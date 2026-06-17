@@ -1,0 +1,27 @@
+.claude
+.codex
+.agents/
+.cache/
+/skills-lock.json
+.idea/
+.worktrees/
+_*/
+
+# Go
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Local test/CI artifacts
+/test-results.xml
+/test-results-*.xml
+/test-events-*.json
+/test-timing-summary.md
+/dist/
+/.envrc
+/.kata.toml
