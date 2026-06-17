@@ -1,0 +1,13 @@
+#!/bin/sh
+# Fast pre-commit gate: formatting + vet. The full suite runs in `make
+# check` / CI; this keeps obvious breakage out of commits.
+set -e
+
+unformatted="$(gofmt -l .)"
+if [ -n "$unformatted" ]; then
+	echo "pre-commit: gofmt needed on:" >&2
+	echo "$unformatted" >&2
+	exit 1
+fi
+
+go vet ./...
