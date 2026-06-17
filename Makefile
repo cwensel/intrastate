@@ -81,10 +81,8 @@ tidy:
 clean:
 	rm -rf $(BIN_DIR) coverage.out dist
 
-# One-shot: install a pre-commit hook running gofmt + go vet.
+# One-shot: point git at the checked-in hooks in .githooks/
+# (pre-commit: gofmt + vet; commit-msg: Conventional Commits).
 hooks:
-	@mkdir -p .githooks
-	@printf '#!/bin/sh\nset -e\ngofmt -l . | (! grep .) || { echo "gofmt needed"; exit 1; }\ngo vet ./...\n' > .githooks/pre-commit
-	@chmod +x .githooks/pre-commit
 	git config core.hooksPath .githooks
-	@echo "installed .githooks/pre-commit"
+	@echo "hooks enabled: core.hooksPath -> .githooks"
