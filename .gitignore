@@ -25,3 +25,4 @@ _*/
 /dist/
 /.envrc
 /.kata.toml
+.kata.local.toml
