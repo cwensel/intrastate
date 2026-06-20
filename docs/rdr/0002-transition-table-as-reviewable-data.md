@@ -84,31 +84,117 @@ intrastate is a Go CLI wired through `internal/cli`. The table format feeds the 
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+The proposal is shaped by RDR 0001's stateless resolver split, the current CLI
+output contract, and the transition-model prior that treats state as a tag-set
+matched by reviewable rows. The design has to keep table authors in normal code
+review instead of making them read generated code or scattered prose.
+Sibling-path check for an existing table/selection signal:
+
+```sh
+rg -n "resolve|resolver|transition|state|guard|tag|predicate|recognized|outcome|next legal|illegal|refus" internal cmd docs
+```
+
+The search found no implemented transition table or resolver package under
+`internal/`; it found only the existing CLI refusal plumbing and the peer RDR
+drafts. Prior-art reading favors a data table that looks like "match predicates
+-> tag writes" and reserves external FSM libraries for graph validation, not
+runtime orchestration.
+
+Direct `arc` searches over `StateMachineOS`, `StateMachineLit`, and `DevRef`
+added four design constraints. Sismic keeps nested state source separate from
+rendered PlantUML output and carries transition contracts as preconditions,
+postconditions, and invariants. `transitions` models guards as positive
+`conditions` and negative `unless` lists evaluated as one predicate set.
+Stateless builds a symbolic `StateGraph` for diagramming from machine metadata,
+including superstates, stay transitions, and decision nodes, instead of making
+the graph renderer the runtime. The literature search surfaced statecharts as
+the formal answer to dimensional state explosion: hierarchy and extended state
+factor common context instead of enumerating every Cartesian row.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — RDR 0001 delegates the reviewable transition-table contract
+  to this RDR and requires enough structure for deterministic single-edge
+  selection.
+- **Documented** — the CLI output contract already establishes refusal-first
+  behavior; table parse and lint failures can flow through the existing
+  structured error gateway rather than inventing table-specific output.
+- **Assumed** — Go's TOML tooling can preserve a sparse authoring schema's
+  ergonomics, round-trip enough structure for mechanical rewrites, and provide
+  good-enough diagnostics for malformed rows; Resolve must verify this with a
+  small fixture spike.
+- **Assumed** — the RDR and kata legal graphs can be expressed as sparse rules
+  that normalize to explicit row candidates without requiring host-code
+  callbacks or an embedded expression language.
+- **Assumed** — hierarchical/shared contexts plus positive/negative guard lists
+  are enough factoring to avoid RDR's status/profile/prelock Cartesian explosion
+  without importing a full statechart runtime.
 
 ### Critical Assumptions
 
-[Load-bearing assumptions — if wrong, the approach
-fails. Each must have a complete Evidence Record
-before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight below`
-  - **Evidence**: [single sentence — concrete artifact;
-    see method-specific guidance below]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 TOML can represent sparse transition rules with nested match predicates,
+  multi-tag writes, and accessor references without ambiguous decoding.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Pending: Resolve must parse a minimal RDR-table fixture and a
+    kata-table fixture into typed Go structs, including one inherited match
+    context, one multi-tag write, and one accessor reference.
+  - **If wrong**: The chosen carrier either loses table semantics or forces a
+    custom parser earlier than intended.
+- **A2 Row order is not part of successful edge selection.**
+  - **Status**: Pending
+  - **Method**: Design Decision
+  - **Evidence**: Pending: this RDR makes exact-one predicate matching the only
+    success condition and rejects first-match semantics.
+  - **If wrong**: Reviewers would have to reason about hidden priority, and
+    reordering rows could silently change resolver behavior.
+- **A3 RDR and kata flow edges can be encoded sparsely with fixed predicate
+  operators rather than host-code callbacks or Cartesian-product row
+  enumeration.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Pending: Resolve must encode representative RDR and kata
+    rules covering status, profile, prelock iteration, equality,
+    set-membership, integer comparison, self-loop, rewind, and multi-tag write
+    cases, then dump the mechanically expanded candidate rows.
+  - **If wrong**: RDR 0003 must expand the predicate grammar or this table format
+    becomes too weak for the target flows.
+- **A4 The model data can carry enough provenance to separate owned, observed,
+  and recognized tags for lint and accessor binding.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Pending: RDR 0003 and RDR 0004 must define predicate and
+    accessor contracts that consume the model's tag provenance without adding
+    parallel configuration.
+  - **If wrong**: The resolver cannot prove read-before-write or accessor safety
+    from the model alone.
+- **A5 Standard parse and validation failures can be surfaced through the
+  existing CLI error envelope.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`
+    and `internal/cli/respond::Fail` are sufficient for table parse and lint
+    failure classes.
+  - **If wrong**: Table loading would need a separate user-facing error contract
+    owned by this RDR or RDR 0005.
+- **A6 Mechanical rewrite can preserve human-authored comments, ordering, and
+  stable ids closely enough for normal code review.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Pending: Resolve must run a parse-edit-render spike that adds
+    a rule or outcome to a fixture and shows the resulting diff.
+  - **If wrong**: The CLI may still lint and dump tables, but automated rewrite
+    must be deferred or limited to generated files so it does not damage the
+    reviewable source.
+- **A7 Shared contexts and positive/negative guard lists are sufficient to keep
+  the RDR model sparse without hiding ambiguity.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Pending: Resolve must encode RDR status, profile routing, and
+    prelock cap handling with inherited contexts plus `all`/`unless` guard
+    lists, then show the expanded rows and ambiguity diagnostics.
+  - **If wrong**: The model either needs a richer statechart-like hierarchy or
+    the table becomes too repetitive for reliable human review.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -157,12 +243,68 @@ Evidence Record or by the Minimum Viable Validation.
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Use a sparse, hand-authored TOML transition model that normalizes to explicit
+candidate rows. Authors write shared tag declarations, reusable match contexts,
+outcome groups, guarded rules, and tag writes; the tool normalizes that source
+into a full row set for lint, resolver lookup, visualization, and table dumps.
+The rendered table is review support, not the source authors maintain.
+
+Each flow has a named model with flow-level tag declarations, optional accessor
+references, a legal recognized-outcome alphabet, and sparse rules that encode
+the match predicates and tag writes produced by legal edges. Runtime success is
+still exact-one candidate row after predicate evaluation. Zero matches, multiple
+matches, unknown outcomes, unavailable accessors, and malformed rules are typed
+refusals.
+
+The model is data, not generated code and not a runtime FSM engine. RDR 0001's
+resolver consumes the normalized representation, RDR 0003 owns the fixed
+predicate operators, RDR 0004 owns accessor execution and read-back safety, RDR
+0005 exposes the CLI, and RDR 0006 owns graph lint. This RDR owns the on-disk
+sparse representation, the normalization/dump contract, and the match-to-tag
+write contract those peers consume.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The source schema has six conceptual parts:
+
+1. Flow metadata: table id, version, and human description.
+2. Tag declarations: tag name, provenance (`owned`, `observed`, `recognized`),
+   value kind, and optional accessor reference for observed or owned read-back.
+3. Recognized outcome alphabet: the closed set of outcome tags that the
+   recognizer may emit for the flow.
+4. Shared match contexts: named predicate blocks for dimensions such as RDR
+   `Status`, `Profile`, stage, prelock iteration, cluster eligibility, or kata
+   lifecycle. Contexts may inherit from another context to model statechart-like
+   hierarchy without adopting a statechart runtime.
+5. Sparse transition rules: reviewable rule ids, optional context references, a
+   local match block, positive `all` guards, negative `unless` guards, and a
+   write block containing one or more tag assignments or explicit clear
+   sentinels.
+6. Render settings: deterministic ordering and field selection for the expanded
+   table dump and graph export.
+
+The parser turns TOML into typed source data, then normalizes it into explicit
+candidate rows. Validation rejects malformed tags, unknown predicate operators,
+writes to non-owned tags, rules that match on missing tag declarations,
+unresolvable context references, and unknown accessor names. Runtime matching is
+deliberately priority-free: the resolver evaluates candidate rows against the
+supplied tag-set and succeeds only when exactly one row matches. Multi-tag writes
+are first-class because RDR rewinds and kata lifecycle moves need to set both the
+next stage/state and side-channel scope tags in one edge.
+
+Guard factoring follows the `transitions` prior art: positive predicates and
+negative predicates are authored separately but normalized into one predicate
+set. Contract factoring follows the Sismic prior art: entry preconditions,
+postconditions, and invariants are different validation classes, not free-form
+comments. Rendered dumps follow the Stateless/Sismic graph-export pattern: they
+are symbolic views derived from model metadata and must carry enough source ids
+to send diagnostics back to the authored sparse rule.
+
+The internal representation may be indexed as a decision tree, trie, or decision
+DAG for efficient lookup, but that is an implementation detail. The normative
+semantic object is the normalized candidate-row set plus its source span back to
+the sparse TOML rule. This keeps diagnostics and rewrites tied to the authored
+source while letting the resolver avoid scanning irrelevant dimensions.
 
 #### Normative Contracts
 
@@ -185,36 +327,55 @@ Phase 2).]
 > seams rather than locking them together. The split test
 > is **contract count, not word count**.
 
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block,
-e.g.:
-
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+The transition model MUST be authored as sparse TOML data, not generated code
+and not a fully expanded Cartesian-product table.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+```normative
+Each transition rule MUST contain a stable rule id, zero or more shared-context
+references, a local match block, and a write block. A write block MAY assign
+more than one tag.
+```
+
+```normative
+Shared contexts MAY inherit from other contexts, but inheritance MUST normalize
+to an explicit predicate set before lint or resolution.
+```
+
+```normative
+Guard predicates MUST be represented as positive `all` predicates and negative
+`unless` predicates. Normalization MUST combine both into one candidate-row
+predicate set before ambiguity checks.
+```
+
+```normative
+The tool MUST normalize the sparse source into deterministic candidate rows for
+lint, resolver lookup, diagnostics, and table dumps. Each candidate row MUST
+retain its source rule id and source span.
+```
+
+```normative
+Source order and rendered-row order MUST NOT decide a successful transition. A
+tag-set resolves only when exactly one normalized candidate row matches; zero or
+multiple matches are refusals.
+```
+
+```normative
+The model MUST declare every tag it matches or writes, including each tag's
+provenance: owned, observed, or recognized.
+```
+
+```normative
+Clearing a tag MUST be represented by an explicit clear sentinel in the write
+block. Absence from a write block MUST NOT imply deletion.
+```
+
+```normative
+Automated rewrite MUST operate on the sparse TOML source, not on the expanded
+dump. If comment/order preservation cannot be proven, rewrite MUST be limited to
+generated output or refused with a typed diagnostic.
+```
 
 #### Load-Bearing Decisions
 
@@ -225,172 +386,361 @@ invents silently, so each must carry **one explicit
 answer** here when in play. This is targeted rigor on
 the churn-prone decisions, not blanket detail.]
 
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
+- **Identity** — a transition rule is identified by `(model id, rule id)`.
+  Normalized candidate rows inherit that identity plus a deterministic expansion
+  suffix. Rule ids are stable review anchors and must not be reused for a
+  different edge.
+- **Wire / byte format** — TOML is the on-disk carrier. Exact field names and
+  example fixtures are finalized during Resolve after the sparse parser and
+  parse-edit-render spikes prove the chosen TOML shape.
+- **Naming** — the canonical source artifact name is "transition model"; the
+  canonical rendered view is "expanded transition table." Rejected
+  names: "state machine config" because it suggests a runtime driver, and
+  "workflow graph" because this RDR owns sparse rules and tag writes, not
+  orchestration.
+- **Selection / predicate** — the only successful selection is exact-one row
+  match after normalization. If multiple candidate rows qualify, the model is
+  ambiguous; the resolver refuses and lint should reject the overlap before
+  runtime.
 
 #### Round-Trip / Inverse Invariants
 
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 8.1 asserts it across the
-seam.
+`parse ∘ normalize ∘ dump = expanded-table value identity` on valid transition
+model fixtures: dumping the normalized model and reading the dump as a table
+view must preserve the candidate-row set. If a source formatter or rewrite path
+is introduced, `parse ∘ edit ∘ render ∘ parse = source-model value identity`
+must hold for supported edits; byte identity is not required, but stable ids,
+comments not attached to edited nodes, and reviewer-chosen ordering must be
+preserved.
 
 #### Illustrative Code
 
 [Shape only — not load-bearing. Use sparingly; prose
 is usually clearer.]
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+Illustrative sparse source shape, not a locked schema:
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+```toml
+[context.draft]
+status.eq = "Draft"
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+[context.prelock]
+inherits = "draft"
+stage.eq = "prelock"
+
+[[rule]]
+id = "prelock-flapping-cap"
+use = ["prelock"]
+
+[rule.match]
+outcome.eq = "verdict-flapping"
+
+[rule.guard.all]
+iter.lt = 3
+
+[rule.guard.unless]
+profile.eq = "small"
+
+[rule.write]
+stage = "prelock"
+```
 
 ### Capability Dependencies
 
-[For each load-bearing behavior, state whether the
-enabling capability exists now, is introduced by this
-RDR, is provided by a predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Stateless exact-one resolution | RDR 0001 | Pending | This RDR must provide normalized candidate rows and tag writes the kernel can evaluate. |
+| Fixed predicate operators | RDR 0003 | Pending | This RDR names predicate slots but does not own the operator grammar. |
+| Accessor references and safe read-back | RDR 0004 | Pending | This RDR may reference accessors but does not execute them. |
+| CLI parse/lint output | RDR 0005 plus existing respond gateway | Pending | Failures must map to the CLI output contract. |
+| Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks. |
+| Expanded table dump | This RDR | Introduced | Reviewers can inspect the full table without maintaining it by hand. |
+| Graph/render export | This RDR | Introduced | Source metadata must render to table and graph views without becoming the runtime source of truth. |
+| Source rewrite | This RDR | Conditional | Rewrite is allowed only where parse-edit-render preserves the sparse source's review ergonomics. |
 
 ### Existing Infrastructure Audit
 
-[List existing modules that overlap with proposed
-components. For each, state whether to reuse, extend,
-or replace, and name any known limit that affects the
-spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Structured CLI failures | `internal/cli/clierr::CLIError` | No table-specific codes yet | Extend | Add stable parse/lint refusal codes later. |
+| Text/json output gateway | `internal/cli/respond::Fail` | Gateway is CLI-only, not kernel behavior | Reuse | Parser/lint commands must report through existing gateway. |
+| Resolver/table package | `internal/` search | Not implemented | Introduce | New internal package can own sparse source structs and normalized row structs. |
+| Config discovery | `internal/cli/config::Load` | Project config exists, table discovery not designed | Reuse later | Table path binding belongs with CLI integration, not this RDR's data format. |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out.]
+Sparse TOML is the best fit because the source is meant to be reviewed and
+edited by humans, while the expanded table is a mechanical view for lint,
+debugging, and documentation. A fully expanded table would make the RDR model's
+dimensions multiply: status, profile, stage, prelock iteration, cluster
+eligibility, rewind scope, and guards would force authors to copy the same
+predicate fragments across rows. That is exactly the DX failure this RDR must
+avoid.
+
+The resource corpus points to the same split. `BUILD-SEEDS.md` says the table is
+the flow's design and is hand-authored, but also says the resolver is table +
+thin CLI + lint, not a runtime. `ANALYSIS-kernel-vocabulary.md` supplies the
+vocabulary: recognized outcome is a Deferred Choice, guards are an Exclusive
+Choice layer, unconditional rows are eventless/automatic transitions, and
+ambiguous enabled edges should be lint-rejected rather than resolved by document
+order. The Ragel POC shows why flat compiled topology is insufficient for the
+RDR model: the hard parts are the coupled status register, cap-3 counter,
+guards, and readable current state. Therefore the source should be sparse and
+semantic, while normalization can render explicit rows for tools.
+
+The direct `arc` corpus checks sharpen the sparse shape. Sismic demonstrates a
+source model with nested states, transition guards, and contract classes that can
+be exported to another view; that supports inherited contexts plus separate
+precondition/invariant/postcondition diagnostics. `transitions` demonstrates
+positive `conditions` and negative `unless` guard factoring; that supports
+`all`/`unless` blocks instead of forcing every guard into one expression string.
+Stateless demonstrates a symbolic graph object built from machine metadata; that
+supports an expanded table/graph dump as a rendered view rather than the
+authoring source. The statechart literature search supports hierarchy and
+extended state as the known way to contain dimensional state explosion, while
+the project still rejects adopting a statechart runtime.
+
+Choosing exact-one candidate-row matching aligns with RDR 0001's deterministic
+kernel and deliberately diverges from first-match FSM engines: priority order is
+convenient in code, but it makes review harder and lets source or dump
+reordering change behavior. Runtime FSM libraries are kept out of the core
+because they would either drive orchestration or hide the contract in host
+callbacks; their useful role is vocabulary, validation, and visualization.
+
+Premortem: this could fail if the sparse source becomes a verbose
+pseudo-language, if expansion hides surprising implicit rows, or if automated
+rewrite churns comments and ordering so reviewers no longer trust the file. The
+recommendation survives only if Resolve proves the RDR and kata examples with a
+parse-normalize-dump spike and a parse-edit-render rewrite spike. If those fail,
+rewrite must be deferred and the source schema must be reduced before lock.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Sparse TOML Model With Expanded Table Dump
 
-### Alternative 1: [Name]
-
-**Description**: [Brief description]
+**Description**: Hand-authored TOML files declare tags, recognized outcomes,
+shared contexts, accessor references, and sparse transition rules. The tool
+normalizes rules into explicit candidate rows and can dump that expanded table.
 
 **Pros**:
 
-- [Advantage 1]
+- Avoids Cartesian-product authoring for dimensional models such as RDR status
+  plus profile plus prelock iteration plus guards.
+- Keeps the source reviewable while still giving lint and resolver code a fully
+  explicit row set.
+- Supports mechanical dumps, graph export, and diagnostics tied back to stable
+  source rule ids.
+- Fits Go CLI implementation with ordinary typed decoding and validation.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Normalization and rewrite are real contracts, not just parsing.
+- Exact field layout and comment-preserving edits need spikes before lock.
+- TOML is not a formal state-machine standard, so graph validation must be built
+  over the parsed representation.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for selection**: Best balance of reviewability, parse simplicity, and
+structured expressiveness for the target RDR and kata models.
+
+### Alternative 2: Fully Expanded TOML Row Table
+
+**Description**: Authors maintain one TOML row per candidate edge, with all
+dimensions repeated inline.
+
+**Pros**:
+
+- Simplest parser and easiest mental model for tiny graphs.
+- The source file is already the table the resolver sees.
+
+**Cons**:
+
+- Explodes for the RDR model once status, profile, prelock iteration, cluster
+  gates, rewind scope, and guard dimensions interact.
+- Repetition makes edits risky: changing one shared condition requires finding
+  every copied row.
+- The source becomes a generated-looking artifact even though humans are
+  expected to own it.
+
+**Reason for rejection**: It is acceptable as a dump format, not as the
+authoring format.
+
+### Alternative 3: JSON Model
+
+**Description**: Store the same sparse model as JSON.
+
+**Pros**:
+
+- Simple to parse and strict about data types.
+- Easy for tools to generate and consume.
+
+**Cons**:
+
+- Poor hand-review ergonomics: comments are unavailable, trailing comma churn is
+  common, and nested objects become noisy for prose-heavy transition data.
+- Encourages machine-generated artifacts, which conflicts with the goal that the
+  legal graph be authored and reviewed directly.
+
+**Reason for rejection**: It optimizes interchange over the human review loop
+that is the central user outcome.
+
+### Alternative 4: CSV / Matrix Table
+
+**Description**: Store transitions as rows with columns for current state,
+outcome, guard columns, and writes.
+
+**Pros**:
+
+- Compact and easy to scan for small state machines.
+- Familiar representation for simple transition matrices.
+
+**Cons**:
+
+- Weak fit for nested predicates, typed values, accessor references, and
+  multi-tag writes.
+- Escaping and comments become awkward exactly where RDR/kata examples need
+  explanation.
+
+**Reason for rejection**: Too scalar for the required tag-set model.
+
+### Alternative 5: Small DSL
+
+**Description**: Define a custom text grammar such as `match -> writes` with
+inline predicates.
+
+**Pros**:
+
+- Can be concise and domain-specific.
+- Could make graph-like edges visually obvious.
+
+**Cons**:
+
+- Requires custom parsing, error recovery, formatting, editor support, and
+  long-term grammar ownership.
+- Pushes this RDR into language design before the target tables are proven.
+
+**Reason for rejection**: The parser and tooling burden is not justified while
+TOML can carry the same semantics.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Generated Go tables**: Fast and type-safe, but the reviewable artifact would
+  be code, not the legal graph as data.
+- **SCXML/XState as the source format**: Strong standard/tooling story, but a
+  poor fit for tag provenance and the project's non-orchestrating resolver
+  boundary.
+- **Embedded host predicates**: Expressive, but defeats static lint and makes
+  graph review depend on reading arbitrary code.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- The legal graph becomes a first-class reviewed model with stable rule ids.
+- The expanded table becomes a generated diagnostic view, not hand-maintained
+  source.
+- Parser and lint errors become part of the CLI surface even though this RDR is
+  primarily an internal data-format decision.
+- Some expressiveness is intentionally deferred to RDR 0003 so this table stays
+  statically checkable.
+- Source-preserving rewrite becomes a gated capability: useful, but only where
+  the parse-edit-render spike proves low-churn diffs.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: Sparse TOML rules become too verbose or too magical for large
+  graphs.
+  **Mitigation**: Resolve must encode representative RDR and kata fixtures and
+  reject the shape if reviewers cannot scan the source or explain the dump.
+- **Risk**: Sparse contexts hide an accidental Cartesian product.
+  **Mitigation**: The dump must show normalized candidate rows with source rule
+  ids, and lint must report expansion counts per rule.
+- **Risk**: Future contributors treat row order as priority.
+  **Mitigation**: Normative exact-one semantics and graph lint both reject
+  overlapping rows instead of picking the first match.
+- **Risk**: Accessor references pull execution semantics into the table.
+  **Mitigation**: The table only names accessor bindings; RDR 0004 owns execution
+  and read-back behavior.
+- **Risk**: Automated rewrite damages comments or reviewer-chosen ordering.
+  **Mitigation**: Rewrite is conditional on a parse-edit-render spike; otherwise
+  the CLI may suggest edits or regenerate dumps but must not mutate source.
 
 ### Failure Modes
 
-[What breaks visibly? What fails silently? Recovery
-path? How does a developer diagnose the problem?]
+Malformed TOML, unknown schema fields, unresolvable context references, or
+normalization explosions fail at load/validation time with stable CLI errors. A
+row gap, overlap, write to an undeclared tag, read-before-write condition, or
+ambiguous expansion is a lint failure before the model is accepted. At runtime,
+unknown outcomes, zero matches, multiple matches, and unavailable accessor
+inputs are typed resolver refusals rather than guessed edges. Rewrite failures
+must leave the source unchanged and report the unsupported edit or preservation
+problem.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] RDR 0001 remains aligned on exact-one stateless resolution.
+- [ ] RDR 0003 confirms the fixed predicate operator set.
 
 ### Minimum Viable Validation
 
-[The single end-to-end proof that the approach works.
-Must be in scope — not deferred.]
+Parse two hand-authored sparse TOML fixtures, one for a representative RDR flow
+slice and one for a representative kata flow slice, into typed source data;
+normalize them into candidate rows; dump the expanded table; validate tag
+declarations, context references, predicate references, recognized outcomes, and
+multi-tag writes; then prove by unit test that one sample tag-set resolves to
+exactly one row and one ambiguous tag-set is refused. The RDR fixture must cover
+at least `Status`, `Profile`, prelock iteration, and one rewind or cluster guard.
+The spike must also perform one parse-edit-render operation and show the source
+diff.
 
-### Phase 1: Code Implementation
+### Phase 1: Fixture and Schema Spike
 
-#### Step 1: [Title]
+Name the minimal sparse TOML field layout and encode representative RDR and kata
+rules, including shared contexts, one self-loop, one rewind, one accessor
+reference, one profile-dependent branch, and one multi-tag write.
 
-[Instructions]
+### Phase 2: Normalizer and Dump
 
-#### Step 2: [Title]
+Introduce typed source structures, normalized candidate-row structures, and an
+expanded-table dump with deterministic ordering and source rule ids.
 
-[Instructions]
+### Phase 3: Parser and Validation Skeleton
 
-### Phase 2: Operational Activation
+Add validation rules for declarations, rule ids, context references, predicate
+references, write targets, explicit clears, and expansion-count diagnostics.
 
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
+### Phase 4: Resolver Handshake
 
-#### Activation Step 1: [Title]
+Connect the normalized rows to RDR 0001's exact-one matching contract without
+adding runtime ordering or host-code predicate callbacks. Internal indexes may
+be decision trees or tries, but they must preserve the normalized semantics.
 
-[Instructions]
+### Phase 5: Rewrite Handshake
+
+Define which source edits the CLI may perform automatically and which it must
+refuse or report as suggestions because comment/order preservation is not
+proven.
+
+### Phase 6: Lint Handshake
+
+Expose the parsed representation needed by RDR 0006 for graph determinism,
+reachability, and read-before-write checks.
 
 ### Day 2 Operations
 
-[For every persistent resource this RDR creates
-(collection, index, data store, config entry),
-address management operations:]
-
 | Resource | List | Info | Delete | Verify | Backup |
 | --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
+| Transition model files | In scope via normal repository listing | In scope via parse/lint/dump output | N/A; source-controlled files | In scope via lint | N/A; source control is backup |
+| Expanded table dumps | In scope through dump command | In scope through source rule ids | Delete/regenerate | In scope via dump tests | N/A; generated from source |
 
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
+No runtime persistent resource is introduced by this RDR.
 
 ### New Dependencies
 
-[Dependencies to add/update. For third-party: note
-license and whether legal review is required.]
+Likely a TOML parser dependency if the standard library remains insufficient.
+Resolve must identify the concrete Go module and license before lock.
 
 ## Validation
 
@@ -505,7 +855,30 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0001, Resolution Kernel Contract.
+- `docs/cli-output-contract.md`.
+- Resource index: `.rdr/resources.md`.
+- Seed prior: `../state-machines/BUILD-SEEDS.md`, especially Seed 2
+  transition-table representation and Seed 3 guard expression.
+- Transition model prior: "The transition model — inputs, outputs, error
+  conditions."
+- Kernel vocabulary prior: `../state-machines/ANALYSIS-kernel-vocabulary.md`,
+  especially Deferred Choice, Exclusive Choice, eventless/automatic transitions,
+  and lint-rejecting document-order ambiguity.
+- Direct `arc` corpus checks:
+  - `StateMachineOS`: `sismic/sismic/io/datadict.py::import_from_dict` and
+    `export_to_dict` for nested source models and contracts.
+  - `StateMachineOS`: `transitions/transitions/core.py::Transition` for
+    positive `conditions` and negative `unless` guard lists.
+  - `StateMachineOS`: `stateless/src/Stateless/Graph/StateGraph.cs::StateGraph`
+    for symbolic graph generation from machine metadata.
+  - `StateMachineOS`: `sismic/sismic/io/plantuml.py::PlantUMLExporter` for
+    rendered graph output as a view over model data.
+  - `StateMachineLit`: statechart hierarchy / extended-state literature hits as
+    the prior-art answer to dimensional state explosion.
+- RDR Ragel POC contrast: `../state-machines/contrast/poc-rdr-ragel/REVIEW.md`,
+  especially the coupled status register, cap-3 counter, guard, and readable
+  current-state limitations.
+- RDR and kata flow audits from the state-machine prior-art corpus.
+- Tool-fit assessment for FSM libraries as validation/visualization tools, not
+  runtime orchestrators.
