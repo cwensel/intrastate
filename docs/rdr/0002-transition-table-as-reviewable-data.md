@@ -35,29 +35,6 @@
   -->
 - **Type**: Architecture
 - **Profile**: large — locks the sparse transition-model data format.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel
@@ -119,13 +96,13 @@ factor common context instead of enumerating every Cartesian row.
 - **Documented** — the CLI output contract already establishes refusal-first
   behavior; table parse and lint failures can flow through the existing
   structured error gateway rather than inventing table-specific output.
-- **Assumed** — Go's TOML tooling can preserve a sparse authoring schema's
-  ergonomics and provide good-enough diagnostics for malformed rows; Resolve
-  must verify this with a small fixture spike.
-- **Assumed** — the RDR and kata legal graphs can be expressed as sparse rules
+- **Verified** — Go's TOML tooling can preserve a sparse authoring schema's
+  ergonomics for representative malformed-row diagnostics; the Resolve spike
+  identified root-key placement as the exact field-layout constraint to lock.
+- **Verified** — the RDR and kata legal graphs can be expressed as sparse rules
   that normalize to explicit row candidates without requiring host-code
   callbacks or an embedded expression language.
-- **Assumed** — hierarchical/shared contexts plus positive/negative guard lists
+- **Verified** — hierarchical/shared contexts plus positive/negative guard lists
   are enough factoring to avoid RDR's status/profile/prelock Cartesian explosion
   without importing a full statechart runtime.
 
@@ -133,56 +110,44 @@ factor common context instead of enumerating every Cartesian row.
 
 - **A1 TOML can represent sparse transition rules with nested match predicates,
   multi-tag writes, and accessor references without ambiguous decoding.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must parse a minimal RDR-table fixture and a
-    kata-table fixture into typed Go structs, including one inherited match
-    context, one multi-tag write, and one accessor reference.
+  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && go run . rdr-fixture.toml kata-fixture.toml` parsed both fixtures with `github.com/pelletier/go-toml/v2`, including inherited match contexts, nested predicates, accessor references, multi-tag writes, and explicit clears; transcript captured in `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/output.txt`.
   - **If wrong**: The chosen carrier either loses table semantics or forces a
     custom parser earlier than intended.
 - **A2 Row order is not part of successful edge selection.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: Pending: this RDR makes exact-one predicate matching the only
-    success condition and rejects first-match semantics.
+  - **Evidence**: Normative Contracts state that source order and rendered-row order MUST NOT decide transition success; the only successful selection is exactly one normalized candidate row, with zero or multiple matches as refusals. This explicitly rejects first-match semantics.
   - **If wrong**: Reviewers would have to reason about hidden priority, and
     reordering rows could silently change resolver behavior.
 - **A3 RDR and kata flow edges can be encoded sparsely with fixed predicate
   operators rather than host-code callbacks or Cartesian-product row
   enumeration.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must encode representative RDR and kata
-    rules covering status, profile, prelock iteration, equality,
-    set-membership, integer comparison, self-loop, rewind, and multi-tag write
-    cases, then dump the mechanically expanded candidate rows.
+  - **Evidence**: `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/rdr-fixture.toml` and `kata-fixture.toml` encode representative rules covering status, profile, prelock iteration, equality, set membership, integer comparison, self-loop, rewind, positive/negative guards, and multi-tag writes without host-code callbacks; `output.txt` dumps the expanded candidate rows.
   - **If wrong**: RDR 0003 must expand the predicate grammar or this table format
     becomes too weak for the target flows.
 - **A4 The model data can carry enough provenance to separate owned, observed,
   and recognized tags for lint and accessor binding.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0003 and RDR 0004 must define predicate and
-    accessor contracts that consume the model's tag provenance without adding
-    parallel configuration.
+  - **Evidence**: RDR 0003 `Technical Design` requires declared tag provenance for predicate lint and owned-tag read-before-write checks; RDR 0004 `Technical Design` makes RDR 0002 responsible for table-carried accessor references while accessor execution validates capabilities and writes only owned tags.
   - **If wrong**: The resolver cannot prove read-before-write or accessor safety
     from the model alone.
 - **A5 Standard parse and validation failures can be surfaced through the
   existing CLI error envelope.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`
-    and `internal/cli/respond::Fail` are sufficient for table parse and lint
-    failure classes.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` already carries stable `Code`, `Message`, optional `Param`, parser/lint `Detail`, `Hint`, exit-code `Group`, and `Cause`; `internal/cli/respond/respond.go::Fail` emits the same envelope in text/json modes; `internal/cli/config/config.go::Load` already uses stable parse/config error codes as the local pattern.
   - **If wrong**: Table loading would need a separate user-facing error contract
     owned by this RDR or RDR 0005.
 - **A6 Shared contexts and positive/negative guard lists are sufficient to keep
   the RDR model sparse without hiding ambiguity.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must encode RDR status, profile routing, and
-    prelock cap handling with inherited contexts plus `all`/`unless` guard
-    lists, then show the expanded rows and ambiguity diagnostics.
+  - **Evidence**: `rdr-fixture.toml` encodes `draft -> prelock -> large-prelock` inherited contexts plus `all.iter.lt = 3` and `unless.profile.eq = "small"` guards; `output.txt` shows the normalized row with inherited status/stage/profile predicates and combined `all`/`unless` predicates, preserving ambiguity visibility in the expanded row.
   - **If wrong**: The model either needs a richer statechart-like hierarchy or
     the table becomes too repetitive for reliable human review.
 
@@ -652,7 +617,7 @@ inputs are typed resolver refusals rather than guessed edges.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
+- [x] All Critical Assumptions verified
 - [ ] RDR 0001 remains aligned on exact-one stateless resolution.
 - [ ] RDR 0003 confirms the fixed predicate operator set.
 
@@ -704,28 +669,35 @@ No runtime persistent resource is introduced by this RDR.
 
 ### New Dependencies
 
-Likely a TOML parser dependency if the standard library remains insufficient.
-Resolve must identify the concrete Go module and license before lock.
+Use `github.com/pelletier/go-toml/v2` as the TOML parser candidate. The Resolve
+spike ran against v2.3.1 from the local module cache, and the module license is
+MIT. No production dependency is added until implementation.
 
 ## Validation
 
 ### Testing Strategy
 
-[Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Implementation tests must promote the Resolve spike into production fixtures:
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
+   **Expected**: Tag declarations, root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, and multi-tag writes decode without ambiguous field placement.
+2. **Scenario**: Normalize the RDR fixture's `continue-prelock` and `reconcile-rewind` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
+   **Expected**: Candidate rows retain source rule ids/source spans, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, and writes are deterministic.
+3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, and missing root outcome alphabets.
+   **Expected**: Each failure becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
+4. **Scenario**: Run exact-one selection over one matching tag-set and one overlapping/ambiguous tag-set.
+   **Expected**: The matching tag-set resolves to one row; zero or multiple matches are refusals and never fall back to row order.
 
 ### Performance Expectations
 
-[Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+Resolve evidence is functional rather than throughput-oriented. The spike
+normalizes representative RDR and kata sparse fixtures into four deterministic
+rows, and a repeated run produced byte-identical output with SHA-256
+`3041e9e6678510e203a0213d5410df0852971416d64727c767345c4ca4725b24`.
+Production code should preserve deterministic dump ordering by sorting stable
+model/rule/predicate/write keys rather than relying on map iteration or source
+order. Runtime lookup may index rows later, but that optimization must preserve
+the normalized candidate-row semantics.
 
 ## Finalization Gate
 
