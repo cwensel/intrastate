@@ -34,7 +34,7 @@
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: large — locks the transition-table data format and match-to-tag contract.
+- **Profile**: large — locks the sparse transition-model data format.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -120,9 +120,8 @@ factor common context instead of enumerating every Cartesian row.
   behavior; table parse and lint failures can flow through the existing
   structured error gateway rather than inventing table-specific output.
 - **Assumed** — Go's TOML tooling can preserve a sparse authoring schema's
-  ergonomics, round-trip enough structure for mechanical rewrites, and provide
-  good-enough diagnostics for malformed rows; Resolve must verify this with a
-  small fixture spike.
+  ergonomics and provide good-enough diagnostics for malformed rows; Resolve
+  must verify this with a small fixture spike.
 - **Assumed** — the RDR and kata legal graphs can be expressed as sparse rules
   that normalize to explicit row candidates without requiring host-code
   callbacks or an embedded expression language.
@@ -177,16 +176,7 @@ factor common context instead of enumerating every Cartesian row.
     failure classes.
   - **If wrong**: Table loading would need a separate user-facing error contract
     owned by this RDR or RDR 0005.
-- **A6 Mechanical rewrite can preserve human-authored comments, ordering, and
-  stable ids closely enough for normal code review.**
-  - **Status**: Pending
-  - **Method**: Spike
-  - **Evidence**: Pending: Resolve must run a parse-edit-render spike that adds
-    a rule or outcome to a fixture and shows the resulting diff.
-  - **If wrong**: The CLI may still lint and dump tables, but automated rewrite
-    must be deferred or limited to generated files so it does not damage the
-    reviewable source.
-- **A7 Shared contexts and positive/negative guard lists are sufficient to keep
+- **A6 Shared contexts and positive/negative guard lists are sufficient to keep
   the RDR model sparse without hiding ambiguity.**
   - **Status**: Pending
   - **Method**: Spike
@@ -246,22 +236,22 @@ Evidence Record or by the Minimum Viable Validation.
 Use a sparse, hand-authored TOML transition model that normalizes to explicit
 candidate rows. Authors write shared tag declarations, reusable match contexts,
 outcome groups, guarded rules, and tag writes; the tool normalizes that source
-into a full row set for lint, resolver lookup, visualization, and table dumps.
+into a full row set for lint, resolver lookup, and table dumps.
 The rendered table is review support, not the source authors maintain.
 
 Each flow has a named model with flow-level tag declarations, optional accessor
 references, a legal recognized-outcome alphabet, and sparse rules that encode
-the match predicates and tag writes produced by legal edges. Runtime success is
-still exact-one candidate row after predicate evaluation. Zero matches, multiple
-matches, unknown outcomes, unavailable accessors, and malformed rules are typed
-refusals.
+the match predicates and tag writes produced by legal edges. The source model
+must provide enough structure for RDR 0001's exact-one resolver contract: zero
+matches, multiple matches, unknown outcomes, unavailable accessors, and
+malformed rules remain typed refusals.
 
 The model is data, not generated code and not a runtime FSM engine. RDR 0001's
 resolver consumes the normalized representation, RDR 0003 owns the fixed
 predicate operators, RDR 0004 owns accessor execution and read-back safety, RDR
 0005 exposes the CLI, and RDR 0006 owns graph lint. This RDR owns the on-disk
-sparse representation, the normalization/dump contract, and the match-to-tag
-write contract those peers consume.
+sparse representation and the normalized expanded-table view those peers
+consume.
 
 ### Technical Design
 
@@ -281,7 +271,7 @@ The source schema has six conceptual parts:
    write block containing one or more tag assignments or explicit clear
    sentinels.
 6. Render settings: deterministic ordering and field selection for the expanded
-   table dump and graph export.
+   table dump.
 
 The parser turns TOML into typed source data, then normalizes it into explicit
 candidate rows. Validation rejects malformed tags, unknown predicate operators,
@@ -296,15 +286,15 @@ Guard factoring follows the `transitions` prior art: positive predicates and
 negative predicates are authored separately but normalized into one predicate
 set. Contract factoring follows the Sismic prior art: entry preconditions,
 postconditions, and invariants are different validation classes, not free-form
-comments. Rendered dumps follow the Stateless/Sismic graph-export pattern: they
-are symbolic views derived from model metadata and must carry enough source ids
-to send diagnostics back to the authored sparse rule.
+comments. Rendered dumps follow the Stateless/Sismic export pattern: they are
+symbolic views derived from model metadata and must carry enough source ids to
+send diagnostics back to the authored sparse rule.
 
 The internal representation may be indexed as a decision tree, trie, or decision
 DAG for efficient lookup, but that is an implementation detail. The normative
 semantic object is the normalized candidate-row set plus its source span back to
-the sparse TOML rule. This keeps diagnostics and rewrites tied to the authored
-source while letting the resolver avoid scanning irrelevant dimensions.
+the sparse TOML rule. This keeps diagnostics tied to the authored source while
+letting the resolver avoid scanning irrelevant dimensions.
 
 #### Normative Contracts
 
@@ -371,12 +361,6 @@ Clearing a tag MUST be represented by an explicit clear sentinel in the write
 block. Absence from a write block MUST NOT imply deletion.
 ```
 
-```normative
-Automated rewrite MUST operate on the sparse TOML source, not on the expanded
-dump. If comment/order preservation cannot be proven, rewrite MUST be limited to
-generated output or refused with a typed diagnostic.
-```
-
 #### Load-Bearing Decisions
 
 [Conditional — include only the classes this RDR
@@ -392,11 +376,11 @@ the churn-prone decisions, not blanket detail.]
   different edge.
 - **Wire / byte format** — TOML is the on-disk carrier. Exact field names and
   example fixtures are finalized during Resolve after the sparse parser and
-  parse-edit-render spikes prove the chosen TOML shape.
+  normalization spikes prove the chosen TOML shape.
 - **Naming** — the canonical source artifact name is "transition model"; the
   canonical rendered view is "expanded transition table." Rejected
   names: "state machine config" because it suggests a runtime driver, and
-  "workflow graph" because this RDR owns sparse rules and tag writes, not
+  "workflow graph" because this RDR owns sparse transition data, not
   orchestration.
 - **Selection / predicate** — the only successful selection is exact-one row
   match after normalization. If multiple candidate rows qualify, the model is
@@ -407,11 +391,9 @@ the churn-prone decisions, not blanket detail.]
 
 `parse ∘ normalize ∘ dump = expanded-table value identity` on valid transition
 model fixtures: dumping the normalized model and reading the dump as a table
-view must preserve the candidate-row set. If a source formatter or rewrite path
-is introduced, `parse ∘ edit ∘ render ∘ parse = source-model value identity`
-must hold for supported edits; byte identity is not required, but stable ids,
-comments not attached to edited nodes, and reviewer-chosen ordering must be
-preserved.
+view must preserve the candidate-row set. Source rewrite is out of scope for
+this RDR; a later rewrite-capability RDR must define its own source-preservation
+invariant before mutating authored TOML.
 
 #### Illustrative Code
 
@@ -455,8 +437,7 @@ stage = "prelock"
 | CLI parse/lint output | RDR 0005 plus existing respond gateway | Pending | Failures must map to the CLI output contract. |
 | Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks. |
 | Expanded table dump | This RDR | Introduced | Reviewers can inspect the full table without maintaining it by hand. |
-| Graph/render export | This RDR | Introduced | Source metadata must render to table and graph views without becoming the runtime source of truth. |
-| Source rewrite | This RDR | Conditional | Rewrite is allowed only where parse-edit-render preserves the sparse source's review ergonomics. |
+| Graph/render export | RDR 0006 | Pending | This RDR exposes normalized rows and source ids; graph-specific rendering remains with graph lint. |
 
 ### Existing Infrastructure Audit
 
@@ -508,11 +489,10 @@ because they would either drive orchestration or hide the contract in host
 callbacks; their useful role is vocabulary, validation, and visualization.
 
 Premortem: this could fail if the sparse source becomes a verbose
-pseudo-language, if expansion hides surprising implicit rows, or if automated
-rewrite churns comments and ordering so reviewers no longer trust the file. The
+pseudo-language or if expansion hides surprising implicit rows. The
 recommendation survives only if Resolve proves the RDR and kata examples with a
-parse-normalize-dump spike and a parse-edit-render rewrite spike. If those fail,
-rewrite must be deferred and the source schema must be reduced before lock.
+parse-normalize-dump spike. If that fails, the source schema must be reduced
+before lock.
 
 ## Alternatives Considered
 
@@ -528,14 +508,14 @@ normalizes rules into explicit candidate rows and can dump that expanded table.
   plus profile plus prelock iteration plus guards.
 - Keeps the source reviewable while still giving lint and resolver code a fully
   explicit row set.
-- Supports mechanical dumps, graph export, and diagnostics tied back to stable
-  source rule ids.
+- Supports mechanical dumps, diagnostics tied back to stable source rule ids,
+  and future graph export by RDR 0006.
 - Fits Go CLI implementation with ordinary typed decoding and validation.
 
 **Cons**:
 
-- Normalization and rewrite are real contracts, not just parsing.
-- Exact field layout and comment-preserving edits need spikes before lock.
+- Normalization is a real contract, not just parsing.
+- Exact field layout needs spikes before lock.
 - TOML is not a formal state-machine standard, so graph validation must be built
   over the parsed representation.
 
@@ -642,8 +622,6 @@ TOML can carry the same semantics.
   primarily an internal data-format decision.
 - Some expressiveness is intentionally deferred to RDR 0003 so this table stays
   statically checkable.
-- Source-preserving rewrite becomes a gated capability: useful, but only where
-  the parse-edit-render spike proves low-churn diffs.
 
 ### Risks and Mitigations
 
@@ -660,9 +638,6 @@ TOML can carry the same semantics.
 - **Risk**: Accessor references pull execution semantics into the table.
   **Mitigation**: The table only names accessor bindings; RDR 0004 owns execution
   and read-back behavior.
-- **Risk**: Automated rewrite damages comments or reviewer-chosen ordering.
-  **Mitigation**: Rewrite is conditional on a parse-edit-render spike; otherwise
-  the CLI may suggest edits or regenerate dumps but must not mutate source.
 
 ### Failure Modes
 
@@ -671,9 +646,7 @@ normalization explosions fail at load/validation time with stable CLI errors. A
 row gap, overlap, write to an undeclared tag, read-before-write condition, or
 ambiguous expansion is a lint failure before the model is accepted. At runtime,
 unknown outcomes, zero matches, multiple matches, and unavailable accessor
-inputs are typed resolver refusals rather than guessed edges. Rewrite failures
-must leave the source unchanged and report the unsupported edit or preservation
-problem.
+inputs are typed resolver refusals rather than guessed edges.
 
 ## Implementation Plan
 
@@ -692,8 +665,6 @@ declarations, context references, predicate references, recognized outcomes, and
 multi-tag writes; then prove by unit test that one sample tag-set resolves to
 exactly one row and one ambiguous tag-set is refused. The RDR fixture must cover
 at least `Status`, `Profile`, prelock iteration, and one rewind or cluster guard.
-The spike must also perform one parse-edit-render operation and show the source
-diff.
 
 ### Phase 1: Fixture and Schema Spike
 
@@ -717,13 +688,7 @@ Connect the normalized rows to RDR 0001's exact-one matching contract without
 adding runtime ordering or host-code predicate callbacks. Internal indexes may
 be decision trees or tries, but they must preserve the normalized semantics.
 
-### Phase 5: Rewrite Handshake
-
-Define which source edits the CLI may perform automatically and which it must
-refuse or report as suggestions because comment/order preservation is not
-proven.
-
-### Phase 6: Lint Handshake
+### Phase 5: Lint Handshake
 
 Expose the parsed representation needed by RDR 0006 for graph determinism,
 reachability, and read-before-write checks.
