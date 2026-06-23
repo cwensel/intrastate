@@ -8,7 +8,7 @@
 - **Date**: 2026-06-19
 - **Status**: Draft
 - **Type**: Architecture
-- **Profile**: large — locks the resolver's deterministic kernel contract and refusal semantics.
+- **Profile**: large — locks one resolver-kernel contract with deterministic disposition and typed-refusal semantics.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: None
@@ -40,10 +40,11 @@ stateless-kernel constraint, and the sibling RDR split already present in this
 cluster. `docs/cli-output-contract.md` establishes refusal-first CLI behavior;
 RDR 0002 owns the reviewable transition table, RDR 0003 owns guard predicate
 shape, RDR 0004 owns accessor safety, RDR 0005 owns the user-facing CLI, and
-RDR 0006 owns graph lint. Sibling-path check for resolver selection rules:
-`rg -n "resolve|resolver|transition|state|guard|tag|predicate|recognized|outcome|next legal|illegal|refus" internal cmd docs`
-found no implemented resolver kernel under `internal/`; it found only the
-existing `respond`/`clierr` refusal plumbing and the peer RDR drafts.
+RDR 0006 owns graph lint. Reuse audit against the Stage 4 paths found no
+implemented resolver kernel, transition table, guard evaluator, or accessor
+executor under `internal/`; the only reusable surfaces are the existing
+`respond`/`clierr` refusal plumbing and the peer RDR drafts. Audit command:
+`rg -n "resolve|resolver|transition|state|guard|tag|predicate|recognized|outcome|next legal|illegal|refus" internal cmd docs`.
 
 ### Key Discoveries
 
@@ -51,45 +52,50 @@ existing `respond`/`clierr` refusal plumbing and the peer RDR drafts.
   values as refusals and routes structured failures through the CLI gateway.
 - **Documented** — peer RDRs 0002 through 0006 are already seeded around the
   adjacent seams this RDR must not absorb.
-- **Assumed** — the accessor, table, and guard seams can provide stable enough
-  inputs for deterministic kernel replay; Critical Assumptions A1-A3 carry that
-  verification work.
+- **Verified** — the accessor, table, and guard seams define the structures this
+  kernel consumes: RDR 0002 defines normalized exact-one candidate rows, RDR
+  0003 defines symbolic guard predicates without host callbacks, and RDR 0004
+  defines caller-artifact accessors with read-back verification.
 
 ### Critical Assumptions
 
 - **A1 Caller-supplied observed and freshly recognized tags are sufficient
   inputs for non-owned facts.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: Pending: Resolve must name a kernel test where identical
-    table, owned snapshot, observed tags, and recognized outcome produce an
-    identical resolution without hidden reads.
+  - **Evidence**: Minimum Viable Validation names `Replay the same legal input
+    tuple twice`: identical table, owned snapshot, observed tags, and recognized
+    outcome must return value-identical transition plans without hidden reads.
   - **If wrong**: The resolver would need orchestration authority or ambient
     discovery, breaking replay safety.
 - **A2 Owned tags can be read from and persisted to caller-provided artifacts
   through injected accessors without making the resolver itself stateful.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0004 must define artifact-bound accessor
-    execution and read-back semantics compatible with a stateless resolver.
+  - **Evidence**: RDR 0004 `Approach`, `Technical Design`, and `Normative
+    Contracts` define read/write/gate accessors over caller-supplied artifact
+    roles, planned owned-tag writes only, same-role read-back verification, and
+    structured success/refusal values with no direct output.
   - **If wrong**: The kernel either cannot persist legal transitions or must own
     storage, collapsing the resolver/accessor split.
 - **A3 The transition table and guard predicates can expose enough structure for
   deterministic single-edge selection.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 and RDR 0003 must define table and predicate
-    contracts that let the kernel evaluate candidate edges without host-code
-    callbacks.
+  - **Evidence**: RDR 0002 `Approach` and `Normative Contracts` define
+    normalized candidate rows, source identity, and exact-one row matching; RDR
+    0003 `Approach` and `Normative Contracts` define closed symbolic predicate
+    atoms over declared tags and reject host predicates before resolution.
   - **If wrong**: The kernel cannot prove whether zero, one, or multiple edges
     match, so refusal semantics become guesswork.
 - **A4 Refusal outcomes can be represented as typed kernel results and mapped to
   CLI errors outside the kernel.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`
-    and `internal/cli/respond::Fail` can carry the resolver's refusal classes
-    without adding kernel-owned output behavior.
+  - **Evidence**: `internal/cli/clierr/clierr.go:48` defines extensible
+    `CLIError` fields and exit groups; `internal/cli/respond/respond.go:133`
+    emits failures through `Fail`; `internal/cli/root.go:85` converts
+    command-level failures through the same gateway.
   - **If wrong**: The kernel would need CLI-specific behavior or the CLI would
     lose stable error mapping.
 
@@ -425,7 +431,9 @@ No third-party dependency is proposed at this stage.
 Implementation must add focused resolver-kernel tests before any CLI command
 wraps the kernel. The tests exercise the pure decision boundary: fixture
 transition tables, owned snapshots supplied through test accessors, observed
-tags supplied by the caller, and freshly recognized outcome tags.
+tags supplied by the caller, and freshly recognized outcome tags. The matrix is
+grounded in A1's MVV replay evidence, A2's RDR 0004 accessor seam, A3's RDR
+0002/0003 exact-one predicate seam, and A4's existing CLI refusal gateway.
 
 1. **Scenario**: Replay the same legal input tuple twice.
    **Expected**: Both calls return value-identical transition plans, including
@@ -443,10 +451,11 @@ tags supplied by the caller, and freshly recognized outcome tags.
 ### Performance Expectations
 
 No throughput target is part of this RDR. Resolution is bounded by the supplied
-transition table and caller-provided artifacts; implementation should keep the
-kernel allocation-light and deterministic, then benchmark only if the RDR or
-kata tables become large enough to make table scans visible in normal command
-latency.
+transition table and caller-provided artifacts. No byte-stable hash or
+canonical serialization is introduced; determinism is value-level replay of the
+input tuple named in A1. Implementation should keep the kernel allocation-light
+and deterministic, then benchmark only if the RDR or kata tables become large
+enough to make table scans visible in normal command latency.
 
 ## Finalization Gate
 
