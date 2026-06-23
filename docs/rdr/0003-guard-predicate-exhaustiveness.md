@@ -221,6 +221,16 @@ by expanding each predicate into a finite domain constraint; it proves whether
 candidate rows for an outcome are mutually exclusive and whether they cover the
 declared domain.
 
+The initial operator/kind matrix is:
+
+| Operator | Accepted tag value kinds | Literal shape | Lint proof role |
+| --- | --- | --- | --- |
+| `eq` | enum, boolean, integer, string-like scalar | one typed scalar | Narrows the tag domain to one value. |
+| `in` | enum, boolean, integer, string-like scalar | non-empty typed scalar set | Narrows the tag domain to the listed values. |
+| `lt`, `lte`, `gt`, `gte` | integer | one typed integer | Narrows a bounded integer domain by comparison; remains runtime-only for an unbounded integer. |
+| `exists` | optional scalar or optional set-valued tag | boolean | Tests presence or absence, not value equality. |
+| `contains` | set-valued tag with a declared element universe | non-empty typed element set | Narrows the set-valued domain to assignments containing every listed element. |
+
 This intentionally aligns with prior art that separates positive and negative
 guard lists, and deliberately diverges from callback-driven FSM libraries.
 Callbacks are ergonomic for application code, but intrastate needs the guard
@@ -237,15 +247,19 @@ constraints for graph lint.
 
 A predicate atom has four conceptual fields: tag name, operator, expected value,
 and source identity. The tag name must resolve to a declared tag. The operator
-must be allowed for the tag's value kind. The expected value must parse to that
-kind. Source identity is inherited from the RDR 0002 row/context so diagnostics
-can point back to the authored guard.
+must be allowed by the operator/kind matrix above. The expected value must parse
+to the operator's literal shape. Source identity is inherited from the RDR 0002
+row/context so diagnostics can point back to the authored guard.
 
 Positive `all` predicates are conjunctive requirements. Negative `unless`
 predicates are also conjunctive within the excluded predicate set: if all
 `unless` predicates hold, the candidate row is disabled. Normalization may
 combine them into one internal constraint object, but authoring keeps the
 separation because it reads better and mirrors prior art.
+For lint, a row's accepted assignments are the intersection of all positive
+`all` atom domains minus the single conjunctive assignment set matched by the
+row's full `unless` block. `unless` is not per-atom negation, and it does not
+create source-order priority.
 
 Exhaustiveness is only asserted over finite declared domains. Enum, boolean,
 and set-element universes are finite by declaration. Integer tags are exhaustive
@@ -636,7 +650,10 @@ unbounded dimensions.
 ### Phase 3: Target-Flow Fixture
 
 Build the MVV fixture against representative RDR and kata guards and use the
-result to confirm or adjust the initial operator set.
+result to confirm or adjust the initial operator set. The Resolve spike already
+covered the target-flow subset `eq`, `in`, `lt`, `gte`, and `exists`; the
+implementation MVV must add at least one `contains` predicate over a declared
+set-valued tag before the full operator vocabulary is accepted.
 
 ### Phase 4: Integration With Peer RDRs
 
@@ -665,13 +682,16 @@ exhaustiveness proof/refusal without host callbacks or source-order priority.
 Resolve evidence for the representative authoring shape lives in
 `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/`: the fixture
 covers profile routing, cap-3 handling, prelock lens sets, cluster eligibility,
-and rewind legality, while the checker confirms the closed operator vocabulary.
+and rewind legality with the target-flow subset `eq`, `in`, `lt`, `gte`, and
+`exists`. The implementation MVV must extend that coverage with `contains`
+before the full closed operator vocabulary is accepted.
 
 1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
    membership, set containment, bounded integer comparison, existence, and mixed
    `all`/`unless` guards.
-   **Expected**: Exactly one qualifying row resolves for the legal input, and
-   zero or multiple qualifying rows become typed refusals.
+   **Expected**: Exactly one qualifying row resolves for the legal input; a row
+   whose `all` predicates match is disabled when its full conjunctive `unless`
+   block also matches; zero or multiple qualifying rows become typed refusals.
 2. **Scenario**: Lint finite enum, boolean, set-universe, and bounded-int tag
    domains with one complete partition, one intentional gap, and one intentional
    overlap.
@@ -688,17 +708,18 @@ and rewind legality, while the checker confirms the closed operator vocabulary.
 5. **Scenario**: Reorder authored rows and guard atoms without changing their
    semantics.
    **Expected**: Successful matching and lint findings are unchanged because
-   source order is not a selection mechanism.
+   source order is not a selection mechanism; an ambiguous pair remains a
+   multiple-match refusal instead of becoming a first-match success.
 
 ### Performance Expectations
 
 Resolve measured representative fixture size rather than setting a throughput
-target: the spike uses four rows and five of the closed operators. The intended
-implementation uses local typed comparisons and finite-set expansion over
-declared domains; no callback invocation, expression parser, or external engine
-is part of the hot path. If implementation later indexes predicates for speed,
-the optimization must preserve the normalized atom semantics and exact-one
-refusal behavior.
+target: the spike uses four rows and the target-flow operator subset. The
+intended implementation uses local typed comparisons and finite-set expansion
+over declared domains; no callback invocation, expression parser, or external
+engine is part of the hot path. If implementation later indexes predicates for
+speed, the optimization must preserve the normalized atom semantics and
+exact-one refusal behavior.
 
 ## Finalization Gate
 
