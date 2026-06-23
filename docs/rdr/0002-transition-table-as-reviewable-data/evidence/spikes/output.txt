@@ -1,0 +1,6 @@
+MODEL rdr rows=2 outcomes=round-clean,verdict-flapping,reconcile-block,finalized
+rdr.continue-prelock source=rdr:prelock match=[all:iter.lt=3; outcome.eq=round-clean; profile.in=[large foundational]; stage.eq=prelock; status.eq=Draft; unless:profile.eq=small] write=[iter=2; stage=prelock]
+rdr.reconcile-rewind source=rdr:reconcile match=[outcome.eq=reconcile-block; status.eq=Draft] write=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft]
+MODEL kata rows=2 outcomes=accepted,needs-work,closed
+kata.review-accepted source=kata:review match=[all:owner.eq=current-session; outcome.eq=accepted; phase.eq=review; status.eq=open; unless:status.eq=closed] write=[phase=ship; status=accepted]
+kata.review-needs-work source=kata:review match=[outcome.eq=needs-work; phase.eq=review; status.eq=open] write=[phase=resolve; status=open]
