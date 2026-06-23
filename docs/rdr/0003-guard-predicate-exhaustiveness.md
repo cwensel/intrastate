@@ -122,10 +122,11 @@ guard model.
   - **Evidence**: `cd docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes && sh check.sh guard-fixture.toml` validated four representative guard rows covering status/profile routing, cap-3 handling, prelock lens sets, cluster eligibility, and rewind legality with only `eq`, `in`, `lt`, `gte`, and `exists`; transcript captured in `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/output.txt`.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
-- **A2 Every exhaustiveness claim can be reduced to finite declared domains.**
+- **A2 Every exhaustiveness claim can be reduced to scoped finite declared
+  domains.**
   - **Status**: Verified
   - **Method**: Derivation
-  - **Evidence**: For every exhaustiveness-eligible tag, lint receives a finite domain `D`: enum/boolean values as declared sets, set-valued tags as the declared element universe's finite powerset or an implementation-equivalent bitset, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of `D`; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == D` for the checked dimension/product, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks finite `D`, the proof cannot enumerate coverage and lint must refuse or downgrade the exhaustiveness claim.
+  - **Evidence**: For every exhaustiveness-eligible row group, lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that vary inside that group: enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
@@ -139,7 +140,7 @@ guard model.
   gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. Predicate parse, unknown-operator, type-mismatch, non-exhaustive, overlap, and unevaluable-guard failures can add stable codes on this existing gateway.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, and unevaluable guard; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
   - **If wrong**: This RDR or RDR 0005 must add a separate user-facing error
     contract before implementation.
 - **A5 The normalized predicate representation can retain source identity for
@@ -217,9 +218,10 @@ Each tag declaration supplies the value kind and, when lint must prove
 exhaustiveness, the finite domain: enum values, boolean values, set element
 universe, or bounded integer range. Runtime guard evaluation is simple predicate
 evaluation over the assembled tag-set. Static lint reasons over the same atoms
-by expanding each predicate into a finite domain constraint; it proves whether
-candidate rows for an outcome are mutually exclusive and whether they cover the
-declared domain.
+inside row groups supplied by the normalized model: within one selection
+context, it checks the scoped product of participating guard domains, proves
+whether candidate rows are mutually exclusive, and proves whether they cover the
+declared product.
 
 The initial operator/kind matrix is:
 
@@ -256,20 +258,26 @@ predicates are also conjunctive within the excluded predicate set: if all
 `unless` predicates hold, the candidate row is disabled. Normalization may
 combine them into one internal constraint object, but authoring keeps the
 separation because it reads better and mirrors prior art.
-For lint, a row's accepted assignments are the intersection of all positive
-`all` atom domains minus the single conjunctive assignment set matched by the
-row's full `unless` block. `unless` is not per-atom negation, and it does not
-create source-order priority.
+For lint, RDR 0002 supplies the normalized candidate rows and RDR 0006 supplies
+the graph-lint grouping context, such as one source-state/recognized-outcome
+selection group. Within that group, a row's accepted assignments are the
+intersection of all positive `all` atom domains minus the single conjunctive
+assignment set matched by the row's full `unless` block. `unless` is not
+per-atom negation, and it does not create source-order priority.
 
 Exhaustiveness is only asserted over finite declared domains. Enum, boolean,
-and set-element universes are finite by declaration. Integer tags are exhaustive
-only when they declare a bounded range; this covers cap counters and iteration
-limits without pretending arbitrary integers can be fully partitioned. A guard
-may still compare an unbounded integer at runtime, but lint must report that it
-cannot prove exhaustive coverage for that dimension. Provenance affects lint:
-recognized tags are fresh event inputs, observed tags are re-read before
-matching, and owned tags must have a reachable predecessor write before a row
-may match them.
+and set-element universes are finite by declaration; set-valued tags must be
+represented symbolically or as an implementation-equivalent bitset rather than
+requiring literal powerset materialization. Integer tags are exhaustive only
+when they declare a bounded range; this covers cap counters and iteration limits
+without pretending arbitrary integers can be fully partitioned. A guard may
+still compare an unbounded integer at runtime, but lint must report that it
+cannot prove exhaustive coverage for that dimension. If a finite scoped product
+is too large for the implementation to prove deterministically, lint must also
+refuse or downgrade the exhaustiveness claim instead of silently capping the
+proof. Provenance affects lint: recognized tags are fresh event inputs, observed
+tags are re-read before matching, and owned tags must have a reachable
+predecessor write before a row may match them.
 
 #### Normative Contracts
 
@@ -308,6 +316,19 @@ covered examples as complete.
 ```
 
 ```normative
+Coverage and overlap checks MUST be scoped to a normalized row group supplied by
+the transition/lint model, and MUST evaluate the participating guard dimensions
+as one product rather than as independent one-dimensional checks.
+```
+
+```normative
+Set-valued guard domains MUST be proved with a deterministic symbolic or
+bitset-equivalent representation. If the finite product is too large for that
+proof, lint MUST refuse or downgrade the exhaustiveness claim rather than
+silently capping enumeration.
+```
+
+```normative
 Overlap and coverage diagnostics MUST name the source rule id or context id
 that contributed each predicate involved in the finding.
 ```
@@ -334,9 +355,13 @@ sets or preserves that tag before the match.
   optional tag value; set containment checks declared set-valued tags against a
   typed element set.
 - **Finite-domain proof** — exhaustive coverage is a lint claim over the
-  declared tag domain, not over examples observed in fixtures. Unbounded
-  dimensions remain runtime-evaluable but cannot satisfy an exhaustiveness
-  proof.
+  declared tag-domain product for a normalized row group, not over examples
+  observed in fixtures. Unbounded dimensions and finite products that cannot be
+  represented deterministically remain runtime-evaluable but cannot satisfy an
+  exhaustiveness proof.
+- **Error ownership** — this RDR names predicate semantic kinds; RDR 0006 maps
+  graph-level predicate failures to lint finding codes, and RDR 0005 maps those
+  findings/refusals to the CLI envelope.
 - **Selection / predicate** — a row qualifies only when every `all` atom is true
   and the `unless` predicate set is not fully true; if multiple rows qualify,
   RDR 0001's exact-one resolver refuses instead of choosing by priority.
@@ -607,6 +632,13 @@ skills.
 - **Risk**: Finite-domain declarations feel like boilerplate.
   **Mitigation**: Keep declarations close to tag definitions in RDR 0002's
   model and make diagnostics explain when a missing domain blocks proof.
+- **Risk**: Multi-dimensional coverage is accidentally checked one dimension at
+  a time.
+  **Mitigation**: Require MVV cases with a gap and overlap that only appear in a
+  scoped row-group product.
+- **Risk**: Set-valued domains are implemented by naive powerset enumeration.
+  **Mitigation**: Require symbolic or bitset-equivalent proof and explicit
+  refusal/downgrade for finite products that are too large to prove.
 - **Risk**: `unless` semantics are misunderstood as per-atom negation.
   **Mitigation**: Normatively define it as an excluded predicate set and require
   fixtures that demonstrate mixed `all`/`unless` behavior.
@@ -615,10 +647,10 @@ skills.
 
 Visible failures should be typed parse or lint failures: unknown operator,
 operator/tag-kind mismatch, literal parse failure, unknown tag, non-exhaustive
-finite domain, overlapping candidate rows, or guard dimension not provable
-because it lacks a finite domain. Silent failure would be a false
-exhaustiveness claim; the recovery path is to keep every exactness claim tied to
-A2 and the MVV fixture before Final.
+finite domain, overlapping candidate rows, guard dimension not provable because
+it lacks a finite domain, or finite scoped product too large to prove. Silent
+failure would be a false exhaustiveness claim; the recovery path is to keep
+every exactness claim tied to A2 and the MVV fixture before Final.
 
 ## Implementation Plan
 
@@ -633,8 +665,9 @@ A2 and the MVV fixture before Final.
 Encode one RDR flow slice and one kata flow slice as normalized candidate rows,
 including equality, enum membership, set containment, bounded integer
 comparison, and mixed `all`/`unless` guards. Lint must prove one exhaustive and
-mutually exclusive route, then detect one intentional gap and one intentional
-overlap with source rule/context ids in the diagnostic.
+mutually exclusive scoped row group, then detect one intentional gap and one
+intentional overlap that only appear in the multi-dimensional product, with
+source rule/context ids in the diagnostic.
 
 ### Phase 1: Predicate Model
 
@@ -644,8 +677,9 @@ shape used by resolver and lint.
 ### Phase 2: Finite-Domain Lint Semantics
 
 Define how enum, boolean, set-universe, and bounded-int domains are converted
-into coverage and overlap checks, including refusal/downgrade behavior for
-unbounded dimensions.
+into scoped row-group coverage and overlap checks, including
+refusal/downgrade behavior for unbounded dimensions and finite products too
+large to prove deterministically.
 
 ### Phase 3: Target-Flow Fixture
 
@@ -693,18 +727,21 @@ before the full closed operator vocabulary is accepted.
    whose `all` predicates match is disabled when its full conjunctive `unless`
    block also matches; zero or multiple qualifying rows become typed refusals.
 2. **Scenario**: Lint finite enum, boolean, set-universe, and bounded-int tag
-   domains with one complete partition, one intentional gap, and one intentional
-   overlap.
-   **Expected**: Complete partitions pass; gaps and overlaps fail with source
-   rule/context ids.
+   domains inside one normalized row group with one complete partition, one
+   intentional gap visible only in the multi-dimensional product, and one
+   intentional overlap visible only in the multi-dimensional product.
+   **Expected**: Complete partitions pass; product-level gaps and overlaps fail
+   with source rule/context ids.
 3. **Scenario**: Lint an otherwise valid guard over an unbounded integer or
-   undeclared finite domain.
+   undeclared finite domain, and lint a declared finite product too large for
+   the deterministic proof representation.
    **Expected**: Runtime evaluation remains available, but lint refuses or
-   downgrades the exhaustiveness claim for that dimension.
+   downgrades the exhaustiveness claim for that dimension/product.
 4. **Scenario**: Parse malformed guard atoms: unknown tag, unknown operator,
    unsupported operator/tag-kind pair, and literal parse mismatch.
-   **Expected**: Each failure is rejected before resolution with a stable
-   structured error category for the CLI gateway.
+   **Expected**: Each failure is rejected before resolution with a predicate
+   semantic kind that RDR 0006 can map to a lint finding and RDR 0005 can map to
+   the structured CLI gateway.
 5. **Scenario**: Reorder authored rows and guard atoms without changing their
    semantics.
    **Expected**: Successful matching and lint findings are unchanged because
@@ -715,11 +752,12 @@ before the full closed operator vocabulary is accepted.
 
 Resolve measured representative fixture size rather than setting a throughput
 target: the spike uses four rows and the target-flow operator subset. The
-intended implementation uses local typed comparisons and finite-set expansion
-over declared domains; no callback invocation, expression parser, or external
-engine is part of the hot path. If implementation later indexes predicates for
-speed, the optimization must preserve the normalized atom semantics and
-exact-one refusal behavior.
+intended implementation uses local typed comparisons and deterministic symbolic
+or bitset-equivalent finite-domain proof over declared domains; no callback
+invocation, expression parser, or external engine is part of the hot path. If
+implementation later indexes predicates for speed, the optimization must
+preserve the normalized atom semantics, scoped product proof, and exact-one
+refusal behavior.
 
 ## Finalization Gate
 
