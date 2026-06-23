@@ -1,0 +1,68 @@
+outcomes = ["accepted", "needs-work", "closed"]
+
+[model]
+id = "kata"
+version = 1
+description = "Representative kata lifecycle slice."
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+accessor = "kata-frontmatter"
+
+[tags.phase]
+provenance = "owned"
+kind = "enum"
+
+[tags.owner]
+provenance = "observed"
+kind = "string"
+accessor = "kata-owner"
+
+[tags.outcome]
+provenance = "recognized"
+kind = "enum"
+
+[accessors.kata-frontmatter]
+mode = "read-write"
+path = "kata.frontmatter"
+
+[accessors.kata-owner]
+mode = "read"
+path = "kata.owner"
+
+[context.open.match.status]
+eq = "open"
+
+[context.review]
+inherits = "open"
+[context.review.match.phase]
+eq = "review"
+
+[[rule]]
+id = "review-needs-work"
+use = ["review"]
+source = "kata:review"
+self = true
+[rule.match.outcome]
+eq = "needs-work"
+[rule.write]
+phase = "resolve"
+status = "open"
+
+[[rule]]
+id = "review-accepted"
+use = ["review"]
+source = "kata:review"
+[rule.match.outcome]
+eq = "accepted"
+[rule.guard.all.owner]
+eq = "current-session"
+[rule.guard.unless.status]
+eq = "closed"
+[rule.write]
+phase = "ship"
+status = "accepted"
+
+[dump]
+order = ["model", "rule", "match", "write"]

@@ -1,0 +1,82 @@
+outcomes = ["round-clean", "verdict-flapping", "reconcile-block", "finalized"]
+
+[model]
+id = "rdr"
+version = 1
+description = "Representative RDR prelock and rewind slice."
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+accessor = "rdr-status"
+
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+
+[tags.iter]
+provenance = "owned"
+kind = "int"
+
+[tags.outcome]
+provenance = "recognized"
+kind = "enum"
+
+[tags.finalized_at]
+provenance = "observed"
+kind = "string"
+accessor = "rdr-finalized-at"
+
+[accessors.rdr-status]
+mode = "read-write"
+path = "rdr.status"
+
+[accessors.rdr-finalized-at]
+mode = "read"
+path = "rdr.finalized_at"
+
+[context.draft.match.status]
+eq = "Draft"
+
+[context.prelock]
+inherits = "draft"
+[context.prelock.match.stage]
+eq = "prelock"
+
+[context.large-prelock]
+inherits = "prelock"
+[context.large-prelock.match.profile]
+in = ["large", "foundational"]
+
+[[rule]]
+id = "continue-prelock"
+use = ["large-prelock"]
+source = "rdr:prelock"
+[rule.match.outcome]
+eq = "round-clean"
+[rule.guard.all.iter]
+lt = 3
+[rule.guard.unless.profile]
+eq = "small"
+[rule.write]
+stage = "prelock"
+iter = 2
+
+[[rule]]
+id = "reconcile-rewind"
+use = ["draft"]
+source = "rdr:reconcile"
+clear = ["prelock_lens"]
+[rule.match.outcome]
+eq = "reconcile-block"
+[rule.write]
+stage = "resolve"
+status = "Draft"
+rewind_scope = "assumptions"
+
+[dump]
+order = ["model", "rule", "match", "write"]
