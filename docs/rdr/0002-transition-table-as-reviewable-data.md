@@ -150,6 +150,18 @@ factor common context instead of enumerating every Cartesian row.
   - **Evidence**: `rdr-fixture.toml` encodes `draft -> prelock -> large-prelock` inherited contexts plus `all.iter.lt = 3` and `unless.profile.eq = "small"` guards; `output.txt` shows the normalized row with inherited status/stage/profile predicates and combined `all`/`unless` predicates, preserving ambiguity visibility in the expanded row.
   - **If wrong**: The model either needs a richer statechart-like hierarchy or
     the table becomes too repetitive for reliable human review.
+- **A7 Deterministic expanded-table ordering is a format contract, not an
+  implementation accident.**
+  - **Status**: Verified
+  - **Method**: Design Decision
+  - **Evidence**: Normative Contracts define the expanded table as the
+    normalized candidate-row value containing model id, row identity, source
+    locator, predicates, and writes; they require dump ordering to sort rows by
+    row identity and then sort predicate and write keys within each row. This
+    explicitly rejects source-order, map-iteration, and renderer-specific
+    ordering.
+  - **If wrong**: Golden tests and review dumps could churn across machines or
+    refactors even when the transition semantics are unchanged.
 
 **Method vocabulary** (pick exactly one per assumption):
 
