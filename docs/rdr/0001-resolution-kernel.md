@@ -99,6 +99,27 @@ executor under `internal/`; the only reusable surfaces are the existing
     converts command-level failures through the same gateway.
   - **If wrong**: The kernel would need CLI-specific behavior or the CLI would
     lose stable error mapping.
+- **A5 The resolver owns a closed value-level refusal taxonomy rather than
+  returning modeled refusals as Go errors or CLI-owned strings.**
+  - **Status**: Accepted
+  - **Method**: Design Decision
+  - **Evidence**: The kernel-owned refusal kind set is exactly `no_match`,
+    `ambiguous_match`, `owned_state_unavailable`, `guard_unevaluable`, and
+    `unmodeled_outcome`; the rejected alternative is letting RDR 0005 infer
+    CLI codes from Go errors or ad hoc strings.
+  - **If wrong**: RDR 0005 would invent mappings outside the kernel contract,
+    and skill integrations would branch on brittle error text instead of a
+    stable resolver disposition.
+
+### Stage 6 Reconcile Record
+
+| Item | Source | Disposition | Evidence pointer or plan |
+| --- | --- | --- | --- |
+| Pre-lock needs-verification lists | 1 | VERIFIED | `docs/rdr/0001-resolution-kernel/evidence/3amigo/dispositions.md` and `docs/rdr/0001-resolution-kernel/evidence/critique/dispositions.md` both state `Needs verification: None`. |
+| Pending or unverified assumptions | 2 | VERIFIED | Critical Assumptions A1-A4 are `Status: Verified`; A5 is `Status: Accepted` as a design decision. |
+| Named but unrun spikes | 3 | VERIFIED | No spike is named by the RDR or findings as a required run; no `evidence/spikes/` results are required for this reconcile pass. |
+| Round-introduced accessor-boundary exactness | 4 | VERIFIED | A1 covers value-identical replay from explicit inputs; A2 pins accessor execution outside the resolver through RDR 0004. |
+| Round-introduced unmodeled-outcome and refusal-taxonomy exactness | 4 | ACCEPTED | A5 accepts the closed kernel-owned refusal taxonomy as a design decision; MVV and Validation require one value-level refusal case for every listed kind. |
 
 **Method vocabulary** (pick exactly one per assumption):
 
