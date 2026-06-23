@@ -7,57 +7,8 @@
 
 - **Date**: 2026-06-19
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Architecture
-- **Profile**: large — locks the guard predicate grammar and exhaustiveness contract.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
+- **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel
@@ -92,13 +43,13 @@ guard lists but delegates the operator grammar here, and RDR 0006 will depend on
 this RDR for static determinism and exhaustiveness checks.
 
 The Domain priors do not include an in-repo competitor document for guard
-predicate exhaustiveness, so this large-profile proposal used the sibling
-`../state-machines` corpus as the bounded prior-art pass. The strongest local
-prior is `MODEL-transition.md`: state is a tag-set, a transition is predicate
-matching over that tag-set, and "guard" is not a side input but a predicate over
-machine data. That model also names tag provenance (`owned`, `observed`,
+predicate exhaustiveness, so the bounded prior-art pass used the sibling
+`../state-machines` corpus. The strongest local prior is
+`MODEL-transition.md`: state is a tag-set, a transition is predicate matching
+over that tag-set, and "guard" is not a side input but a predicate over machine
+data. That model also names tag provenance (`owned`, `observed`,
 `recognized`) and design-time lint failures for overlapping rows,
-non-exhaustive predicates, and read-before-write of owned tags.
+non-exhaustive predicates, and owned-tag read-before-write.
 
 The tool corpus sharpens the options. `transitions` has the closest authoring
 shape to RDR 0002: positive `conditions` and negative `unless` lists. enetx/fsm,
@@ -374,6 +325,15 @@ sets or preserves that tag before the match.
 - **Naming** — the canonical name is "guard predicate"; rejected alternatives
   are "condition callback" and "guard expression" because both invite opaque
   host logic.
+- **Operator semantics** — equality compares a tag value to one typed literal;
+  membership checks a scalar tag against a typed literal set; bounded integer
+  comparison uses `lt`, `lte`, `gt`, and `gte`; existence checks presence of an
+  optional tag value; set containment checks declared set-valued tags against a
+  typed element set.
+- **Finite-domain proof** — exhaustive coverage is a lint claim over the
+  declared tag domain, not over examples observed in fixtures. Unbounded
+  dimensions remain runtime-evaluable but cannot satisfy an exhaustiveness
+  proof.
 - **Selection / predicate** — a row qualifies only when every `all` atom is true
   and the `unless` predicate set is not fully true; if multiple rows qualify,
   RDR 0001's exact-one resolver refuses instead of choosing by priority.
@@ -709,21 +669,42 @@ small parsing or set library is necessary.
 
 ### Testing Strategy
 
-[Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The MVV should become production tests that exercise both runtime predicate
+evaluation and lint-time finite-domain reasoning. Done means the same normalized
+predicate atoms drive exact-one row selection, overlap detection, and
+exhaustiveness proof/refusal without host callbacks or source-order priority.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
+   membership, set containment, bounded integer comparison, existence, and mixed
+   `all`/`unless` guards.
+   **Expected**: Exactly one qualifying row resolves for the legal input, and
+   zero or multiple qualifying rows become typed refusals.
+2. **Scenario**: Lint finite enum, boolean, set-universe, and bounded-int tag
+   domains with one complete partition, one intentional gap, and one intentional
+   overlap.
+   **Expected**: Complete partitions pass; gaps and overlaps fail with source
+   rule/context ids.
+3. **Scenario**: Lint an otherwise valid guard over an unbounded integer or
+   undeclared finite domain.
+   **Expected**: Runtime evaluation remains available, but lint refuses or
+   downgrades the exhaustiveness claim for that dimension.
+4. **Scenario**: Parse malformed guard atoms: unknown tag, unknown operator,
+   unsupported operator/tag-kind pair, and literal parse mismatch.
+   **Expected**: Each failure is rejected before resolution with a stable
+   structured error category for the CLI gateway.
+5. **Scenario**: Reorder authored rows and guard atoms without changing their
+   semantics.
+   **Expected**: Successful matching and lint findings are unchanged because
+   source order is not a selection mechanism.
 
 ### Performance Expectations
 
-[Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+Resolve should measure representative fixture size rather than set a throughput
+target in this RDR. The intended implementation uses local typed comparisons
+and finite-set expansion over declared domains; no callback invocation,
+expression parser, or external engine is part of the hot path. If implementation
+later indexes predicates for speed, the optimization must preserve the
+normalized atom semantics and exact-one refusal behavior.
 
 ## Finalization Gate
 
@@ -818,7 +799,15 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0001, Resolution Kernel Contract.
+- RDR 0002, Transition Table As Reviewable Data.
+- RDR 0006, Graph Lint Authority and Guarantees.
+- `docs/cli-output-contract.md`.
+- Resource index: `.rdr/resources.md`.
+- Seed prior: `../state-machines/BUILD-SEEDS.md`, especially the guard
+  expression and transition-table seeds.
+- Transition model prior: "The transition model — inputs, outputs, error
+  conditions."
+- Prior-art corpus: `../state-machines` audits, evals, contrasts, and checked
+  repositories for `transitions`, stateless/qmuntal-stateless, SCXML/scxmlcc,
+  Sismic, StateSmith, and Statewright.
