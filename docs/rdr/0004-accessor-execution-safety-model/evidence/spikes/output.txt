@@ -1,0 +1,11 @@
+state.read/read tags={profile=large,status=Draft}
+state.gate/gate gate=allow
+state.gate/gate refusal=gate_indeterminate
+state.gate/gate refusal=execution_failure
+slow.read/read refusal=timeout
+missing.read/read refusal=unknown_accessor
+state.persist/read refusal=capability_mismatch
+state.persist/write tags={status=Final}
+state.persist/write refusal=read_back_mismatch expected={status=Final} observed={profile=large,status=corrupt}
+replay-identical=true first=state.persist/write tags={status=Final} second=state.persist/write tags={status=Final}
+replay-injected=state.gate/gate refusal=gate_indeterminate
