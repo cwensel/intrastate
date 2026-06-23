@@ -25,11 +25,11 @@ A skill that recognized a typed outcome needs a contracted resolver that returns
 
 The build model needs a replay-safe transition kernel for RDR and kata flows. The kernel must treat state as a tag-set, with guards expressed as predicates over tags and tag provenance distinguished as owned, observed, or freshly recognized.
 
-The real design fork is where owned state lives for replay safety: the caller can pass the whole tag-set each call, the kernel can own state storage, or a hybrid can read owned tags through declared accessors while the caller supplies non-owned facts.
+The real design fork is where owned state lives for replay safety: the caller can pass the whole tag-set each call, the kernel can own state storage, or a hybrid can use an accessor layer to read owned tags while the caller supplies non-owned facts.
 
 ### Technical Environment
 
-intrastate is a Go CLI wired through `internal/cli`. The resolver belongs in an internal package behind the CLI: it must stay stateless and non-orchestrating, rely on injected accessors for owned-state reads and writes, and refuse illegal or incomplete transition inputs rather than initiating work.
+intrastate is a Go CLI wired through `internal/cli`. The resolver belongs in an internal package behind the CLI: it must stay stateless and non-orchestrating, consume owned-state snapshots and write targets produced by the accessor layer, and refuse illegal or incomplete transition inputs rather than initiating work.
 
 ## Research Findings
 
@@ -69,15 +69,16 @@ executor under `internal/`; the only reusable surfaces are the existing
   - **If wrong**: The resolver would need orchestration authority or ambient
     discovery, breaking replay safety.
 - **A2 Owned tags can be read from and persisted to caller-provided artifacts
-  through injected accessors without making the resolver itself stateful.**
+  through the accessor layer without making the resolver itself stateful.**
   - **Status**: Verified
   - **Method**: Peer RDR
   - **Evidence**: RDR 0004 `Approach`, `Technical Design`, and `Normative
     Contracts` define read/write/gate accessors over caller-supplied artifact
     roles, planned owned-tag writes only, same-role read-back verification, and
     structured success/refusal values with no direct output.
-  - **If wrong**: The kernel either cannot persist legal transitions or must own
-    storage, collapsing the resolver/accessor split.
+  - **If wrong**: The resolver cannot rely on explicit owned-state snapshots and
+    planned writes without owning storage, collapsing the resolver/accessor
+    split.
 - **A3 The transition table and guard predicates can expose enough structure for
   deterministic single-edge selection.**
   - **Status**: Verified
@@ -147,42 +148,41 @@ Evidence Record or by the Minimum Viable Validation.
 ### Approach
 
 Use a hybrid, stateless resolver kernel: the caller supplies the transition
-table, the recognized typed outcome, all non-owned context tags, and the artifact
-handles/references that contain owned state. The kernel applies declared
-accessors to those caller-provided artifacts to read the owned tag snapshot,
-evaluates candidate edges deterministically, and returns either one legal
-transition plan or a typed refusal. The kernel does not discover artifacts,
-discover work, run subflows, print output, or own persistence. A successful
-resolution returns the next state tags and the owned-tag writes that the
-accessor layer applies back to the same caller-provided artifact boundary; an
-illegal, ambiguous, incomplete, or unmodeled input returns an explicit refusal
-class.
+table, the recognized typed outcome, all non-owned context tags, and the owned
+tag snapshot already read from caller-provided artifacts by the accessor layer.
+The kernel evaluates candidate edges deterministically and returns either one
+legal transition plan or a typed refusal. The kernel does not discover
+artifacts, execute accessors, discover work, run subflows, print output, or own
+persistence. A successful resolution returns the next state tags and the
+owned-tag writes that the accessor layer applies back to the same
+caller-provided artifact boundary; an illegal, ambiguous, incomplete, or
+unmodeled input returns an explicit refusal class.
 
 ### Technical Design
 
 The kernel is the pure decision boundary between recognition and action. Inputs
-are: flow identity, role-qualified artifact handles supplied by the caller,
-current owned-state snapshot obtained by applying accessors to those artifacts,
-observed tags supplied by the caller, the freshly recognized outcome tag, and
-the reviewable transition table. Evaluation builds a single tag-set view,
-selects matching candidate edges, refuses zero or multiple matches unless the
-table contract explicitly models an escape edge, and emits a transition plan.
+are: flow identity, transition table revision, owned-state snapshot values
+produced by the accessor layer, observed tags supplied by the caller, the
+freshly recognized outcome tag, and the reviewable transition table. Evaluation
+builds a single tag-set view, selects matching candidate edges, refuses zero or
+multiple matches unless the table contract explicitly models an escape edge,
+and emits a transition plan.
 
-Artifact selection stays outside this RDR's contract. The kernel may describe
-owned-tag writes in the returned plan, and the accessor layer knows how to apply
-those writes to the caller-provided artifacts, but RDR 0004 owns how those
-writes execute and how read-back verification works. The CLI surface, including
-text/json output and exit-code mapping, is owned by RDR 0005; the kernel only
-exposes structured success/refusal values that the CLI can map.
+Artifact selection and accessor execution stay outside this RDR's contract. The
+kernel may describe owned-tag writes in the returned plan, and the accessor
+layer knows how to apply those writes to caller-provided artifacts, but RDR 0004
+owns how reads, writes, and read-back verification execute. The CLI surface,
+including text/json output and exit-code mapping, is owned by RDR 0005; the
+kernel only exposes structured success/refusal values that the CLI can map.
 
 #### Normative Contracts
 
 ```normative
 Resolver kernel contract:
-Given the same transition table, caller-supplied role-qualified artifact
-references, owned tag snapshot read from those artifacts, caller-supplied
-observed tags, and freshly recognized outcome tag, resolve returns the same
-disposition: exactly one transition plan or exactly one typed refusal.
+Given the same flow identity, transition table revision, accessor-produced owned
+tag snapshot, caller-supplied observed tags, and freshly recognized outcome tag,
+resolve returns the same disposition: exactly one transition plan or exactly
+one typed refusal.
 
 The kernel MUST refuse instead of guessing when no edge matches, more than one
 edge matches, required owned state is unavailable, a guard cannot be evaluated,
@@ -196,9 +196,9 @@ side effects directly.
 #### Load-Bearing Decisions
 
 - **Identity** — a resolution input is the tuple of flow identity, transition
-  table revision, caller-provided artifact references, owned tag snapshot,
-  observed tag-set, and freshly recognized outcome tag. Replaying that tuple
-  must replay the disposition.
+  table revision, accessor-produced owned tag snapshot, observed tag-set, and
+  freshly recognized outcome tag. Replaying that tuple must replay the
+  disposition.
 - **Naming** — the internal component is the resolver kernel. Rejected names:
   "orchestrator" because it implies initiating work, and "state machine runner"
   because it implies owning persistence.
@@ -217,32 +217,36 @@ Validation.
 
 Illustrative algorithm only:
 
-1. Receive role-qualified artifact handles/references from the caller.
-2. Read the owned tag snapshot by applying declared accessors to those artifacts.
-3. Merge owned, observed, and freshly recognized tags into the evaluation view.
-4. Evaluate transition-table guards against that view.
-5. Return one transition plan if exactly one legal edge matches.
-6. Return a typed refusal for no match, many matches, unavailable state, or an
+1. Receive an owned tag snapshot from the accessor layer.
+2. Merge owned, observed, and freshly recognized tags into the evaluation view.
+3. Evaluate transition-table guards against that view.
+4. Return one transition plan if exactly one legal edge matches.
+5. Return a typed refusal for no match, many matches, unavailable state, or an
    unevaluable guard.
 
-Illustrative CLI shape only; RDR 0005 owns the final command syntax:
+Illustrative CLI flow only; RDR 0005 owns the final command syntax and may split
+artifact reads from pure resolution:
 
 ```sh
+intrastate read-state \
+  --flow rdr \
+  --artifact state:./docs/rdr/0001-resolution-kernel.md
+
 intrastate resolve \
   --flow rdr \
-  --artifact state:./docs/rdr/0001-resolution-kernel.md \
+  --owned status:Draft \
   --recognized successful
 ```
 
 When more than one artifact participates, callers pass role-qualified artifacts
-rather than implementation labels such as `owned` or `observed`:
+rather than implementation labels such as `owned` or `observed` to the accessor
+verbs:
 
 ```sh
-intrastate resolve \
+intrastate read-state \
   --flow rdr \
   --artifact state:./docs/rdr/0001-resolution-kernel.md \
-  --artifact evidence:./docs/rdr/0001-resolution-kernel/evidence/repeatability/diff.md \
-  --recognized successful
+  --artifact evidence:./docs/rdr/0001-resolution-kernel/evidence/repeatability/diff.md
 ```
 
 In this shape, the flow definition maps artifact roles to accessors. The
@@ -257,7 +261,7 @@ the resolved tags and write targets, not user-facing `owned`/`observed` flags.
 | CLI output and error envelope | Existing `respond` / `clierr` | Available | Kernel refusal values must stay mappable to CLI errors without printing. |
 | Transition table | RDR 0002 | Deferred to peer | Kernel assumes a parsed, reviewable table shape. |
 | Guard predicate evaluation | RDR 0003 | Deferred to peer | Kernel assumes guards are evaluable without arbitrary callbacks. |
-| Accessor execution | RDR 0004 | Deferred to peer | Kernel applies accessors to caller-provided artifacts and describes writes through this seam. |
+| Accessor execution | RDR 0004 | Deferred to peer | Accessor layer reads owned tags before resolution and applies planned writes after a successful transition. |
 | CLI surface | RDR 0005 | Deferred to peer | User-facing commands wrap the kernel but do not define kernel behavior. |
 | Static lint | RDR 0006 | Deferred to peer | Lint proves graph safety before runtime; kernel still refuses bad runtime inputs. |
 
@@ -328,8 +332,8 @@ past the seed's stateless, non-orchestrating boundary.
 ### Alternative 3: Hybrid Accessor-Backed Kernel
 
 **Description**: The caller supplies non-owned context and the recognized
-outcome; the kernel obtains owned state through injected accessors, evaluates the
-table, and returns a plan or typed refusal.
+outcome; the accessor layer supplies the owned state snapshot, and the kernel
+evaluates the table and returns a plan or typed refusal.
 
 **Pros**:
 
@@ -398,7 +402,8 @@ tuple and the transition table revision used for that resolution.
 Resolve must name and implementation must add a replay test that feeds the same
 table, owned snapshot, observed tags, and recognized outcome to the kernel twice
 and asserts byte/value-identical dispositions. The same validation must include
-at least one refusal for no match and one refusal for ambiguous matches.
+at least one refusal each for no match, ambiguous matches, and an unmodeled
+recognized outcome.
 
 ### Phase 1: Kernel Boundary
 
@@ -430,8 +435,8 @@ No third-party dependency is proposed at this stage.
 
 Implementation must add focused resolver-kernel tests before any CLI command
 wraps the kernel. The tests exercise the pure decision boundary: fixture
-transition tables, owned snapshots supplied through test accessors, observed
-tags supplied by the caller, and freshly recognized outcome tags. The matrix is
+transition tables, owned snapshots from accessor fixtures, observed tags
+supplied by the caller, and freshly recognized outcome tags. The matrix is
 grounded in A1's MVV replay evidence, A2's RDR 0004 accessor seam, A3's RDR
 0002/0003 exact-one predicate seam, and A4's existing CLI refusal gateway.
 
@@ -444,14 +449,17 @@ grounded in A1's MVV replay evidence, A2's RDR 0004 accessor seam, A3's RDR
 3. **Scenario**: More than one table edge matches after guard evaluation.
    **Expected**: The kernel returns the typed ambiguous-match refusal unless one
    explicit escape edge matches exactly once.
-4. **Scenario**: Owned state is unavailable or a guard cannot be evaluated.
+4. **Scenario**: The freshly recognized outcome is not modeled by the table.
+   **Expected**: The kernel returns the typed unmodeled-outcome refusal and
+   performs no persistence side effect.
+5. **Scenario**: Owned state is unavailable or a guard cannot be evaluated.
    **Expected**: The kernel returns the corresponding typed refusal and does not
    fall back to ambient discovery.
 
 ### Performance Expectations
 
 No throughput target is part of this RDR. Resolution is bounded by the supplied
-transition table and caller-provided artifacts. No byte-stable hash or
+transition table and tag snapshots. No byte-stable hash or
 canonical serialization is introduced; determinism is value-level replay of the
 input tuple named in A1. Implementation should keep the kernel allocation-light
 and deterministic, then benchmark only if the RDR or kata tables become large
