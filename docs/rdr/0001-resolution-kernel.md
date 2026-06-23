@@ -93,10 +93,10 @@ executor under `internal/`; the only reusable surfaces are the existing
   CLI errors outside the kernel.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go:48` defines extensible
-    `CLIError` fields and exit groups; `internal/cli/respond/respond.go:133`
-    emits failures through `Fail`; `internal/cli/root.go:85` converts
-    command-level failures through the same gateway.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` defines extensible
+    error codes and exit groups; `internal/cli/respond/respond.go::Fail` emits
+    failures through the CLI gateway; `internal/cli/root.go::ExecuteAndEmit`
+    converts command-level failures through the same gateway.
   - **If wrong**: The kernel would need CLI-specific behavior or the CLI would
     lose stable error mapping.
 
@@ -188,6 +188,19 @@ The kernel MUST refuse instead of guessing when no edge matches, more than one
 edge matches, required owned state is unavailable, a guard cannot be evaluated,
 or the recognized outcome is not modeled by the table.
 
+Modeled refusal is a value-level resolver disposition, not a CLI error and not
+the Go error path for parser bugs, IO failures, or programmer mistakes. The
+kernel-owned refusal kind set is exactly:
+
+- `no_match`
+- `ambiguous_match`
+- `owned_state_unavailable`
+- `guard_unevaluable`
+- `unmodeled_outcome`
+
+Each refusal kind must be stable enough for RDR 0005 to map to a CLI error code
+without inspecting error strings.
+
 The kernel MUST NOT print output, inspect CLI flags, discover ambient state,
 choose artifacts on behalf of the caller, initiate work, or execute persistence
 side effects directly.
@@ -221,8 +234,8 @@ Illustrative algorithm only:
 2. Merge owned, observed, and freshly recognized tags into the evaluation view.
 3. Evaluate transition-table guards against that view.
 4. Return one transition plan if exactly one legal edge matches.
-5. Return a typed refusal for no match, many matches, unavailable state, or an
-   unevaluable guard.
+5. Return a typed refusal for no match, many matches, unavailable owned state,
+   unevaluable guard, or unmodeled recognized outcome.
 
 Illustrative CLI flow only; RDR 0005 owns the final command syntax and may split
 artifact reads from pure resolution:
@@ -269,7 +282,7 @@ the resolved tags and write targets, not user-facing `owned`/`observed` flags.
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| Refusal mapping | `internal/cli/clierr` | No resolver-specific codes yet | Extend | Add resolver refusal codes outside the kernel package. |
+| Refusal mapping | `internal/cli/clierr` | No resolver-specific CLI codes yet | Extend | RDR 0005 maps kernel refusal kinds to CLI error codes outside the kernel package. |
 | Output routing | `internal/cli/respond` | CLI-only gateway | Reuse | Kernel must return values, not write output. |
 | Command wiring | `internal/cli` | Only version/config scaffolding exists | Extend later | RDR 0005 owns command shape. |
 | Resolver implementation | none found under `internal/` | No existing kernel | Introduce | New internal package can own pure resolution logic. |
@@ -383,11 +396,12 @@ an orchestrator.
 
 ### Failure Modes
 
-Visible failures are typed refusals: no modeled edge, ambiguous edge, missing
-owned state, unevaluable guard, or unmodeled recognized outcome. Silent failure
-would mean the kernel guessed a transition or executed persistence directly;
-both are prohibited by the normative contract. Diagnosis starts with the input
-tuple and the transition table revision used for that resolution.
+Visible failures are typed refusal values: `no_match`, `ambiguous_match`,
+`owned_state_unavailable`, `guard_unevaluable`, or `unmodeled_outcome`. Silent
+failure would mean the kernel guessed a transition or executed persistence
+directly; both are prohibited by the normative contract. Diagnosis starts with
+the input tuple, the refusal kind, and the transition table revision used for
+that resolution.
 
 ## Implementation Plan
 
@@ -401,9 +415,10 @@ tuple and the transition table revision used for that resolution.
 
 Resolve must name and implementation must add a replay test that feeds the same
 table, owned snapshot, observed tags, and recognized outcome to the kernel twice
-and asserts byte/value-identical dispositions. The same validation must include
-at least one refusal each for no match, ambiguous matches, and an unmodeled
-recognized outcome.
+and asserts value-identical dispositions. The same validation must include at
+least one value-level refusal each for `no_match`, `ambiguous_match`,
+`owned_state_unavailable`, `guard_unevaluable`, and `unmodeled_outcome`, and
+must assert those modeled refusals do not use the CLI or Go error path.
 
 ### Phase 1: Kernel Boundary
 
@@ -453,8 +468,8 @@ grounded in A1's MVV replay evidence, A2's RDR 0004 accessor seam, A3's RDR
    **Expected**: The kernel returns the typed unmodeled-outcome refusal and
    performs no persistence side effect.
 5. **Scenario**: Owned state is unavailable or a guard cannot be evaluated.
-   **Expected**: The kernel returns the corresponding typed refusal and does not
-   fall back to ambient discovery.
+   **Expected**: The kernel returns the corresponding value-level typed refusal
+   and does not fall back to ambient discovery or the CLI/Go error path.
 
 ### Performance Expectations
 
