@@ -7,57 +7,8 @@
 
 - **Date**: 2026-06-19
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Architecture
 - **Profile**: large — locks the resolver's deterministic kernel contract and refusal semantics.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: None
@@ -66,7 +17,7 @@
 
 ## Problem Statement
 
-A skill that recognized a typed outcome needs a contracted resolver that returns the next legal state predictably: the same input must produce the same legal output, unmodeled matches must be refused instead of guessed, and unclassifiable outcomes must route to an explicit escape rather than a confident wrong edge. The system-internal requirement is to define the deterministic `resolve` half of recognize-to-resolve as a kernel contract.
+A skill that recognized a typed outcome needs a contracted resolver that returns the next legal state predictably: the same input must produce the same legal output, unmodeled matches must be refused instead of guessed, and escape behavior must be explicit table data rather than a confident wrong edge. The system-internal requirement is to define the deterministic `resolve` half of recognize-to-resolve as a kernel contract.
 
 ## Context
 
@@ -74,11 +25,11 @@ A skill that recognized a typed outcome needs a contracted resolver that returns
 
 The build model needs a replay-safe transition kernel for RDR and kata flows. The kernel must treat state as a tag-set, with guards expressed as predicates over tags and tag provenance distinguished as owned, observed, or freshly recognized.
 
-The real design fork is where owned state lives for replay safety: the caller can pass the whole tag-set each call, the kernel can read owned tags via an accessor, or a hybrid can re-derive position while trusting recorded judgments and re-fetching world facts.
+The real design fork is where owned state lives for replay safety: the caller can pass the whole tag-set each call, the kernel can own state storage, or a hybrid can read owned tags through declared accessors while the caller supplies non-owned facts.
 
 ### Technical Environment
 
-intrastate is a Go CLI wired through `internal/cli`. The resolver is constrained to be a table plus thin CLI plus lint; it must stay stateless and non-orchestrating, read and persist through passthrough accessors, and refuse illegal or incomplete transition inputs rather than initiating work.
+intrastate is a Go CLI wired through `internal/cli`. The resolver belongs in an internal package behind the CLI: it must stay stateless and non-orchestrating, rely on injected accessors for owned-state reads and writes, and refuse illegal or incomplete transition inputs rather than initiating work.
 
 ## Research Findings
 
@@ -198,18 +149,18 @@ transition plan or a typed refusal. The kernel does not discover artifacts,
 discover work, run subflows, print output, or own persistence. A successful
 resolution returns the next state tags and the owned-tag writes that the
 accessor layer applies back to the same caller-provided artifact boundary; an
-illegal, ambiguous, incomplete, or unclassifiable input returns an explicit
-refusal class.
+illegal, ambiguous, incomplete, or unmodeled input returns an explicit refusal
+class.
 
 ### Technical Design
 
 The kernel is the pure decision boundary between recognition and action. Inputs
-are: flow identity, artifact handles supplied by the caller, current owned-state
-snapshot obtained by applying accessors to those artifacts, observed tags
-supplied by the caller, the freshly recognized outcome tag, and the reviewable
-transition table. Evaluation builds a single tag-set view, selects matching
-candidate edges, refuses zero or multiple matches unless the table contract
-explicitly models an escape edge, and emits a transition plan.
+are: flow identity, role-qualified artifact handles supplied by the caller,
+current owned-state snapshot obtained by applying accessors to those artifacts,
+observed tags supplied by the caller, the freshly recognized outcome tag, and
+the reviewable transition table. Evaluation builds a single tag-set view,
+selects matching candidate edges, refuses zero or multiple matches unless the
+table contract explicitly models an escape edge, and emits a transition plan.
 
 Artifact selection stays outside this RDR's contract. The kernel may describe
 owned-tag writes in the returned plan, and the accessor layer knows how to apply
@@ -222,10 +173,10 @@ exposes structured success/refusal values that the CLI can map.
 
 ```normative
 Resolver kernel contract:
-Given the same transition table, caller-supplied artifact references, owned tag
-snapshot read from those artifacts, caller-supplied observed tags, and freshly
-recognized outcome tag, resolve returns the same disposition: exactly one
-transition plan or exactly one typed refusal.
+Given the same transition table, caller-supplied role-qualified artifact
+references, owned tag snapshot read from those artifacts, caller-supplied
+observed tags, and freshly recognized outcome tag, resolve returns the same
+disposition: exactly one transition plan or exactly one typed refusal.
 
 The kernel MUST refuse instead of guessing when no edge matches, more than one
 edge matches, required owned state is unavailable, a guard cannot be evaluated,
@@ -239,7 +190,7 @@ side effects directly.
 #### Load-Bearing Decisions
 
 - **Identity** — a resolution input is the tuple of flow identity, transition
-  table revision, caller-provided artifact reference, owned tag snapshot,
+  table revision, caller-provided artifact references, owned tag snapshot,
   observed tag-set, and freshly recognized outcome tag. Replaying that tuple
   must replay the disposition.
 - **Naming** — the internal component is the resolver kernel. Rejected names:
@@ -260,8 +211,8 @@ Validation.
 
 Illustrative algorithm only:
 
-1. Receive the artifact handle/reference from the caller.
-2. Read the owned tag snapshot by applying the accessor seam to that artifact.
+1. Receive role-qualified artifact handles/references from the caller.
+2. Read the owned tag snapshot by applying declared accessors to those artifacts.
 3. Merge owned, observed, and freshly recognized tags into the evaluation view.
 4. Evaluate transition-table guards against that view.
 5. Return one transition plan if exactly one legal edge matches.
@@ -471,21 +422,31 @@ No third-party dependency is proposed at this stage.
 
 ### Testing Strategy
 
-[Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Implementation must add focused resolver-kernel tests before any CLI command
+wraps the kernel. The tests exercise the pure decision boundary: fixture
+transition tables, owned snapshots supplied through test accessors, observed
+tags supplied by the caller, and freshly recognized outcome tags.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: Replay the same legal input tuple twice.
+   **Expected**: Both calls return value-identical transition plans, including
+   next tags and accessor write descriptions.
+2. **Scenario**: No table edge matches the assembled tag-set.
+   **Expected**: The kernel returns the typed no-match refusal and performs no
+   persistence side effect.
+3. **Scenario**: More than one table edge matches after guard evaluation.
+   **Expected**: The kernel returns the typed ambiguous-match refusal unless one
+   explicit escape edge matches exactly once.
+4. **Scenario**: Owned state is unavailable or a guard cannot be evaluated.
+   **Expected**: The kernel returns the corresponding typed refusal and does not
+   fall back to ambient discovery.
 
 ### Performance Expectations
 
-[Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+No throughput target is part of this RDR. Resolution is bounded by the supplied
+transition table and caller-provided artifacts; implementation should keep the
+kernel allocation-light and deterministic, then benchmark only if the RDR or
+kata tables become large enough to make table scans visible in normal command
+latency.
 
 ## Finalization Gate
 
