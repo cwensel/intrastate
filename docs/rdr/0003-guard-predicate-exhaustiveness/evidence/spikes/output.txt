@@ -1,0 +1,4 @@
+fixture=guard-fixture.toml
+operators=eq,in,lt,gte,exists
+rules=4
+coverage=status/profile routing, cap-3 handling, prelock lens sets, cluster eligibility, rewind legality
