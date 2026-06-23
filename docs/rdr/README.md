@@ -10,7 +10,7 @@ engine README — this file is only the per-project index.
 | ID | Title | Status | Priority |
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Final | — |
-| 0002 | Transition table as reviewable data | Draft | — |
+| 0002 | Transition table as reviewable data | Final | — |
 | 0003 | Guard predicate exhaustiveness | Draft | — |
 | 0004 | Accessor execution safety model | Draft | — |
 | 0005 | Skill integration CLI contract | Draft | — |
