@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — locks one resolver-kernel contract with deterministic disposition and typed-refusal semantics.
 - **Priority**: High
@@ -428,8 +428,8 @@ that resolution.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] RDR 0002, RDR 0003, and RDR 0004 are at least coherent enough to verify the
+- [x] All Critical Assumptions verified
+- [x] RDR 0002, RDR 0003, and RDR 0004 are at least coherent enough to verify the
   table, predicate, and accessor dependencies.
 
 ### Minimum Viable Validation
@@ -464,6 +464,13 @@ state mutation semantics in this RDR.
 ### New Dependencies
 
 No third-party dependency is proposed at this stage.
+
+### Day 2 Operations
+
+No runtime operation, service deployment, persistent storage, or recurring
+maintenance procedure is introduced by this RDR. Day 2 inspection is limited to
+reading resolver test failures and typed refusal values through the CLI surface
+owned by RDR 0005.
 
 ## Validation
 
@@ -516,81 +523,64 @@ enough to make table scans visible in normal command latency.
 
 ### Contradiction Check
 
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+No contradictions found between research findings, design principles, and
+proposed solution. The research record says no resolver kernel, transition
+table, guard evaluator, or accessor executor already exists under `internal/`;
+the proposal introduces only the pure resolver kernel and delegates table shape,
+guard predicates, accessor execution, CLI output, and graph lint to peer RDRs.
+The refusal-first behavior matches the existing CLI output contract without
+moving CLI concerns into the kernel.
 
 ### Assumption Verification
 
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
+Every Critical Assumption Evidence Record is internally consistent. A1 is
+verified by the named MVV replay test; A2 and A3 are verified against peer RDR
+contracts; A4 is verified by Source Search against
+`internal/cli/clierr/clierr.go::CLIError`,
+`internal/cli/respond/respond.go::Fail`, and
+`internal/cli/root.go::ExecuteAndEmit`, all of which resolve in the current
+source tree; A5 is accepted as the design decision that owns the closed
+resolver-refusal taxonomy. Each record has a non-empty "If wrong" consequence.
+No assumption uses `Docs Only`, none remain `Pending` or `Unverified`, and no
+Source Search evidence cites this RDR or its artifact directory.
 
 ### Scope Verification
 
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+The Minimum Viable Validation is in scope for implementation. The required test
+is the replay validation named in A1 and the Validation section: feed the same
+table, owned snapshot, observed tags, and recognized outcome to the resolver
+twice and assert value-identical dispositions. The same implementation test
+suite must include value-level refusal coverage for `no_match`,
+`ambiguous_match`, `owned_state_unavailable`, `guard_unevaluable`, and
+`unmodeled_outcome`, and must assert these modeled refusals do not use CLI or Go
+error paths.
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+Versioning: the transition table revision is part of the resolver input tuple,
+so table evolution is explicit input rather than ambient behavior.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+Incremental adoption: the kernel is introduced behind the internal resolver
+package boundary and can be exercised by focused tests before RDR 0005 exposes a
+CLI surface.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+Concurrency model: the resolver is stateless and receives snapshots and table
+data as inputs; it does not own shared persistence or execute accessor writes.
+
+Canonical-form / determinism: this RDR claims value-level replay determinism,
+not byte-identical output, hashes, or serialized canonical form. Determinism is
+covered by A1 and the MVV replay test over the explicit input tuple.
 
 ### Proportionality
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+The document is right-sized for lock. It owns one independent load-bearing
+contract: the resolver kernel's value-level disposition contract. It explicitly
+does not own transition-table structure, guard predicate syntax, accessor
+execution, CLI command behavior, or graph lint. The large profile remains
+appropriate because this RDR locks a kernel contract and a stable refusal
+taxonomy, and the required grounding, 3amigo, critique, and reconcile passes have
+run with no remaining verification residue. No sections need trimming before
+implementation.
 
 ## References
 
