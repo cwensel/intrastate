@@ -140,7 +140,7 @@ factor common context instead of enumerating every Cartesian row.
   existing CLI error envelope.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` already carries stable `Code`, `Message`, optional `Param`, parser/lint `Detail`, `Hint`, exit-code `Group`, and `Cause`; `internal/cli/respond/respond.go::Fail` emits the same envelope in text/json modes; `internal/cli/config/config.go::Load` already uses stable parse/config error codes as the local pattern.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` already carries stable `Code`, `Message`, optional `Param`, diagnostic `Detail`, `Hint`, exit-code `Group`, and `Cause`; `internal/cli/respond/respond.go::Fail` emits that envelope in text/json modes; `internal/cli/config/config.go::Load` already uses stable config load/read error codes (`config-not-found`, `config-read-error`) and marks `config-invalid` as the planned parse-validation path. Table-specific parse and lint failures must add their stable codes during implementation.
   - **If wrong**: Table loading would need a separate user-facing error contract
     owned by this RDR or RDR 0005.
 - **A6 Shared contexts and positive/negative guard lists are sufficient to keep
