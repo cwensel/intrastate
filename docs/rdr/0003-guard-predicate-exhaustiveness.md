@@ -120,6 +120,7 @@ guard model.
   - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: `cd docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes && sh check.sh guard-fixture.toml` validated four representative guard rows covering status/profile routing, cap-3 handling, prelock lens sets, cluster eligibility, and rewind legality with only `eq`, `in`, `lt`, `gte`, and `exists`; transcript captured in `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/output.txt`.
+  - **Reconciliation**: Stage 6 treats the pre-lock `contains` finding as a validation obligation, not as evidence for the target-flow subset: Phase 3 and MVV Scenario 1 require at least one `contains` predicate over a declared set-valued tag before accepting the full operator vocabulary.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
 - **A2 Every exhaustiveness claim can be reduced to scoped finite declared
@@ -127,6 +128,7 @@ guard model.
   - **Status**: Verified
   - **Method**: Derivation
   - **Evidence**: For every exhaustiveness-eligible row group, lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that vary inside that group: enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
+  - **Reconciliation**: Stage 6 confirms the critique findings are absorbed: MVV Scenario 2 requires row-group gap and overlap cases visible only in the multi-dimensional product, and MVV Scenario 3 requires refusal/downgrade when a finite product is too large to prove deterministically.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
@@ -134,6 +136,7 @@ guard model.
   - **Status**: Verified
   - **Method**: Design Decision
   - **Evidence**: This RDR chooses separate positive and negative guard lists: `all` is the required conjunctive predicate set, `unless` is the conjunctive exclusion set, and RDR 0002's normalized candidate-row contract combines both before ambiguity checks. Inline `not` and nested boolean expressions are rejected to keep each diagnostic tied to an authored atom and to preserve finite-domain coverage/overlap derivation.
+  - **Reconciliation**: Stage 6 confirms the 3amigo `unless` finding is absorbed: MVV Scenario 1 requires a disabled-row assertion where every positive predicate matches and the full conjunctive `unless` block disables the row.
   - **If wrong**: Authors will duplicate rows or encode confusing inverse
     predicates that make overlap diagnostics harder to understand.
 - **A4 Guard predicate errors can use the existing structured CLI failure
@@ -141,6 +144,7 @@ guard model.
   - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, and unevaluable guard; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
+  - **Reconciliation**: Stage 6 confirms the critique handoff finding is absorbed: Testing Scenario 4 requires one documented ownership chain from predicate semantic kind through RDR 0006 lint finding to RDR 0005 CLI envelope.
   - **If wrong**: This RDR or RDR 0005 must add a separate user-facing error
     contract before implementation.
 - **A5 The normalized predicate representation can retain source identity for
