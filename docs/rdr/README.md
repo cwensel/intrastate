@@ -11,7 +11,7 @@ engine README — this file is only the per-project index.
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Final | — |
 | 0002 | Transition table as reviewable data | Final | — |
-| 0003 | Guard predicate exhaustiveness | Draft | — |
+| 0003 | Guard predicate exhaustiveness | Final | — |
 | 0004 | Accessor execution safety model | Draft | — |
 | 0005 | Skill integration CLI contract | Draft | — |
 | 0006 | Graph lint authority and guarantees | Draft | — |
