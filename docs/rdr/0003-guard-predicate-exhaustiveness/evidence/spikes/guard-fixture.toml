@@ -1,0 +1,75 @@
+[model]
+id = "guard-predicate-representative-flow"
+version = 1
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final", "Implemented"]
+
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "mid", "large", "foundational"]
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["resolve", "prelock", "reconcile", "finalize"]
+
+[tags.lens]
+provenance = "owned"
+kind = "enum"
+domain = ["grounding", "3amigo", "critique", "repeatability", "cove"]
+
+[tags.prelock_iterations]
+provenance = "owned"
+kind = "int"
+min = 0
+max = 3
+
+[tags.cluster_eligible]
+provenance = "observed"
+kind = "bool"
+domain = [true, false]
+
+[tags.rewind_target]
+provenance = "recognized"
+kind = "enum"
+domain = ["resolve", "refine", "propose"]
+
+[[rule]]
+id = "profile-to-grounding"
+[rule.match.status]
+eq = "Draft"
+[rule.guard.all.profile]
+in = ["mid", "large"]
+[rule.guard.unless.prelock_iterations]
+gte = 3
+
+[[rule]]
+id = "foundational-to-cove"
+[rule.match.status]
+eq = "Draft"
+[rule.guard.all.profile]
+eq = "foundational"
+[rule.guard.all.cluster_eligible]
+exists = true
+
+[[rule]]
+id = "continue-prelock-lenses"
+[rule.match.stage]
+eq = "prelock"
+[rule.guard.all.lens]
+in = ["grounding", "3amigo", "critique", "repeatability", "cove"]
+[rule.guard.all.prelock_iterations]
+lt = 3
+
+[[rule]]
+id = "reconcile-rewind-legality"
+[rule.match.stage]
+eq = "reconcile"
+[rule.guard.all.rewind_target]
+in = ["resolve", "refine", "propose"]
+[rule.guard.unless.status]
+eq = "Implemented"
