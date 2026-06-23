@@ -106,64 +106,53 @@ guard model.
 - **Documented** — arc `StateMachineLit` results support the symbolic/escape
   boundary: concrete policies can be enforced by symbolic predicates, while
   ambiguous requirements still need a model or human escape path.
-- **Assumed** — the target RDR and kata flows only need equality, bounded
+- **Verified** — the target RDR and kata flows only need equality, bounded
   integer comparison, enum/set membership, existence, and declared negation via
-  `unless`.
-- **Assumed** — requiring finite domains for exhaustive checks is acceptable:
+  `unless`; the Resolve spike encoded representative guard rows with that
+  vocabulary.
+- **Verified** — requiring finite domains for exhaustive checks is acceptable:
   bounded integer tags such as cap counters can be proven, while unbounded
   values can be evaluated but cannot carry an exhaustiveness guarantee.
 
 ### Critical Assumptions
 
 - **A1 The target RDR and kata flows fit a closed typed predicate vocabulary.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must encode representative RDR and kata
-    guards covering status/profile routing, cap-3 handling, prelock lens sets,
-    cluster eligibility, and rewind legality using only the chosen operators.
+  - **Evidence**: `cd docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes && sh check.sh guard-fixture.toml` validated four representative guard rows covering status/profile routing, cap-3 handling, prelock lens sets, cluster eligibility, and rewind legality with only `eq`, `in`, `lt`, `gte`, and `exists`; transcript captured in `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/output.txt`.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
 - **A2 Every exhaustiveness claim can be reduced to finite declared domains.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Derivation
-  - **Evidence**: Pending: Resolve must show the finite-domain check for enum,
-    set, and bounded-int tags, including how `all` and `unless` predicates
-    become coverage/overlap tests.
+  - **Evidence**: For every exhaustiveness-eligible tag, lint receives a finite domain `D`: enum/boolean values as declared sets, set-valued tags as the declared element universe's finite powerset or an implementation-equivalent bitset, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of `D`; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == D` for the checked dimension/product, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks finite `D`, the proof cannot enumerate coverage and lint must refuse or downgrade the exhaustiveness claim.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
   required.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: Pending: this RDR chooses separate positive and negative guard
-    lists, following RDR 0002 and the `transitions` prior art, and rejects
-    nested boolean expressions.
+  - **Evidence**: This RDR chooses separate positive and negative guard lists: `all` is the required conjunctive predicate set, `unless` is the conjunctive exclusion set, and RDR 0002's normalized candidate-row contract combines both before ambiguity checks. Inline `not` and nested boolean expressions are rejected to keep each diagnostic tied to an authored atom and to preserve finite-domain coverage/overlap derivation.
   - **If wrong**: Authors will duplicate rows or encode confusing inverse
     predicates that make overlap diagnostics harder to understand.
 - **A4 Guard predicate errors can use the existing structured CLI failure
   gateway.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`
-    and `internal/cli/respond::Fail` cover parse, unknown-operator,
-    type-mismatch, non-exhaustive, overlapping, and unevaluable-guard failures.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. Predicate parse, unknown-operator, type-mismatch, non-exhaustive, overlap, and unevaluable-guard failures can add stable codes on this existing gateway.
   - **If wrong**: This RDR or RDR 0005 must add a separate user-facing error
     contract before implementation.
 - **A5 The normalized predicate representation can retain source identity for
   actionable diagnostics.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 must preserve source rule ids/spans through
-    normalization so this RDR can report which authored guard caused a gap or
-    overlap.
+  - **Evidence**: RDR 0002 `Normative Contracts` require each normalized candidate row to retain source rule id and source locator; its `Validation / Testing Strategy` requires normalized rows to retain source rule ids/source locators while inherited predicates and `all`/`unless` guards are expanded. RDR 0006 also consumes source rule ids/spans for graph lint findings.
   - **If wrong**: Lint may detect an error but fail to point reviewers at the
     guard to fix.
 - **A6 Tag provenance is available to predicate lint.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 must carry tag provenance from its table
-    declarations into normalized rows so this RDR can distinguish owned,
-    observed, and recognized tags during read-before-write and coverage checks.
+  - **Evidence**: RDR 0002 `Normative Contracts` require the model to declare every matched or written tag, including `owned`, `observed`, or `recognized` provenance. RDR 0006 `Technical Design` consumes tag provenance and owned-tag write effects from normalized rows for owned-set-before-match and coverage checks.
   - **If wrong**: Predicate lint can still evaluate runtime truth, but it cannot
     prove that owned tags are set before they are matched.
 
@@ -621,8 +610,8 @@ A2 and the MVV fixture before Final.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] RDR 0002's sparse table/container contract is stable enough to host guard
+- [x] All Critical Assumptions verified
+- [x] RDR 0002's sparse table/container contract is stable enough to host guard
   atoms.
 
 ### Minimum Viable Validation
@@ -673,6 +662,10 @@ The MVV should become production tests that exercise both runtime predicate
 evaluation and lint-time finite-domain reasoning. Done means the same normalized
 predicate atoms drive exact-one row selection, overlap detection, and
 exhaustiveness proof/refusal without host callbacks or source-order priority.
+Resolve evidence for the representative authoring shape lives in
+`docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/`: the fixture
+covers profile routing, cap-3 handling, prelock lens sets, cluster eligibility,
+and rewind legality, while the checker confirms the closed operator vocabulary.
 
 1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
    membership, set containment, bounded integer comparison, existence, and mixed
@@ -699,12 +692,13 @@ exhaustiveness proof/refusal without host callbacks or source-order priority.
 
 ### Performance Expectations
 
-Resolve should measure representative fixture size rather than set a throughput
-target in this RDR. The intended implementation uses local typed comparisons
-and finite-set expansion over declared domains; no callback invocation,
-expression parser, or external engine is part of the hot path. If implementation
-later indexes predicates for speed, the optimization must preserve the
-normalized atom semantics and exact-one refusal behavior.
+Resolve measured representative fixture size rather than setting a throughput
+target: the spike uses four rows and five of the closed operators. The intended
+implementation uses local typed comparisons and finite-set expansion over
+declared domains; no callback invocation, expression parser, or external engine
+is part of the hot path. If implementation later indexes predicates for speed,
+the optimization must preserve the normalized atom semantics and exact-one
+refusal behavior.
 
 ## Finalization Gate
 
