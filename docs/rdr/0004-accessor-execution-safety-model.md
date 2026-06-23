@@ -8,7 +8,7 @@
 - **Date**: 2026-06-19
 - **Status**: Draft
 - **Type**: Architecture
-- **Profile**: large — locks one accessor execution safety contract for authoritative artifact reads, gates, writes, refusal classes, and write verification.
+- **Profile**: large — locks one accessor execution safety contract governing authoritative artifact mutation.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -82,59 +82,48 @@ accessor safety contract and reuses existing CLI failure plumbing later.
 - **Documented** — callback-based FSM prior art executes action hooks directly
   during transitions; useful as a contrast, but not safe enough for a
   reviewable static model.
-- **Assumed** — a small declared-capability vocabulary can express the RDR and
+- **Verified** — a small declared-capability vocabulary can express the RDR and
   kata accessors without falling back to raw shell strings or host callbacks.
-- **Assumed** — read-back verification can prove the expected owned-tag effect
+- **Verified** — read-back verification can prove the expected owned-tag effect
   for initial write accessors without needing a full undo log.
 
 ### Critical Assumptions
 
 - **A1 The target RDR and kata flows only need declared read, gate, and write
   accessors over caller-supplied artifact roles.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must bind representative RDR and kata flow
-    fixtures to read, gate, and write accessors without raw shell strings or
-    host-language transition callbacks.
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` binds `state.read`, `state.gate`, and `state.persist` as declared read/gate/write accessors over caller-supplied `state` artifacts (`main.go:208-226`); transcript lines 1-8 show read success, gate allow, typed gate/refusal cases, capability mismatch, and write success without raw shell strings or callbacks (`output.txt:1-8`).
   - **If wrong**: The capability vocabulary is too small, and authors will
     pressure the model toward unsafe command execution.
 - **A2 Write accessors can verify their intended owned-tag effect by re-reading
   the same artifact boundary after the write.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Pending: Resolve must run a write-then-read-back fixture that
-    changes an owned tag, re-reads it through the accessor seam, and captures a
-    mismatch as a typed failure.
+  - **Evidence**: The spike writes planned owned tags, clones the same role's observed tags, and returns `read_back_mismatch` when observed values differ (`main.go:121-153`); transcript line 8 shows matching `status=Final`, and line 9 captures the mismatch with expected and observed values (`output.txt:8-9`).
   - **If wrong**: A successful write command could silently corrupt or fail to
     update authoritative state.
 - **A3 Timeout, execution failure, gate indeterminate, and read-back mismatch
   can be represented as stable accessor refusal classes and mapped through the
   existing CLI failure gateway.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`,
-    `internal/cli/clierr::ExitCodeFor`, and `internal/cli/respond::Fail` can
-    carry accessor refusal classes without adding direct output from the
-    accessor package.
+  - **Evidence**: `internal/cli/clierr/clierr.go:44-67` defines append-only structured `CLIError` codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr/clierr.go:101-128` maps groups to stable exits, and `internal/cli/respond/respond.go:129-144` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`main.go:22-30`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
   - **If wrong**: Accessor errors would need a separate user-facing output
     contract or would leak implementation errors to callers.
 - **A4 Accessor execution can be deterministic enough for resolver replay when
   the model records artifact role, accessor name, capability, timeout, and
   returned tag values.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: Pending: Resolve must name a replay test where the same
-    transition model and fixture artifacts produce the same read/gate/write
-    disposition or the same typed refusal.
+  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`main.go:246-264`), while sorted map formatting prevents map-order drift in the transcript (`main.go:188-206`). Transcript line 10 shows identical success disposition for two runs; line 11 shows an injected gate-indeterminate refusal remains stable (`output.txt:10-11`).
   - **If wrong**: Resolver replay could depend on ambient process state rather
     than declared model inputs.
 - **A5 External API accessors can be constrained by declared capability and
   timeout without requiring intrastate to own credentials or remote lifecycle.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: Pending: this RDR scopes credentials and remote resource
-    lifecycle outside intrastate; accessors receive caller-provided environment
-    and return typed success/failure only.
+  - **Evidence**: This RDR explicitly scopes credentials and remote resource lifecycle outside intrastate in Cross-Cutting Concerns; accessors receive caller-provided artifacts/environment, declare capability and timeout in model data, and return typed success/refusal only. The selected contract rejects ambient artifact discovery and shell/callback authority in Normative Contracts and Alternatives.
   - **If wrong**: The accessor layer becomes an orchestrator and should be split
     into a separate integration contract.
 
@@ -512,7 +501,7 @@ timeout, and expected versus observed tag values.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
+- [x] All Critical Assumptions verified
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
 - [ ] RDR 0002 carries accessor references, tag provenance, and artifact roles
@@ -567,11 +556,13 @@ test helper or TOML library only if RDR 0002 has not already selected one.
 ### Testing Strategy
 
 The MVV should become production tests around the accessor validator and
-executor boundary. Done means the same declared accessor model validates
-capability use, invokes typed read/gate/write bindings with bounded timeouts,
-converts every visible failure into a structured refusal, and verifies write
-effects by re-reading the same artifact role without direct stdout/stderr
-output.
+executor boundary. The Resolve spike at
+`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go`
+already exercises the test matrix as a fixture proof: declared read/gate/write
+bindings over caller-supplied artifacts, bounded timeouts, typed refusals,
+write read-back verification, and stable replay. Done means those spike cases
+become package tests without direct stdout/stderr output from the accessor
+package.
 
 1. **Scenario**: Validate a fixture flow with one read accessor, one gate
    accessor, and one write accessor bound to caller-supplied artifact roles.
@@ -599,10 +590,13 @@ output.
 
 ### Performance Expectations
 
-No throughput target is set at Draft. The relevant non-functional check is
-bounded execution: every invocation uses a context timeout, and read-back adds
-one same-role read after a write. Resolve must confirm the fixture cost is
-acceptable for the representative RDR and kata flows before lock.
+No throughput target is set. The relevant non-functional check is bounded
+execution: the Resolve spike wraps every invocation in `context.WithTimeout`
+(`main.go:71-74`), demonstrates timeout as its own refusal (`output.txt:5`),
+and shows the write path performs one same-role read-back comparison after a
+command-level success (`main.go:121-153`, `output.txt:8-9`). That cost is
+acceptable for the representative RDR/kata flow shape because accessors run at
+transition boundaries, not inside graph-wide lint loops.
 
 ## Finalization Gate
 
@@ -626,13 +620,14 @@ refusals.
 
 ### Assumption Verification
 
-All Critical Assumptions are internally consistent for Draft: each remains
-`Pending`, has a non-empty "If wrong" clause, and names a Resolve method. A1 and
-A2 require spikes, A3 requires source search, A4 is covered by the named MVV
-test, and A5 is the explicit scoping decision that credentials and remote
-resource lifecycle remain outside intrastate. No assumption is marked
-`Verified`, so there are no self-referential or stale symbol citations yet. This
-RDR cannot lock until Resolve either verifies or revises A1-A4.
+All Critical Assumptions are verified. A1 and A2 are backed by the Resolve spike
+and transcript under
+`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
+by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
+source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
+the explicit scoping decision that credentials and remote resource lifecycle
+remain outside intrastate. None of the evidence cites this RDR or its artifact
+directory as self-proof.
 
 ### Scope Verification
 
