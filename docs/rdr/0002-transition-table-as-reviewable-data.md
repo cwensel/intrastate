@@ -6,33 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — locks the sparse transition-model data format.
 - **Priority**: High
@@ -278,25 +252,6 @@ scanning irrelevant dimensions.
 
 #### Normative Contracts
 
-[Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
 ```normative
 The transition model MUST be authored as sparse TOML data, not generated code
 and not a fully expanded Cartesian-product table.
@@ -371,13 +326,6 @@ unknown accessor, unsupported version, and ambiguous overlap.
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
 - **Identity** — a transition rule is identified by `(model id, rule id)`.
   Normalized candidate rows inherit that identity plus a deterministic expansion
   suffix. Rule ids are stable review anchors and must not be reused for a
@@ -408,9 +356,6 @@ later rewrite-capability RDR must define its own source-preservation invariant
 before mutating authored TOML.
 
 #### Illustrative Code
-
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
 
 Illustrative sparse source shape, not a locked schema:
 
@@ -665,8 +610,9 @@ inputs are typed resolver refusals rather than guessed edges.
 ### Prerequisites
 
 - [x] All Critical Assumptions verified
-- [ ] RDR 0001 remains aligned on exact-one stateless resolution.
-- [ ] RDR 0003 confirms the fixed predicate operator set.
+- [x] RDR 0001 remains aligned on exact-one stateless resolution.
+- [x] RDR 0003 is coherent enough for this RDR to defer the fixed predicate
+  operator set without importing that grammar.
 
 ### Minimum Viable Validation
 
@@ -754,94 +700,62 @@ preserve the normalized candidate-row semantics.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
 ### Contradiction Check
 
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+No contradictions found between research findings, design principles, and
+proposed solution. The research findings point to sparse, reviewable data with
+expanded diagnostic views; the proposed TOML source, normalized candidate rows,
+and exact-one selection semantics implement that shape without introducing a
+runtime FSM engine or source-order priority.
 
 ### Assumption Verification
 
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
+All Critical Assumptions A1-A7 are `Verified`, each has an in-vocabulary
+Method, concrete Evidence, and a non-empty "If wrong" consequence. No record
+uses `Docs Only`, and no record remains `Pending` or `Unverified`. The single
+`Source Search` record, A5, cites repository symbols outside this RDR:
+`internal/cli/clierr/clierr.go::CLIError`,
+`internal/cli/respond/respond.go::Fail`, and
+`internal/cli/config/config.go::Load`; those symbols resolve in the current
+source tree and are not self-referential. The spike-backed records cite the
+RDR-owned spike fixtures and transcript as execution evidence, not as
+`Source Search` proof.
 
 ### Scope Verification
 
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+The Minimum Viable Validation is in scope for implementation. The required
+proof is the production test set that promotes the Resolve spike fixtures into
+typed parse, normalize, dump, validation, and exact-one selection tests,
+including unsupported-version refusal, ambiguous-overlap refusal, and
+deterministic expanded-table output across semantically identical fixtures with
+different TOML key order.
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+- **Versioning** — `[model].version = 1` is the only accepted version; any
+  other version is refused before normalization.
+- **Build tool compatibility** — the candidate TOML parser is
+  `github.com/pelletier/go-toml/v2`, validated by the Resolve spike; no
+  production dependency is added until implementation.
+- **Licensing** — the candidate parser is MIT licensed.
+- **Incremental adoption** — transition model files are source-controlled data;
+  expanded table dumps are generated review/diagnostic views and can be
+  introduced alongside the existing CLI wiring.
+- **Canonical-form / determinism** — the normalized candidate-row value is the
+  canonical semantic form. Dumps sort rows by row identity and sort predicate
+  and write keys within each row. The spike SHA is evidence for that spike
+  output only; production tests must assert the normalized value, not a
+  content-addressed hash contract.
 
 ### Proportionality
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+The RDR is right-sized for one independent load-bearing contract: the sparse
+transition-model data format and its normalized expanded-table value. Predicate
+operators, accessor execution, CLI surface, resolver behavior, and graph lint
+are explicitly owned by peer RDRs. The `large` Profile is still correct because
+this RDR locks an on-disk format/grammar contract; the grounding, 3amigo, and
+critique lenses ran and their dispositions were reconciled before lock. No
+additional split is required before implementation.
 
 ## References
 
