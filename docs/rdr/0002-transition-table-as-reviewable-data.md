@@ -233,8 +233,8 @@ The source schema has six conceptual parts:
    hierarchy without adopting a statechart runtime.
 5. Sparse transition rules: reviewable rule ids, optional context references, a
    local match block, positive `all` guards, negative `unless` guards, and a
-   write block containing one or more tag assignments or explicit clear
-   sentinels.
+   write block containing one or more tag assignments, plus an optional
+   explicit clear list.
 6. Render settings: deterministic ordering and field selection for the expanded
    table dump.
 
@@ -257,9 +257,11 @@ send diagnostics back to the authored sparse rule.
 
 The internal representation may be indexed as a decision tree, trie, or decision
 DAG for efficient lookup, but that is an implementation detail. The normative
-semantic object is the normalized candidate-row set plus its source span back to
-the sparse TOML rule. This keeps diagnostics tied to the authored source while
-letting the resolver avoid scanning irrelevant dimensions.
+semantic object is the normalized candidate-row set plus its source locator back
+to the sparse TOML rule. The locator must identify at least the model id and rule
+id; byte line/column coordinates are optional diagnostic detail. This keeps
+diagnostics tied to the authored source while letting the resolver avoid
+scanning irrelevant dimensions.
 
 #### Normative Contracts
 
@@ -288,9 +290,18 @@ and not a fully expanded Cartesian-product table.
 ```
 
 ```normative
+The source schema MUST use the Resolve spike field layout: root `outcomes`,
+`[model]`, `[tags.<tag>]`, `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`,
+and `[dump]`. Context predicates live under `[context.<id>.match.<tag>]`; rule
+predicates live under `[rule.match.<tag>]`, `[rule.guard.all.<tag>]`, and
+`[rule.guard.unless.<tag>]`; writes live under `[rule.write]`; explicit clears
+live in a rule-level `clear` list.
+```
+
+```normative
 Each transition rule MUST contain a stable rule id, zero or more shared-context
-references, a local match block, and a write block. A write block MAY assign
-more than one tag.
+references, a local match block, and a write block. A rule MAY contain a
+rule-level explicit clear list. A write block MAY assign more than one tag.
 ```
 
 ```normative
@@ -307,7 +318,7 @@ predicate set before ambiguity checks.
 ```normative
 The tool MUST normalize the sparse source into deterministic candidate rows for
 lint, resolver lookup, diagnostics, and table dumps. Each candidate row MUST
-retain its source rule id and source span.
+retain its source rule id and source locator.
 ```
 
 ```normative
@@ -322,8 +333,9 @@ provenance: owned, observed, or recognized.
 ```
 
 ```normative
-Clearing a tag MUST be represented by an explicit clear sentinel in the write
-block. Absence from a write block MUST NOT imply deletion.
+Clearing a tag MUST be represented by an explicit rule-level `clear` entry that
+normalization renders as a `<clear>` write. Absence from both the write block and
+the clear list MUST NOT imply deletion.
 ```
 
 #### Load-Bearing Decisions
@@ -339,9 +351,11 @@ the churn-prone decisions, not blanket detail.]
   Normalized candidate rows inherit that identity plus a deterministic expansion
   suffix. Rule ids are stable review anchors and must not be reused for a
   different edge.
-- **Wire / byte format** — TOML is the on-disk carrier. Exact field names and
-  example fixtures are finalized during Resolve after the sparse parser and
-  normalization spikes prove the chosen TOML shape.
+- **Wire / byte format** — TOML is the on-disk carrier. The exact field names
+  are the Resolve spike layout: root `outcomes`, `[model]`, `[tags.<tag>]`,
+  `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`, `[rule.write]`,
+  rule-level `clear`, and `[dump]`. The RDR and kata spike fixtures are the
+  canonical examples implementation tests must promote.
 - **Naming** — the canonical source artifact name is "transition model"; the
   canonical rendered view is "expanded transition table." Rejected
   names: "state machine config" because it suggests a runtime driver, and
@@ -628,8 +642,9 @@ slice and one for a representative kata flow slice, into typed source data;
 normalize them into candidate rows; dump the expanded table; validate tag
 declarations, context references, predicate references, recognized outcomes, and
 multi-tag writes; then prove by unit test that one sample tag-set resolves to
-exactly one row and one ambiguous tag-set is refused. The RDR fixture must cover
-at least `Status`, `Profile`, prelock iteration, and one rewind or cluster guard.
+exactly one row and one deliberately overlapping malformed variant is refused as
+ambiguous. The RDR fixture must cover at least `Status`, `Profile`, prelock
+iteration, and one rewind or cluster guard.
 
 ### Phase 1: Fixture and Schema Spike
 
@@ -682,10 +697,10 @@ Implementation tests must promote the Resolve spike into production fixtures:
 1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
    **Expected**: Tag declarations, root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, and multi-tag writes decode without ambiguous field placement.
 2. **Scenario**: Normalize the RDR fixture's `continue-prelock` and `reconcile-rewind` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source spans, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, and writes are deterministic.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, and writes are deterministic.
 3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, and missing root outcome alphabets.
    **Expected**: Each failure becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
-4. **Scenario**: Run exact-one selection over one matching tag-set and one overlapping/ambiguous tag-set.
+4. **Scenario**: Run exact-one selection over one matching tag-set and one deliberately overlapping/ambiguous negative fixture variant.
    **Expected**: The matching tag-set resolves to one row; zero or multiple matches are refusals and never fall back to row order.
 
 ### Performance Expectations
