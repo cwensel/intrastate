@@ -108,7 +108,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   existing CLI failure gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go:44-67` defines append-only structured `CLIError` codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr/clierr.go:101-128` maps groups to stable exits, and `internal/cli/respond/respond.go:129-144` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`main.go:22-30`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
+  - **Evidence**: `internal/cli/clierr::CLIError` defines append-only structured codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr::ExitCodeFor` maps groups to stable exits, and `internal/cli/respond::Fail` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`main.go:22-30`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
   - **If wrong**: Accessor errors would need a separate user-facing output
     contract or would leak implementation errors to callers.
 - **A4 Accessor execution can be deterministic enough for resolver replay when
