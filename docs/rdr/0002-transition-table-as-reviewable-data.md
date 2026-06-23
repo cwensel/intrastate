@@ -239,9 +239,10 @@ The source schema has six conceptual parts:
    table dump.
 
 The parser turns TOML into typed source data, then normalizes it into explicit
-candidate rows. Validation rejects malformed tags, unknown predicate operators,
-writes to non-owned tags, rules that match on missing tag declarations,
-unresolvable context references, and unknown accessor names. Runtime matching is
+candidate rows. Validation rejects malformed tags, unsupported model versions,
+unknown predicate operators, writes to non-owned tags, rules that match on
+missing tag declarations, unresolvable context references, unknown accessor
+names, and ambiguous overlaps between candidate rows. Runtime matching is
 deliberately priority-free: the resolver evaluates candidate rows against the
 supplied tag-set and succeeds only when exactly one row matches. Multi-tag writes
 are first-class because RDR rewinds and kata lifecycle moves need to set both the
@@ -299,6 +300,11 @@ live in a rule-level `clear` list.
 ```
 
 ```normative
+`[model]` MUST contain `id` and `version`. Version `1` is the only version this
+RDR accepts; any other version MUST be refused before normalization.
+```
+
+```normative
 Each transition rule MUST contain a stable rule id, zero or more shared-context
 references, a local match block, and a write block. A rule MAY contain a
 rule-level explicit clear list. A write block MAY assign more than one tag.
@@ -322,6 +328,13 @@ retain its source rule id and source locator.
 ```
 
 ```normative
+The expanded table dump MUST be derived from the normalized candidate-row value:
+model id, row identity, source locator, predicates, and writes. Dump ordering
+MUST be deterministic across source key order by sorting rows by row identity,
+then sorting predicate and write keys within each row.
+```
+
+```normative
 Source order and rendered-row order MUST NOT decide a successful transition. A
 tag-set resolves only when exactly one normalized candidate row matches; zero or
 multiple matches are refusals.
@@ -336,6 +349,12 @@ provenance: owned, observed, or recognized.
 Clearing a tag MUST be represented by an explicit rule-level `clear` entry that
 normalization renders as a `<clear>` write. Absence from both the write block and
 the clear list MUST NOT imply deletion.
+```
+
+```normative
+Validation failures MUST retain stable data-level categories before CLI mapping,
+including at minimum unknown tag, unknown context, write to non-owned tag,
+unknown accessor, unsupported version, and ambiguous overlap.
 ```
 
 #### Load-Bearing Decisions
@@ -354,8 +373,9 @@ the churn-prone decisions, not blanket detail.]
 - **Wire / byte format** — TOML is the on-disk carrier. The exact field names
   are the Resolve spike layout: root `outcomes`, `[model]`, `[tags.<tag>]`,
   `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`, `[rule.write]`,
-  rule-level `clear`, and `[dump]`. The RDR and kata spike fixtures are the
-  canonical examples implementation tests must promote.
+  rule-level `clear`, and `[dump]`. `[model].version = 1` is the only accepted
+  format version. The RDR and kata spike fixtures are the canonical examples
+  implementation tests must promote.
 - **Naming** — the canonical source artifact name is "transition model"; the
   canonical rendered view is "expanded transition table." Rejected
   names: "state machine config" because it suggests a runtime driver, and
@@ -370,9 +390,10 @@ the churn-prone decisions, not blanket detail.]
 
 `parse ∘ normalize ∘ dump = expanded-table value identity` on valid transition
 model fixtures: dumping the normalized model and reading the dump as a table
-view must preserve the candidate-row set. Source rewrite is out of scope for
-this RDR; a later rewrite-capability RDR must define its own source-preservation
-invariant before mutating authored TOML.
+view must preserve the candidate-row set, including row identity, source
+locator, predicates, and writes. Source rewrite is out of scope for this RDR; a
+later rewrite-capability RDR must define its own source-preservation invariant
+before mutating authored TOML.
 
 #### Illustrative Code
 
@@ -640,11 +661,12 @@ inputs are typed resolver refusals rather than guessed edges.
 Parse two hand-authored sparse TOML fixtures, one for a representative RDR flow
 slice and one for a representative kata flow slice, into typed source data;
 normalize them into candidate rows; dump the expanded table; validate tag
-declarations, context references, predicate references, recognized outcomes, and
-multi-tag writes; then prove by unit test that one sample tag-set resolves to
-exactly one row and one deliberately overlapping malformed variant is refused as
-ambiguous. The RDR fixture must cover at least `Status`, `Profile`, prelock
-iteration, and one rewind or cluster guard.
+declarations, context references, predicate references, recognized outcomes,
+supported model version, and multi-tag writes; then prove by unit test that one
+sample tag-set resolves to exactly one row, one unsupported-version variant is
+refused before normalization, and one deliberately overlapping malformed variant
+is refused as ambiguous. The RDR fixture must cover at least `Status`, `Profile`,
+prelock iteration, and one rewind or cluster guard.
 
 ### Phase 1: Fixture and Schema Spike
 
@@ -698,10 +720,12 @@ Implementation tests must promote the Resolve spike into production fixtures:
    **Expected**: Tag declarations, root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, and multi-tag writes decode without ambiguous field placement.
 2. **Scenario**: Normalize the RDR fixture's `continue-prelock` and `reconcile-rewind` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
    **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, and writes are deterministic.
-3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, and missing root outcome alphabets.
-   **Expected**: Each failure becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
+3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, unsupported versions, ambiguous overlaps, and missing root outcome alphabets.
+   **Expected**: Each failure retains a stable data-level category and becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
 4. **Scenario**: Run exact-one selection over one matching tag-set and one deliberately overlapping/ambiguous negative fixture variant.
    **Expected**: The matching tag-set resolves to one row; zero or multiple matches are refusals and never fall back to row order.
+5. **Scenario**: Normalize and dump two semantically identical fixtures whose TOML keys are authored in different orders.
+   **Expected**: The expanded-table value is identical because rows sort by row identity and predicates/writes sort by key.
 
 ### Performance Expectations
 
@@ -711,8 +735,10 @@ rows, and a repeated run produced byte-identical output with SHA-256
 `3041e9e6678510e203a0213d5410df0852971416d64727c767345c4ca4725b24`.
 Production code should preserve deterministic dump ordering by sorting stable
 model/rule/predicate/write keys rather than relying on map iteration or source
-order. Runtime lookup may index rows later, but that optimization must preserve
-the normalized candidate-row semantics.
+order. The SHA is evidence for the spike output only; production golden tests
+must assert the normalized expanded-table value defined by the normative
+contract. Runtime lookup may index rows later, but that optimization must
+preserve the normalized candidate-row semantics.
 
 ## Finalization Gate
 
