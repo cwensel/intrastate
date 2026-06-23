@@ -84,31 +84,121 @@ intrastate is a Go CLI wired through `internal/cli`. The lint must be compatible
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+The seed is still current. `rg -n "graph|lint|verify|guarantee|DAG|cycle|authority|migration|schema" .`
+found no implemented transition graph, resolver, table loader, guard package, or
+graph lint command under `internal/`; it found only the peer RDR drafts, the
+existing CLI output/error plumbing, and normal Go tooling lint. The design
+therefore targets the RDR cluster contract rather than an implemented command.
+
+Prior art was read before naming approaches. The resource index names
+`../state-machines` as the current prior-system source, and its Seed 6 states
+the lint problem directly: illegal or incomplete graphs should be caught at
+design time, with the design fork of "standalone CI check vs `resolve --lint`
+subcommand vs pre-commit hook" and an invariant set including dangling edges,
+dead ends, determinism, guard exhaustiveness, single-valued state, and
+owned-set-before-match. `../state-machines/MODEL-transition.md` gives the
+closest semantic prior: design-time lint rejects overlapping predicates,
+non-exhaustive predicates, and owned-tag reads before predecessor writes, and
+says provenance feeds the determinism check. `../state-machines/attic/RESOLVER-DESIGN.md`
+states the old thin-lint form as "Run once at design time over the table" and
+lists no dangling edges, no dead ends, determinism, guard coverage, and
+single-valued-state invariants. `../state-machines/repos/README.md` records the
+superseded formal-tool conclusion: the RDR/kata graphs are small enough for a
+declarative table plus a short lint instead of a model checker. The local CLI
+contract adds that every user-facing graceful exit must route through
+`respond`/`clierr`, not direct printing.
+
+The peer RDR split is load-bearing. RDR 0001 owns runtime exact-one resolution
+and keeps runtime refusal necessary after lint. RDR 0002 owns sparse TOML
+source, normalization, stable rule identity, source spans, and graph/render
+views. RDR 0003 owns symbolic predicate atoms, finite-domain exhaustiveness,
+overlap diagnostics, and owned/observed/recognized provenance. RDR 0004 owns
+accessor execution and read-back safety. RDR 0005 owns the resolver CLI surface
+and may expose lint, but it explicitly leaves static graph lint authority to
+this RDR. This RDR should therefore define when a normalized graph is accepted,
+which invariant failures are blocking, and how those failures map to the
+existing CLI output contract.
+
+Sibling-path check:
+
+```sh
+rg -n "graph|lint|verify|guarantee|DAG|cycle|authority|migration|schema" .
+```
+
+The search found no adjacent implemented lint authority or discriminator to
+reuse. The only sibling signal is the peer-RDR design: exact-one runtime
+selection, symbolic finite-domain predicates, source rule identity, and the
+existing CLI failure gateway.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — RDR 0001 makes runtime resolution exact-one-or-refusal and
+  keeps runtime refusal distinct from design-time graph acceptance.
+- **Documented** — RDR 0002's normalized candidate rows retain source rule ids
+  and spans, which lint needs for actionable diagnostics.
+- **Documented** — RDR 0003 gives lint finite-domain predicate semantics for
+  overlap, coverage, and owned-tag read-before-write checks.
+- **Documented** — `docs/cli-output-contract.md` makes `respond`/`clierr` the
+  route for text/json success and structured failure output.
+- **Documented** — prior-system notes reject a separate formal runtime or model
+  checker for these small graphs and preserve a design-time validator/lint
+  carve-out.
+- **Assumed** — the normalized table and predicate contracts can expose enough
+  graph structure for lint to prove all mandatory invariants without reading
+  sparse TOML directly.
+- **Assumed** — a blocking `intrastate lint` command plus CI invocation is the
+  right authority surface; local hooks may call it but cannot be the source of
+  truth.
+- **Assumed** — the initial invariant set can be expressed as deterministic
+  checks over normalized rows, declared tags/domains, declared terminals, and
+  predecessor/write reachability.
 
 ### Critical Assumptions
 
-[Load-bearing assumptions — if wrong, the approach
-fails. Each must have a complete Evidence Record
-before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight below`
-  - **Evidence**: [single sentence — concrete artifact;
-    see method-specific guidance below]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 Normalized rows expose every graph edge, guard constraint, write, source
+  rule id, and source span needed for lint diagnostics.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Pending: RDR 0002 must lock the normalized candidate-row
+    contract with source ids/spans and writes preserved from sparse TOML.
+  - **If wrong**: Lint may find a graph defect but fail to locate the authored
+    rule or may need to parse sparse source through a parallel model.
+- **A2 Predicate lint can decide overlap and coverage for the finite domains
+  this graph claims exhaustive.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Pending: RDR 0003 must lock finite-domain semantics for enum,
+    boolean, set-universe, and bounded-int predicate atoms.
+  - **If wrong**: The lint would either miss ambiguous/gap cases or block valid
+    guarded edges with false positives.
+- **A3 Owned-tag read-before-write can be checked over the normalized graph
+  without executing accessors.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Pending: RDR 0002 and RDR 0004 must expose tag provenance,
+    owned writes, preserve/clear semantics, and accessor binding enough for a
+    static predecessor/write check.
+  - **If wrong**: Lint cannot prove that trusted owned state exists before a row
+    matches it, so a class of runtime missing-state refusals remains design-time
+    invisible.
+- **A4 Blocking lint failures can map to the existing CLI failure envelope and
+  exit-code groups.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`,
+    `internal/cli/clierr::ExitCodeFor`, and `internal/cli/respond::Fail` can
+    carry graph lint codes and text/json diagnostics without direct output.
+  - **If wrong**: The lint command needs a separate output contract or new
+    exit-code group before it can be authoritative in CI.
+- **A5 CI can run `intrastate lint` as the blocking graph-acceptance authority
+  for transition model changes.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Pending: the Minimum Viable Validation must add a fixture lint
+    command invocation that fails at least one illegal graph and passes one
+    legal graph through the same command shape CI would run.
+  - **If wrong**: The graph may be lintable locally but not enforced at the
+    design-time boundary maintainers actually rely on.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -157,240 +247,376 @@ Evidence Record or by the Minimum Viable Validation.
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Make graph lint a first-class, blocking acceptance gate over the normalized
+transition graph. The lint consumes the normalized model produced by RDR 0002
+and the symbolic predicate/domain semantics from RDR 0003; it does not parse
+sparse TOML independently, execute accessors, run the resolver, or become a
+runtime state-machine engine. A model is accepted only when every mandatory
+static invariant passes. A model with an invariant failure is rejected before it
+can be used by the resolver or accepted by CI.
+
+The authoritative surface is `intrastate lint` and its CI invocation. A
+pre-commit hook may call the same command for ergonomics, and a future resolver
+command may offer a validation-only flag for local convenience, but neither is
+the authority. The authority is the blocking lint result over model files using
+the existing CLI output envelope.
+
+Runtime refusal remains separate. Lint proves that the designed graph has no
+known static defects; RDR 0001's kernel still refuses bad runtime inputs such
+as missing artifacts, unavailable observed tags, unmodeled recognized outcomes,
+or guard values that cannot be evaluated for a live call.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The lint pipeline has four conceptual stages. First, load and normalize the
+transition model through the RDR 0002 table contract. Second, derive a graph
+view from normalized candidate rows: source rule ids/spans, source and target
+tag writes, recognized outcomes, guard constraints, terminal declarations, tag
+provenance, finite domains, and owned-tag write effects. Third, run invariant
+checks over that graph and collect typed findings. Fourth, emit either a success
+report or a structured `CLIError` failure through `respond`.
+
+The mandatory invariant set is:
+
+1. **Dangling edge** — every transition target, context reference, tag, outcome,
+   accessor reference, and terminal state named by a row must resolve to a
+   declared model element.
+2. **Dead end** — every non-terminal reachable state must have at least one
+   outgoing modeled edge for a legal recognized outcome.
+3. **Determinism / overlap** — no finite-domain input assignment may enable two
+   candidate rows for the same state/outcome unless the model explicitly routes
+   to one deterministic escape row.
+4. **Guard exhaustiveness / gap** — for each state/outcome pair that claims
+   closed coverage, finite-domain input assignments must either match exactly
+   one modeled row or a declared escape row.
+5. **Single-valued state** — writes must not produce two values for a tag class
+   that the model declares single-valued, such as one lifecycle/status value.
+6. **Owned-set-before-match** — every row matching an owned tag must be reachable
+   only after a predecessor writes or preserves that owned tag, or after an
+   initial-state declaration supplies it.
+7. **Declared terminal/escape handling** — terminal states and intentional
+   escapes are explicit model data; lint must not infer them from missing rows.
+
+Each finding carries a stable code, severity, model id, rule/context id when
+available, source span when available, and a concise human message. Blocking
+findings make the command fail. Non-blocking advisories may exist for redundant
+rows or unreachable rules only if they do not weaken the mandatory acceptance
+gate.
 
 #### Normative Contracts
 
-[Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block,
-e.g.:
-
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+Graph lint MUST be a blocking acceptance gate over the normalized transition
+model. A model with any blocking lint finding MUST NOT be accepted for resolver
+use or CI success.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+```normative
+Graph lint MUST consume the normalized candidate-row graph from the transition
+model contract. It MUST NOT define a second sparse-source parser or a parallel
+transition semantics.
+```
+
+```normative
+Graph lint MUST check at least these blocking invariant classes: dangling edge,
+dead end, determinism/overlap, guard exhaustiveness/gap, single-valued state,
+owned-set-before-match, and declared terminal/escape handling.
+```
+
+```normative
+Graph lint MUST reject ambiguity instead of relying on source order,
+rendered-row order, or first-match priority to choose between enabled rows.
+```
+
+```normative
+Graph lint MAY claim exhaustiveness only over finite declared domains supplied
+by the predicate/tag model. If a required dimension is not finite, lint MUST
+emit a blocking inability-to-prove finding for any contract that depends on
+closed coverage.
+```
+
+```normative
+Every blocking finding MUST carry a stable code, model identity, severity,
+human-readable message, and the source rule/context id or source span when the
+normalized model can provide one.
+```
+
+```normative
+The authoritative CLI surface for graph acceptance MUST be `intrastate lint`
+or a same-engine CI invocation. Pre-commit hooks and resolver-local validation
+flags MAY call that engine, but MUST NOT define different acceptance rules.
+```
+
+```normative
+Lint command success and failure MUST route through `respond.OK`,
+`respond.Fail`, and `CLIError`; the command MUST NOT write directly to stdout
+or stderr.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
+- **Identity** — a lint finding is identified by `(model id, invariant code,
+  source rule/context id or graph element id, normalized predicate/write
+  fingerprint)`. This makes repeated runs stable enough for review and tests
+  without depending on source line numbers alone.
+- **Naming** — the canonical command and subsystem name is "lint". Rejected:
+  "validate" because it is too broad and collides with parse/schema validation;
+  "`resolve --lint`" as the authority because it hides graph acceptance under a
+  runtime verb; and "pre-commit check" because hooks are optional ergonomics,
+  not an acceptance boundary.
+- **Selection / predicate** — when two rows qualify for the same state/outcome,
+  lint rejects the model. It never selects by order; explicit escape rows are
+  modeled graph edges, not a tie-breaker.
 
 #### Round-Trip / Inverse Invariants
 
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 8.1 asserts it across the
-seam.
+This RDR introduces no encode/decode, import/export, or inverse operation.
+Parse/render fidelity remains owned by RDR 0002. Lint determinism is covered by
+the finding identity decision and the Minimum Viable Validation.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative command shape only; RDR 0005 may still adjust flag placement:
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```sh
+intrastate lint --flow rdr --model ./path/to/rdr-transition-model.toml
+```
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+Illustrative finding shape only:
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+```json
+{
+  "code": "graph-overlap",
+  "model": "rdr",
+  "severity": "blocking",
+  "rule": "prelock-flapping-cap",
+  "message": "two rows can match status=Draft outcome=reviewed profile=large"
+}
+```
 
 ### Capability Dependencies
 
-[For each load-bearing behavior, state whether the
-enabling capability exists now, is introduced by this
-RDR, is provided by a predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Normalized candidate rows and source identity | RDR 0002 | Pending | Lint consumes normalized graph data and reports authored source ids/spans. |
+| Symbolic predicate finite-domain semantics | RDR 0003 | Pending | Enables overlap and exhaustiveness proofs. |
+| Owned/observed/recognized tag provenance | RDR 0002 / RDR 0003 | Pending | Required for owned-set-before-match and coverage checks. |
+| Accessor write/read-back semantics | RDR 0004 | Pending | Lint reasons about declared owned writes without executing accessors. |
+| CLI command exposure | RDR 0005 plus this RDR | Pending / introduced | RDR 0005 wires verbs; this RDR owns the lint acceptance contract. |
+| CLI failure/output gateway | Existing `respond` / `clierr` | Available | Lint results must use existing text/json and exit-code behavior. |
+| Graph lint invariant taxonomy | This RDR | Introduced | Defines blocking graph acceptance before resolver use. |
 
 ### Existing Infrastructure Audit
 
-[List existing modules that overlap with proposed
-components. For each, state whether to reuse, extend,
-or replace, and name any known limit that affects the
-spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Structured CLI failures | `internal/cli/clierr` | No graph-lint codes yet | Extend | Add stable lint failure codes mapped to an existing exit-code group unless Resolve proves a new group is needed. |
+| Text/json output routing | `internal/cli/respond` | Existing gateway, no lint payload yet | Reuse | Success/failure output goes through `respond.OK` / `respond.Fail`. |
+| Command tree | `internal/cli` | No resolver/lint commands yet | Extend via RDR 0005 | Add lint command without bypassing command conventions. |
+| Transition graph model | none under `internal/` | Pending peer implementation | Introduce via RDR 0002 | Lint package depends on normalized graph API, not source TOML parsing. |
+| Guard reasoning | none under `internal/` | Pending peer implementation | Introduce via RDR 0003 | Lint package depends on finite-domain predicate API. |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out.]
+The blocking `intrastate lint` approach is the smallest authority that solves
+the user's problem: illegal or incomplete graphs fail before use, while runtime
+refusal still handles live bad inputs. It follows the local prior that the
+legal graph should be specified and checked as data, not driven by a framework
+or reinterpreted by a hook. It also preserves the peer seams: table source and
+normalization stay in RDR 0002, predicate semantics stay in RDR 0003, accessor
+safety stays in RDR 0004, and CLI presentation stays in RDR 0005.
+
+Q-O-C matrix for the large-profile decision:
+
+| Criterion | Standalone blocking `intrastate lint` + CI | `resolve --lint` validation mode | Pre-commit hook authority | External model checker / FSM validator |
+| --- | --- | --- | --- | --- |
+| Correctness fit | Directly gates graph acceptance before resolver use. | Couples design-time proof to runtime verb and can be skipped by non-resolve paths. | Local-only; hooks are easy to skip or absent in CI. | Strong proof surface, but oversized for small declared tables. |
+| Prior-art alignment | Matches sibling "table + thin CLI + lint" and "run once at design time" notes. | Partly matches thin CLI, but weakens the design-time/runtime split. | Useful ergonomics, not an authority in prior art. | Prior notes keep validator carve-out but supersede model-checker adoption. |
+| Reversibility | Can add hook wrappers or resolver-local flags later without changing lint semantics. | Harder to extract once runtime and lint flags share behavior. | Easy to add/remove, but cannot be the only gate. | Hard to remove after specs/tests depend on tool language. |
+| Blast radius | New lint package/verb plus CI path; no runtime engine expansion. | Runtime CLI grows acceptance semantics and may obscure refusal boundaries. | Low code blast radius but high process risk. | High dependency/tooling blast radius. |
+| Cost | Implementable over normalized rows and finite-domain predicates. | Similar engine cost plus confusing command semantics. | Cheap wrapper but insufficient guarantee. | Expensive setup and translation with little benefit for tiny graphs. |
+
+Premortem: this approach fails if normalized rows cannot preserve source
+identity, if finite-domain predicate reasoning is too weak for the RDR/kata
+graphs, or if CI never runs the lint. The recommendation survives because those
+are explicit assumptions for Resolve and because each failure has a bounded
+response: fix the peer normalized graph contract, restrict which exhaustiveness
+claims lint may make, or wire CI to the same command. A runtime-only or hook-only
+approach would hide those risks until after the graph is already in use.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Standalone Blocking `intrastate lint` And CI
 
-### Alternative 1: [Name]
-
-**Description**: [Brief description]
+**Description**: Add a lint engine and command that consumes normalized
+transition models and fails on blocking graph invariant violations. CI invokes
+the same command for model changes.
 
 **Pros**:
 
-- [Advantage 1]
+- Clear design-time authority.
+- Keeps runtime resolver refusal separate from graph acceptance.
+- Lets hooks and future validation flags reuse one engine.
+- Fits existing CLI output and error conventions.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Requires CI wiring and stable fixture coverage before the guarantee is real.
+- Depends on peer normalized-row and predicate contracts being strong enough.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for selection**: It is the only option that is both enforceable and
+properly scoped to design-time graph acceptance.
+
+### Alternative 2: `resolve --lint` As The Authority
+
+**Description**: Put graph lint behind the resolver command as a validation mode
+or flag.
+
+**Pros**:
+
+- Keeps graph validation close to the command that consumes the graph.
+- May be convenient for users already invoking resolver flows.
+
+**Cons**:
+
+- Blurs the static proof/runtime refusal boundary.
+- Makes lint look optional or call-specific instead of a model acceptance gate.
+- Risks forcing the resolver CLI to carry graph-diagnostic concerns owned here.
+
+**Reason for rejection**: It is useful as an optional wrapper later, but it is
+the wrong authority surface.
+
+### Alternative 3: Pre-Commit Hook Authority
+
+**Description**: Run graph lint only as a repository hook before commits.
+
+**Pros**:
+
+- Fast local feedback.
+- Low command-surface complexity if it shells out to an internal package.
+
+**Cons**:
+
+- Hooks are local, mutable, and easy to bypass.
+- CI and automated generation paths can miss the gate.
+- Hook output tends to drift from the project CLI output contract.
+
+**Reason for rejection**: A hook may call `intrastate lint`, but it cannot be
+the acceptance authority.
+
+### Alternative 4: External Model Checker Or FSM Validator
+
+**Description**: Translate the legal graph to Quint/TLA+/SCXML/Sismic or a
+similar validator and use that tool as the proof authority.
+
+**Pros**:
+
+- Strong prior-art fit for larger safety-critical graphs.
+- Could express richer temporal properties later.
+
+**Cons**:
+
+- Adds a second graph language and toolchain.
+- Duplicates the normalized model semantics this RDR needs to check directly.
+- Prior notes already judged it overkill for these small RDR/kata graphs.
+
+**Reason for rejection**: Keep external validators as future contrast or audit
+tools; the authoritative gate should be native lint over the model intrastate
+actually consumes.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Advisory-only lint**: Rejected because it does not catch illegal graphs
+  before use.
+- **Runtime-only resolver refusal**: Rejected because it discovers design
+  defects one call at a time instead of rejecting the graph.
+- **Generated exhaustive table as the authority**: Rejected because RDR 0002
+  makes the sparse source the authored model and the expanded table a view.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Transition model changes get a single blocking acceptance gate that can be
+  run locally and in CI.
+- Runtime resolver code remains simpler because graph-design defects should be
+  rejected before models reach it.
+- Lint must depend on peer model/predicate APIs; if those contracts drift, lint
+  failure quality degrades.
+- Some live failures remain runtime refusals by design; lint is not a promise
+  that every future call has complete artifacts or observed context.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: Lint emits correct findings without useful source locations.
+  **Mitigation**: Make source rule/context identity a peer-RDR assumption and
+  block lock until diagnostics can point to authored rules.
+- **Risk**: Exhaustiveness checks overclaim on open domains.
+  **Mitigation**: Require finite declared domains for closed-coverage claims and
+  make inability-to-prove a blocking finding when acceptance depends on it.
+- **Risk**: CI wiring lags behind command implementation.
+  **Mitigation**: Include CI-shaped command invocation in the Minimum Viable
+  Validation rather than treating it as Day 2 work.
 
 ### Failure Modes
 
-[What breaks visibly? What fails silently? Recovery
-path? How does a developer diagnose the problem?]
+Visible failures are structured lint failures: dangling references, dead ends,
+overlapping rows, coverage gaps, multi-valued state writes, owned-tag
+read-before-write, undeclared terminals, and inability to prove a required
+finite-domain guarantee. Silent failure would mean accepting a model with a
+blocking invariant defect or letting a hook/alternate command use different
+rules; the normative command/CI authority and shared lint engine are meant to
+prevent that. Diagnosis starts from the finding code plus source rule/context id
+or source span.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
+  semantics are coherent enough to implement checks against.
+- [ ] RDR 0005 command placement is coherent enough to expose `intrastate lint`
+  without direct output.
 
 ### Minimum Viable Validation
 
-[The single end-to-end proof that the approach works.
-Must be in scope — not deferred.]
+Add a fixture-backed lint invocation that uses the same command shape intended
+for CI. It must pass one legal transition model and fail one illegal model for
+each blocking invariant class named in this RDR, asserting stable finding codes
+and source rule/context identity in JSON mode.
 
-### Phase 1: Code Implementation
+### Phase 1: Lint Boundary
 
-#### Step 1: [Title]
+Define the lint package boundary over the normalized graph API and the finding
+taxonomy without introducing a second source parser.
 
-[Instructions]
+### Phase 2: Invariant Engine
 
-#### Step 2: [Title]
+Implement the mandatory graph checks over normalized rows, finite domains, tag
+provenance, declared terminals, and owned writes.
 
-[Instructions]
+### Phase 3: CLI And CI Surface
 
-### Phase 2: Operational Activation
+Expose `intrastate lint` through the existing Cobra/respond/clierr gateway and
+add the CI-shaped invocation to the validation path.
 
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
+### Phase 4: Fixture Corpus
 
-#### Activation Step 1: [Title]
-
-[Instructions]
+Add compact legal and illegal model fixtures that exercise every blocking
+finding and preserve stable source identity for diagnostics.
 
 ### Day 2 Operations
 
-[For every persistent resource this RDR creates
-(collection, index, data store, config entry),
-address management operations:]
-
 | Resource | List | Info | Delete | Verify | Backup |
 | --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
+| Transition model files | Covered by repository tools | Covered by lint output and table dumps | Covered by version control | In scope through `intrastate lint` | Covered by version control |
+| Lint fixtures | Covered by repository tools | Covered by test names and fixture paths | Covered by version control | In scope through tests | Covered by version control |
 
 ### New Dependencies
 
-[Dependencies to add/update. For third-party: note
-license and whether legal review is required.]
+No new third-party dependency is selected at Propose. The chosen approach should
+first use the normalized model and predicate packages introduced by peer RDRs.
 
 ## Validation
 
