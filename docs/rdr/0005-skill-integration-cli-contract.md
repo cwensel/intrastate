@@ -7,57 +7,8 @@
 
 - **Date**: 2026-06-19
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Feature
 - **Profile**: mid — exposes the resolver contract through a user-facing CLI surface.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -614,21 +565,39 @@ No new third-party dependency is selected at Propose. Cobra, `respond`, and
 
 ### Testing Strategy
 
-[Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Command tests should exercise the `flow` command group through the production
+Cobra path rather than calling renderers or kernel functions directly. Coverage
+must include argument validation, output mode validation, success rendering, and
+typed refusal mapping for each verb.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: `flow next` over the fixture model in `--as=json` and
+   `--as=text`.
+   **Expected**: both modes report the same recognized-outcome alphabet and
+   conditional summaries through the standard success envelope/rendering path.
+2. **Scenario**: `flow resolve` over the fixture model with one recognized
+   outcome that matches exactly one row.
+   **Expected**: the command returns the expected next tag-set and no artifact
+   binding is required or attempted.
+3. **Scenario**: `flow resolve` with an unknown outcome, zero-match row, and
+   multi-match row.
+   **Expected**: each refusal maps to a stable `CLIError.Code` and non-zero
+   exit behavior under both output modes.
+4. **Scenario**: `flow read-state` and `flow set-state` over a fixture artifact
+   and declared accessor roles.
+   **Expected**: reads return the artifact tag-set; writes report success only
+   after read-back verification proves the expected owned-tag values.
+5. **Scenario**: accessor unavailable, gate indeterminate, and read-back
+   mismatch.
+   **Expected**: each failure remains a typed CLI refusal, not a successful
+   transition.
 
 ### Performance Expectations
 
-[Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+No throughput target is load-bearing for this RDR. The command path should stay
+single-invocation deterministic: parse inputs, load the selected model, call one
+owning package operation, and render one terminal result. Any accessor latency
+belongs to RDR 0004's execution contract; this RDR only requires that an
+unavailable or indeterminate accessor surfaces as a typed refusal.
 
 ## Finalization Gate
 
@@ -645,81 +614,47 @@ chosen approach over a rejected one.]
 
 ### Contradiction Check
 
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+No contradictions found between research findings, design principles, and
+proposed solution. The research points to a thin four-verb CLI, reuse of the
+existing output gateway, pure resolver delegation, and accessor-owned state
+binding; the proposed solution follows those boundaries.
 
 ### Assumption Verification
 
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
+A1-A5 remain Pending and each has a non-empty "If wrong" branch. No assumption
+uses `Docs Only`; A1 and A5 require source search, A2 requires the named MVV
+test, and A3-A4 require peer-RDR verification. No `Verified` stamp is present,
+so there is no self-referential evidence to reject at this stage. Before lock,
+Resolve must either verify each record or route this RDR back for proposal if a
+pending record refutes the four-verb contract.
 
 ### Scope Verification
 
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+The Minimum Viable Validation is in scope for implementation: one fixture-backed
+flow must prove `flow next`, `flow resolve`, `flow read-state`, and
+`flow set-state` through the production Cobra path in both output modes,
+including at least one typed refusal.
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+- **Versioning**: verb-specific JSON `data` payloads are append-only under the
+  existing CLI output envelope.
+- **Incremental adoption**: explicit flags and fixture-backed model loading can
+  ship before broader config discovery.
+- **Secret/credential lifecycle**: this RDR does not introduce credentials;
+  accessor execution and external availability belong to RDR 0004.
+- **Canonical-form / determinism**: the deterministic claim is request-level
+  semantic determinism over the same model revision, not byte-identical output
+  or content-addressed identity.
 
 ### Proportionality
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+This RDR is right-sized for one load-bearing contract: the user-facing CLI
+integration surface over the resolver, accessor, and output seams. It does not
+own kernel selection semantics, transition-model format, guard predicate
+meaning, accessor safety, or graph lint invariants. The `mid` profile remains
+appropriate because the contract is user-facing but not foundational and carries
+no prior accretion in Seam Lineage.
 
 ## References
 
