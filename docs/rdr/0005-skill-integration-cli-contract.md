@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-06-24; re-verify A4 — cluster 0001-0006 found read-state/gate accessor result-shape gap]
+- **Status**: Draft
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -97,9 +97,10 @@ the verb set.
   success/refusal mapping to this RDR.
 - **Documented** - RDR 0002 provides the legal recognized-outcome alphabet and
   normalized model rows consumed by `next` and `resolve`.
-- **Documented** - RDR 0004 owns read/write/gate accessor execution and
-  read-back verification; this RDR should expose those outcomes, not redefine
-  accessor safety.
+- **Documented** - RDR 0004 owns read/write/gate accessor execution, gate
+  result shape, and read-back verification; this RDR should expose those
+  outcomes through verb-appropriate result shapes, not redefine accessor
+  safety.
 - **Documented** - sibling prior art names the thin CLI as
   `resolve`/`next`/`read-state`/`set-state` and explicitly rejects a runtime,
   driver, or framework.
@@ -165,8 +166,13 @@ the verb set.
     resolver kernel to receive explicit table, owned snapshot, observed tags,
     and recognized outcome inputs, and to avoid artifact discovery, accessor
     execution, output, subflows, and persistence. RDR 0004 `Technical Design` and
-    `Normative Contracts` place caller-supplied artifact roles, read/gate/write
-    accessors, and same-role read-back verification in the accessor executor.
+    `Normative Contracts` distinguish read accessors, which return typed tag
+    values, from gate accessors, which return allow/deny/indeterminate, and
+    place caller-supplied artifact roles plus same-role write read-back
+    verification in the accessor executor. Therefore `flow read-state` must bind
+    only read accessors for tag-set reads, while gate accessor results surface as
+    resolver/`next` candidate facts or typed CLI refusals rather than as
+    `read-state` tag payloads.
   - **If wrong**: The CLI would have to mix artifact discovery, accessor
     execution, and kernel selection in one command, weakening replay safety.
 - **A5 Stable CLI error codes can distinguish bad input, unknown outcome,
@@ -271,10 +277,12 @@ what exact next tag-set or refusal results?" It delegates edge selection to the
 RDR 0001 kernel and maps kernel refusals to stable `CLIError.Code` values.
 
 `flow read-state` and `flow set-state` bind the model's accessor names to
-caller-supplied artifact roles. `read-state` returns the current tag-set read
-from the artifact boundary. `set-state` persists a decided owned-tag mutation
-through RDR 0004's accessor executor and returns success only after read-back
-verification succeeds.
+caller-supplied artifact roles. `read-state` invokes declared read accessors
+and returns the current tag-set read from the artifact boundary. It does not
+invoke gate accessors, because gate accessors return allow, deny, or
+indeterminate rather than tag values. `set-state` persists a decided owned-tag
+mutation through RDR 0004's accessor executor and returns success only after
+read-back verification succeeds.
 
 ### Technical Design
 
@@ -321,8 +329,8 @@ The minimum `data` shape is:
   the normalized model exposes them without evaluating missing facts.
 - `resolve`: selected flow/model identity, supplied tags, recognized outcome,
   matched rule identity, next tags, and planned owned-tag writes.
-- `read-state`: selected flow/model identity, artifact role bindings, and read
-  tags.
+- `read-state`: selected flow/model identity, artifact role bindings, read
+  accessor identities, and read tags.
 - `set-state`: selected flow/model identity, artifact role bindings, requested
   owned-tag writes, and read-back-confirmed owned-tag values.
 
@@ -363,9 +371,10 @@ CLIError refusal mapped from the resolver kernel. It MUST NOT discover
 artifacts, run accessors, print directly, initiate skill work, or choose among
 multiple matching rows.
 
-flow read-state MUST invoke only declared read or gate accessors over
-caller-supplied `role=path` artifact bindings and return the read tag-set or a
-stable CLIError failure.
+flow read-state MUST invoke only declared read accessors over caller-supplied
+`role=path` artifact bindings and return the read tag-set or a stable CLIError
+failure. It MUST NOT invoke gate accessors or coerce gate allow, deny, or
+indeterminate results into tag values.
 
 flow set-state MUST invoke only declared write accessors over caller-supplied
 `role=path` artifact bindings and planned owned-tag `--write name=value`
@@ -420,7 +429,7 @@ intrastate flow set-state --flow rdr --artifact state=./docs/rdr/0005-skill-inte
 | Stateless resolver kernel | RDR 0001 | Verified peer RDR | `flow resolve` delegates selection and refusal classes. |
 | Transition model and outcome alphabet | RDR 0002 | Verified peer RDR | `flow next` depends on model-provided outcome and row data. |
 | Guard predicate semantics | RDR 0003 | Verified peer RDR | CLI reports conditions but does not own guard truth. |
-| Accessor execution and read-back | RDR 0004 | Verified peer RDR | `read-state` / `set-state` expose accessor outcomes. |
+| Accessor execution and read-back | RDR 0004 | Verified peer RDR | `read-state` exposes read-accessor tag values; `set-state` exposes write/read-back outcomes; gate results surface through candidate summaries or typed refusals. |
 | Graph lint authority | RDR 0006 | Out of scope for this contract | CLI may later expose lint, but this RDR does not own lint guarantees. |
 
 ### Existing Infrastructure Audit
@@ -631,8 +640,9 @@ model before broad config discovery.
 
 ### Phase 3: Accessor Binding
 
-Wire `read-state` and `set-state` to RDR 0004's accessor executor and preserve
-read-back failure as a typed CLI refusal.
+Wire `read-state` and `set-state` to RDR 0004's accessor executor. Restrict
+`read-state` to declared read accessors, and preserve gate-indeterminate and
+read-back failures as typed CLI refusals from the verb path that invoked them.
 
 ### Phase 4: Error Taxonomy And Docs
 
@@ -680,13 +690,14 @@ typed refusal mapping for each verb.
    exit behavior under both output modes.
 4. **Scenario**: `flow read-state` and `flow set-state` over a fixture artifact
    and declared accessor roles.
-   **Expected**: `--artifact role=path` bindings are validated, reads return the
-   artifact tag-set, and `--write name=value` mutations report success only
-   after read-back verification proves the expected owned-tag values.
-5. **Scenario**: accessor unavailable, gate indeterminate, and read-back
-   mismatch.
+   **Expected**: `--artifact role=path` bindings are validated, `read-state`
+   invokes only declared read accessors and returns the artifact tag-set, and
+   `--write name=value` mutations report success only after read-back
+   verification proves the expected owned-tag values.
+5. **Scenario**: read accessor unavailable, gate indeterminate during accessor
+   fact evaluation, and write read-back mismatch.
    **Expected**: each failure remains a typed CLI refusal, not a successful
-   transition.
+   transition or a coerced `read-state` tag payload.
 
 ### Performance Expectations
 
@@ -714,7 +725,9 @@ unavailable or indeterminate accessor surfaces as a typed refusal.
 No contradictions found between research findings, design principles, and
 proposed solution. The research points to a thin four-verb CLI, reuse of the
 existing output gateway, pure resolver delegation, and accessor-owned state
-binding; the proposed solution follows those boundaries.
+binding. The scoped re-entry clarified that `read-state` binds only read
+accessors, while gate accessors keep their RDR 0004 allow/deny/indeterminate
+shape and surface through candidate summaries or typed refusals.
 
 ### Assumption Verification
 
