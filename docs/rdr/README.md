@@ -10,7 +10,7 @@ engine README — this file is only the per-project index.
 | ID | Title | Status | Priority |
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Final | — |
-| 0002 | Transition table as reviewable data | Draft [revised from Final 2026-06-24; re-verify A2 A3 — cluster 0001-0006 found missing table-modeled escape-edge semantics] | — |
+| 0002 | Transition table as reviewable data | Final | High |
 | 0003 | Guard predicate exhaustiveness | Final | — |
 | 0004 | Accessor execution safety model | Final | — |
 | 0005 | Skill integration CLI contract | Draft [revised from Final 2026-06-24; re-verify A4 — cluster 0001-0006 found read-state/gate accessor result-shape gap] | — |
