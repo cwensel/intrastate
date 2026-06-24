@@ -128,13 +128,9 @@ accessor safety contract and reuses existing CLI failure plumbing later.
     into a separate integration contract.
 - **A6 Accessor definition validation can reject unsafe execution metadata
   before the resolver runs.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: Add `TestAccessorDefinitionValidation` to the Minimum Viable
-    Validation. It must cover missing accessors, duplicate or multiply-bound
-    accessor identities, capability mismatches, missing timeout metadata,
-    non-positive timeouts, missing read-back metadata for writes, ambient
-    artifact discovery attempts, and write attempts against non-owned tags.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`main.go:83-129`, `main.go:305-311`, `main.go:321-395`); transcript lines 12-19 capture every validation disposition (`output.txt:12-19`).
   - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
     and turn typed refusals into late execution surprises.
 
@@ -586,9 +582,9 @@ executor boundary. The Resolve spike at
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go`
 already exercises the test matrix as a fixture proof: declared read/gate/write
 bindings over caller-supplied artifacts, bounded timeouts, typed refusals,
-write read-back verification, and stable replay. Done means those spike cases
-become package tests without direct stdout/stderr output from the accessor
-package.
+unsafe definition validation, write read-back verification, and stable replay.
+Done means those spike cases become package tests without direct stdout/stderr
+output from the accessor package.
 
 1. **Scenario**: Validate a fixture flow with one read accessor, one gate
    accessor, and one write accessor bound to caller-supplied artifact roles.
@@ -648,15 +644,15 @@ refusals.
 
 ### Assumption Verification
 
-Critical Assumptions A1-A5 are verified. A1 and A2 are backed by the Resolve
+Critical Assumptions A1-A6 are verified. A1 and A2 are backed by the Resolve
 spike and transcript under
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
 by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
 source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
 the explicit scoping decision that credentials and remote resource lifecycle
-remain outside intrastate. A6 is pending validation of the unsafe-definition
-rules added during pre-lock review. None of the verified evidence cites this RDR
-or its artifact directory as self-proof.
+remain outside intrastate; A6 is backed by the same Resolve spike's
+definition-validation harness and transcript. None of the verified evidence
+cites this RDR or its artifact directory as self-proof.
 
 ### Scope Verification
 
