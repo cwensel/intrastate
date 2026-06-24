@@ -6,10 +6,14 @@ Confirmed codebase claims:
 
 - `internal/cli/clierr/clierr.go::CLIError`
 - `internal/cli/clierr/clierr.go::ExitCodeFor`
+- `internal/cli/clierr/clierr.go::GroupUserEnv`
 - `internal/cli/respond/respond.go::OK`
 - `internal/cli/respond/respond.go::Fail`
 - `internal/cli/respond/respond.go::ValidateMode`
+- `internal/cli/root.go::NewRootCmd`
 - `internal/cli/root.go::ExecuteAndEmit`
+- `Makefile::check`
+- `.github/workflows/ci.yml::jobs`
 
 Confirmed documentation claims:
 
@@ -43,8 +47,11 @@ Confirmed sibling prior-art claims:
 
 Inverse search:
 
-- Searched `internal/` and `cmd/` for lint, transition, resolver, guard,
-  predicate, candidate row, owned/recognized outcome, and state implementation
-  symbols. No existing transition graph model, resolver, guard predicate
-  evaluator, graph lint command, or sibling discriminator already makes the
-  graph-lint authority decision.
+- Searched `internal/`, `cmd/`, `Makefile`, `.github/`, and the CLI output
+  contract for lint, transition, resolver, guard, predicate, candidate row,
+  owned/recognized outcome, and state implementation symbols. No existing
+  transition graph model, resolver, guard predicate evaluator, graph lint
+  command, or sibling discriminator already makes the graph-lint authority
+  decision. Existing repository gates can host the future command, but neither
+  `make check` nor CI currently invokes `intrastate lint` because the command
+  does not exist yet.
