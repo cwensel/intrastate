@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -160,16 +160,19 @@ the verb set.
     incorrectly become the owner of conditional evaluation.
 - **A4 The resolver kernel can remain pure while the CLI binds accessors only at
   verb boundaries.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Stage 6 must re-check this against RDR 0001 and RDR 0004 after
-    the 3amigo iter-3 fix: RDR 0001 keeps the kernel free of artifact discovery
-    and accessor execution; RDR 0004 distinguishes read accessors, gate
-    accessors, and write accessors. The intended contract is that `flow
-    read-state` binds only read accessors, `flow next` / `flow resolve` may
-    invoke declared gate accessors from caller-supplied artifact bindings before
-    calling the pure kernel, and `flow set-state` binds only planned write
-    accessors with read-back.
+  - **Evidence**: RDR 0001 `Technical Design` and `Normative Contracts` keep
+    artifact discovery and accessor execution outside the resolver kernel; the
+    kernel accepts accessor-produced facts and returns structured
+    success/refusal values. RDR 0004 `Technical Design` and `Normative
+    Contracts` define separate read, gate, and write accessor capabilities over
+    caller-supplied artifact roles: reads return typed tags, gates return
+    allow/deny/indeterminate, and writes apply planned owned-tag mutations with
+    same-role read-back. Therefore the CLI can bind read accessors in
+    `flow read-state`, declared gate accessors in `flow next` / `flow resolve`,
+    and write accessors in `flow set-state` without making the kernel stateful
+    or coercing gate results into tag values.
   - **If wrong**: The CLI would have to mix artifact discovery, accessor
     execution, and kernel selection in one command, weakening replay safety.
 - **A5 Stable CLI error codes can distinguish bad input, unknown outcome,
@@ -205,6 +208,7 @@ the verb set.
 
 | Item | Source | Disposition | Evidence pointer or plan |
 | --- | --- | --- | --- |
+| A4 verb-boundary accessor binding after the gate-accessor re-entry fix | 1, 2, 4 | VERIFIED | Peer RDR evidence recorded in A4: RDR 0001 keeps the kernel pure and RDR 0004 distinguishes read, gate, and write capability result shapes over caller-supplied artifacts. |
 | A6 pinned MVP grammar, payload fields, and stable `flow-*` code spellings | 1, 2, 4 | ACCEPTED | Design Decision recorded in A6. The contract pins the MVP grammar, success payload minima, and refusal-code spellings; the rejected alternative is implementation-time invention. |
 
 **Method vocabulary** (pick exactly one per assumption):
@@ -744,17 +748,19 @@ shape and surface through candidate summaries or typed refusals.
 
 ### Assumption Verification
 
-A1-A3 and A5 are Verified and each has a non-empty "If wrong" branch. A4 is
-Pending after the 3amigo iter-3 gate-accessor fix and must be rechecked against
-RDR 0001 and RDR 0004 before re-lock. A6 is Accepted as a design decision
-because the 3amigo pass pinned exact request grammar, success payload, and
-error-code spellings that the implementation must satisfy. No assumption uses
-`Docs Only`; A1 and A5 cite source search against the CLI gateway and error
-taxonomy, A2 cites the named MVV, A3 cites peer RDR contracts, and A6 names the
-rejected alternative. No evidence cites this RDR or its artifact directory as
-proof. Resolve found one implementation requirement rather than a refutation:
-text success payloads must be rendered through `respond.OK` or a respond-owned
-helper instead of direct Cobra printing.
+A1-A5 are Verified and each has a non-empty "If wrong" branch. A4 was
+rechecked after the 3amigo iter-3 gate-accessor fix against RDR 0001 and RDR
+0004: the kernel remains pure, read/gate/write accessor result shapes remain
+distinct, and gate results surface only through `flow next` / `flow resolve`
+candidate facts or typed refusals. A6 is Accepted as a design decision because
+the 3amigo pass pinned exact request grammar, success payload, and error-code
+spellings that the implementation must satisfy. No assumption uses `Docs Only`;
+A1 and A5 cite source search against the CLI gateway and error taxonomy, A2
+cites the named MVV, A3-A4 cite peer RDR contracts, and A6 names the rejected
+alternative. No evidence cites this RDR or its artifact directory as proof.
+Resolve found one implementation requirement rather than a refutation: text
+success payloads must be rendered through `respond.OK` or a respond-owned helper
+instead of direct Cobra printing.
 
 ### Scope Verification
 
@@ -798,27 +804,3 @@ no prior accretion in Seam Lineage.
 - `../state-machines/attic/RESOLVER-CLI.md`
 - `../state-machines/attic/RESOLVER-DESIGN.md`
 - `../state-machines/MODEL-transition.md`
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-- **Cluster**: 0001-0006, 2026-06-24.
-- **Peer pair**: 0004-accessor-execution-safety-model with
-  0005-skill-integration-cli-contract.
-- **Defect**: RDR 0004 says "A gate accessor MUST return allow, deny, or
-  indeterminate." RDR 0005 says "flow read-state MUST invoke only declared read
-  or gate accessors over caller-supplied `role=path` artifact bindings and
-  return the read tag-set or a stable CLIError failure." A gate result is not a
-  tag-set, so implementation would have to invent whether `read-state` can
-  return gate results or must be restricted to read accessors.
-- **Disposition**: SPEC-DEFECT against RDR 0005, the less foundational RDR.
-- **Target re-entry stage**: 4 re-resolve.
-- **Re-entry scope**: STAGE-SCOPED. The four-verb CLI approach still holds, but
-  A4 is disturbed because the accessor binding handoff to RDR 0004 is
-  underspecified for `read-state`.
-- **Resolution direction**: Either restrict `flow read-state` to read
-  accessors and move gate invocation to the verb that needs gate evaluation, or
-  define a separate CLI result shape for gate accessors. The content fix belongs
-  to the re-entry pass; this note only lifts the Final freeze.
-- **Evidence**:
-  `docs/rdr/cluster-reconcile/0001-0006/pairwise-0004-0005.md` and
-  `docs/rdr/cluster-reconcile/0001-0006/report.md`.
