@@ -8,7 +8,7 @@
 - **Date**: 2026-06-19
 - **Status**: Draft
 - **Type**: Feature
-- **Profile**: large — locks static graph invariants and blocking lint authority.
+- **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -75,7 +75,7 @@ existing CLI output contract.
 - **Documented** — RDR 0001 makes runtime resolution exact-one-or-refusal and
   keeps runtime refusal distinct from design-time graph acceptance.
 - **Documented** — RDR 0002's normalized candidate rows retain source rule ids
-  and spans, which lint needs for actionable diagnostics.
+  and source locators, which lint needs for actionable diagnostics.
 - **Documented** — RDR 0003 gives lint finite-domain predicate semantics for
   overlap, coverage, and owned-tag read-before-write checks.
 - **Documented** — `docs/cli-output-contract.md` makes `respond`/`clierr` the
@@ -83,60 +83,79 @@ existing CLI output contract.
 - **Documented** — prior-system notes reject a separate formal runtime or model
   checker for these small graphs and preserve a design-time validator/lint
   carve-out.
-- **Assumed** — the normalized table and predicate contracts can expose enough
+- **Verified** — the normalized table and predicate contracts expose enough
   graph structure for lint to prove all mandatory invariants without reading
   sparse TOML directly.
-- **Assumed** — a blocking `intrastate lint` command plus CI invocation is the
+- **Verified** — a blocking `intrastate lint` command plus CI invocation is the
   right authority surface; local hooks may call it but cannot be the source of
   truth.
-- **Assumed** — the initial invariant set can be expressed as deterministic
+- **Verified** — the initial invariant set can be expressed as deterministic
   checks over normalized rows, declared tags/domains, declared terminals, and
   predecessor/write reachability.
 
 ### Critical Assumptions
 
 - **A1 Normalized rows expose every graph edge, guard constraint, write, source
-  rule id, and source span needed for lint diagnostics.**
-  - **Status**: Pending
+  rule id, and source locator needed for lint diagnostics.**
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 must lock the normalized candidate-row
-    contract with source ids/spans and writes preserved from sparse TOML.
+  - **Evidence**: RDR 0002 `Technical Design` defines normalized candidate
+    rows with source locator, predicates, and writes; RDR 0002 `Normative
+    Contracts` require each candidate row to retain source rule id and source
+    locator, and require tag declarations, explicit writes/clears, accessor
+    references, and deterministic candidate-row dumps. RDR 0003 A5 confirms
+    normalized predicates retain source identity for diagnostics.
   - **If wrong**: Lint may find a graph defect but fail to locate the authored
     rule or may need to parse sparse source through a parallel model.
 - **A2 Predicate lint can decide overlap and coverage for the finite domains
   this graph claims exhaustive.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0003 must lock finite-domain semantics for enum,
-    boolean, set-universe, and bounded-int predicate atoms.
+  - **Evidence**: RDR 0003 A2 derives coverage as
+    `union(row_i accepted assignments) == scoped product` and overlap as any
+    non-empty row intersection over finite enum/boolean, declared set-universe,
+    and bounded-int domains; its `Normative Contracts` require finite domains
+    for exhaustiveness claims and blocking refusal/downgrade when proof is not
+    possible.
   - **If wrong**: The lint would either miss ambiguous/gap cases or block valid
     guarded edges with false positives.
 - **A3 Owned-tag read-before-write can be checked over the normalized graph
   without executing accessors.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 and RDR 0004 must expose tag provenance,
-    owned writes, preserve/clear semantics, and accessor binding enough for a
-    static predecessor/write check.
+  - **Evidence**: RDR 0002 `Normative Contracts` require every matched or
+    written tag to declare provenance (`owned`, `observed`, `recognized`) and
+    preserve explicit writes/clears in normalized candidate rows. RDR 0003 A6
+    verifies provenance is available to predicate lint, and its `Normative
+    Contracts` reject rows that match owned tags unless reachable predecessors
+    write or preserve them. RDR 0004 `Technical Design` keeps accessor
+    execution outside predicate evaluation while validating write capability
+    and owned-tag effects at the accessor boundary.
   - **If wrong**: Lint cannot prove that trusted owned state exists before a row
     matches it, so a class of runtime missing-state refusals remains design-time
     invisible.
 - **A4 Blocking lint failures can map to the existing CLI failure envelope and
   exit-code groups.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`,
-    `internal/cli/clierr::ExitCodeFor`, and `internal/cli/respond::Fail` can
-    carry graph lint codes and text/json diagnostics without direct output.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable
+    `Code`, `Message`, optional `Param`, `Detail`, `Hint`, and exit-code
+    `Group`; `internal/cli/clierr/clierr.go::ExitCodeFor` maps existing groups
+    to stable process exits; `internal/cli/respond/respond.go::Fail` emits the
+    structured envelope in text/json modes; `internal/cli/root.go::ExecuteAndEmit`
+    converts Cobra-level failures through the same gateway. Graph lint needs
+    new stable codes, not a new envelope or direct output path.
   - **If wrong**: The lint command needs a separate output contract or new
     exit-code group before it can be authoritative in CI.
 - **A5 CI can run `intrastate lint` as the blocking graph-acceptance authority
   for transition model changes.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: Pending: the Minimum Viable Validation must add a fixture lint
-    command invocation that fails at least one illegal graph and passes one
-    legal graph through the same command shape CI would run.
+  - **Evidence**: Minimum Viable Validation names the CI-shaped
+    `intrastate lint` invocation as the proof: one legal model must pass, and
+    illegal fixtures for every blocking invariant class must fail through the
+    same production command shape, asserting stable codes and source
+    rule/context identity in JSON mode.
   - **If wrong**: The graph may be lintable locally but not enforced at the
     design-time boundary maintainers actually rely on.
 
@@ -338,11 +357,11 @@ Illustrative finding shape only:
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| Normalized candidate rows and source identity | RDR 0002 | Pending | Lint consumes normalized graph data and reports authored source ids/spans. |
-| Symbolic predicate finite-domain semantics | RDR 0003 | Pending | Enables overlap and exhaustiveness proofs. |
-| Owned/observed/recognized tag provenance | RDR 0002 / RDR 0003 | Pending | Required for owned-set-before-match and coverage checks. |
-| Accessor write/read-back semantics | RDR 0004 | Pending | Lint reasons about declared owned writes without executing accessors. |
-| CLI command exposure | RDR 0005 plus this RDR | Pending / introduced | RDR 0005 wires verbs; this RDR owns the lint acceptance contract. |
+| Normalized candidate rows and source identity | RDR 0002 | Verified peer RDR | Lint consumes normalized graph data and reports authored source ids/spans. |
+| Symbolic predicate finite-domain semantics | RDR 0003 | Verified peer RDR | Enables overlap and exhaustiveness proofs. |
+| Owned/observed/recognized tag provenance | RDR 0002 / RDR 0003 | Verified peer RDR | Required for owned-set-before-match and coverage checks. |
+| Accessor write/read-back semantics | RDR 0004 | Verified peer RDR | Lint reasons about declared owned writes without executing accessors. |
+| CLI command exposure | RDR 0005 plus this RDR | Verified / introduced | RDR 0005 wires flow verbs; this RDR owns the lint acceptance contract and command authority. |
 | CLI failure/output gateway | Existing `respond` / `clierr` | Available | Lint results must use existing text/json and exit-code behavior. |
 | Graph lint invariant taxonomy | This RDR | Introduced | Defines blocking graph acceptance before resolver use. |
 
@@ -513,7 +532,7 @@ or source span.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
+- [x] All Critical Assumptions verified
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
 - [ ] RDR 0005 command placement is coherent enough to expose `intrastate lint`
@@ -562,10 +581,13 @@ first use the normalized model and predicate packages introduced by peer RDRs.
 
 ### Testing Strategy
 
-Tests should exercise `intrastate lint` through the production Cobra path and
-the same output gateway intended for CI. Coverage must include success output,
-blocking failure output, stable finding codes, and source rule/context identity
-in JSON mode.
+The verified assumptions imply a production-command test matrix: exercise
+`intrastate lint` through the Cobra path and the same output gateway intended
+for CI. Coverage must include success output, blocking failure output, stable
+finding codes, and source rule/context identity in JSON mode. A1 supplies the
+source identity and write/predicate graph data, A2 supplies finite-domain
+overlap and coverage proof obligations, A3 supplies owned-tag
+read-before-write checks, and A4 supplies the `respond`/`clierr` output path.
 
 1. **Scenario**: legal fixture model with all mandatory declarations and
    finite-domain coverage.
@@ -587,11 +609,14 @@ in JSON mode.
 
 ### Performance Expectations
 
-No throughput target is load-bearing for this RDR. Lint should remain a
+No throughput target is load-bearing for this RDR. Evidence bounds lint to a
 single-invocation static check over the normalized model: load model data,
-derive the graph view, run deterministic invariant checks, and render one
-terminal result. If fixture runtime becomes material, implementation should
-profile the invariant engine before changing the contract.
+derive the graph view, run deterministic invariant checks over declared finite
+domains and predecessor/write reachability, and render one terminal result.
+Determinism depends on RDR 0002's candidate-row/source identity and stable dump
+ordering plus this RDR's finding identity tuple, not on source order, map order,
+or first-match priority. If fixture runtime becomes material, implementation
+should profile the invariant engine before changing the contract.
 
 ## Finalization Gate
 
@@ -615,9 +640,9 @@ solution keeps graph acceptance in a blocking lint command.
 
 ### Assumption Verification
 
-A1-A5 remain Pending and must be resolved before lock. None uses `Docs Only`,
-and none is stamped `Verified` on self-reference. A1-A3 depend on peer RDR
-contracts, A4 requires source search against the CLI failure gateway, and A5 is
+A1-A5 are verified. None uses `Docs Only`, and none is stamped `Verified` on
+self-reference. A1-A3 are verified against peer RDR contracts, A4 is verified
+by source search against the CLI failure gateway, and A5 is
 covered by the named MVV command invocation.
 
 ### Scope Verification
