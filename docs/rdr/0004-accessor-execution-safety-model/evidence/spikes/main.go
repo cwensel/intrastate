@@ -42,6 +42,18 @@ type accessor struct {
 	timeout    time.Duration
 }
 
+type accessorRef struct {
+	name       string
+	capability capability
+}
+
+type accessorDefinition struct {
+	accessor
+	readBackRequired bool
+	ambientDiscovery bool
+	writes           []string
+}
+
 type result struct {
 	name     string
 	cap      capability
@@ -66,6 +78,54 @@ func (r registry) lookup(name string, cap capability) (accessor, *result) {
 		panic("fixture accessors must declare a timeout")
 	}
 	return a, nil
+}
+
+func validateDefinitions(refs []accessorRef, defs []accessorDefinition, ownedTags map[string]bool) []string {
+	type key struct {
+		name       string
+		capability capability
+	}
+
+	bindings := make(map[key][]accessorDefinition, len(defs))
+	for _, def := range defs {
+		if def.timeout <= 0 {
+			return []string{"missing_or_non_positive_timeout"}
+		}
+		if def.ambientDiscovery {
+			return []string{"ambient_artifact_discovery"}
+		}
+		if def.capability == writeCap && !def.readBackRequired {
+			return []string{"missing_write_read_back"}
+		}
+		for _, tag := range def.writes {
+			if !ownedTags[tag] {
+				return []string{"write_non_owned_tag"}
+			}
+		}
+		k := key{name: def.name, capability: def.capability}
+		bindings[k] = append(bindings[k], def)
+	}
+
+	var failures []string
+	for _, ref := range refs {
+		matched := bindings[key(ref)]
+		if len(matched) == 1 {
+			continue
+		}
+		if len(matched) == 0 {
+			for k := range bindings {
+				if k.name == ref.name {
+					failures = append(failures, "capability_mismatch")
+					goto nextRef
+				}
+			}
+			failures = append(failures, "missing_accessor")
+			continue
+		}
+		failures = append(failures, "multiply_bound_accessor")
+	nextRef:
+	}
+	return failures
 }
 
 func withTimeout(a accessor, run func(context.Context) *result) *result {
@@ -240,6 +300,101 @@ func main() {
 	}
 	if injected.refusal != refusalGateIndeterminate {
 		panic(errors.New("expected stable injected refusal"))
+	}
+
+	for _, c := range validationCases() {
+		failures := validateDefinitions(c.refs, c.defs, map[string]bool{"status": true})
+		fmt.Printf("validation-%s=%s\n", c.name, strings.Join(failures, ","))
+		if !reflect.DeepEqual(failures, c.want) {
+			panic(fmt.Errorf("%s: got %v want %v", c.name, failures, c.want))
+		}
+	}
+}
+
+type validationCase struct {
+	name string
+	refs []accessorRef
+	defs []accessorDefinition
+	want []string
+}
+
+func validationCases() []validationCase {
+	baseRefs := []accessorRef{
+		{name: "state.read", capability: readCap},
+		{name: "state.gate", capability: gateCap},
+		{name: "state.persist", capability: writeCap},
+	}
+	baseDefs := []accessorDefinition{
+		{accessor: accessor{name: "state.read", capability: readCap, role: "state", timeout: 10 * time.Millisecond}},
+		{accessor: accessor{name: "state.gate", capability: gateCap, role: "state", timeout: 10 * time.Millisecond}},
+		{
+			accessor:         accessor{name: "state.persist", capability: writeCap, role: "state", timeout: 10 * time.Millisecond},
+			readBackRequired: true,
+			writes:           []string{"status"},
+		},
+	}
+
+	return []validationCase{
+		{name: "ok", refs: baseRefs, defs: baseDefs},
+		{
+			name: "missing",
+			refs: append(baseRefs, accessorRef{name: "missing.read", capability: readCap}),
+			defs: baseDefs,
+			want: []string{"missing_accessor"},
+		},
+		{
+			name: "multiply-bound",
+			refs: baseRefs,
+			defs: append(baseDefs, baseDefs[0]),
+			want: []string{"multiply_bound_accessor"},
+		},
+		{
+			name: "capability-mismatch",
+			refs: append(baseRefs, accessorRef{name: "state.persist", capability: readCap}),
+			defs: baseDefs,
+			want: []string{"capability_mismatch"},
+		},
+		{
+			name: "missing-timeout",
+			refs: baseRefs,
+			defs: []accessorDefinition{
+				{accessor: accessor{name: "state.read", capability: readCap, role: "state"}},
+			},
+			want: []string{"missing_or_non_positive_timeout"},
+		},
+		{
+			name: "missing-readback",
+			refs: baseRefs,
+			defs: []accessorDefinition{
+				{accessor: accessor{name: "state.persist", capability: writeCap, role: "state", timeout: 10 * time.Millisecond}},
+			},
+			want: []string{"missing_write_read_back"},
+		},
+		{
+			name: "ambient-discovery",
+			refs: baseRefs,
+			defs: []accessorDefinition{
+				{
+					accessor:         accessor{name: "state.persist", capability: writeCap, timeout: 10 * time.Millisecond},
+					readBackRequired: true,
+					ambientDiscovery: true,
+					writes:           []string{"status"},
+				},
+			},
+			want: []string{"ambient_artifact_discovery"},
+		},
+		{
+			name: "non-owned-write",
+			refs: baseRefs,
+			defs: []accessorDefinition{
+				{
+					accessor:         accessor{name: "state.persist", capability: writeCap, role: "state", timeout: 10 * time.Millisecond},
+					readBackRequired: true,
+					writes:           []string{"observed"},
+				},
+			},
+			want: []string{"write_non_owned_tag"},
+		},
 	}
 }
 
