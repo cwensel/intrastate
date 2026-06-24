@@ -46,6 +46,7 @@ type Rule struct {
 	Guard  Guard
 	Write  map[string]any
 	Clear  []string
+	Escape []string
 	Self   bool
 	Source string
 }
@@ -62,6 +63,7 @@ type Dump struct {
 type Row struct {
 	Model  string
 	Rule   string
+	Kind   string
 	Source string
 	Match  []string
 	Write  []string
@@ -77,8 +79,8 @@ func main() {
 		must(err)
 		fmt.Printf("MODEL %s rows=%d outcomes=%s\n", model.Model.ID, len(rows), strings.Join(model.Outcomes, ","))
 		for _, row := range rows {
-			fmt.Printf("%s.%s source=%s match=[%s] write=[%s]\n",
-				row.Model, row.Rule, row.Source, strings.Join(row.Match, "; "), strings.Join(row.Write, "; "))
+			fmt.Printf("%s.%s kind=%s source=%s match=[%s] write=[%s]\n",
+				row.Model, row.Rule, row.Kind, row.Source, strings.Join(row.Match, "; "), strings.Join(row.Write, "; "))
 		}
 	}
 }
@@ -96,12 +98,15 @@ func normalize(model Model) ([]Row, error) {
 		mergePredicates(predicates, "all:", rule.Guard.All)
 		mergePredicates(predicates, "unless:", rule.Guard.Unless)
 
-		writes := make([]string, 0, len(rule.Write)+len(rule.Clear))
+		writes := make([]string, 0, len(rule.Write)+len(rule.Clear)+len(rule.Escape))
 		for tag, value := range rule.Write {
 			writes = append(writes, fmt.Sprintf("%s=%v", tag, value))
 		}
 		for _, tag := range rule.Clear {
 			writes = append(writes, fmt.Sprintf("%s=<clear>", tag))
+		}
+		if len(rule.Escape) > 0 {
+			writes = append(writes, fmt.Sprintf("escape=%s", strings.Join(rule.Escape, ",")))
 		}
 		sort.Strings(writes)
 
@@ -110,9 +115,14 @@ func normalize(model Model) ([]Row, error) {
 			match = append(match, fmt.Sprintf("%s%s", key, value))
 		}
 		sort.Strings(match)
+		kind := "transition"
+		if len(rule.Escape) > 0 {
+			kind = "escape"
+		}
 		rows = append(rows, Row{
 			Model:  model.Model.ID,
 			Rule:   rule.ID,
+			Kind:   kind,
 			Source: rule.Source,
 			Match:  match,
 			Write:  writes,
