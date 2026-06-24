@@ -133,6 +133,15 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`main.go:83-129`, `main.go:305-311`, `main.go:321-395`); transcript lines 12-19 capture every validation disposition (`output.txt:12-19`).
   - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
     and turn typed refusals into late execution surprises.
+- **A7 Write read-back verification can detect unintended mutation of
+  non-owned observed or recognized tags on the same artifact role.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Extend the existing accessor spike and MVV tests so a write
+    accessor that changes an observed or recognized tag, while still writing the
+    expected owned tag value, returns a read-back mismatch.
+  - **If wrong**: A write accessor could corrupt caller-observed state while
+    still passing the owned-tag success check.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -210,10 +219,13 @@ non-owned tags, missing timeout/read-back metadata, non-positive timeouts, and
 ambient artifact discovery before resolution. Second, runtime invocation applies
 read and gate accessors to caller-supplied artifacts and classifies timeout,
 unavailable artifact, execution error, gate denied, and gate-indeterminate
-outcomes. Third, write accessors execute only from a successful transition plan,
-then immediately re-read the same caller-supplied artifact role from the write
-binding and compare expected owned-tag values. A read-back mismatch is a failure
-even if the write command exited successfully.
+outcomes. Third, write accessors execute only from a successful transition plan.
+Before the write, the executor records the same caller-supplied artifact role's
+observed and recognized tag values. After command-level success, it immediately
+re-reads that same role from the write binding, compares expected owned-tag
+values, and verifies the pre-write observed and recognized tag values are
+unchanged. A read-back mismatch is a failure even if the write command exited
+successfully.
 
 Large-profile Q-O-C matrix:
 
@@ -262,7 +274,8 @@ successful transition. It MUST NOT write observed or recognized tags.
 ```normative
 After a write accessor reports command-level success, the executor MUST re-read
 the same caller-supplied artifact role named by the write binding and verify the
-expected owned-tag values. It MUST NOT satisfy read-back verification by
+expected owned-tag values and that observed and recognized tag values present
+before the write are unchanged. It MUST NOT satisfy read-back verification by
 discovering an ambient artifact or by reading an unrelated role. A read-back
 mismatch MUST be reported as a write failure.
 ```
@@ -298,12 +311,14 @@ write to stdout or stderr directly.
 
 #### Round-Trip / Inverse Invariants
 
-`write -> read = expected owned-tag value identity` for the written tag subset:
-after a write accessor reports command-level success, reading the same
-caller-supplied artifact role named by the write binding must return the
-expected owned-tag values. This is not an undo or byte-for-byte artifact
-invariant; it is the minimum safety invariant for the authoritative tag values
-this RDR owns.
+`write -> read = expected owned-tag value identity + protected non-owned tag
+identity`: after a write accessor reports command-level success, reading the
+same caller-supplied artifact role named by the write binding must return the
+expected owned-tag values, and any observed or recognized tag values present
+before the write must remain unchanged. This is not an undo or byte-for-byte
+artifact invariant; it is the minimum safety invariant for the authoritative tag
+values and protected non-owned tag values this RDR can observe at the accessor
+boundary.
 
 #### Illustrative Code
 
@@ -553,8 +568,8 @@ returns structured success/refusal values and performs no direct output.
 ### Phase 3: Write Read-Back Verification
 
 Apply planned owned-tag writes through write accessors, then re-read the same
-artifact role and compare the expected owned-tag values. Treat mismatch as a
-write failure.
+artifact role and compare the expected owned-tag values plus the pre-write
+observed and recognized tag values. Treat mismatch as a write failure.
 
 ### Phase 4: CLI Integration Hook
 
@@ -584,7 +599,10 @@ already exercises the test matrix as a fixture proof: declared read/gate/write
 bindings over caller-supplied artifacts, bounded timeouts, typed refusals,
 unsafe definition validation, write read-back verification, and stable replay.
 Done means those spike cases become package tests without direct stdout/stderr
-output from the accessor package.
+output from the accessor package. The write success tests must assert the
+re-read owned-tag value equals the transition plan's expected value and that
+pre-write observed and recognized tag values on the same artifact role remain
+unchanged.
 
 1. **Scenario**: Validate a fixture flow with one read accessor, one gate
    accessor, and one write accessor bound to caller-supplied artifact roles.
@@ -601,8 +619,8 @@ output from the accessor package.
 3. **Scenario**: Execute a successful transition plan through a write accessor,
    then re-read the same artifact role.
    **Expected**: Matching expected owned-tag values report success; mismatched
-   values report read-back mismatch even when command-level write invocation
-   succeeded.
+   owned-tag values or mutated non-owned observed/recognized tag values report
+   read-back mismatch even when command-level write invocation succeeded.
 4. **Scenario**: Run the same transition model and fixture artifacts twice with
    identical accessor results, then once with an injected refusal.
    **Expected**: The first two runs produce the same disposition; the injected
