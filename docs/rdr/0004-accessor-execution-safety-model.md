@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — locks one accessor execution safety contract governing authoritative artifact mutation.
 - **Priority**: High
@@ -93,14 +93,14 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   accessors over caller-supplied artifact roles.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` binds `state.read`, `state.gate`, and `state.persist` as declared read/gate/write accessors over caller-supplied `state` artifacts (`main.go:208-226`); transcript lines 1-8 show read success, gate allow, typed gate/refusal cases, capability mismatch, and write success without raw shell strings or callbacks (`output.txt:1-8`).
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` binds `state.read`, `state.gate`, and `state.persist` as declared read/gate/write accessors over caller-supplied `state` artifacts (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::main`); transcript lines 1-8 show read success, gate allow, typed gate/refusal cases, capability mismatch, and write success without raw shell strings or callbacks (`output.txt:1-8`).
   - **If wrong**: The capability vocabulary is too small, and authors will
     pressure the model toward unsafe command execution.
 - **A2 Write accessors can verify their intended owned-tag effect by re-reading
   the same artifact boundary after the write.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: The spike writes planned owned tags, clones the same role's observed tags, and returns `read_back_mismatch` when observed values differ (`main.go:121-153`); transcript line 8 shows matching `status=Final`, and line 9 captures the mismatch with expected and observed values (`output.txt:8-9`).
+  - **Evidence**: The spike writes planned owned tags, clones the same role's observed tags, and returns `read_back_mismatch` when observed values differ (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::write`); transcript line 8 shows matching `status=Final`, and line 9 captures the mismatch with expected and observed values (`output.txt:8-9`).
   - **If wrong**: A successful write command could silently corrupt or fail to
     update authoritative state.
 - **A3 Timeout, execution failure, gate indeterminate, and read-back mismatch
@@ -108,7 +108,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   existing CLI failure gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr::CLIError` defines append-only structured codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr::ExitCodeFor` maps groups to stable exits, and `internal/cli/respond::Fail` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`main.go:22-30`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
+  - **Evidence**: `internal/cli/clierr::CLIError` defines append-only structured codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr::ExitCodeFor` maps groups to stable exits, and `internal/cli/respond::Fail` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::refusal`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
   - **If wrong**: Accessor errors would need a separate user-facing output
     contract or would leak implementation errors to callers.
 - **A4 Accessor execution can be deterministic enough for resolver replay when
@@ -116,7 +116,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   returned tag values.**
   - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`main.go:428-445`), while sorted map formatting prevents map-order drift in the transcript (`main.go:250-271`). Transcript line 11 shows identical success disposition for two runs; line 12 shows an injected gate-indeterminate refusal remains stable (`output.txt:11-12`).
+  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::replay`), while sorted map formatting prevents map-order drift in the transcript (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::formatMap`). Transcript line 11 shows identical success disposition for two runs; line 12 shows an injected gate-indeterminate refusal remains stable (`output.txt:11-12`).
   - **If wrong**: Resolver replay could depend on ambient process state rather
     than declared model inputs.
 - **A5 External API accessors can be constrained by declared capability and
@@ -130,14 +130,14 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   before the resolver runs.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`main.go:83-129`, `main.go:329-335`, `main.go:345-419`); transcript lines 13-20 capture every validation disposition (`output.txt:13-20`).
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validateDefinitions`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validationCases`); transcript lines 13-20 capture every validation disposition (`output.txt:13-20`).
   - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
     and turn typed refusals into late execution surprises.
 - **A7 Write read-back verification can detect unintended mutation of
   non-owned observed or recognized tags on the same artifact role.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` snapshots pre-write tag values, skips the planned owned tag during the non-owned comparison, and returns `read_back_mismatch` when any other observed tag changes (`main.go:189-240`). Transcript line 10 shows `status=Final` was written as planned while non-owned `profile` changed from `large` to `small`, producing `read_back_mismatch` (`output.txt:10`).
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` snapshots pre-write tag values, skips the planned owned tag during the non-owned comparison, and returns `read_back_mismatch` when any other observed tag changes (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::write`). Transcript line 10 shows `status=Final` was written as planned while non-owned `profile` changed from `large` to `small`, producing `read_back_mismatch` (`output.txt:10`).
   - **If wrong**: A write accessor could corrupt caller-observed state while
     still passing the owned-tag success check.
 
@@ -632,9 +632,9 @@ unchanged.
 
 No throughput target is set. The relevant non-functional check is bounded
 execution: the Resolve spike wraps every invocation in `context.WithTimeout`
-(`main.go:71-74`), demonstrates timeout as its own refusal (`output.txt:5`),
+(`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::withTimeout`), demonstrates timeout as its own refusal (`output.txt:5`),
 and shows the write path performs one same-role read-back comparison after a
-command-level success (`main.go:121-153`, `output.txt:8-9`). That cost is
+command-level success (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::write`, `output.txt:8-9`). That cost is
 acceptable for the representative RDR/kata flow shape because accessors run at
 transition boundaries, not inside graph-wide lint loops.
 
