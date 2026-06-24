@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-06-24; re-verify A2 A3 — cluster 0001-0006 found missing table-modeled escape-edge semantics]
 - **Type**: Architecture
 - **Profile**: large — locks the sparse transition-model data format.
 - **Priority**: High
@@ -786,3 +786,26 @@ additional split is required before implementation.
 - RDR and kata flow audits from the state-machine prior-art corpus.
 - Tool-fit assessment for FSM libraries as validation/visualization tools, not
   runtime orchestrators.
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster**: 0001-0006, 2026-06-24.
+- **Peer pair**: 0001-resolution-kernel with 0002-transition-table-as-reviewable-data.
+- **Defect**: RDR 0001 says the resolver "refuses zero or multiple matches
+  unless the table contract explicitly models an escape edge". RDR 0002 owns
+  the sparse table contract, normalized rows, guards, writes, clears,
+  exact-one matching, and ambiguous-overlap refusal, but it does not define how
+  an escape edge is authored, normalized, linted, or distinguished from an
+  ordinary row.
+- **Disposition**: SPEC-DEFECT against RDR 0002, the less foundational RDR.
+- **Target re-entry stage**: 4 re-resolve.
+- **Re-entry scope**: STAGE-SCOPED. The sparse TOML approach still holds, but
+  A2 and A3 are disturbed because escape-edge behavior affects exact-one
+  selection and target-flow encodability.
+- **Resolution direction**: Define the escape-edge table semantics in RDR 0002
+  or explicitly remove the escape-edge allowance from the peer contract through
+  a coordinated RDR 0001/0002 refinement. The content fix belongs to the
+  re-entry pass; this note only lifts the Final freeze.
+- **Evidence**:
+  `docs/rdr/cluster-reconcile/0001-0006/pairwise-0001-0002.md` and
+  `docs/rdr/cluster-reconcile/0001-0006/report.md`.
