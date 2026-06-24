@@ -13,7 +13,7 @@ engine README — this file is only the per-project index.
 | 0002 | Transition table as reviewable data | Final | — |
 | 0003 | Guard predicate exhaustiveness | Final | — |
 | 0004 | Accessor execution safety model | Final | — |
-| 0005 | Skill integration CLI contract | Draft | — |
+| 0005 | Skill integration CLI contract | Final | — |
 | 0006 | Graph lint authority and guarantees | Draft | — |
 
 ## Status legend
