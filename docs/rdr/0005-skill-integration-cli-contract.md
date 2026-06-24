@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-06-24; re-verify A4 — cluster 0001-0006 found read-state/gate accessor result-shape gap]
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -770,3 +770,27 @@ no prior accretion in Seam Lineage.
 - `../state-machines/attic/RESOLVER-CLI.md`
 - `../state-machines/attic/RESOLVER-DESIGN.md`
 - `../state-machines/MODEL-transition.md`
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster**: 0001-0006, 2026-06-24.
+- **Peer pair**: 0004-accessor-execution-safety-model with
+  0005-skill-integration-cli-contract.
+- **Defect**: RDR 0004 says "A gate accessor MUST return allow, deny, or
+  indeterminate." RDR 0005 says "flow read-state MUST invoke only declared read
+  or gate accessors over caller-supplied `role=path` artifact bindings and
+  return the read tag-set or a stable CLIError failure." A gate result is not a
+  tag-set, so implementation would have to invent whether `read-state` can
+  return gate results or must be restricted to read accessors.
+- **Disposition**: SPEC-DEFECT against RDR 0005, the less foundational RDR.
+- **Target re-entry stage**: 4 re-resolve.
+- **Re-entry scope**: STAGE-SCOPED. The four-verb CLI approach still holds, but
+  A4 is disturbed because the accessor binding handoff to RDR 0004 is
+  underspecified for `read-state`.
+- **Resolution direction**: Either restrict `flow read-state` to read
+  accessors and move gate invocation to the verb that needs gate evaluation, or
+  define a separate CLI result shape for gate accessors. The content fix belongs
+  to the re-entry pass; this note only lifts the Final freeze.
+- **Evidence**:
+  `docs/rdr/cluster-reconcile/0001-0006/pairwise-0004-0005.md` and
+  `docs/rdr/cluster-reconcile/0001-0006/report.md`.
