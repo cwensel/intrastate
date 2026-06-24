@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-06-24; re-verify A2 A3 — cluster 0001-0006 found missing table-modeled escape-edge semantics]
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — locks the sparse transition-model data format.
 - **Priority**: High
@@ -74,8 +74,9 @@ factor common context instead of enumerating every Cartesian row.
   ergonomics for representative malformed-row diagnostics; the Resolve spike
   identified root-key placement as the exact field-layout constraint to lock.
 - **Verified** — the RDR and kata legal graphs can be expressed as sparse rules
-  that normalize to explicit row candidates without requiring host-code
-  callbacks or an embedded expression language.
+  that normalize to explicit row candidates, including explicit escape rows for
+  modeled `no_match` behavior, without requiring host-code callbacks or an
+  embedded expression language.
 - **Verified** — hierarchical/shared contexts plus positive/negative guard lists
   are enough factoring to avoid RDR's status/profile/prelock Cartesian explosion
   without importing a full statechart runtime.
@@ -92,7 +93,7 @@ factor common context instead of enumerating every Cartesian row.
 - **A2 Row order is not part of successful edge selection.**
   - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: Normative Contracts state that source order and rendered-row order MUST NOT decide transition success; the only successful selection is exactly one normalized candidate row, with zero or multiple matches as refusals. This explicitly rejects first-match semantics.
+  - **Evidence**: Normative Contracts state that source order and rendered-row order MUST NOT decide transition success; ordinary transition success is exactly one matching non-escape normalized candidate row. If that fails, an explicit escape row may model the corresponding `no_match` or `ambiguous_match` refusal only when exactly one escape row matches the same tag-set and declares that failure class. This explicitly rejects first-match semantics.
   - **If wrong**: Reviewers would have to reason about hidden priority, and
     reordering rows could silently change resolver behavior.
 - **A3 RDR and kata flow edges can be encoded sparsely with fixed predicate
@@ -100,7 +101,7 @@ factor common context instead of enumerating every Cartesian row.
   enumeration.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/rdr-fixture.toml` and `kata-fixture.toml` encode representative rules covering status, profile, prelock iteration, equality, set membership, integer comparison, self-loop, rewind, positive/negative guards, and multi-tag writes without host-code callbacks; `output.txt` dumps the expanded candidate rows.
+  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GONOSUMDB='*' GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` parsed and normalized the RDR and kata fixtures. The fixtures cover status, profile, prelock iteration, equality, set membership, integer comparison, self-loop, rewind, positive/negative guards, multi-tag writes, and an explicit RDR `escape = ["no_match"]` row without host-code callbacks; `output.txt` captures the expanded candidate rows.
   - **If wrong**: RDR 0003 must expand the predicate grammar or this table format
     becomes too weak for the target flows.
 - **A4 The model data can carry enough provenance to separate owned, observed,
@@ -194,8 +195,10 @@ Each flow has a named model with flow-level tag declarations, optional accessor
 references, a legal recognized-outcome alphabet, and sparse rules that encode
 the match predicates and tag writes produced by legal edges. The source model
 must provide enough structure for RDR 0001's exact-one resolver contract: zero
-matches, multiple matches, unknown outcomes, unavailable accessors, and
-malformed rules remain typed refusals.
+matches and multiple matches are value-level resolver refusals unless the table
+also defines exactly one matching escape row for that failure class. Unknown
+outcomes and unavailable accessors remain resolver refusals; malformed TOML or
+schema-invalid rules are load/lint failures before the resolver sees a table.
 
 The model is data, not generated code and not a runtime FSM engine. RDR 0001's
 resolver consumes the normalized representation, RDR 0003 owns the fixed
@@ -218,9 +221,10 @@ The source schema has six conceptual parts:
    lifecycle. Contexts may inherit from another context to model statechart-like
    hierarchy without adopting a statechart runtime.
 5. Sparse transition rules: reviewable rule ids, optional context references, a
-   local match block, positive `all` guards, negative `unless` guards, and a
-   write block containing one or more tag assignments, plus an optional
-   explicit clear list.
+   local match block, positive `all` guards, negative `unless` guards, and
+   either a write block containing one or more tag assignments plus an optional
+   explicit clear list, or an explicit `escape` list naming the resolver
+   failure class the row models.
 6. Render settings: deterministic ordering and field selection for the expanded
    table dump.
 
@@ -228,10 +232,14 @@ The parser turns TOML into typed source data, then normalizes it into explicit
 candidate rows. Validation rejects malformed tags, unsupported model versions,
 unknown predicate operators, writes to non-owned tags, rules that match on
 missing tag declarations, unresolvable context references, unknown accessor
-names, and ambiguous overlaps between candidate rows. Runtime matching is
-deliberately priority-free: the resolver evaluates candidate rows against the
-supplied tag-set and succeeds only when exactly one row matches. Multi-tag writes
-are first-class because RDR rewinds and kata lifecycle moves need to set both the
+names, malformed escape declarations, and ambiguous overlaps between candidate
+rows. Runtime matching is deliberately priority-free: the resolver evaluates
+non-escape candidate rows against the supplied tag-set and succeeds only when
+exactly one row matches. If zero or multiple non-escape rows match, the resolver
+may return a modeled escape disposition only when exactly one escape row matches
+the same tag-set and its `escape` list contains the corresponding failure class;
+otherwise it returns the kernel-owned typed refusal. Multi-tag writes are
+first-class because RDR rewinds and kata lifecycle moves need to set both the
 next stage/state and side-channel scope tags in one edge.
 
 Guard factoring follows the `transitions` prior art: positive predicates and
@@ -263,7 +271,8 @@ The source schema MUST use the Resolve spike field layout: root `outcomes`,
 and `[dump]`. Context predicates live under `[context.<id>.match.<tag>]`; rule
 predicates live under `[rule.match.<tag>]`, `[rule.guard.all.<tag>]`, and
 `[rule.guard.unless.<tag>]`; writes live under `[rule.write]`; explicit clears
-live in a rule-level `clear` list.
+live in a rule-level `clear` list; modeled escape rows live in a rule-level
+`escape` list.
 ```
 
 ```normative
@@ -273,8 +282,17 @@ RDR accepts; any other version MUST be refused before normalization.
 
 ```normative
 Each transition rule MUST contain a stable rule id, zero or more shared-context
-references, a local match block, and a write block. A rule MAY contain a
-rule-level explicit clear list. A write block MAY assign more than one tag.
+references, and a local match block. An ordinary transition rule MUST contain a
+write block and MAY contain a rule-level explicit clear list. A write block MAY
+assign more than one tag. An escape rule MUST contain an `escape` list and MUST
+NOT contain a write block or clear list.
+```
+
+```normative
+An `escape` list MUST contain only resolver failure classes that RDR 0001
+allows the table to model: `no_match` and `ambiguous_match`. Normalization MUST
+render an escape rule as a candidate row with row kind `escape`, its normal
+predicate set, source rule id, source locator, and modeled failure class list.
 ```
 
 ```normative
@@ -302,9 +320,12 @@ then sorting predicate and write keys within each row.
 ```
 
 ```normative
-Source order and rendered-row order MUST NOT decide a successful transition. A
-tag-set resolves only when exactly one normalized candidate row matches; zero or
-multiple matches are refusals.
+Source order and rendered-row order MUST NOT decide a successful transition.
+Ordinary transition success requires exactly one matching non-escape normalized
+candidate row. If zero or multiple non-escape rows match, the resolver MAY
+return a modeled escape disposition only when exactly one escape row matches the
+same tag-set and its `escape` list contains the corresponding failure class;
+otherwise zero or multiple matches remain kernel-owned typed refusals.
 ```
 
 ```normative
@@ -320,8 +341,10 @@ the clear list MUST NOT imply deletion.
 
 ```normative
 Validation failures MUST retain stable data-level categories before CLI mapping,
-including at minimum unknown tag, unknown context, write to non-owned tag,
-unknown accessor, unsupported version, and ambiguous overlap.
+including at minimum malformed TOML, unknown schema field, missing recognized
+outcome alphabet, unknown tag, unknown context, write to non-owned tag, unknown
+accessor, unsupported version, malformed escape declaration, and ambiguous
+overlap.
 ```
 
 #### Load-Bearing Decisions
@@ -333,27 +356,28 @@ unknown accessor, unsupported version, and ambiguous overlap.
 - **Wire / byte format** — TOML is the on-disk carrier. The exact field names
   are the Resolve spike layout: root `outcomes`, `[model]`, `[tags.<tag>]`,
   `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`, `[rule.write]`,
-  rule-level `clear`, and `[dump]`. `[model].version = 1` is the only accepted
-  format version. The RDR and kata spike fixtures are the canonical examples
-  implementation tests must promote.
+  rule-level `clear`, rule-level `escape`, and `[dump]`. `[model].version = 1`
+  is the only accepted format version. The RDR and kata spike fixtures are the
+  canonical examples implementation tests must promote.
 - **Naming** — the canonical source artifact name is "transition model"; the
   canonical rendered view is "expanded transition table." Rejected
   names: "state machine config" because it suggests a runtime driver, and
   "workflow graph" because this RDR owns sparse transition data, not
   orchestration.
-- **Selection / predicate** — the only successful selection is exact-one row
-  match after normalization. If multiple candidate rows qualify, the model is
-  ambiguous; the resolver refuses and lint should reject the overlap before
-  runtime.
+- **Selection / predicate** — the only successful transition selection is
+  exact-one non-escape row match after normalization. If zero or multiple
+  non-escape rows qualify, the resolver returns a typed refusal unless exactly
+  one matching escape row models that failure class. Lint rejects ambiguous
+  ordinary overlaps and ambiguous escape overlaps before runtime.
 
 #### Round-Trip / Inverse Invariants
 
 `parse ∘ normalize ∘ dump = expanded-table value identity` on valid transition
 model fixtures: dumping the normalized model and reading the dump as a table
 view must preserve the candidate-row set, including row identity, source
-locator, predicates, and writes. Source rewrite is out of scope for this RDR; a
-later rewrite-capability RDR must define its own source-preservation invariant
-before mutating authored TOML.
+locator, row kind, predicates, writes, and escape failure classes. Source rewrite
+is out of scope for this RDR; a later rewrite-capability RDR must define its own
+source-preservation invariant before mutating authored TOML.
 
 #### Illustrative Code
 
@@ -382,6 +406,14 @@ profile.eq = "small"
 
 [rule.write]
 stage = "prelock"
+
+[[rule]]
+id = "draft-no-match-escape"
+use = ["draft"]
+escape = ["no_match"]
+
+[rule.match]
+outcome.eq = "round-clean"
 ```
 
 ### Capability Dependencies
@@ -590,20 +622,23 @@ TOML can carry the same semantics.
   **Mitigation**: The dump must show normalized candidate rows with source rule
   ids, and lint must report expansion counts per rule.
 - **Risk**: Future contributors treat row order as priority.
-  **Mitigation**: Normative exact-one semantics and graph lint both reject
-  overlapping rows instead of picking the first match.
+  **Mitigation**: Normative exact-one semantics require explicit escape rows for
+  modeled no-match or ambiguous-match behavior; graph lint rejects overlapping
+  ordinary or escape rows instead of picking the first match.
 - **Risk**: Accessor references pull execution semantics into the table.
   **Mitigation**: The table only names accessor bindings; RDR 0004 owns execution
   and read-back behavior.
 
 ### Failure Modes
 
-Malformed TOML, unknown schema fields, unresolvable context references, or
-normalization explosions fail at load/validation time with stable CLI errors. A
-row gap, overlap, write to an undeclared tag, read-before-write condition, or
-ambiguous expansion is a lint failure before the model is accepted. At runtime,
-unknown outcomes, zero matches, multiple matches, and unavailable accessor
-inputs are typed resolver refusals rather than guessed edges.
+Malformed TOML, unknown schema fields, unresolvable context references, malformed
+escape declarations, or normalization explosions fail at load/validation time
+with stable CLI errors. A row gap, overlap, write to an undeclared tag,
+read-before-write condition, or ambiguous expansion is a lint failure before the
+model is accepted. At runtime, unknown outcomes, unavailable accessor inputs,
+and unmodeled zero/multiple matches are typed resolver refusals rather than
+guessed edges; modeled zero/multiple-match behavior must come from exactly one
+matching escape row.
 
 ## Implementation Plan
 
@@ -620,17 +655,20 @@ Parse two hand-authored sparse TOML fixtures, one for a representative RDR flow
 slice and one for a representative kata flow slice, into typed source data;
 normalize them into candidate rows; dump the expanded table; validate tag
 declarations, context references, predicate references, recognized outcomes,
-supported model version, and multi-tag writes; then prove by unit test that one
-sample tag-set resolves to exactly one row, one unsupported-version variant is
-refused before normalization, and one deliberately overlapping malformed variant
-is refused as ambiguous. The RDR fixture must cover at least `Status`, `Profile`,
-prelock iteration, and one rewind or cluster guard.
+supported model version, multi-tag writes, and escape rows; then prove by unit
+test that one sample tag-set resolves to exactly one ordinary row, one unmatched
+sample tag-set resolves to exactly one modeled escape row when the table declares
+one, one unsupported-version variant is refused before normalization, and one
+deliberately overlapping malformed variant is refused as ambiguous. The RDR
+fixture must cover at least `Status`, `Profile`, prelock iteration, one rewind
+or cluster guard, and one explicit `no_match` escape row.
 
 ### Phase 1: Fixture and Schema Spike
 
 Name the minimal sparse TOML field layout and encode representative RDR and kata
 rules, including shared contexts, one self-loop, one rewind, one accessor
-reference, one profile-dependent branch, and one multi-tag write.
+reference, one profile-dependent branch, one explicit escape row, and one
+multi-tag write.
 
 ### Phase 2: Normalizer and Dump
 
@@ -640,7 +678,8 @@ expanded-table dump with deterministic ordering and source rule ids.
 ### Phase 3: Parser and Validation Skeleton
 
 Add validation rules for declarations, rule ids, context references, predicate
-references, write targets, explicit clears, and expansion-count diagnostics.
+references, write targets, explicit clears, escape declarations, and
+expansion-count diagnostics.
 
 ### Phase 4: Resolver Handshake
 
@@ -675,22 +714,23 @@ MIT. No production dependency is added until implementation.
 Implementation tests must promote the Resolve spike into production fixtures:
 
 1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
-   **Expected**: Tag declarations, root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, and multi-tag writes decode without ambiguous field placement.
-2. **Scenario**: Normalize the RDR fixture's `continue-prelock` and `reconcile-rewind` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, and writes are deterministic.
-3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, unsupported versions, ambiguous overlaps, and missing root outcome alphabets.
+   **Expected**: Tag declarations, root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement.
+2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `reconcile-rewind`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, `all`/`unless` predicates are visible in the row predicate set, escape rows retain row kind plus modeled failure class list, and writes are deterministic.
+3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, unsupported versions, malformed escape declarations, ambiguous overlaps, and missing root outcome alphabets.
    **Expected**: Each failure retains a stable data-level category and becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
-4. **Scenario**: Run exact-one selection over one matching tag-set and one deliberately overlapping/ambiguous negative fixture variant.
-   **Expected**: The matching tag-set resolves to one row; zero or multiple matches are refusals and never fall back to row order.
+4. **Scenario**: Run exact-one selection over one matching ordinary tag-set, one tag-set with no ordinary match but one matching `no_match` escape row, and one deliberately overlapping/ambiguous negative fixture variant.
+   **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; zero or multiple matches without exactly one matching escape row are refusals and never fall back to row order.
 5. **Scenario**: Normalize and dump two semantically identical fixtures whose TOML keys are authored in different orders.
    **Expected**: The expanded-table value is identical because rows sort by row identity and predicates/writes sort by key.
 
 ### Performance Expectations
 
 Resolve evidence is functional rather than throughput-oriented. The spike
-normalizes representative RDR and kata sparse fixtures into four deterministic
-rows, and a repeated run produced byte-identical output with SHA-256
-`3041e9e6678510e203a0213d5410df0852971416d64727c767345c4ca4725b24`.
+normalizes representative RDR and kata sparse fixtures into five deterministic
+rows, including one explicit escape row, and a repeated run produced
+byte-identical output with SHA-256
+`3e3509f3a6f3065b93378dca9fcc4c0e606409ec102a8978366e5e42cfafe4e3`.
 Production code should preserve deterministic dump ordering by sorting stable
 model/rule/predicate/write keys rather than relying on map iteration or source
 order. The SHA is evidence for the spike output only; production golden tests
@@ -705,8 +745,9 @@ preserve the normalized candidate-row semantics.
 No contradictions found between research findings, design principles, and
 proposed solution. The research findings point to sparse, reviewable data with
 expanded diagnostic views; the proposed TOML source, normalized candidate rows,
-and exact-one selection semantics implement that shape without introducing a
-runtime FSM engine or source-order priority.
+explicit escape rows, and exact-one selection semantics implement that shape
+without introducing a runtime FSM engine, source-order priority, or malformed
+table data as resolver behavior.
 
 ### Assumption Verification
 
@@ -726,7 +767,8 @@ RDR-owned spike fixtures and transcript as execution evidence, not as
 The Minimum Viable Validation is in scope for implementation. The required
 proof is the production test set that promotes the Resolve spike fixtures into
 typed parse, normalize, dump, validation, and exact-one selection tests,
-including unsupported-version refusal, ambiguous-overlap refusal, and
+including unsupported-version refusal, malformed escape declaration refusal,
+ambiguous-overlap refusal, modeled `no_match` escape disposition, and
 deterministic expanded-table output across semantically identical fixtures with
 different TOML key order.
 
@@ -742,9 +784,9 @@ different TOML key order.
   expanded table dumps are generated review/diagnostic views and can be
   introduced alongside the existing CLI wiring.
 - **Canonical-form / determinism** — the normalized candidate-row value is the
-  canonical semantic form. Dumps sort rows by row identity and sort predicate
-  and write keys within each row. The spike SHA is evidence for that spike
-  output only; production tests must assert the normalized value, not a
+  canonical semantic form. Dumps sort rows by row identity and sort predicate,
+  write, and escape fields within each row. The spike SHA is evidence for that
+  spike output only; production tests must assert the normalized value, not a
   content-addressed hash contract.
 
 ### Proportionality
@@ -786,26 +828,3 @@ additional split is required before implementation.
 - RDR and kata flow audits from the state-machine prior-art corpus.
 - Tool-fit assessment for FSM libraries as validation/visualization tools, not
   runtime orchestrators.
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-- **Cluster**: 0001-0006, 2026-06-24.
-- **Peer pair**: 0001-resolution-kernel with 0002-transition-table-as-reviewable-data.
-- **Defect**: RDR 0001 says the resolver "refuses zero or multiple matches
-  unless the table contract explicitly models an escape edge". RDR 0002 owns
-  the sparse table contract, normalized rows, guards, writes, clears,
-  exact-one matching, and ambiguous-overlap refusal, but it does not define how
-  an escape edge is authored, normalized, linted, or distinguished from an
-  ordinary row.
-- **Disposition**: SPEC-DEFECT against RDR 0002, the less foundational RDR.
-- **Target re-entry stage**: 4 re-resolve.
-- **Re-entry scope**: STAGE-SCOPED. The sparse TOML approach still holds, but
-  A2 and A3 are disturbed because escape-edge behavior affects exact-one
-  selection and target-flow encodability.
-- **Resolution direction**: Define the escape-edge table semantics in RDR 0002
-  or explicitly remove the escape-edge allowance from the peer contract through
-  a coordinated RDR 0001/0002 refinement. The content fix belongs to the
-  re-entry pass; this note only lifts the Final freeze.
-- **Evidence**:
-  `docs/rdr/cluster-reconcile/0001-0006/pairwise-0001-0002.md` and
-  `docs/rdr/cluster-reconcile/0001-0006/report.md`.
