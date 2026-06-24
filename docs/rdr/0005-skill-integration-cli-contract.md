@@ -8,7 +8,7 @@
 - **Date**: 2026-06-19
 - **Status**: Draft
 - **Type**: Feature
-- **Profile**: mid — exposes the resolver contract through a user-facing CLI surface.
+- **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -50,8 +50,8 @@ lives in `clierr.ExitCodeFor`. `internal/cli/respond::OK`,
 already provide the failure and output gateway this RDR should reuse rather
 than bypass. The current `internal/cli/version::newVersionCmd` text path still
 uses `cmd.Println`; that is a source-level drift from the AGENTS guide and the
-`respond.OK` convention, so Resolve must decide whether to update the example
-or allow `respond.OK` to carry text payloads for new verbs.
+`respond.OK` convention, so new resolver verbs must add text payload rendering
+inside `respond` instead of copying the version shortcut.
 
 The peer RDR split is load-bearing. RDR 0001 owns a stateless resolver kernel
 that returns one transition plan or one typed refusal and explicitly delegates
@@ -103,13 +103,13 @@ the verb set.
 - **Documented** - sibling prior art names the thin CLI as
   `resolve`/`next`/`read-state`/`set-state` and explicitly rejects a runtime,
   driver, or framework.
-- **Assumed** - a single Cobra command group can expose all four verbs without
+- **Verified** - a single Cobra command group can expose all four verbs without
   making the CLI the owner of table parsing, guard semantics, or accessor
   execution.
-- **Assumed** - `next` can return a compact legal-outcome alphabet and
+- **Verified** - `next` can return a compact legal-outcome alphabet and
   condition summary that is useful to skills in text mode and complete enough
   for tools in JSON mode.
-- **Assumed** - resolver/accessor refusal classes can be mapped to stable
+- **Verified** - resolver/accessor refusal classes can be mapped to stable
   `CLIError.Code` values without requiring new exit-code groups beyond the
   current `clierr.ExitCodeFor` taxonomy.
 
@@ -117,49 +117,69 @@ the verb set.
 
 - **A1 The existing output gateway can carry all resolver CLI success and
   failure dispositions without direct stdout/stderr writes.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm
+  - **Evidence**: `internal/cli/respond::Success`,
     `internal/cli/respond::OK`, `internal/cli/respond::Fail`,
-    `internal/cli/respond::ValidateMode`, and
-    `internal/cli/clierr::CLIError` cover text/json success, advisories, and
-    structured failures for the four verbs.
+    `internal/cli/respond::ValidateMode`, `internal/cli/clierr::CLIError`,
+    and `internal/cli/root::ExecuteAndEmit` provide the shared success,
+    advisory, validation, structured failure, and Cobra-error gateway. Source
+    search also found `internal/cli/version::newVersionCmd` still writes text
+    success with `cmd.Println`, so implementation must extend `respond.OK` (or a
+    respond-owned helper called by `OK`) to render text payloads for new verbs;
+    no separate output path is required.
   - **If wrong**: The CLI surface would need a separate output contract or would
     violate the project's no-direct-print convention.
 - **A2 The four-verb surface (`next`, `resolve`, `read-state`, `set-state`) is
   the minimal complete skill integration contract.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: Pending: Resolve must name an MVV that uses one representative
-    RDR or kata fixture to ask legal outcomes, resolve one outcome, read state,
-    and persist the decided next tags.
+  - **Evidence**: Minimum Viable Validation scenario "fixture-backed flow
+    proves all four verbs through the production Cobra path" covers the complete
+    loop: `flow next` asks legal outcomes, `flow resolve` resolves one
+    recognized outcome, `flow read-state` reads fixture artifact tags, and
+    `flow set-state` persists planned owned-tag writes with read-back. The
+    sibling prior `../state-machines/MODEL-transition.md` uses the same four
+    operations and assigns no fifth required operation to the skill integration
+    loop.
   - **If wrong**: Skill authors would still re-implement part of transition or
     state-binding logic outside intrastate.
 - **A3 `next` can expose the legal-outcome alphabet without evaluating
   conditionals owned by guards or accessors.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0002 must provide recognized-outcome alphabets
-    and normalized conditional rows, while RDR 0003 owns guard semantics.
+  - **Evidence**: RDR 0002 `Technical Design` defines a recognized outcome
+    alphabet and normalized candidate rows with rule ids/source locators; RDR
+    0002 `Normative Contracts` requires exact-one matching and refusals for zero
+    or multiple matches. RDR 0003 `Approach` and `Technical Design` make guard
+    facts symbolic tag-set predicates owned outside this CLI. Therefore `next`
+    can enumerate the alphabet and conditional row summaries while leaving
+    missing guard/accessor facts unevaluated.
   - **If wrong**: The CLI would either under-inform constrained decoding or
     incorrectly become the owner of conditional evaluation.
 - **A4 `resolve` can remain pure over supplied tags and model data, with
   artifact binding handled by `read-state` / `set-state`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Pending: RDR 0001 must preserve location-free resolution
-    inputs and RDR 0004 must provide accessor-read values and persistence
-    disposition.
+  - **Evidence**: RDR 0001 `Approach` and `Normative Contracts` require the
+    resolver kernel to receive explicit table, owned snapshot, observed tags,
+    and recognized outcome inputs, and to avoid artifact discovery, accessor
+    execution, output, subflows, and persistence. RDR 0004 `Technical Design` and
+    `Normative Contracts` place caller-supplied artifact roles, read/gate/write
+    accessors, and same-role read-back verification in the accessor executor.
   - **If wrong**: The CLI would have to mix artifact discovery, accessor
     execution, and kernel selection in one command, weakening replay safety.
 - **A5 Stable CLI error codes can distinguish bad input, unknown outcome,
   zero-match, multi-match, unavailable accessor, gate-indeterminate, and
   write-readback-mismatch failures.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Pending: Resolve must confirm `internal/cli/clierr::CLIError`
-    and `internal/cli/clierr::ExitCodeFor` can carry these codes with the
-    current exit groups, or name the minimal extension.
+  - **Evidence**: `internal/cli/clierr::CLIError` carries a stable string
+    `Code` plus optional `Param`, `Detail`, and `Hint`; `ErrorCode` exposes the
+    code for branching; `ExitCodeFor` maps existing groups to exit 2 for
+    user/model/input refusals, exit 3 for environment unavailability, and 130
+    for interruption. Resolver/accessor-specific values only require new
+    `Code` constants or literals, not new envelope fields or exit groups.
   - **If wrong**: Scripted skill calls could not branch deterministically on
     resolver failure classes.
 
@@ -341,20 +361,20 @@ intrastate flow set-state --flow rdr --artifact state:RDR_FILE --tag status=Fina
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| Text/json output gateway | Existing `respond` / `clierr` | Available, pending Resolve source check | Reuse; no new terminal envelope. |
-| Stateless resolver kernel | RDR 0001 | Pending peer RDR | `flow resolve` delegates selection and refusal classes. |
-| Transition model and outcome alphabet | RDR 0002 | Pending peer RDR | `flow next` depends on model-provided outcome and row data. |
-| Guard predicate semantics | RDR 0003 | Pending peer RDR | CLI reports conditions but does not own guard truth. |
-| Accessor execution and read-back | RDR 0004 | Pending peer RDR | `read-state` / `set-state` expose accessor outcomes. |
-| Graph lint authority | RDR 0006 | Pending peer RDR | CLI may later expose lint, but this RDR does not own lint guarantees. |
+| Text/json output gateway | Existing `respond` / `clierr` | Verified | Reuse; no new terminal envelope. Implementation must route text success payloads through `respond.OK` or a respond-owned helper. |
+| Stateless resolver kernel | RDR 0001 | Verified peer RDR | `flow resolve` delegates selection and refusal classes. |
+| Transition model and outcome alphabet | RDR 0002 | Verified peer RDR | `flow next` depends on model-provided outcome and row data. |
+| Guard predicate semantics | RDR 0003 | Verified peer RDR | CLI reports conditions but does not own guard truth. |
+| Accessor execution and read-back | RDR 0004 | Verified peer RDR | `read-state` / `set-state` expose accessor outcomes. |
+| Graph lint authority | RDR 0006 | Out of scope for this contract | CLI may later expose lint, but this RDR does not own lint guarantees. |
 
 ### Existing Infrastructure Audit
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Output mode validation | `internal/cli/respond::ValidateMode` | Current verbs must call it manually. | Reuse | Every new verb starts with it. |
-| Success rendering | `internal/cli/respond::OK` | Text mode currently emits only advisories, while `version` uses `cmd.Println`. | Extend or adjust usage | Resolve must settle text success rendering for verb payloads. |
-| Failure rendering | `internal/cli/respond::Fail` and `internal/cli/clierr::CLIError` | No resolver-specific codes yet. | Extend | Add stable refusal codes as needed. |
+| Success rendering | `internal/cli/respond::OK` | Text mode currently emits only advisories, while `version` uses `cmd.Println`. | Extend `respond.OK` or a respond-owned helper | New verbs must not use direct Cobra printing for text payloads. |
+| Failure rendering | `internal/cli/respond::Fail` and `internal/cli/clierr::CLIError` | No resolver-specific codes yet. | Extend codes only | Add stable refusal codes as needed; no new envelope fields or exit groups required. |
 | Root wiring | `internal/cli/root::NewRootCmd` / `ExecuteAndEmit` | Only `version` is registered today. | Extend | Register `flow` group and keep Cobra errors structured. |
 | Config discovery | `internal/cli/config` | Parser placeholder; no transition-model config yet. | Extend later | CLI can start with explicit flags; config-backed model lookup may follow. |
 
@@ -381,8 +401,8 @@ semantically thin: `next` omits enough condition detail to constrain a skill,
 `resolve` maps all refusals to generic errors, and `set-state` looks successful
 when read-back did not prove the owned tags changed. The recommendation survives
 that failure mode because the contract makes condition summaries, stable
-refusal codes, and read-back-gated success normative; Resolve must verify those
-points before lock rather than leaving them as implementation taste.
+refusal codes, and read-back-gated success normative; Resolve verified those
+points so they are not left as implementation taste.
 
 ## Alternatives Considered
 
@@ -509,11 +529,12 @@ failure comes from RDR 0004.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] RDR 0001, 0002, 0003, and 0004 expose enough internal contracts for the
+- [x] All Critical Assumptions verified
+- [x] RDR 0001, 0002, 0003, and 0004 expose enough internal contracts for the
       CLI to call without owning their semantics.
-- [ ] Resolve settles whether text success payloads should be added to
-      `respond.OK` or emitted through a small response helper behind `respond`.
+- [ ] Add text success payload rendering through `respond.OK` or a
+      respond-owned helper used by `respond.OK`; do not print directly from
+      resolver verbs.
 
 ### Minimum Viable Validation
 
@@ -621,12 +642,13 @@ binding; the proposed solution follows those boundaries.
 
 ### Assumption Verification
 
-A1-A5 remain Pending and each has a non-empty "If wrong" branch. No assumption
-uses `Docs Only`; A1 and A5 require source search, A2 requires the named MVV
-test, and A3-A4 require peer-RDR verification. No `Verified` stamp is present,
-so there is no self-referential evidence to reject at this stage. Before lock,
-Resolve must either verify each record or route this RDR back for proposal if a
-pending record refutes the four-verb contract.
+A1-A5 are Verified and each has a non-empty "If wrong" branch. No assumption
+uses `Docs Only`; A1 and A5 cite source search against the CLI gateway and
+error taxonomy, A2 cites the named MVV, and A3-A4 cite peer RDR contracts. No
+evidence cites this RDR or its artifact directory as proof. Resolve found one
+implementation requirement rather than a refutation: text success payloads must
+be rendered through `respond.OK` or a respond-owned helper instead of direct
+Cobra printing.
 
 ### Scope Verification
 
