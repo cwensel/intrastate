@@ -149,17 +149,19 @@ existing CLI output contract.
     exit-code group before it can be authoritative in CI.
 - **A5 CI can run `intrastate lint` as the blocking graph-acceptance authority
   for transition model changes.**
-  - **Status**: Verified
-  - **Method**: Source Search
-  - **Evidence**: `Makefile::check` is the local aggregate gate, while
-    `Makefile::build` builds `./bin/intrastate` from `cmd/intrastate`;
-    `.github/workflows/ci.yml::jobs` already runs repository gates on push and
-    pull request; and
-    `internal/cli/root.go::NewRootCmd` registers root-level commands through
-    the same `ExecuteAndEmit` path. The lint command and fixture corpus still
-    need implementation-time validation, but the repo has the command tree and
-    CI surfaces needed to make `intrastate lint` the blocking gate.
-  - **If wrong**: The graph may be lintable locally but not enforced at the
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Validation scenario 7 must capture `make check` or
+    `.github/workflows/ci.yml` invoking the production `intrastate lint`
+    command over the checked-in transition model or fixture corpus. Source
+    search confirms the gate surfaces exist: `Makefile::check` is the local
+    aggregate gate, `Makefile::build` builds `./bin/intrastate` from
+    `cmd/intrastate`, `.github/workflows/ci.yml::jobs` already runs repository
+    gates on push and pull request, and `internal/cli/root.go::NewRootCmd`
+    registers root-level commands through the same `ExecuteAndEmit` path.
+  - **If wrong**: The implementation cannot complete this RDR's MVV until the
+    production gate runs the lint command. If that gate is bypassed after
+    implementation, the graph may be lintable locally but not enforced at the
     design-time boundary maintainers actually rely on.
 
 **Method vocabulary** (pick exactly one per assumption):
@@ -606,6 +608,9 @@ or source span.
 
 - [x] A5 CI gate surface verified: `Makefile` and GitHub Actions can host the
   production `intrastate lint` gate once the command and fixture corpus exist.
+- [ ] A5 production gate proof pending MVV scenario 7: `make check` or the
+  GitHub workflow must invoke the built `intrastate lint` command over the
+  checked-in transition model or fixture corpus.
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
 - [x] RDR 0005 command placement is coherent enough to expose root
@@ -745,13 +750,12 @@ solution keeps graph acceptance in a blocking lint command.
 
 ### Assumption Verification
 
-A1-A5 are verified. None uses `Docs Only`, and none is stamped `Verified` on
-self-reference. A1-A3 are verified against peer RDR contracts, A4 is verified by
-source search against the CLI failure gateway, and A5 is verified by source
-search against the command-tree and CI gate surfaces. The implementation still
-must prove that the future command and fixture corpus are wired into the gate;
-that proof lives in the Validation scenarios rather than as an unresolved
-assumption.
+A1-A4 are verified. None uses `Docs Only`, and none is stamped `Verified` on
+self-reference. A1-A3 are verified against peer RDR contracts, and A4 is
+verified by source search against the CLI failure gateway. A5 is deliberately
+Pending by `MVV Test`: the repo has the command-tree and CI gate surfaces, but
+implementation must prove that the future command and fixture corpus are wired
+into the production gate through Validation scenario 7.
 
 ### Scope Verification
 
