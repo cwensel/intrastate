@@ -116,7 +116,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   returned tag values.**
   - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`main.go:246-264`), while sorted map formatting prevents map-order drift in the transcript (`main.go:188-206`). Transcript line 10 shows identical success disposition for two runs; line 11 shows an injected gate-indeterminate refusal remains stable (`output.txt:10-11`).
+  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`main.go:428-445`), while sorted map formatting prevents map-order drift in the transcript (`main.go:250-271`). Transcript line 11 shows identical success disposition for two runs; line 12 shows an injected gate-indeterminate refusal remains stable (`output.txt:11-12`).
   - **If wrong**: Resolver replay could depend on ambient process state rather
     than declared model inputs.
 - **A5 External API accessors can be constrained by declared capability and
@@ -130,16 +130,14 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   before the resolver runs.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`main.go:83-129`, `main.go:305-311`, `main.go:321-395`); transcript lines 12-19 capture every validation disposition (`output.txt:12-19`).
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`main.go:83-129`, `main.go:329-335`, `main.go:345-419`); transcript lines 13-20 capture every validation disposition (`output.txt:13-20`).
   - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
     and turn typed refusals into late execution surprises.
 - **A7 Write read-back verification can detect unintended mutation of
   non-owned observed or recognized tags on the same artifact role.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Extend the existing accessor spike and MVV tests so a write
-    accessor that changes an observed or recognized tag, while still writing the
-    expected owned tag value, returns a read-back mismatch.
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` snapshots pre-write tag values, skips the planned owned tag during the non-owned comparison, and returns `read_back_mismatch` when any other observed tag changes (`main.go:189-240`). Transcript line 10 shows `status=Final` was written as planned while non-owned `profile` changed from `large` to `small`, producing `read_back_mismatch` (`output.txt:10`).
   - **If wrong**: A write accessor could corrupt caller-observed state while
     still passing the owned-tag success check.
 
@@ -662,15 +660,16 @@ refusals.
 
 ### Assumption Verification
 
-Critical Assumptions A1-A6 are verified. A1 and A2 are backed by the Resolve
+Critical Assumptions A1-A7 are verified. A1 and A2 are backed by the Resolve
 spike and transcript under
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
 by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
 source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
 the explicit scoping decision that credentials and remote resource lifecycle
 remain outside intrastate; A6 is backed by the same Resolve spike's
-definition-validation harness and transcript. None of the verified evidence
-cites this RDR or its artifact directory as self-proof.
+definition-validation harness and transcript; A7 is backed by the same spike's
+collateral-mutation read-back mismatch case. None of the verified evidence cites
+this RDR or its artifact directory as self-proof.
 
 ### Scope Verification
 
