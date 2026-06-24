@@ -78,5 +78,13 @@ stage = "resolve"
 status = "Draft"
 rewind_scope = "assumptions"
 
+[[rule]]
+id = "draft-no-match-escape"
+use = ["draft"]
+source = "rdr:escape"
+escape = ["no_match"]
+[rule.match.outcome]
+eq = "round-clean"
+
 [dump]
 order = ["model", "rule", "match", "write"]
