@@ -126,6 +126,17 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   - **Evidence**: This RDR explicitly scopes credentials and remote resource lifecycle outside intrastate in Cross-Cutting Concerns; accessors receive caller-provided artifacts/environment, declare capability and timeout in model data, and return typed success/refusal only. The selected contract rejects ambient artifact discovery and shell/callback authority in Normative Contracts and Alternatives.
   - **If wrong**: The accessor layer becomes an orchestrator and should be split
     into a separate integration contract.
+- **A6 Accessor definition validation can reject unsafe execution metadata
+  before the resolver runs.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Add `TestAccessorDefinitionValidation` to the Minimum Viable
+    Validation. It must cover missing accessors, duplicate or multiply-bound
+    accessor identities, capability mismatches, missing timeout metadata,
+    non-positive timeouts, missing read-back metadata for writes, ambient
+    artifact discovery attempts, and write attempts against non-owned tags.
+  - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
+    and turn typed refusals into late execution surprises.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -198,14 +209,15 @@ required. RDR 0002 owns the table carrier and accessor references; this RDR owns
 what it means to execute a referenced accessor safely.
 
 Execution has three phases. First, validation rejects unknown accessor names,
-capability mismatches, writes to non-owned tags, and missing timeout/read-back
-metadata before resolution. Second, runtime invocation applies read and gate
-accessors to caller-supplied artifacts and classifies timeout, unavailable
-artifact, execution error, and gate-indeterminate outcomes. Third, write
-accessors execute only from a successful transition plan, then immediately
-re-read through the same accessor boundary and compare expected owned-tag
-values. A read-back mismatch is a failure even if the write command exited
-successfully.
+missing or multiply-bound accessor identities, capability mismatches, writes to
+non-owned tags, missing timeout/read-back metadata, non-positive timeouts, and
+ambient artifact discovery before resolution. Second, runtime invocation applies
+read and gate accessors to caller-supplied artifacts and classifies timeout,
+unavailable artifact, execution error, gate denied, and gate-indeterminate
+outcomes. Third, write accessors execute only from a successful transition plan,
+then immediately re-read the same caller-supplied artifact role from the write
+binding and compare expected owned-tag values. A read-back mismatch is a failure
+even if the write command exited successfully.
 
 Large-profile Q-O-C matrix:
 
@@ -223,6 +235,12 @@ Large-profile Q-O-C matrix:
 Every accessor definition MUST declare exactly one capability: read, gate, or
 write. Runtime execution MUST reject any attempt to use an accessor for a
 different capability than the one declared.
+```
+
+```normative
+Within one flow, each `(flow id, accessor name, capability)` identity MUST
+resolve to exactly one accessor binding. Missing and multiply-bound identities
+MUST fail validation before resolution.
 ```
 
 ```normative
@@ -247,7 +265,9 @@ successful transition. It MUST NOT write observed or recognized tags.
 
 ```normative
 After a write accessor reports command-level success, the executor MUST re-read
-the same artifact role and verify the expected owned-tag values. A read-back
+the same caller-supplied artifact role named by the write binding and verify the
+expected owned-tag values. It MUST NOT satisfy read-back verification by
+discovering an ambient artifact or by reading an unrelated role. A read-back
 mismatch MUST be reported as a write failure.
 ```
 
@@ -255,6 +275,10 @@ mismatch MUST be reported as a write failure.
 Every accessor invocation MUST have a bounded timeout. Timeout MUST be reported
 as its own refusal class, distinct from execution failure and read-back
 mismatch.
+```
+
+```normative
+Missing or non-positive timeout metadata MUST fail validation before execution.
 ```
 
 ```normative
@@ -279,10 +303,11 @@ write to stdout or stderr directly.
 #### Round-Trip / Inverse Invariants
 
 `write -> read = expected owned-tag value identity` for the written tag subset:
-after a write accessor reports command-level success, reading through the same
-artifact role must return the expected owned-tag values. This is not an undo or
-byte-for-byte artifact invariant; it is the minimum safety invariant for the
-authoritative tag values this RDR owns.
+after a write accessor reports command-level success, reading the same
+caller-supplied artifact role named by the write binding must return the
+expected owned-tag values. This is not an undo or byte-for-byte artifact
+invariant; it is the minimum safety invariant for the authoritative tag values
+this RDR owns.
 
 #### Illustrative Code
 
@@ -501,7 +526,7 @@ timeout, and expected versus observed tag values.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified
+- [ ] All Critical Assumptions verified
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
 - [ ] RDR 0002 carries accessor references, tag provenance, and artifact roles
@@ -512,10 +537,11 @@ timeout, and expected versus observed tag values.
 ### Minimum Viable Validation
 
 Build a fixture flow with one read accessor, one gate accessor, and one write
-accessor over caller-supplied artifact roles. Prove success, timeout,
-gate-indeterminate, execution failure, capability mismatch, and write
-read-back-mismatch dispositions. The write success test must assert the
-re-read owned-tag value equals the transition plan's expected value.
+accessor over caller-supplied artifact roles. Prove success, timeout, gate
+denied, gate-indeterminate, execution failure, capability mismatch, unsafe
+definition validation, and write read-back-mismatch dispositions. The write
+success test must assert the re-read owned-tag value equals the transition
+plan's expected value.
 
 ### Phase 1: Accessor Model
 
@@ -568,7 +594,9 @@ package.
    accessor, and one write accessor bound to caller-supplied artifact roles.
    **Expected**: Matching capability references pass; unknown accessors,
    duplicate bindings, capability mismatches, missing timeout metadata, and
-   write attempts against non-owned tags fail before resolution.
+   write attempts against non-owned tags fail before resolution. Missing or
+   non-positive timeouts, missing write read-back metadata, and ambient artifact
+   discovery attempts also fail before resolution.
 2. **Scenario**: Invoke read and gate accessors that succeed, time out, return
    an execution failure, or return gate indeterminate.
    **Expected**: Successful reads return typed tag values, gate allow/deny
@@ -620,14 +648,15 @@ refusals.
 
 ### Assumption Verification
 
-All Critical Assumptions are verified. A1 and A2 are backed by the Resolve spike
-and transcript under
+Critical Assumptions A1-A5 are verified. A1 and A2 are backed by the Resolve
+spike and transcript under
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
 by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
 source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
 the explicit scoping decision that credentials and remote resource lifecycle
-remain outside intrastate. None of the evidence cites this RDR or its artifact
-directory as self-proof.
+remain outside intrastate. A6 is pending validation of the unsafe-definition
+rules added during pre-lock review. None of the verified evidence cites this RDR
+or its artifact directory as self-proof.
 
 ### Scope Verification
 
