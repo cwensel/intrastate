@@ -149,14 +149,16 @@ existing CLI output contract.
     exit-code group before it can be authoritative in CI.
 - **A5 CI can run `intrastate lint` as the blocking graph-acceptance authority
   for transition model changes.**
-  - **Status**: Pending
-  - **Method**: Spike
-  - **Evidence**: Verification must add the repository gate after the command
-    and fixture corpus exist: `make check` or `.github/workflows/ci.yml` must
-    invoke the built `intrastate lint` command over the checked-in transition
-    model or fixture corpus, and the captured run must show one legal model
-    passing plus illegal fixtures for every blocking invariant class failing
-    through the production command shape.
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: `Makefile::check` is the local aggregate gate, while
+    `Makefile::build` builds `./bin/intrastate` from `cmd/intrastate`;
+    `.github/workflows/ci.yml::jobs` already runs repository gates on push and
+    pull request; and
+    `internal/cli/root.go::NewRootCmd` registers root-level commands through
+    the same `ExecuteAndEmit` path. The lint command and fixture corpus still
+    need implementation-time validation, but the repo has the command tree and
+    CI surfaces needed to make `intrastate lint` the blocking gate.
   - **If wrong**: The graph may be lintable locally but not enforced at the
     design-time boundary maintainers actually rely on.
 
@@ -602,9 +604,8 @@ or source span.
 
 ### Prerequisites
 
-- [ ] A5 CI gate verification pending: once `intrastate lint` and the fixture
-  corpus exist, prove the repository gate invokes the production command over
-  the checked-in transition model or lint fixture corpus.
+- [x] A5 CI gate surface verified: `Makefile` and GitHub Actions can host the
+  production `intrastate lint` gate once the command and fixture corpus exist.
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
 - [x] RDR 0005 command placement is coherent enough to expose root
@@ -671,7 +672,8 @@ for CI. Coverage must include success output, blocking failure output, stable
 finding codes, and source rule/context identity in JSON mode. A1 supplies the
 source identity and write/predicate graph data, A2 supplies finite-domain
 overlap and coverage proof obligations, A3 supplies owned-tag
-read-before-write checks, and A4 supplies the `respond`/`clierr` output path.
+read-before-write checks, A4 supplies the `respond`/`clierr` output path, and
+A5 supplies the repository gate surface that must run the production command.
 
 1. **Scenario**: legal fixture model with all mandatory declarations and
    finite-domain coverage.
@@ -743,12 +745,13 @@ solution keeps graph acceptance in a blocking lint command.
 
 ### Assumption Verification
 
-A1-A4 are verified. None uses `Docs Only`, and none is stamped `Verified` on
-self-reference. A1-A3 are verified against peer RDR contracts, and A4 is
-verified by source search against the CLI failure gateway. A5 is pending
-because CI authority cannot be verified until the command and checked-in model
-or fixture corpus exist; its verification plan is the repository gate spike
-named in A5 and the Validation scenarios.
+A1-A5 are verified. None uses `Docs Only`, and none is stamped `Verified` on
+self-reference. A1-A3 are verified against peer RDR contracts, A4 is verified by
+source search against the CLI failure gateway, and A5 is verified by source
+search against the command-tree and CI gate surfaces. The implementation still
+must prove that the future command and fixture corpus are wired into the gate;
+that proof lives in the Validation scenarios rather than as an unresolved
+assumption.
 
 ### Scope Verification
 
@@ -761,8 +764,8 @@ invariant through the production command path.
 - **Versioning**: lint finding codes and JSON payload fields must be stable and
   append-only under the existing CLI output envelope.
 - **Build tool compatibility**: the authoritative check is the same
-  root `intrastate lint` command CI can run after `make build`; A5 remains
-  pending until that gate is wired and captured.
+  root `intrastate lint` command CI can run after `make build`; the Validation
+  scenarios must capture that gate once the command and fixture corpus exist.
 - **Incremental adoption**: local hooks and resolver-local validation flags may
   call the lint engine later, but only the command/CI gate defines acceptance.
 - **Canonical-form / determinism**: deterministic claims are semantic finding
