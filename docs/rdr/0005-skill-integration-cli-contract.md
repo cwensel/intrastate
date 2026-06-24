@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -185,14 +185,24 @@ the verb set.
 - **A6 The pinned MVP request grammar, minimum success payload fields, and
   stable flow error-code spellings are sufficient for the first fixture-backed
   CLI implementation.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: Run the Minimum Viable Validation through the production Cobra
-    path with repeated `--tag name=value`, `--artifact role=path`, and
-    `--write name=value`; assert the JSON `data` fields named in Technical
-    Design and the minimum `flow-*` error codes named in Failure Modes.
+  - **Status**: Accepted
+  - **Method**: Design Decision
+  - **Evidence**: Stage 6 Reconcile classifies the pinned `--flow`, repeated
+    `--tag name=value`, `--artifact role=path`, and `--write name=value` grammar,
+    the minimum JSON `data` fields in Technical Design, and the minimum
+    `flow-*` code strings in Failure Modes as this RDR's implementation contract.
+    The rejected alternative is leaving grammar, payload fields, or error-code
+    spelling to implementation-time invention. The Implementation Plan and
+    Validation sections keep the fixture-backed production-Cobra MVV as the test
+    that proves an implementation conforms to this chosen contract.
   - **If wrong**: Implementers would still need to invent request grammar,
     payload fields, or error-code spellings during code work.
+
+### Reconciliation Report
+
+| Item | Source | Disposition | Evidence pointer or plan |
+| --- | --- | --- | --- |
+| A6 pinned MVP grammar, payload fields, and stable `flow-*` code spellings | 1, 2, 4 | ACCEPTED | Design Decision recorded in A6. The contract pins the MVP grammar, success payload minima, and refusal-code spellings; the rejected alternative is implementation-time invention. |
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -591,8 +601,8 @@ failure comes from RDR 0004.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified; A1-A5 are verified, and A6 requires
-      the MVV before lock.
+- [x] All Critical Assumptions have terminal dispositions; A1-A5 are verified,
+      and A6 is accepted as the pinned implementation contract.
 - [x] RDR 0001, 0002, 0003, and 0004 expose enough internal contracts for the
       CLI to call without owning their semantics.
 - [ ] Add text success payload rendering through `respond.OK` or a
@@ -708,14 +718,15 @@ binding; the proposed solution follows those boundaries.
 
 ### Assumption Verification
 
-A1-A5 are Verified and each has a non-empty "If wrong" branch. A6 is Pending
-because the 3amigo pass pinned new exact request grammar, success payload, and
-error-code claims that need the MVV before lock. No assumption uses `Docs Only`;
-A1 and A5 cite source search against the CLI gateway and error taxonomy, A2 and
-A6 cite the named MVV, and A3-A4 cite peer RDR contracts. No evidence cites this
-RDR or its artifact directory as proof. Resolve found one implementation
-requirement rather than a refutation: text success payloads must be rendered
-through `respond.OK` or a respond-owned helper instead of direct Cobra printing.
+A1-A5 are Verified and each has a non-empty "If wrong" branch. A6 is Accepted as
+a design decision because the 3amigo pass pinned exact request grammar, success
+payload, and error-code spellings that the implementation must satisfy. No
+assumption uses `Docs Only`; A1 and A5 cite source search against the CLI gateway
+and error taxonomy, A2 cites the named MVV, A3-A4 cite peer RDR contracts, and A6
+names the rejected alternative. No evidence cites this RDR or its artifact
+directory as proof. Resolve found one implementation requirement rather than a
+refutation: text success payloads must be rendered through `respond.OK` or a
+respond-owned helper instead of direct Cobra printing.
 
 ### Scope Verification
 
