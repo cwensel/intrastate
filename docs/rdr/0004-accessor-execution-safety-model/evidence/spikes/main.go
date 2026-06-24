@@ -178,7 +178,16 @@ func gate(r registry, mode string) result {
 	})
 }
 
-func write(r registry, artifacts map[string]*artifact, name string, planned map[string]string, corrupt bool) result {
+type writeCorruption string
+
+const (
+	corruptNone     writeCorruption = ""
+	corruptOwned    writeCorruption = "owned"
+	corruptObserved writeCorruption = "observed"
+)
+
+func write(r registry, artifacts map[string]*artifact, planned map[string]string, corrupt writeCorruption) result {
+	name := "state.persist"
 	a, failure := r.lookup(name, writeCap)
 	if failure != nil {
 		return *failure
@@ -193,9 +202,13 @@ func write(r registry, artifacts map[string]*artifact, name string, planned map[
 		if !ok {
 			return &result{name: name, cap: writeCap, refusal: refusalExecutionFailure}
 		}
+		before := clone(art.tags)
 		maps.Copy(art.tags, planned)
-		if corrupt {
+		switch corrupt {
+		case corruptOwned:
 			art.tags["status"] = "corrupt"
+		case corruptObserved:
+			art.tags["profile"] = "small"
 		}
 		observed := clone(art.tags)
 		for k, v := range planned {
@@ -205,6 +218,20 @@ func write(r registry, artifacts map[string]*artifact, name string, planned map[
 					cap:      writeCap,
 					refusal:  refusalReadBackMismatch,
 					expected: clone(planned),
+					observed: observed,
+				}
+			}
+		}
+		for k, beforeValue := range before {
+			if _, owned := planned[k]; owned {
+				continue
+			}
+			if observed[k] != beforeValue {
+				return &result{
+					name:     name,
+					cap:      writeCap,
+					refusal:  refusalReadBackMismatch,
+					expected: before,
 					observed: observed,
 				}
 			}
@@ -282,8 +309,9 @@ func main() {
 		read(reg, artifacts, "slow.read"),
 		read(reg, artifacts, "missing.read"),
 		read(reg, artifacts, "state.persist"),
-		write(reg, artifacts, "state.persist", map[string]string{"status": "Final"}, false),
-		write(reg, newArtifacts(), "state.persist", map[string]string{"status": "Final"}, true),
+		write(reg, artifacts, map[string]string{"status": "Final"}, corruptNone),
+		write(reg, newArtifacts(), map[string]string{"status": "Final"}, corruptOwned),
+		write(reg, newArtifacts(), map[string]string{"status": "Final"}, corruptObserved),
 	}
 	for _, c := range cases {
 		fmt.Println(stableLine(c))
@@ -415,5 +443,5 @@ func replay(reg registry, injectRefusal bool) result {
 	if gateResult.gate != "allow" {
 		return gateResult
 	}
-	return write(reg, artifacts, "state.persist", map[string]string{"status": "Final"}, false)
+	return write(reg, artifacts, map[string]string{"status": "Final"}, corruptNone)
 }

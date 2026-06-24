@@ -7,6 +7,7 @@ missing.read/read refusal=unknown_accessor
 state.persist/read refusal=capability_mismatch
 state.persist/write tags={status=Final}
 state.persist/write refusal=read_back_mismatch expected={status=Final} observed={profile=large,status=corrupt}
+state.persist/write refusal=read_back_mismatch expected={profile=large,status=Draft} observed={profile=small,status=Final}
 replay-identical=true first=state.persist/write tags={status=Final} second=state.persist/write tags={status=Final}
 replay-injected=state.gate/gate refusal=gate_indeterminate
 validation-ok=
