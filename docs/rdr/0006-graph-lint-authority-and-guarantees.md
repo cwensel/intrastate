@@ -233,7 +233,27 @@ view from normalized candidate rows: source rule ids/spans, source and target
 tag writes, recognized outcomes, guard constraints, terminal declarations, tag
 provenance, finite domains, and owned-tag write effects. Third, run invariant
 checks over that graph and collect typed findings. Fourth, emit either a success
-report or a structured `CLIError` failure through `respond`.
+report or one aggregate structured `CLIError` failure through `respond`.
+
+The lint engine boundary is an internal graph-lint package that receives a
+normalized graph value, not Cobra command state and not sparse TOML. The minimum
+input contract is:
+
+- model identity and version;
+- normalized candidate rows with deterministic row identity, source rule id,
+  optional source span, match predicates, guard predicates, writes, and clears;
+- declared tags with provenance, value kind, finite-domain metadata when
+  exhaustiveness is claimed, and single-valued grouping when applicable;
+- recognized outcome alphabet, declared terminal states, and declared escape
+  rows;
+- accessor references and context references only as normalized identifiers
+  needed for dangling-reference diagnostics.
+
+The authoritative command surface is `intrastate lint` over model files using
+the same graph-lint package. CI must run that production command shape for
+transition-model changes; hooks, wrappers, and future resolver-local validation
+flags may call it, but they do not define acceptance and must not use a separate
+rule set.
 
 The mandatory invariant set is:
 
@@ -261,6 +281,28 @@ available, source span when available, and a concise human message. Blocking
 findings make the command fail. Non-blocking advisories may exist for redundant
 rows or unreachable rules only if they do not weaken the mandatory acceptance
 gate.
+
+Mandatory blocking finding codes:
+
+| Invariant | Stable Code |
+| --- | --- |
+| Dangling edge/reference | `graph-dangling-edge` |
+| Dead end | `graph-dead-end` |
+| Determinism / overlap | `graph-overlap` |
+| Guard exhaustiveness / gap | `graph-coverage-gap` |
+| Required finite-domain proof unavailable | `graph-unprovable-coverage` |
+| Single-valued state violation | `graph-single-valued-state` |
+| Owned-set-before-match | `graph-owned-before-write` |
+| Declared terminal/escape handling | `graph-terminal-escape` |
+
+When one or more blocking findings exist, the command returns one aggregate
+`CLIError` with `Code: graph-lint-failed` and `Group: GroupUserEnv`. The
+wire-visible error may add an optional `findings` field to `CLIError` under the
+existing append-only `omitempty` envelope rule; each finding record carries its
+own stable code and identity. Text mode may summarize the same findings in
+`Detail`, but JSON mode must keep findings machine-readable. Success means no
+blocking findings for the supplied normalized model. Non-blocking advisories, if
+implemented, are warnings and do not change the success disposition.
 
 #### Normative Contracts
 
@@ -301,6 +343,19 @@ normalized model can provide one.
 ```
 
 ```normative
+Graph lint failure MUST return one aggregate `CLIError` with code
+`graph-lint-failed` and `GroupUserEnv`; the individual blocking findings MUST
+remain machine-readable in JSON mode through an append-only optional envelope
+field.
+```
+
+```normative
+Graph lint findings MUST be emitted in deterministic order by finding identity:
+model id, invariant code, source rule/context id or graph element id, then
+normalized predicate/write fingerprint.
+```
+
+```normative
 The authoritative CLI surface for graph acceptance MUST be `intrastate lint`
 or a same-engine CI invocation. Pre-commit hooks and resolver-local validation
 flags MAY call that engine, but MUST NOT define different acceptance rules.
@@ -318,6 +373,10 @@ or stderr.
   source rule/context id or graph element id, normalized predicate/write
   fingerprint)`. This makes repeated runs stable enough for review and tests
   without depending on source line numbers alone.
+- **Wire / byte format** — graph-lint failure uses aggregate
+  `CLIError.Code = "graph-lint-failed"` and individual finding codes from the
+  mandatory taxonomy above. JSON mode carries findings as append-only structured
+  data on the error envelope; text mode may render a concise detail summary.
 - **Naming** — the canonical command and subsystem name is "lint". Rejected:
   "validate" because it is too broad and collides with parse/schema validation;
   "`resolve --lint`" as the authority because it hides graph acceptance under a
@@ -369,7 +428,7 @@ Illustrative finding shape only:
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| Structured CLI failures | `internal/cli/clierr` | No graph-lint codes yet | Extend | Add stable lint failure codes mapped to an existing exit-code group unless Resolve proves a new group is needed. |
+| Structured CLI failures | `internal/cli/clierr` | No graph-lint codes yet | Extend | Add aggregate `graph-lint-failed` plus structured finding codes; model defects map to `GroupUserEnv`. |
 | Text/json output routing | `internal/cli/respond` | Existing gateway, no lint payload yet | Reuse | Success/failure output goes through `respond.OK` / `respond.Fail`. |
 | Command tree | `internal/cli` | No resolver/lint commands yet | Extend via RDR 0005 | Add lint command without bypassing command conventions. |
 | Transition graph model | none under `internal/` | Pending peer implementation | Introduce via RDR 0002 | Lint package depends on normalized graph API, not source TOML parsing. |
@@ -543,12 +602,19 @@ or source span.
 Add a fixture-backed lint invocation that uses the same command shape intended
 for CI. It must pass one legal transition model and fail one illegal model for
 each blocking invariant class named in this RDR, asserting stable finding codes
-and source rule/context identity in JSON mode.
+and source rule/context identity in JSON mode. The illegal fixture matrix must
+assert `graph-dangling-edge`, `graph-dead-end`, `graph-overlap`,
+`graph-coverage-gap`, `graph-unprovable-coverage`,
+`graph-single-valued-state`, `graph-owned-before-write`, and
+`graph-terminal-escape`. Every blocking run must return aggregate
+`CLIError.Code = graph-lint-failed` with `GroupUserEnv` exit behavior and a
+machine-readable finding list.
 
 ### Phase 1: Lint Boundary
 
 Define the lint package boundary over the normalized graph API and the finding
-taxonomy without introducing a second source parser.
+taxonomy without introducing a second source parser. The boundary accepts only a
+normalized graph value with the minimum fields listed in Technical Design.
 
 ### Phase 2: Invariant Engine
 
@@ -592,20 +658,32 @@ read-before-write checks, and A4 supplies the `respond`/`clierr` output path.
 1. **Scenario**: legal fixture model with all mandatory declarations and
    finite-domain coverage.
    **Expected**: `intrastate lint --as=json` succeeds through `respond.OK` and
-   reports no blocking findings.
+   reports no blocking findings. Non-blocking advisories, if present, are
+   warnings and do not change exit behavior.
 2. **Scenario**: illegal fixture models covering dangling edge, dead end,
    overlap, coverage gap, multi-valued state, owned-tag read-before-write, and
    undeclared terminal/escape handling.
-   **Expected**: each run fails through `respond.Fail` with a stable graph-lint
-   `CLIError.Code`, blocking severity, model id, and source rule/context id or
-   span when the normalized model provides one.
+   **Expected**: each run fails through `respond.Fail` with aggregate
+   `CLIError.Code = graph-lint-failed`, exit code 2, and a machine-readable
+   finding containing the exact stable code for that invariant, blocking
+   severity, model id, and source rule/context id or span when the normalized
+   model provides one.
 3. **Scenario**: a model claims closed coverage over an input dimension that is
    not finite under the predicate contract.
-   **Expected**: lint emits a blocking inability-to-prove finding instead of
-   silently accepting or weakening the coverage guarantee.
+   **Expected**: lint emits `graph-unprovable-coverage` instead of silently
+   accepting or weakening the coverage guarantee.
 4. **Scenario**: text and JSON modes for the same legal and illegal fixtures.
    **Expected**: both modes return the same semantic result and exit behavior
-   without direct stdout/stderr writes from the command.
+   without direct stdout/stderr writes from the command. JSON finding order is
+   deterministic by finding identity; text tests may assert equivalent
+   semantics without depending on paragraph wrapping.
+5. **Scenario**: a finding whose normalized row lacks a rule id but has a source
+   span or graph element id.
+   **Expected**: the finding remains actionable and stable by carrying the
+   available source span or graph element id in the identity fields.
+6. **Scenario**: CI-shaped invocation.
+   **Expected**: the validation path invokes the production `intrastate lint`
+   command, not a hook-only wrapper or alternate rule implementation.
 
 ### Performance Expectations
 
