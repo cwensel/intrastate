@@ -145,8 +145,8 @@ the verb set.
     loop.
   - **If wrong**: Skill authors would still re-implement part of transition or
     state-binding logic outside intrastate.
-- **A3 `next` can expose the legal-outcome alphabet without evaluating
-  conditionals owned by guards or accessors.**
+- **A3 `next` can expose the legal-outcome alphabet without owning guard
+  semantics or hiding unresolved facts.**
   - **Status**: Verified
   - **Method**: Peer RDR
   - **Evidence**: RDR 0002 `Technical Design` defines a recognized outcome
@@ -154,25 +154,22 @@ the verb set.
     0002 `Normative Contracts` requires exact-one matching and refusals for zero
     or multiple matches. RDR 0003 `Approach` and `Technical Design` make guard
     facts symbolic tag-set predicates owned outside this CLI. Therefore `next`
-    can enumerate the alphabet and conditional row summaries while leaving
-    missing guard/accessor facts unevaluated.
+    can enumerate the alphabet, surface supplied or unresolved facts, and map
+    accessor refusals without becoming the owner of guard truth.
   - **If wrong**: The CLI would either under-inform constrained decoding or
     incorrectly become the owner of conditional evaluation.
-- **A4 `resolve` can remain pure over supplied tags and model data, with
-  artifact binding handled by `read-state` / `set-state`.**
-  - **Status**: Verified
+- **A4 The resolver kernel can remain pure while the CLI binds accessors only at
+  verb boundaries.**
+  - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0001 `Approach` and `Normative Contracts` require the
-    resolver kernel to receive explicit table, owned snapshot, observed tags,
-    and recognized outcome inputs, and to avoid artifact discovery, accessor
-    execution, output, subflows, and persistence. RDR 0004 `Technical Design` and
-    `Normative Contracts` distinguish read accessors, which return typed tag
-    values, from gate accessors, which return allow/deny/indeterminate, and
-    place caller-supplied artifact roles plus same-role write read-back
-    verification in the accessor executor. Therefore `flow read-state` must bind
-    only read accessors for tag-set reads, while gate accessor results surface as
-    resolver/`next` candidate facts or typed CLI refusals rather than as
-    `read-state` tag payloads.
+  - **Evidence**: Stage 6 must re-check this against RDR 0001 and RDR 0004 after
+    the 3amigo iter-3 fix: RDR 0001 keeps the kernel free of artifact discovery
+    and accessor execution; RDR 0004 distinguishes read accessors, gate
+    accessors, and write accessors. The intended contract is that `flow
+    read-state` binds only read accessors, `flow next` / `flow resolve` may
+    invoke declared gate accessors from caller-supplied artifact bindings before
+    calling the pure kernel, and `flow set-state` binds only planned write
+    accessors with read-back.
   - **If wrong**: The CLI would have to mix artifact discovery, accessor
     execution, and kernel selection in one command, weakening replay safety.
 - **A5 Stable CLI error codes can distinguish bad input, unknown outcome,
@@ -295,11 +292,15 @@ is human-scannable but still derived from the same request/response structs as
 JSON mode.
 
 State binding is explicit. Commands accept a model or flow identifier plus
-state tags supplied as repeated `--tag name=value` flags in the MVP, and accept
-artifact role bindings only for accessor verbs. A later structured input file
-may add bulk tag input, but it is not required for the first implementation
-slice. The chosen approach deliberately avoids ambient artifact discovery in
-`resolve`; location belongs to accessor I/O, not to the pure resolver.
+state tags supplied as repeated `--tag name=value` flags in the MVP. Commands
+that need accessor execution accept caller-supplied artifact role bindings as
+`--artifact role=path`: `read-state` for read accessors, `next` / `resolve` for
+declared gate accessors needed to evaluate candidate facts, and `set-state` for
+write accessors plus read-back. A later structured input file may add bulk tag
+input, but it is not required for the first implementation slice. The chosen
+approach deliberately avoids ambient artifact discovery in `resolve`; location
+comes only from explicit artifact bindings, and the resolver kernel remains
+pure over model data, supplied facts, and accessor results.
 
 The four verbs share a small error taxonomy. Input and config errors remain in
 `GroupUserEnv`. External/accessor unavailability uses `GroupEnvUnavailable` when
@@ -311,10 +312,10 @@ fields.
 The MVP request grammar is intentionally narrow. `--flow <id>` selects the model
 or flow definition. `--tag name=value` supplies one scalar tag fact; duplicate
 tag names in the same request are refused until the transition-model layer
-exposes a first-class structured literal for set-valued tags. Accessor verbs
-also accept `--artifact role=path`, where `role` is the model-declared artifact
-role and `path` is the caller-owned artifact path supplied to the accessor
-executor. `flow set-state` accepts planned owned-tag mutations as
+exposes a first-class structured literal for set-valued tags. Verbs that invoke
+accessors accept `--artifact role=path`, where `role` is the model-declared
+artifact role and `path` is the caller-owned artifact path supplied to the
+accessor executor. `flow set-state` accepts planned owned-tag mutations as
 `--write name=value`; those writes are distinct from `--tag`, which remains
 context already known to the caller.
 
@@ -325,10 +326,12 @@ The minimum `data` shape is:
   `candidates[]`. Each outcome has the recognized outcome tag and optional
   recognizer text supplied by the model. Each candidate summary has source rule
   identity, the recognized outcome it belongs to, required supplied facts,
-  unresolved guard/accessor facts, and preview next tags or write targets when
-  the normalized model exposes them without evaluating missing facts.
+  unresolved guard/accessor facts, evaluated gate facts when artifact bindings
+  were supplied, and preview next tags or write targets when the normalized model
+  exposes them without evaluating missing facts.
 - `resolve`: selected flow/model identity, supplied tags, recognized outcome,
-  matched rule identity, next tags, and planned owned-tag writes.
+  artifact role bindings used for gate facts, matched rule identity, next tags,
+  and planned owned-tag writes.
 - `read-state`: selected flow/model identity, artifact role bindings, read
   accessor identities, and read tags.
 - `set-state`: selected flow/model identity, artifact role bindings, requested
@@ -363,13 +366,20 @@ flow next MUST return the legal recognized-outcome alphabet for the supplied
 state tag-set, plus candidate summaries containing source rule identity,
 required supplied facts, unresolved guard/accessor facts, and preview next tags
 or write targets when those can be read from normalized model data without
-evaluating missing facts. It MUST NOT evaluate guard facts that were not
-supplied.
+evaluating missing facts. When the selected model references declared gate
+accessors and the caller supplies matching `role=path` artifact bindings, `flow
+next` MAY invoke those gate accessors through the RDR 0004 executor and surface
+allow/deny/indeterminate as candidate facts or stable CLIError refusals. It MUST
+NOT invent guard facts that were neither supplied nor produced by a declared
+gate accessor.
 
 flow resolve MUST return exactly one resolved next tag-set or exactly one
 CLIError refusal mapped from the resolver kernel. It MUST NOT discover
-artifacts, run accessors, print directly, initiate skill work, or choose among
-multiple matching rows.
+artifacts, run read/write accessors, print directly, initiate skill work, or
+choose among multiple matching rows. It MAY invoke declared gate accessors from
+caller-supplied `role=path` artifact bindings before the pure kernel call when
+the matched candidate requires a gate fact; gate denied or indeterminate results
+MUST surface as stable CLIError refusals.
 
 flow read-state MUST invoke only declared read accessors over caller-supplied
 `role=path` artifact bindings and return the read tag-set or a stable CLIError
@@ -640,8 +650,10 @@ model before broad config discovery.
 
 ### Phase 3: Accessor Binding
 
-Wire `read-state` and `set-state` to RDR 0004's accessor executor. Restrict
-`read-state` to declared read accessors, and preserve gate-indeterminate and
+Wire `next`, `resolve`, `read-state`, and `set-state` to RDR 0004's accessor
+executor only for the capability each verb may invoke. Restrict `read-state` to
+declared read accessors, allow `next` / `resolve` to request declared gate
+accessors from explicit artifact bindings, and preserve gate-indeterminate and
 read-back failures as typed CLI refusals from the verb path that invoked them.
 
 ### Phase 4: Error Taxonomy And Docs
@@ -682,8 +694,9 @@ typed refusal mapping for each verb.
    JSON includes `outcomes[]` and `candidates[]`.
 2. **Scenario**: `flow resolve` over the fixture model with one recognized
    outcome that matches exactly one row.
-   **Expected**: the command returns the expected next tag-set and no artifact
-   binding is required or attempted.
+   **Expected**: the command returns the expected next tag-set and no read/write
+   accessor is attempted; when the matched row needs a gate fact, only a
+   declared gate accessor over a supplied artifact binding may run.
 3. **Scenario**: `flow resolve` with an unknown outcome, zero-match row, and
    multi-match row.
    **Expected**: each refusal maps to a stable `CLIError.Code` and non-zero
@@ -694,8 +707,8 @@ typed refusal mapping for each verb.
    invokes only declared read accessors and returns the artifact tag-set, and
    `--write name=value` mutations report success only after read-back
    verification proves the expected owned-tag values.
-5. **Scenario**: read accessor unavailable, gate indeterminate during accessor
-   fact evaluation, and write read-back mismatch.
+5. **Scenario**: read accessor unavailable, gate indeterminate during `next` /
+   `resolve` accessor fact evaluation, and write read-back mismatch.
    **Expected**: each failure remains a typed CLI refusal, not a successful
    transition or a coerced `read-state` tag payload.
 
@@ -731,15 +744,17 @@ shape and surface through candidate summaries or typed refusals.
 
 ### Assumption Verification
 
-A1-A5 are Verified and each has a non-empty "If wrong" branch. A6 is Accepted as
-a design decision because the 3amigo pass pinned exact request grammar, success
-payload, and error-code spellings that the implementation must satisfy. No
-assumption uses `Docs Only`; A1 and A5 cite source search against the CLI gateway
-and error taxonomy, A2 cites the named MVV, A3-A4 cite peer RDR contracts, and A6
-names the rejected alternative. No evidence cites this RDR or its artifact
-directory as proof. Resolve found one implementation requirement rather than a
-refutation: text success payloads must be rendered through `respond.OK` or a
-respond-owned helper instead of direct Cobra printing.
+A1-A3 and A5 are Verified and each has a non-empty "If wrong" branch. A4 is
+Pending after the 3amigo iter-3 gate-accessor fix and must be rechecked against
+RDR 0001 and RDR 0004 before re-lock. A6 is Accepted as a design decision
+because the 3amigo pass pinned exact request grammar, success payload, and
+error-code spellings that the implementation must satisfy. No assumption uses
+`Docs Only`; A1 and A5 cite source search against the CLI gateway and error
+taxonomy, A2 cites the named MVV, A3 cites peer RDR contracts, and A6 names the
+rejected alternative. No evidence cites this RDR or its artifact directory as
+proof. Resolve found one implementation requirement rather than a refutation:
+text success payloads must be rendered through `respond.OK` or a respond-owned
+helper instead of direct Cobra printing.
 
 ### Scope Verification
 
