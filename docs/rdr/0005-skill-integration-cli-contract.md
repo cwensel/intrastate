@@ -182,6 +182,17 @@ the verb set.
     `Code` constants or literals, not new envelope fields or exit groups.
   - **If wrong**: Scripted skill calls could not branch deterministically on
     resolver failure classes.
+- **A6 The pinned MVP request grammar, minimum success payload fields, and
+  stable flow error-code spellings are sufficient for the first fixture-backed
+  CLI implementation.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Run the Minimum Viable Validation through the production Cobra
+    path with repeated `--tag name=value`, `--artifact role=path`, and
+    `--write name=value`; assert the JSON `data` fields named in Technical
+    Design and the minimum `flow-*` error codes named in Failure Modes.
+  - **If wrong**: Implementers would still need to invent request grammar,
+    payload fields, or error-code spellings during code work.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -266,10 +277,11 @@ is human-scannable but still derived from the same request/response structs as
 JSON mode.
 
 State binding is explicit. Commands accept a model or flow identifier plus
-state tags supplied as flags or a structured input file, and accept artifact
-role bindings only for accessor verbs. The chosen approach deliberately avoids
-ambient artifact discovery in `resolve`; location belongs to accessor I/O, not
-to the pure resolver.
+state tags supplied as repeated `--tag name=value` flags in the MVP, and accept
+artifact role bindings only for accessor verbs. A later structured input file
+may add bulk tag input, but it is not required for the first implementation
+slice. The chosen approach deliberately avoids ambient artifact discovery in
+`resolve`; location belongs to accessor I/O, not to the pure resolver.
 
 The four verbs share a small error taxonomy. Input and config errors remain in
 `GroupUserEnv`. External/accessor unavailability uses `GroupEnvUnavailable` when
@@ -277,6 +289,35 @@ the environment, not the model, is unavailable. Internal parse or invariant
 failures use the existing internal/user-env mapping unless Resolve finds a need
 for a narrower group. Error envelopes stay append-only through `CLIError`
 fields.
+
+The MVP request grammar is intentionally narrow. `--flow <id>` selects the model
+or flow definition. `--tag name=value` supplies one scalar tag fact; duplicate
+tag names in the same request are refused until the transition-model layer
+exposes a first-class structured literal for set-valued tags. Accessor verbs
+also accept `--artifact role=path`, where `role` is the model-declared artifact
+role and `path` is the caller-owned artifact path supplied to the accessor
+executor. `flow set-state` accepts planned owned-tag mutations as
+`--write name=value`; those writes are distinct from `--tag`, which remains
+context already known to the caller.
+
+Successful JSON payloads use the existing `{"type":"ok","data":...}` envelope.
+The minimum `data` shape is:
+
+- `next`: selected flow/model identity, supplied tags, `outcomes[]`, and
+  `candidates[]`. Each outcome has the recognized outcome tag and optional
+  recognizer text supplied by the model. Each candidate summary has source rule
+  identity, the recognized outcome it belongs to, required supplied facts,
+  unresolved guard/accessor facts, and preview next tags or write targets when
+  the normalized model exposes them without evaluating missing facts.
+- `resolve`: selected flow/model identity, supplied tags, recognized outcome,
+  matched rule identity, next tags, and planned owned-tag writes.
+- `read-state`: selected flow/model identity, artifact role bindings, and read
+  tags.
+- `set-state`: selected flow/model identity, artifact role bindings, requested
+  owned-tag writes, and read-back-confirmed owned-tag values.
+
+Text mode renders the same result content in a human-scannable order; it does
+not invent fields absent from the JSON payload.
 
 Sibling-path check for a new discriminator or identity rule found no existing
 resolver CLI signal in `internal/`. The adjacent decision signal is the
@@ -301,9 +342,11 @@ result. Failures MUST use the existing CLIError JSON/text envelope defined by
 docs/cli-output-contract.md and internal/cli/clierr.
 
 flow next MUST return the legal recognized-outcome alphabet for the supplied
-state tag-set, plus conditional next summaries when more than one next tag-set
-depends on unresolved guard/accessor facts. It MUST NOT evaluate guard facts
-that were not supplied.
+state tag-set, plus candidate summaries containing source rule identity,
+required supplied facts, unresolved guard/accessor facts, and preview next tags
+or write targets when those can be read from normalized model data without
+evaluating missing facts. It MUST NOT evaluate guard facts that were not
+supplied.
 
 flow resolve MUST return exactly one resolved next tag-set or exactly one
 CLIError refusal mapped from the resolver kernel. It MUST NOT discover
@@ -311,12 +354,14 @@ artifacts, run accessors, print directly, initiate skill work, or choose among
 multiple matching rows.
 
 flow read-state MUST invoke only declared read or gate accessors over
-caller-supplied artifact role bindings and return the read tag-set or a stable
-CLIError failure.
+caller-supplied `role=path` artifact bindings and return the read tag-set or a
+stable CLIError failure.
 
 flow set-state MUST invoke only declared write accessors over caller-supplied
-artifact role bindings and report success only after the accessor layer's
-read-back verification confirms the expected owned-tag values.
+`role=path` artifact bindings and planned owned-tag `--write name=value`
+mutations. It MUST report success only after the accessor layer's read-back
+verification confirms the expected owned-tag values. It MUST NOT treat
+context-only `--tag` values as writes.
 ```
 
 #### Load-Bearing Decisions
@@ -353,8 +398,8 @@ Illustrative invocation shapes:
 ```sh
 intrastate flow next --flow rdr --tag stage=resolve --tag profile=small --as=json
 intrastate flow resolve --flow rdr --tag stage=prelock --tag iter=2 --outcome verdict-flapping
-intrastate flow read-state --flow rdr --artifact state:RDR_FILE
-intrastate flow set-state --flow rdr --artifact state:RDR_FILE --tag status=Final
+intrastate flow read-state --flow rdr --artifact state=./docs/rdr/0005-skill-integration-cli-contract.md
+intrastate flow set-state --flow rdr --artifact state=./docs/rdr/0005-skill-integration-cli-contract.md --write status=Final
 ```
 
 ### Capability Dependencies
@@ -507,8 +552,8 @@ for skills, not an orchestrator.
   **Mitigation**: Derive both renderings from one typed result per verb and
   test both modes.
 - **Risk**: `set-state` is mistaken for an orchestration command.
-  **Mitigation**: It only persists supplied next tags through declared write
-  accessors and depends on RDR 0004 read-back verification.
+  **Mitigation**: It only persists planned owned-tag `--write` mutations through
+  declared write accessors and depends on RDR 0004 read-back verification.
 
 ### Failure Modes
 
@@ -517,6 +562,23 @@ unknown outcome, zero matching row, multiple matching rows, missing supplied
 guard facts, accessor unavailable, gate indeterminate, and write read-back
 mismatch. Each should surface as one `CLIError.Code` with a clear message,
 detail, and hint where useful.
+
+Minimum stable code strings:
+
+| Failure | Code | Group |
+| --- | --- | --- |
+| malformed `--tag` / `--write` | `flow-tag-invalid` | `GroupUserEnv` |
+| duplicate supplied tag name | `flow-tag-duplicate` | `GroupUserEnv` |
+| malformed `--artifact` binding | `flow-artifact-invalid` | `GroupUserEnv` |
+| selected flow/model not found | `flow-model-not-found` | `GroupUserEnv` |
+| recognized outcome absent from model alphabet | `flow-outcome-unknown` | `GroupUserEnv` |
+| resolver found no matching row | `flow-zero-match` | `GroupUserEnv` |
+| resolver found multiple matching rows | `flow-multi-match` | `GroupUserEnv` |
+| required supplied fact is missing | `flow-fact-missing` | `GroupUserEnv` |
+| guard cannot be evaluated from supplied facts | `flow-guard-unevaluable` | `GroupUserEnv` |
+| accessor cannot run because its environment is unavailable | `flow-accessor-unavailable` | `GroupEnvUnavailable` |
+| accessor gate result is indeterminate | `flow-gate-indeterminate` | `GroupUserEnv` |
+| write read-back does not confirm expected owned tags | `flow-write-readback-mismatch` | `GroupUserEnv` |
 
 The main silent-failure risk is treating a failed accessor or ambiguous row as a
 successful transition. The recovery path is refusal-first: the command exits
@@ -529,7 +591,8 @@ failure comes from RDR 0004.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified
+- [ ] All Critical Assumptions verified; A1-A5 are verified, and A6 requires
+      the MVV before lock.
 - [x] RDR 0001, 0002, 0003, and 0004 expose enough internal contracts for the
       CLI to call without owning their semantics.
 - [ ] Add text success payload rendering through `respond.OK` or a
@@ -543,7 +606,8 @@ production Cobra path: `flow next` returns the legal outcome alphabet,
 `flow resolve` maps one outcome to one next tag-set, `flow read-state` reads the
 fixture artifact tags, and `flow set-state` persists a planned owned-tag write
 then read-back-verifies it. Run the same happy path and at least one typed
-refusal in `--as=text` and `--as=json`.
+refusal in `--as=text` and `--as=json`, including the MVP `--tag`,
+`--artifact`, and `--write` grammar.
 
 ### Phase 1: Command Contract Skeleton
 
@@ -594,7 +658,8 @@ typed refusal mapping for each verb.
 1. **Scenario**: `flow next` over the fixture model in `--as=json` and
    `--as=text`.
    **Expected**: both modes report the same recognized-outcome alphabet and
-   conditional summaries through the standard success envelope/rendering path.
+   candidate summaries through the standard success envelope/rendering path;
+   JSON includes `outcomes[]` and `candidates[]`.
 2. **Scenario**: `flow resolve` over the fixture model with one recognized
    outcome that matches exactly one row.
    **Expected**: the command returns the expected next tag-set and no artifact
@@ -605,7 +670,8 @@ typed refusal mapping for each verb.
    exit behavior under both output modes.
 4. **Scenario**: `flow read-state` and `flow set-state` over a fixture artifact
    and declared accessor roles.
-   **Expected**: reads return the artifact tag-set; writes report success only
+   **Expected**: `--artifact role=path` bindings are validated, reads return the
+   artifact tag-set, and `--write name=value` mutations report success only
    after read-back verification proves the expected owned-tag values.
 5. **Scenario**: accessor unavailable, gate indeterminate, and read-back
    mismatch.
@@ -642,13 +708,14 @@ binding; the proposed solution follows those boundaries.
 
 ### Assumption Verification
 
-A1-A5 are Verified and each has a non-empty "If wrong" branch. No assumption
-uses `Docs Only`; A1 and A5 cite source search against the CLI gateway and
-error taxonomy, A2 cites the named MVV, and A3-A4 cite peer RDR contracts. No
-evidence cites this RDR or its artifact directory as proof. Resolve found one
-implementation requirement rather than a refutation: text success payloads must
-be rendered through `respond.OK` or a respond-owned helper instead of direct
-Cobra printing.
+A1-A5 are Verified and each has a non-empty "If wrong" branch. A6 is Pending
+because the 3amigo pass pinned new exact request grammar, success payload, and
+error-code claims that need the MVV before lock. No assumption uses `Docs Only`;
+A1 and A5 cite source search against the CLI gateway and error taxonomy, A2 and
+A6 cite the named MVV, and A3-A4 cite peer RDR contracts. No evidence cites this
+RDR or its artifact directory as proof. Resolve found one implementation
+requirement rather than a refutation: text success payloads must be rendered
+through `respond.OK` or a respond-owned helper instead of direct Cobra printing.
 
 ### Scope Verification
 
