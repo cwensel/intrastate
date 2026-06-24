@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
@@ -743,10 +743,10 @@ should profile the invariant engine before changing the contract.
 
 ### Contradiction Check
 
-Pending Stage 7. Refine found no internal contradiction between the research and
-the proposed solution: the research points to a design-time validator over the
+No contradiction found. The research points to a design-time validator over the
 declared table, peer RDRs own the source/predicate/runtime seams, and the
-solution keeps graph acceptance in a blocking lint command.
+solution keeps graph acceptance in a blocking lint command while preserving
+runtime refusal for live input failures.
 
 ### Assumption Verification
 
