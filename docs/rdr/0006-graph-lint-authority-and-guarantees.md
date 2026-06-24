@@ -86,9 +86,9 @@ existing CLI output contract.
 - **Verified** — the normalized table and predicate contracts expose enough
   graph structure for lint to prove all mandatory invariants without reading
   sparse TOML directly.
-- **Verified** — a blocking `intrastate lint` command plus CI invocation is the
-  right authority surface; local hooks may call it but cannot be the source of
-  truth.
+- **Verified** — a blocking root command, `intrastate lint`, is the right
+  authority surface; local hooks and resolver-adjacent helpers may call it but
+  cannot be the source of truth.
 - **Verified** — the initial invariant set can be expressed as deterministic
   checks over normalized rows, declared tags/domains, declared terminals, and
   predecessor/write reachability.
@@ -149,13 +149,14 @@ existing CLI output contract.
     exit-code group before it can be authoritative in CI.
 - **A5 CI can run `intrastate lint` as the blocking graph-acceptance authority
   for transition model changes.**
-  - **Status**: Verified
-  - **Method**: MVV Test
-  - **Evidence**: Minimum Viable Validation names the CI-shaped
-    `intrastate lint` invocation as the proof: one legal model must pass, and
-    illegal fixtures for every blocking invariant class must fail through the
-    same production command shape, asserting stable codes and source
-    rule/context identity in JSON mode.
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: Verification must add the repository gate after the command
+    and fixture corpus exist: `make check` or `.github/workflows/ci.yml` must
+    invoke the built `intrastate lint` command over the checked-in transition
+    model or fixture corpus, and the captured run must show one legal model
+    passing plus illegal fixtures for every blocking invariant class failing
+    through the production command shape.
   - **If wrong**: The graph may be lintable locally but not enforced at the
     design-time boundary maintainers actually rely on.
 
@@ -214,11 +215,12 @@ runtime state-machine engine. A model is accepted only when every mandatory
 static invariant passes. A model with an invariant failure is rejected before it
 can be used by the resolver or accepted by CI.
 
-The authoritative surface is `intrastate lint` and its CI invocation. A
-pre-commit hook may call the same command for ergonomics, and a future resolver
-command may offer a validation-only flag for local convenience, but neither is
-the authority. The authority is the blocking lint result over model files using
-the existing CLI output envelope.
+The authoritative user-facing surface is the root command `intrastate lint`.
+A pre-commit hook may call the same command for ergonomics, and a future
+resolver-adjacent helper such as `intrastate flow lint` may exist for local
+convenience, but any helper or alias must share the same command/request builder
+and graph-lint engine. The authority is the blocking lint result over model
+files using the existing CLI output envelope.
 
 Runtime refusal remains separate. Lint proves that the designed graph has no
 known static defects; RDR 0001's kernel still refuses bad runtime inputs such
@@ -249,11 +251,14 @@ input contract is:
 - accessor references and context references only as normalized identifiers
   needed for dangling-reference diagnostics.
 
-The authoritative command surface is `intrastate lint` over model files using
-the same graph-lint package. CI must run that production command shape for
-transition-model changes; hooks, wrappers, and future resolver-local validation
-flags may call it, but they do not define acceptance and must not use a separate
-rule set.
+The authoritative command surface is the root command `intrastate lint` over
+model files using the same graph-lint package. This command is intentionally not
+hidden under RDR 0005's `flow` resolver group: `flow next` and `flow resolve`
+answer runtime resolver questions, while root `lint` is a design-time graph
+acceptance gate. CI must run that production command shape for transition-model
+changes; hooks, wrappers, aliases, and future resolver-local validation flags
+may call it, but they do not define acceptance and must not use a separate rule
+set.
 
 The mandatory invariant set is:
 
@@ -297,12 +302,15 @@ Mandatory blocking finding codes:
 
 When one or more blocking findings exist, the command returns one aggregate
 `CLIError` with `Code: graph-lint-failed` and `Group: GroupUserEnv`. The
-wire-visible error may add an optional `findings` field to `CLIError` under the
-existing append-only `omitempty` envelope rule; each finding record carries its
-own stable code and identity. Text mode may summarize the same findings in
-`Detail`, but JSON mode must keep findings machine-readable. Success means no
-blocking findings for the supplied normalized model. Non-blocking advisories, if
-implemented, are warnings and do not change the success disposition.
+implementation must extend `internal/cli/clierr.CLIError` with
+an optional typed `Findings` field serialized as `findings`, or an equivalently
+named respond/clierr-owned typed field, so JSON mode carries individual
+findings as structured data. Each finding record carries its own stable code and
+identity.
+Text mode may summarize the same findings in `Detail`, but JSON mode must keep
+findings machine-readable. Success means no blocking findings for the supplied
+normalized model. Non-blocking advisories, if implemented, are warnings and do
+not change the success disposition.
 
 #### Normative Contracts
 
@@ -345,8 +353,9 @@ normalized model can provide one.
 ```normative
 Graph lint failure MUST return one aggregate `CLIError` with code
 `graph-lint-failed` and `GroupUserEnv`; the individual blocking findings MUST
-remain machine-readable in JSON mode through an append-only optional envelope
-field.
+remain machine-readable in JSON mode through an append-only optional typed
+`findings` envelope field owned by `clierr`/`respond`, not through a verb-local
+wrapper or a text-only `Detail` string.
 ```
 
 ```normative
@@ -356,9 +365,10 @@ normalized predicate/write fingerprint.
 ```
 
 ```normative
-The authoritative CLI surface for graph acceptance MUST be `intrastate lint`
-or a same-engine CI invocation. Pre-commit hooks and resolver-local validation
-flags MAY call that engine, but MUST NOT define different acceptance rules.
+The authoritative CLI surface for graph acceptance MUST be the root command
+`intrastate lint` or a same-engine CI invocation of that command. Pre-commit
+hooks, aliases, and resolver-local validation flags MAY call that engine, but
+MUST NOT define different acceptance rules.
 ```
 
 ```normative
@@ -376,7 +386,8 @@ or stderr.
 - **Wire / byte format** — graph-lint failure uses aggregate
   `CLIError.Code = "graph-lint-failed"` and individual finding codes from the
   mandatory taxonomy above. JSON mode carries findings as append-only structured
-  data on the error envelope; text mode may render a concise detail summary.
+  data in a typed `findings` field on the error envelope; text mode may render a
+  concise detail summary.
 - **Naming** — the canonical command and subsystem name is "lint". Rejected:
   "validate" because it is too broad and collides with parse/schema validation;
   "`resolve --lint`" as the authority because it hides graph acceptance under a
@@ -591,11 +602,14 @@ or source span.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified
+- [ ] A5 CI gate verification pending: once `intrastate lint` and the fixture
+  corpus exist, prove the repository gate invokes the production command over
+  the checked-in transition model or lint fixture corpus.
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
-- [ ] RDR 0005 command placement is coherent enough to expose `intrastate lint`
-  without direct output.
+- [x] RDR 0005 command placement is coherent enough to expose root
+  `intrastate lint`: RDR 0005 owns runtime `flow` verbs and leaves graph lint
+  authority to this RDR.
 
 ### Minimum Viable Validation
 
@@ -623,8 +637,12 @@ provenance, declared terminals, and owned writes.
 
 ### Phase 3: CLI And CI Surface
 
-Expose `intrastate lint` through the existing Cobra/respond/clierr gateway and
-add the CI-shaped invocation to the validation path.
+Expose root `intrastate lint` through the existing Cobra/respond/clierr gateway.
+If any `flow lint` alias or resolver-local validation flag is added later, it
+must reuse the same request builder and graph-lint engine. Extend
+`clierr.CLIError`/`respond` with the typed optional findings field used by JSON
+mode. Add the CI-shaped production command invocation to `make check` or the
+GitHub workflow once the checked-in transition model or fixture corpus exists.
 
 ### Phase 4: Fixture Corpus
 
@@ -681,9 +699,16 @@ read-before-write checks, and A4 supplies the `respond`/`clierr` output path.
    span or graph element id.
    **Expected**: the finding remains actionable and stable by carrying the
    available source span or graph element id in the identity fields.
-6. **Scenario**: CI-shaped invocation.
-   **Expected**: the validation path invokes the production `intrastate lint`
-   command, not a hook-only wrapper or alternate rule implementation.
+6. **Scenario**: command placement.
+   **Expected**: root `intrastate lint` is the canonical tested command path.
+   Any alias or resolver-local helper uses the same request builder and
+   graph-lint engine, and tests fail if it accepts different flags or returns a
+   different semantic result.
+7. **Scenario**: CI-shaped invocation.
+   **Expected**: `make check` or `.github/workflows/ci.yml` invokes the
+   production `intrastate lint` command over the checked-in transition model or
+   fixture corpus, not a hook-only wrapper, unit-test-only engine path, or
+   alternate rule implementation.
 
 ### Performance Expectations
 
@@ -718,10 +743,12 @@ solution keeps graph acceptance in a blocking lint command.
 
 ### Assumption Verification
 
-A1-A5 are verified. None uses `Docs Only`, and none is stamped `Verified` on
-self-reference. A1-A3 are verified against peer RDR contracts, A4 is verified
-by source search against the CLI failure gateway, and A5 is
-covered by the named MVV command invocation.
+A1-A4 are verified. None uses `Docs Only`, and none is stamped `Verified` on
+self-reference. A1-A3 are verified against peer RDR contracts, and A4 is
+verified by source search against the CLI failure gateway. A5 is pending
+because CI authority cannot be verified until the command and checked-in model
+or fixture corpus exist; its verification plan is the repository gate spike
+named in A5 and the Validation scenarios.
 
 ### Scope Verification
 
@@ -734,7 +761,8 @@ invariant through the production command path.
 - **Versioning**: lint finding codes and JSON payload fields must be stable and
   append-only under the existing CLI output envelope.
 - **Build tool compatibility**: the authoritative check is the same
-  `intrastate lint` command CI can run after `make build`.
+  root `intrastate lint` command CI can run after `make build`; A5 remains
+  pending until that gate is wired and captured.
 - **Incremental adoption**: local hooks and resolver-local validation flags may
   call the lint engine later, but only the command/CI gate defines acceptance.
 - **Canonical-form / determinism**: deterministic claims are semantic finding
