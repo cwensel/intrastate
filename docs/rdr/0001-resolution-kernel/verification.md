@@ -39,3 +39,25 @@
 
 PASS — all three adversarial probes pass against the current implementation;
 no Phase 3c defect was found by this review.
+
+## Phase 3a — Chain-of-Verification
+
+- **Requirements challenged:** REQ-1 through REQ-39 and REQ-MVV (40 total).
+- **Independent violating inputs:** repeated identical tuples; provenance-name
+  collisions; zero, multiple, unavailable, unevaluable, and unmodeled
+  candidates; explicit and competing escapes; returned-plan mutation; changed
+  process arguments and environment; refusal-taxonomy and dependency-boundary
+  probes.
+- **FAIL-N entries:** None.
+- **Probe commands:**
+  - `gofmt -w .run-rdr/cove/main.go && go run ./.run-rdr/cove`
+  - `go list -f '{{join .Imports "\n"}}' ./internal/resolver`
+- **Observed probe result:**
+  `PASS legal/provenance/replay/copy/refusals/escapes/ambient/taxonomy`;
+  the resolver package's only direct import is the standard-library `maps`
+  package.
+
+## Phase 3a Verdict
+
+PASS — all 40 requirements were challenged independently; zero implementation
+violations and zero FAIL-N entries were found.
