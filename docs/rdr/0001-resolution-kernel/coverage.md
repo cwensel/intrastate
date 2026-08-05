@@ -63,3 +63,22 @@ Test file: `internal/resolver/resolver_test.go`
 - Numbered requirements covered: 39 of 39, plus REQ-MVV.
 - REQ-MVV runner after implementation:
   `go test ./internal/resolver -run '^TestResolve_MinimumViableValidation$'`.
+
+## Phase 2 implementation validation
+
+- Package command: `go test ./internal/resolver`
+- Package result: `ok github.com/newcoinc/intrastate/internal/resolver`
+- Full-suite command: `go test ./...`
+- Full-suite result: PASS for all packages.
+- Project gate command: `make check`
+- Project gate result: PASS (`go vet`, `golangci-lint` with 0 issues, and
+  race-enabled atomic coverage tests; resolver coverage 92.6%).
+- REQ-MVV command:
+  `go test -v ./internal/resolver -run '^TestResolve_MinimumViableValidation$'`
+- REQ-MVV actual result: PASS. The value-level replay assertion
+  `reflect.DeepEqual(first, second)` passed for the complete disposition, and
+  the `no_match`, `ambiguous_match`, `owned_state_unavailable`,
+  `guard_unevaluable`, and `unmodeled_outcome` value-refusal subtests each
+  passed without using the Go error path.
+- Orphan audit after implementation: unchanged; every REQ has a green behavior
+  test and every behavior test has at least one REQ header.
