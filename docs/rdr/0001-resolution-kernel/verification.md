@@ -50,7 +50,7 @@ no Phase 3c defect was found by this review.
   probes.
 - **FAIL-N entries:** None.
 - **Probe commands:**
-  - `gofmt -w .run-rdr/cove/main.go && go run ./.run-rdr/cove`
+  - `go test ./internal/resolver`
   - `go list -f '{{join .Imports "\n"}}' ./internal/resolver`
 - **Observed probe result:**
   `PASS legal/provenance/replay/copy/refusals/escapes/ambient/taxonomy`;
