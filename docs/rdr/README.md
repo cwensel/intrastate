@@ -9,12 +9,12 @@ engine README — this file is only the per-project index.
 
 | ID | Title | Status | Priority |
 | --- | --- | --- | --- |
-| 0001 | Resolution kernel | Final | — |
-| 0002 | Transition table as reviewable data | Final | High |
-| 0003 | Guard predicate exhaustiveness | Final | — |
-| 0004 | Accessor execution safety model | Final | — |
-| 0005 | Skill integration CLI contract | Final | High |
-| 0006 | Graph lint authority and guarantees | Final | — |
+| [0001](0001-resolution-kernel.md) | Resolution kernel | Final | — |
+| [0002](0002-transition-table-as-reviewable-data.md) | Transition table as reviewable data | Final | High |
+| [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final | — |
+| [0004](0004-accessor-execution-safety-model.md) | Accessor execution safety model | Final | — |
+| [0005](0005-skill-integration-cli-contract.md) | Skill integration CLI contract | Final | High |
+| [0006](0006-graph-lint-authority-and-guarantees.md) | Graph lint authority and guarantees | Final | — |
 
 ## Status legend
 
