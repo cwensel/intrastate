@@ -28,6 +28,7 @@ func legalInput() resolver.Input {
 			Name:  "outcome",
 			Value: "successful",
 		},
+		Outcomes: []string{"successful"},
 		Table: []resolver.Edge{
 			{
 				Outcome: "successful",
@@ -219,6 +220,22 @@ func TestResolve_ReturnsInertOwnedTagWrites(t *testing.T) {
 func TestResolve_RefusesUnmodeledOutcome(t *testing.T) {
 	t.Parallel()
 	assertRefusal(t, unmodeledOutcomeInput(), resolver.RefusalUnmodeledOutcome)
+}
+
+func TestResolve_RefusesDeclaredOutcomeWithoutCandidateRowAsNoMatch(t *testing.T) {
+	t.Parallel()
+
+	input := legalInput()
+	input.Table = []resolver.Edge{}
+	assertRefusal(t, input, resolver.RefusalNoMatch)
+}
+
+func TestResolve_RefusesUndeclaredOutcomeDespiteCandidateRow(t *testing.T) {
+	t.Parallel()
+
+	input := unmodeledOutcomeInput()
+	input.Table = append(input.Table, resolver.Edge{Outcome: "abandoned"})
+	assertRefusal(t, input, resolver.RefusalUnmodeledOutcome)
 }
 
 // REQ-14: "The kernel MUST refuse instead of guessing when no edge matches, more than one edge matches, required owned state is unavailable, a guard cannot be evaluated, or the recognized outcome is not modeled by the table."

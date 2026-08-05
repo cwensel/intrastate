@@ -23,6 +23,7 @@ func TestResolveAdversarialRefusesInsteadOfGuessing(t *testing.T) {
 			in: resolver.Input{
 				Owned:      resolver.OwnedSnapshot{Available: true},
 				Recognized: resolver.Tag{Name: "result", Value: "accepted"},
+				Outcomes:   []string{"accepted"},
 				Table: []resolver.Edge{
 					{Outcome: "accepted"},
 					{Outcome: "accepted", Guard: resolver.Guard{Unevaluable: true}},
@@ -35,6 +36,7 @@ func TestResolveAdversarialRefusesInsteadOfGuessing(t *testing.T) {
 			in: resolver.Input{
 				Owned:      resolver.OwnedSnapshot{Available: true},
 				Recognized: resolver.Tag{Name: "result", Value: "accepted"},
+				Outcomes:   []string{"accepted"},
 				Table: []resolver.Edge{
 					{Outcome: "accepted"},
 					{Outcome: "accepted"},
@@ -128,6 +130,7 @@ func TestResolveAdversarialNoMatchEscapes(t *testing.T) {
 			got, err := resolver.Resolve(resolver.Input{
 				Owned:      resolver.OwnedSnapshot{Available: true},
 				Recognized: resolver.Tag{Name: "result", Value: "accepted"},
+				Outcomes:   []string{"accepted"},
 				Table:      tt.table,
 			})
 			if err != nil {
@@ -169,6 +172,7 @@ func TestResolveAdversarialReturnedPlanCannotMutateReplay(t *testing.T) {
 				TableRevision: "rev-1",
 				Owned:         resolver.OwnedSnapshot{Available: true},
 				Recognized:    resolver.Tag{Name: "result", Value: "accepted"},
+				Outcomes:      []string{"accepted"},
 				Table: []resolver.Edge{
 					{
 						Outcome:  "accepted",

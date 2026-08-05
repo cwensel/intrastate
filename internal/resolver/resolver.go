@@ -1,7 +1,10 @@
 // Package resolver provides the pure transition-resolution kernel.
 package resolver
 
-import "maps"
+import (
+	"maps"
+	"slices"
+)
 
 // TagSet is a state snapshot keyed by tag name.
 type TagSet map[string]string
@@ -62,7 +65,7 @@ const (
 	RefusalOwnedStateUnavailable RefusalKind = "owned_state_unavailable"
 	// RefusalGuardUnevaluable means a relevant symbolic guard could not be evaluated.
 	RefusalGuardUnevaluable RefusalKind = "guard_unevaluable"
-	// RefusalUnmodeledOutcome means the table has no row for the recognized outcome.
+	// RefusalUnmodeledOutcome means the recognized outcome is outside the declared alphabet.
 	RefusalUnmodeledOutcome RefusalKind = "unmodeled_outcome"
 )
 
@@ -82,6 +85,7 @@ type Input struct {
 	Owned         OwnedSnapshot
 	Observed      TagSet
 	Recognized    Tag
+	Outcomes      []string
 	Table         []Edge
 }
 
@@ -108,7 +112,7 @@ func Resolve(input Input) (Disposition, error) {
 		return refuse(RefusalOwnedStateUnavailable), nil
 	}
 
-	if !modelsOutcome(input.Table, input.Recognized.Value) {
+	if !modelsOutcome(input.Outcomes, input.Recognized.Value) {
 		return refuse(RefusalUnmodeledOutcome), nil
 	}
 
@@ -139,13 +143,8 @@ func Resolve(input Input) (Disposition, error) {
 	return refuse(failedKind), nil
 }
 
-func modelsOutcome(table []Edge, outcome string) bool {
-	for _, edge := range table {
-		if edge.Outcome == outcome {
-			return true
-		}
-	}
-	return false
+func modelsOutcome(outcomes []string, outcome string) bool {
+	return slices.Contains(outcomes, outcome)
 }
 
 func matchingEdges(input Input, escapeFor RefusalKind) ([]Edge, bool) {
