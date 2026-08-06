@@ -7,13 +7,13 @@
   and deterministic expansion suffix.
 - RDR 0005 `Technical Design`: the `flow resolve` payload includes "matched
   rule identity."
-- Stateless `src/Stateless/Transition.cs::Transition`: one successful
-  transition value exposes get-only `Source`, `Destination`, and `Trigger`.
-- uscxml `src/uscxml/interpreter/LargeMicroStep.h::Transition` and
-  `LargeMicroStep.cpp` take-transitions block: the selected transition retains
-  its source element/context and the same element reaches before/after monitor
-  callbacks. `WrappedInterpreterMonitor.cpp::afterTakingTransition` derives an
-  XPath, source, and targets from that selected element.
+- qmuntal-stateless `statemachine.go::internalFireOne` and
+  `::handleTransitioningTrigger`: selection constructs one
+  `Transition{Source, Destination, Trigger}` and passes it through execution
+  and transition callbacks.
+- scxmlcc `doc/user-manual.md::Transition` and
+  `::Custom Actions and Conditions`: a transition may omit a target while its
+  executable content remains a separately modeled choice.
 
 ## Queries
 
@@ -31,16 +31,38 @@
    from transition selection into execution result diagnostics audit trace`.
 6. Arc, `StateMachineLit`: `SCXML selectTransitions enabled transition set
    transition element source state execution microstep`.
+7. Arc, `StateMachineLit`: `SCXML targetless transition no target state
+   configuration executable content successful transition semantics`.
+8. Web, W3C-only: `targetless transition no target state configuration
+   executable content` and `transition without target executable content
+   internal transition`.
 
 ## Rejected branches
 
 - The two `StateMachineLit` queries found general next-configuration,
   observability, and event-history material but no load-bearing carrier design;
   none is cited as support for the choice.
-- Returning the entire selected transition/Edge was not adopted from uscxml:
+- Returning the entire selected transition/Edge was not adopted from the prior
+  art:
   intrastate callers do not need guard or normalized-table internals.
 - Reconstructing rule identity in the CLI was rejected because it introduces a
   second lookup that can disagree with the edge actually selected.
+- The additional `StateMachineLit` query returned general statechart semantics
+  but no direct carrier contract.
+- The formerly accepted Stateless and uscxml clone anchors were removed when a
+  cold-path refresh found neither clone in the configured corpora or local
+  prior-art checkout. Their exact selected-rule/source-locator claim is not
+  carried forward.
+
+## Stage 2 re-entry disposition
+
+The revised candidate set treats selected-rule identity and action as separate
+questions. Ordinary selection remains a successful plan with identity and
+action. An exactly-one escape preserves its underlying refusal kind and carries
+the selected escape row's identity, but no action; unmodeled kernel refusals
+carry neither selection nor action. Successful no-change action, a third public
+modeled-escape branch, and disposition-level optional identity were rejected by
+the scored matrix in the RDR.
 
 ## Stage 4 cold-path re-resolution record
 
@@ -93,3 +115,44 @@
 - A6 is contradicted, not merely uncited: RDR 0001 and current `Resolve` make an
   exactly-one escape successful, while RDR 0002 forbids escape action fields.
   Resolve must return to Stage 2/3 to choose one cross-RDR meaning.
+
+## Stage 4 external-evidence refresh
+
+### Accepted anchors
+
+- qmuntal-stateless `statemachine.go::internalFireOne` and
+  `::handleTransitioningTrigger`: source, destination, and trigger are carried
+  from selection into execution and transition callbacks.
+- scxmlcc `doc/user-manual.md::Transition` and
+  `::Custom Actions and Conditions`: target and executable content are
+  independent transition properties; a targetless transition can still have
+  an authored action.
+
+### Queries
+
+1. Arc, `StateMachineOS`: `selected transition object retains transition
+   identity source context from selection through execution monitoring
+   diagnostics`.
+2. Arc, `OpenSource`: `state machine selected transition carries source
+   destination trigger metadata into transition execution notification`.
+3. Arc, `DevRefOS`: `selected transition object retains source destination
+   trigger identity context into execution monitor callbacks state machine`.
+4. Arc, `StateMachineRes`: `selected transition identity source destination
+   trigger context carried through execution diagnostics monitoring`.
+5. Arc, `StateMachineLit`: `targetless transition no target state configuration
+   executable content semantics actionless refusal`.
+6. Arc, `StateMachineRes`: `targetless transition actionless transition refusal
+   no state change executable content semantics`.
+7. Arc, `DevRef`: `SCXML targetless transition does not change state
+   configuration invokes executable content`.
+8. Arc, `StateMachineLit`: `targetless internal transition executable content
+   action no state change transition semantics`.
+
+### Negative and rejected branches
+
+- Exact selected-rule/source-locator handoff: no surviving corpus evidence.
+  `StateMachineOS`, `OpenSource`, and `DevRefOS` were unavailable, and the
+  previously recorded Stateless/uscxml clone anchors were absent.
+- The surviving prior art supports direct transition-context handoff but does
+  not select or refute this RDR's split plan/refusal carrier. That taxonomy
+  remains a project design decision grounded in the RDR 0002 escape schema.
