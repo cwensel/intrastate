@@ -94,6 +94,17 @@ func TestResolveAdversarialNoMatchEscapes(t *testing.T) {
 			name: "exactly one no-match escape succeeds",
 			table: []resolver.Edge{
 				{
+					Outcome: "accepted",
+					Guard: resolver.Guard{All: []resolver.TagPredicate{
+						{
+							Provenance: resolver.ProvenanceRecognized,
+							Name:       "result",
+							Value:      "rejected",
+						},
+					}},
+					NextTags: resolver.TagSet{"selected": "ordinary"},
+				},
+				{
 					Outcome:   "accepted",
 					EscapeFor: resolver.RefusalNoMatch,
 					NextTags:  resolver.TagSet{"selected": "escape"},
