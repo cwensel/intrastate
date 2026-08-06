@@ -163,17 +163,19 @@ the scored matrix in the RDR.
 
 - `evidence/spikes/production-command.txt` →
   `evidence/spikes/production-output.txt`: the race-enabled external-package
-  probe proves that the current ordinary plan owns cloned action storage.
+  probe proves that the current ordinary plan owns cloned action storage and
+  directly confirms that production exposes no `SelectedRule` or typed source
+  locator on `Edge`, `TransitionPlan`, or `Refusal`.
 - `internal/resolver/resolver.go::Input` and `::Edge`: caller-owned `[]Edge`
   storage and exported row components remain the production construction
   boundary.
 
 ### Negative and rejected branches
 
-- A2 remains Pending: mutation before `Resolve` changes the selected row,
-  external callers can construct and replace row components, production has no
-  selected-rule or typed-locator value, and modeled escape still returns an
-  action-bearing plan.
+- A2 remains Pending: the production absence probe finds no selected-rule or
+  typed-locator value to copy; mutation before `Resolve` changes the selected
+  row, external callers can construct and replace row components, and modeled
+  escape still returns an action-bearing plan.
 - The green ordinary-copy case is not accepted as proof of coherent normalized
   input ownership; it proves only result-side copying after selection.
 - A7 is newly Pending: exported `Disposition`, `TransitionPlan`, and `Refusal`

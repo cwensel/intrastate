@@ -8,6 +8,24 @@ import (
 )
 
 func TestA2ProductionBoundary(t *testing.T) {
+	t.Run("production selected identity and locator are absent", func(t *testing.T) {
+		edgeType := reflect.TypeOf(resolver.Edge{})
+		planType := reflect.TypeOf(resolver.TransitionPlan{})
+		refusalType := reflect.TypeOf(resolver.Refusal{})
+		_, edgeHasSelectedRule := edgeType.FieldByName("SelectedRule")
+		_, planHasSelectedRule := planType.FieldByName("SelectedRule")
+		_, refusalHasSelectedRule := refusalType.FieldByName("SelectedRule")
+		if edgeHasSelectedRule || planHasSelectedRule || refusalHasSelectedRule {
+			t.Fatalf(
+				"production boundary changed: SelectedRule fields edge=%t plan=%t refusal=%t; replace this absence probe with typed copy checks",
+				edgeHasSelectedRule,
+				planHasSelectedRule,
+				refusalHasSelectedRule,
+			)
+		}
+		t.Log("INCOMPLETE identity/locator copy proof: Edge, TransitionPlan, and Refusal expose no SelectedRule; no typed source locator is reachable at this boundary")
+	})
+
 	t.Run("ordinary result owns copied action", func(t *testing.T) {
 		table := []resolver.Edge{{
 			Outcome:  "accepted",

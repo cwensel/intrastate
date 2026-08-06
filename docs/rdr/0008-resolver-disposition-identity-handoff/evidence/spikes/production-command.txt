@@ -1,1 +1,1 @@
-go test -race -v ./docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes -run '^TestA2ProductionBoundary$' -count=1
+GOCACHE=/tmp/intrastate-rdr0008-a2-gocache go test -race -v ./docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes -run '^TestA2ProductionBoundary$' -count=1
