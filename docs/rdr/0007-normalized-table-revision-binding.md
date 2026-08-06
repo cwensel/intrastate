@@ -94,19 +94,43 @@ digest, registry binding, or identity discriminator exists to reuse.
 - **Verified** — `internal/resolver/resolver.go::Resolve` selects from caller-
   supplied rows without consulting `TableRevision`, so the same nominal replay
   tuple can select different edges.
-- **Assumed** — the RDR 0002 normalized semantic value admits one versioned,
-  order-independent encoding that covers every behavior- and logical-identity
-  field without depending on TOML source formatting or diagnostic provenance.
+- **Verified** — the Stage 4 canonicalization spike produces the same pre-image
+  and revision after semantic-set reordering, map iteration, source-locator
+  changes, source-schema-version changes, and nil/empty construction changes;
+  every projected one-field mutation and clear-versus-empty boundary changes
+  both.
+- **Verified** — Go's `crypto/sha256::Sum256` and
+  `encoding/hex::EncodeToString` provide the intended standard-library digest
+  and lowercase 64-digit encoding without a third-party dependency. Revision
+  parsing must still reject uppercase explicitly because hex decoding accepts
+  it.
+- **Blocked** — the proposed version-1 projection is not yet complete against
+  RDR 0002 and the concrete resolver value: row outcome, predicate
+  provenance/operator, write role, and guard unevaluability lack explicit
+  include-or-eliminate dispositions.
+- **Verified** — RDR 0001's value-level refusal contract and RDR 0005's stable
+  refusal-to-`CLIError` mapping can preserve a distinct revision-mismatch
+  outcome without using the Go error path, provided the closed refusal set and
+  CLI code set are extended explicitly.
+- **Blocked** — the Stage 4 contract recount finds at least three independent
+  load-bearing contracts: canonical hash/pre-image, public revision grammar,
+  and resolver refusal/ordering policy. The Resolve profile rule treats that as
+  a split signal, so the provisional `foundational` profile cannot be latched
+  until Refine consolidates or splits those seams.
 
 ### Critical Assumptions
 
 - **A1 The normalized semantic table can be encoded canonically without source
   formatting, map iteration, or caller row order changing its revision.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Build the Stage 4 canonicalization spike from RDR 0002's
-    normalized candidate-row value and compare reordered, reformatted, and
-    one-field-different fixtures.
+  - **Evidence**: `GOCACHE=/tmp/intrastate-rdr7-go-cache go run
+    ./docs/rdr/0007-normalized-table-revision-binding/evidence/spikes` produced
+    the golden vector and comparison matrix captured at
+    `docs/rdr/0007-normalized-table-revision-binding/evidence/spikes/output.txt`:
+    all ordering, map, source-only, and nil/empty variants were byte- and
+    revision-identical, while every projected semantic mutation,
+    clear-versus-empty, and ambiguous unframed concatenation differed.
   - **If wrong**: Semantically identical tables churn revision or distinct
     resolver behavior aliases to one revision, defeating reliable replay.
 - **A2 Every field that can change edge selection, action, or logical
@@ -114,37 +138,48 @@ digest, registry binding, or identity discriminator exists to reuse.
   while diagnostic source location can be excluded.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: Audit RDR 0002 `Normative Contracts` and RDR 0008
-    `Load-Bearing Decisions / Identity` against the Stage 4 pre-image field
-    inventory.
+  - **Evidence**: The Stage 4 audit confirms RDR 0008 `Load-Bearing Decisions /
+    Identity` makes `SourceLocator` diagnostic-only, but the proposed inventory
+    does not explicitly project or eliminate RDR 0002/current resolver row
+    outcome, predicate provenance/operator, write role, or guard
+    unevaluability. Refine the inventory, then extend the one-field-change
+    vectors and repeat this audit.
   - **If wrong**: A caller can alter an omitted outcome, predicate, action, or
     rule identity while retaining the same revision.
 - **A3 Go's standard SHA-256 implementation and lowercase hexadecimal encoding
   are available and sufficient for this table-identity boundary.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Verify `crypto/sha256::New` or `Sum256` and `encoding/hex`
-    against the exact framing chosen at Resolve; no third-party dependency is
-    permitted for the hash.
+  - **Evidence**: Go 1.26 `crypto/sha256::Sum256` returns the standardized
+    32-byte digest and `encoding/hex::EncodeToString` emits the required 64
+    lowercase digits. The revision parser must separately enforce the
+    `sha256:` prefix, exact length, and lowercase-only grammar because
+    `encoding/hex::DecodeString` accepts uppercase.
   - **If wrong**: The format needs another algorithm or dependency before its
     revision grammar can be locked.
 - **A4 The normalizer and resolver can share one revision function without
   exposing mutable digest state or a second implementation.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: `TestResolveRejectsTableRevisionMismatchBeforeSelection` will
-    derive a valid revision, alter one normalized edge, and require the shared
-    verifier to refuse the altered table before matching it.
+  - **Evidence**: The peer/source audit found no existing production digest or
+    binding implementation and confirmed a pure shared function is feasible,
+    but `TestResolveRejectsTableRevisionMismatchBeforeSelection` alone proves
+    recomputation, not single implementation. Pair that mutation-before-
+    selection MVV with a source-level definition/call-site audit showing both
+    producer and resolver use the same exported derivation symbol.
   - **If wrong**: Producer and consumer may accept different revisions for the
     same table, or caller mutation may invalidate a cached binding silently.
 - **A5 Downstream resolver and CLI mapping can preserve
   `table_revision_mismatch` as a distinct modeled refusal without using the Go
   error path.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Resolve must reconcile this RDR's explicit RDR 0001 override
-    with RDR 0001 `Normative Contracts` and RDR 0005's downstream mapping before
-    lock.
+  - **Evidence**: RDR 0001 `Normative Contracts` makes resolver refusal a
+    value-level disposition, and RDR 0005 `Approach` / `Technical Design`
+    requires `flow resolve` to map each stable refusal to `CLIError`. This RDR
+    can extend both closed sets with `table_revision_mismatch` and a distinct
+    `flow-table-revision-mismatch` CLI code while reserving malformed syntax and
+    invalid normalized values for the Go/load error path.
   - **If wrong**: Callers cannot diagnose a replay-identity failure uniformly,
     and may conflate adversarial input with parser or programmer failure.
 
@@ -287,7 +322,7 @@ claimed revision that does not identify the supplied normalized value.
 | Exact-one resolver selection | RDR 0001 | Available | Runs only after revision binding succeeds. |
 | Canonical normalized semantic table | RDR 0002 | Predecessor | Supplies the value whose behavior and identity fields are hashed. |
 | Logical selected-rule identity fields | RDR 0002 / RDR 0008 | Deferred peer | Included in the table pre-image; diagnostic source location is excluded. |
-| SHA-256 and hexadecimal encoding | Go standard library | Pending verification | No third-party runtime dependency is intended. |
+| SHA-256 and hexadecimal encoding | Go standard library | Available | A3 verifies `crypto/sha256::Sum256` and lowercase `encoding/hex` output; grammar validation remains explicit. |
 | Table revision derivation and validation | This RDR | Introduced | One shared function binds producer output to resolver replay input. |
 
 ### Existing Infrastructure Audit
