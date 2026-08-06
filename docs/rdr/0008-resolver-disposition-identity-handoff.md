@@ -195,7 +195,10 @@ instead of inventing a parallel CLI-side lookup.
   - **Evidence**: Stage 6 must verify against RDR 0002 `Technical Design` and
     `Normative Contracts` that the locator retained on each normalized row
     identifies that row's model id and rule id, rather than merely being
-    non-empty.
+    non-empty. Before lock, that verification must name the normalized-table
+    constructor or validator that owns the check and the mismatch test at that
+    callable boundary; `plan` remains a copying consumer of the validated
+    value.
   - **If wrong**: A successful plan could report the selected identity while
     directing diagnostics to a different authored rule.
 
@@ -205,10 +208,13 @@ instead of inventing a parallel CLI-side lookup.
 
 Make `TransitionPlan`, the successful branch of `Disposition`, own two nested
 values: a value-only `SelectedRule` and a separately copyable
-`TransitionAction`. `SelectedRule` contains model id, rule id, expansion suffix,
-and source locator. `TransitionAction` contains next tags and owned-tag writes.
-Each normalized `Edge` supplies both values; `plan` copies them into the returned
-plan.
+`TransitionAction`. RDR 0008 owns this Go carrier shape; RDR 0002 continues to
+own the identity semantics and normalized-table population rules. `SelectedRule`
+is the one value shared by normalized `Edge` and `TransitionPlan`, not a second
+resolver projection or a value reconstructed during selection. It contains
+model id, rule id, expansion suffix, and source locator. `TransitionAction`
+contains next tags and owned-tag writes. Each normalized `Edge` supplies both
+values; `plan` copies them into the returned plan.
 
 Ordinary and modeled-escape matches use the same successful plan carrier. A
 write-free escape therefore still reports the exact selected rule while its
@@ -244,6 +250,11 @@ The selection value is descriptive, not a second authority: it is copied from
 the normalized row that was actually matched. It does not recalculate table
 revision (RDR 0007), redefine row identity (RDR 0002), change matching/refusal
 semantics (RDR 0001), or define CLI rendering (RDR 0005).
+
+The existing RDR 0001 replay test is the replay consumer for this handoff. This
+RDR extends that test so two resolutions of the same input compare complete
+`SelectedRule` and `Action` values; replay does not gain a second identity
+lookup or a separate carrier.
 
 #### Normative Contracts
 
@@ -406,13 +417,18 @@ projection instead.
 
 `TestResolvePreservesSelectedRuleForOrdinaryAndEscape` resolves one ordinary
 edge and one write-free modeled escape, asserts the returned selected-rule tuple
-matches the exact input edge and the action matches that edge, then mutates the
-input table and asserts both returned plans remain value-identical.
+matches the exact input edge and the action matches that edge. The ordinary
+fixture carries a non-empty expansion suffix and a non-empty write. The test
+then mutates that write's element in the caller-owned backing array, mutates the
+next-tag map, replaces the source identity strings, reuses the input table, and
+asserts both returned plans remain value-identical.
 
 ### Phase 1: Normalize Selection Identity
 
-Carry the RDR 0002 identity tuple and action as distinct values on every
-ordinary and modeled-escape edge.
+Define the resolver-facing `SelectedRule` carrier once and have normalization
+populate that same value, plus the distinct action, on every ordinary and
+modeled-escape edge. Do not introduce a parallel normalizer identity struct or
+a selection-time conversion.
 
 ### Phase 2: Preserve the Successful Handoff
 
@@ -424,7 +440,10 @@ rule and action without changing matching or refusal semantics.
 Expose the successful plan shape for RDR 0005 without adding CLI rendering in
 this implementation. RDR 0005's implementation owns the downstream payload
 fixture proving `flow resolve` projects the selected rule, next tags, and
-planned writes without a second identity lookup or accessor execution.
+planned writes without a second identity lookup or accessor execution. RDR 0008
+implementation acceptance ends at the carrier and resolver/replay tests;
+operator-visible diagnostics are delivered only when that RDR 0005 consumer
+acceptance also lands.
 
 ## Validation
 
@@ -439,13 +458,15 @@ turn that evidence into this matrix:
 1. **Ordinary selection** — resolve an exact-one ordinary edge through
    `Resolve` and `plan`.
    **Expected**: `TransitionPlan.SelectedRule` equals that edge's complete
-   identity and `Action` equals its next tags and writes.
+   identity, including a non-empty expansion suffix, and `Action` equals its
+   next tags and writes.
 2. **Write-free modeled escape** — resolve a no-match case through the same
    `plan` boundary with one escape edge and no writes.
    **Expected**: the plan retains the escape edge's complete selected rule and
    exposes an action with the expected next tags and an empty write list.
 3. **Copy isolation** — after either successful resolution, replace the input
-   edge's identity strings, mutate its next-tag map, and replace its writes.
+   edge's identity strings, mutate its next-tag map, mutate a write element in
+   the caller-owned backing array, and then replace/reuse the input edge.
    **Expected**: the returned selected rule and action remain unchanged.
 4. **Incomplete identity** — select an edge with an empty model id, rule id, or
    source locator.
@@ -455,7 +476,17 @@ turn that evidence into this matrix:
    state, unevaluable guard, and unmodeled outcome without a selected escape.
    **Expected**: each disposition has no plan and therefore claims no selected
    rule.
-6. **CLI projection (RDR 0005 acceptance)** — when RDR 0005 is implemented, map
+6. **Locator agreement (normalized-table acceptance)** — after A4 pins the
+   constructor or validator boundary, supply a locator that designates a
+   different model id or rule id from `SelectedRule`.
+   **Expected**: the normalized-table boundary rejects the row before
+   `Resolve`; `plan` does not parse or repair the locator.
+7. **Replay identity** — extend RDR 0001's
+   `TestResolve_ReplayReturnsValueIdenticalPlans` with selected identity.
+   **Expected**: two resolutions of the same input return value-identical
+   `SelectedRule` and `Action`, including a non-empty expansion suffix, without
+   a second identity lookup.
+8. **CLI projection (RDR 0005 acceptance)** — when RDR 0005 is implemented, map
    a successful plan through `flow resolve`.
    **Expected**: output uses the plan's selected rule, next tags, and planned
    writes verbatim; the RDR 0005 test observes no model lookup or accessor
