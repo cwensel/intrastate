@@ -16,6 +16,7 @@ engine README — this file is only the per-project index.
 | [0005](0005-skill-integration-cli-contract.md) | Skill integration CLI contract | Final | High |
 | [0006](0006-graph-lint-authority-and-guarantees.md) | Graph lint authority and guarantees | Final | — |
 | [0007](0007-normalized-table-revision-binding.md) | Normalized-table revision binding | Draft | Medium |
+| [0008](0008-resolver-disposition-identity-handoff.md) | Resolver disposition identity handoff | Draft | Medium |
 
 ## Status legend
 
