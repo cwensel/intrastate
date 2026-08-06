@@ -1,69 +1,12 @@
 # Recommendation 0007: Normalized-table revision binding
 
-> Revise during planning; lock at implementation.
-> If wrong, abandon code and iterate RDR.
-
-<!-- Section classes: **Required** (never omit). **Conditional**
-(delete the whole section if N/A — do NOT leave it blank or
-N/A-bulleted). **Reference-only** (guidance; never copy into the
-instance body). -->
-
 ## Metadata
 
 - **Date**: 2026-08-06
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Architecture
 - **Profile**: foundational — defines one revision-binding contract across
   normalized-table production and resolver consumption.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: Medium
 - **Related Issues**: kata jv85; RDR 0001; RDR 0002
 - **Predecessors**: 0001-resolution-kernel,
@@ -102,10 +45,9 @@ The affected system is the Go resolver centered on
 `internal/resolver/resolver.go::Resolve`, its caller-provided normalized
 transition table, and the loading or normalization boundary that supplies table
 revision identity. RDR 0001 defines resolver replay identity and RDR 0002 defines
-the transition table as reviewable data. Ownership of revision binding and the
-failure boundary remain undecided; later stages must evaluate the available
-design forks without changing the resolver's established output contracts
-accidentally.
+the transition table as reviewable data. The binding boundary must preserve the
+resolver's structured value/error split and the CLI output contract owned by
+RDR 0005.
 
 ## Research Findings
 
@@ -153,14 +95,10 @@ digest, registry binding, or identity discriminator exists to reuse.
   supplied rows without consulting `TableRevision`, so the same nominal replay
   tuple can select different edges.
 - **Assumed** — the RDR 0002 normalized semantic value admits one versioned,
-  order-independent encoding that covers every behavior- and identity-bearing
-  field without depending on TOML source formatting.
+  order-independent encoding that covers every behavior- and logical-identity
+  field without depending on TOML source formatting or diagnostic provenance.
 
 ### Critical Assumptions
-
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
 
 - **A1 The normalized semantic table can be encoded canonically without source
   formatting, map iteration, or caller row order changing its revision.**
@@ -171,12 +109,14 @@ Evidence Record before marking this RDR Final.]
     one-field-different fixtures.
   - **If wrong**: Semantically identical tables churn revision or distinct
     resolver behavior aliases to one revision, defeating reliable replay.
-- **A2 Every field that can change edge selection or selected-rule identity can
-  be included in one versioned digest pre-image.**
+- **A2 Every field that can change edge selection, action, or logical
+  selected-rule identity can be included in one versioned digest pre-image,
+  while diagnostic source location can be excluded.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: Audit RDR 0002 `Normative Contracts` and RDR 0008's eventual
-    selected-rule carrier against the Stage 4 pre-image field inventory.
+  - **Evidence**: Audit RDR 0002 `Normative Contracts` and RDR 0008
+    `Load-Bearing Decisions / Identity` against the Stage 4 pre-image field
+    inventory.
   - **If wrong**: A caller can alter an omitted outcome, predicate, action, or
     rule identity while retaining the same revision.
 - **A3 Go's standard SHA-256 implementation and lowercase hexadecimal encoding
@@ -197,60 +137,16 @@ Evidence Record before marking this RDR Final.]
     verifier to refuse the altered table before matching it.
   - **If wrong**: Producer and consumer may accept different revisions for the
     same table, or caller mutation may invalidate a cached binding silently.
-- **A5 A table-revision mismatch is a modeled input refusal that can extend RDR
-  0001's closed taxonomy without using the Go error path.**
+- **A5 Downstream resolver and CLI mapping can preserve
+  `table_revision_mismatch` as a distinct modeled refusal without using the Go
+  error path.**
   - **Status**: Pending
-  - **Method**: Design Decision
-  - **Evidence**: Resolve must reconcile this RDR's `table_revision_mismatch`
-    override with RDR 0001 `Normative Contracts` and the downstream RDR 0005
-    mapping before lock.
+  - **Method**: Peer RDR
+  - **Evidence**: Resolve must reconcile this RDR's explicit RDR 0001 override
+    with RDR 0001 `Normative Contracts` and RDR 0005's downstream mapping before
+    lock.
   - **If wrong**: Callers cannot diagnose a replay-identity failure uniformly,
     and may conflate adversarial input with parser or programmer failure.
-
-**Method vocabulary** (Reference-only — guidance for
-filling the **Method** field; do NOT copy this list into
-the instance body. Pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
 
 ## Proposed Solution
 
@@ -265,9 +161,10 @@ revision with the same function and compares it before evaluating owned state,
 outcomes, guards, or edges.
 
 The digest covers the normalized semantic value, not TOML bytes or a rendered
-dump. It therefore binds every behavior- and selected-identity-bearing field
-while ignoring source formatting and authored key order. Its external grammar
-is algorithm-qualified lowercase hexadecimal, initially `sha256:<64-hex>`; the
+dump. It binds every match, action, and logical selected-rule identity field,
+but excludes `SourceLocator`: RDR 0008 defines that field as diagnostic
+provenance rather than logical rule identity. Its external grammar is
+algorithm-qualified lowercase hexadecimal, initially `sha256:<64-hex>`; the
 pre-image is domain-separated and versioned so later semantic formats cannot
 accidentally share an identity namespace.
 
@@ -289,13 +186,34 @@ separate `Outcomes` and `Table` fields. RDR 0002 remains the owner of those
 values' semantics and source identity; this RDR owns only their content-derived
 revision and the binding check.
 
-Canonical encoding operates over typed normalized values, with explicit field
-tags and length framing, deterministic ordering for set/map-shaped fields, and
-distinct encodings for empty, absent, and present-empty values. The pre-image
-begins with a table-identity domain and encoding version. TOML whitespace,
-comments, source key order, absolute paths, and rendered dump formatting never
-enter the digest. Stage 4 must finish the field inventory and framing spike
-before this contract locks.
+Canonical encoding operates over a version-1 semantic projection, not Go field
+layout. The pre-image begins with the ASCII bytes
+`intrastate.transition-table-revision`, a NUL byte, and the ASCII encoding label
+`v1`. Every projected value is framed as a one-byte type tag, an unsigned
+64-bit big-endian payload length, and the payload: `0x01` is a UTF-8 string,
+`0x02` an unsigned 64-bit big-endian integer, `0x03` a list, and `0x04` a
+record. A list payload begins with an unsigned 64-bit element count followed by
+framed elements. A record payload begins with a field count followed by pairs
+of framed field-name strings and framed values, sorted by field-name bytes.
+
+The top-level record fields are `model_id`, `outcomes`, and `rows`; RDR 0002's
+source-schema version is excluded because it is not part of the normalized
+semantic value. Each row record contains `rule_id`, `expansion_suffix`, `kind`,
+`predicates`, `escape_classes`, `next_tags`, and `writes`. Predicate entries are
+records of `key` and `value`; next-tag entries are records of `tag` and `value`;
+write entries are records of `tag`, `operation`, and, for `set`, `value`.
+`operation` is either `set` or `clear`. Outcomes, rows, predicates, escape
+classes, next tags, and writes are semantic sets and are sorted by their
+complete framed element bytes before list framing.
+
+`SourceLocator` and every other source-formatting or diagnostic-only field are
+excluded. Strings are their validated UTF-8 bytes without additional Unicode
+normalization. The explicit `operation` field distinguishes clear from setting
+an empty string; authored absent and present-empty forms that normalize to the
+same typed value cannot produce different revisions. Stage 4 must verify this
+projection against the concrete RDR 0002/RDR 0008 types and produce golden
+vectors before the contract locks; it may not change these inclusion,
+exclusion, ordering, framing, or primitive-encoding rules.
 
 `Resolve` validates revision binding at the start of modeled input handling. It
 derives the actual revision from the supplied normalized table and compares it
@@ -310,21 +228,23 @@ validates table revision.
 ```normative
 A normalized transition table revision MUST be the content-derived identity of
 the complete normalized semantic table, including its recognized-outcome
-alphabet, candidate selection data, transition actions, and normalized rule
-identity/provenance fields. It MUST NOT be an unconstrained caller label, TOML
-source checksum, rendered-dump checksum, registry sequence, timestamp, or source
-path.
+alphabet, candidate selection data, transition actions, and logical rule
+identity. Diagnostic provenance, including `SourceLocator`, MUST NOT participate
+in revision identity. The revision MUST NOT be an unconstrained caller label,
+TOML source checksum, rendered-dump checksum, registry sequence, timestamp, or
+source path.
 
 The revision grammar MUST be algorithm-qualified lowercase hexadecimal. Version
 1 MUST use `sha256:<64 lowercase hexadecimal digits>` over a domain-separated,
 versioned canonical encoding. One shared derivation function MUST be used by the
 normalization/loading boundary and resolver validation.
 
-Canonical encoding MUST be independent of TOML whitespace, comments, source key
-order, map iteration, and normalized candidate input order. It MUST use explicit
-field identity and framing, deterministic ordering for set/map-shaped values,
-and distinct representations for absent, empty, and present-empty values. Its
-exact version-1 field inventory and framing MUST be locked before Final.
+Canonical encoding MUST use the version-1 domain prefix, recursively typed
+length framing, semantic field projection, and encoded-byte sorting defined in
+Technical Design. It MUST be independent of TOML whitespace,
+comments, source key order, map iteration, normalized candidate input order,
+and diagnostic source location. The projection-to-normalized-type inventory and
+golden vectors MUST be verified before Final.
 
 Before evaluating owned-state availability, the outcome alphabet, guards,
 ordinary edges, or escape edges, `Resolve` MUST derive the supplied normalized
@@ -343,13 +263,15 @@ claimed revision that does not identify the supplied normalized value.
 
 - **Identity** — two normalized tables have the same revision only when their
   version-1 canonical semantic encodings have the same SHA-256 digest. Source
-  formatting and candidate input order do not distinguish identity; any field
-  that can change resolution or selected-rule identity does.
+  formatting, diagnostic source location, and candidate input order do not
+  distinguish identity; any field that can change matching, action, or logical
+  selected-rule identity does.
 - **Wire / byte format** — the public revision is
   `sha256:<64 lowercase hexadecimal digits>`. The pre-image is a domain-
-  separated, versioned, length-framed encoding of the normalized semantic
-  value; Stage 4 owns the exact field table and golden vectors required before
-  lock.
+  separated, versioned, recursively typed and length-framed encoding of the
+  normalized semantic value. Stage 4 verifies the projection and golden
+  vectors; it does not choose different fields, ordering, primitives, or
+  framing.
 - **Naming** — the content identity remains `TableRevision` in replay input;
   the mismatch is `table_revision_mismatch`. Rejected: `version`, which RDR 0002
   already uses for source-schema version, and `etag`, which implies transport
@@ -360,15 +282,11 @@ claimed revision that does not identify the supplied normalized value.
 
 ### Capability Dependencies
 
-[For each load-bearing behavior, state whether the
-enabling capability exists now, is introduced by this
-RDR, is provided by a predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
 | Exact-one resolver selection | RDR 0001 | Available | Runs only after revision binding succeeds. |
 | Canonical normalized semantic table | RDR 0002 | Predecessor | Supplies the value whose behavior and identity fields are hashed. |
-| Selected-rule identity fields | RDR 0002 / RDR 0008 | Deferred peer | Included in the table pre-image without moving handoff ownership here. |
+| Logical selected-rule identity fields | RDR 0002 / RDR 0008 | Deferred peer | Included in the table pre-image; diagnostic source location is excluded. |
 | SHA-256 and hexadecimal encoding | Go standard library | Pending verification | No third-party runtime dependency is intended. |
 | Table revision derivation and validation | This RDR | Introduced | One shared function binds producer output to resolver replay input. |
 
@@ -465,10 +383,11 @@ API cost while losing the compact revision identity already established by RDR
 
 ### Consequences
 
-- Replay revision becomes a mechanically checkable claim about the exact
-  normalized semantics used for selection and selected-rule identity.
+- Replay revision becomes a mechanically checkable claim about the normalized
+  match, action, and logical selected-rule identity used for selection.
 - Semantically equivalent source formatting and author order share one revision;
-  behavior- or identity-changing normalized values do not.
+  behavior- or logical-identity-changing normalized values do not. Relocating
+  unchanged source preserves the revision.
 - Resolver calls pay canonicalization and SHA-256 cost before matching, and
   normalized field evolution must update a versioned pre-image contract.
 - RDR 0001's refusal taxonomy and RDR 0002's no-hash disposition are explicitly
@@ -550,114 +469,50 @@ refusal through the planned CLI mapping and audit fixtures.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
-
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Scenario**: Normalize tables that differ only in source formatting, source
+   key order, candidate input order, map iteration, or `SourceLocator`.
+   **Expected**: Every table produces the same version-1 pre-image, revision,
+   and resolver plan.
+2. **Scenario**: Change each match, action, outcome, row-kind, or logical
+   selected-rule identity field individually.
+   **Expected**: Every change produces a different golden pre-image and revision;
+   the projection inventory contains no unclassified semantic field.
+3. **Scenario**: Resolve a table using the revision derived by the producer.
+   **Expected**: Binding succeeds and the existing exact-one resolution result
+   is unchanged.
+4. **Scenario**: Resolve an altered table using the original table's revision.
+   **Expected**: Only `table_revision_mismatch` is returned, with no plan and no
+   owned-state, outcome, guard, ordinary-edge, or escape-edge evaluation.
+5. **Scenario**: Supply malformed revision syntax or an invalid normalized
+   value.
+   **Expected**: The Go load/programmer error path is used; neither case is
+   reported as a modeled mismatch.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
 ### Contradiction Check
 
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+Pending Stage 7 response after assumption verification and pre-lock review.
 
 ### Assumption Verification
 
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
+Pending Stage 7 response after A1–A5 reach terminal dispositions.
 
 ### Scope Verification
 
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Pending Stage 7 response against
+`TestResolveRejectsTableRevisionMismatchBeforeSelection` and the version-1
+golden vectors.
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+Pending Stage 7 response for versioning, character encoding, canonical form,
+determinism, mutation safety, and downstream CLI mapping.
 
 ### Proportionality
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Pending Stage 7 response revalidating the single revision-binding contract and
+the `foundational` profile.
 
 ## References
 
