@@ -121,17 +121,17 @@ RDR 0002 `Normative Contracts` requires every candidate row to retain its
 source rule id and source locator, and its `Load-Bearing Decisions / Identity`
 defines `(model id, rule id)` plus a deterministic expansion suffix. RDR 0005
 `Technical Design` requires `flow resolve` data to contain matched-rule
-identity. In external source, Stateless
-`src/Stateless/Transition.cs::Transition` and uscxml
-`src/uscxml/interpreter/LargeMicroStep.h::Transition` retain selected-transition
-context through successful execution and monitoring, favoring a direct carrier
-over downstream reconstruction. W3C SCXML 1.0 `3.1.5 Type and Transitions`
-says a targetless transition does not change the state configuration but "does
-invoke the executable content" in the transition. That contrast supports a
-no-state-change success only when transition behavior is explicitly modeled;
-it does not justify synthesizing an action for an RDR 0002 escape row that names
-a refusal class and forbids `write` and `clear`. Queries and rejected branches
-are recorded under
+identity. In surviving local prior art,
+qmuntal-stateless `statemachine.go::internalFireOne` constructs a
+`Transition{Source, Destination, Trigger}` after handler selection and passes
+that value through `handleTransitioningTrigger` to transition callbacks.
+scxmlcc `doc/user-manual.md::Transition` models targetless transitions whose
+executable content is optional. Those examples support carrying selected
+transition context and show that no target does not itself define whether an
+action exists; they do not prove the exact selected-rule/source-locator handoff
+chosen here. That bounded contrast does not justify synthesizing an action for
+an RDR 0002 escape row that names a refusal class and forbids `write` and
+`clear`. Queries and rejected branches are recorded under
 `docs/rdr/0008-resolver-disposition-identity-handoff/evidence/research/`.
 
 Sibling-path check: source search found no adjacent selected-rule carrier or
@@ -145,8 +145,10 @@ instead of inventing a parallel CLI-side lookup.
   identity; this RDR only owns preserving it across resolver dispositions.
 - **Documented** — RDR 0005 consumes matched-rule identity but does not own
   reconstructing it from model data.
-- **Documented** — Stateless and uscxml keep selected-transition context on the
-  successful transition object used by execution and diagnostics.
+- **Prior art, bounded** — qmuntal-stateless carries source, destination, and
+  trigger from selection through transition callbacks. This supports direct
+  transition-context handoff but not this RDR's exact identity fields or
+  branch taxonomy.
 - **Verified on the integration branch** — `Edge`, `TransitionPlan`, `Refusal`,
   and their constructors discard all four identity fields. `Resolve` currently
   turns an exactly-one escape into a plan even though RDR 0002 forbids action
@@ -174,7 +176,7 @@ instead of inventing a parallel CLI-side lookup.
   source locator, and any action without aliasing mutable normalized-table
   storage.**
   - **Status**: Pending
-  - **Method**: Spike + Peer RDR
+  - **Method**: Spike
   - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` is green and
     proves isolation for string identity fields, a string locator, a cloned
     next-tag map, and a copied writes slice. It remains a local surrogate:
@@ -216,7 +218,7 @@ instead of inventing a parallel CLI-side lookup.
   rows that bind match inputs and selected identity to the row-kind payload at
   one validated construction boundary.**
   - **Status**: Pending
-  - **Method**: Source Search + Peer RDR
+  - **Method**: Source Search
   - **Evidence**: Current `internal/resolver/resolver.go::{Input,Edge}` exposes a
     caller-constructible `[]Edge`; RDR 0007 is Draft and explicitly records that
     no production normalizer or validated-table type exists. Before Resolve can
@@ -231,7 +233,7 @@ instead of inventing a parallel CLI-side lookup.
   with selected-rule identity and no action across the source schema,
   normalized row, resolver, and CLI.**
   - **Status**: Pending
-  - **Method**: Peer RDR + Source Search
+  - **Method**: Peer RDR
   - **Evidence**: RDR 0002 `Normative Contracts` make an escape row name
     `no_match` or `ambiguous_match` and forbid `write` and `clear`; RDR 0005
     permits `flow resolve` to return a refusal. RDR 0001 `Technical Design` and
@@ -383,15 +385,16 @@ The Questions-Options-Criteria matrix scores 1 (poor) through 5 (strong):
 
 | Approach | Correctness fit | Prior-art alignment | Reversibility | Blast radius | Cost | Total |
 | --- | --- | --- | --- | --- | --- | ---: |
-| Plan on ordinary selection; identity-bearing Refusal on escape | 5 — action exists only where authored | 5 — direct selected-object handoff; preserves local refusal model | 4 — nested carriers can evolve | 4 — resolver result and peer tests | 4 — two explicit constructors | **22** |
+| Plan on ordinary selection; identity-bearing Refusal on escape | 5 — action exists only where authored | 4 — transition context is handed through directly; identity/refusal split is a local decision | 4 — nested carriers can evolve | 4 — resolver result and peer tests | 4 — two explicit constructors | **21** |
 | Successful plan with explicit no-change escape action | 2 — invents action absent from source | 3 — SCXML permits targetless success, but with transition semantics | 2 — changes schema and consumers | 2 — spans parser through CLI | 2 — new action variant and projection | **11** |
 | Dedicated ModeledEscape disposition branch | 5 — invalid combinations are unrepresentable | 3 — explicit but adds a project-specific third branch | 3 — removable through migration | 2 — every disposition consumer changes | 3 — new branch and mapping | **16** |
 | Disposition-level optional selected rule | 3 — permits plan/identity mismatch | 4 — context stays near result | 5 — leaves branch types unchanged | 4 — one extra outer field | 3 — every branch enforces presence | **19** |
 
-The split carrier wins on correctness and local prior-art alignment: ordinary
-rows already author actions, while escape rows author refusal classes and
-forbid actions. It preserves the direct selected-object handoff on both paths
-without adding a third public disposition branch. A successful no-change plan
+The split carrier wins on correctness and local design fit: ordinary rows
+already author actions, while escape rows author refusal classes and forbid
+actions. It preserves the direct transition-context handoff seen in local prior
+art without treating that prior art as proof of the selected-rule schema or
+adding a third public disposition branch. A successful no-change plan
 would require RDR 0002 to author a real action rather than letting `plan` infer
 one. A dedicated branch makes the invariant clearer in the type shape but
 forces every RDR 0001/RDR 0005 consumer to learn a third terminal outcome.
@@ -411,11 +414,11 @@ escape test makes an invented action or anonymous modeled refusal observable.
 ### Alternative 1: Successful No-Change Escape Action
 
 Treat an exactly-one escape as a successful `TransitionPlan` with an explicit
-no-change action. W3C SCXML shows that a targetless transition can retain
-transition semantics without changing state, but it still executes explicitly
-modeled content. Intrastate's escape schema instead names a refusal class and
-forbids `write` and `clear`; adopting this alternative would require a source
-and normalized action variant, not empty or input-derived `NextTags` in `plan`.
+no-change action. scxmlcc's SCXML model shows that a targetless transition can
+still have explicitly modeled executable content. Intrastate's escape schema
+instead names a refusal class and forbids `write` and `clear`; adopting this
+alternative would require a source and normalized action variant, not empty or
+input-derived `NextTags` in `plan`.
 
 ### Alternative 2: Dedicated Modeled-Escape Disposition
 
@@ -678,8 +681,7 @@ matrix/provenance prose left from the template or Seed
   rule id, source locator, model id, and expansion suffix.
 - RDR 0005 `Technical Design`; `Normative Contracts` — matched-rule CLI payload.
 - RDR 0007 — normalized-table revision binding, explicitly separate.
-- Stateless `src/Stateless/Transition.cs::Transition`.
-- uscxml `src/uscxml/interpreter/LargeMicroStep.h::Transition`,
-  `LargeMicroStep.cpp` take-transitions block, and
-  `src/bindings/swig/wrapped/WrappedInterpreterMonitor.cpp::afterTakingTransition`.
-- W3C SCXML 1.0 `3.1.5 Type and Transitions` — targetless transition semantics.
+- qmuntal-stateless `statemachine.go::internalFireOne` and
+  `::handleTransitioningTrigger` — direct transition-context handoff.
+- scxmlcc `doc/user-manual.md::Transition` and
+  `::Custom Actions and Conditions` — targetless-transition/action contrast.
