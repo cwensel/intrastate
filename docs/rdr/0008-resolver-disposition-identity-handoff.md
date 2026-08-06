@@ -96,6 +96,9 @@ remains separately usable for ordinary and modeled escape selections.
 
 The affected seam is the Go resolver in `internal/resolver/resolver.go`, whose
 selection result feeds replay validation and the planned CLI resolution payload.
+That seam exists on the current integration branch but not yet on `main`; the
+RDR 0001 implementation must be present on the implementation baseline before
+this RDR can change it.
 RDR 0001 defines the resolution kernel requirement to expose downstream values;
 RDR 0002 defines normalized model/rule identity and source locators; RDR 0005
 defines the consuming `flow resolve` payload contract. Draft RDR 0007 separately
@@ -106,12 +109,13 @@ table revision.
 
 ### Investigation
 
-The freshness check confirmed that RDRs 0001, 0002, and 0005 remain Final and
-that the named resolver seam still exists at `internal/resolver/resolver.go`.
-`Edge` carries only match/action data, `plan` copies only `NextTags` and
-`Writes`, and `TransitionPlan` therefore cannot satisfy RDR 0005's selected-rule
-payload. RDR 0007 now owns the adjacent table-revision binding question and is
-explicitly outside this RDR.
+The freshness check confirmed that RDRs 0001, 0002, and 0005 remain Final. The
+named resolver seam exists on the current integration branch at
+`internal/resolver/resolver.go`, but not yet on `main`. On that branch, `Edge`
+carries only match/action data, `plan` copies only `NextTags` and `Writes`, and
+`TransitionPlan` therefore cannot satisfy RDR 0005's selected-rule payload.
+RDR 0007 now owns the adjacent table-revision binding question and is explicitly
+outside this RDR.
 
 Prior art was read before alternatives were named. RDR 0002 `Normative
 Contracts` requires: "Each candidate row MUST retain its source rule id and
@@ -141,8 +145,10 @@ instead of inventing a parallel CLI-side lookup.
   reconstructing it from model data.
 - **Documented** — Stateless and uscxml keep selected-transition context on the
   successful transition object used by execution and diagnostics.
-- **Verified** — current `Edge`, `TransitionPlan`, and `plan` discard all four
-  identity fields, for both ordinary and modeled-escape selections.
+- **Verified on the integration branch** — `Edge`, `TransitionPlan`, and `plan`
+  discard all four identity fields, for both ordinary and modeled-escape
+  selections. The symbols do not yet resolve on `main`; landing the RDR 0001
+  implementation is an explicit implementation prerequisite below.
 - **Verified** — RDR 0002 requires the future normalizer to populate the
   complete selected-rule value on every normalized ordinary and escape row,
   without a downstream lookup.
@@ -182,6 +188,16 @@ instead of inventing a parallel CLI-side lookup.
     the CLI candidate-table or matching internals for a second lookup.
   - **If wrong**: This RDR must revise the carrier before lock or RDR 0005 will
     retain a parallel identity lookup.
+- **A4 The normalized-table boundary can guarantee that source locator and
+  selected-rule identity designate the same authored rule.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Stage 6 must verify against RDR 0002 `Technical Design` and
+    `Normative Contracts` that the locator retained on each normalized row
+    identifies that row's model id and rule id, rather than merely being
+    non-empty.
+  - **If wrong**: A successful plan could report the selected identity while
+    directing diagnostics to a different authored rule.
 
 ## Proposed Solution
 
@@ -216,8 +232,11 @@ Before returning success, `plan` treats an empty model id, rule id, or source
 locator as a programmer/invariant error on the Go error path, not as a modeled
 refusal. An expansion suffix may be empty for an unexpanded source rule; its
 value still participates in identity. The source locator is an opaque RDR 0002
-value that this handoff copies without parsing or reformatting. RDR 0005
-projects the selected rule, next tags, and planned writes into `flow resolve`
+value that this handoff copies without parsing or reformatting. Before an edge
+reaches the resolver, the normalized-table boundary validates that the locator
+designates the same model id and rule id carried by `SelectedRule`; `plan`
+enforces required presence but does not reconstruct or reinterpret provenance.
+RDR 0005 projects the selected rule, next tags, and planned writes into `flow resolve`
 output without reconstructing identity or executing accessors. A later state
 operation may pass the action to the RDR 0004 accessor boundary.
 
@@ -234,6 +253,8 @@ whose `SelectedRule` contains `ModelID`, `RuleID`, `ExpansionSuffix`, and
 `SourceLocator` copied from the normalized edge that matched. `ModelID`,
 `RuleID`, and `SourceLocator` MUST be non-empty; a missing required field MUST
 use the Go error path for a programmer/invariant failure, not a modeled refusal.
+The normalized-table boundary MUST reject a row whose `SourceLocator`
+designates a model id or rule id different from that row's `SelectedRule`.
 
 The transition plan MUST expose `Action` separately from `SelectedRule`.
 `Action` contains `NextTags` and `Writes`; callers MUST NOT need guard predicates
@@ -357,6 +378,9 @@ projection instead.
 - **Incomplete identity on a selected edge**: `plan` returns a programmer error
   before producing a successful disposition; the MVV covers every required
   field. Diagnose at `resolver.plan` construction.
+- **Identity/provenance mismatch on a normalized edge**: normalization rejects
+  the row before resolver selection. Diagnose at the normalized-table
+  validation boundary; `plan` must not guess or repair provenance.
 - **Identity/action mismatch**: audit names one rule while next tags/writes came
   from another. Treat as an internal invariant failure; do not reconstruct or
   guess downstream.
@@ -370,8 +394,12 @@ projection instead.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified
+- [ ] All Critical Assumptions reconciled; A4 was introduced by COVE and is
+  Pending for Stage 6.
+- [ ] RDR 0001's resolver implementation is present on the implementation
+  baseline; the reviewed symbols currently exist only on the integration branch.
 - [ ] RDR 0002 selected-rule fields are available at normalized edge creation.
+- [ ] The RDR 0002 normalizer rejects source-locator/model-rule disagreement.
 - [ ] RDR 0007 boundary is confirmed so revision binding is not duplicated.
 
 ### Minimum Viable Validation
@@ -391,11 +419,12 @@ ordinary and modeled-escape edge.
 Extend the single plan-construction path to return defensive copies of selected
 rule and action without changing matching or refusal semantics.
 
-### Phase 3: Prove the Consumer Boundary
+### Phase 3: Hand Off the Consumer Contract
 
-Add a downstream payload fixture proving `flow resolve` projects the selected
-rule, next tags, and planned writes without a second identity lookup or accessor
-execution.
+Expose the successful plan shape for RDR 0005 without adding CLI rendering in
+this implementation. RDR 0005's implementation owns the downstream payload
+fixture proving `flow resolve` projects the selected rule, next tags, and
+planned writes without a second identity lookup or accessor execution.
 
 ## Validation
 
@@ -426,9 +455,12 @@ turn that evidence into this matrix:
    state, unevaluable guard, and unmodeled outcome without a selected escape.
    **Expected**: each disposition has no plan and therefore claims no selected
    rule.
-6. **CLI projection** — map a successful plan through `flow resolve`.
+6. **CLI projection (RDR 0005 acceptance)** — when RDR 0005 is implemented, map
+   a successful plan through `flow resolve`.
    **Expected**: output uses the plan's selected rule, next tags, and planned
-   writes verbatim; the test observes no model lookup or accessor execution.
+   writes verbatim; the RDR 0005 test observes no model lookup or accessor
+   execution. This is a consumer acceptance obligation, not code owned by this
+   RDR's implementation.
 
 ### Performance Expectations
 
