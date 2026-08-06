@@ -39,8 +39,8 @@ instance body). -->
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: foundational — cross-RDR identity producer spanning resolver
-  dispositions and the CLI resolution payload.
+- **Profile**: foundational — one cross-RDR handoff contract consumed by the
+  resolver, replay tests, and the CLI resolution payload.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -181,11 +181,11 @@ instead of inventing a parallel CLI-side lookup.
 ### Approach
 
 Make `TransitionPlan`, the successful branch of `Disposition`, own two nested
-values: an immutable selected-rule value and a separately copyable transition
-action. The selected-rule value contains the RDR 0002 identity tuple—model id,
-rule id, expansion suffix, and source locator. The action contains next tags and
-owned-tag writes. Each normalized `Edge` supplies both values; `plan` copies
-them into the returned plan.
+values: a value-only `SelectedRule` and a separately copyable
+`TransitionAction`. `SelectedRule` contains model id, rule id, expansion suffix,
+and source locator. `TransitionAction` contains next tags and owned-tag writes.
+Each normalized `Edge` supplies both values; `plan` copies them into the returned
+plan.
 
 Ordinary and modeled-escape matches use the same successful plan carrier. A
 write-free escape therefore still reports the exact selected rule while its
@@ -196,13 +196,23 @@ candidate-table internals.
 
 ### Technical Design
 
-The normalized-table boundary constructs each `Edge` from three conceptual
-parts: match inputs, selected-rule identity, and transition action. Resolver
-matching reads only the match inputs. On exact-one ordinary selection, or
-exact-one modeled escape selection, `plan` returns a `TransitionPlan` containing
-a value-copy of that edge's selected-rule identity and a defensive copy of its
-action. RDR 0005 reads the former into `flow resolve` diagnostics and hands the
-latter to the accessor/state boundary.
+The normalized-table boundary constructs each `Edge` with match inputs plus
+`SelectedRule SelectedRule` and `Action TransitionAction`. `SelectedRule` has
+the string fields `ModelID`, `RuleID`, `ExpansionSuffix`, and `SourceLocator`;
+`TransitionAction` has `NextTags TagSet` and `Writes []OwnedTagWrite`.
+`TransitionPlan` exposes the same two fields. Resolver matching reads only the
+match inputs. On exact-one ordinary or modeled-escape selection,
+`plan(edge Edge) (Disposition, error)` value-copies `edge.SelectedRule`, clones
+`edge.Action.NextTags`, and copies `edge.Action.Writes` from that same edge.
+
+Before returning success, `plan` treats an empty model id, rule id, or source
+locator as a programmer/invariant error on the Go error path, not as a modeled
+refusal. An expansion suffix may be empty for an unexpanded source rule; its
+value still participates in identity. The source locator is an opaque RDR 0002
+value that this handoff copies without parsing or reformatting. RDR 0005
+projects the selected rule, next tags, and planned writes into `flow resolve`
+output without reconstructing identity or executing accessors. A later state
+operation may pass the action to the RDR 0004 accessor boundary.
 
 The selection value is descriptive, not a second authority: it is copied from
 the normalized row that was actually matched. It does not recalculate table
@@ -212,20 +222,22 @@ semantics (RDR 0001), or define CLI rendering (RDR 0005).
 #### Normative Contracts
 
 ```normative
-Every successful resolver disposition MUST expose exactly one transition plan
-whose selected-rule value contains model id, rule id, expansion suffix, and
-source locator copied from the normalized edge that matched.
+Every successful resolver disposition MUST expose exactly one `TransitionPlan`
+whose `SelectedRule` contains `ModelID`, `RuleID`, `ExpansionSuffix`, and
+`SourceLocator` copied from the normalized edge that matched. `ModelID`,
+`RuleID`, and `SourceLocator` MUST be non-empty; a missing required field MUST
+use the Go error path for a programmer/invariant failure, not a modeled refusal.
 
-The transition plan MUST expose its transition action separately from the
-selected-rule value. The action contains next tags and owned-tag writes; callers
-MUST NOT need guard predicates or the matched Edge to apply it.
+The transition plan MUST expose `Action` separately from `SelectedRule`.
+`Action` contains `NextTags` and `Writes`; callers MUST NOT need guard predicates
+or the matched `Edge` to apply it.
 
 Ordinary and modeled-escape selections MUST use the same plan shape. A
 write-free modeled escape MUST retain selected-rule identity even when its
 action has no owned-tag writes. A kernel refusal MUST NOT claim selected-rule
 identity because no normalized row was selected.
 
-The returned selected-rule value and action MUST remain unchanged if the caller
+The returned `SelectedRule` and `Action` MUST remain unchanged if the caller
 later mutates or reuses the supplied normalized table.
 ```
 
@@ -234,10 +246,11 @@ later mutates or reuses the supplied normalized table.
 - **Identity** — selected-rule equality is the RDR 0002 tuple `(model id, rule
   id, expansion suffix)`; source locator is carried diagnostic provenance and
   does not create a different logical rule identity.
-- **Naming** — the successful carrier remains `TransitionPlan`; its nested
-  values are "selected rule" and "transition action." Rejected: "provenance"
-  alone because the value is operational selection identity, and "edge"
-  because callers must not receive matching internals.
+- **Naming** — the successful carrier remains `TransitionPlan`; the nested
+  types are `SelectedRule` and `TransitionAction`, exposed as
+  `TransitionPlan.SelectedRule` and `TransitionPlan.Action`. Rejected:
+  "provenance" alone because the value is operational selection identity, and
+  "edge" because callers must not receive matching internals.
 - **Selection / predicate** — identity is copied only from the exact edge RDR
   0001 already selects; this RDR adds no tie-break or second lookup.
 
@@ -289,43 +302,19 @@ ordinary and write-free modeled-escape paths.
 
 ### Alternative 1: Selection on Disposition
 
-**Description**: Add an optional selected-rule value beside `Plan` and
-`Refusal`, leaving `TransitionPlan` as action-only.
-
-**Pros**:
-
-- Keeps action-only plans unchanged.
-- Makes selection visible at the outermost result boundary.
-
-**Cons**:
-
-- Allows invalid states: plan without selection, refusal with selection, or
-  selection without either branch.
-- Requires every disposition constructor and test to enforce a cross-field
-  invariant.
-
-**Reason for rejection**: The successful plan is the narrower carrier that can
-make selection and action atomic without weakening refusal semantics.
+Add an optional selected-rule value beside `Plan` and `Refusal`, leaving
+`TransitionPlan` action-only. This keeps the current plan shape but permits plan
+without selection, refusal with selection, and selection without either branch.
+The successful plan is the narrower carrier that makes selection and action
+atomic without a cross-field invariant.
 
 ### Alternative 2: Return the Matched Edge
 
-**Description**: Put the selected normalized `Edge` directly in the successful
-disposition and let callers read both identity and action from it.
-
-**Pros**:
-
-- Preserves every source field with almost no projection code.
-- Closely resembles uscxml retaining its selected transition object.
-
-**Cons**:
-
-- Exposes guards, outcome matching, and normalized-table storage to action
-  consumers.
-- Risks slice/map aliasing and turns future `Edge` changes into downstream API
-  changes.
-
-**Reason for rejection**: The resolver should return the minimum successful
-projection, not its candidate input object.
+Put the selected normalized `Edge` directly in the successful disposition.
+This preserves every source field with little projection code, but exposes
+guards and matching internals, risks slice/map aliasing, and couples downstream
+APIs to candidate storage. The resolver should return the minimum successful
+projection instead.
 
 ### Briefly Rejected
 
@@ -341,7 +330,8 @@ projection, not its candidate input object.
 - Action consumers can apply next tags/writes without depending on rule identity
   or guard internals.
 - `Edge`, `TransitionPlan`, construction code, and fixtures must all grow in
-  lockstep; zero-valued identity becomes a new defect class to refuse or test.
+  lockstep; incomplete selected-rule identity becomes a programmer error to
+  reject and test.
 
 ### Risks and Mitigations
 
@@ -357,8 +347,9 @@ projection, not its candidate input object.
 
 ### Failure Modes
 
-- **Missing identity on success**: CLI output lacks model/rule/source fields;
-  the MVV fails before release. Diagnose at `resolver.plan` construction.
+- **Incomplete identity on a selected edge**: `plan` returns a programmer error
+  before producing a successful disposition; the MVV covers every required
+  field. Diagnose at `resolver.plan` construction.
 - **Identity/action mismatch**: audit names one rule while next tags/writes came
   from another. Treat as an internal invariant failure; do not reconstruct or
   guess downstream.
@@ -395,31 +386,35 @@ rule and action without changing matching or refusal semantics.
 
 ### Phase 3: Prove the Consumer Boundary
 
-Add ordinary, modeled-escape, mutation, and downstream payload fixtures that
-show diagnostics consume the selected rule while state application consumes the
-separate action.
+Add a downstream payload fixture proving `flow resolve` projects the selected
+rule, next tags, and planned writes without a second identity lookup or accessor
+execution.
 
 ## Validation
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
-
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Ordinary selection** — resolve an exact-one ordinary edge.
+   **Expected**: `TransitionPlan.SelectedRule` equals that edge's complete
+   identity and `Action` equals its next tags and writes.
+2. **Write-free modeled escape** — resolve a no-match case through one escape
+   edge with no writes.
+   **Expected**: the plan retains the escape edge's complete selected rule and
+   exposes an action with the expected next tags and an empty write list.
+3. **Copy isolation** — after either successful resolution, replace the input
+   edge's identity strings, mutate its next-tag map, and replace its writes.
+   **Expected**: the returned selected rule and action remain unchanged.
+4. **Incomplete identity** — select an edge with an empty model id, rule id, or
+   source locator.
+   **Expected**: resolution returns a programmer/invariant error and no success
+   or modeled-refusal disposition.
+5. **Refusal branches** — exercise no match, ambiguous match, unavailable owned
+   state, unevaluable guard, and unmodeled outcome without a selected escape.
+   **Expected**: each disposition has no plan and therefore claims no selected
+   rule.
+6. **CLI projection** — map a successful plan through `flow resolve`.
+   **Expected**: output uses the plan's selected rule, next tags, and planned
+   writes verbatim; the test observes no model lookup or accessor execution.
 
 ## Finalization Gate
 
