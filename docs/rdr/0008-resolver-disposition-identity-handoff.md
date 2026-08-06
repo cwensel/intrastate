@@ -157,6 +157,10 @@ instead of inventing a parallel CLI-side lookup.
 - **Verified** — RDR 0002 requires the future normalizer to populate the
   complete selected-rule value on every normalized ordinary and escape row,
   without a downstream lookup.
+- **Unverified** — the current exported `Disposition`, `TransitionPlan`, and
+  `Refusal` fields let external callers fabricate combinations that bypass the
+  proposed constructor invariant; the public representation must be refined or
+  the contract narrowed to values returned by `Resolve`.
 
 ### Critical Assumptions
 
@@ -177,16 +181,15 @@ instead of inventing a parallel CLI-side lookup.
   storage.**
   - **Status**: Pending
   - **Method**: Spike
-  - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` is green and
-    proves isolation for string identity fields, a string locator, a cloned
-    next-tag map, and a copied writes slice. It remains a local surrogate:
-    production `internal/resolver/resolver.go::{Edge,Input}` has no
-    `SelectedRule` or typed locator and still accepts caller-built `[]Edge`.
-    Before Resolve can pass, rerun the spike against the concrete A4/A5 types
-    for ordinary and modeled-escape selection, mutating constructor inputs
-    before resolution and source or inspection storage afterward; an external-
-    package API test must show row components cannot be independently
-    constructed, replaced, or mutably exposed.
+  - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` proves isolation for
+    surrogate string identity and cloned action fields. The production
+    `TestA2ProductionBoundary` proves an ordinary result owns its copied action,
+    but falsifies the required input boundary: caller mutation before `Resolve`
+    changes `Input.Table`, an external package can construct and replace every
+    `Edge` component, and a modeled escape still returns an action-bearing plan.
+    Production has no `SelectedRule` or typed locator to test. Keep Pending
+    until A4/A5 supply their concrete types, then rerun the same mutation and
+    external-package checks for ordinary and modeled-escape selection.
   - **If wrong**: Audit output or replay assertions could drift after the
     caller reuses or mutates the supplied table.
 - **A3 RDR 0005 can require and test direct projection of the selected-rule
@@ -244,6 +247,21 @@ instead of inventing a parallel CLI-side lookup.
   - **If wrong**: The source schema must gain an explicit complete no-change
     action or this RDR needs a distinct modeled-escape disposition; `plan` must
     not invent next tags from an actionless row.
+- **A7 The public disposition representation can enforce that selected-rule
+  presence means exactly one modeled escape row was selected.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Current
+    `internal/resolver/resolver.go::{Disposition,TransitionPlan,Refusal}` exposes
+    caller-constructible fields, so an external package can fabricate a plan,
+    refusal, or future selected-rule combination without `plan`,
+    `modeledRefusal`, or `refuse`. Before Resolve can pass, Refine must either
+    require an opaque/accessor-based public result or narrow the invariant to
+    dispositions returned by `Resolve`, with external-package tests for the
+    chosen boundary.
+  - **If wrong**: Callers can manufacture an identity-bearing kernel refusal or
+    an impossible plan/refusal combination, making the advertised branch
+    invariant unreliable outside the resolver package.
 
 ## Proposed Solution
 
@@ -367,7 +385,7 @@ a candidate-table lookup or accessor execution.
 | Validated normalized rows, rule identity, and typed source locator | RDR 0002 | Predecessor; A2/A4/A5 Pending | Must supply one snapshot-owned row value; this RDR consumes but does not specify its construction API. |
 | Table-revision derivation and binding | RDR 0007 + charted successor | Deferred peers | Remain outside this logical identity-handoff contract. |
 | Matched-rule CLI payload | RDR 0005 | Predecessor; A3/A6 Pending | Must project selected-rule identity on success and modeled refusal, with action only on success. |
-| Disposition identity handoff | This RDR | Introduced | Extends ordinary plans and modeled refusals across the producer/consumer seam. |
+| Disposition identity handoff | This RDR | A7 Pending | Extends ordinary plans and modeled refusals across the producer/consumer seam; public construction semantics require refinement. |
 
 ### Existing Infrastructure Audit
 
@@ -494,7 +512,7 @@ the branch whose constructor selected the row gives a narrower invariant.
 
 ### Prerequisites
 
-- [ ] A2 through A6 are verified and reconciled.
+- [ ] A2 through A7 are verified and reconciled.
 - [ ] RDR 0001's resolver implementation is present on the implementation
   baseline; the reviewed symbols currently exist only on the integration branch.
 - [ ] RDR 0002 supplies the A4/A5 typed locator and validated normalized-row
@@ -536,8 +554,10 @@ The source audit grounds ordinary and modeled-escape selection in
 `internal/resolver/resolver.go::Resolve` and the current shared construction
 boundary in `internal/resolver/resolver.go::plan`; the proposal splits that
 boundary into ordinary-plan, modeled-refusal, and kernel-refusal constructors.
-The A2 spike under `evidence/spikes/` grounds only string-identity/action
-copying. RDR 0008 implementation acceptance covers:
+The A2 spikes under `evidence/spikes/` prove surrogate identity copying and
+production action-copy isolation after selection; the production probe also
+falsifies snapshot-before-resolution ownership and external construction
+constraints. RDR 0008 implementation acceptance covers:
 
 1. **Ordinary selection** — resolve an exact-one ordinary row through
    `Resolve` and `plan`.
@@ -559,7 +579,12 @@ copying. RDR 0008 implementation acceptance covers:
    state, unevaluable guard, and unmodeled outcome without a selected escape.
    **Expected**: each disposition has no plan and no selected rule; only the
    modeled-escape fixture may attach selected identity to a refusal.
-6. **Replay identity** — extend RDR 0001's
+6. **Public result construction** — attempt to compose each impossible
+   plan/refusal/selected-rule combination from an external test package.
+   **Expected**: the public API cannot construct it, or the contract explicitly
+   limits the invariant to values returned by `Resolve` and tests every returned
+   branch.
+7. **Replay identity** — extend RDR 0001's
    `TestResolve_ReplayReturnsValueIdenticalPlans` with ordinary and escape
    selected identity.
    **Expected**: two resolutions of the same input return value-identical
@@ -575,13 +600,13 @@ not code owned by RDR 0008.
 
 ### Performance Expectations
 
-The existing A2 spike supports bounded copying for string identity and action
+The A2 surrogate and production spikes support bounded copying for action
 fields: the next-tag map and writes slice are cloned once in `plan`, so time and
 allocation scale linearly with the selected action's tag and write counts. A2
-must verify the concrete typed locator and snapshot-owned table before lock.
-The spike is a correctness proof, not a latency benchmark; this RDR makes no
-throughput claim. Add a benchmark only if real normalized actions make copy cost
-material.
+must still verify concrete selected-rule and typed-locator copying from a
+snapshot-owned table before lock. The spikes are correctness proofs, not latency
+benchmarks; this RDR makes no throughput claim. Add a benchmark only if real
+normalized actions make copy cost material.
 
 ## Finalization Gate
 
