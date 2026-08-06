@@ -50,12 +50,32 @@ no Phase 3c defect was found by this review.
   probes.
 - **FAIL-N entries:** None.
 - **Probe commands:**
-  - `go test ./internal/resolver`
+  - `go test -list . ./internal/resolver`
+  - `go test -count=1 ./internal/resolver`
   - `go list -f '{{join .Imports "\n"}}' ./internal/resolver`
-- **Observed probe result:**
-  `PASS legal/provenance/replay/copy/refusals/escapes/ambient/taxonomy`;
-  the resolver package's only direct import is the standard-library `maps`
-  package.
+- **Observed test result:** `go test -count=1` reported
+  `ok github.com/newcoinc/intrastate/internal/resolver`.
+- **Category-to-test mapping:** each name below is emitted by
+  `go test -list . ./internal/resolver`:
+  - legal: `TestResolve_ReturnsExactlyOneStructuredDisposition`
+  - provenance: `TestResolve_GuardsDistinguishTagProvenance`
+  - replay: `TestResolve_ReplayReturnsValueIdenticalPlans` and
+    `TestResolve_MinimumViableValidation`
+  - copy: `TestResolve_ReturnsInertOwnedTagWrites` and
+    `TestResolveAdversarialReturnedPlanCannotMutateReplay`
+  - refusals: `TestResolve_RefusesUnmodeledOutcome`,
+    `TestResolve_RefusesDeclaredOutcomeWithoutCandidateRowAsNoMatch`,
+    `TestResolve_RefusesUndeclaredOutcomeDespiteCandidateRow`,
+    `TestResolve_RefusesNoMatch`,
+    `TestResolve_RefusesUnavailableOwnedStateAsValue`,
+    `TestResolve_RefusesUnevaluableGuardAsValue`, and
+    `TestResolveAdversarialRefusesInsteadOfGuessing`
+  - escapes: `TestResolve_AmbiguityRequiresOneExplicitEscapeEdge` and
+    `TestResolveAdversarialNoMatchEscapes`
+  - ambient: `TestResolve_IgnoresAmbientProcessStateAndProducesNoSideEffects`
+  - taxonomy: `TestResolve_RefusalKindsAreStableValues`
+- **Observed direct imports:** `go list` emitted the standard-library packages
+  `maps` and `slices`, one per line.
 
 ## Phase 3a Verdict
 
