@@ -38,3 +38,44 @@ Needs verification:
   baseline before Stage 8.
 
 Tiebreakers: none.
+
+## Fresh-context fallback resolution
+
+- **fixed** — fallback `FALLBACK-1`, origin `CRIT-1`; sections touched:
+  `Critical Assumptions / A6`, `Approach`, `Technical Design`, `Normative
+  Contracts`, `Capability Dependencies`, `Decision Rationale`, `Trade-offs`,
+  `Implementation Plan`, and `Validation`. RDR 0002 forbids write/clear data on
+  an escape while RDR 0001 and `resolver.Resolve` return an exactly-one escape
+  through `plan`; A6 now blocks lock until one production end-to-end meaning is
+  chosen.
+- **fixed** — fallback `FALLBACK-3`, origins `CRIT-1` and `CRIT-2`; sections
+  touched: `Critical Assumptions / A2`, `Approach`, `Technical Design`,
+  `Normative Contracts`, `Existing Infrastructure Audit`, `Trade-offs`,
+  `Minimum Viable Validation`, and `Validation`. The typed locator and
+  snapshot-owned table invalidate A2's string-only, post-plan spike evidence;
+  A2 is Pending and the new plan requires external-package ownership tests,
+  pre/post-resolution mutation, defensive inspection, and a race test.
+- **dismissed-with-cite** — fallback `FALLBACK-2`, origin `CRIT-2`; section
+  touched: `Technical Design` and `Load-Bearing Decisions / Identity`. RDR 0007
+  owns revision derivation and its `Existing Infrastructure Audit / Replay
+  revision claim` charts association enforcement to a successor. The RDR now
+  states that `SelectedRule` is logical identity within a revision-bound input,
+  not standalone historical event identity; `TableRevision` is not folded into
+  this carrier.
+- **fixed** — fallback `FALLBACK-3` error-boundary residue, origin `CRIT-1`;
+  sections touched: `Technical Design`, `Normative Contracts`, `Prerequisites`,
+  `Phase 3`, and Validation scenario 5. User-authored invalidity is a
+  load/config failure mapped to stable `CLIError`; only an impossible invalid
+  value inside a validated table uses the internal programmer error path.
+
+Needs verification:
+
+- **A2** — rerun ownership evidence against the concrete typed locator and
+  opaque normalized-table API.
+- **A3** — align RDR 0005 selected-rule/action projection and load/config error
+  mapping.
+- **A4** — name and verify the typed locator constructor/validator.
+- **A5** — name and verify the opaque, snapshot-owned normalized-table API.
+- **A6** — reconcile modeled-escape disposition/action semantics end to end.
+
+Tiebreakers: none.
