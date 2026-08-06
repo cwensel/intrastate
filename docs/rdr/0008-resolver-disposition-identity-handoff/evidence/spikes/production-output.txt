@@ -1,0 +1,16 @@
+=== RUN   TestA2ProductionBoundary
+=== RUN   TestA2ProductionBoundary/ordinary_result_owns_copied_action
+    production_boundary_test.go:33: PASS ordinary action result remains unchanged after source storage mutation
+=== RUN   TestA2ProductionBoundary/caller_mutation_before_resolve_changes_selected_row
+    production_boundary_test.go:49: FALSIFIED snapshot-before-resolution: exported Input.Table observes caller mutation
+=== RUN   TestA2ProductionBoundary/modeled_escape_is_action-bearing_plan
+    production_boundary_test.go:72: BLOCK modeled-escape A2 proof: production returns an action-bearing plan, not an identity-bearing refusal
+=== RUN   TestA2ProductionBoundary/external_caller_constructs_and_replaces_row_components
+    production_boundary_test.go:85: FALSIFIED external construction constraint: Edge fields and Input.Table are exported and replaceable
+--- PASS: TestA2ProductionBoundary (0.00s)
+    --- PASS: TestA2ProductionBoundary/ordinary_result_owns_copied_action (0.00s)
+    --- PASS: TestA2ProductionBoundary/caller_mutation_before_resolve_changes_selected_row (0.00s)
+    --- PASS: TestA2ProductionBoundary/modeled_escape_is_action-bearing_plan (0.00s)
+    --- PASS: TestA2ProductionBoundary/external_caller_constructs_and_replaces_row_components (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes	1.524s
