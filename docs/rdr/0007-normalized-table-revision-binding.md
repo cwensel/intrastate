@@ -98,10 +98,17 @@ digest, registry binding, or identity discriminator exists to reuse.
   and lowercase 64-digit encoding without a third-party dependency. Revision
   parsing must still reject uppercase explicitly because hex decoding accepts
   it.
-- **Pending** — the version-1 projection now includes explicit dispositions for
-  row outcome, predicate provenance/name/operator, write role, and guard
-  unevaluability, but Resolve must verify the inventory against RDR 0002 and
-  the concrete normalized value.
+- **Blocked** — the version-1 projection names row outcome, predicate
+  provenance/name/operator, write role, and guard unevaluability, but it does
+  not represent RDR 0003's typed predicate literal shape or the semantic
+  distinction between positive `all` predicates and the conjunctive `unless`
+  block. The concrete production surface is still raw
+  `internal/resolver/resolver.go::{Input,Edge}`, not RDR 0002's validated
+  normalized-table value, so the complete inventory cannot yet be verified.
+- **Pending** — no production normalizer, validated normalized-table type,
+  canonical encoder, digest helper, or binding call site exists yet. The only
+  adjacent production value is the caller-constructible resolver
+  `Input.TableRevision`, which `Resolve` does not consult.
 - **Documented** — resolver mismatch classification and ordering alter RDR
   0001's closed refusal policy independently of canonical identity; they are
   outside this RDR and must be specified before resolver enforcement ships.
@@ -126,11 +133,17 @@ digest, registry binding, or identity discriminator exists to reuse.
   while diagnostic source location can be excluded.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0008 `Load-Bearing Decisions / Identity` makes
-    `SourceLocator` diagnostic-only. The explicit inventory in Technical Design
-    covers row outcome, predicate provenance/name/operator, write role, and
-    guard unevaluability; Resolve must audit it against the RDR 0002 and concrete
-    normalized values and extend the one-field-change vectors.
+  - **Evidence**: RDR 0002 `Normative Contracts` and `Load-Bearing Decisions /
+    Identity` require normalized rows to retain model/rule identity, expansion
+    suffix, row kind, predicates, writes, escape classes, and diagnostic source
+    locator; RDR 0008 `Load-Bearing Decisions / Identity` excludes that locator
+    from logical identity. RDR 0003 `Technical Design` and `Load-Bearing
+    Decisions / Identity` additionally make typed predicate literals and the
+    positive-`all` versus conjunctive-`unless` distinction behavior-bearing.
+    The current projection does not encode those two predicate dimensions, and
+    production exposes only raw `internal/resolver/resolver.go::{Input,Edge}`
+    rather than the validated normalized-table value. Refine must settle the
+    inventory, then the spike must add one-field-change vectors for it.
   - **If wrong**: A caller can alter an omitted outcome, predicate, action, or
     rule identity while retaining the same revision.
 - **A3 Go's standard SHA-256 implementation and lowercase hexadecimal encoding
@@ -149,10 +162,13 @@ digest, registry binding, or identity discriminator exists to reuse.
   implementation.**
   - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: The peer/source audit found no existing production digest or
-    binding implementation. Resolve must identify the one exported derivation
-    symbol and the normalization call site; the follow-up enforcement RDR must
-    require its consumers to call that symbol rather than reimplement it.
+  - **Evidence**: The reuse/source audit found no production normalizer,
+    validated normalized-table type, canonical encoder, digest helper, or
+    binding implementation. `internal/resolver/resolver.go::Input` exposes raw
+    outcomes, edges, and an inert `TableRevision`; `Resolve` never reads the
+    revision. Refine must name the normalized-table construction boundary and
+    exported derivation symbol before Resolve can verify one producer call site
+    and require later consumers to reuse it.
   - **If wrong**: Producer and consumer may accept different revisions for the
     same table, or caller mutation may invalidate a cached binding silently.
 
@@ -443,7 +459,8 @@ strict public revision parser on the same identity path.
    key order, candidate input order, map iteration, or `SourceLocator`.
    **Expected**: Every table produces the same version-1 pre-image and revision.
 2. **Scenario**: Change each outcome, row kind, predicate provenance/name/
-   operator/value, escape class, guard-unevaluability value, next tag, write
+   operator/typed-literal value, positive-`all`/conjunctive-`unless` placement,
+   escape class, guard-unevaluability value, next tag, write
    role/tag/operation/value, or logical selected-rule identity field
    individually.
    **Expected**: Every change produces a different golden pre-image and revision;
