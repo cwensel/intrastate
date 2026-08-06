@@ -39,8 +39,8 @@ instance body). -->
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: foundational — one cross-RDR selected-rule/action handoff
-  contract spanning the resolver, replay validation, and CLI projection.
+- **Profile**: foundational — one resolver disposition handoff consumed across
+  replay validation and CLI projection.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -110,20 +110,19 @@ table revision.
 
 ### Investigation
 
-The freshness check confirmed that RDRs 0001, 0002, and 0005 remain Final. The
-named resolver seam exists on the current integration branch at
-`internal/resolver/resolver.go`, but not yet on `main`. On that branch, `Edge`
-carries only match/action data, `plan` copies only `NextTags` and `Writes`, and
-`TransitionPlan` therefore cannot satisfy RDR 0005's selected-rule payload.
-RDR 0007 now owns the adjacent table-revision binding question and is explicitly
-outside this RDR.
+RDRs 0001, 0002, and 0005 are Final. The named resolver seam exists on the
+current integration branch at `internal/resolver/resolver.go`, but not yet on
+`main`. On that branch, `Edge` carries only match/action data, `plan` copies
+only `NextTags` and `Writes`, and `TransitionPlan` cannot satisfy RDR 0005's
+selected-rule payload. RDR 0007 owns the separate table-revision binding
+question.
 
-Prior art was read before alternatives were revised. RDR 0002 `Normative
-Contracts` requires: "Each candidate row MUST retain its source rule id and
-source locator." Its `Load-Bearing Decisions / Identity` defines `(model id,
-rule id)` plus a deterministic expansion suffix. RDR 0005 `Technical Design`
-requires `flow resolve` data to contain "matched rule identity." In external
-source, Stateless `src/Stateless/Transition.cs::Transition` and uscxml
+RDR 0002 `Normative Contracts` requires every candidate row to retain its
+source rule id and source locator, and its `Load-Bearing Decisions / Identity`
+defines `(model id, rule id)` plus a deterministic expansion suffix. RDR 0005
+`Technical Design` requires `flow resolve` data to contain matched-rule
+identity. In external source, Stateless
+`src/Stateless/Transition.cs::Transition` and uscxml
 `src/uscxml/interpreter/LargeMicroStep.h::Transition` retain selected-transition
 context through successful execution and monitoring, favoring a direct carrier
 over downstream reconstruction. W3C SCXML 1.0 `3.1.5 Type and Transitions`
@@ -143,7 +142,7 @@ instead of inventing a parallel CLI-side lookup.
 ### Key Discoveries
 
 - **Documented** — RDR 0002 already owns the complete normalized selection
-  identity; this RDR only owns preserving it across resolver success.
+  identity; this RDR only owns preserving it across resolver dispositions.
 - **Documented** — RDR 0005 consumes matched-rule identity but does not own
   reconstructing it from model data.
 - **Documented** — Stateless and uscxml keep selected-transition context on the
@@ -176,7 +175,7 @@ instead of inventing a parallel CLI-side lookup.
   storage.**
   - **Status**: Pending
   - **Method**: Spike + Peer RDR
-  - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` reruns green and
+  - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` is green and
     proves isolation for string identity fields, a string locator, a cloned
     next-tag map, and a copied writes slice. It remains a local surrogate:
     production `internal/resolver/resolver.go::{Edge,Input}` has no
@@ -248,76 +247,53 @@ instead of inventing a parallel CLI-side lookup.
 
 ### Approach
 
-Make the resolver disposition preserve selected-rule identity on the semantic
-branch that actually occurred. An ordinary exact-one selection returns a
-`TransitionPlan` containing a `SelectedRule` and a separately copyable
-`TransitionAction`. An exactly-one modeled escape returns the underlying typed
-`Refusal` with `SelectedRule` populated and no action. A kernel refusal for which
-no row was selected has no selected rule. This keeps "selected" distinct from
-"successful": diagnostics can name the authored escape without pretending that
-an actionless row produced a next state.
+Carry one row-owned `SelectedRule` into the disposition branch that selection
+actually produces. An exact-one ordinary selection returns a `TransitionPlan`
+with that identity and a separately copyable `TransitionAction`. An exact-one
+modeled escape returns the underlying typed `Refusal` with the same identity
+and no action. A kernel refusal for which no row was selected has no selected
+rule. This keeps "selected" distinct from "successful": diagnostics can name
+the authored escape without pretending that an actionless row produced a next
+state.
 
-RDR 0008 owns this Go handoff shape; RDR 0002 continues to own identity
-semantics and normalized-table population. `SelectedRule` is the one value
-shared by a validated normalized row and whichever disposition branch consumes
-that row, not a second resolver projection or a value reconstructed during
-selection. It contains model id, rule id, expansion suffix, and a typed source
-locator. `TransitionAction` contains next tags and owned-tag writes and exists
-only on an ordinary row and its successful plan. The normalized-table
-constructor owns caller storage and builds a tagged row: common match inputs and
-selected rule plus either an ordinary action or modeled refusal classes. The
-production resolver accepts one stable validated-table snapshot; `plan` copies
-the ordinary row's identity and action, while `modeledRefusal` copies the escape
-row's identity and the failure kind it handled. Downstream callers consume
-selection for diagnostics/audit and successful action, when present, without
-receiving guard or candidate-table internals.
+RDR 0008 owns only this Go disposition handoff. RDR 0002 owns identity semantics
+and must supply typed source-locator validation, coherent normalized-row
+construction, and snapshot ownership; RDR 0005 owns CLI projection; RDR 0007
+owns table-revision binding. The handoff copies the `SelectedRule` and, for
+ordinary selection, the `TransitionAction` directly from the selected normalized
+row. It never reconstructs identity or exposes matching internals.
 
 ### Technical Design
 
-The normalized-table boundary constructs an opaque, snapshot-owned validated
-table whose internal tagged rows bind match inputs and `SelectedRule` to exactly
-one row payload: `Action TransitionAction` for an ordinary row or a modeled
-failure-class set for an escape row. Production callers cannot independently
-assemble, replace, or mutate those row components after validation; inspection
-and dump APIs return immutable values or defensive copies. `SelectedRule` has
-string fields `ModelID`, `RuleID`, and `ExpansionSuffix`, plus a typed
-`SourceLocator` value owned by the RDR 0002 normalization boundary.
-`TransitionAction` has `NextTags TagSet` and `Writes []OwnedTagWrite`.
-`TransitionPlan` exposes the selected rule and action. `Refusal` exposes its
-`Kind` and an optional `SelectedRule`; that field MUST be present exactly when a
-modeled escape row was selected. Resolver matching reads only match inputs. On
-exact-one ordinary selection, `plan` copies the matched row's selected rule and
-action without retaining mutable aliases. On exact-one escape selection,
-`modeledRefusal` copies the matched row's selected rule and the underlying
-`no_match` or `ambiguous_match` kind without constructing an action. A2/A4 must
-determine whether the typed locator is deeply immutable and value-copyable or
-requires an explicit clone.
+The resolver consumes the tagged normalized row supplied by the RDR 0002
+boundary: common match inputs and `SelectedRule`, plus either an ordinary
+`Action` or modeled refusal classes. This RDR relies on that boundary's
+validation and snapshot ownership; it does not define its constructor or
+inspection API.
 
-Before returning a selected disposition, `plan` and `modeledRefusal` treat an
-empty model id or rule id, or a zero or invalid source locator, as a programmer/
-invariant error on the Go error path, not as a modeled refusal. An expansion
-suffix may be empty for an unexpanded source rule; its value still participates
-in identity. The source locator is an RDR 0002 typed value that this handoff
-copies without parsing or reformatting. Before a row reaches the resolver, the
-normalized-table boundary constructs the locator with the same model id and
-rule id carried by `SelectedRule`; both constructors enforce required presence
-but do not reconstruct or reinterpret provenance. RDR 0005 must project the
-selected rule and any action carried by the resolved disposition into
-`flow resolve` output without
-reconstructing identity or executing accessors. A modeled escape maps to the
-stable CLI refusal for its `Kind` while retaining matched-rule identity in the
-RDR 0005 refusal payload; it does not claim next tags or writes. User-authored
-model validation failures are load/config failures that RDR 0005 maps to a
-stable `CLIError`; an invariant breach in an already validated table remains an
-internal Go error. A later state operation may pass only a successful action to
-the RDR 0004 accessor boundary.
+`SelectedRule` has `ModelID`, `RuleID`, `ExpansionSuffix`, and the typed
+`SourceLocator` owned by RDR 0002. `TransitionAction` has `NextTags TagSet` and
+`Writes []OwnedTagWrite`. `TransitionPlan` exposes both values. `Refusal`
+exposes `Kind` and an optional `SelectedRule`, present only for a selected
+modeled escape. Resolver matching reads only match inputs. `plan` copies the
+ordinary row's selected rule and action; `modeledRefusal` copies the escape
+row's selected rule and handled `no_match` or `ambiguous_match` kind; kernel
+`refuse` attaches no identity. A2/A4 determine whether the typed locator is
+deeply immutable and value-copyable or requires an explicit clone.
 
-The selection value is descriptive, not a second authority: it is copied from
-the normalized row that was actually matched and identifies that logical row
-within the revision-bound resolver input. It is not a standalone historical
-event identity. It does not recalculate or enforce table revision (RDR 0007 and
-its charted enforcement successor), redefine row identity (RDR 0002), change
-matching/refusal semantics (RDR 0001), or define CLI rendering (RDR 0005).
+`plan` and `modeledRefusal` treat an empty model id or rule id, or a zero or
+invalid source locator, as an internal invariant error rather than a modeled
+refusal. An expansion suffix may be empty for an unexpanded rule but still
+participates in identity. The handoff copies the typed locator without parsing
+or reformatting it. RDR 0005 projects the resulting selection and successful
+action; user-authored validation failures remain load/config failures under its
+CLI contract. A later state operation may pass only a successful action to the
+RDR 0004 accessor boundary.
+
+The selection value is descriptive, not a second authority. It identifies the
+matched logical row within the revision-bound resolver input; it neither
+recalculates table revision nor redefines identity, matching semantics, or CLI
+rendering.
 
 The existing RDR 0001 replay test is the replay consumer for this handoff. This
 RDR extends that test so two resolutions of the same input compare the complete
@@ -328,24 +304,15 @@ the absence of selection. Replay does not gain a second identity lookup.
 #### Normative Contracts
 
 ```normative
-The production resolver entry point MUST consume one validated normalized-table
-value whose construction binds each row's match inputs and `SelectedRule` to
-exactly one tagged payload: `Action` for an ordinary row or modeled refusal
-classes for an escape row. Production callers MUST NOT be able to compose,
-replace, or mutate those row components after validation, and inspection APIs
-MUST NOT expose mutable backing storage.
-Invalid user-authored model construction MUST fail as a load/config error before
-selection; an impossible value observed inside an already validated table MUST
-use the internal programmer/invariant error path.
+Given one selected row from the validated normalized-table boundary, the
+resolver MUST copy that row's `SelectedRule` into the disposition branch that
+selection produces. `SelectedRule` contains `ModelID`, `RuleID`,
+`ExpansionSuffix`, and the typed `SourceLocator`. `ModelID` and `RuleID` MUST be
+non-empty and `SourceLocator` MUST be valid; a missing required field MUST use
+the Go programmer/invariant error path, not a modeled refusal.
 
-Every successful resolver disposition MUST expose exactly one `TransitionPlan`
-whose `SelectedRule` contains `ModelID`, `RuleID`, `ExpansionSuffix`, and
-the typed `SourceLocator` copied from the normalized row that matched.
-`ModelID` and `RuleID` MUST be non-empty and `SourceLocator` MUST be valid; a
-missing required field MUST use the Go error path for a programmer/invariant
-failure, not a modeled refusal. The normalized-table boundary MUST reject a row
-whose `SourceLocator` designates a model id or rule id different from that
-row's `SelectedRule`.
+An exact-one ordinary selection MUST return exactly one `TransitionPlan` with
+the matched row's `SelectedRule` and `Action`.
 
 An ordinary transition plan MUST expose `Action` separately from `SelectedRule`.
 `Action` contains `NextTags` and `Writes`; callers MUST NOT need guard predicates
@@ -359,18 +326,15 @@ row was selected MUST NOT claim selected-rule identity. The `Refusal`
 constructor and tests MUST enforce that selected-rule presence means exactly
 one modeled escape row was selected; no other refusal may claim it.
 
-The returned `SelectedRule` and any `Action` MUST remain unchanged if the
-caller mutates or reuses constructor inputs before `Resolve`, later reuses
-source storage, or inspects the validated table through a public API.
-
-`flow resolve` MUST project the resolver disposition's `SelectedRule` and any
-successful `Action` in both JSON and text terminal output without a
-candidate-table lookup or accessor execution. A modeled escape MUST map to the
-stable CLI refusal for its `Kind`, include its selected-rule identity, and omit
-next tags and writes. RDR 0005 owns rendering, stable load/config error codes,
-and CLI wiring, but its consumer contract and acceptance tests MUST preserve
-this handoff before this RDR locks.
+The returned `SelectedRule` and any `Action` MUST be owned values that remain
+unchanged after `Resolve` when producer or inspection storage is reused or
+mutated.
 ```
+
+Before this RDR locks, RDR 0002's validated-table contract must separately
+prevent callers from composing or replacing row identity and payload, and RDR
+0005's consumer contract must preserve the disposition in text and JSON without
+a candidate-table lookup or accessor execution.
 
 #### Load-Bearing Decisions
 
@@ -388,13 +352,17 @@ this handoff before this RDR locks.
   identity, and "edge" because callers must not receive matching internals.
 - **Selection / predicate** — identity is copied only from the exact edge RDR
   0001 already selects; this RDR adds no tie-break or second lookup.
+- **Boundary ownership** — this RDR defines the disposition carrier and branch
+  invariants only. RDR 0002 owns producer validation and RDR 0005 owns terminal
+  projection; their acceptance is a lock prerequisite, not an additional
+  contract authored here.
 
 ### Capability Dependencies
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
 | Exact-one resolver disposition and escape meaning | RDR 0001 / RDR 0002 | A6 Pending | Must align peer contracts on an identity-bearing refusal with no action. |
-| Validated normalized rows, rule identity, and typed source locator | RDR 0002 | Predecessor; A2/A4/A5 Pending | Supplies one snapshot-owned row value; this RDR does not redefine identity semantics. |
+| Validated normalized rows, rule identity, and typed source locator | RDR 0002 | Predecessor; A2/A4/A5 Pending | Must supply one snapshot-owned row value; this RDR consumes but does not specify its construction API. |
 | Table-revision derivation and binding | RDR 0007 + charted successor | Deferred peers | Remain outside this logical identity-handoff contract. |
 | Matched-rule CLI payload | RDR 0005 | Predecessor; A3/A6 Pending | Must project selected-rule identity on success and modeled refusal, with action only on success. |
 | Disposition identity handoff | This RDR | Introduced | Extends ordinary plans and modeled refusals across the producer/consumer seam. |
@@ -403,7 +371,7 @@ this handoff before this RDR locks.
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| Normalized candidate | `internal/resolver/resolver.go::{Input,Edge}` | Exported raw rows and backing slices let callers compose or mutate unrelated identity and row payload | Replace boundary | Accept an opaque, snapshot-owned normalized-table value; return copies from inspection APIs. |
+| Normalized candidate | `internal/resolver/resolver.go::{Input,Edge}` | Exported raw rows and backing slices cannot provide the required coherent selected value | Predecessor change | RDR 0002/A5 must supply an opaque, snapshot-owned row; this RDR consumes it. |
 | Successful result | `internal/resolver/resolver.go::TransitionPlan` | Carries action only | Extend | Own selected rule and separately usable action. |
 | Modeled refusal | `internal/resolver/resolver.go::{Refusal,Resolve}` | Exactly-one escape is converted to an action-bearing plan | Correct | Return the underlying refusal kind with selected-rule identity and no action. |
 | Result construction | `internal/resolver/resolver.go::{plan,refuse}` | Drops identity on every branch | Extend | Add defensive ordinary-plan and modeled-refusal construction paths. |
@@ -478,25 +446,21 @@ the branch whose constructor selected the row gives a narrower invariant.
   diagnostics and replay assertions.
 - Action consumers can apply next tags/writes without depending on rule identity
   or guard internals.
-- `Edge`, `TransitionPlan`, `Refusal`, construction code, and fixtures must all
-  grow in lockstep; incomplete selected-rule identity becomes a programmer
-  error to reject and test.
+- `TransitionPlan`, `Refusal`, their constructors, and replay fixtures must grow
+  in lockstep; incomplete selected-rule identity becomes an invariant error.
 
 ### Risks and Mitigations
 
 - **Risk**: One selected path omits or partially fills selected-rule identity.
   **Mitigation**: Use one ordinary plan constructor and one modeled-refusal
   constructor; make the MVV cover both plus anonymous kernel refusals.
-- **Risk**: A caller pairs one row's identity or locator with another row's
-  predicates or row-kind payload.
-  **Mitigation**: Make `Resolve` consume only the validated normalized-table
-  value and test that malformed ordinary and escape rows cannot produce a
-  disposition.
-- **Risk**: Returned maps or slices alias caller-owned edge data.
-  **Mitigation**: Make validated-table construction own caller storage; clone
-  the action and clone or value-copy only deeply immutable identity fields.
-  Mutate source inputs before and after resolution and run concurrent snapshot
-  use under the race detector.
+- **Risk**: The producer supplies mismatched identity, locator, or row payload.
+  **Mitigation**: Make RDR 0002's validated-table acceptance an A4/A5 lock
+  prerequisite; the resolver never repairs or reconstructs the value.
+- **Risk**: Returned maps or slices alias producer storage.
+  **Mitigation**: Clone the action and clone or value-copy identity fields as A2
+  requires; mutate inspection storage after resolution and exercise concurrent
+  snapshot use under the race detector.
 - **Risk**: A selected modeled escape is rendered as success or gains an
   invented next state.
   **Mitigation**: Reconcile RDR 0001, RDR 0002, and RDR 0005 at A6; test
@@ -511,12 +475,9 @@ the branch whose constructor selected the row gives a narrower invariant.
 - **Incomplete identity on a selected edge**: `plan` or `modeledRefusal` returns
   a programmer error before producing a disposition; the MVV covers every
   required field. Diagnose at the matching resolver constructor.
-- **Identity/provenance mismatch on a normalized edge**: normalization rejects
-  the row before resolver selection. Diagnose at the normalized-table
-  validation boundary; `plan` must not guess or repair provenance.
-- **Identity/action mismatch**: audit names one rule while next tags/writes came
-  from another. Reject it at the validated normalized-table construction
-  boundary before `Resolve`; do not reconstruct or guess downstream.
+- **Invalid producer row**: identity, locator, predicates, and payload do not
+  describe one rule. The RDR 0002 boundary rejects it before selection; `plan`
+  never guesses or repairs provenance.
 - **Aliased result**: replay output changes after table reuse. The mutation
   fixture identifies which selected-rule/action field was not copied.
 - **Undefined escape action**: a selected escape returns success with empty or
@@ -530,48 +491,32 @@ the branch whose constructor selected the row gives a narrower invariant.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions reconciled; A2 through A6 are Pending for Stage
-  6.
+- [ ] A2 through A6 are verified and reconciled.
 - [ ] RDR 0001's resolver implementation is present on the implementation
   baseline; the reviewed symbols currently exist only on the integration branch.
-- [ ] RDR 0002 selected-rule fields are available at normalized edge creation.
-- [ ] A4 names the RDR 0002 typed locator constructor and its model/rule
-  agreement test.
-- [ ] A5 names the validated normalized-table production type/constructor and
-  proves callers cannot independently compose or mutate row identity and its
-  ordinary-action or escape-refusal payload.
-- [ ] A6 aligns RDR 0001, RDR 0002, and RDR 0005 on the selected escape as an
-  identity-bearing refusal with no action, including production normalization,
-  resolver tests, and CLI projection.
-- [ ] RDR 0007 and its charted enforcement successor own revision derivation and
-  table binding so this RDR does not duplicate historical event identity.
-- [ ] RDR 0005 `Normative Contracts` and text/JSON acceptance require direct
-  projection of the returned `SelectedRule` and any successful `Action`, plus a
-  stable load/config `CLIError` for malformed authored identity.
+- [ ] RDR 0002 supplies the A4/A5 typed locator and validated normalized-row
+  boundary, including mismatch and storage-ownership acceptance tests.
+- [ ] RDRs 0001, 0002, and 0005 align under A3/A6 on an identity-bearing modeled
+  refusal with no action; RDR 0005 acceptance directly projects ordinary and
+  modeled-refusal dispositions in text and JSON.
 
 ### Minimum Viable Validation
 
-`TestResolvePreservesSelectedRuleAndAction` parses and normalizes a production
-ordinary rule, resolves it, and asserts its selected-rule tuple and action match
-the exact row. The fixture carries a non-empty expansion suffix and write. It
-then mutates caller-owned row slices, write backing arrays, next-tag maps,
-identity strings, and locator-constructor inputs before and after `Resolve` and
-asserts the validated snapshot and returned plan remain unchanged. An
-external-package API test proves callers cannot construct or replace row
-components independently. A companion production TOML → normalize → resolve →
-CLI test asserts that an authored escape returns its failure kind and complete
-selected-rule identity with no next tags or writes; it must not hand-construct
-`Edge` values.
+`TestResolvePreservesSelectedRuleAndAction` resolves a production normalized
+ordinary row and asserts that the returned selected-rule tuple and action match
+that exact row. The fixture carries a non-empty expansion suffix and write, then
+mutates exposed inspection storage after `Resolve` and asserts the returned plan
+is unchanged. A companion resolver test selects a normalized escape and asserts
+its failure kind and complete selected-rule identity with no plan or action.
+RDR 0002 separately proves producer coherence and storage ownership; RDR 0005
+separately proves terminal projection.
 
-### Phase 1: Normalize Selection Identity
+### Phase 1: Adopt the Producer Selection Value
 
-Define the resolver-facing `SelectedRule` carrier once and have the validated
-normalized-table constructor populate that same value, plus the distinct
-action, on every ordinary row. Escape rows carry the same selected-rule value
-and modeled refusal classes but no action.
-The production resolver input uses the opaque, snapshot-owned table rather than
-caller-assembled raw edges. Do not introduce a parallel normalizer identity
-struct or a selection-time conversion.
+Wire the RDR 0002 `SelectedRule` value into the resolver-facing normalized row.
+Ordinary rows supply it beside an action; escape rows supply it beside modeled
+refusal classes. Do not introduce a parallel identity type or a selection-time
+conversion.
 
 ### Phase 2: Preserve the Disposition Handoff
 
@@ -580,19 +525,6 @@ selected rule and action without changing matching semantics. Add a modeled-
 refusal constructor that returns the selected escape's underlying failure kind
 and defensive selected-rule copy without inventing action data in `plan`.
 
-### Phase 3: Hand Off the Consumer Contract
-
-Expose the resolved disposition shape for RDR 0005 without adding CLI rendering
-in this implementation. RDR 0005's implementation owns the downstream payload
-fixture proving that `flow resolve` projects the selected rule and any
-successful action without a second identity lookup or accessor execution, and
-that it maps the modeled escape to its stable refusal with selected identity
-and no action. It also maps user-authored validation failure to a stable
-load/config `CLIError`. A3/A6 must align RDR 0005's normative contract and
-text/JSON acceptance before this RDR locks. RDR 0008 implementation acceptance
-ends at the carrier and resolver/replay tests; the release-level operator
-outcome additionally requires the RDR 0005 consumer acceptance to land.
-
 ## Validation
 
 ### Testing Strategy
@@ -600,66 +532,43 @@ outcome additionally requires the RDR 0005 consumer acceptance to land.
 The source audit grounds ordinary and modeled-escape selection in
 `internal/resolver/resolver.go::Resolve` and the current shared construction
 boundary in `internal/resolver/resolver.go::plan`; the proposal splits that
-boundary into ordinary plan, modeled-refusal, and kernel-refusal constructors.
-The existing A2 spike under `evidence/spikes/` grounds only
-the string-identity/action copy mechanism. Implementation must turn the
-resolved A2/A6 evidence into this matrix:
+boundary into ordinary-plan, modeled-refusal, and kernel-refusal constructors.
+The A2 spike under `evidence/spikes/` grounds only string-identity/action
+copying. RDR 0008 implementation acceptance covers:
 
-1. **Validated row provenance** — try to construct ordinary and escape rows
-   that pair rule B identity/locator with rule A predicates/action, including
-   through the public production resolver API.
-   **Expected**: the named normalized-table constructor rejects each malformed
-   row, or the API makes the composition unrepresentable; no successful plan is
-   returned.
-2. **Ordinary selection** — resolve an exact-one ordinary edge through
+1. **Ordinary selection** — resolve an exact-one ordinary row through
    `Resolve` and `plan`.
-   **Expected**: `TransitionPlan.SelectedRule` equals that edge's complete
+   **Expected**: `TransitionPlan.SelectedRule` equals that row's complete
    identity, including a non-empty expansion suffix, and `Action` equals its
    next tags and writes.
-3. **Modeled escape end to end** — author a valid RDR 0002 TOML escape with no
-   write or clear block, then run the production parser, normalizer, `Resolve`,
-   and CLI projection.
+2. **Modeled escape** — resolve a normalized escape with no action.
    **Expected**: the result is the modeled `no_match` or `ambiguous_match`
    refusal with the escape row's complete `SelectedRule`, no plan, and no
-   action. The test never hand-constructs an `Edge`.
-4. **Copy isolation** — mutate caller-owned row slices, identity/locator inputs,
-   next-tag maps, and write backing arrays after constructing the table but
-   before `Resolve`, then again after resolution; concurrently resolve one
-   stable snapshot under `go test -race`.
-   **Expected**: the selected rule and action remain coherent and unchanged;
-   inspection APIs expose no mutable backing storage.
-5. **Incomplete identity** — load authored rows with an empty model id or rule
-   id, zero/invalid source locator, or locator/identity mismatch; separately
-   inject an impossible invalid value inside a validated table in a package test.
-   **Expected**: authored invalidity fails before resolution as a stable
-   load/config error; the impossible internal value uses the programmer error
-   path. Neither returns a resolver disposition.
-6. **Refusal branches** — exercise no match, ambiguous match, unavailable owned
+   action.
+3. **Copy isolation** — mutate any storage exposed for inspection after
+   resolution and concurrently resolve one stable snapshot under `go test
+   -race`.
+   **Expected**: the returned selected rule and action remain unchanged.
+4. **Incomplete identity** — inject an impossible empty model id, rule id, or
+   invalid locator inside a validated row in a package test.
+   **Expected**: the programmer/invariant error path returns no disposition.
+5. **Refusal branches** — exercise no match, ambiguous match, unavailable owned
    state, unevaluable guard, and unmodeled outcome without a selected escape.
    **Expected**: each disposition has no plan and no selected rule; only the
    modeled-escape fixture may attach selected identity to a refusal.
-7. **Locator agreement (normalized-table acceptance)** — after A4 pins the
-   constructor or validator boundary, supply a locator that designates a
-   different model id or rule id from `SelectedRule`.
-   **Expected**: the normalized-table boundary rejects the row before
-   `Resolve`; `plan` does not parse or repair the locator.
-8. **Replay identity** — extend RDR 0001's
+6. **Replay identity** — extend RDR 0001's
    `TestResolve_ReplayReturnsValueIdenticalPlans` with ordinary and escape
    selected identity.
    **Expected**: two resolutions of the same input return value-identical
    dispositions: complete `SelectedRule` and `Action` for ordinary success,
    complete `SelectedRule` and `Kind` for modeled refusal, without a second
    identity lookup.
-9. **CLI projection (RDR 0005 acceptance)** — for an ordinary plan and the A6
-   selected-escape case, run production `flow resolve` in JSON and text modes.
-   **Expected**: both modes expose the exact selected model id, rule id,
-   expansion suffix, source locator, and any successful next tags/writes from
-   the resolver disposition; the test observes no model lookup or accessor
-   execution. The escape case maps to the stable CLI refusal for its kind,
-   includes selected-rule identity, and omits next tags/writes. Missing ordinary
-   action, missing selected identity, or any action on the modeled refusal fails
-   consumer acceptance. This is a release-level consumer obligation, not code
-   owned by this RDR.
+
+Lock additionally requires peer acceptance: RDR 0002 rejects mismatched
+identity/locator/payload combinations and mutable backing storage before
+selection; RDR 0005 projects ordinary and modeled-refusal dispositions in JSON
+and text without lookup or accessor execution. Those tests verify dependencies,
+not code owned by RDR 0008.
 
 ### Performance Expectations
 
