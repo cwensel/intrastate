@@ -103,15 +103,14 @@
 
 ### Blocking inventory finding
 
-The current version-1 projection remains insufficient evidence for A2. It now
-names `Edge.Outcome`, predicate provenance/name/operator, write role, and guard
-unevaluability, and it excludes `SourceLocator` consistently with RDR 0008.
-However, it does not encode RDR 0003's typed predicate literal shape or the
-semantic distinction between positive `all` predicates and the conjunctive
-`unless` block. Production also has no validated normalized-table value against
-which to close the inventory. Treating the projection as complete was rejected;
-Refine must settle those dimensions before Stage 4 extends and reruns the
-one-field vectors and peer audit.
+The version-1 projection remains insufficient evidence for A2. It now names
+`Edge.Outcome`, predicate provenance/name/operator, write role, guard
+unevaluability, typed predicate literal kind/shape, and the positive-`all`
+versus conjunctive-`unless` distinction; it excludes `SourceLocator`
+consistently with RDR 0008. Production still has no validated normalized-table
+value against which to close the inventory. Treating the projection as complete
+was rejected; Resolve must audit the concrete types and extend the one-field
+vectors and peer audit before lock.
 
 ### Profile recount
 
