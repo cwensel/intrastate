@@ -3,67 +3,13 @@
 > Revise during planning; lock at implementation.
 > If wrong, abandon code and iterate RDR.
 
-<!-- Section classes: **Required** (never omit). **Conditional**
-(delete the whole section if N/A — do NOT leave it blank or
-N/A-bulleted). **Reference-only** (guidance; never copy into the
-instance body). -->
-
 ## Metadata
 
 - **Date**: 2026-08-06
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Architecture
 - **Profile**: foundational — one resolver disposition handoff consumed across
   replay validation and CLI projection.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: Medium
 - **Related Issues**: kata `zy0m`; RDR 0005; RDR 0007
 - **Predecessors**: 0001-resolution-kernel,
@@ -110,13 +56,6 @@ table revision.
 
 ### Investigation
 
-RDRs 0001, 0002, and 0005 are Final. The named resolver seam exists on the
-current integration branch at `internal/resolver/resolver.go`, but not yet on
-`main`. On that branch, `Edge` carries only match/action data, `plan` copies
-only `NextTags` and `Writes`, and `TransitionPlan` cannot satisfy RDR 0005's
-selected-rule payload. RDR 0007 owns the separate table-revision binding
-question.
-
 RDR 0002 `Normative Contracts` requires every candidate row to retain its
 source rule id and source locator, and its `Load-Bearing Decisions / Identity`
 defines `(model id, rule id)` plus a deterministic expansion suffix. RDR 0005
@@ -157,10 +96,6 @@ instead of inventing a parallel CLI-side lookup.
 - **Verified** — RDR 0002 requires the future normalizer to populate the
   complete selected-rule value on every normalized ordinary and escape row,
   without a downstream lookup.
-- **Unverified** — the current exported `Disposition`, `TransitionPlan`, and
-  `Refusal` fields let external callers fabricate combinations that bypass the
-  proposed constructor invariant; the public representation must be refined or
-  the contract narrowed to values returned by `Resolve`.
 
 ### Critical Assumptions
 
@@ -247,21 +182,6 @@ instead of inventing a parallel CLI-side lookup.
   - **If wrong**: The source schema must gain an explicit complete no-change
     action or this RDR needs a distinct modeled-escape disposition; `plan` must
     not invent next tags from an actionless row.
-- **A7 The public disposition representation can enforce that selected-rule
-  presence means exactly one modeled escape row was selected.**
-  - **Status**: Pending
-  - **Method**: Source Search
-  - **Evidence**: Current
-    `internal/resolver/resolver.go::{Disposition,TransitionPlan,Refusal}` exposes
-    caller-constructible fields, so an external package can fabricate a plan,
-    refusal, or future selected-rule combination without `plan`,
-    `modeledRefusal`, or `refuse`. Before Resolve can pass, Refine must either
-    require an opaque/accessor-based public result or narrow the invariant to
-    dispositions returned by `Resolve`, with external-package tests for the
-    chosen boundary.
-  - **If wrong**: Callers can manufacture an identity-bearing kernel refusal or
-    an impossible plan/refusal combination, making the advertised branch
-    invariant unreliable outside the resolver package.
 
 ## Proposed Solution
 
@@ -276,12 +196,16 @@ rule. This keeps "selected" distinct from "successful": diagnostics can name
 the authored escape without pretending that an actionless row produced a next
 state.
 
-RDR 0008 owns only this Go disposition handoff. RDR 0002 owns identity semantics
-and must supply typed source-locator validation, coherent normalized-row
-construction, and snapshot ownership; RDR 0005 owns CLI projection; RDR 0007
-owns table-revision binding. The handoff copies the `SelectedRule` and, for
-ordinary selection, the `TransitionAction` directly from the selected normalized
-row. It never reconstructs identity or exposes matching internals.
+The handoff copies the `SelectedRule` and, for ordinary selection, the
+`TransitionAction` directly from the selected normalized row. It never
+reconstructs identity or exposes matching internals; the peer ownership
+boundaries remain as listed in Capability Dependencies.
+
+The branch invariant applies to dispositions returned by `Resolve`. Exported
+result structs remain plain data carriers so CLI projection and tests can inspect
+and compare them; values assembled directly by callers carry no resolver-validity
+guarantee. This keeps construction policy inside `Resolve` without expanding this
+RDR into a public opaque-result API redesign.
 
 ### Technical Design
 
@@ -295,11 +219,12 @@ inspection API.
 `SourceLocator` owned by RDR 0002. `TransitionAction` has `NextTags TagSet` and
 `Writes []OwnedTagWrite`. `TransitionPlan` exposes both values. `Refusal`
 exposes `Kind` and an optional `SelectedRule`, present only for a selected
-modeled escape. Resolver matching reads only match inputs. `plan` copies the
-ordinary row's selected rule and action; `modeledRefusal` copies the escape
-row's selected rule and handled `no_match` or `ambiguous_match` kind; kernel
-`refuse` attaches no identity. A2/A4 determine whether the typed locator is
-deeply immutable and value-copyable or requires an explicit clone.
+modeled escape in values returned by `Resolve`. Resolver matching reads only
+match inputs. `plan` copies the ordinary row's selected rule and action;
+`modeledRefusal` copies the escape row's selected rule and handled `no_match` or
+`ambiguous_match` kind; kernel `refuse` attaches no identity. A2/A4 determine
+whether the typed locator is deeply immutable and value-copyable or requires an
+explicit clone.
 
 `plan` and `modeledRefusal` treat an empty model id or rule id, or a zero or
 invalid source locator, as an internal invariant error rather than a modeled
@@ -342,9 +267,11 @@ When zero or multiple ordinary rows match and exactly one eligible escape row
 matches, the resolver MUST return the underlying `no_match` or
 `ambiguous_match` `Refusal` with that row's `SelectedRule` and MUST NOT return a
 `TransitionPlan`, `NextTags`, or `Writes`. A kernel refusal for which no escape
-row was selected MUST NOT claim selected-rule identity. The `Refusal`
-constructor and tests MUST enforce that selected-rule presence means exactly
-one modeled escape row was selected; no other refusal may claim it.
+row was selected MUST NOT claim selected-rule identity. For every disposition
+returned by `Resolve`, selected-rule presence on a refusal MUST mean exactly one
+modeled escape row was selected; tests MUST cover every return branch. Exported
+carrier structs MAY be assembled directly by callers, but such values are
+outside this invariant and MUST NOT be treated as resolver-validated results.
 
 The returned `SelectedRule` and any `Action` MUST be owned values that remain
 unchanged after `Resolve` when producer or inspection storage is reused or
@@ -376,6 +303,10 @@ a candidate-table lookup or accessor execution.
   invariants only. RDR 0002 owns producer validation and RDR 0005 owns terminal
   projection; their acceptance is a lock prerequisite, not an additional
   contract authored here.
+- **Public construction** — the invariant is guaranteed only for values returned
+  by `Resolve`. Exported result structs remain inspectable data carriers; this
+  RDR does not introduce opaque results or claim that caller-assembled values
+  are valid resolver outcomes.
 
 ### Capability Dependencies
 
@@ -385,7 +316,7 @@ a candidate-table lookup or accessor execution.
 | Validated normalized rows, rule identity, and typed source locator | RDR 0002 | Predecessor; A2/A4/A5 Pending | Must supply one snapshot-owned row value; this RDR consumes but does not specify its construction API. |
 | Table-revision derivation and binding | RDR 0007 + charted successor | Deferred peers | Remain outside this logical identity-handoff contract. |
 | Matched-rule CLI payload | RDR 0005 | Predecessor; A3/A6 Pending | Must project selected-rule identity on success and modeled refusal, with action only on success. |
-| Disposition identity handoff | This RDR | A7 Pending | Extends ordinary plans and modeled refusals across the producer/consumer seam; public construction semantics require refinement. |
+| Disposition identity handoff | This RDR | Introduced here | Extends ordinary plans and modeled refusals; validity is guaranteed for `Resolve` results, not caller-assembled carriers. |
 
 ### Existing Infrastructure Audit
 
@@ -458,6 +389,10 @@ the branch whose constructor selected the row gives a narrower invariant.
   can report a row other than the one the kernel selected.
 - **Return the matched `Edge`**: Rejected because it exposes guards and matching
   internals, risks aliases, and couples consumers to candidate storage.
+- **Opaque or accessor-only result types**: Rejected because callers consume
+  only values returned by `Resolve`; changing the public representation would
+  expand this handoff into an API redesign without strengthening that runtime
+  boundary.
 
 ## Trade-offs
 
@@ -468,7 +403,8 @@ the branch whose constructor selected the row gives a narrower invariant.
 - Action consumers can apply next tags/writes without depending on rule identity
   or guard internals.
 - `TransitionPlan`, `Refusal`, their constructors, and replay fixtures must grow
-  in lockstep; incomplete selected-rule identity becomes an invariant error.
+  in lockstep; `Resolve` treats incomplete selected-rule identity as an invariant
+  error.
 
 ### Risks and Mitigations
 
@@ -512,7 +448,7 @@ the branch whose constructor selected the row gives a narrower invariant.
 
 ### Prerequisites
 
-- [ ] A2 through A7 are verified and reconciled.
+- [ ] A2 through A6 are verified and reconciled.
 - [ ] RDR 0001's resolver implementation is present on the implementation
   baseline; the reviewed symbols currently exist only on the integration branch.
 - [ ] RDR 0002 supplies the A4/A5 typed locator and validated normalized-row
@@ -575,16 +511,12 @@ constraints. RDR 0008 implementation acceptance covers:
 4. **Incomplete identity** — inject an impossible empty model id, rule id, or
    invalid locator inside a validated row in a package test.
    **Expected**: the programmer/invariant error path returns no disposition.
-5. **Refusal branches** — exercise no match, ambiguous match, unavailable owned
-   state, unevaluable guard, and unmodeled outcome without a selected escape.
-   **Expected**: each disposition has no plan and no selected rule; only the
-   modeled-escape fixture may attach selected identity to a refusal.
-6. **Public result construction** — attempt to compose each impossible
-   plan/refusal/selected-rule combination from an external test package.
-   **Expected**: the public API cannot construct it, or the contract explicitly
-   limits the invariant to values returned by `Resolve` and tests every returned
-   branch.
-7. **Replay identity** — extend RDR 0001's
+5. **Resolve branch invariant** — exercise ordinary success, modeled escape,
+   and no match, ambiguous match, unavailable owned state, unevaluable guard,
+   and unmodeled outcome without a selected escape.
+   **Expected**: every returned disposition has exactly one plan or refusal;
+   selected identity appears on ordinary success and modeled escape only.
+6. **Replay identity** — extend RDR 0001's
    `TestResolve_ReplayReturnsValueIdenticalPlans` with ordinary and escape
    selected identity.
    **Expected**: two resolutions of the same input return value-identical
