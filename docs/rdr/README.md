@@ -15,6 +15,7 @@ engine README — this file is only the per-project index.
 | [0004](0004-accessor-execution-safety-model.md) | Accessor execution safety model | Final | — |
 | [0005](0005-skill-integration-cli-contract.md) | Skill integration CLI contract | Final | High |
 | [0006](0006-graph-lint-authority-and-guarantees.md) | Graph lint authority and guarantees | Final | — |
+| [0007](0007-normalized-table-revision-binding.md) | Normalized-table revision binding | Draft | Medium |
 
 ## Status legend
 
