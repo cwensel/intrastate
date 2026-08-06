@@ -118,13 +118,14 @@ instead of inventing a parallel CLI-side lookup.
   - **Method**: Spike
   - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` proves isolation for
     surrogate string identity and cloned action fields. The production
-    `TestA2ProductionBoundary` proves an ordinary result owns its copied action,
-    but falsifies the required input boundary: caller mutation before `Resolve`
-    changes `Input.Table`, an external package can construct and replace every
-    `Edge` component, and a modeled escape still returns an action-bearing plan.
-    Production has no `SelectedRule` or typed locator to test. Keep Pending
-    until A4/A5 supply their concrete types, then rerun the same mutation and
-    external-package checks for ordinary and modeled-escape selection.
+    `TestA2ProductionBoundary` proves an ordinary result owns its copied action
+    and directly confirms that `Edge`, `TransitionPlan`, and `Refusal` expose no
+    `SelectedRule` or typed locator to copy. It also falsifies the required input
+    boundary: caller mutation before `Resolve` changes `Input.Table`, an external
+    package can construct and replace every `Edge` component, and a modeled
+    escape still returns an action-bearing plan. Keep Pending until A4/A5 supply
+    their concrete types, then replace the absence probe with the same mutation
+    and external-package checks for ordinary and modeled-escape selection.
   - **If wrong**: Audit output or replay assertions could drift after the
     caller reuses or mutates the supplied table.
 - **A3 RDR 0005 can require and test direct projection of the selected-rule
