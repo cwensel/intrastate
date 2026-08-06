@@ -65,7 +65,7 @@ instance body). -->
   Gate locks it at Draft → Final. Never skip lenses off a
   Draft Profile until Resolve has run. -->
 - **Priority**: Medium
-- **Related Issues**: kata `zy0m`; RDR 0005
+- **Related Issues**: kata `zy0m`; RDR 0005; RDR 0007
 - **Predecessors**: 0001-resolution-kernel,
   0002-transition-table-as-reviewable-data
 - **Seam Lineage**: no prior accretion
@@ -98,335 +98,306 @@ The affected seam is the Go resolver in `internal/resolver/resolver.go`, whose
 selection result feeds replay validation and the planned CLI resolution payload.
 RDR 0001 defines the resolution kernel requirement to expose downstream values;
 RDR 0002 defines normalized model/rule identity and source locators; RDR 0005
-defines the consuming `flow resolve` payload contract.
+defines the consuming `flow resolve` payload contract. Draft RDR 0007 separately
+owns normalized-table revision binding; this RDR does not define or validate the
+table revision.
 
 ## Research Findings
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+The freshness check confirmed that RDRs 0001, 0002, and 0005 remain Final and
+that the named resolver seam still exists at `internal/resolver/resolver.go`.
+`Edge` carries only match/action data, `plan` copies only `NextTags` and
+`Writes`, and `TransitionPlan` therefore cannot satisfy RDR 0005's selected-rule
+payload. RDR 0007 now owns the adjacent table-revision binding question and is
+explicitly outside this RDR.
+
+Prior art was read before alternatives were named. RDR 0002 `Normative
+Contracts` requires: "Each candidate row MUST retain its source rule id and
+source locator." Its `Load-Bearing Decisions / Identity` defines `(model id,
+rule id)` plus a deterministic expansion suffix. RDR 0005 `Technical Design`
+requires `flow resolve` data to contain "matched rule identity." In external
+source, Stateless `src/Stateless/Transition.cs::Transition` describes one
+successful transition with get-only `Source`, `Destination`, and `Trigger`
+values. uscxml `src/uscxml/interpreter/LargeMicroStep.h::Transition` retains the
+source transition element, source, targets, event, and condition; the matching
+`LargeMicroStep.cpp` take-transitions block passes that same selected transition
+element to before/after monitor callbacks. These sources favor carrying
+selection identity on the successful transition value rather than
+reconstructing it downstream. Queries and rejected branches are recorded under
+`docs/rdr/0008-resolver-disposition-identity-handoff/evidence/research/`.
+
+Sibling-path check: source search found no adjacent selected-rule carrier or
+identity discriminator in `internal/resolver`; the existing decision boundary
+is `internal/resolver/resolver.go::plan`, so this proposal extends that boundary
+instead of inventing a parallel CLI-side lookup.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — RDR 0002 already owns the complete normalized selection
+  identity; this RDR only owns preserving it across resolver success.
+- **Documented** — RDR 0005 consumes matched-rule identity but does not own
+  reconstructing it from model data.
+- **Documented** — Stateless and uscxml keep selected-transition context on the
+  successful transition object used by execution and diagnostics.
+- **Verified** — current `Edge`, `TransitionPlan`, and `plan` discard all four
+  identity fields, for both ordinary and modeled-escape selections.
+- **Assumed** — the future normalizer can populate a complete selected-rule
+  value on every normalized ordinary and escape edge without a second lookup.
 
 ### Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight below`
-  - **Evidence**: [single sentence — concrete artifact;
-    see method-specific guidance below. Prefer a stable
-    anchor: `path::Symbol`, section heading,
-    REQ/assumption/test ID, grepable literal snippet, or
-    artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
-
-**Method vocabulary** (Reference-only — guidance for
-filling the **Method** field; do NOT copy this list into
-the instance body. Pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
+- **A1 Every normalized ordinary and escape edge can carry the complete RDR
+  0002 selection identity without a downstream model lookup.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Verify RDR 0002 `Normative Contracts` and the normalizer's
+    eventual edge-construction symbol expose model id, rule id, deterministic
+    expansion suffix, and source locator together.
+  - **If wrong**: The resolver cannot make identity and action one atomic
+    result, so CLI diagnostics may report a different rule than the one used.
+- **A2 Copying a successful plan can preserve selection identity and action
+  without aliasing mutable normalized-table storage.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: `TestResolvePreservesSelectedRuleForOrdinaryAndEscape` will
+    mutate the input edge after resolution and require the returned plan's
+    identity and action to remain unchanged.
+  - **If wrong**: Audit output or replay assertions could drift after the
+    caller reuses or mutates the supplied table.
+- **A3 RDR 0005 can render the selected-rule value directly without
+  reconstructing identity from flow/model inputs.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: Verify RDR 0005 `Technical Design` maps the resolver plan's
+    matched-rule identity into the `flow resolve` payload and needs no richer
+    resolver internals.
+  - **If wrong**: This RDR must revise the carrier before lock or RDR 0005 will
+    retain a parallel identity lookup.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Make `TransitionPlan`, the successful branch of `Disposition`, own two nested
+values: an immutable selected-rule value and a separately copyable transition
+action. The selected-rule value contains the RDR 0002 identity tuple—model id,
+rule id, expansion suffix, and source locator. The action contains next tags and
+owned-tag writes. Each normalized `Edge` supplies both values; `plan` copies
+them into the returned plan.
+
+Ordinary and modeled-escape matches use the same successful plan carrier. A
+write-free escape therefore still reports the exact selected rule while its
+action legitimately contains no writes. Kernel refusals carry no selected-rule
+value because no row was selected. Downstream callers consume selection for
+diagnostics/audit and action for state application without receiving guard or
+candidate-table internals.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The normalized-table boundary constructs each `Edge` from three conceptual
+parts: match inputs, selected-rule identity, and transition action. Resolver
+matching reads only the match inputs. On exact-one ordinary selection, or
+exact-one modeled escape selection, `plan` returns a `TransitionPlan` containing
+a value-copy of that edge's selected-rule identity and a defensive copy of its
+action. RDR 0005 reads the former into `flow resolve` diagnostics and hands the
+latter to the accessor/state boundary.
+
+The selection value is descriptive, not a second authority: it is copied from
+the normalized row that was actually matched. It does not recalculate table
+revision (RDR 0007), redefine row identity (RDR 0002), change matching/refusal
+semantics (RDR 0001), or define CLI rendering (RDR 0005).
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block,
-e.g.:
-
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
-```
+Every successful resolver disposition MUST expose exactly one transition plan
+whose selected-rule value contains model id, rule id, expansion suffix, and
+source locator copied from the normalized edge that matched.
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+The transition plan MUST expose its transition action separately from the
+selected-rule value. The action contains next tags and owned-tag writes; callers
+MUST NOT need guard predicates or the matched Edge to apply it.
+
+Ordinary and modeled-escape selections MUST use the same plan shape. A
+write-free modeled escape MUST retain selected-rule identity even when its
+action has no owned-tag writes. A kernel refusal MUST NOT claim selected-rule
+identity because no normalized row was selected.
+
+The returned selected-rule value and action MUST remain unchanged if the caller
+later mutates or reuses the supplied normalized table.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 8.1 asserts it across the
-seam.
-
-#### Illustrative Code
-
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
-
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
-
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+- **Identity** — selected-rule equality is the RDR 0002 tuple `(model id, rule
+  id, expansion suffix)`; source locator is carried diagnostic provenance and
+  does not create a different logical rule identity.
+- **Naming** — the successful carrier remains `TransitionPlan`; its nested
+  values are "selected rule" and "transition action." Rejected: "provenance"
+  alone because the value is operational selection identity, and "edge"
+  because callers must not receive matching internals.
+- **Selection / predicate** — identity is copied only from the exact edge RDR
+  0001 already selects; this RDR adds no tie-break or second lookup.
 
 ### Capability Dependencies
 
-[For each load-bearing behavior, state whether the
-enabling capability exists now, is introduced by this
-RDR, is provided by a predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Exact-one resolver disposition | RDR 0001 | Available | Preserves existing success/refusal selection semantics. |
+| Normalized rule identity and source locator | RDR 0002 | Predecessor | Supplies the selected-rule value; this RDR does not redefine it. |
+| Table-revision binding | RDR 0007 | Deferred peer | Remains outside this identity-handoff contract. |
+| Matched-rule CLI payload | RDR 0005 | Predecessor | Consumes selected-rule identity directly. |
+| Successful selected-rule/action carrier | This RDR | Introduced | Extends the resolver plan across the producer/consumer seam. |
 
 ### Existing Infrastructure Audit
 
-[List existing modules that overlap with proposed
-components. For each, state whether to reuse, extend,
-or replace, and name any known limit that affects the
-spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Normalized candidate | `internal/resolver/resolver.go::Edge` | Carries match and action only | Extend | Add the RDR 0002-selected rule value without changing matching. |
+| Successful result | `internal/resolver/resolver.go::TransitionPlan` | Carries action only | Extend | Own selected rule and separately usable action. |
+| Result construction | `internal/resolver/resolver.go::plan` | Drops edge identity and copies action fields only | Extend | Copy both values defensively from the matched edge. |
+| CLI output | `internal/cli/respond` and RDR 0005 | No resolver verb wired yet | Reuse later | Rendering stays outside the kernel. |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out.]
+The Questions-Options-Criteria matrix scores 1 (poor) through 5 (strong):
+
+| Approach | Correctness fit | Prior-art alignment | Reversibility | Blast radius | Cost | Total |
+| --- | --- | --- | --- | --- | --- | ---: |
+| Plan owns selected rule + separate action | 5 — success makes both atomic | 5 — mirrors successful transition values | 4 — nested values can evolve | 4 — resolver types and tests only | 4 — one propagation path | **22** |
+| Disposition owns optional selected rule | 3 — permits plan/identity mismatch | 4 — transition context stays near result | 5 — plan stays unchanged | 4 — one extra disposition field | 3 — every branch must enforce presence | **19** |
+| Return the matched Edge | 2 — exposes match internals and aliases | 3 — preserves transition object | 2 — hard to narrow later | 2 — downstream couples to resolver input | 4 — minimal initial code | **13** |
+| Reconstruct identity in CLI | 1 — second lookup can disagree | 1 — breaks selected-object handoff | 3 — isolated but removable | 1 — duplicates model selection | 2 — lookup/index plumbing | **8** |
+
+The chosen plan-owned carrier wins on the deciding correctness and prior-art
+criteria while keeping blast radius bounded. Putting selection on `Disposition`
+would preserve the current action-only plan, but creates an optional-field
+invariant across success and refusal branches. Returning `Edge` leaks guard and
+candidate storage. CLI reconstruction violates the user's audit outcome because
+reported identity could diverge from the edge actually selected.
+
+Premortem: this ships and diagnostics sometimes show an empty or stale rule id
+because one success path constructs the action without copying selection, or a
+caller mutates the source edge after resolution. The recommendation survives:
+one successful `TransitionPlan` constructor path can make selected rule and
+action inseparable, and A2's MVV requires defensive-copy behavior for both
+ordinary and write-free modeled-escape paths.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Selection on Disposition
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-**Description**: [Brief description]
+**Description**: Add an optional selected-rule value beside `Plan` and
+`Refusal`, leaving `TransitionPlan` as action-only.
 
 **Pros**:
 
-- [Advantage 1]
+- Keeps action-only plans unchanged.
+- Makes selection visible at the outermost result boundary.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Allows invalid states: plan without selection, refusal with selection, or
+  selection without either branch.
+- Requires every disposition constructor and test to enforce a cross-field
+  invariant.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: The successful plan is the narrower carrier that can
+make selection and action atomic without weakening refusal semantics.
+
+### Alternative 2: Return the Matched Edge
+
+**Description**: Put the selected normalized `Edge` directly in the successful
+disposition and let callers read both identity and action from it.
+
+**Pros**:
+
+- Preserves every source field with almost no projection code.
+- Closely resembles uscxml retaining its selected transition object.
+
+**Cons**:
+
+- Exposes guards, outcome matching, and normalized-table storage to action
+  consumers.
+- Risks slice/map aliasing and turns future `Edge` changes into downstream API
+  changes.
+
+**Reason for rejection**: The resolver should return the minimum successful
+projection, not its candidate input object.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **CLI-side identity reconstruction**: Rejected because a second model lookup
+  can report a row other than the one the kernel selected.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Successful resolution becomes self-describing for diagnostics and replay
+  assertions, including modeled escapes with empty write sets.
+- Action consumers can apply next tags/writes without depending on rule identity
+  or guard internals.
+- `Edge`, `TransitionPlan`, construction code, and fixtures must all grow in
+  lockstep; zero-valued identity becomes a new defect class to refuse or test.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: One success path omits or partially fills selected-rule identity.
+  **Mitigation**: Use one plan-construction path and make the MVV cover ordinary
+  and modeled-escape selections.
+- **Risk**: Returned maps or slices alias caller-owned edge data.
+  **Mitigation**: Clone the action and value-copy immutable identity; prove it by
+  mutating the input fixture after resolution.
+- **Risk**: This RDR accidentally absorbs table revision or CLI wire-format
+  ownership.
+  **Mitigation**: Keep revision validation in RDR 0007 and rendering in RDR 0005.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- **Missing identity on success**: CLI output lacks model/rule/source fields;
+  the MVV fails before release. Diagnose at `resolver.plan` construction.
+- **Identity/action mismatch**: audit names one rule while next tags/writes came
+  from another. Treat as an internal invariant failure; do not reconstruct or
+  guess downstream.
+- **Aliased result**: replay output changes after table reuse. The mutation
+  fixture identifies which selected-rule/action field was not copied.
+- **Refusal claims a rule**: a no-match or ambiguous refusal falsely implies a
+  selection. Reject the invalid disposition in tests and keep refusal identity
+  absent.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] RDR 0002 selected-rule fields are available at normalized edge creation.
+- [ ] RDR 0007 boundary is confirmed so revision binding is not duplicated.
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.]
+`TestResolvePreservesSelectedRuleForOrdinaryAndEscape` resolves one ordinary
+edge and one write-free modeled escape, asserts the returned selected-rule tuple
+matches the exact input edge and the action matches that edge, then mutates the
+input table and asserts both returned plans remain value-identical.
 
-### Phase 1: Code Implementation
+### Phase 1: Normalize Selection Identity
 
-#### Step 1: [Title]
+Carry the RDR 0002 identity tuple and action as distinct values on every
+ordinary and modeled-escape edge.
 
-[Instructions]
+### Phase 2: Preserve the Successful Handoff
 
-#### Step 2: [Title]
+Extend the single plan-construction path to return defensive copies of selected
+rule and action without changing matching or refusal semantics.
 
-[Instructions]
+### Phase 3: Prove the Consumer Boundary
 
-### Phase 2: Operational Activation
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Add ordinary, modeled-escape, mutation, and downstream payload fixtures that
+show diagnostics consume the selected rule while state application consumes the
+separate action.
 
 ## Validation
 
@@ -543,7 +514,12 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0001 `Normative Contracts` — resolver disposition and refusal ownership.
+- RDR 0002 `Normative Contracts`; `Load-Bearing Decisions / Identity` — source
+  rule id, source locator, model id, and expansion suffix.
+- RDR 0005 `Technical Design`; `Normative Contracts` — matched-rule CLI payload.
+- RDR 0007 — normalized-table revision binding, explicitly separate.
+- Stateless `src/Stateless/Transition.cs::Transition`.
+- uscxml `src/uscxml/interpreter/LargeMicroStep.h::Transition`,
+  `LargeMicroStep.cpp` take-transitions block, and
+  `src/bindings/swig/wrapped/WrappedInterpreterMonitor.cpp::afterTakingTransition`.
