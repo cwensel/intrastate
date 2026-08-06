@@ -39,8 +39,8 @@ instance body). -->
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: foundational — one cross-RDR handoff contract consumed by the
-  resolver, replay tests, and the CLI resolution payload.
+- **Profile**: foundational — one cross-RDR selected-rule/action handoff
+  contract spanning the resolver, replay validation, and CLI projection.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -143,36 +143,43 @@ instead of inventing a parallel CLI-side lookup.
   successful transition object used by execution and diagnostics.
 - **Verified** — current `Edge`, `TransitionPlan`, and `plan` discard all four
   identity fields, for both ordinary and modeled-escape selections.
-- **Assumed** — the future normalizer can populate a complete selected-rule
-  value on every normalized ordinary and escape edge without a second lookup.
+- **Verified** — RDR 0002 requires the future normalizer to populate the
+  complete selected-rule value on every normalized ordinary and escape row,
+  without a downstream lookup.
 
 ### Critical Assumptions
 
 - **A1 Every normalized ordinary and escape edge can carry the complete RDR
   0002 selection identity without a downstream model lookup.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Verify RDR 0002 `Normative Contracts` and the normalizer's
-    eventual edge-construction symbol expose model id, rule id, deterministic
-    expansion suffix, and source locator together.
+  - **Evidence**: RDR 0002 `Normative Contracts` requires every normalized
+    candidate row to retain source rule id and source locator;
+    `Load-Bearing Decisions / Identity` defines the same row's identity as
+    model id, rule id, and deterministic expansion suffix, and its modeled-
+    escape contract keeps escape selection in that normalized row set.
   - **If wrong**: The resolver cannot make identity and action one atomic
     result, so CLI diagnostics may report a different rule than the one used.
 - **A2 Copying a successful plan can preserve selection identity and action
   without aliasing mutable normalized-table storage.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: `TestResolvePreservesSelectedRuleForOrdinaryAndEscape` will
-    mutate the input edge after resolution and require the returned plan's
-    identity and action to remain unchanged.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `go test -v
+    ./docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes -run
+    '^TestPlanOwnsSelectedIdentityAndAction$' -count=1` passed; captured
+    `evidence/spikes/output.txt` shows a value-copied selected rule plus cloned
+    next-tag map and writes slice remain unchanged after input mutation and
+    reuse.
   - **If wrong**: Audit output or replay assertions could drift after the
     caller reuses or mutates the supplied table.
 - **A3 RDR 0005 can render the selected-rule value directly without
   reconstructing identity from flow/model inputs.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: Verify RDR 0005 `Technical Design` maps the resolver plan's
-    matched-rule identity into the `flow resolve` payload and needs no richer
-    resolver internals.
+  - **Evidence**: RDR 0005 `Technical Design` makes `flow resolve` a translating
+    consumer of the resolver result and includes matched rule identity in its
+    payload; its `Normative Contracts` require that projection without granting
+    the CLI candidate-table or matching internals for a second lookup.
   - **If wrong**: This RDR must revise the carrier before lock or RDR 0005 will
     retain a parallel identity lookup.
 
@@ -363,7 +370,7 @@ projection instead.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
+- [x] All Critical Assumptions verified
 - [ ] RDR 0002 selected-rule fields are available at normalized edge creation.
 - [ ] RDR 0007 boundary is confirmed so revision binding is not duplicated.
 
@@ -394,11 +401,18 @@ execution.
 
 ### Testing Strategy
 
-1. **Ordinary selection** — resolve an exact-one ordinary edge.
+The source audit grounds ordinary and modeled-escape selection in
+`internal/resolver/resolver.go::Resolve` and their shared copy boundary in
+`internal/resolver/resolver.go::plan`. The A2 spike output under
+`evidence/spikes/` grounds the copy-isolation mechanism. Implementation must
+turn that evidence into this matrix:
+
+1. **Ordinary selection** — resolve an exact-one ordinary edge through
+   `Resolve` and `plan`.
    **Expected**: `TransitionPlan.SelectedRule` equals that edge's complete
    identity and `Action` equals its next tags and writes.
-2. **Write-free modeled escape** — resolve a no-match case through one escape
-   edge with no writes.
+2. **Write-free modeled escape** — resolve a no-match case through the same
+   `plan` boundary with one escape edge and no writes.
    **Expected**: the plan retains the escape edge's complete selected rule and
    exposes an action with the expected next tags and an empty write list.
 3. **Copy isolation** — after either successful resolution, replace the input
@@ -415,6 +429,15 @@ execution.
 6. **CLI projection** — map a successful plan through `flow resolve`.
    **Expected**: output uses the plan's selected rule, next tags, and planned
    writes verbatim; the test observes no model lookup or accessor execution.
+
+### Performance Expectations
+
+The source audit and A2 spike support a bounded handoff: selected-rule fields
+are value-copied, while the next-tag map and writes slice are cloned once in
+`plan`, so time and allocation scale linearly with the selected action's tag and
+write counts. The spike is a correctness proof, not a latency benchmark; this
+RDR makes no throughput claim. Implementation should add a benchmark only if
+real normalized actions make copy cost material.
 
 ## Finalization Gate
 
