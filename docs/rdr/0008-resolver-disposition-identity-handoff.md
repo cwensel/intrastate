@@ -171,40 +171,39 @@ instead of inventing a parallel CLI-side lookup.
   locator, and action without aliasing mutable normalized-table storage.**
   - **Status**: Pending
   - **Method**: Spike + Peer RDR
-  - **Evidence**: The existing
-    `TestPlanOwnsSelectedIdentityAndAction` spike proves isolation for string
-    identity fields, a string locator, a next-tag map, and a writes slice. It
-    does not prove the revised RDR 0002-owned typed locator is deeply immutable
-    or cloned, nor that the validated table owns caller storage before
-    `Resolve`. Stage 6 must rerun the spike against the concrete A4/A5 types,
-    mutating constructor inputs before resolution and source storage after
-    resolution; an external-package API test must show row components cannot be
-    replaced after validation.
+  - **Evidence**: `TestPlanOwnsSelectedIdentityAndAction` reruns green and
+    proves isolation for string identity fields, a string locator, a cloned
+    next-tag map, and a copied writes slice. It remains a local surrogate:
+    production `internal/resolver/resolver.go::{Edge,Input}` has no
+    `SelectedRule` or typed locator and still accepts caller-built `[]Edge`.
+    Before Resolve can pass, rerun the spike against the concrete A4/A5 types,
+    mutating constructor inputs before resolution and source or inspection
+    storage afterward; an external-package API test must show row components
+    cannot be independently constructed, replaced, or mutably exposed.
   - **If wrong**: Audit output or replay assertions could drift after the
     caller reuses or mutates the supplied table.
 - **A3 RDR 0005 can require and test direct projection of the selected-rule
   value without reconstructing identity from flow/model inputs.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0005 `Technical Design` includes matched rule identity in
-    the `flow resolve` payload, but its current `Normative Contracts` require
-    only a resolved next tag-set or refusal. Stage 6 must verify that RDR 0005 is
-    revised to require `SelectedRule` and `Action` projection in JSON and text
-    acceptance tests, without a candidate-table lookup or accessor execution,
-    before this RDR locks.
+  - **Evidence**: Final RDR 0005 `Technical Design` includes matched rule
+    identity and action in the `flow resolve` payload, but its `Normative
+    Contracts` require only a resolved next tag-set or refusal. Before Resolve
+    can pass, RDR 0005 must require `SelectedRule` and `Action` projection in
+    JSON and text acceptance tests without a candidate-table lookup or accessor
+    execution.
   - **If wrong**: This RDR must revise the carrier before lock or RDR 0005 will
     omit identity or retain a parallel identity lookup.
 - **A4 The normalized-table boundary can construct a typed source locator that
   remains bound to the selected model and rule.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: Stage 6 must verify against RDR 0002 `Technical Design` and
-    `Normative Contracts` that the locator retained on each normalized row is a
-    typed value constructed with that row's model id and rule id, rather than
-    an opaque string checked only for presence. Before lock, that verification
-    must name the normalized-table constructor or validator, its zero-value and
-    mismatch behavior, and the mismatch test at that callable boundary; `plan`
-    remains a copying consumer of the validated value.
+  - **Evidence**: RDR 0002 `Technical Design` says a locator identifies the
+    model and rule and its `Normative Contracts` require retention, but neither
+    section defines a typed constructor or callable validator, zero-value
+    behavior, model/rule mismatch behavior, or a boundary test. Before Resolve
+    can pass, that contract must be named at the normalized-table construction
+    boundary; `plan` remains only a copying consumer of the validated value.
   - **If wrong**: A successful plan could report the selected identity while
     directing diagnostics to a different authored rule.
 - **A5 The production resolver entry point can accept only normalized-table
@@ -213,24 +212,25 @@ instead of inventing a parallel CLI-side lookup.
   - **Status**: Pending
   - **Method**: Source Search + Peer RDR
   - **Evidence**: Current `internal/resolver/resolver.go::{Input,Edge}` exposes a
-    caller-constructible `[]Edge`, while RDR 0007 requires outcomes and rows to
-    become one normalized semantic table value. Stage 6 must name the concrete
-    constructor/validator and production input type that prevent callers from
-    independently composing rule B identity with rule A predicates or action,
-    and must name ordinary and escape mismatch tests at `Resolve`.
+    caller-constructible `[]Edge`; RDR 0007 is Draft and explicitly records that
+    no production normalizer or validated-table type exists. Before Resolve can
+    pass, the owning RDR must name the concrete constructor or validator and
+    production input type that prevent callers from composing rule B identity
+    with rule A predicates or action, plus ordinary and escape mismatch tests.
   - **If wrong**: The resolver can execute one row's action while returning
     authoritative-looking identity for another row.
 - **A6 Modeled escape selection has one action/disposition meaning shared by
   the source schema, normalized row, resolver, and CLI.**
   - **Status**: Pending
   - **Method**: Peer RDR + Source Search
-  - **Evidence**: RDR 0002 currently forbids `write` and `clear` on an escape
-    rule, while RDR 0001 and `internal/resolver/resolver.go::Resolve` treat an
-    exactly-one escape edge as a successful plan; current resolver tests
-    hand-construct escape edges with next tags and writes. Stage 6 must reconcile
-    those contracts at the production parse → normalize → resolve boundary:
-    either define how a selected escape obtains a complete action, or define it
-    as an identity-bearing non-success disposition with no action.
+  - **Evidence**: Stage 4 falsified the shared-meaning claim as currently
+    specified. RDR 0001 `Technical Design` and
+    `internal/resolver/resolver.go::Resolve` turn an exactly-one escape into a
+    successful plan, while RDR 0002 `Normative Contracts` forbid `write` and
+    `clear` on escape rules and RDR 0005 requires next tags or refusal. Return
+    to Stage 2/3 and choose one production parse → normalize → resolve meaning:
+    either define how a selected escape obtains a complete action, or define an
+    identity-bearing non-success disposition with no action.
   - **If wrong**: `flow resolve` can report a successful selected escape with
     an empty or invented next tag-set, causing automation to repeat the same
     state or violate the authored schema.
