@@ -42,7 +42,7 @@
 - Reconstructing rule identity in the CLI was rejected because it introduces a
   second lookup that can disagree with the edge actually selected.
 
-## Stage 4 verification record
+## Stage 4 cold-path re-resolution record
 
 ### Accepted anchors
 
@@ -57,14 +57,39 @@
 - RDR 0005 `Technical Design` and `Normative Contracts`: `flow resolve` is a
   translating consumer of matched rule identity, not a second resolver.
 - `evidence/spikes/command.txt` → `evidence/spikes/output.txt`: the live Go
-  spike passed and preserved selected identity and action after input mutation
-  and reuse.
+  spike reran green and preserved surrogate string identity and cloned action
+  fields after input mutation and reuse.
 
-### Negative and rejected branches
+### Queries
+
+1. Semble, intrastate: `resolver plan copies selected rule identity source
+   locator action TransitionPlan from matched normalized row without mutable
+   aliases`.
+2. Semble, intrastate: `validated normalized table constructor binds match
+   predicates selected rule identity source locator action and production
+   Resolve accepts opaque table`.
+3. Semble, intrastate: `modeled escape disposition semantics selected escape
+   action next tags writes success refusal resolver`.
+4. Semble, RDR peers: `Each candidate row MUST retain source rule id source
+   locator model id deterministic expansion suffix escape`.
+5. Semble, RDR peers: `flow resolve minimum payload matched rule identity`.
+6. Semble, RDR peers: `RDR 0001 resolution kernel normative contracts modeled
+   escape successful plan downstream values`.
+
+### Negative, incomplete, and rejected branches
 
 - Reuse audit negative: no production selected-rule identity carrier or
   discriminator exists in `internal/resolver`; extending `plan` does not
   duplicate an adjacent capability.
-- No normalizer or edge-construction implementation exists yet. That absence
-  is an implementation prerequisite, not contrary evidence: Final RDR 0002
-  owns the complete normalized-row identity contract consumed here.
+- A2 remains incomplete: the live spike uses a local string-locator surrogate;
+  production has no selected-rule or locator carrier and accepts raw `[]Edge`.
+- A3 remains incomplete: Final RDR 0005 describes matched identity and action
+  in `Technical Design`, but its `Normative Contracts` require only next tags
+  or refusal.
+- A4 remains incomplete: RDR 0002 retains source identity but names no typed
+  locator constructor or mismatch-validation boundary.
+- A5 remains incomplete: no production normalizer, opaque validated-table
+  value, or construction boundary exists; Draft RDR 0007 records the same gap.
+- A6 is contradicted, not merely uncited: RDR 0001 and current `Resolve` make an
+  exactly-one escape successful, while RDR 0002 forbids escape action fields.
+  Resolve must return to Stage 2/3 to choose one cross-RDR meaning.
