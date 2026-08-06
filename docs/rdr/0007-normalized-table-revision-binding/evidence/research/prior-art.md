@@ -64,8 +64,10 @@
 
 ### Accepted evidence
 
-- The live Go spike at `../spikes/main.go`, with captured output in
-  `../spikes/output.txt`, verifies the proposed framing and ordering mechanics:
+- `GOCACHE=/tmp/intrastate-rdr7-go-cache go run
+  ./docs/rdr/0007-normalized-table-revision-binding/evidence/spikes` was rerun
+  on 2026-08-06 and byte-matched `../spikes/output.txt`. The live spike verifies
+  the proposed framing and ordering mechanics:
   reordered semantic sets, map iteration, diagnostic locator changes,
   source-schema-version changes, and nil/empty construction preserve the
   pre-image and revision; projected one-field changes, clear-versus-empty, and
@@ -74,10 +76,14 @@
   `encoding/hex::EncodeToString` emits 64 lowercase hexadecimal digits. The
   decoder accepts uppercase, so revision grammar validation cannot rely on
   successful hex decoding alone.
-- RDR 0001 `Normative Contracts` keeps resolver refusals in the value-level
-  disposition, while RDR 0005 `Approach` and `Technical Design` map stable
-  resolver refusals to `CLIError`. Together they support a distinct
-  `table_revision_mismatch` refusal and `flow-table-revision-mismatch` CLI code.
+- RDR 0002 `Normative Contracts` and `Load-Bearing Decisions / Identity` define
+  the normalized row's model/rule identity, expansion suffix, row kind,
+  predicates, writes, escape classes, and diagnostic source locator. RDR 0008
+  `Load-Bearing Decisions / Identity` confirms that `SourceLocator` is not
+  logical selected-rule identity.
+- RDR 0003 `Technical Design` and `Load-Bearing Decisions / Identity` define a
+  predicate's behavior-bearing typed literal and distinguish positive `all`
+  predicates from one conjunctive `unless` block.
 
 ### Queries and negative findings
 
@@ -90,25 +96,29 @@
    structured output error path`.
 4. Semble, intrastate: `tests for resolver refusal handling and transition
    table revision replay identity`.
-5. No production revision digest, parser, binding gate, mismatch refusal, or
-   CLI mapping exists to reuse. RDR 0002's evidence contains only a sorting
-   prototype.
+5. No production normalized-table constructor, revision digest, parser, or
+   binding call site exists to reuse. `internal/resolver/resolver.go::Input`
+   contains the only `TableRevision`, and `Resolve` does not consult it. RDR
+   0002's evidence contains only a normalization/sorting prototype.
 
 ### Blocking inventory finding
 
-The current version-1 projection is insufficient evidence for A2. It excludes
-`SourceLocator` consistently with RDR 0008, but does not explicitly include or
-eliminate `Edge.Outcome`, `TagPredicate.Provenance` and predicate operator,
-`OwnedTagWrite.Role`, or `Guard.Unevaluable`. Treating the current projection as
-complete was rejected; Refine must settle those fields before Stage 4 reruns
-the one-field vectors and peer audit.
+The current version-1 projection remains insufficient evidence for A2. It now
+names `Edge.Outcome`, predicate provenance/name/operator, write role, and guard
+unevaluability, and it excludes `SourceLocator` consistently with RDR 0008.
+However, it does not encode RDR 0003's typed predicate literal shape or the
+semantic distinction between positive `all` predicates and the conjunctive
+`unless` block. Production also has no validated normalized-table value against
+which to close the inventory. Treating the projection as complete was rejected;
+Refine must settle those dimensions before Stage 4 extends and reruns the
+one-field vectors and peer audit.
 
 ### Profile recount
 
-The Normative Contracts currently lock at least three independent
-load-bearing contracts: the canonical hash/pre-image, the public revision
-grammar, and the resolver mismatch refusal/ordering policy. Stage 4 therefore
-did not overwrite the provisional `foundational` profile: the Resolve sizing
-rule makes two or more independent contracts a split signal. Refine must either
-demonstrate one inseparable seam or split the contracts before the profile can
-be latched.
+The Normative Contracts currently lock at least two independent load-bearing
+contracts: the canonical semantic pre-image/SHA-256 identity and the public
+revision grammar/parser contract. Resolver mismatch disposition and ordering
+have correctly moved outside this RDR, but the remaining count is still a
+Resolve split signal. Stage 4 therefore did not overwrite the provisional
+`foundational` profile. Refine must either demonstrate that these are one
+inseparable contract or split them before the routing latch can be set.
