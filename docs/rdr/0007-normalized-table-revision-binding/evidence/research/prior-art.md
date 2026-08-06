@@ -122,3 +122,27 @@ have correctly moved outside this RDR, but the remaining count is still a
 Resolve split signal. Stage 4 therefore did not overwrite the provisional
 `foundational` profile. Refine must either demonstrate that these are one
 inseparable contract or split them before the routing latch can be set.
+
+### Stage 4 cold recheck (2026-08-06)
+
+- **A1 — verified**: `GOCACHE=/tmp/intrastate-rdr7-go-cache-a1 go run
+  ./docs/rdr/0007-normalized-table-revision-binding/evidence/spikes` reproduced
+  `../spikes/output.txt`. The spike's `canonicalPreimage` and `revision`
+  functions preserve identity across semantic-set order, map iteration,
+  diagnostic-locator/source-schema changes, and nil/empty construction; its
+  projected mutations and clear-versus-empty boundary change the identity.
+- **A3 — verified**: Go 1.26
+  `crypto/sha256/sha256.go::{Size,Sum256}` supplies a 32-byte SHA-256 result;
+  `encoding/hex/hex.go::{hextable,EncodedLen,EncodeToString}` produces its
+  64-character lowercase form. `reverseHexTable` accepts uppercase, so the
+  parser must check lowercase bytes before decoding.
+- **A2 and A4 — incomplete**: Semble searches for the normalized-table
+  constructor, validation boundary, canonical encoder, digest helper, and
+  revision binding find only this RDR's spike and
+  `internal/resolver/resolver.go::{Input,Resolve}`. The production input still
+  accepts raw `[]Edge` plus an unused caller `TableRevision`; there is no
+  normalized-table, `SelectedRule`, action, or typed-`SourceLocator` inventory
+  against which to prove completeness or shared-consumer reuse. RDR 0002/0008
+  must first make those concrete types and their construction boundary
+  available, then this RDR must audit the projection and extend the one-field
+  mutation vectors.
