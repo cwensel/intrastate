@@ -98,13 +98,11 @@ digest, registry binding, or identity discriminator exists to reuse.
   and lowercase 64-digit encoding without a third-party dependency. Revision
   parsing must still reject uppercase explicitly because hex decoding accepts
   it.
-- **Blocked** — the version-1 projection names row outcome, predicate
-  provenance/name/operator, write role, and guard unevaluability, but it does
-  not represent RDR 0003's typed predicate literal shape or the semantic
-  distinction between positive `all` predicates and the conjunctive `unless`
-  block. The concrete production surface is still raw
-  `internal/resolver/resolver.go::{Input,Edge}`, not RDR 0002's validated
-  normalized-table value, so the complete inventory cannot yet be verified.
+- **Documented** — RDR 0003 makes predicate literal type and shape
+  behavior-bearing and gives positive `all` and conjunctive `unless` different
+  semantics. The version-1 projection therefore uses a typed-value record and
+  an explicit clause discriminator; flattening either to untyped bytes would
+  permit semantic aliases.
 - **Pending** — no production normalizer, validated normalized-table type,
   canonical encoder, digest helper, or binding call site exists yet. The only
   adjacent production value is the caller-constructible resolver
@@ -140,10 +138,12 @@ digest, registry binding, or identity discriminator exists to reuse.
     from logical identity. RDR 0003 `Technical Design` and `Load-Bearing
     Decisions / Identity` additionally make typed predicate literals and the
     positive-`all` versus conjunctive-`unless` distinction behavior-bearing.
-    The current projection does not encode those two predicate dimensions, and
-    production exposes only raw `internal/resolver/resolver.go::{Input,Edge}`
-    rather than the validated normalized-table value. Refine must settle the
-    inventory, then the spike must add one-field-change vectors for it.
+    The version-1 projection records both dimensions as the predicate `clause`
+    and typed `value` fields. Production still exposes only raw
+    `internal/resolver/resolver.go::{Input,Edge}` rather than the validated
+    normalized-table value, so Resolve must verify the projection against that
+    future concrete inventory and extend the spike with one-field-change
+    vectors.
   - **If wrong**: A caller can alter an omitted outcome, predicate, action, or
     rule identity while retaining the same revision.
 - **A3 Go's standard SHA-256 implementation and lowercase hexadecimal encoding
@@ -166,9 +166,9 @@ digest, registry binding, or identity discriminator exists to reuse.
     validated normalized-table type, canonical encoder, digest helper, or
     binding implementation. `internal/resolver/resolver.go::Input` exposes raw
     outcomes, edges, and an inert `TableRevision`; `Resolve` never reads the
-    revision. Refine must name the normalized-table construction boundary and
-    exported derivation symbol before Resolve can verify one producer call site
-    and require later consumers to reuse it.
+    revision. This RDR names `RevisionFor` and `ParseTableRevision` as the
+    normalized-table package boundary; Resolve must verify that the predecessor
+    type can support those signatures and that later consumers can reuse them.
   - **If wrong**: Producer and consumer may accept different revisions for the
     same table, or caller mutation may invalidate a cached binding silently.
 
@@ -177,11 +177,13 @@ digest, registry binding, or identity discriminator exists to reuse.
 ### Approach
 
 Make transition-table revision a content-derived identity of the normalized
-semantic table. The normalization/loading boundary derives the revision through
-one exported, versioned SHA-256 function over the normalized outcome alphabet
-and candidate rows. Replay records store that derived value as
-`TableRevision`; any boundary that compares a table to a claimed revision must
-reuse the same derivation function under a separate enforcement contract.
+semantic table. The normalized-table package exposes
+`RevisionFor(NormalizedTable) (TableRevision, error)` as the only derivation
+boundary and `ParseTableRevision(string) (TableRevision, error)` as the strict
+text boundary. The normalization/loading boundary calls `RevisionFor`; replay
+records store its result as `TableRevision`. Any later boundary that compares a
+table to a claimed revision must reuse the same function under a separate
+enforcement contract.
 
 The digest covers the normalized semantic value, not TOML bytes or a rendered
 dump. It binds every match, action, and logical selected-rule identity field,
@@ -199,45 +201,57 @@ reports or orders a comparison failure.
 ### Technical Design
 
 The normalized-table producer owns revision derivation because it owns the
-semantic value being identified. It uses one package-level canonical encoder
-and exported digest function; enforcement and CLI code must not implement a
-second hash path. RDR 0002 remains the owner of normalized values' semantics
-and source identity. This RDR owns only their content-derived revision.
+semantic value being identified. Its package owns the unexported canonical
+encoder, exported `RevisionFor` derivation function, `TableRevision` value, and
+exported `ParseTableRevision` parser. Enforcement and CLI code must not
+implement a second hash or grammar path. RDR 0002 remains the owner of
+normalized values' semantics and source identity. This RDR owns only their
+content-derived revision.
 
 Canonical encoding operates over a version-1 semantic projection, not Go field
 layout. The pre-image begins with the ASCII bytes
 `intrastate.transition-table-revision`, a NUL byte, and the ASCII encoding label
 `v1`. Every projected value is framed as a one-byte type tag, an unsigned
 64-bit big-endian payload length, and the payload: `0x01` is a UTF-8 string,
-`0x02` an unsigned 64-bit big-endian integer, `0x03` a list, `0x04` a record,
-and `0x05` a Boolean encoded as the single byte `0x00` or `0x01`. A list
-payload begins with an unsigned 64-bit element count followed by framed
-elements. A record payload begins with a field count followed by pairs of
-framed field-name strings and framed values, sorted by field-name bytes.
+`0x02` an unsigned 64-bit big-endian integer used only for counts, `0x03` a
+list, `0x04` a record, and `0x05` a Boolean encoded as the single byte `0x00`
+or `0x01`. A list payload begins with an unsigned 64-bit element count followed
+by framed elements. A record payload begins with a field count followed by
+pairs of framed field-name strings and framed values, sorted by field-name
+bytes.
 
 The top-level record fields are `model_id`, `outcomes`, and `rows`; RDR 0002's
 source-schema version is excluded because it is not part of the normalized
 semantic value. Each row record contains `rule_id`, `expansion_suffix`, `kind`,
 `outcome`, `predicates`, `escape_classes`, `guard_unevaluable`, `next_tags`, and
-`writes`. Predicate entries are records of `provenance`, `name`, `operator`, and
-`value`, so owned/observed/recognized lookup, fixed predicate operation, and
-positive/negative semantics cannot alias. Next-tag entries are records of `tag`
-and `value`. Write entries are records of `role`, `tag`, `operation`, and, for
-`set`, `value`; `operation` is either `set` or `clear`.
+`writes`. Predicate entries are records of `clause`, `provenance`, `name`,
+`operator`, and `value`; `clause` is `all` or `unless`, preserving RDR 0003's
+positive requirement versus conjunctive exclusion semantics. Next-tag entries
+are records of `tag` and `value`. Write entries are records of `role`, `tag`,
+`operation`, and, for `set`, `value`; `operation` is either `set` or `clear`.
 `guard_unevaluable` is included while it remains a normalized behavior-bearing
 input; removing it requires the normalized type to eliminate that behavior,
 not merely omit it from the projection. Outcomes, rows, predicates, escape
 classes, next tags, and writes are semantic sets and are sorted by their
 complete framed element bytes before list framing.
 
+Every predicate, next-tag, and set-write `value` uses the same typed-value
+record with fields `kind`, `shape`, and `data`. `kind` is the normalized tag's
+closed value-kind discriminator and `shape` is `scalar` or `set`. Scalar
+Boolean data uses the Boolean frame; enum and string-like data use their UTF-8
+bytes; integer data uses minimal signed base-10 ASCII (`0` for zero, no leading
+zeroes or leading `+`). Set data is a list of scalar data values sorted by
+complete framed bytes. The `kind` and `shape` fields keep equal display bytes
+from aliasing across value kinds or scalar/set literal shapes.
+
 `SourceLocator` and every other source-formatting or diagnostic-only field are
 excluded. Strings are their validated UTF-8 bytes without additional Unicode
 normalization. The explicit `operation` field distinguishes clear from setting
 an empty string; authored absent and present-empty forms that normalize to the
 same typed value cannot produce different revisions. Resolve must verify this
-projection against the concrete RDR 0002/RDR 0008 types and produce golden
-vectors before the contract locks; it may not change these inclusion,
-exclusion, ordering, framing, or primitive-encoding rules.
+projection against the concrete RDR 0002/RDR 0003/RDR 0008 types and produce
+golden vectors before the contract locks; it may not change these inclusion,
+exclusion, ordering, framing, typed-value, or primitive-encoding rules.
 
 #### Normative Contracts
 
@@ -259,11 +273,11 @@ Canonical encoding MUST use the version-1 domain prefix, recursively typed
 length framing, semantic field projection, and encoded-byte sorting defined in
 Technical Design. It MUST be independent of TOML whitespace,
 comments, source key order, map iteration, normalized candidate input order,
-and diagnostic source location. The version-1 projection MUST include row
-outcome, predicate provenance/name/operator, write role, and any normalized
-guard-unevaluability state in addition to the other fields listed in Technical
-Design. The projection-to-normalized-type inventory and golden vectors MUST be
-verified before Final.
+and diagnostic source location. The version-1 projection MUST include every
+field listed in Technical Design. In particular, predicate clause and typed
+value kind/shape, row outcome, write role, and normalized
+guard-unevaluability state MUST NOT alias. The projection-to-normalized-type
+inventory and golden vectors MUST be verified before Final.
 
 Revision parsing MUST reject any value outside `sha256:<64 lowercase
 hexadecimal digits>`. Malformed revision syntax and failure to construct a
@@ -273,23 +287,19 @@ Resolver mismatch disposition and evaluation ordering are outside this RDR.
 
 #### Load-Bearing Decisions
 
-- **Identity** — two normalized tables have the same revision only when their
-  version-1 canonical semantic encodings have the same SHA-256 digest. Source
-  formatting, diagnostic source location, and candidate input order do not
-  distinguish identity; any field that can change matching, action, or logical
-  selected-rule identity does.
-- **Wire / byte format** — the public revision is
-  `sha256:<64 lowercase hexadecimal digits>`. The pre-image is a domain-
-  separated, versioned, recursively typed and length-framed encoding of the
-  normalized semantic value. Resolve verifies the projection and golden
-  vectors; it does not choose different fields, ordering, primitives, or
-  framing.
+- **Identity** — equality is SHA-256 equality over the complete version-1
+  projection defined in Technical Design. Diagnostic and source-format fields
+  are excluded; match, action, and logical selected-rule fields are included.
+- **Wire / byte format** — the public revision grammar and canonical pre-image
+  are authoritative in Technical Design and Normative Contracts. Resolve
+  verifies that contract against the concrete normalized type and golden
+  vectors; it does not redesign it.
 - **Naming** — the content identity remains `TableRevision` in replay input;
   rejected: `version`, which RDR 0002 already uses for source-schema version,
   and `etag`, which implies transport cache semantics.
-- **Selection / predicate** — every behavior-bearing predicate component is
-  part of the semantic projection; this RDR does not alter predicate evaluation
-  or resolver selection ordering.
+- **Selection / predicate** — `clause` distinguishes `all` from `unless`, and
+  the typed-value record distinguishes kind and scalar/set shape. This RDR does
+  not alter predicate evaluation or resolver selection ordering.
 
 ### Capability Dependencies
 
@@ -298,7 +308,7 @@ Resolver mismatch disposition and evaluation ordering are outside this RDR.
 | Canonical normalized semantic table | RDR 0002 | Predecessor | Supplies the value whose behavior and identity fields are hashed. |
 | Logical selected-rule identity fields | RDR 0002 / RDR 0008 | Deferred peer | Included in the table pre-image; diagnostic source location is excluded. |
 | SHA-256 and hexadecimal encoding | Go standard library | Available | A3 verifies `crypto/sha256::Sum256` and lowercase `encoding/hex` output; grammar validation remains explicit. |
-| Table revision derivation | This RDR | Introduced | One exported function gives producer output its canonical replay identity. |
+| Table revision derivation | This RDR | Introduced | `RevisionFor` gives producer output its canonical replay identity; `ParseTableRevision` owns strict text parsing. |
 
 ### Existing Infrastructure Audit
 
@@ -328,9 +338,10 @@ copy of the model and still needs canonical value equality.
 Premortem: this ships and two behaviorally different tables receive one
 revision because the encoder omitted a newly added edge field, or a consumer
 reimplemented the framing rules. Replay can then treat different tables as one
-identity. The recommendation survives: one exported encoder, an explicit
-versioned field inventory, golden cross-boundary vectors, and A4's call-site
-audit make omission or divergence a lock-blocking failure.
+identity. The recommendation survives: one canonical encoder behind the
+exported derivation function, an explicit versioned field inventory, golden
+cross-boundary vectors, and A4's call-site audit make omission or divergence a
+lock-blocking failure.
 
 ## Alternatives Considered
 
