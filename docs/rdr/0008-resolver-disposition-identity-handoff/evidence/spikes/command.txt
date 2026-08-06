@@ -1,0 +1,1 @@
+go test -v ./docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes -run '^TestPlanOwnsSelectedIdentityAndAction$' -count=1

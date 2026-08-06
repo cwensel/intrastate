@@ -1,0 +1,5 @@
+=== RUN   TestPlanOwnsSelectedIdentityAndAction
+    ownership_test.go:78: preserved selected_rule=model-a/rule-a#1 source=rules.toml:7 next_status=Final write=status:Final
+--- PASS: TestPlanOwnsSelectedIdentityAndAction (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/docs/rdr/0008-resolver-disposition-identity-handoff/evidence/spikes	0.403s
