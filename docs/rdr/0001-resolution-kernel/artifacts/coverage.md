@@ -11,6 +11,9 @@ that would fail if a future change broke that clause.
   logic-free skeleton; the 5 that pass are negative-contract guards whose
   bite was verified by temporarily violating each prohibition (see
   "Negative-contract guards" below).
+- Green gate (Phase 2): **confirmed**. 43 of 43 top-level tests pass against
+  the implemented kernel, race-clean, with `golangci-lint run ./...` reporting
+  `0 issues`. See "REQ-MVV end-to-end run" below for the recorded output.
 
 ---
 
@@ -124,3 +127,94 @@ tension. `TestReq15_EscapeEdgeRescuesOnlyWhenItMatchesExactlyOnce` and
 asserts that an escape edge can or cannot rescue `owned_state_unavailable` or
 `guard_unevaluable`; that clause needs a cross-RDR decision before it is
 pinned by a test.
+
+**Phase 2 disposition**: recorded as `D1` in `deviations.md`, Type SPEC-UNDER,
+Status *needs author decision*. The implementation continues with the narrow
+reading — escapes rescue `no_match` and `ambiguous_match` only — grounded in
+RDR 0001's own Risks clause ("any priority or escape must be explicit table data
+owned by RDR 0002") plus RDR 0002's normative restriction of `escape` lists to
+those two classes. No frozen test was changed, and the broad reading remains a
+one-line routing change if the author decides otherwise.
+
+---
+
+## REQ-MVV end-to-end run
+
+Command:
+
+```
+go test -v -count=1 -run 'TestMVV_ReplayDeterminismAndFiveValueLevelRefusals' ./internal/resolve/
+```
+
+Actual output:
+
+```
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/1_replay_yields_value_identical_dispositions
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/no_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/ambiguous_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/owned_state_unavailable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/guard_unevaluable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/unmodeled_outcome
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/ambiguous_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/owned_state_unavailable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/guard_unevaluable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/unmodeled_outcome
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/no_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/no_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/ambiguous_match
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/owned_state_unavailable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/guard_unevaluable
+=== RUN   TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/unmodeled_outcome
+--- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals (0.00s)
+    --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/1_replay_yields_value_identical_dispositions (0.00s)
+    --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/no_match (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/ambiguous_match (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/owned_state_unavailable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/guard_unevaluable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/2_one_value_level_refusal_per_kind/unmodeled_outcome (0.00s)
+    --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/ambiguous_match (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/owned_state_unavailable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/guard_unevaluable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/unmodeled_outcome (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/3_refusals_use_neither_the_cli_nor_the_go_error_path/no_match (0.00s)
+    --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/no_match (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/ambiguous_match (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/owned_state_unavailable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/guard_unevaluable (0.00s)
+        --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/unmodeled_outcome (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/internal/resolve	0.189s
+```
+
+All three MVV obligations are satisfied by the run above: leg 1 compares
+replayed dispositions value-for-value (next tags, writes, revision `rev-1`);
+leg 2 produces one value-level refusal for each of the five kinds and checks
+closure against `RefusalKinds()`; leg 3 asserts a nil Go error, a refusal on the
+`Result` value, that neither `Refusal` nor `Result` implements `error`, and that
+the kernel package imports no CLI package. Leg 4 extends replay determinism to
+all five refusal dispositions.
+
+## Full-suite result (Phase 2)
+
+```
+$ go test -count=1 ./...
+ok  	github.com/newcoinc/intrastate/internal/cli	0.187s
+ok  	github.com/newcoinc/intrastate/internal/resolve	0.355s
+(all other packages: no test files)
+
+$ go test -race -count=1 ./internal/resolve/
+ok  	github.com/newcoinc/intrastate/internal/resolve	1.308s
+
+$ golangci-lint run ./...
+0 issues.
+```
+
+43 of 43 top-level tests in `internal/resolve` pass; 0 fail. No pre-existing
+failure was observed anywhere in the module.
