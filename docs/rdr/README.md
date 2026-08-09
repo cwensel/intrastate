@@ -15,6 +15,7 @@ engine README — this file is only the per-project index.
 | 0004 | Accessor execution safety model | Final | — |
 | 0005 | Skill integration CLI contract | Final | High |
 | 0006 | Graph lint authority and guarantees | Final | — |
+| [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Draft | Medium |
 
 ## Status legend
 
