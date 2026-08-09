@@ -8,9 +8,6 @@
 // transition plan or a typed refusal. It never prints output, inspects CLI
 // flags, discovers ambient state, chooses artifacts, initiates work, or
 // executes persistence.
-//
-// This file is the Phase 1 boundary skeleton: types and the entry-point
-// signature only. It contains no resolution logic.
 package resolve
 
 // Tag is a single state fact in the tag-set model. Tags are compared by
@@ -60,7 +57,15 @@ const (
 )
 
 // RefusalKinds returns the closed kernel-owned refusal kind set.
-func RefusalKinds() []RefusalKind { return nil }
+func RefusalKinds() []RefusalKind {
+	return []RefusalKind{
+		KindNoMatch,
+		KindAmbiguousMatch,
+		KindOwnedStateUnavailable,
+		KindGuardUnevaluable,
+		KindUnmodeledOutcome,
+	}
+}
 
 // GuardResult is a guard seam verdict. RDR 0003 owns predicate shape; the
 // kernel only consumes decided/undecided verdicts.
@@ -94,13 +99,64 @@ type taggedValue struct {
 	provenance Provenance
 }
 
+// recognizedTagKey is the tag key the freshly recognized outcome takes in
+// the assembled evaluation view, so a table row can match on it directly
+// (REQ-17).
+const recognizedTagKey = "recognized"
+
 // Lookup returns the value and provenance for key.
-func (TagSet) Lookup(key string) (value string, prov Provenance, ok bool) {
-	return "", ProvenanceOwned, false
+func (s TagSet) Lookup(key string) (value string, prov Provenance, ok bool) {
+	tv, ok := s.tags[key]
+	if !ok {
+		return "", ProvenanceOwned, false
+	}
+	return tv.value, tv.provenance, true
 }
 
 // Len reports how many distinct tag keys the view carries.
-func (TagSet) Len() int { return 0 }
+func (s TagSet) Len() int { return len(s.tags) }
+
+// has reports whether key is present with the given provenance.
+func (s TagSet) has(key string, prov Provenance) bool {
+	tv, ok := s.tags[key]
+	return ok && tv.provenance == prov
+}
+
+// matches reports whether every tag in want is present in the view with
+// the same value.
+func (s TagSet) matches(want []Tag) bool {
+	for _, w := range want {
+		tv, ok := s.tags[w.Key]
+		if !ok || tv.value != w.Value {
+			return false
+		}
+	}
+	return true
+}
+
+// assemble merges owned, observed, and freshly recognized tags into one
+// evaluation view (REQ-17). Provenance precedence is owned over observed
+// over recognized, so the accessor-produced snapshot is never shadowed by
+// caller-supplied context. Within one provenance the last tag wins; the
+// merge is order-insensitive across provenances, which is what value-level
+// replay determinism requires (REQ-3).
+func assemble(in Input) TagSet {
+	view := TagSet{tags: make(map[string]taggedValue, len(in.Owned)+len(in.Observed)+1)}
+
+	if in.Recognized != "" {
+		view.tags[recognizedTagKey] = taggedValue{
+			value:      in.Recognized,
+			provenance: ProvenanceRecognized,
+		}
+	}
+	for _, t := range in.Observed {
+		view.tags[t.Key] = taggedValue{value: t.Value, provenance: ProvenanceObserved}
+	}
+	for _, t := range in.Owned {
+		view.tags[t.Key] = taggedValue{value: t.Value, provenance: ProvenanceOwned}
+	}
+	return view
+}
 
 // Row is one normalized candidate edge from the reviewable transition
 // table. RDR 0002 owns normalization; the kernel consumes the normalized
@@ -134,6 +190,16 @@ type Row struct {
 	Escape []RefusalKind
 }
 
+// rescues reports whether the row is modeled to rescue kind.
+func (r Row) rescues(kind RefusalKind) bool {
+	for _, k := range r.Escape {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // Table is the parsed, reviewable transition table the caller supplies.
 type Table struct {
 	// Revision is the opaque caller-supplied table revision identity. The
@@ -144,6 +210,16 @@ type Table struct {
 	Outcomes []string
 	// Rows are the normalized candidate edges.
 	Rows []Row
+}
+
+// models reports whether outcome is in the table's declared alphabet.
+func (t Table) models(outcome string) bool {
+	for _, o := range t.Outcomes {
+		if o == outcome {
+			return true
+		}
+	}
+	return false
 }
 
 // Input is the resolution input tuple named by RDR 0001's Identity
@@ -217,10 +293,205 @@ type Result struct {
 }
 
 // Refused reports whether the disposition is a modeled refusal.
-func (Result) Refused() bool { return false }
+func (r Result) Refused() bool { return r.Refusal != nil }
 
 // Resolve is the kernel's single pure entry point. It returns exactly one
 // disposition for the input tuple. A modeled refusal travels the Result
 // value with a nil error; the error return is reserved for programmer
 // mistakes, not for modeled refusals.
-func Resolve(in Input) (Result, error) { return Result{}, nil }
+//
+// Evaluation order is fixed so the same tuple always replays the same
+// disposition (REQ-1):
+//
+//  1. the recognized outcome must be in the table's declared alphabet,
+//     otherwise unmodeled_outcome (which therefore outranks a mere
+//     zero-match);
+//  2. candidate rows are the non-escape rows for that outcome whose match
+//     pattern holds over the assembled view;
+//  3. a candidate requiring an owned tag absent from the accessor
+//     snapshot yields owned_state_unavailable;
+//  4. a candidate whose guard the seam cannot decide yields
+//     guard_unevaluable;
+//  5. exactly one surviving candidate is the plan; zero is no_match and
+//     more than one is ambiguous_match, each subject to rescue by a
+//     modeled escape edge that itself matches exactly once.
+func Resolve(in Input) (Result, error) {
+	view := assemble(in)
+
+	if !in.Table.models(in.Recognized) {
+		return refuse(in, Refusal{Kind: KindUnmodeledOutcome}), nil
+	}
+
+	var candidates []Row
+	for _, row := range in.Table.Rows {
+		if len(row.Escape) != 0 {
+			// Escape edges are not ordinary candidates; they participate
+			// only in the rescue phase for their declared class.
+			continue
+		}
+		if row.Outcome != in.Recognized {
+			continue
+		}
+		if !view.matches(row.Match) {
+			continue
+		}
+		candidates = append(candidates, row)
+	}
+
+	if missing := missingOwned(candidates, view); len(missing) > 0 {
+		return refuse(in, Refusal{
+			Kind:         KindOwnedStateUnavailable,
+			MissingOwned: missing,
+			Rows:         rowRefsRequiring(candidates, missing),
+		}), nil
+	}
+
+	var selected []Row
+	for _, row := range candidates {
+		switch evaluateGuard(in.Guards, row.Guard, view) {
+		case GuardTrue:
+			selected = append(selected, row)
+		case GuardFalse:
+			// Decided and does not hold: the row is not a candidate.
+		case GuardUnevaluable:
+			return refuse(in, Refusal{
+				Kind:  KindGuardUnevaluable,
+				Guard: row.Guard,
+				Rows:  []RowRef{refOf(row)},
+			}), nil
+		}
+	}
+
+	switch len(selected) {
+	case 1:
+		return Result{Plan: planOf(in, selected[0], false)}, nil
+	case 0:
+		return escapeOrRefuse(in, view, Refusal{Kind: KindNoMatch}), nil
+	default:
+		return escapeOrRefuse(in, view, Refusal{
+			Kind: KindAmbiguousMatch,
+			Rows: rowRefs(selected),
+		}), nil
+	}
+}
+
+// evaluateGuard delegates the predicate to the injected seam (REQ-23). An
+// unguarded row needs no seam; a guarded row with no seam is undecidable,
+// never evaluated by the kernel itself.
+func evaluateGuard(seam GuardEvaluator, guard string, view TagSet) GuardResult {
+	if guard == "" {
+		return GuardTrue
+	}
+	if seam == nil {
+		return GuardUnevaluable
+	}
+	return seam.Evaluate(guard, view)
+}
+
+// missingOwned returns, in stable order, the owned tag keys any candidate
+// requires that the accessor-produced snapshot does not carry.
+func missingOwned(candidates []Row, view TagSet) []string {
+	var missing []string
+	seen := map[string]bool{}
+	for _, row := range candidates {
+		for _, key := range row.RequiresOwned {
+			if view.has(key, ProvenanceOwned) || seen[key] {
+				continue
+			}
+			seen[key] = true
+			missing = append(missing, key)
+		}
+	}
+	return missing
+}
+
+// escapeOrRefuse rescues a no_match or ambiguous_match refusal when the
+// table models exactly one matching escape edge for that class (REQ-15,
+// REQ-16). An escape that matches more than once is not an exact-one
+// rescue and degrades to ambiguous_match.
+func escapeOrRefuse(in Input, view TagSet, r Refusal) Result {
+	var escapes []Row
+	for _, row := range in.Table.Rows {
+		if !row.rescues(r.Kind) {
+			continue
+		}
+		if row.Outcome != in.Recognized || !view.matches(row.Match) {
+			continue
+		}
+		escapes = append(escapes, row)
+	}
+
+	switch len(escapes) {
+	case 1:
+		return Result{Plan: planOf(in, escapes[0], true)}
+	case 0:
+		return refuse(in, r)
+	default:
+		return refuse(in, Refusal{Kind: KindAmbiguousMatch, Rows: rowRefs(escapes)})
+	}
+}
+
+// planOf builds the success disposition for row. Tag slices are copied so
+// the plan never aliases the caller's table (REQ-24).
+func planOf(in Input, row Row, escaped bool) *Plan {
+	return &Plan{
+		RuleID:        row.RuleID,
+		SourceLocator: row.SourceLocator,
+		NextTags:      copyTags(row.NextTags),
+		Writes:        copyTags(row.Writes),
+		Revision:      in.Table.Revision,
+		Escaped:       escaped,
+	}
+}
+
+// refuse completes a refusal with the input-tuple identity RDR 0001
+// requires for diagnosis (REQ-10).
+func refuse(in Input, r Refusal) Result {
+	r.Revision = in.Table.Revision
+	r.Flow = in.Flow
+	r.Recognized = in.Recognized
+	return Result{Refusal: &r}
+}
+
+func refOf(row Row) RowRef {
+	return RowRef{RuleID: row.RuleID, SourceLocator: row.SourceLocator}
+}
+
+func rowRefs(rows []Row) []RowRef {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]RowRef, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, refOf(row))
+	}
+	return out
+}
+
+// rowRefsRequiring names the candidate rows that asked for one of the
+// missing owned keys, so RDR 0005 can report which edge went unevaluable.
+func rowRefsRequiring(rows []Row, missing []string) []RowRef {
+	want := make(map[string]bool, len(missing))
+	for _, key := range missing {
+		want[key] = true
+	}
+	var out []RowRef
+	for _, row := range rows {
+		for _, key := range row.RequiresOwned {
+			if want[key] {
+				out = append(out, refOf(row))
+				break
+			}
+		}
+	}
+	return out
+}
+
+func copyTags(in []Tag) []Tag {
+	if in == nil {
+		return nil
+	}
+	out := make([]Tag, len(in))
+	copy(out, in)
+	return out
+}
