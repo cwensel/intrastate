@@ -10,7 +10,10 @@
 // executes persistence.
 package resolve
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // Tag is a single state fact in the tag-set model. Tags are compared by
 // value; the kernel never parses their internal structure.
@@ -300,13 +303,18 @@ func (r Result) Refused() bool { return r.Refusal != nil }
 //     zero-match);
 //  2. candidate rows are the non-escape rows for that outcome whose match
 //     pattern holds over the assembled view;
-//  3. a candidate requiring an owned tag absent from the accessor
-//     snapshot yields owned_state_unavailable;
-//  4. a candidate whose guard the seam cannot decide yields
-//     guard_unevaluable;
-//  5. exactly one surviving candidate is the plan; zero is no_match and
-//     more than one is ambiguous_match, each subject to rescue by a
-//     modeled escape edge that itself matches exactly once.
+//  3. every candidate passes the same viability gate (see viable): a row
+//     the guard seam decides FALSE is pruned outright and contributes
+//     nothing; a surviving row missing required owned state yields
+//     owned_state_unavailable; a surviving row whose guard the seam cannot
+//     decide yields guard_unevaluable;
+//  4. exactly one viable candidate is the plan; zero is no_match and more
+//     than one is ambiguous_match, each subject to rescue by a modeled
+//     escape edge that is itself viable and matches exactly once.
+//
+// The gate in step 3 is applied identically to ordinary candidates and to
+// escape candidates, so an escape edge can never reach a plan on terms an
+// ordinary edge would be refused on (REQ-5, REQ-15, REQ-23).
 func Resolve(in Input) (Result, error) {
 	view := assemble(in)
 
@@ -330,28 +338,9 @@ func Resolve(in Input) (Result, error) {
 		candidates = append(candidates, row)
 	}
 
-	if missing := missingOwned(candidates, view); len(missing) > 0 {
-		return refuse(in, Refusal{
-			Kind:         KindOwnedStateUnavailable,
-			MissingOwned: missing,
-			Rows:         rowRefsRequiring(candidates, missing),
-		}), nil
-	}
-
-	var selected []Row
-	for _, row := range candidates {
-		switch evaluateGuard(in.Guards, row.Guard, view) {
-		case GuardTrue:
-			selected = append(selected, row)
-		case GuardFalse:
-			// Decided and does not hold: the row is not a candidate.
-		case GuardUnevaluable:
-			return refuse(in, Refusal{
-				Kind:  KindGuardUnevaluable,
-				Guard: row.Guard,
-				Rows:  []RowRef{refOf(row)},
-			}), nil
-		}
+	selected, blocked := gate(candidates, in.Guards, view)
+	if blocked != nil {
+		return refuse(in, *blocked), nil
 	}
 
 	switch len(selected) {
@@ -367,6 +356,69 @@ func Resolve(in Input) (Result, error) {
 	}
 }
 
+// gate applies the uniform viability check to rows and partitions them into
+// the survivors and, if some row raises a typed blocking condition, the
+// refusal that condition warrants.
+//
+// A row the seam decides GuardFalse is *pruned*: the predicate is decided
+// and does not hold, so the row is not an edge at all and its owned-state
+// obligation is not part of this resolution's evaluation. This is what
+// REQ-15's "exactly one matching edge after guard evaluation" requires —
+// a pruned row must not convert a legal exact-one match into a refusal, nor
+// mask an escapable zero-match condition.
+//
+// Among rows the guard does *not* prune, owned state is reported before an
+// undecidable guard: absent owned state is the more precise diagnosis and is
+// frequently the reason the seam could not decide the predicate. Rows are
+// visited in table order, but every payload the refusal carries is sorted
+// before it is returned, so the disposition stays a function of the tuple
+// rather than of slice position (REQ-1, REQ-10).
+func gate(rows []Row, seam GuardEvaluator, view TagSet) (selected []Row, blocked *Refusal) {
+	var survivors []Row
+	verdicts := make([]GuardResult, 0, len(rows))
+	for _, row := range rows {
+		verdict := evaluateGuard(seam, row.Guard, view)
+		if verdict == GuardFalse {
+			continue
+		}
+		survivors = append(survivors, row)
+		verdicts = append(verdicts, verdict)
+	}
+
+	if missing := missingOwned(survivors, view); len(missing) > 0 {
+		return nil, &Refusal{
+			Kind:         KindOwnedStateUnavailable,
+			MissingOwned: missing,
+			Rows:         rowRefsRequiring(survivors, missing),
+		}
+	}
+
+	var undecidable []Row
+	for i, row := range survivors {
+		switch verdicts[i] {
+		case GuardTrue:
+			selected = append(selected, row)
+		case GuardUnevaluable:
+			undecidable = append(undecidable, row)
+		case GuardFalse:
+			// Unreachable: pruned above.
+		}
+	}
+
+	if len(undecidable) > 0 {
+		lowest := slices.MinFunc(undecidable, func(a, b Row) int {
+			return compareRefs(refOf(a), refOf(b))
+		})
+		return nil, &Refusal{
+			Kind:  KindGuardUnevaluable,
+			Guard: lowest.Guard,
+			Rows:  rowRefs(undecidable),
+		}
+	}
+
+	return selected, nil
+}
+
 // evaluateGuard delegates the predicate to the injected seam (REQ-23). An
 // unguarded row needs no seam; a guarded row with no seam is undecidable,
 // never evaluated by the kernel itself.
@@ -380,8 +432,15 @@ func evaluateGuard(seam GuardEvaluator, guard string, view TagSet) GuardResult {
 	return seam.Evaluate(guard, view)
 }
 
-// missingOwned returns, in stable order, the owned tag keys any candidate
-// requires that the accessor-produced snapshot does not carry.
+// missingOwned returns the owned tag keys any candidate requires that the
+// accessor-produced snapshot does not carry, sorted by key.
+//
+// Sorting by key rather than accumulating in row order is what makes the
+// payload a function of the input tuple: REQ-2 identifies a resolution by
+// the table *revision*, not by row sequence, so two orderings of the same
+// row set at the same revision are the same input and must report the same
+// diagnosis (REQ-1, REQ-10). Row order is a normalization detail RDR 0002
+// owns and must not reach the reported diagnosis.
 func missingOwned(candidates []Row, view TagSet) []string {
 	var missing []string
 	seen := map[string]bool{}
@@ -394,13 +453,23 @@ func missingOwned(candidates []Row, view TagSet) []string {
 			missing = append(missing, key)
 		}
 	}
+	slices.Sort(missing)
 	return missing
 }
 
 // escapeOrRefuse rescues a no_match or ambiguous_match refusal when the
-// table models exactly one matching escape edge for that class (REQ-15,
+// table models exactly one viable escape edge for that class (REQ-15,
 // REQ-16). An escape that matches more than once is not an exact-one
 // rescue and degrades to ambiguous_match.
+//
+// Escape candidates pass the same viability gate as ordinary candidates
+// before the exact-one count is taken: an escape edge whose guard the seam
+// decides FALSE is pruned and does not rescue, and an escape edge missing
+// required owned state or carrying an undecidable guard raises that typed
+// refusal rather than emitting a plan whose writes the kernel cannot
+// justify (REQ-5, REQ-12, REQ-15, REQ-23). The escape path is the kernel's
+// most permissive path, so leaving it ungated is where a guessed transition
+// would enter.
 func escapeOrRefuse(in Input, view TagSet, r Refusal) Result {
 	var escapes []Row
 	for _, row := range in.Table.Rows {
@@ -413,13 +482,18 @@ func escapeOrRefuse(in Input, view TagSet, r Refusal) Result {
 		escapes = append(escapes, row)
 	}
 
-	switch len(escapes) {
+	viable, blocked := gate(escapes, in.Guards, view)
+	if blocked != nil {
+		return refuse(in, *blocked)
+	}
+
+	switch len(viable) {
 	case 1:
-		return Result{Plan: planOf(in, escapes[0], true)}
+		return Result{Plan: planOf(in, viable[0], true)}
 	case 0:
 		return refuse(in, r)
 	default:
-		return refuse(in, Refusal{Kind: KindAmbiguousMatch, Rows: rowRefs(escapes)})
+		return refuse(in, Refusal{Kind: KindAmbiguousMatch, Rows: rowRefs(viable)})
 	}
 }
 
@@ -449,6 +523,18 @@ func refOf(row Row) RowRef {
 	return RowRef{RuleID: row.RuleID, SourceLocator: row.SourceLocator}
 }
 
+// compareRefs orders row references by source identity, so a collection of
+// implicated rows can be reported independently of table row order.
+func compareRefs(a, b RowRef) int {
+	if c := strings.Compare(a.RuleID, b.RuleID); c != 0 {
+		return c
+	}
+	return strings.Compare(a.SourceLocator, b.SourceLocator)
+}
+
+// rowRefs names rows by source identity, sorted by that identity. Like
+// missingOwned, the sort is what keeps the diagnosis payload a function of
+// the input tuple rather than of Table.Rows order (REQ-1, REQ-10).
 func rowRefs(rows []Row) []RowRef {
 	if len(rows) == 0 {
 		return nil
@@ -457,6 +543,7 @@ func rowRefs(rows []Row) []RowRef {
 	for _, row := range rows {
 		out = append(out, refOf(row))
 	}
+	slices.SortFunc(out, compareRefs)
 	return out
 }
 
@@ -467,16 +554,16 @@ func rowRefsRequiring(rows []Row, missing []string) []RowRef {
 	for _, key := range missing {
 		want[key] = true
 	}
-	var out []RowRef
+	var out []Row
 	for _, row := range rows {
 		for _, key := range row.RequiresOwned {
 			if want[key] {
-				out = append(out, refOf(row))
+				out = append(out, row)
 				break
 			}
 		}
 	}
-	return out
+	return rowRefs(out)
 }
 
 func copyTags(in []Tag) []Tag {
