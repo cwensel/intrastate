@@ -9,7 +9,7 @@ engine README — this file is only the per-project index.
 
 | ID | Title | Status | Priority |
 | --- | --- | --- | --- |
-| 0001 | Resolution kernel | Final | — |
+| 0001 | Resolution kernel | Implemented | — |
 | 0002 | Transition table as reviewable data | Final | High |
 | 0003 | Guard predicate exhaustiveness | Final | — |
 | 0004 | Accessor execution safety model | Final | — |

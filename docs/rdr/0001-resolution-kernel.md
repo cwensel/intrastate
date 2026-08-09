@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Architecture
 - **Profile**: large — locks one resolver-kernel contract with deterministic disposition and typed-refusal semantics.
 - **Priority**: High
