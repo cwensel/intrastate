@@ -10,6 +10,8 @@
 // executes persistence.
 package resolve
 
+import "slices"
+
 // Tag is a single state fact in the tag-set model. Tags are compared by
 // value; the kernel never parses their internal structure.
 type Tag struct {
@@ -192,12 +194,7 @@ type Row struct {
 
 // rescues reports whether the row is modeled to rescue kind.
 func (r Row) rescues(kind RefusalKind) bool {
-	for _, k := range r.Escape {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.Escape, kind)
 }
 
 // Table is the parsed, reviewable transition table the caller supplies.
@@ -214,12 +211,7 @@ type Table struct {
 
 // models reports whether outcome is in the table's declared alphabet.
 func (t Table) models(outcome string) bool {
-	for _, o := range t.Outcomes {
-		if o == outcome {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.Outcomes, outcome)
 }
 
 // Input is the resolution input tuple named by RDR 0001's Identity
