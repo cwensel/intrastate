@@ -2,6 +2,123 @@
 
 Stage-8 implementation verification evidence.
 
+## Phase 3c — Fixup resolution notes
+
+Both Phase 3 verifiers returned BLOCK on the same three defects. All three are
+now closed. **No test was weakened, deleted, skipped, or edited** — the
+adversarial tests were failing because the implementation was wrong, and the
+implementation is what changed. `internal/resolve/resolve.go` is the only
+source file touched; `internal/resolve/fixup_test.go` is new.
+
+Suite after fixup: **139 passing assertions across 56 top-level tests, 0
+failures**, race-clean, `golangci-lint run ./...` → `0 issues`. REQ-MVV re-run
+end-to-end and still passing, with its recorded output materially unchanged
+(see `coverage.md`).
+
+---
+
+### Resolution A — closes FAIL-2 and ADV-1, ADV-1b
+
+**Defect:** `missingOwned()` ran at `resolve.go:333`, *before* the guard loop at
+`:341`, over every row matching on tag pattern alone. A row the seam decided
+`GuardFalse` still contributed its `RequiresOwned`.
+
+**Change:** the pre-guard `missingOwned` call is gone. Gating now happens inside
+a single `gate(rows, seam, view)` helper that evaluates each row's guard
+**first**. A row decided `GuardFalse` is *pruned* — the predicate is decided and
+does not hold, so the row is not an edge at all and its owned-state obligation
+is not part of this resolution's evaluation. Only rows the guard does not prune
+can raise a blocking condition.
+
+**Why guard-before-owned, reversing the previously documented per-row order:**
+REQ-15 counts matches "after guard evaluation", so a guard-FALSE row is by
+definition not among the edges whose evaluation the disposition rests on.
+Keeping the old order made a dead row's requirement decide a live row's fate
+(ADV-1) and, worse, masked an escapable `no_match` behind a never-escapable
+`owned_state_unavailable`, silently deleting a modeled table capability
+(ADV-1b). Among rows the guard does *not* prune, the documented
+owned-before-guard precedence is **preserved**: absent owned state is the more
+precise diagnosis and is frequently why the seam could not decide the predicate.
+No Phase 1 fixture pins the collision — `missingOwnedTable` has no guard and
+`unevaluableGuardTable` has its owned key present — so this reordering breaks no
+frozen assertion. Recorded as deviation **D8**.
+
+---
+
+### Resolution B — closes FAIL-1 and ADV-2, ADV-2b (incl. widened sub-cases 1d, 1e)
+
+**Defect:** `escapeOrRefuse` (`resolve.go:404-424`) selected escape rows on
+`rescues(kind)`, `Outcome`, and `Match` only, then emitted a `Plan`. It called
+neither `evaluateGuard` nor `missingOwned`, on either rescuable class, live seam
+or nil.
+
+**Change:** `escapeOrRefuse` now routes its escape candidates through the **same
+`gate`** before the exact-one count is taken. A guard-FALSE escape is pruned and
+does not rescue; an escape missing owned state or carrying an undecidable guard
+raises that typed refusal instead of emitting a plan whose `Writes` the kernel
+cannot justify.
+
+This is deliberately the shared-gate shape both verifiers recommended, adopted
+on its merits: A and B were one defect seen from two directions — gating applied
+at inconsistent pipeline points — and the failure mode they warned about was a
+fix that patched one path and left the other. Routing both phases through one
+helper makes that class of divergence a compile-time impossibility rather than a
+review obligation. `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates`
+pins the property directly.
+
+Sub-cases **1d** (guarded escape, nil seam) and **1e** (ambiguous-class escape)
+were uncovered by Phase 3b; both fall out of the shared gate and are now pinned
+by `TestFixup1d_*` and `TestFixup1e_*`, each verified red against the pre-fix
+kernel.
+
+**Consistency with the D1 narrow reading:** unchanged. Escapes still rescue only
+`no_match` and `ambiguous_match`; `owned_state_unavailable` and
+`guard_unevaluable` are still never escapable. The fix does not widen what an
+escape can rescue — it makes an escape edge earn its rescue on the same terms as
+any other edge. If anything it *strengthens* the narrow reading: an escape row
+that itself hits an unavailable/unevaluable condition now surfaces that
+condition rather than papering over it. No change to the D1 calculus.
+
+---
+
+### Resolution C — closes FAIL-3 and ADV-3, ADV-3b (incl. the widened `ambiguous_match` surface)
+
+**Defect:** three diagnosis payloads were functions of `Table.Rows` position
+rather than of the input tuple. REQ-2 identifies a resolution by table
+*revision*, not row sequence, so two orderings of the same row set at the same
+revision are the same input.
+
+**Change, one per surface:**
+
+- `missingOwned` sorts its keys with `slices.Sort` before returning.
+- `rowRefs` sorts by source identity (`RuleID`, then `SourceLocator`) via a new
+  `compareRefs`. This fixes the `ambiguous_match` surface — **new relative to
+  ADV-3** — at its single call site, and `rowRefsRequiring` was rewritten to
+  funnel through `rowRefs` so it inherits the ordering rather than duplicating
+  it.
+- `guard_unevaluable` no longer returns on the first undecidable row in slice
+  order. `gate` collects **all** undecidable rows, reports them via the sorted
+  `rowRefs`, and picks the reported `Guard` by lowest rule identity
+  (`slices.MinFunc` over `compareRefs`) instead of by slice position. Reporting
+  all of them is also the better diagnosis: a table with two undecidable
+  predicates has two problems, and the old payload disclosed only one.
+
+The degraded escape-ambiguity payload is a distinct `rowRefs` call site and is
+covered separately by `TestFixup3c_DegradedEscapeAmbiguityPayloadMustNotDependOnRowOrder`.
+
+---
+
+### Explicit non-defects — confirmed not "fixed"
+
+The two Phase 3a non-violations were left exactly as they were: the unreserved
+`"recognized"` tag key (deterministic and refusal-shaped, not a breach), and the
+silently-unreachable row whose `Escape` list holds only a non-rescuable class
+(correct kernel behaviour; an RDR 0006 lint obligation). The escape path's
+correct deference to the outcome-alphabet gate is likewise untouched and still
+verified by the suite.
+
+---
+
 ## Phase 3b — Adversarial Review (independent lens)
 
 Reviewer stance: assume the implementation is wrong and prove it. Scope is the

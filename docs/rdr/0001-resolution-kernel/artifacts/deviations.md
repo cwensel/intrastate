@@ -4,8 +4,10 @@ Phase 2 (implementer) artifact. Every entry records a gap between the locked
 RDR / frozen Phase 1 tests and what the implementation had to decide, with its
 Type, grounding evidence, and status.
 
-No Phase 1 test was weakened, deleted, skipped, or edited. `internal/resolve/resolve.go`
-is the only source file changed.
+No Phase 1 test was weakened, deleted, skipped, or edited, in Phase 2 or in the
+Phase 3c fixup. `internal/resolve/resolve.go` is the only source file changed;
+the Phase 3c fixup additionally added `internal/resolve/fixup_test.go`
+(regression coverage only, no existing test touched).
 
 ---
 
@@ -176,17 +178,88 @@ was added; `go.mod` is unchanged.
 
 ---
 
+## D8 — Guard-FALSE prunes a row before its owned-state obligation counts
+
+- **Type**: SPEC-UNDER
+- **Status**: needs author decision (recorded; implementation continued with the
+  recommendation below)
+- **REQs**: REQ-5, REQ-15, REQ-33
+- **Phase**: 3c fixup (supersedes the per-row ordering half of D4)
+
+### The gap
+
+When a single candidate row is **both** decided `GuardFalse` by the seam **and**
+requires an owned tag absent from the accessor snapshot, which condition governs?
+The RDR does not say. `req-list.md` QUESTIONS §2 records that no total ordering
+across refusal conditions is stated and that implementation need only pick a
+deterministic one — but that latitude was written for orderings *across rows*,
+and it does not settle what a guard-FALSE row contributes to the disposition
+**at all**.
+
+Phase 2 read the RDR's evaluation-order comment as owned-before-guard and applied
+`missingOwned` over every pattern-matching candidate before any guard ran. Both
+Phase 3 verifiers independently proved that wrong (FAIL-2 / ADV-1, ADV-1b).
+
+### Evidence consulted
+
+- RDR 0001 REQ-15: "the only successful selection is exactly one matching edge
+  **after guard evaluation**." A guard-FALSE row is not a matching edge, so it is
+  not among the edges whose evaluation the disposition rests on.
+- `req-list.md` ASSUMPTION: `owned_state_unavailable` arises when "**a candidate
+  row's evaluation** requires an owned tag absent from the accessor-produced
+  owned snapshot". A pruned row's evaluation concluded at its guard; it never
+  needed its owned tags.
+- RDR 0002 normative block: escape lists carry only `no_match` and
+  `ambiguous_match`, making `owned_state_unavailable` **never escapable**. The
+  old order therefore converted an escapable condition into an inescapable one.
+- Frozen Phase 1 fixtures: `missingOwnedTable` has no guard,
+  `unevaluableGuardTable` has its required owned key present. **No frozen test
+  pins the collision**, so either reading was open.
+
+### Recommendation (implemented)
+
+**Guard-FALSE prunes first.** A row the seam decides `GuardFalse` is dropped
+outright and contributes neither candidacy nor an owned-state obligation.
+Among rows the guard does *not* prune, the D4 owned-before-guard precedence is
+preserved: `owned_state_unavailable` outranks `guard_unevaluable`, because absent
+owned state is the more precise diagnosis and is frequently the reason the seam
+could not decide the predicate.
+
+Two consequences make this the reading the RDR's own evidence supports rather
+than mere convenience:
+
+1. Under the old order a dead row's requirement decided a live row's fate — the
+   kernel refused a transition it should have planned and named an owned key
+   irrelevant to the edge the caller wanted.
+2. When *every* ordinary row was guard-FALSE, the honest condition is zero-match
+   → `no_match`, an escapable class. The old order reported the inescapable
+   `owned_state_unavailable` instead, **silently removing a modeled table
+   capability** — a correctness bug in precedence deleting author intent.
+
+Implemented in the single `gate()` helper applied uniformly to ordinary and
+escape candidates, so the ordering cannot diverge between the two paths.
+
+**Author decision needed**: confirm that a guard-FALSE row contributes nothing to
+the disposition, or direct that owned-state availability be a precondition
+checked before the guard seam is consulted at all. Note the second reading
+requires re-opening FAIL-2/ADV-1 and ADV-1b, whose frozen adversarial tests
+assert the first.
+
+---
+
 ## Summary
 
 | Count | Category |
 | --- | --- |
 | 6 | mechanical translation (D2–D7) |
-| 1 | needs author decision (D1) |
+| 2 | needs author decision (D1, D8) |
 | 0 | halted on |
 
 No SPEC-DEFECT, no DEPENDENCY-LIMIT, and no TEST-FIXTURE defect was found: the
 Phase 1 test suite and fixtures were internally consistent and every frozen
-assertion was satisfiable without edit.
+assertion was satisfiable without edit, and the Phase 3b adversarial tests were
+likewise satisfiable by fixing the implementation alone. D1 and D8 are both
+SPEC-UNDER — clauses the RDR leaves open rather than states wrongly.
 
 **New public surface added beyond the RDR's Normative Contracts: none.** The
 Phase 1 skeleton already declared every exported symbol (`Tag`, `Provenance`,

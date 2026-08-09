@@ -6,7 +6,9 @@ that would fail if a future change broke that clause.
 - Test package: `internal/resolve` (external test package `resolve_test`).
 - Files: `internal/resolve/resolve_test.go`, `internal/resolve/mvv_test.go`,
   `internal/resolve/fixtures_test.go` (fixtures only),
-  `internal/resolve/boundary_test.go` (package-boundary helpers only).
+  `internal/resolve/boundary_test.go` (package-boundary helpers only),
+  `internal/resolve/adversarial_test.go` (Phase 3b),
+  `internal/resolve/fixup_test.go` (Phase 3c regression).
 - Red gate: **confirmed**. 38 of 43 top-level tests fail against the
   logic-free skeleton; the 5 that pass are negative-contract guards whose
   bite was verified by temporarily violating each prohibition (see
@@ -14,6 +16,13 @@ that would fail if a future change broke that clause.
 - Green gate (Phase 2): **confirmed**. 43 of 43 top-level tests pass against
   the implemented kernel, race-clean, with `golangci-lint run ./...` reporting
   `0 issues`. See "REQ-MVV end-to-end run" below for the recorded output.
+- Green gate (Phase 3c): **confirmed**. After the three-defect fixup, the
+  whole package is green — **139 passing assertions across 56 top-level
+  tests, 0 failures**, race-clean (`go test -race -count=1
+  ./internal/resolve/...`), with `golangci-lint run ./...` reporting
+  `0 issues`. REQ-MVV re-run end-to-end and still passing; its recorded
+  output below is unchanged apart from Go's map-iteration subtest ordering,
+  which is harness scheduling and not kernel output.
 
 ---
 
@@ -65,12 +74,49 @@ that would fail if a future change broke that clause.
 | REQ-37 | `TestReq37_KernelIntroducesNoHashOrCanonicalSerialization` | BOUNDARY |
 | REQ-MVV | `TestMVV_ReplayDeterminismAndFiveValueLevelRefusals` | HAPPY PATH |
 
+## Phase 3c regression tests (`fixup_test.go`)
+
+Added when the three Phase 3 defects were fixed. Each pins a sub-case that
+Phase 3a's chain-of-verification reached by spec-derived probe but that no
+committed test covered, so the uniform viability gate cannot regress on
+those paths. **Every case was verified red against the pre-fix kernel and
+green after** — none is a tautology.
+
+| Test | Closes | REQs | Label |
+| --- | --- | --- | --- |
+| `TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue` | FAIL-1 sub-case 1d | REQ-5, REQ-12, REQ-23 | ADVERSARIAL |
+| `TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate` | FAIL-1 sub-case 1e | REQ-5, REQ-12, REQ-15 | ADVERSARIAL |
+| `TestFixup3c_AmbiguousMatchRowsPayloadMustNotDependOnTableRowOrder` | FAIL-3 third surface | REQ-1, REQ-2, REQ-10 | DOMAIN EDGE |
+| `TestFixup3c_DegradedEscapeAmbiguityPayloadMustNotDependOnRowOrder` | FAIL-3, escape call site | REQ-1, REQ-10 | DOMAIN EDGE |
+| `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates` | FAIL-1 + FAIL-2 jointly | REQ-5, REQ-15, REQ-23 | ADVERSARIAL |
+
+Notes on what each buys beyond the Phase 3b adversarial suite:
+
+- **1d** — the escape bypass was not specific to a *live* seam. A nil
+  `Guards` seam was bypassed too, whereas an ordinary guarded row with a nil
+  seam already refused correctly. A fix that only routed escape rows through
+  an existing evaluator would still have leaked here.
+- **1e** — the bypass was not specific to the `no_match` class. The
+  `ambiguous_match` rescue class bypassed identically, so both rescuable
+  classes are pinned, with a control asserting the gate rejects *unviable*
+  escapes rather than disabling the rescue mechanism.
+- **3c** — `rowRefs` feeds three refusal surfaces, not the two ADV-3
+  recorded. Both the ordinary ambiguity payload and the degraded
+  escape-ambiguity payload (a distinct call site building rows from the
+  escape candidate set) are covered.
+- **Uniformity** — the property test that would have caught FAIL-1 and
+  FAIL-2 together: an ordinary edge and an escape edge presented with the
+  same blocking condition must receive the same refusal kind. This is the
+  assertion a future path-specific shortcut would break first.
+
 ## Orphans
 
 - **REQs with no test**: none. All 37 REQs plus REQ-MVV are covered.
 - **Tests citing no REQ**: none. Every `Test*` function opens with a
-  `// REQ-N: "<quote>"` comment. Non-test helpers in `fixtures_test.go` and
-  `boundary_test.go` declare no REQ because they assert nothing.
+  `// REQ-N: "<quote>"` comment, and the Phase 3b/3c tests open with the
+  Failure Modes clause plus the REQs they read it against. Non-test helpers
+  in `fixtures_test.go` and `boundary_test.go` declare no REQ because they
+  assert nothing.
 
 ## REQ-MVV decomposition
 
