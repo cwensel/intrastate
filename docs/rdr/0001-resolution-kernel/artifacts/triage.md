@@ -16,9 +16,9 @@ One-pass, unattended roborev triage of the Stage-8 implementation branch.
 roborev reviews each commit in repo-sandbox isolation: it never reads the
 RDRs. Every cluster below was raised repeatedly across commits because the
 reviewer re-derived the same objection each time, and several rest on
-premises the RDR text refutes. Two clusters, however, surfaced **real
-unowned cross-RDR seams** that the Phase 3 verifiers did not catch — those
-are filed as seeds.
+premises the RDR text refutes. Three clusters, however, surfaced **real
+unowned cross-RDR seams or under-specifications** that the Phase 3
+verifiers did not catch — those are filed as seeds.
 
 ## Verdicts
 
@@ -117,8 +117,9 @@ and are **not** blockers:
   mandatory verdict when a predicate references absent state. That closes the
   masking path without touching `resolve.go` or weakening a frozen test.
 
-Ratify D1 and D8 **before RDR 0003 is drafted** — 0003's guard contract
-depends on how D8 resolves.
+Ratify D1 and D8 **before RDR 0003 is implemented** — 0003 is already
+Final, and its guard contract's implementation depends on how D8 resolves
+(the recommended fix lands *in* 0003's guard-evaluator contract).
 
 ## Noted, not filed
 

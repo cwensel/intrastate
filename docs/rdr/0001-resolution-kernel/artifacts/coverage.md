@@ -88,7 +88,7 @@ green after** — none is a tautology.
 | `TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate` | FAIL-1 sub-case 1e | REQ-5, REQ-12, REQ-15 | ADVERSARIAL |
 | `TestFixup3c_AmbiguousMatchRowsPayloadMustNotDependOnTableRowOrder` | FAIL-3 third surface | REQ-1, REQ-2, REQ-10 | DOMAIN EDGE |
 | `TestFixup3c_DegradedEscapeAmbiguityPayloadMustNotDependOnRowOrder` | FAIL-3, escape call site | REQ-1, REQ-10 | DOMAIN EDGE |
-| `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates` | FAIL-1 + FAIL-2 jointly | REQ-5, REQ-15, REQ-23 | ADVERSARIAL |
+| `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates` | FAIL-1 (FAIL-2 is covered by ADV-1/ADV-1b) | REQ-5, REQ-15, REQ-23 | ADVERSARIAL |
 
 Notes on what each buys beyond the Phase 3b adversarial suite:
 
