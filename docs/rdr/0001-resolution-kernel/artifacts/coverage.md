@@ -104,10 +104,17 @@ Notes on what each buys beyond the Phase 3b adversarial suite:
   recorded. Both the ordinary ambiguity payload and the degraded
   escape-ambiguity payload (a distinct call site building rows from the
   escape candidate set) are covered.
-- **Uniformity** — the property test that would have caught FAIL-1 and
-  FAIL-2 together: an ordinary edge and an escape edge presented with the
-  same blocking condition must receive the same refusal kind. This is the
-  assertion a future path-specific shortcut would break first.
+- **Uniformity** — the property test that would have caught **FAIL-1**: an
+  ordinary edge and an escape edge presented with the same blocking
+  condition must receive the same refusal kind. This is the assertion a
+  future path-specific shortcut would break first. Its three cases are
+  missing-owned-with-guard-TRUE, undecidable guard, and nil seam; none
+  combines guard-FALSE with missing owned state, so it would **not** have
+  caught FAIL-2. **FAIL-2 coverage is carried by ADV-1 and ADV-1b**
+  (`adversarial_test.go`), which pin that shape directly. The
+  guard-FALSE + missing-owned collision is deliberately *not* added here:
+  deviation D8 records that precedence as SPEC-UNDER awaiting author
+  decision, and a test would pin an unratified semantic.
 
 ## Orphans
 
