@@ -461,11 +461,15 @@ existence tests.
   itself. With the existence-guarded value row, neither
   route is ambiguous under exact-one selection, and neither
   drives authors to stamp sentinel values upstream.**
-  - **Status**: Pending — the runtime half is settled; the
-    **load-time** half is refuted pending A12. See *Carried
-    constraint*.
+  - **Status**: Verified — the runtime half is settled here;
+    the **load-time** half is *unsettled by RDR 0003's
+    silence*, not refuted, and rides on A12's inherited
+    obligation. A14 further narrows the dependence: a
+    single-atom absence test (`all … exists = false`) is
+    legal, so the two-row pattern is needed only for the
+    DISJUNCTION. See *Carried constraint*.
   - **Method**: Design Decision (runtime) + Source Search
-    (load-time, owed)
+    (load-time)
   - **Evidence**: The decision: absence tests MUST be
     explicit existence atoms; implicit absence-as-false on
     value operators is rejected (Alternative 1). Verified
@@ -515,7 +519,16 @@ existence tests.
     under-read the risk. Whether RDR 0003's row-group scoping
     ("MUST be scoped to a normalized row group … as one
     product") narrows the two rows out of a shared product,
-    or whether absence needs standing in the domain, is A12.
+    or whether absence needs standing in the domain, is A12 —
+    now resolved as **indeterminate by RDR 0003's silence**
+    and routed to its implement stage. RDR 0003 never states
+    how an existence atom projects onto the declared-domain
+    product, and the `exists` row's "optional scalar" phrasing
+    confers no domain standing (RDR 0002's tag-declaration
+    schema has no optionality field). So the pattern is not
+    rejected at load — the projection rule simply does not
+    exist yet, and RDR 0003 must supply it before graph lint
+    can run overlap over any table using this pattern.
   - **If wrong**: Authors cannot express a legitimate
     absence-conditional row and either demand a grammar
     extension from RDR 0003 or mask absence behind
@@ -555,9 +568,18 @@ existence tests.
   distinguishable from *genuine* absence at the
   accessor→kernel boundary is not stated by any current
   contract.**
-  - **Status**: Pending — open obligation on RDR 0004 (or
-    wherever the accessor executor lands); not resolvable
-    inside this RDR.
+  - **Status**: Pending — DOWNGRADED at Stage 6 by explicit
+    decision, with the obligation now ROUTED to a named
+    destination: **RDR 0004's implement stage**, which owns
+    the accessor executor and must state whether the "typed
+    tag values" branch carries a completeness guarantee. Not
+    resolvable inside this RDR — the kernel seam cannot
+    express the distinction either way — and not
+    MVV-critical, so it does not block lock. Survivable
+    because the contract is sound without it: the exposure
+    is that an unevaluable refusal cannot be read as
+    "retryable", which the Failure Modes entry states as
+    operator guidance.
   - **Method**: Source Search
   - **Evidence**: RDR 0004's **read-accessor** clause is
     the whole of what governs this: "A read accessor MUST
@@ -683,15 +705,48 @@ existence tests.
   vacuously-true conjunction, and RDR 0002's normalization
   does not synthesize an empty `unless` block that would
   disable rows under `all ∧ ¬(unless_conj)`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Needed. RDR 0003 states the row-verdict
-    shape but not the empty-block identity, and this RDR now
-    fixes it (Normative Contracts). Verify against RDR 0002's
-    normalization contract whether an omitted `unless` block
-    normalizes to absent or to an empty collection, and
-    confirm no lint/exhaustiveness rule in RDR 0003 depends
-    on the opposite reading.
+  - **Evidence**: RDR 0002 is silent on the identity, so the
+    clause belongs here. Its only `unless` normative requires
+    that guards "be represented as positive `all` predicates
+    and negative `unless` predicates" and that "Normalization
+    MUST combine both into one candidate-row predicate set
+    before ambiguity checks" — fixing representation and
+    combination timing, never the truth value of a zero-atom
+    block. Its rule-shape contract enumerates required and
+    optional rule parts without mentioning guard blocks at
+    all, so an omitted `unless` is neither mandated nor given
+    meaning. RDR 0002 *does* fix the analogous
+    absence-identity for writes — "Absence from both the
+    write block and the clear list MUST NOT imply deletion" —
+    which shows that RDR states such identities when it means
+    to, and did not for guards. RDR 0003 states the
+    row-verdict shape but not the empty-block case: "if all
+    `unless` predicates hold, the candidate row is disabled"
+    and "the `unless` predicate set is not fully true" are
+    both undefined at cardinality zero. No lint or
+    exhaustiveness rule depends on the opposite reading — RDR
+    0003's algebra is *subtractive* ("its `unless` block
+    denotes an excluded intersection that is subtracted from
+    the row's accepted assignments"), so an absent block
+    subtracts nothing, whereas the vacuously-true reading
+    would empty every such row's accepted set and break
+    coverage for every row group. The absent reading is
+    therefore the only one consistent with RDR 0003's own
+    lint math. Sweeps of `docs/rdr/` for
+    `empty[- ]?(atom|block|all|unless|conjunction)` and for
+    `empty|omitted|vacuous|absent` within three lines of
+    `unless` return no hit outside this RDR and its evidence.
+    Corroborating shape: both canonical fixtures omit
+    `unless` on most rules
+    (`0002-…/evidence/spikes/rdr-fixture.toml`,
+    `0003-…/evidence/spikes/guard-fixture.toml`), and the
+    0002 normalizer contributes zero predicates for an absent
+    block (`0002-…/evidence/spikes/main.go`, nil map),
+    rendering rows carrying no `unless:` token —
+    representable-and-absent, with no synthesized empty
+    block.
   - **If wrong**: Either the identity belongs to RDR 0002's
     normalization (not here), or a table with an omitted
     `unless` block disables every row carrying one — a
@@ -703,26 +758,65 @@ existence tests.
   total, lossless mapping from the authored guard to
   `Row.Guard string` exists or can be specified by RDR 0003
   without reopening RDR 0001's `Row` shape.**
-  - **Status**: Pending
+  - **Status**: Verified — as a NAMED OBLIGATION on RDR
+    0003's implement stage, not as a settled mapping. The
+    mapping is specified nowhere; it is unowned, not
+    impossible.
   - **Method**: Source Search
-  - **Evidence**: Needed. Established so far: `Row.Guard` is
-    an opaque `string` and `Evaluate(guard string, view
-    TagSet)` is the whole seam
-    (`internal/resolve/resolve.go::GuardEvaluator`); the
-    kernel attaches no meaning to the text
-    (`evaluateGuard` only special-cases `""`). Guards are
-    authored *structurally* — RDR 0003's spike fixture uses
-    `[rule.guard.all.profile]`, `[rule.guard.unless.
-    prelock_iterations]` — and RDR 0002's normalization
-    "MUST combine both into one candidate-row" predicate
-    set. No RDR states what that combination yields at the
-    `Row.Guard` boundary, and the only in-tree consumer
-    (`fixtures_test.go::fixtureGuards`) treats it as an
-    opaque *name* keyed into `decided map[string]bool`.
-    Verify against RDR 0002's normalization contract and
-    RDR 0003's grammar whether the mapping is specified
-    anywhere; if not, it is an obligation handed to RDR 0003
-    (Phase 3), not a defect fixed here.
+  - **Evidence**: The mapping is specified **nowhere** — a
+    demonstrated negative. Sweeps of `docs/rdr/*.md` for
+    `Row.Guard` / `Guard string`, for guard
+    encode/serialize/render terms, and for
+    guard-key/opaque-string phrasings return no clause in
+    RDR 0001, 0002, 0003, or any peer stating what
+    `Row.Guard string` carries; every hit describes the
+    authored or normalized *structured* form. RDR 0002
+    normalizes guards to "one candidate-row predicate
+    **set**" and explicitly rejects the alternative —
+    "`all`/`unless` blocks instead of forcing every guard
+    into one expression string". RDR 0003 owns the atom
+    grammar but disclaims the bridge: "This RDR introduces
+    no encode/decode pair", deferring container format to
+    RDR 0002. The 0002 spike's own `Row` has no `Guard`
+    field, merging guards into a prefixed predicate map
+    instead (`0002-…/evidence/spikes/main.go`), and no
+    producer of `Row.Guard` exists in the tree (`rg
+    "Evaluate\("` → only `resolve.go` and
+    `fixtures_test.go`). The sole consumer uses two mutually
+    incompatible ad-hoc conventions — an infix expression
+    `"reviews >= quorum"` beside opaque names
+    `"is-fast-lane"` / `"is-slow-lane"`
+    (`fixtures_test.go`) — through an evaluator self-labeled
+    a "stand-in for the RDR 0003 guard seam". Two
+    conventions coexisting in one file is positive evidence
+    that none is specified.
+    **Not refuted**: `Row` need not be reopened. RDR 0003's
+    Identity decision — "a guard predicate is identified by
+    its source rule/context id plus its position within
+    `all` or `unless`" — is already a total, unique,
+    string-expressible key, so a key-into-atom-table mapping
+    fits `Row.Guard string` losslessly; a serialized
+    `(tag, operator, literal)` + block-placement form is the
+    alternative. RDR 0001 stays closed either way, so this
+    assumption's "If wrong" branch is NOT triggered.
+    **Obligation destination (NAMED)**: RDR 0003's
+    `### Phase 1: Predicate Model` implement-stage step,
+    which already charters "the normalized predicate atom
+    shape used by **resolver** and lint" — the resolver being
+    the kernel, whose only guard surface is
+    `Row.Guard string`. The obligation sits inside Phase 1's
+    existing scope, so no amendment to Final RDR 0003 is
+    required. RDR 0003's Prerequisites are both already
+    checked and are not a live gate; Phase 1 is where the
+    work is. Neither RDR 0008 (recognized tag key name) nor
+    RDR 0009 (escape-row shape) owns guard grammar or
+    encoding, and no later RDR exists — a successor RDR is
+    unnecessary. Sequencing is already enforced: this RDR is
+    Final before RDR 0003's implementation begins.
+    **Consequence for this RDR**: Testing Strategy rows 4–8
+    and the Phase 2 conformance vectors remain un-encodable
+    until RDR 0003 Phase 1 discharges the mapping. That is a
+    stated downstream dependency, not a defect here.
   - **If wrong**: Every atom-level normative clause in this
     RDR is unimplementable as written and the Phase 2
     vectors for scenarios 4/6/7/8 cannot be encoded at all —
@@ -764,35 +858,58 @@ existence tests.
   domain product — otherwise the pattern is rejected at table
   load under RDR 0002's mandatory `ambiguous overlap`
   category.**
-  - **Status**: Pending
+  - **Status**: Verified — INDETERMINATE-BY-SILENCE, resolved
+    as an inherited obligation, NOT a refutation. RDR 0003
+    does not say the pattern is rejected; it says nothing
+    about the case at all.
   - **Method**: Source Search
-  - **Evidence**: Needed. Established so far: RDR 0003
-    Technical Design defines overlap as "any non-empty
+  - **Evidence**: RDR 0003 defines overlap as "any non-empty
     `row_i accepted assignments intersect row_j accepted
     assignments`" over a product of declared finite domains,
-    and normatively requires coverage/overlap checks "MUST be
-    scoped to a normalized row group … as one product". RDR
-    0002 lists "ambiguous overlap" among validation
-    categories that "MUST retain stable data-level
-    categories" — a hard reject, not a downgradeable claim
-    (contrast RDR 0003's exhaustiveness permission ceiling,
-    which explicitly allows lint to "refuse or downgrade").
-    No tag declaration in the tree admits an absent element.
-    The asymmetry is textual: every "refuse or downgrade"
-    escape in RDR 0003 attaches to the *exhaustiveness*
-    claim, and none of them mentions overlap — so the weaker
-    claim is the only one with a relief valve, while the hard
-    reject runs over a product that cannot represent absence.
-    RDR 0003's own fixture sits on the fault line: the
-    `foundational-to-cove` rule guards `cluster_eligible`
-    with `exists = true` over a tag whose declared domain is
-    `[true, false]`. Verify whether an existence atom over a
-    dimension with no absent member makes a row's
-    accepted-assignment set empty, total, or undefined under
-    0003's proof, and whether the two rows share a normalized
-    row group at all. Note the value row now carries an
-    existence atom of its own (A5/A15), which the overlap
-    proof must also accommodate.
+    normatively scoped so checks "MUST be scoped to a
+    normalized row group … as one product". It is then
+    **genuinely silent** on how an existence atom projects
+    onto that product. Its operator matrix fills the "Lint
+    proof role" column for `exists` with "Tests presence or
+    absence, not value equality" — a *runtime* description
+    occupying the column where every other operator states a
+    domain-narrowing rule (`eq`: "Narrows the tag domain to
+    one value"). No text states whether such a row's
+    accepted-assignment set is empty, total, or undefined; a
+    sweep of `absen|presen|null|undefined|empty set` across
+    RDR 0003 and RDR 0006 returns only the matrix line and
+    its Load-Bearing restatement. The matrix's "optional
+    scalar" confers no domain standing: RDR 0002's
+    tag-declaration schema has **no optionality field**, and
+    a sweep for `optional|nullable|required|absent` across
+    every TOML in the RDR tree returns zero rows —
+    `cluster_eligible domain = [true, false]` is guarded by
+    `exists = true` with no absent member declared. So
+    "optional" reads as coverage but has no schema backing.
+    Route 1 (row-group scoping separating the two rows) is
+    plausible but unproven: RDR 0003 explicitly delegates
+    grouping — "RDR 0006 supplies the graph-lint grouping
+    context, such as one source-state/recognized-outcome
+    selection group" ("such as" being illustrative, not
+    definitional) — and RDR 0006 never defines group
+    membership beyond "the same state/outcome". Route 2
+    (absence has domain standing) is affirmatively
+    unsupported. The overlap/exhaustiveness asymmetry this
+    assumption asserts is **confirmed**: RDR 0002 lists
+    "ambiguous overlap" among categories validation "MUST
+    retain" with no relief valve, while every "refuse or
+    downgrade" escape in RDR 0003 and RDR 0006 attaches to
+    the *exhaustiveness* claim and none to overlap.
+    **Obligation destination (NAMED)**: RDR 0003's implement
+    stage must define an existence atom's projection onto the
+    declared-domain product, and RDR 0006's must define
+    row-group membership tightly enough to decide whether the
+    absence row and the value row share a compared product,
+    before graph lint can run overlap over any table using
+    the two-row pattern. Because RDR 0003 does not say the
+    pattern is rejected, the pattern is not refuted at load;
+    the projection rule is an unclosed gap inherited from a
+    Final peer, not a defect in this RDR.
   - **If wrong**: A5's blessed pattern is unusable — the
     domain rule leaves authors with no sanctioned way to
     express an absence-conditional row, and the only
@@ -804,25 +921,48 @@ existence tests.
   knowingly: an observed tag supplied by the caller can turn
   a `guard_unevaluable` into a decided guard verdict, which
   no shipped test contends.**
-  - **Status**: Pending
+  - **Status**: Verified — as an ACCEPTED EXPOSURE (the
+    assumption's second clause). No constraint exists
+    anywhere; the exposure is real, currently unreachable,
+    and recorded knowingly.
   - **Method**: Source Search
-  - **Evidence**: Needed. Established so far: `Input.Observed`
-    is caller-supplied (`resolve.go::Input`; `ProvenanceObserved`
-    is documented as "a non-owned context tag supplied by the"
-    caller) and `assemble` writes it into `view.tags`
+  - **Evidence**: No constraint exists. `Input.Observed` is
+    caller-supplied (`resolve.go::Input`;
+    `ProvenanceObserved` is "a non-owned context tag supplied
+    by the caller") and `assemble` writes it into `view.tags`
     unconditionally, so presence under the provenance-blind
-    rule is caller-reachable. The kernel already refuses this
-    substitution on the *owned-state* path — frozen by
-    `adversarial_test.go::TestAdv4_ObservedTagsMustNotShadowTheOwnedSnapshot`
-    and `::TestAdv5_ObservedTagCannotSatisfyAnOwnedStateRequirement`
-    — but neither test covers the guard path, and before this
-    RDR nothing stated that guards read the view
-    provenance-blind. A11 verifies the rule *conforms* to
-    shipped `TagSet.Lookup` behavior; it does not establish
-    that conformance is safe. Verify whether the
-    accessor/input boundary (RDR 0004 / RDR 0005) constrains
-    what a caller may supply as observed, and record the
-    residue here if it does not.
+    rule is caller-reachable. The accessor/input boundary
+    does **not** constrain it. RDR 0005 never mentions
+    observed tags (zero occurrences repo-wide in that
+    document) and normatively treats `--tag name=value` as
+    "context already known to the caller", with no allowlist,
+    validation, or accessor-origin requirement; it further
+    states `flow next` MUST NOT invent guard facts "neither
+    **supplied** nor produced by a declared gate accessor" —
+    which *blesses* supplied facts as legitimate guard input
+    rather than restricting them. RDR 0004's only normative
+    clauses touching observed tags are output-side: a write
+    accessor "MUST NOT write observed or recognized tags",
+    and read-back must find them unchanged. RDR 0001 affirms
+    rather than constrains the channel — its kernel-contract
+    normative block names "accessor-produced owned tag
+    snapshot, **caller-supplied observed tags**", an
+    asymmetry reproduced verbatim in `resolve.go`. The single
+    input-side producer obligation in the whole RDR set
+    constrains one reserved key *name*, not provenance
+    origin: RDR 0008's "Producers of kernel `Input` MUST NOT
+    supply an owned or observed tag keyed `recognized`" —
+    proof the authors knew how to write an input-boundary
+    obligation and wrote only that one.
+    **Exposure is currently unreachable**, which bounds it:
+    no production code imports `internal/resolve` (only
+    in-package tests and one 0007 evidence spike),
+    `internal/cli/` has no `flow` package, and
+    `internal/cli/root.go` registers only `version`. The
+    bound is temporary by design — it becomes live when RDR
+    0005's CLI integration handoff wires `--tag` to
+    `Input.Observed`. Recorded here under this assumption's
+    second clause, and surfaced under Failure Modes.
   - **If wrong**: an operator can unstick a
     `guard_unevaluable` refusal by supplying the missing tag
     on the command line, producing a plan whose `Writes` are
@@ -836,25 +976,36 @@ existence tests.
   supplied only by `all`/`unless` placement — so
   `all … exists = false` is a legal single-atom absence
   test.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Established so far: RDR 0003's
-    operator/kind matrix gives `exists` the literal shape
-    "boolean" (the only operator whose literal is a boolean
-    rather than a scalar/set), and its spike fixture authors
-    `exists = true`
-    (`0003-…/evidence/spikes/guard-fixture.toml`), so the
-    literal exists and is not decorative. What is NOT yet
-    confirmed: that `exists = false` is *accepted* — the
-    fixture only exercises `true`, and RDR 0003 states the
-    placement rule "Positive guard atoms MUST live in `all`;
-    negative guard atoms MUST live in `unless`", which could
-    be read as forbidding a negative-polarity literal in
-    `all`. Verify against RDR 0003's grammar whether polarity
-    in the literal and polarity in placement are independent
-    or whether one constrains the other. Raised by the
-    repeatability lens (D-10) where `glm-5.2` reconstructed
-    `exists` as unary.
+  - **Evidence**: RDR 0003 **never defines** "positive guard
+    atom" or "negative guard atom". A sweep of `docs/rdr/`
+    for `positive|negative|polarity` scoped to RDR 0003
+    returns 12 hits, of which the placement rule is the sole
+    normative use; every other hit modifies the *list*
+    ("positive `all` guards and negative `unless` guards"),
+    never an operator or a literal. Polarity is therefore
+    placement-only: RDR 0003's Identity decision fixes atom
+    identity as "source rule/context id plus its **position
+    within `all` or `unless`**", the atom's four conceptual
+    fields (tag name, operator, expected value, source
+    identity) carry no polarity field, and RDR 0003 states
+    "`unless` is not per-atom negation" — the negation site
+    is the block's whole conjunction, not the atom. The
+    `exists` row gives literal shape "boolean" with proof
+    role "Tests presence **or absence**", which only has
+    content if both literal values are authorable; a
+    `true`-only operator would test presence alone. The parse
+    rule rejects only literals that fail to parse as the
+    declared kind, and `false` parses as boolean, so it is
+    not rejectable. Placement polarity and literal polarity
+    are structurally independent, and neither constrains the
+    other — so `all … exists = false` is a legal single-atom
+    absence test. The fixture's `exists = true` is
+    under-coverage, not a restriction: the spike validator
+    (`0003-…/evidence/spikes/check.sh`) matches operator
+    *names* only and never inspects literal values, so it
+    would have accepted `exists = false` identically.
   - **If wrong**: absence is expressible only via `unless …
     exists`, A5's two-row pattern regains its status as the
     sole absence route (restoring the stronger dependence on
@@ -867,21 +1018,50 @@ existence tests.
   conjoined atoms) or the same tag guarded in both `all` and
   `unless` — so the two-row pattern's value row can prune
   (GuardFalse) on absence rather than survive unevaluable.**
-  - **Status**: Pending
+  - **Status**: Verified — as a NAMED OBLIGATION on RDR
+    0003's implement stage (silence, not prohibition), the
+    disposition this assumption's own text anticipated.
   - **Method**: Source Search
-  - **Evidence**: Needed. Established so far: the pattern's
-    value row must be existence-guarded or the aggregation
-    veto refuses the absent leg (A5). RDR 0003's fixture
-    keys atoms by tag — `[rule.guard.all.profile]` carries a
-    single operator key per table
-    (`0003-…/evidence/spikes/guard-fixture.toml`) — no
-    fixture shows two operator keys on one tag-table, and
-    none guards the same tag in both `all` and `unless`.
-    Verify against RDR 0003's grammar and RDR 0002's
-    normalization whether either shape parses as the
-    conjunction; if neither is legal, the guarded-value
-    shape is a grammar obligation handed to RDR 0003's
-    implement stage alongside A10's mapping.
+  - **Evidence**: Neither RDR 0003 nor RDR 0002 addresses
+    either shape. RDR 0003 defines an atom as four conceptual
+    fields — "tag name, operator, expected value, and source
+    identity" — and RDR 0002 owns keying: "rule predicates
+    live under `[rule.match.<tag>]`,
+    `[rule.guard.all.<tag>]`, and
+    `[rule.guard.unless.<tag>]`", which names the table path
+    but sets **no bound on operator keys inside it** and says
+    nothing about a tag appearing in both blocks. Sweeps
+    scoped to RDR 0002/0003 for
+    `same tag|duplicate|at most one|multiple operator|keyed
+    by|conjoin|in both` return no rule on either shape; RDR
+    0002's `duplicate|multiple` hits all concern multiple
+    matching *rows*, a different subject. The structural
+    commitments lean toward admitting shape (a): semantic
+    equality is the tuple `(tag, operator, literal)` — a
+    three-part key under which `profile.eq` and
+    `profile.exists` are distinct atoms; the selection rule
+    quantifies over *atoms*, not tags ("a row qualifies only
+    when every `all` atom is true"); both RDRs' illustrative
+    TOML places multiple atoms under a single guard header
+    (`[rule.guard.all]` with `status.eq` and `profile.in`),
+    which is TOML-equivalent to the nested per-tag form; and
+    the spike validator iterates every operator key in a
+    guard section with **no at-most-one constraint**, never
+    counting keys or tracking which tag it has seen, so two
+    keys in one tag-table pass unchanged. For shape (b), RDR
+    0002's "Normalization MUST combine both into one
+    candidate-row predicate set" states a merge with no
+    collision rule, and RDR 0003's `intersection(all) minus
+    (unless conjunction)` is well-defined for a tag on both
+    sides but is never offered as an authoring affordance.
+    Compatibility is not a stated rule: this is silence, not
+    prohibition.
+    **Obligation destination (NAMED)**: RDR 0003's implement
+    stage — the same `Phase 1: Predicate Model` step that
+    owns A10's mapping — must fix (i) whether one tag-table
+    may carry multiple operator keys and whether they
+    conjoin, and (ii) whether a tag may be guarded in both
+    `all` and `unless` and how normalization merges it.
   - **If wrong**: the two-row pattern has no legal value
     row — bare value rows self-veto (A5) — so the
     disjunction "absent OR equals v" is inexpressible and
@@ -1052,21 +1232,27 @@ supplying it — an `exists` atom is NOT unary-over-a-key.
 Both polarity channels reach the same verdicts.
 ```
 
-**Open grammar question (A14, Pending) — not part of the
-normative block above.** The `presence == literal` semantics
-is fixed here and holds either way; whether RDR 0003's
-placement rule ("Positive guard atoms MUST live in `all`")
-admits the literal `exists = false` in an `all` block is
-A14's to settle. While it holds, a single-row absence test
-(`all … exists = false`) is expressible; if A14 resolves
-against it, the `unless … exists = true` channel carries
-bare absence tests and Scenario 6's `all` leg moves with
-A14's answer. A5's two-row pattern is required only for the
-DISJUNCTION "absent OR equals v", which no single row can
-carry because RDR 0003 rejects intra-guard disjunction —
-and its value row must itself be guarded on existence
-(A5/A15), or the aggregation veto below refuses the absent
-leg the pattern exists for.
+**Grammar note (A14, settled) — not part of the normative
+block above.** The `presence == literal` semantics is fixed
+here and holds regardless. A14 settles the adjacent grammar
+question in favor of expressibility: RDR 0003 never defines
+"positive"/"negative" atom, so its placement rule ("Positive
+guard atoms MUST live in `all`") is placement-only and does
+not read a `false` literal as making an atom negative —
+polarity in the literal and polarity in placement are
+structurally independent. A single-row absence test
+(`all … exists = false`) is therefore expressible, and
+Scenario 6 asserts both channels reach the same verdict.
+A5's two-row pattern is required only for the DISJUNCTION
+"absent OR equals v", which no single row can carry because
+RDR 0003 rejects intra-guard disjunction — and its value row
+must itself be guarded on existence (A5/A15), or the
+aggregation veto below refuses the absent leg the pattern
+exists for. **The shape of that guarded value row is A15's
+inherited obligation on RDR 0003's implement stage** — RDR
+0003 neither admits nor forbids two operator keys on one
+tag-table, so the pattern's value row is authorable in
+principle but not yet grammar-blessed.
 
 ```normative
 PRESENCE IS PROVENANCE-BLIND. "Present in the assembled
@@ -1106,14 +1292,22 @@ vacuously-true conjunction, which under
 `all ∧ ¬(unless_conj)` would disable every row carrying one.
 ```
 
-**Open ownership question (A9, Pending) — not part of the
-normative block above.** If RDR 0002's normalization already
-fixes the empty-`unless` identity, this clause is 0002's and
-is struck here rather than restated; if it does not, the
-clause stands as written. A normative MUST cannot carry its
-own strike-out condition, so the question is recorded here
-and A9 blocks lock until it is answered either way. The
-identity itself is not in doubt — only which RDR owns it.
+**Ownership note (A9, settled) — not part of the normative
+block above.** The empty-`unless` identity is **this RDR's**
+to fix: A9 verified that RDR 0002's normalization contract
+governs representation and combination timing only and never
+states the truth value of a zero-atom block, and that RDR
+0002 fixes the analogous absence-identity for *writes*
+("Absence from both the write block and the clear list MUST
+NOT imply deletion") — showing it states such identities when
+it means to, and did not for guards. The clause above
+therefore stands unconditionally, with no strike-out
+condition attached. RDR 0003's exhaustiveness algebra
+independently requires the same reading: its `unless` block
+denotes an *excluded intersection subtracted from* the row's
+accepted assignments, so an absent block subtracts nothing,
+whereas the vacuously-true reading would empty every such
+row's accepted set and break coverage for every row group.
 
 ```normative
 Atom verdicts combine under strong-Kleene three-valued
@@ -1333,7 +1527,7 @@ user outcome — an actionable refusal, never a masked one):
 | Reversibility | ~ — flipping later reclassifies shipped table behavior | ✓ — spec + fixtures now; evaluator unbuilt, kernel unchanged | ✗ — adds a declared-reads surface to Row that must be maintained forever |
 | Blast radius | Kernel unchanged, but D8 becomes unsound (prune on absence) | Kernel unchanged; D8 ratified sound; 0003 evaluator constrained | Kernel `gate` must grow a second precheck; ADV ordering re-opened |
 | Operability (recovery when a guard cannot read state) | ~ — masked, so nothing to recover *from*; the failure is silent | ✗ — worst of the three: `guard_unevaluable` is non-escapable, so there is no table-level hatch; recovery is fixing the artifact or accessor, and while A6b is open a transient read failure is indistinguishable from real absence | ~ — precheck refusal names the absent key directly, but is equally non-escapable |
-| Blast radius on the authoring surface | None — closed-world reads keep working | ✗ — absence-conditional rows need the two-row pattern, whose load-time legality is open (A12); the project's own fixtures become migration candidates (Consequences) | ~ — authors must maintain a declared-reads list |
+| Blast radius on the authoring surface | None — closed-world reads keep working | ✗ — a single-atom absence test is legal (A14), but the DISJUNCTION needs the two-row pattern, whose load-time legality RDR 0003 leaves unstated (A12/A15, routed to its implement stage); the project's own fixtures become migration candidates (Consequences) | ~ — authors must maintain a declared-reads list |
 | Cost | Low now, high at first masked escape | Low — the discriminator already exists end to end | Medium — new Row field or overloaded RequiresOwned (re-creates xg7p's conflation) |
 
 The deciding rows are correctness fit and blast radius: B
@@ -1606,16 +1800,27 @@ B achieves with a spec and fixtures.
 - **Risk**: Authors defeat partiality by stamping sentinel
   values upstream so keys are never absent, making value
   comparisons decide on placeholders.
-  **Mitigation**: conditional on A12 and A15. A5's two-row
-  pattern (existence-guarded value row) is the intended
-  legitimate outlet and authoring guidance
+  **Mitigation**: partial, and honestly bounded. Two outlets
+  exist. The first is now settled: A14 establishes that a
+  single-atom absence test (`all … exists = false`) is
+  grammar-legal, so the common "row applies when X is absent"
+  case has a sanctioned route that depends on neither A12 nor
+  A15. The second — A5's two-row pattern with an
+  existence-guarded value row, needed only for the
+  DISJUNCTION "absent OR equals v" — rests on obligations RDR
+  0003's implement stage must discharge: the existence-atom
+  projection onto the declared-domain product (A12) and the
+  conjoined-atom row shape (A15). Neither is *refuted*; both
+  are unstated, so the disjunction pattern is authorable in
+  principle but not yet grammar-blessed. Authoring guidance
   flags sentinel-stamping as the anti-pattern (premortem
-  P-6) — but the pattern's load-time legality is open (A12),
-  and sentinel-stamping is what authors fall back to if it is
-  rejected. So this mitigation stands or fails with A12: an
-  anti-pattern warning with no working alternative is not a
-  mitigation, it is a prohibition, and it would make the
-  sentinel path the only route to an absence-conditional row.
+  P-6). **Residual**: if RDR 0003 discharges A12 against the
+  pattern, the disjunction case loses its only sanctioned
+  outlet and sentinel-stamping becomes the fallback — an
+  anti-pattern warning with no working alternative is a
+  prohibition, not a mitigation. That residue is carried
+  openly and is the reason both obligations are named
+  Prerequisites rather than left implicit.
 
 ### Failure Modes
 
@@ -1654,7 +1859,8 @@ B achieves with a spec and fixtures.
   The catch is RDR 0003's declared-tag rule at parse/lint
   (A7): the defect fails table load, never reaching a
   production refusal.
-- **Refusal defeated by caller-supplied state** (A13, open):
+- **Refusal defeated by caller-supplied state** (A13,
+  verified as an accepted exposure):
   because presence is provenance-blind and `Input.Observed`
   is caller-supplied, an operator facing a
   `guard_unevaluable` can supply the missing key as an
@@ -1673,76 +1879,118 @@ B achieves with a spec and fixtures.
   an observed tag (A11) — but "the refusal is
   non-escapable" is a weaker guarantee than it reads: it is
   unroutable *around within the table*, not unbypassable by
-  the caller. A Phase 2 vector should pin whatever A13
-  settles.
+  the caller. A13 confirms no contract constrains the
+  channel: RDR 0005 treats `--tag` as "context already known
+  to the caller" with no allowlist or accessor-origin
+  requirement, and RDR 0001 normatively *affirms*
+  "caller-supplied observed tags". The exposure is real and
+  accepted; it is bounded today only because no CLI surface
+  is wired (`internal/cli/root.go` registers `version`
+  alone), and it becomes live at RDR 0005's CLI handoff. A
+  Phase 2 vector MUST pin the guard-path behavior, and
+  constraining the `--tag` channel is seeded against RDR
+  0005 (Prerequisites).
 - **Conflated recovery signal**: `guard_unevaluable`
   cannot itself distinguish transient read failure
   (retryable) from genuine absence (not retryable); until
-  A6b settles what the accessor contract reports,
-  operators should treat the refusal as "inspect the
-  artifact and accessor," not "retry". A6b is confirmed
-  open: RDR 0004 requires only "typed tag values or a
-  typed refusal", with no completeness rule on the values
-  branch, so the conflation is real and currently
-  unowned.
+  the accessor contract states what it reports, operators
+  should treat the refusal as "inspect the artifact and
+  accessor," not "retry". A6b is confirmed open: RDR 0004
+  requires only "typed tag values or a typed refusal", with
+  no completeness rule on the values branch, so the
+  conflation is real. It is now **routed rather than
+  unowned** — RDR 0004's implement stage owns stating
+  whether the values branch carries a completeness
+  guarantee (Prerequisites).
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] **A9 verified** (empty-`unless` identity against RDR
+- [x] **A9 verified** (empty-`unless` identity against RDR
       0002's normalization) — raised by the cove lens, which
       found both this RDR and RDR 0003 silent on empty atom
-      blocks. Must close before lock: the wrong identity
-      disables every row carrying an omitted `unless` block.
-- [ ] **A10 verified** (guard-structure mapping at the
-      `Row.Guard` boundary) — raised by the 3amigo lens as
-      its hinge finding. Must close before lock: every
-      atom-level normative clause here binds an evaluator
-      that must recover atom structure from an opaque
-      string, and the Phase 2 vectors for scenarios 4/6/7/8
-      cannot be encoded until the mapping is known. If the
-      mapping is unspecified anywhere, the resolution is to
-      hand it to RDR 0003 as a named obligation, not to
-      specify a grammar here — **and the handoff needs a
-      destination that exists.** RDR 0003 is Final and this
-      project does not amend RDRs, so "state it in 0003"
-      cannot mean editing 0003's text. It means 0003's
-      *implement* stage owns the mapping as a named
-      prerequisite, or a successor RDR states it. Whichever
-      it is MUST be named when A10 closes; an obligation
-      addressed to a locked document is not a resolution,
-      and leaving it there is what turns Phase 2 into
-      indefinite deferral.
-- [ ] **A12 verified** (two-row absence pattern survives
-      RDR 0003's load-time overlap check) — raised by the
-      critique lens. Must close before lock: A5's blessed
-      pattern is the domain rule's only sanctioned outlet for
-      absence-conditional rows, and `ambiguous overlap` is a
-      mandatory rejection category, not a downgradeable
-      claim. If the pattern is overlap-rejected, the
-      authoring story needs a different answer before this
-      rule binds authors.
-- [ ] **A13 verified** (provenance-blind presence is safe
-      against caller-supplied observed tags, or the exposure
-      is accepted knowingly) — raised by the critique lens.
-      Not a blocker for the domain rule itself; a blocker for
-      claiming the refusal cannot be worked around.
-- [ ] **A14 verified** (`exists` carries a boolean literal;
+      blocks. **Closed at Stage 6**: RDR 0002 is silent, so
+      the identity is this RDR's to fix and the clause stands
+      unconditionally. RDR 0003's subtractive exhaustiveness
+      algebra independently requires the same reading.
+- [x] **A10 verified as a named obligation** (guard-structure
+      mapping at the `Row.Guard` boundary) — raised by the
+      3amigo lens as its hinge finding. **Closed at Stage 6**:
+      the mapping is specified nowhere in RDR 0001/0002/0003
+      or in code, but it is *unowned, not impossible* — RDR
+      0003's Identity decision ("source rule/context id plus
+      its position within `all` or `unless`") is already a
+      total, string-expressible key that fits
+      `Row.Guard string` losslessly, so RDR 0001's `Row`
+      shape is not reopened and this assumption's "If wrong"
+      branch is not triggered. **Destination named**: RDR
+      0003's `Phase 1: Predicate Model` implement-stage step,
+      which already charters "the normalized predicate atom
+      shape used by **resolver** and lint" — so the
+      obligation lands inside 0003's existing scope with no
+      amendment to a Final peer. Sequencing already enforced
+      below. Residual: Phase 2 vectors 4/6/7/8 stay
+      un-encodable until 0003 discharges it — a stated
+      downstream dependency, not a defect here.
+- [x] **A12 verified as an inherited obligation** (two-row
+      absence pattern vs RDR 0003's load-time overlap check)
+      — raised by the critique lens. **Closed at Stage 6 as
+      INDETERMINATE-BY-SILENCE**: RDR 0003 never states how
+      an existence atom projects onto the declared-domain
+      product, so the pattern is *not rejected* at load — the
+      projection rule simply does not exist. The asymmetry
+      this RDR asserted is confirmed (overlap is a mandatory
+      reject; every "refuse or downgrade" valve attaches to
+      exhaustiveness), and the matrix's "optional scalar"
+      confers no domain standing since RDR 0002's
+      tag-declaration schema has no optionality field.
+      **Destination named**: RDR 0003's implement stage must
+      define the projection, and RDR 0006's must define
+      row-group membership, before graph lint can run overlap
+      over a table using this pattern.
+- [x] **A13 verified as an accepted exposure** (provenance-
+      blind presence vs caller-supplied observed tags) —
+      raised by the critique lens. **Closed at Stage 6** under
+      this assumption's own second clause: no constraint
+      exists anywhere (RDR 0005 never mentions observed tags
+      and treats `--tag` as "context already known to the
+      caller"; RDR 0004 constrains only the write side; RDR
+      0001 normatively *affirms* "caller-supplied observed
+      tags"). The exposure is currently unreachable — no
+      production code imports `internal/resolve` and
+      `root.go` registers only `version` — and becomes live
+      when RDR 0005's CLI handoff wires `--tag` to
+      `Input.Observed`. Recorded under Failure Modes; a
+      follow-up seed against RDR 0005 is noted below.
+- [x] **A14 verified** (`exists` carries a boolean literal;
       `exists = false` is authorable in `all`) — raised by
-      the repeatability lens. Not a blocker for the domain
-      rule; it fixes whether a single-atom absence test
-      exists, which sets how hard A12 binds — if A14 fails,
-      the two-row pattern is again the only absence route.
-- [ ] **A15 verified** (a one-row existence-guarded value
-      atom is grammar-legal) — raised by the critique lens
-      (model-B pass, B-5). Must close before lock alongside
-      A12: the two-row pattern's value row must prune on
-      absence rather than survive unevaluable, or the
-      pattern self-vetoes under the aggregation clause (A5).
-      If RDR 0003's grammar admits neither shape, the
-      grammar obligation is handed to 0003's implement
-      stage alongside A10's mapping.
+      the repeatability lens. **Closed at Stage 6**: RDR 0003
+      never defines "positive"/"negative" atom, so its
+      placement rule is placement-only and structurally
+      independent of the literal's polarity; `false` parses
+      as boolean and is not rejectable. A single-atom absence
+      test is therefore legal, which narrows A5's two-row
+      pattern to the disjunction case only.
+- [x] **A15 verified as a named obligation** (a one-row
+      existence-guarded value atom is grammar-legal) — raised
+      by the critique lens (model-B pass, B-5). **Closed at
+      Stage 6 as silence, not prohibition**: RDR 0002 names
+      the table path `[rule.guard.all.<tag>]` but sets no
+      bound on operator keys inside it, and neither RDR
+      addresses a tag guarded in both blocks. The structural
+      commitments lean toward admitting the conjoined shape —
+      semantic equality is the tuple `(tag, operator,
+      literal)`, the selection rule quantifies over *atoms*
+      not tags, both RDRs' own illustrative TOML puts
+      multiple atoms under one guard header, and RDR 0003's
+      spike validator iterates operator keys with no
+      at-most-one constraint — but no normative contract
+      grants them. **Destination named**: the same RDR 0003
+      `Phase 1: Predicate Model` step that owns A10's
+      mapping, which must fix (i) whether one tag-table may
+      carry multiple conjoined operator keys and (ii) whether
+      a tag may be guarded in both `all` and `unless`.
 - [x] All other Critical Assumptions verified **except
       A6b**, which is carried open by decision: the
       read-failed vs genuinely-absent distinction is not
@@ -1752,15 +2000,31 @@ B achieves with a spec and fixtures.
       distinction either way), and the contract is sound
       without it; the exposure is recorded under Risks and
       Failure Modes.
-- [ ] Read-completeness obligation routed for A6b — and,
-      like A10's handoff, the destination must exist: RDR
-      0004 is Final and this project does not amend RDRs, so
-      the obligation lands on RDR 0004's *implement* stage
-      or on the successor RDR that owns the accessor
-      executor, and whichever it is MUST be named when the
-      routing lands. Not a blocker for this RDR's lock; a
+- [x] **Read-completeness obligation routed for A6b** —
+      destination named at Stage 6: **RDR 0004's implement
+      stage**, which owns the accessor executor and is where
+      the read-accessor contract ("typed tag values or a
+      typed refusal") is realized in code. That stage must
+      state whether the "typed tag values" branch carries a
+      completeness guarantee — i.e. whether a partially-read
+      artifact MUST take the refusal branch — since a
+      truncated snapshot and a genuine absence are currently
+      byte-identical at the kernel boundary (`Input.Owned`
+      has no error channel). RDR 0004 is Final and is not
+      amended; the obligation lands on its implement stage,
+      not on its text. Not a blocker for this RDR's lock; a
       blocker for trusting negative existence atoms in
       production.
+- [ ] **Follow-up seed against RDR 0005** (not a lock
+      blocker) — A13 established that `--tag name=value` is
+      normatively unconstrained "context already known to the
+      caller", so once the CLI handoff wires it to
+      `Input.Observed`, an operator can convert a
+      `guard_unevaluable` into a decided verdict from the
+      command line. Whether the `--tag` channel should be
+      constrained, or guard-relevant observed tags required
+      to originate from a declared gate accessor, is RDR
+      0005's question and is seeded rather than decided here.
 - [ ] This RDR Final **before** RDR 0003's implementation
       begins (triage sequencing: D8 ratification precedes
       the evaluator build)
@@ -2040,13 +2304,18 @@ normative expected value
    veto fires; row 1 is not selected. Pins why the value
    row must be existence-guarded (A5/A15).
    Backing: A5, A15.
-   **Load-time precondition (A12).** This scenario asserts
-   *runtime* disjointness and presumes the pair loads at all.
-   If RDR 0003's overlap proof rejects the pair over a domain
-   product with no absent member, the vector is unreachable —
-   the table never reaches resolution. A12 MUST close first;
-   if it resolves against the pattern, this scenario changes
-   with whatever replaces it.
+   **Load-time precondition (A12/A15, routed).** This
+   scenario asserts *runtime* disjointness and presumes the
+   pair loads at all. RDR 0003 states no projection rule for
+   existence atoms over the declared-domain product, so the
+   pair is not overlap-rejected today — but neither is it
+   blessed, and the vector is unreachable until RDR 0003's
+   implement stage discharges A12 (projection) and A15 (the
+   conjoined value-row shape). Phase 2 MUST NOT encode this
+   scenario before both land; if either resolves against the
+   pattern, this scenario changes with whatever replaces it.
+   The single-row absence leg (Scenario 6) is unaffected —
+   A14 settles it independently.
 
 9. **Scenario**: unguarded and empty-block rows — (a) a row
    with no guard at all, evaluated against a view missing
