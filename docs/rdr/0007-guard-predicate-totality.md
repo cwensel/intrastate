@@ -7,32 +7,6 @@
 
 - **Date**: 2026-08-09
 - **Status**: Draft
-  <!--
-  - `Demoted` is the terminal status for an RDR judged
-    *not RDR-shaped* — the decision was never a real
-    design fork, so it leaves the RDR lifecycle and is
-    refiled as a plain issue. Carry the destination on the
-    live value: `Demoted [→ <issue link>]`, and record the
-    same link under **Related Issues**. A `Demoted` RDR runs
-    no further stages. (Distinct from the 08.1 *demotion*
-    below, which is a `Final → Draft` flip that keeps the
-    RDR in the lifecycle — that flip never writes
-    `Status: Demoted`; see the disambiguation note there.)
-  - A Draft demoted from Final by the 08.1 cluster gate
-    carries a qualifier on the live value:
-    `Draft [revised from Final YYYY-MM-DD; re-verify A2,A4
-    — <one-line reason>]`. It is still a `Draft` for every
-    binary Draft/Final gate; only Stage 4 (scoped
-    re-verify) and Stage 8 (re-lock) parse the qualifier.
-    The Stage 8 flip to `Final` overwrites the whole value,
-    so the qualifier self-clears at re-lock — no separate
-    cleanup. This 08.1 "demotion" is a *verb* describing the
-    Final→Draft flip; it is **not** the `Demoted` status
-    above (which exits the lifecycle to an issue) — do not
-    conflate the two. (`Reverted` above is the unrelated
-    terminal "implementation rolled back" status — also do
-    not conflate.)
-  -->
 - **Type**: Architecture
 - **Profile**: foundational — provisional; one contract
   (the domain of guard-predicate evaluation over an
@@ -40,23 +14,6 @@
   evaluator and consumed by RDR 0001's refusal taxonomy, so
   it spans two already-Final RDRs. Resolve overwrites from
   the verified count.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: Medium
 - **Related Issues**: kata `xg7p` — "RDR 0001:
   RequiresOwned conflates guard-input state with post-guard
@@ -154,29 +111,20 @@ resolution. RDR 0002 L292 closes escape lists to `no_match`
 and `ambiguous_match`, which is the asymmetry that makes
 verdict ordering load-bearing in both directions.
 
-Seed triage corrected one premise carried in the original
-report: it assumed RDR 0003 was unimplemented. RDR 0003 is
-**Final**. Its normative blocks — grammar, typing,
-`all`/`unless`, exhaustiveness, row-group scoping,
-set-domain proof, diagnostics, provenance lint — contain no
-rule for what an atom evaluates to when its tag is absent
-from the runtime view; its only absent-state rule (owned
-read-before-write) is a lint rejection, not a runtime
-verdict. The fork is live.
+RDR 0003 is **Final** and unimplemented. Its normative
+blocks — grammar, typing, `all`/`unless`, exhaustiveness,
+row-group scoping, set-domain proof, diagnostics, provenance
+lint — contain no rule for what an atom evaluates to when
+its tag is absent from the runtime view; its only
+absent-state rule (owned read-before-write) is a lint
+rejection, not a runtime verdict. The fork is live.
 
-Sequencing. `triage.md` records that D8 should be ratified
-before RDR 0003 is implemented, because 0003's
-guard-evaluator contract depends on how the fork resolves.
-This makes 0007 the sequencing-critical member of its seed
-batch.
-
-Scope note carried from triage: the originating kata also
-listed a secondary item — ratifying deviations D8 and D1.
-D8 is this fork's downstream consequence and is settled by
-whichever branch is chosen. D1 (escape scope) is
-independent of guard semantics and already resolved by
-evidence rather than open design; it needs an author
-signature, not an RDR, and is not in scope here.
+Sequencing. D8 must be ratified before RDR 0003 is
+implemented, because 0003's guard-evaluator contract depends
+on how this fork resolves — which makes 0007 the
+sequencing-critical member of its seed batch. D8 is this
+fork's downstream consequence and is settled by whichever
+branch is chosen.
 
 ### Technical Environment
 
@@ -251,11 +199,12 @@ existence tests.
 
 ### Key Discoveries
 
-- **Documented** — SCXML §5.9.1 (quoted above): unevaluable
-  → `false` is legitimate *only* paired with a mandated
-  observable error signal; the spec never permits silent
-  masking. Source: W3C SCXML Recommendation, fetched
-  2026-08-11; quote cached in the research file.
+- **Documented** — SCXML §5.9.1 (quoted under
+  *Investigation*): unevaluable → `false` is legitimate
+  *only* paired with a mandated observable error signal;
+  the spec never permits silent masking. Source: W3C SCXML
+  Recommendation, fetched 2026-08-11; quote cached in the
+  research file.
 - **Documented** — The kernel side of a three-valued
   contract is already built and frozen:
   `resolve.go::GuardResult` (three values),
@@ -312,13 +261,14 @@ existence tests.
   - **If wrong**: The masking path reopens through verdict
     combination even though single atoms are honest, and
     the contract's core guarantee fails.
-- **A3 The kernel requires no code change: the
-  `GuardUnevaluable` → `guard_unevaluable` mapping, the
-  gate ordering, escape-candidate gating, AND the
-  resolution-level aggregation rule (any surviving
-  candidate with an unevaluable guard blocks selection — a
-  decided-true sibling row is never selected past it)
-  already implement the consumer side of this contract.**
+- **A3 The kernel requires no behavior change (Phase 1
+  edits doc comments only): the `GuardUnevaluable` →
+  `guard_unevaluable` mapping, the gate ordering,
+  escape-candidate gating, AND the resolution-level
+  aggregation rule (any surviving candidate with an
+  unevaluable guard blocks selection — a decided-true
+  sibling row is never selected past it) already implement
+  the consumer side of this contract.**
   - **Status**: Pending
   - **Method**: Source Search
   - **Evidence**: `internal/resolve/resolve.go::gate`
@@ -457,7 +407,9 @@ implemented by RDR 0003's evaluator when that RDR is built.
 No kernel data flow changes: `assemble` builds the view,
 `gate` prunes decided-FALSE rows, reports missing owned
 state among survivors, then reports undecidable guards;
-`escapeOrRefuse` applies the same gate to escape candidates.
+`escapeOrRefuse` applies the same gate to the escape rows
+as a separate row set (per D5 scoping — see the aggregation
+contract below).
 This RDR adds (a) the normative domain rule below, (b)
 doc-contract narrowing on `Row.RequiresOwned`, and (c) a
 conformance fixture set the 0003 evaluator must pass.
@@ -513,7 +465,13 @@ any surviving candidate row's guard is GuardUnevaluable,
 the resolution MUST refuse guard_unevaluable — a
 decided-GuardTrue sibling row MUST NOT be selected while
 an unevaluable candidate exists. Only decided-GuardFalse
-rows are pruned from consideration.
+rows are pruned from consideration. Aggregation is scoped
+to one row set at a time (RDR 0001 deviation D5): the
+candidate rows aggregate among themselves, and the escape
+rows are gated as their own set, so an unevaluable escape
+row MUST NOT convert a candidate-set refusal into
+guard_unevaluable, and an unevaluable candidate row MUST
+NOT be masked by a decidable escape row.
 ```
 
 ```normative
@@ -631,10 +589,9 @@ dropped) and the superficially simplest evaluator.
 
 **Cons**:
 
-- Is exactly the masking path: absence ⇒ `GuardFalse` ⇒
-  prune (D8) ⇒ obligation vanishes ⇒ `no_match` ⇒ escapable
-  ⇒ plan, with nothing distinguishing "did not apply" from
-  "could not tell" — the Problem Statement's failure.
+- Is exactly the masking path the Problem Statement
+  describes, with nothing distinguishing "did not apply"
+  from "could not tell".
 - Makes every value operator an implicit existence test,
   making RDR 0003's dedicated existence operator redundant
   and author intent inexpressible.
@@ -773,16 +730,16 @@ B achieves with a spec and fixtures.
 - **Review-time blind spot guarded against**: a typo'd or
   undeclared guard key would be permanently absent —
   forever unevaluable, or forever shadowed when
-  FALSE-domination decides the guard from its other atoms
-  (premortem P-4/P-8). The catch is RDR 0003's
-  declared-tag rule at parse/lint (A7): the defect fails
-  table load, never reaching a production refusal.
+  FALSE-domination decides the guard from its other atoms.
+  The catch is RDR 0003's declared-tag rule at parse/lint
+  (A7): the defect fails table load, never reaching a
+  production refusal.
 - **Conflated recovery signal**: `guard_unevaluable`
   cannot itself distinguish transient read failure
   (retryable) from genuine absence (not retryable); until
   A6 settles what the accessor contract reports, operators
   should treat the refusal as "inspect the artifact and
-  accessor," not "retry" (premortem P-11).
+  accessor," not "retry".
 
 ## Implementation Plan
 
