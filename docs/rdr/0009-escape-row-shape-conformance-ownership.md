@@ -34,10 +34,11 @@
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: foundational — one contract (which layer
-  guarantees that an escape row bears no writes and no
-  clears, and in what form), enforced across two modules:
-  RDR 0001's kernel and RDR 0002's normalizer.
+- **Profile**: foundational — one contract (an escape row
+  bears no owned-state mutation: no writes, no clears),
+  enforced across two modules — RDR 0001's kernel and RDR
+  0002's normalizer — and consumed by a third (RDR 0005's
+  CLI surfacing).
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -145,13 +146,18 @@ handed to the RDR 0004 accessor layer — precisely the
 "kernel guessing at persistence" that RDR 0001's ADV-2b
 names.
 
-The escape fixtures in
-`internal/resolve/fixtures_test.go::escapeRow` populate
-`Writes`/`NextTags` on escape rows. Conforming them is an
-implementation step of this RDR (Phase 2), superseding the
-"Noted, not filed" disposition in RDR 0001's `triage.md`;
-whether the frozen suite still discriminates once they are
-stripped is A3.
+Two escape rows in the frozen suite carry `Writes`, and
+both are *call-site overrides* rather than the builder:
+`internal/resolve/adversarial_test.go:229` (ADV-2b) and
+`internal/resolve/fixup_test.go:103` (Fixup-1e), each
+assigning `escape.Writes = []resolve.Tag{{Key: "status",
+Value: "Escaped"}}`. The builder
+`internal/resolve/fixtures_test.go::escapeRow` populates
+`NextTags` only and sets no `Writes` at all. Conforming the
+two override sites is an implementation step of this RDR
+(Phase 2), superseding the "Noted, not filed" disposition in
+RDR 0001's `triage.md`; A3 confirmed the frozen suite still
+discriminates once they are stripped.
 
 Triage also examined and rejected merging this with kata
 `z53t` (RDR 0008): both sit at the 0001↔0002 seam, but this
@@ -211,9 +217,18 @@ ledger and citations are cached at
 conformance problem class in the arc corpora
 (`StateMachineRes` ×2 queries, `StateMachineLit` ×1);
 external claims (SCXML load-time document conformance,
-"parse, don't validate" shape-level doctrine) are from the
-model prior and are deliberately not load-bearing — demoted
-to Resolve assumption A6.
+"parse, don't validate" shape-level doctrine) were from the
+model prior and deliberately not load-bearing — demoted to
+Resolve assumption A6, where the SCXML claim was researched
+and **falsified** (ledger:
+`evidence/research/resolve-prior-art.md`).
+
+Stage 4 also ran a DX pass over the *form* of the check —
+error shape, aggregate-vs-fail-fast reporting, validation
+locus, and naming — against the Go standard library and this
+repo's own idiom; findings are cited on A7 and in
+Load-Bearing Decisions, ledger at
+`evidence/research/resolve-dx-prior-art.md`.
 
 The load-bearing findings are in-repo. RDR 0002's Normative
 Contracts already state both halves of the authored-path
@@ -281,10 +296,15 @@ structural check on `Table.Rows` before evaluation).
   escape selections too (`Escaped: true`); ADV-2b
   (`internal/resolve/adversarial_test.go`) names the
   resulting class "the kernel guessing."
-- **Assumed** — load-time schema/document rejection as the
-  standard enforcement point in peer state-machine systems
-  (SCXML conformance): model-prior, to be cited at Resolve
-  (A6); the choice does not rest on it.
+- **Researched and falsified** (Resolve) — load-time
+  schema/document rejection is **not** an established
+  standard enforcement point. W3C SCXML IRP test 313 states
+  a processor "MAY reject documents containing syntactically
+  ill-formed expressions at document load time, or it MAY
+  wait and place error.execution in the internal event queue
+  at runtime" — the enforcement point is deliberately left to
+  the implementation. A6 restated accordingly; the choice
+  never rested on it and is unchanged.
 
 ### Critical Assumptions
 
@@ -293,12 +313,23 @@ structural check on `Table.Rows` before evaluation).
   error today), so adding a table-shape breach error cannot
   collide with an existing error semantic or caller
   branch.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/resolve/resolve.go::Resolve`
-    (every return path today carries nil error); grep all
-    callers of `resolve.Resolve` for error handling that
-    assumes nil.
+  - **Evidence**: `internal/resolve/resolve.go::Resolve` —
+    all five return paths carry a literal `nil` error
+    (`KindUnmodeledOutcome`, the `blocked` refusal, the
+    exact-one plan, and both `escapeOrRefuse` arms); no
+    helper (`gate`, `escapeOrRefuse`, `planOf`, `refuse`)
+    returns an error type, so nothing can propagate into
+    the slot. Callers: the only importers of
+    `internal/resolve` are its own `*_test.go` files plus
+    `docs/rdr/0007-guard-predicate-totality/evidence/spikes/aggregation-probe_test.go`
+    — no production file imports the package. Existing
+    tests do more than assume nil, they *assert* it
+    (`internal/resolve/mvv_test.go` "modeled refusal %q
+    traveled the Go error path";
+    `internal/resolve/resolve_test.go` "Resolve returned a
+    Go error for a modeled disposition").
   - **If wrong**: An existing caller treats a non-nil error
     as a different failure class and misreports the breach;
     the error contract must be reconciled before the check
@@ -307,27 +338,73 @@ structural check on `Table.Rows` before evaluation).
   existing CLI envelope (`internal/cli/clierr::GroupInternal`,
   exit 2) with no new refusal code, exit group, or RDR 0005
   contract change.**
-  - **Status**: Pending
+  - **Status**: Verified (with a named wiring obligation)
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr::ExitCodeFor` and
-    `GroupInternal`; RDR 0005 Key Discoveries ("without
-    requiring new exit-code groups beyond the current
-    `clierr.ExitCodeFor` taxonomy").
+  - **Evidence**: `internal/cli/clierr::ExitCodeFor` —
+    `case GroupUserEnv, GroupInternal: return 2`.
+    `internal/cli/config/config.go::Load` is the shipped
+    precedent for wrapping a Go error into that group
+    (`Code: "config-read-error"`, `Detail: err.Error()`,
+    `Group: clierr.GroupInternal`, `Cause: err`), and
+    `clierr::CLIError.Unwrap` keeps it traversable. RDR
+    0005 Key Discoveries ("without requiring new exit-code
+    groups beyond the current `clierr.ExitCodeFor`
+    taxonomy") and its Technical Design ("Internal parse or
+    invariant failures use the existing internal/user-env
+    mapping") pre-authorize the routing.
+    **Obligation, not a gap:** no `flow` verb exists at
+    HEAD (`internal/cli/root.go::NewRootCmd` registers only
+    `newVersionCmd()`), so this path is specified, not
+    shipped. An *unwrapped* Go error escaping a future
+    verb's `RunE` exits **1**, not 2 —
+    `clierr::ExitCodeFor` defaults a non-`CLIError` to 1 and
+    `root.go::cobraErrorToCLIError` stamps
+    `GroupUserEnv`/`command-error`. Exit 2 therefore holds
+    only if the verb wraps the kernel error into
+    `GroupInternal`; the Normative Contracts below bind
+    that wrap.
   - **If wrong**: Surfacing the breach requires reopening
     RDR 0005's envelope contract, and the error-path branch
     loses its no-peer-change advantage.
 - **A3 Bringing escape fixtures into conformance (dropping
-  `Writes` from `escapeRow`-built rows) changes no frozen
+  `Writes` from write-bearing escape rows) changes no frozen
   assertion outcome: every ADV/MVV/boundary test still
   discriminates, so the entry precondition lands without
   weakening RDR 0001's frozen evidence.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: Run the `internal/resolve` test suite
-    with conformed fixtures at Resolve; triage's claim
-    ("changes no assertion outcome" — RDR 0001
-    `artifacts/triage.md`, "Noted, not filed") is the prior
-    to confirm, not the proof.
+  - **Evidence**:
+    `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/spikes/a3-fixture-conformance.md`
+    — `go test ./internal/resolve/... -v -count=1` at three
+    fixture states: baseline (`a3-baseline.out`), `Writes`
+    stripped (`a3-conformed.out`), and `Writes`+`NextTags`
+    stripped (`a3-conformed-plus-nexttags.out`). All three:
+    154 `--- PASS`, 0 `--- FAIL`, **identical sorted outcome
+    sets**. Non-vacuity established two ways: (a) every
+    `Plan.Writes` read on an escape-derived plan
+    (`adversarial_test.go` ADV-2b, `fixup_test.go` Fixup-1d
+    / Fixup-1e) sits in a `t.Fatalf` *format argument* on
+    the failure path, never in a condition — the asserted
+    properties are `Refusal.Kind` / `Refusal.Guard`; every
+    substantive `Writes`-equality assertion (REQ-18, REQ-19,
+    REQ-29, MVV leg 1) runs on `singleMatchTable` /
+    `legalInput`, untouched; (b) mutation check — bypassing
+    the uniform viability gate in `escapeOrRefuse`
+    (`viable := escapes`) against the conformed tree still
+    fails 11 assertions across ADV-2, ADV-2b, Fixup-1d,
+    Fixup-1e, and `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates`
+    (`a3-conformed-mutant-gate-bypass.out`). Spike edits
+    fully reverted; suite re-verified green.
+  - **Scope correction (found by this spike)**:
+    `internal/resolve/fixtures_test.go::escapeRow` populates
+    **`NextTags` only — it sets no `Writes` at all**. The
+    write-bearing escape rows are two *call-site overrides*:
+    `internal/resolve/adversarial_test.go:229` (ADV-2b) and
+    `internal/resolve/fixup_test.go:103` (Fixup-1e "missing
+    owned state"), each assigning
+    `escape.Writes = []resolve.Tag{{Key: "status", Value: "Escaped"}}`.
+    Conformance must edit all three sites; stripping only
+    the builder leaves two breaching rows.
   - **If wrong**: A frozen test actually depends on a
     write-bearing escape row; the precondition would flip
     that test to an error and this RDR must re-open an RDR
@@ -339,18 +416,50 @@ structural check on `Table.Rows` before evaluation).
   mutate owned state through the blessed exit-route field.
   If it can, the conformance predicate must also require an
   empty `NextTags` on escape rows.**
-  - **Status**: Pending
+  - **Status**: Verified — settled **closed**: the
+    predicate does **not** widen; it stays `Writes`-only.
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0002 Normative Contracts, escape-row
-    rendering block ("row kind `escape`, its normal
-    predicate set, source rule id, source locator, and
-    modeled failure class list"); RDR 0001's `Plan.NextTags`
-    vs `Plan.Writes` doc contracts (writes are what "the
-    accessor layer applies"); RDR 0004's contract for what
-    an accessor may persist. The miss this must rule out:
-    the original complaint ("an owned tag has a value no
-    rule set") reproduced via NextTags persistence while a
-    Writes-only invariant reports the table conforming.
+  - **Evidence**: Three links, each closed by normative
+    text rather than inference. (1) *Only a write accessor
+    persists* — RDR 0004 Normative Contracts scope the
+    capability set to read/gate/write, with the read
+    accessor "MUST NOT mutate authoritative artifacts" and
+    the gate accessor returning only allow/deny/
+    indeterminate. (2) *That door is scoped to `Writes`, not
+    to the plan* — RDR 0004: "A write accessor MUST apply
+    **only** planned owned-tag writes produced by a
+    successful transition. It MUST NOT write observed or
+    recognized tags." An escape plan with empty `Writes`
+    hands the accessor an empty work set whatever
+    `NextTags` carries. (3) *`NextTags` is not addressed to
+    that layer at all* — the string `NextTags` (and "next
+    state") appears **nowhere** in RDR 0004; positively,
+    `internal/resolve/resolve.go::Plan` separates them in
+    the type's own doc contract ("NextTags is the next
+    state." vs "Writes are the owned-tag writes **for the
+    accessor layer**"), as does RDR 0001's Technical Design
+    ("the owned-tag writes **that the accessor layer
+    applies**"). RDR 0005's `flow set-state` is likewise
+    driven by "planned owned-tag `--write name=value`
+    mutations." Corroborating: the A3 spike's
+    `NextTags`-stripped variant changed no outcome
+    (`a3-conformed-plus-nexttags.out`), so nothing in the
+    frozen suite reads `Plan.NextTags` on an escape-derived
+    plan either.
+  - **Carried forward (peer-contract dependency)**:
+    `resolve.go::planOf` copies `NextTags` and `Writes`
+    symmetrically with no escape-awareness, so this safety
+    rests entirely on RDR 0004's write-accessor scoping,
+    not on any kernel-local property. A future RDR 0004
+    implementer widening "apply the plan" beyond planned
+    writes would breach this RDR's invariant.
+  - **Consistency note**: RDR 0002's escape-row rendering
+    ("row kind `escape`, its normal predicate set, source
+    rule id, source locator, and modeled failure class
+    list") names **neither** writes **nor** next-tags, so a
+    normalized escape row is authored-path-stricter than
+    the kernel predicate requires. Stricter upstream,
+    consistent — not a conflict.
   - **If wrong**: The invariant guards the wrong field for
     the stated problem — the user symptom recurs through
     `NextTags` — and the predicate must widen before lock;
@@ -359,23 +468,55 @@ structural check on `Table.Rows` before evaluation).
   values at HEAD — the only constructors are test fixtures —
   so the entry precondition changes no shipped behavior and
   needs no migration.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Grep constructors/callers of
-    `resolve.Row` and `resolve.Resolve` outside
-    `internal/resolve` tests.
+  - **Evidence**: Repo-wide, every reference to
+    `resolve.Row` / `resolve.Table` / `resolve.Input` /
+    `resolve.Resolve` resolves inside
+    `internal/resolve/{fixtures,resolve,adversarial,mvv,fixup}_test.go`.
+    No production file imports the package at all:
+    `cmd/intrastate/main.go` is `func main() { cli.Execute() }`,
+    and `internal/cli/root.go::NewRootCmd` registers only
+    `newVersionCmd()` — there is no `flow` verb at HEAD.
+    Constructors are exclusively the fixture builders
+    (`singleMatchTable`, `noMatchTable`, `ambiguousTable`,
+    `missingOwnedTable`, `unevaluableGuardTable`,
+    `twoRowsOneGuardFalseTable`, `observedSensitiveTable`,
+    `recognizedTagSensitiveTable`, `escapeRow`) plus inline
+    literals in `adversarial_test.go` and `fixup_test.go`.
   - **If wrong**: An existing production producer could
     begin erroring at `Resolve` entry; a migration step and
     an RDR 0005 surfacing review become prerequisites.
-- **A6 Load-time document/schema rejection is the standard
-  enforcement point for table-shape conformance in peer
-  state-machine systems (SCXML conformance model).**
-  - **Status**: Pending
+- **A6 Peer state-machine systems do NOT fix a standard
+  enforcement point for table-shape conformance: SCXML
+  deliberately leaves the choice between load-time
+  rejection and a runtime error channel to the
+  implementation.** (Restated at Resolve. The Propose-stage
+  claim — that load-time rejection is *the standard* — was
+  researched and **falsified**; it was citation-only and
+  never load-bearing, so the approach is untouched.)
+  - **Status**: Verified (contrary to the original claim)
   - **Method**: Prior Art
-  - **Evidence**: To cite at Resolve from the W3C SCXML
-    Recommendation's conformance section (corpus pass found
-    no coverage; claim is from the model prior and is
-    deliberately not load-bearing for the choice).
+  - **Evidence**: W3C SCXML IRP conformance test 313, as
+    quoted in uSCXML's conformance matrix
+    (`state-machines/study/uscxml/test/w3c/TESTS.md`):
+    "The SCXML processor MAY reject documents containing
+    syntactically ill-formed expressions at document load
+    time, **or** it MAY wait and place error.execution in
+    the internal event queue at runtime when the
+    expressions are evaluated." The one load-time MUST in
+    that matrix (test 301) covers an undownloadable script
+    resource, not document shape. Ledger + rejected
+    branches:
+    `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/research/resolve-prior-art.md`.
+  - **Consequence**: With no external convention to defer
+    to, this RDR's two-point enforcement rests on in-repo
+    authority — RDR 0002's Final escape-rule prohibition
+    for the authored path, RDR 0001's reserved
+    programmer-mistake error channel for the backstop —
+    which is where it was already argued. SCXML's MAY/or
+    structure is *permissive of* that split, not evidence
+    for it.
   - **If wrong**: The normalizer-side half loses its
     external precedent and stands on RDR 0002's already-
     Final prohibition alone — the choice survives, the
@@ -385,13 +526,43 @@ structural check on `Table.Rows` before evaluation).
   rule that CLI codes are never inferred by inspecting
   error strings: the error is diagnostic prose on the
   internal-error path, not a stable code carrier.**
-  - **Status**: Pending
+  - **Status**: Verified — and the structured form is
+    **adopted**, not merely permitted (see the DX finding
+    below).
   - **Method**: Source Search
-  - **Evidence**: RDR 0001 ("RDR 0005 maps each to a CLI
-    error code without inspecting error strings" — the rule
-    binds refusal kinds, not internal errors);
-    `internal/cli/clierr::CLIError` construction sites for
-    how wrapped internal errors carry detail.
+  - **Evidence**: Field names confirmed —
+    `internal/resolve/resolve.go::Row` really does carry
+    `RuleID string` and `SourceLocator string` ("the source
+    identity RDR 0002 requires every normalized row to
+    retain"), mirrored on `Plan` and `RowRef`. Scope of the
+    no-string-inspection rule confirmed: RDR 0001's
+    Normative Contracts say "**Each refusal kind** must be
+    stable enough for RDR 0005 to map to a CLI error code
+    without inspecting error strings," and the same
+    sentence is attached to the `RefusalKind` type at
+    `resolve.go`; RDR 0001's A5 names the rejected
+    alternative as "letting RDR 0005 infer CLI codes from
+    Go errors or ad hoc strings." The rule binds the
+    refusal discriminator, which this breach explicitly is
+    not. `clierr::CLIError` keeps prose and code in
+    separate fields (`Detail` "carries hard facts about the
+    failure", `Code` stable), and `clierr::ErrorCode` /
+    `ExitCodeFor` branch on `Code` only, never on text.
+  - **DX finding (Resolve)**: naming the row in *prose*
+    would make this the only kernel diagnostic not
+    assertable as a value. The kernel already carries row
+    identity structurally (`RowRef`, `Refusal.Rows`) and
+    its frozen tests assert on it by value
+    (`fixup_test.go` `reflect.DeepEqual(forward.Refusal,
+    reversed.Refusal)`), with zero nil-sensitive or
+    string-matching assertions. Go's own convention agrees:
+    `encoding/json/v2` documents the caller idiom as a
+    sentinel in an `Err` field plus an exported location
+    field, inspected via `errors.AsType`
+    (`encoding/json/v2/errors.go::SemanticError`), as do
+    `json.UnmarshalTypeError.Field` and `go/types.Error`.
+    The Normative Contracts below therefore require a typed
+    breach error carrying `[]RowRef`.
   - **If wrong**: The error must carry structure (a typed
     error), which sharpens the contract at Pre-Lock but
     does not move ownership.
@@ -460,11 +631,11 @@ constructor of resolve.Row values: a Row with a non-empty
 Escape list MUST have an empty Writes slice. (Authored clears
 normalize to `<clear>` writes per RDR 0002, so the Writes
 predicate carries both "no writes" and "no clears" at the
-kernel boundary.) Whether the conformance predicate also
-requires an empty NextTags is OPEN pending A4, which settles
-it against RDR 0002's escape-row rendering and RDR 0004's
-accessor write contract; the obligation, its owner, and its
-enforcement channel do not depend on that outcome.
+kernel boundary.) The predicate is Writes-only and does NOT
+extend to NextTags: A4 settled that owned state is reachable
+only through a write accessor, which RDR 0004 scopes to
+"planned owned-tag writes," so an escape row's NextTags
+cannot mutate owned state.
 ```
 
 ```normative
@@ -472,7 +643,15 @@ On the authored-table path, RDR 0002's normalizer/lint is the
 enforcing implementation: an authored escape rule carrying a
 write block or clear list MUST be rejected at table load
 under RDR 0002's "malformed escape declaration" validation
-class, diagnosable to the source rule. Normalized escape rows
+class, diagnosable to the source rule. Rejection keys on the
+PRESENCE of the block, not its contents — RDR 0002 forbids an
+escape rule from containing a write block, so an empty one
+(`writes = []`) is rejected too. The authored layer is
+therefore stricter than the kernel's length-based predicate,
+deliberately: authoring an empty write block on an escape
+rule is a statement of intent worth refusing, while an empty
+Writes slice reaching the kernel is a Go representation
+detail that cannot mutate owned state. Normalized escape rows
 MUST render write-free. This RDR binds that duty with a
 conformance fixture set; RDR 0002's grammar is unchanged.
 ```
@@ -495,14 +674,62 @@ conforming table.
 ```
 
 ```normative
+The breach error MUST be a TYPED error carrying the offending
+row identity as the kernel's existing RowRef value, inspectable
+via errors.As / errors.AsType without parsing message text, and
+MUST wrap a package-level sentinel naming the breach category so
+errors.Is can classify it. Row identity MUST NOT be recoverable
+only from formatted prose. (Form sharpened at Pre-Lock; the
+binding requirement is value-level inspectability, matching the
+kernel's existing Refusal.Rows diagnostics and Go's own
+convention — encoding/json/v2 SemanticError, json.UnmarshalTypeError,
+go/types.Error.)
+```
+
+```normative
+When a table carries MORE THAN ONE breaching row, the
+precondition MUST report every one of them in a single pass —
+not the first alone — combined with errors.Join, so each
+per-row error stays individually inspectable through the
+aggregate's Unwrap() []error. The reported rows MUST be
+ordered by RowRef identity using the kernel's existing
+compareRefs ordering, never by Table.Rows position, so the
+diagnostic payload is a function of the table value rather
+than of row order (the REQ-1/REQ-10 rule rowRefs already
+follows).
+```
+
+```normative
 The conformance predicate MUST be exported by the kernel
 package as a construction-time check callable by any table
-producer (form sharpened at Pre-Lock; e.g. a
-ValidateTable-style function), and Resolve's entry
-precondition MUST be that same function — one predicate,
-two call sites, so a non-TOML producer can fail at build or
-construction time rather than at first production Resolve,
-and the two enforcement points cannot drift.
+producer, and Resolve's entry precondition MUST be that same
+function — one predicate, two call sites, so a non-TOML
+producer can fail at build or construction time rather than
+at first production Resolve, and the two enforcement points
+cannot drift. It MUST return error (nil when valid), and its
+name MUST follow Go's error-returning convention —
+CheckValid or Validate, never Valid/IsValid/OK, which Go
+reserves for bool-returning predicates. Precedent: the
+exported-and-also-called-defensively arrangement is
+pprof.Profile.CheckValid (exported, re-checked at the parse
+boundary) and rsa.PrivateKey.Validate; copy the latter's doc
+form — "returns nil if <x> is valid, or else an error
+describing a problem."
+```
+
+```normative
+When a breach reaches the CLI, the verb MUST wrap it into a
+*clierr.CLIError carrying a stable Code, Group GroupInternal
+(exit 2), the offending row identity, and a Hint stating the
+remedy — the shipped config.Load wrapping pattern. Returning
+the kernel error UNWRAPPED is a defect: clierr.ExitCodeFor
+defaults a non-CLIError to exit 1 and root.go's
+cobraErrorToCLIError stamps GroupUserEnv, so the documented
+exit-2 behavior does not hold without the wrap. Adding this
+Code does NOT open RDR 0001's refusal taxonomy: the five
+refusal kinds stay closed and gain no member — clierr codes
+are a separate, explicitly extensible surface ("Add new
+codes as needed", AGENTS.md).
 ```
 
 ```normative
@@ -515,12 +742,10 @@ introduced at the kernel boundary.
 #### Load-Bearing Decisions
 
 - **Selection / predicate** — the breach predicate over a
-  single row is `len(row.Escape) != 0 && <mutation test>`,
-  where the mutation test is `len(row.Writes) != 0` today and
-  becomes `(len(row.Writes) != 0 || len(row.NextTags) != 0)`
-  if A4 finds that `NextTags` on an escape row can reach
-  owned state. **A4 is the only open input**; these are
-  pinned regardless of its outcome:
+  single row is `len(row.Escape) != 0 && len(row.Writes) != 0`.
+  A4 settled closed, so it does **not** widen to `NextTags`
+  (owned state is reachable only through a write accessor,
+  which RDR 0004 scopes to planned writes). Pinned:
   - *Scope* — evaluated over every row of the supplied table
     at `Resolve` entry, not only rows the resolution touches:
     a malformed table is malformed as a value, and checking
@@ -528,15 +753,39 @@ introduced at the kernel boundary.
     disappear with the input tuple.
   - *Nil-vs-empty* — length-based on purpose: a non-nil but
     empty slice is conforming. The predicate tests emptiness,
-    never nil-ness.
+    never nil-ness. Three grounds: an empty write set is an
+    empty work set, so `[]Tag{}` provably cannot produce the
+    user-facing symptom (RDR 0004 applies only planned
+    writes); nil-sensitivity would make this the kernel's
+    only nil-sensitive contract, against a package that is
+    uniformly length-based (`len(row.Escape) != 0` is the
+    escape discriminator itself) and a frozen suite with
+    **zero** nil-sensitive assertions and four length-based
+    `Writes` checks; and `copyTags` is nil-preserving, so
+    nil-vs-empty is a representation artifact that survives
+    into the Plan without behavioral meaning. Strictness
+    about the *authored* form belongs upstream, where RDR
+    0002 already forbids a write block on an escape rule
+    outright — including an empty one.
   - *Precedence* — the breach error precedes every modeled
     disposition, `unmodeled_outcome` included.
   - *Locus* — one exported function, called at both sites, so
-    widening under A4 is a single-site edit that cannot
+    any future change is a single-site edit that cannot
     desynchronize the two enforcement points.
+  - *Reporting* — aggregate, not fail-fast: all breaching
+    rows in one pass, sorted by `compareRefs`. Prior art is
+    split by audience — `fstest.TestFS` and
+    `slogtest.TestHandler` aggregate via `errors.Join` for
+    artifacts a human iterates on, while `analysis.Validate`
+    is fail-fast for startup wiring. A table author fixing
+    rows is the former, and `errors.Join` costs nothing
+    (nil when all-nil; degrades to the single error's own
+    message for one breach).
 - **Naming** — the breach is "escape-row shape breach,"
-  carried as a Go error. Its form (opaque vs sentinel/typed)
-  is open, sharpened at Pre-Lock and constrained by A7.
+  carried as a typed Go error wrapping a category sentinel
+  (A7). The predicate is `CheckValid`/`Validate`-shaped
+  (returns `error`); the exact type/sentinel spelling is
+  sharpened at Pre-Lock.
 
 ### Capability Dependencies
 
@@ -554,7 +803,8 @@ introduced at the kernel boundary.
 | Escape discrimination | `internal/resolve/resolve.go::rescues` + candidate partition in `::Resolve` | None | Reuse | The precondition keys on the same field; no row-kind added |
 | Plan construction | `internal/resolve/resolve.go::planOf` | Copies `Writes` unconditionally | Reuse | Unchanged — the precondition makes stripping unnecessary |
 | Error envelope | `internal/cli/clierr::GroupInternal` / `ExitCodeFor` | Exit 2 is shared with other internal errors | Reuse | Breach is diagnosable from the error text (A7), not a new code |
-| Escape fixtures | `internal/resolve/fixtures_test.go::escapeRow` | Populates `Writes`/`NextTags` on escape rows | Extend (conform) | Fixtures must satisfy the precondition; supersedes the "Noted, not filed" cleanup |
+| Escape fixtures | `internal/resolve/fixtures_test.go::escapeRow` (builder) + the `escape.Writes` overrides at `adversarial_test.go:229`, `fixup_test.go:103` | Builder sets `NextTags` only; the two overrides add `Writes` | Extend (conform the two override sites) | Fixtures must satisfy the precondition; supersedes the "Noted, not filed" cleanup |
+| Row-identity diagnostics | `internal/resolve/resolve.go::RowRef` + `rowRefs`/`compareRefs` | Sorted for REQ-1/REQ-10 payload stability | Reuse | The typed breach error carries `RowRef`s in the same sorted order |
 
 ### Decision Rationale
 
@@ -711,14 +961,26 @@ enforcement point without opening any peer contract.
 - Negative: `Resolve` takes on a narrow validation duty RDR
   0001 had deferred wholesale to its peer — the deferral is
   narrowed, not honored verbatim (recorded in Overrides).
-- Negative: every `Resolve` call pays an O(rows) conformance
-  scan; acceptable at table scale, and hoisting is an
-  implementation detail, but the cost is per-call because
-  the kernel is stateless.
-- Negative: a breach off the authored path surfaces as a
-  generic exit-2 internal error, not a structured refusal —
-  operators diagnose from error text (A7), which is the
-  price of keeping the taxonomy closed.
+- Cost (measured against the existing path, not assumed):
+  every `Resolve` call pays one additional O(rows)
+  conformance scan. `Resolve` already scans `Table.Rows`
+  twice per call (the candidate partition and
+  `escapeOrRefuse`), plus `gate`, so this is a constant
+  factor on an already-linear path, not a new cost class.
+  RDR 0001's Performance Expectations set no throughput
+  target and direct benchmarking "only if the RDR or kata
+  tables become large enough to make table scans visible in
+  normal command latency." If measurement ever demands it,
+  the precedent is an idempotence short-circuit
+  (`rsa.PrivateKey.Validate`), never deleting the check.
+- Positive: a breach off the authored path surfaces as a
+  typed error carrying the offending rows, wrapped at the
+  CLI in a `CLIError` with a stable `Code`, exit 2, and a
+  remedy `Hint`. Operators branch on the code and tests
+  assert on `RowRef` values — neither reads error prose.
+  This costs the refusal taxonomy nothing: the five kinds
+  stay closed, and `clierr` codes are a separate,
+  explicitly extensible surface.
 - Negative (behavior change, deliberate): a hand-built table
   carrying a *dormant* malformed row — one no resolution
   path reaches — previously resolved fine and now errors on
@@ -757,19 +1019,26 @@ enforcement point without opening any peer contract.
   shipping silently.
 - **Risk**: The predicate under-covers (`NextTags` rides an
   escape unexamined).
-  **Mitigation**: A4 settles NextTags against RDR 0002's
-  rendering contract at Resolve; widening the predicate is
-  mechanical and moves no ownership.
+  **Retired at Resolve**: A4 settled it — owned state is
+  reachable only through a write accessor, which RDR 0004
+  scopes to "planned owned-tag writes," and `NextTags`
+  appears nowhere in RDR 0004. The residual is a
+  peer-contract dependency, not a predicate gap: an RDR 0004
+  implementer who widened "apply the plan" beyond planned
+  writes would breach this invariant. Recorded on A4.
 
 ### Failure Modes
 
 - **Visible break (programmatic producer)**: `Resolve`
-  returns an error naming the offending row's `RuleID` and
-  `SourceLocator`; at the CLI it surfaces as an internal
-  error (exit 2). Diagnosis: the row identity in the error
-  text points at the producing code or fixture. Recovery:
-  fix the producer — the table value is broken; there is
-  nothing to retry.
+  returns a typed error carrying the offending rows'
+  `RowRef`s (every breaching row, not just the first); at
+  the CLI it surfaces through a `CLIError` with a stable
+  code, exit 2, and a remedy `Hint`. Diagnosis: read the
+  row identities off the error value — `errors.As` /
+  `errors.AsType` for callers and tests, the rendered code
+  and detail for operators — pointing at the producing code
+  or fixture. Recovery: fix the producer — the table value
+  is broken; there is nothing to retry.
 - **Visible break (table author)**: the RDR 0002 normalizer
   rejects the rule at load under "malformed escape
   declaration," naming the source rule. Recovery: remove the
@@ -781,16 +1050,21 @@ enforcement point without opening any peer contract.
   symptom until owned state diverged. Under the
   precondition it cannot be emitted; the conformance
   fixtures are the tripwire against regression.
-- **Diagnostic gap (recorded decision)**: exit 2 does not
-  distinguish this breach from other internal errors by
-  code; only the error text — which names the row — does
-  (A7). An operator runbook entry therefore reads "exit 2
-  from a resolve: read the error text; a row-identified
-  escape-shape breach means a broken table producer, not a
-  tool defect". If operational experience
-  needs a machine-branchable code, that is an RDR 0005
-  envelope question — explicitly out of scope here, and the
-  recorded cost of keeping the taxonomy closed.
+- **Diagnosis (revised at Resolve)**: the breach is
+  machine-branchable without opening any closed taxonomy.
+  Exit 2 is shared with other internal errors, but the
+  stable `CLIError.Code` distinguishes this breach, the
+  typed kernel error carries the offending `RowRef`s for
+  programmatic callers and tests, and a `Hint` states the
+  remedy. The runbook entry is therefore "branch on the
+  code; the named rows identify the broken producer," not
+  "read the error text." An earlier draft recorded this as
+  an accepted diagnostic gap on the reasoning that a
+  structured surface would require opening RDR 0001's
+  refusal taxonomy; that conflated two distinct surfaces —
+  the five refusal kinds (closed, untouched here) and
+  `clierr` codes (explicitly extensible, AGENTS.md: "Add
+  new codes as needed").
 - **Error-channel creep guarded against**: this RDR's
   normative clause states what qualifies for the error path
   (a producer/programmer contract breach, never a modeled
@@ -801,12 +1075,18 @@ enforcement point without opening any peer contract.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] A3 spike green (conformed fixtures, full
+- [x] All Critical Assumptions verified (Stage 4; A6
+      verified contrary to its Propose-stage wording)
+- [x] A3 spike green (conformed fixtures, full
       `internal/resolve` suite) before the precondition
-      lands
+      lands —
+      `evidence/spikes/a3-fixture-conformance.md`
 - [ ] RDR 0002's implement stage binds to this RDR's
       conformance fixtures (Phase 3) once both are Final
+- [ ] The `flow` verb that first calls `Resolve` wraps a
+      breach into `CLIError{Group: GroupInternal}` with the
+      stable code and remedy `Hint` (A2's wiring
+      obligation; unwrapped, it would exit 1, not 2)
 
 ### Minimum Viable Validation
 
@@ -816,22 +1096,56 @@ that row's `RuleID` and `SourceLocator`, with no `Plan` and
 no `Refusal` — while the same table with the writes removed
 resolves, escapes, and refuses exactly as the frozen ADV
 suite proves today (zero disposition change for conforming
-tables). Three scenarios are in scope:
-*breach-yields-error-not-plan* (the pre-fix probe — a
-write-bearing escape row selected via escape → plan with
-`Escaped:true` carrying writes — now yields the error, never
-that plan); *dormant-row-still-errors* (a malformed row no
-resolution path reaches → error on every `Resolve`, pinning
-the whole-table decision); and *empty-not-nil-conforms* (a
-non-nil empty `Writes` slice on an escape row → no error,
-pinning the length-based predicate). The exported validator
-and the entry check are exercised as the same predicate.
+tables). The exported validator and the entry check are
+exercised as the same predicate.
+
+The three scenarios below are **normative fixtures**
+(approved at Stage 4). Their values are read from the frozen
+suite and the A3 spike runs, not invented: `{status Escaped}`
+is the literal override at `adversarial_test.go:229`, and the
+conforming baseline is the 154-PASS run captured in
+`evidence/spikes/a3-baseline.out`. Identifiers below are
+illustrative of shape, not locked spellings — the binding
+content is the observable behavior.
+
+1. **breach-yields-error-not-plan** — an escape row
+   (`RuleID` `rdr.escape.needsowned`, `SourceLocator`
+   `flows/rdr.toml:90`, `Escape` `[no_match]`) carrying
+   `Writes: []Tag{{Key: "status", Value: "Escaped"}}`, in a
+   table where it is selected via the escape path.
+   **Expected**: `Resolve` returns `Result{Plan: nil,
+   Refusal: nil}` and a non-nil error; the error yields that
+   row's `RowRef{"rdr.escape.needsowned",
+   "flows/rdr.toml:90"}` through `errors.As`/`AsType`
+   without parsing text, and `errors.Is` classifies it as
+   the escape-shape-breach category. The pre-fix behavior —
+   a `Plan` with `Escaped: true` carrying those writes — is
+   never produced.
+2. **dormant-row-still-errors** — a table that resolves
+   cleanly on its own, plus an escape row no resolution path
+   reaches (an outcome outside the tuple's reach) carrying
+   the same `Writes`.
+   **Expected**: the same error, naming the dormant row —
+   pinning the whole-table decision against an on-path-only
+   reading.
+3. **empty-not-nil-conforms** — an escape row whose `Writes`
+   is a non-nil, zero-length slice (`[]Tag{}`).
+   **Expected**: no error; the table resolves, escapes, and
+   refuses identically to the A3 baseline, and the emitted
+   plan carries `len(Plan.Writes) == 0`. Asserted on length,
+   never on nil-ness — `copyTags` is nil-preserving, so a
+   nil-ness assertion would pin an incidental representation
+   detail rather than the contract.
 
 ### Phase 1: Exported predicate + kernel entry precondition
 
 Export the conformance predicate as a construction-time
-check, call it at `Resolve` entry (breach → Go error naming
-the row; conforming tables unchanged), state the producer
+check (`CheckValid`/`Validate`-shaped, returning `error`,
+doc-commented in the `rsa.PrivateKey.Validate` form), call it
+at `Resolve` entry (breach → typed error carrying the
+offending `RowRef`s and wrapping the category sentinel;
+conforming tables unchanged), aggregate multiple breaches
+with `errors.Join` in `compareRefs` order, state the producer
 obligation on the `Row` doc contract, and record the
 kernel's validation surface — exactly which shape property
 it checks vs still assumes — so partial validation cannot be
@@ -839,24 +1153,36 @@ read as general kernel ownership.
 
 ### Phase 2: Fixture conformance with discrimination check
 
-Bring `escapeRow` fixtures into conformance: drop `Writes`,
-and drop `NextTags` only if A4 widened the predicate. A3's
-spike proves the frozen suite still discriminates, and one
-mutation-style step (revert the entry check; at least one
-test must fail) proves the stripped fixtures did not leave
-the check untested.
+Bring the write-bearing escape rows into conformance by
+dropping `Writes` at the two call-site overrides —
+`internal/resolve/adversarial_test.go:229` (ADV-2b) and
+`internal/resolve/fixup_test.go:103` (Fixup-1e "missing
+owned state"). The `escapeRow` builder needs no change: it
+sets `NextTags` only, and A4 did not widen the predicate, so
+`NextTags` stays. A3's spike proves the frozen suite still
+discriminates after the strip (154 PASS, identical outcome
+set; escape-gate mutation still fails 11 assertions). Because
+no remaining fixture breaches, the mutation-style step
+(revert the entry check; at least one test must fail) is
+load-bearing here rather than a formality — it is what proves
+the new check is exercised at all.
 
 ### Phase 3: Shared normalizer conformance fixtures
 
 Encode the authored-path half as a named, shared fixture set
 binding the future RDR 0002 build: an authored escape rule
 with a write block or clear list fails load under "malformed
-escape declaration" naming the source rule; normalized
-escape rows render write-free; and one canonical
-authored-clear case pins the `<clear>`-sentinel-write
-representation identically for the kernel suite and the
-normalizer suite, so the two enforcers of one invariant
-cannot drift.
+escape declaration" naming the source rule; an escape rule
+carrying an **empty** write block (`writes = []`) fails load
+the same way — RDR 0002 forbids an escape rule from
+*containing* a write block, so presence is the breach and
+emptiness is no defence (this is where authored-layer
+strictness lives; the kernel predicate is deliberately
+length-based one layer down); normalized escape rows render
+write-free; and one canonical authored-clear case pins the
+`<clear>`-sentinel-write representation identically for the
+kernel suite and the normalizer suite, so the two enforcers
+of one invariant cannot drift.
 
 ## Validation
 
@@ -868,18 +1194,20 @@ non-vacuous. The MVV's three scenarios are the core; the
 suite below is the coverage goal.
 
 1. **Scenario**: Escape row with populated `Writes`, selected
-   via the escape path.
-   **Expected**: `Resolve` returns a non-nil error naming the
-   row's `RuleID` and `SourceLocator`; no `Plan`, no
-   `Refusal`.
+   via the escape path. (Normative fixture 1.)
+   **Expected**: `Resolve` returns a non-nil error; no `Plan`,
+   no `Refusal`. The row's `RowRef` is recovered from the
+   error value via `errors.As`/`AsType` and the category via
+   `errors.Is` — no assertion parses message text.
 2. **Scenario**: Escape row with populated `Writes` that no
-   resolution path reaches (dormant).
-   **Expected**: Same error — the precondition is whole-table,
-   not on-path.
+   resolution path reaches (dormant). (Normative fixture 2.)
+   **Expected**: Same error naming that row — the precondition
+   is whole-table, not on-path.
 3. **Scenario**: Escape row with a non-nil but empty `Writes`
-   slice.
-   **Expected**: No error; resolves normally. Pins the
-   length-based predicate against a nil-ness reading.
+   slice. (Normative fixture 3.)
+   **Expected**: No error; resolves exactly as the A3
+   baseline, with `len(Plan.Writes) == 0`. Asserted on length,
+   never nil-ness — pins the length-based predicate.
 4. **Scenario**: Breach coexists with a table state that would
    otherwise yield `unmodeled_outcome`.
    **Expected**: The breach error wins — precedence over every
@@ -898,10 +1226,67 @@ suite below is the coverage goal.
    **Expected**: Verdicts identical to `Resolve`'s entry check
    — one predicate, two call sites, no drift.
 8. **Scenario** (binds RDR 0002's build): authored escape rule
-   carrying a write block, and one carrying a clear list.
-   **Expected**: Both rejected at load under "malformed escape
-   declaration," naming the source rule; normalized escape
-   rows render write-free.
+   carrying a write block, one carrying a clear list, and one
+   carrying an *empty* write block (`writes = []`).
+   **Expected**: All three rejected at load under "malformed
+   escape declaration," naming the source rule; normalized
+   escape rows render write-free. The empty-write-block case
+   is the authored-layer strictness that the kernel's
+   length-based predicate deliberately does not duplicate.
+9. **Scenario**: A table with two or more breaching rows.
+   **Expected**: One `Resolve` call reports **every** breaching
+   row, not just the first; each per-row error is individually
+   recoverable from the aggregate via `errors.As`/`AsType`
+   over `Unwrap() []error`.
+10. **Scenario**: The same multi-breach table supplied with its
+    rows in two different orders.
+    **Expected**: Identical reported row sequence — ordered by
+    `RowRef` identity (`compareRefs`), never by `Table.Rows`
+    position. The REQ-1/REQ-10 payload-stability rule that
+    `rowRefs` already follows, applied to the breach report.
+11. **Scenario** (binds the verb that first calls `Resolve`): a
+    breach surfaced through the CLI.
+    **Expected**: exit 2 via `CLIError{Group: GroupInternal}`
+    carrying the stable code, the offending row identity, and
+    the remedy `Hint` — not exit 1, which is what an
+    unwrapped kernel error would produce.
+
+### Performance Expectations
+
+No throughput target, inheriting RDR 0001's position that
+resolution is bounded by the supplied table and that
+benchmarking waits "only if the RDR or kata tables become
+large enough to make table scans visible in normal command
+latency."
+
+The precondition adds one O(rows) pass over `Table.Rows` per
+`Resolve` call. Measured against the existing path rather
+than in the abstract, this is a constant factor on an
+already-linear function: `resolve.go::Resolve` already walks
+`Table.Rows` for the candidate partition, `escapeOrRefuse`
+walks it again for escape candidates, and `gate` walks the
+survivors. The scan is allocation-free in the conforming case
+— it reads `len(row.Escape)` and `len(row.Writes)` and
+allocates only when a breach is found and a `RowRef` is
+recorded — which keeps the kernel "allocation-light" as RDR
+0001 asks.
+
+The cost is per-call because the kernel is stateless by
+contract; no caching or memoization is introduced, since a
+cache keyed on a caller-supplied value would reintroduce the
+ambient state RDR 0001 forbids. If measurement ever shows the
+scan mattering, the precedent is an idempotence
+short-circuit on an already-validated table
+(`crypto/rsa::PrivateKey.Validate` returns early when its
+precomputed values are consistent), never removing the check.
+
+No byte-stable hash, canonical serialization, or ordering
+guarantee is introduced, so the determinism checklist does
+not apply. The one ordering claim this RDR does make — that
+a multi-breach report is ordered by `RowRef` identity rather
+than table position — is a value-level determinism property
+covered by scenario 10 and by the existing `compareRefs`
+ordering, not a byte-level one.
 
 ## Finalization Gate
 
@@ -1002,5 +1387,30 @@ matrix/provenance prose left from the template or Seed
 - `internal/resolve/fixtures_test.go::escapeRow`
 - `internal/cli/clierr` (`GroupInternal`, `ExitCodeFor`)
 - kata `tgzh` (originating finding)
-- Prior-art query ledger:
-  `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/research/propose-prior-art.md`
+- `internal/cli/clierr/clierr.go` (`CLIError.Detail`,
+  `.Hint`, `.Cause`; `ExitCodeFor` non-`CLIError` → exit 1)
+- `internal/cli/config/config.go::Load` (shipped precedent:
+  Go error → `GroupInternal` + stable code + `Hint`)
+- `internal/cli/root.go` (`NewRootCmd` registers only
+  `version`; `cobraErrorToCLIError` stamps `GroupUserEnv`)
+- `AGENTS.md` ("Every user-facing failure is a
+  `*clierr.CLIError` with a stable `Code` … Add new codes as
+  needed")
+- Go stdlib DX precedent: `encoding/json/v2::SemanticError`
+  (sentinel + location field, `errors.AsType`),
+  `encoding/json::UnmarshalTypeError.Field`,
+  `go/types::Error`, `testing/fstest::TestFS` and
+  `testing/slogtest::TestHandler` (`errors.Join`
+  aggregation), `errors::Join`,
+  `cmd/vendor/.../pprof/profile::Profile.CheckValid`
+  (exported + re-checked at the boundary),
+  `crypto/rsa::PrivateKey.Validate` (doc form; idempotence
+  short-circuit)
+- W3C SCXML IRP test 313 (enforcement point is MAY, not
+  standard) via `state-machines/study/uscxml/test/w3c/TESTS.md`
+- Prior-art query ledgers:
+  `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/research/propose-prior-art.md`,
+  `.../evidence/research/resolve-prior-art.md`,
+  `.../evidence/research/resolve-dx-prior-art.md`
+- A3 spike:
+  `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/spikes/a3-fixture-conformance.md`
