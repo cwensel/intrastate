@@ -76,10 +76,14 @@ instance body). -->
   `release:post-1.0`).
 - **Predecessors**: 0001-resolution-kernel,
   0002-transition-table-as-reviewable-data
-- **Overrides**: [To be determined at Propose — whether this
-  RDR narrows RDR 0001's fixed kernel key or extends RDR
-  0002's tag-declaration surface depends on which branch of
-  the fork is chosen.]
+- **Overrides**: Ratifies RDR 0001 deviation D2 (the
+  `recognized` key) from implementation latitude to
+  normative contract; extends RDR 0002's tag-declaration
+  surface with a name constraint on recognized-provenance
+  declarations and one additional data-level validation
+  category (`reserved tag key`, within its "including at
+  minimum" extensible list). Narrows nothing in either
+  peer.
 - **Seam Lineage**: `area:internal-resolve` (recognized-tag
   key identity at the RDR 0001 ↔ 0002 boundary) — no prior
   accretion.
@@ -111,7 +115,7 @@ compose.
 
 The decision is a single fork with three defensible
 branches: `"recognized"` is a **reserved kernel keyword**
-normalization must rename into (carrier owns identity); the
+normalization must conform to (carrier owns identity); the
 key is a **declaration the model carries** and the kernel
 binds at assembly (model owns identity, carrier
 parameterizes); or the **tag-key affordance is withdrawn**
@@ -182,329 +186,617 @@ will produce.
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Read the kernel source (`internal/resolve/resolve.go`:
+`recognizedTagKey`, `assemble`, `Resolve`'s outcome gate),
+RDR 0001's implementation record (deviations D2/D3,
+`verification.md`, REQ-17 in `req-list.md`), and RDR 0002's
+Technical Design and Normative Contracts (tag declarations,
+provenance vocabulary, validation categories, the `<clear>`
+sentinel). External prior-art pass (bounded, per the Stage 2
+budget) over the `StateMachineRes`/`StateMachineLit` corpora
+and the `../state-machines` sibling checkouts; queries,
+accepted citations, rejected branches, and negative results
+are cached at
+`docs/rdr/0008-recognized-tag-key-ownership/evidence/research/prior-art.md`.
+Peer proposals RDR 0007 (guard predicate totality) and RDR
+0009 (escape-row shape conformance) were read as prior art
+at the same `area:internal-resolve` seam.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — The kernel already fixes the key:
+  `internal/resolve/resolve.go::recognizedTagKey` is the
+  unexported constant `"recognized"`, injected by
+  `internal/resolve/resolve.go::assemble` with
+  `ProvenanceRecognized` only when `in.Recognized` is
+  non-empty. RDR 0001 D2 records this as implementation
+  latitude ("adds no public surface"), pinned by the frozen
+  `recognizedTagSensitiveTable` fixture.
+- **Documented** — Outcome gating never reads the key: the
+  gate is `row.Outcome != in.Recognized` plus the
+  outcome-alphabet check, so the tag-key path is a secondary
+  affordance (REQ-17: matching/guarding on the recognized
+  outcome *as a tag* in the assembled view).
+- **Documented** — The reserved key is a singleton by
+  inheritance, not by this RDR's choice: RDR 0001's `Input`
+  carries exactly one `Recognized` string per resolve, so at
+  most one recognized outcome exists in any view.
+  Multi-recognizer or prior-step outcomes are out of scope
+  here — they would first have to extend RDR 0001's `Input`
+  contract (premortem P-2).
+- **Documented** — RDR 0002's Normative Contracts require
+  declaring every matched/written tag with provenance
+  (`owned`, `observed`, `recognized`) but never bind the
+  recognized declaration's *name*; `recognized` appears in
+  RDR 0002 only as a provenance value, never as a tag key.
+- **Documented** — RDR 0002's validation-failure contract is
+  explicitly extensible: "stable data-level categories …
+  including at minimum malformed TOML, unknown schema field,
+  … ambiguous overlap." An additive category does not reopen
+  the Final contract's closed surface.
+- **Documented** (prior art) — Surveyed engines fix the name
+  of the engine-injected datum; author vocabulary is a
+  disjoint namespace. XState: guards receive
+  `{ context, event }`
+  (`repos/xstate/packages/core/src/guards.ts::GuardArgs`) —
+  the injected event occupies the framework-fixed `event`
+  slot; authors name event *types*, never the slot. Inngest:
+  "Read-Only Fields … system-managed and cannot be modified
+  through write operations"
+  (`repos/inngest/pkg/api/v2/README.md`). In-repo: RDR 0002
+  already reserves the `<clear>` write sentinel — a
+  carrier-owned token adjacent to author-named vocabulary.
+  Negative result: no surveyed engine lets authors rename
+  the injected event/outcome slot.
+- **Assumed** — W3C SCXML §5.10 reserves system-variable
+  names (`_event` etc.) against author binding. The spec
+  text is in no local corpus/checkout; demoted to A3 rather
+  than leaned on.
 
 ### Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight below`
-  - **Evidence**: [single sentence — concrete artifact;
-    see method-specific guidance below. Prefer a stable
-    anchor: `path::Symbol`, section heading,
-    REQ/assumption/test ID, grepable literal snippet, or
-    artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
-
-**Method vocabulary** (Reference-only — guidance for
-filling the **Method** field; do NOT copy this list into
-the instance body. Pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
+- **A1 RDR 0002's data-level validation-category list is
+  additively extensible without reopening its Final
+  contract.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: RDR 0002 Normative Contracts, the
+    "Validation failures MUST retain stable data-level
+    categories … including at minimum" fence — "at minimum"
+    marks the list as a floor, not a closed enum.
+  - **If wrong**: the `reserved tag key` category cannot be
+    added by this RDR; enforcement must be re-homed or RDR
+    0002 reopened, surfacing as a Stage 8.1 cross-RDR
+    conflict.
+- **A2 The assembled evaluation view is the only surface
+  through which a table can observe the recognized outcome
+  as a tag, and match patterns and guard predicates read
+  the identical assembled view in one resolve.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/resolve/resolve.go::assemble`
+    (sole injection point) and
+    `internal/resolve/resolve.go::GuardEvaluator` (guards
+    evaluate over the same `TagSet` the matcher reads); to
+    be confirmed by sweeping `internal/resolve` for any
+    other read of `Input.Recognized` exposed to table data
+    and pinned by the same-view test named in Phase 3.
+  - **If wrong**: reserving the view key leaves a second
+    unbound name elsewhere (or a guard/matcher view split —
+    premortem P-7) and the ownership gap survives this RDR.
+- **A3 Established statechart standards reserve
+  system-injected variable names (W3C SCXML §5.10:
+  `_event`, `_sessionid`; authors must not bind names in
+  the reserved `_` namespace).**
+  - **Status**: Pending
+  - **Method**: Prior Art
+  - **Evidence**: W3C SCXML Recommendation §5.10 "System
+    Variables" — to be fetched and quoted at Resolve; not
+    present in local corpora (see research cache).
+  - **If wrong**: prior-art alignment rests on XState and
+    Inngest alone; the choice still stands on blast radius
+    and the QOC matrix, but the Decision Rationale's
+    prior-art row weakens from "standard + engines" to
+    "engines".
+- **A4 No fixture or authored table at HEAD declares or
+  writes an owned/observed tag named `recognized`, so the
+  reserved-key rule invalidates nothing that exists.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: to be confirmed by a whole-token sweep of
+    `internal/resolve` fixtures and any committed table data
+    for `recognized` used as an owned/observed key
+    (`recognizedTagSensitiveTable` uses it only with
+    recognized provenance).
+  - **If wrong**: implementation must rename the colliding
+    fixture/table tags before the lint lands; scope grows by
+    a mechanical rename, not a design change.
+- **A5 The kernel's D3 precedence (`owned` > `observed` >
+  `recognized`) can remain unchanged as the deterministic
+  backstop, because a table that passes the reserved-key
+  validation can never present a colliding owned/observed
+  key at resolve time.**
+  - **Status**: Pending
+  - **Method**: Derivation
+  - **Evidence**: the reserved-key rule forbids declaring
+    `recognized` with owned/observed provenance, and RDR
+    0002 forbids matching/writing undeclared tags; therefore
+    a conforming normalized table has no owned/observed tag
+    keyed `recognized` — the collision branch in `assemble`
+    is unreachable for conforming input. Derivation to be
+    written out at Resolve against RDR 0002's exact
+    declaration semantics.
+  - **If wrong**: shadowing is reachable for conforming
+    tables and the silent no-match returns; the kernel would
+    then need its own reserved-key breach check, changing
+    kernel surface.
+- **A6 The input-assembly boundary RDR 0009 establishes —
+  producer obligation on `Input` construction, backed by a
+  kernel-entry precondition on RDR 0001's reserved
+  programmer-mistake Go error path — can also carry this
+  RDR's reserved-key input precondition.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: RDR 0009 `Proposed Solution` (producer
+    obligation plus kernel entry precondition on the Go
+    error path RDR 0001 reserves for programmer mistakes);
+    `internal/resolve/resolve.go::Resolve` doc comment
+    reserving the error return.
+  - **If wrong**: the producer obligation has no enforcement
+    seam; resolve-time data keyed `recognized` silently
+    shadows the recognized outcome under D3 (premortem
+    P-1/P-6), and closing the data channel would require new
+    kernel surface of this RDR's own.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+`recognized` is a **reserved kernel keyword** — the carrier
+owns the identity of the recognized-provenance tag key, and
+the model conforms to it rather than choosing it. Concretely:
+
+1. **Ratify D2 as contract.** The assembled evaluation view
+   binds the freshly recognized outcome under exactly the
+   key `recognized`. What D2 recorded as implementation
+   latitude becomes the normative answer to the ownership
+   question; the shipped constant and frozen fixture are
+   already conforming, so no kernel code changes.
+2. **Constrain the declaration, keep the declaration.** RDR
+   0002's rule that the model declares every tag it matches
+   stands: a table that matches or guards on the recognized
+   outcome as a tag still declares it — but the declaration
+   with provenance `recognized` MUST be named `recognized`.
+   The author declares *that* they use the affordance, not
+   what it is called.
+3. **Enforce at load/lint, not at resolve.** A
+   recognized-provenance declaration under any other name,
+   or an owned/observed declaration named `recognized`, is a
+   data-level validation failure in a new `reserved tag key`
+   category — reported by RDR 0002's normalizer before any
+   resolution, which converts the seed's silent no-match
+   discovery into an authoring-time diagnosis. No new
+   refusal kind; no kernel disposition change for conforming
+   tables.
+4. **Reserve the key on the input data channel too.** Lint
+   sees declarations, not resolve-time data: owned/observed
+   input tags arrive at the kernel as data no normalizer
+   touches, and D3 precedence would resolve a collision
+   *against* the declared owner (premortem P-1/P-6). So
+   producers of kernel `Input` — the accessor layer for the
+   owned snapshot, the caller for observed context — carry a
+   producer obligation not to supply a tag keyed
+   `recognized`, enforced at the input-assembly boundary
+   outside the kernel, on the same producer-obligation seam
+   RDR 0009 establishes for row-shape conformance (A6).
+5. **Shadowing becomes unreachable on both channels, not
+   re-decided.** The declaration channel is closed by
+   load/lint (A5); the data channel by the producer
+   obligation (A6). RDR 0001 D3's precedence stays untouched
+   as the kernel's deterministic backstop behind both, for
+   non-conforming input only.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+Data flow: the author writes a tag declaration with
+provenance `recognized` (name constrained to `recognized`);
+the RDR 0002 normalizer validates names at load/lint —
+rejecting wrong-named recognized declarations and
+reserved-name owned/observed declarations — and emits
+normalized rows whose `Match`/`Guard` references to the
+recognized outcome use the reserved key; the kernel's
+`assemble` continues to inject `in.Recognized` under that
+key with `ProvenanceRecognized`, unchanged.
+
+The spelling authority is this RDR's Normative Contracts
+(both sides quote the literal). Drift is guarded
+behaviorally, not literal-vs-literal: the conformance test
+MUST run the real kernel and assert the assembled view binds
+the recognized outcome under the normalizer's spelling — a
+test comparing two hardcoded literals verifies the doc
+against itself and is non-conforming (premortem P-5).
+Whether the normalizer additionally references an exported
+kernel constant is implementation latitude, sharpened at
+Resolve/Pre-Lock — the default lean is the behavioral test
+over new exported kernel surface, matching RDR 0001 D2's
+"no public surface" posture and RDR 0009's minimal-export
+precedent.
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block,
-e.g.:
-
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+The assembled evaluation view MUST bind the freshly
+recognized outcome under exactly the tag key `recognized`
+(`internal/resolve/resolve.go::recognizedTagKey`). The key
+is a reserved kernel keyword: table authors conform to it
+and MUST NOT rebind it.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+```normative
+A tag declaration with provenance `recognized` MUST be named
+`recognized`, and a flow MUST carry at most one such
+declaration. A tag declaration with provenance `owned` or
+`observed` MUST NOT be named `recognized`. Any violation is
+a data-level validation failure in the `reserved tag key`
+category, reported at table load/lint before any resolution
+— never a kernel refusal. The reserved-key comparison is
+byte-exact on the parsed TOML key value: case-sensitive, no
+trimming, no folding (so `Recognized` is an ordinary,
+unreserved name).
+```
+
+```normative
+Every `reserved tag key` failure — and any undeclared-tag
+failure whose offending key is the reserved name — MUST
+carry, at the data level, the offending name, the required
+name `recognized`, and the rule (the kernel owns this key;
+declarations conform to it). A category consumer may map it,
+but the guidance travels in the failure data, not the
+renderer.
+```
+
+```normative
+Producers of kernel `Input` MUST NOT supply an owned or
+observed tag keyed `recognized`; the reserved key enters the
+assembled view only through `Input.Recognized`. A breach is
+a producer programmer mistake — not table data, and never a
+new `RefusalKind` — enforced at the input-assembly boundary
+outside the kernel, on the same producer-obligation seam RDR
+0009 establishes for row-shape conformance.
+```
+
+```normative
+Kernel disposition is unchanged by this RDR: no new
+`RefusalKind`, no change to RDR 0001 D3's provenance
+precedence (`owned` > `observed` > `recognized`), and no
+behavior change for any conforming table and conforming
+input. D3 remains the deterministic backstop behind the
+producer obligation for non-conforming input.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 8.1 asserts it across the
-seam.
-
-#### Illustrative Code
-
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
-
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
-
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+- **Identity** — the recognized-provenance tag key is the
+  exact string `recognized`; equality is byte-exact string
+  match on the parsed TOML key value — no case folding, no
+  trimming, no aliasing. Near-spellings (`Recognized`, a
+  quoted or whitespace-bearing variant) are by definition
+  ordinary unreserved names; whether lint additionally
+  warns on case-variants of the reserved word is a Resolve
+  question, not identity (premortem P-10).
+- **Naming** — canonical name `recognized`, matching the
+  shipped `recognizedTagKey` constant and RDR 0001's frozen
+  fixture. Rejected: a sigil-guarded name (`_recognized`, or
+  an angle-bracket token like RDR 0002's `<clear>`) — it
+  would repin the shipped constant and fixture for no added
+  safety once the reserved-key validation exists, and it
+  diverges from the vocabulary authors already see in
+  `Row.Outcome` diagnostics.
 
 ### Capability Dependencies
 
-[For each load-bearing behavior, state whether the
-enabling capability exists now, is introduced by this
-RDR, is provided by a predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Reserved key injected into the assembled view | Predecessor (RDR 0001 D2, implemented) | Available | Ratified from latitude to contract; no code change |
+| Tag declarations with provenance | Predecessor (RDR 0002, Final unimplemented) | Deferred | Name constraint on `recognized`-provenance declarations |
+| Load/lint name validation | Predecessor (RDR 0002 normalizer) | Deferred | One additive validation category: `reserved tag key` |
+| Input-boundary producer enforcement | Peer (RDR 0009 producer-obligation seam) | Deferred | Reserved-key input precondition rides the same seam (A6) |
 
 ### Existing Infrastructure Audit
 
-[List existing modules that overlap with proposed
-components. For each, state whether to reuse, extend,
-or replace, and name any known limit that affects the
-spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Recognized-outcome injection | `internal/resolve/resolve.go::assemble` | none | Reuse | already conforming |
+| Outcome gating | `internal/resolve/resolve.go::Row` `Outcome` field | none | Reuse | tag-key path stays a secondary affordance |
+| Reserved-token precedent | RDR 0002 `<clear>` write sentinel | sentinel is syntactically un-declarable; `recognized` is declarable | Reuse pattern (reserve + validate) | validation category instead of sigil syntax |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out.]
+QOC matrix (question: *who owns the name of the
+recognized-provenance tag key in the assembled view?*).
+Approaches: **R** = reserved kernel keyword (chosen), **M**
+= model-carried declaration, **W** = withdraw the tag-key
+affordance.
+
+| Criterion | R — reserved keyword | M — model-carried | W — withdraw |
+| --- | --- | --- | --- |
+| Correctness fit (fixes silent no-match discovery) | collision impossible after lint; diagnosis at authoring time | correct only if declaration threads everywhere; misdeclaration becomes a runtime concern | dissolves the tag path but removes the capability the user wanted |
+| Prior-art alignment | matches XState fixed `event` slot, Inngest system fields, RDR 0002 `<clear>` precedent | no surveyed engine lets authors rename the injected slot (negative result, research cache) | no engine surveyed withdraws event visibility from guards |
+| Blast radius | no kernel disposition change; one additive lint category + declaration constraint in 0002; input precondition rides RDR 0009's existing seam | new public kernel surface (`Input` key field or parameterized `assemble`), normalized-table surface, threads through 0005; frozen fixture repinned | violates locked REQ-17 of implemented Final RDR 0001; removes guard-visible recognized value that RDR 0007's chosen guard domain reads |
+| Reversibility | high — a later RDR could still parameterize; reserving now forecloses nothing | low — public surface, once shipped, is load-bearing | low — deleting shipped kernel behavior and reopening 0001 |
+| Consistency with 0007/0009 posture at this seam | same shape as 0009: producer/lint obligation, kernel unchanged for conforming input, no new refusal kind | cuts against both peers: grows kernel surface to solve an authored-data problem | cuts against 0007, whose guard domain assumes the assembled view carries the recognized tag |
+| Cost | doc ratification + lint checks inside work 0002 already owes | largest: kernel, table schema, CLI threading, fixtures | medium code deletion + cross-RDR contract reopening |
+
+Deciding rows: **blast radius** and **prior-art alignment**
+— R is the only branch with no kernel disposition change and
+positive prior art; M has a strict negative prior-art result
+and the largest surface growth; W reopens a locked,
+implemented contract (REQ-17) and breaks RDR 0007's
+guard-domain assumption. The consistency row is
+corroborating, not decisive: R independently wins before
+peer posture is weighed. Rejected alternatives are analyzed
+below.
+
+Sibling-path check: the chosen approach adds one identity
+rule (a reserved tag key). Searched for an adjacent path
+already making that decision:
+`internal/resolve/resolve.go::recognizedTagKey` is the only
+reserved key in the kernel (whole-package sweep for key
+constants and "reserved" yields nothing else), and RDR
+0002's `<clear>` sentinel is the nearest sibling
+reserved-token decision — its mechanism (syntactically
+un-declarable sigil) was considered and rejected under
+Load-Bearing Decisions / Naming; its *pattern* (carrier
+reserves a token, validation enforces it) is what this RDR
+reuses. No parallel signal is invented.
+
+Premortem: hardened — critic verdict PASS, no switch
+forced; folded: P-1/P-6 → input-channel producer obligation
+on RDR 0009's seam (new normative fence, A6); P-5 →
+behavioral end-to-end conformance test mandated; P-4/P-11/
+P-12 → normative refusal-text content; P-10 → byte-exact
+comparison rule on the parsed TOML key; P-2/P-8 → singleton
+inherited from RDR 0001 `Input` + at-most-one declaration
+clause; P-9 → no-back-compat migration note (Risks); P-3 →
+documented residual (Failure Modes). Variant (hardened).
+
+Joint-check: clear (7 peers)
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Model-carried key declaration (model owns identity)
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-**Description**: [Brief description]
+**Description**: The tag declaration with provenance
+`recognized` carries an author-chosen name; the normalized
+table surfaces that name; the kernel's `assemble` binds
+`in.Recognized` under the table-supplied key (a new `Input`
+field or parameter).
 
 **Pros**:
 
-- [Advantage 1]
+- Preserves full author naming authority — the most
+  consistent reading of RDR 0002's "authors name their
+  tags" ethos.
+- No reserved word in the author's namespace; no new
+  validation category.
 
 **Cons**:
 
-- [Disadvantage 1]
+- New public kernel surface on an implemented, Final RDR:
+  `Input` grows a key field (or `assemble` a parameter),
+  RDR 0001 D2's "no public surface" posture is reversed,
+  and the frozen `recognizedTagSensitiveTable` fixture is
+  repinned.
+- The name must thread through the normalized-table surface
+  and RDR 0005's CLI path — the widest blast radius of the
+  three branches.
+- Identity becomes a runtime property of each table: two
+  tables in one review can name the same datum differently,
+  and a misdeclared name is discovered at resolve time, not
+  load time — the original silent-no-match discovery
+  problem survives in a new form.
+- Strict negative prior-art result: no surveyed engine lets
+  authors rename the injected event/outcome slot (research
+  cache).
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: largest blast radius of the three
+branches, spent reversing a shipped posture to solve
+statically what a lint rule solves at load time, with zero
+supporting prior art.
+
+### Alternative 2: Withdraw the tag-key affordance
+
+**Description**: Remove the recognized tag from the
+assembled view; recognized outcomes are matchable only via
+`Row.Outcome`; the identity question dissolves.
+
+**Pros**:
+
+- Deletes the ambiguity instead of ruling on it; no
+  reserved word, no new validation category.
+
+**Cons**:
+
+- Violates REQ-17 of RDR 0001 — a locked, implemented,
+  Final contract ("Merge owned, observed, and freshly
+  recognized tags into the evaluation view") — so it
+  reopens 0001 rather than binding 0001 to 0002.
+- Removes guard visibility of the recognized outcome: RDR
+  0007's chosen guard domain evaluates predicates over the
+  assembled view, so guards could no longer reference the
+  recognized value at all — a capability regression beyond
+  this RDR's scope, and a bridge/retire conflict with a
+  peer's shipped plan.
+- Deletes the exact capability the Problem Statement's user
+  wanted (matching the recognized outcome in tag
+  vocabulary).
+
+**Reason for rejection**: resolves a naming question by
+deleting a locked peer contract and a peer-consumed
+capability — the highest-cost, least-reversible branch.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Sigil-guarded rename** (`_recognized` / `<recognized>`):
+  repins the shipped constant and frozen fixture for no
+  safety the reserved-key validation doesn't already
+  provide; see Load-Bearing Decisions / Naming.
+- **Dual-name aliasing** (kernel writes both the reserved
+  key and the author's declared alias): two names for one
+  datum in one view — invites the divergence this RDR
+  exists to close.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: the naming collision surfaces at authoring time
+  as a typed load/lint failure, replacing the silent
+  no-match discovery in the Problem Statement.
+- Positive: no kernel disposition change; the shipped
+  constant, fixture, and D3 precedence all remain valid —
+  the cheapest branch to implement and the easiest to
+  reverse.
+- Positive: a consistent trust story at the 0001↔0002 seam
+  with RDR 0009 (normalizer enforces, kernel unchanged for
+  conforming input, no new refusal kind).
+- Negative: authors lose naming freedom for exactly one
+  tag; `recognized` becomes a reserved word they must learn
+  (mitigated by the lint message naming the rule).
+- Negative: RDR 0002's implementation grows one validation
+  category and one declaration constraint it did not
+  originally spec (additive, but still scope on an
+  unimplemented Final RDR).
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: RDR 0002's implementer treats the validation
+  category list as closed and rejects the addition.
+  **Mitigation**: A1 verifies extensibility at Resolve; the
+  fence's "including at minimum" wording marks a floor, and
+  the category lands through this RDR's normative contract,
+  which 0002's implementation prompt will extract.
+- **Risk**: resolve-time owned/observed data keyed
+  `recognized` bypasses lint entirely (data channel, no
+  declaration) and D3 resolves the collision against the
+  declared owner — a silent wrong-value match, worse than
+  the original no-match (premortem P-1/P-6).
+  **Mitigation**: the producer-obligation fence closes the
+  data channel at the input-assembly boundary on RDR 0009's
+  seam (A6); D3 stays the deterministic backstop behind it;
+  the breach test is named in Phase 3.
+- **Risk**: kernel and normalizer spellings drift (two
+  constants, one contract).
+  **Mitigation**: the conformance test is normatively
+  behavioral — real kernel, assembled-view assertion — so a
+  doc-vs-doc literal comparison cannot pass for it
+  (premortem P-5); the literal is normative in this RDR, so
+  drift is a spec breach with a named test.
+- **Risk**: category-enumerating consumers (RDR 0005's
+  exit-code map, refusal renderers, remediation docs)
+  render the new category as generic and strip the guidance
+  it exists to carry (premortem P-4/P-11).
+  **Mitigation**: the refusal-text content is normative at
+  the data level — offending name, required name, rule —
+  so a generic renderer still surfaces the resolution; a
+  golden-text test is named in Phase 3.
+- **Risk**: near-spellings (`Recognized`, quoted/whitespace
+  TOML key forms) read as the reserved word to a human but
+  are ordinary names to the byte-exact rule (premortem
+  P-10).
+  **Mitigation**: the comparison rule is normative
+  (byte-exact on the parsed key value); an advisory lint
+  warning on case-variants is a Resolve question; the
+  normalization fixture set is named in Phase 3.
+- **Risk**: pre-existing tables using `recognized` as an
+  innocent owned/observed tag break at load with no
+  migration story (premortem P-9).
+  **Mitigation**: none needed as migration — the project
+  carries no back-compat obligation and the reservation
+  lands before any normalizer or authored table exists (A4);
+  the innocent-collision case is a lint fixture, and the
+  normative refusal text tells that author what to rename
+  and why.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+Visible: a wrong-named or duplicated recognized-provenance
+declaration, or a reserved-name owned/observed declaration,
+fails table load/lint with the `reserved tag key` category —
+the failure data carries the rule, the offending name, and
+the required name, before any resolution runs. A producer
+supplying an owned/observed input tag keyed `recognized`
+breaches the producer obligation and is caught at the
+input-assembly boundary (RDR 0009's seam), not inside the
+kernel.
+
+Silent, residual: an author who declares an *observed* tag
+under an innocent name (`result`, `outcome`) intending
+recognizer semantics passes every name check and the row
+never fires — the original silent no-match survives this
+narrow path, because intent is invisible to a
+name-and-provenance validator (premortem P-3). Diagnosis:
+the table dump shows no recognized-provenance declaration
+for the flow while rows gate on outcomes; an advisory lint
+heuristic for that shape is a Resolve question. Silent,
+backstop-only: input that bypasses both lint and the
+producer obligation shadows the recognized value under D3
+and surfaces as a deterministic `no_match` refusal.
+Recovery in every case is renaming or re-provenancing the
+colliding declaration. A developer diagnosing kernel
+behavior finds the reserved key documented on
+`internal/resolve/resolve.go::recognizedTagKey` with a
+pointer to this RDR.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] RDR 0002 implementation underway (the enforcement
+      point is its normalizer's load/lint path; this RDR's
+      checks land inside that work, not before it)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.]
+One end-to-end pair over the normalizer + kernel: (a) a
+table declaring a recognized-provenance tag named
+`recognized` loads, lints clean, and a row matching on that
+tag fires against a recognized outcome — asserted through
+the real kernel's assembled view (the behavioral
+conformance form, premortem P-5); (b) the same table with
+the declaration renamed (and separately, with an owned tag
+named `recognized`) fails load/lint with the
+`reserved tag key` category whose failure data names the
+required name — not a silent no-match at resolve time.
 
-### Phase 1: Code Implementation
+### Phase 1: Contract ratification
 
-#### Step 1: [Title]
+Promote D2's key to normative: record the reserved-keyword
+rule where implementers read it — this RDR's Normative
+Contracts as authority, plus a pointer comment on
+`internal/resolve/resolve.go::recognizedTagKey` citing RDR
+0008. No kernel behavior change.
 
-[Instructions]
+### Phase 2: Normalizer name validation
 
-#### Step 2: [Title]
+Add the reserved-key checks to RDR 0002's load/lint path:
+wrong-named recognized-provenance declarations and
+reserved-name owned/observed declarations both report the
+`reserved tag key` data-level category.
 
-[Instructions]
+### Phase 3: Conformance pinning
 
-### Phase 2: Operational Activation
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+The MVV fixture pair plus the premortem-derived test set:
+the behavioral spelling test (real kernel, assembled-view
+assertion — never literal-vs-literal), the
+producer-obligation breach test (observed input keyed
+`recognized` caught at the input boundary), the
+guard/matcher same-view test (A2), the duplicate
+recognized-declaration fixture, the reserved-key
+normalization fixtures (case/quoting/whitespace variants
+stay unreserved), and the golden refusal-text check
+(offending name, required name, rule).
 
 ## Validation
 
@@ -517,16 +809,6 @@ not estimates.]
 
 1. **Scenario**: [Description]
    **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
 
 ## Finalization Gate
 
@@ -621,7 +903,20 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0001 `0001-resolution-kernel.md` — REQ-17; artifacts
+  `deviations.md` D2 (tag key), D3 (precedence);
+  `verification.md` ("deterministic and refusal-shaped, not
+  a breach").
+- RDR 0002 `0002-transition-table-as-reviewable-data.md` —
+  Technical Design (tag declarations, provenance
+  vocabulary), Normative Contracts (declare-every-tag,
+  validation categories, `<clear>` sentinel).
+- RDR 0007 `0007-guard-predicate-totality.md`, RDR 0009
+  `0009-escape-row-shape-conformance-ownership.md` — peer
+  posture at the `area:internal-resolve` seam.
+- `internal/resolve/resolve.go` — `recognizedTagKey`,
+  `assemble`, `Row`, `GuardEvaluator`.
+- Prior-art research cache:
+  `docs/rdr/0008-recognized-tag-key-ownership/evidence/research/prior-art.md`
+  (XState `GuardArgs`, Inngest read-only fields; SCXML
+  demoted to A3).
