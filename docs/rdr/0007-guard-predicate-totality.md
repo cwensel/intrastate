@@ -136,7 +136,10 @@ Go; the resolution kernel under `internal/` (`resolve.go`,
 sits at the boundary between two Final RDRs:
 
 - **RDR 0001 — Resolution kernel** (`Implemented`). Owns
-  the closed refusal taxonomy and the selection rule: "the
+  the closed five-kind refusal taxonomy — `no_match`,
+  `ambiguous_match`, `owned_state_unavailable`,
+  `guard_unevaluable`, `unmodeled_outcome`
+  (`resolve.go::RefusalKinds`) — and the selection rule: "the
   only successful selection is exactly one matching edge
   after guard evaluation. Zero, multiple, unavailable, or
   unevaluable candidates are refusals unless the table
@@ -441,12 +444,14 @@ existence tests.
     the choice survives, the citation does not.
 - **A5 Authors who need "row applies when tag X is absent"
   — including the default-value pattern "absent OR equals
-  v" — can express it with existence atoms, using the
-  two-row pattern (one row guarded on absence via `unless`
-  existence, one on the value) where a single row cannot
-  carry the disjunction, without ambiguity under exact-one
-  selection and without driving authors to stamp sentinel
-  values upstream.**
+  v" — can express it with existence atoms. A bare absence
+  test is a single atom (`exists = false`, the literal
+  carrying polarity — see the existence clause); only the
+  DISJUNCTION needs the two-row pattern (one row guarded on
+  absence, one on the value), because RDR 0003 rejects
+  intra-guard disjunction. Neither route is ambiguous under
+  exact-one selection, and neither drives authors to stamp
+  sentinel values upstream.**
   - **Status**: Pending — the runtime half is settled; the
     **load-time** half is refuted pending A12. See *Carried
     constraint*.
@@ -814,6 +819,37 @@ existence tests.
     the ADV-4/ADV-5 defect reintroduced one seam over, with
     no test contending it.
 
+- **A14 An `exists` atom carries a boolean literal whose
+  value is the expected presence (`presence == literal`),
+  rather than being unary over a tag key with polarity
+  supplied only by `all`/`unless` placement — so
+  `all … exists = false` is a legal single-atom absence
+  test.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Established so far: RDR 0003's
+    operator/kind matrix gives `exists` the literal shape
+    "boolean" (the only operator whose literal is a boolean
+    rather than a scalar/set), and its spike fixture authors
+    `exists = true`
+    (`0003-…/evidence/spikes/guard-fixture.toml`), so the
+    literal exists and is not decorative. What is NOT yet
+    confirmed: that `exists = false` is *accepted* — the
+    fixture only exercises `true`, and RDR 0003 states the
+    placement rule "Positive guard atoms MUST live in `all`;
+    negative guard atoms MUST live in `unless`", which could
+    be read as forbidding a negative-polarity literal in
+    `all`. Verify against RDR 0003's grammar whether polarity
+    in the literal and polarity in placement are independent
+    or whether one constrains the other. Raised by the
+    repeatability lens (D-10) where `glm-5.2` reconstructed
+    `exists` as unary.
+  - **If wrong**: absence is expressible only via `unless …
+    exists`, A5's two-row pattern regains its status as the
+    sole absence route (restoring the stronger dependence on
+    A12), and Scenario 6's `all … exists = false` leg is
+    unauthorable.
+
 ## Proposed Solution
 
 ### Approach
@@ -891,6 +927,47 @@ requires only that the mapping be total and lossless for
 operator, referenced tag key, literal, and block placement:
 an evaluator that cannot recover which tag keys an atom
 references cannot implement the domain rule at all.
+
+TOTALITY OF THE MAPPING IS LOAD-BEARING, AND ITS FAILURE IS
+NOT AN UNEVALUABLE GUARD. Because the mapping MUST be total,
+a well-loaded guard the evaluator cannot parse is a defect in
+the evaluator, not a fact about the view. Such a failure MUST
+NOT be reported as GuardUnevaluable: that verdict means "the
+artifact state needed to decide was missing," and collapsing
+an implementation defect into it re-creates — one layer up —
+exactly the conflation this RDR exists to close, with the
+same escapability consequences reversed. Unknown operators
+and undeclared tags are already rejected at load
+(A1, A7), so this case is unreachable for any guard that
+passed lint. `Evaluate` has no error return (below), which
+is deliberate and not an oversight: the seam reports
+verdicts, and a mapping failure is not a verdict. An
+evaluator MUST surface it the way the kernel surfaces
+programmer mistakes — outside the verdict channel
+(`resolve.go::Resolve`: "the error return is reserved for
+programmer mistakes, not for modeled refusals") — never by
+answering GuardUnevaluable.
+
+`Evaluate` returns a bare `GuardResult` — the verdict is the
+whole of what the seam reports, and the kernel switches on it
+exhaustively (`resolve.go::gate`). Adding a second channel
+would give the evaluator a way to report undecidability that
+the kernel's refusal taxonomy does not model.
+
+The seam is the shipped `GuardEvaluator` INTERFACE with the
+single method `Evaluate(guard string, view TagSet)
+GuardResult` — not a function type. This matters only
+because the Phase 2 harness's signature takes the seam as a
+parameter, so its parameter type is fixed by this.
+
+The RDR does NOT model tag value typing. The scalar /
+set-valued / bounded-integer distinction the operator rules
+quantify over (`contains` requires a set-valued tag,
+comparison a bounded integer) is RDR 0003's declared-kind
+system. The clauses here bind regardless of its Go
+representation: whatever carries a value, an ABSENT KEY is
+unevaluable for every value-comparing operator, and an
+absent set-valued tag is never the empty set.
 ```
 
 ```normative
@@ -914,12 +991,27 @@ decide true or false from the presence or absence of its
 referenced tag key alone. Absence tests MUST be expressed
 as explicit existence atoms; no value-comparing operator
 may act as an implicit existence test.
+
+An `exists` atom carries a BOOLEAN LITERAL, per RDR 0003's
+operator/kind matrix (literal shape "boolean") and its own
+fixture (`exists = true`). Its verdict is
+`presence == literal`: `exists = true` decides TRUE when the
+key is present, and `exists = false` decides TRUE when the
+key is ABSENT. Polarity therefore lives in the literal, and
+`all`/`unless` placement composes with it rather than
+supplying it — an `exists` atom is NOT unary-over-a-key.
+Both channels reach the same verdicts, so a single-row
+absence test (`all … exists = false`) is expressible; A5's
+two-row pattern is required only for the DISJUNCTION
+"absent OR equals v", which no single row can carry because
+RDR 0003 rejects intra-guard disjunction.
 ```
 
 ```normative
 PRESENCE IS PROVENANCE-BLIND. "Present in the assembled
 view" means the tag key is in the view under ANY
-provenance — owned, observed, or recognized. A guard atom
+provenance — `ProvenanceOwned`, `ProvenanceObserved`, or
+`ProvenanceRecognized` (`resolve.go`). A guard atom
 MUST NOT be decided differently according to how a tag
 reached the view, and `exists` MUST decide TRUE for an
 observed- or recognized-supplied key exactly as for an
@@ -979,6 +1071,23 @@ is witnessed by present state and holds under every
 resolution of the unevaluable atom. This is what makes D8
 sound, and it is conformance to strong Kleene, not a
 deviation from it.
+
+The tables are normative, not merely cited. Conjunction is
+`min` under the truth order `F < U < T`; negation is
+`¬T = F`, `¬F = T`, `¬U = U`:
+
+| ∧ | T | F | U |
+|---|---|---|---|
+| **T** | T | F | U |
+| **F** | F | F | F |
+| **U** | U | F | U |
+
+The row verdict is `all_result ∧ ¬(unless_conj)`, where
+`unless_conj` is the conjunction of the `unless` block's
+atoms (`unless` is block-level negation, NOT per-atom
+negation). A2's Evidence derives why neither branch admits
+absence as a source of falsity; the tables are restated
+here because the clause is unimplementable without them.
 ```
 
 ```normative
@@ -1015,7 +1124,13 @@ vector MUST assert the ordering as behavior, and the
 authoring docs MUST NOT repeat the superseded rationale.
 
 The refusal MUST identify the rows it came from:
-`Refusal.Rows` carries every undecidable row.
+`Refusal.Rows` carries every undecidable row as
+`[]resolve.RowRef`, where `RowRef` is the shipped
+`(RuleID, SourceLocator)` source-identity pair — NOT whole
+`Row` values and not bare rule-id strings. The element type
+is pinned because the clause below makes `Rows` a normative
+assertion target, and a vector cannot assert on it without
+knowing what it holds.
 `Refusal.Guard` is single-valued — the kernel selects the
 lowest row by `(RuleID, SourceLocator)` — so it is a
 diagnostic convenience, NOT the discriminator: any contract
@@ -1037,12 +1152,33 @@ surviving rows.
 ```
 
 ```normative
+SURVIVOR MEMBERSHIP. A row whose guard evaluates to
+GuardTrue or GuardUnevaluable is a SURVIVOR; only
+GuardFalse rows are pruned. Membership is stated
+constructively here because every downstream clause
+quantifies over it: the owned-state scan runs over
+survivors, so an unevaluable row's RequiresOwned keys DO
+raise owned_state_unavailable (they are not skipped as
+"undecided"), and the undecidable check runs over the same
+set. This is the shipped partition
+(`resolve.go::gate` appends to `survivors` unless the
+verdict is GuardFalse).
+
 Aggregation is resolution-level, not merely per-guard: if
 any surviving candidate row's guard is GuardUnevaluable,
 the resolution MUST refuse guard_unevaluable — a
 decided-GuardTrue sibling row MUST NOT be selected while
-an unevaluable candidate exists. Only decided-GuardFalse
-rows are pruned from consideration.
+an unevaluable candidate exists.
+
+Counting zero-versus-multiple survivors is NOT part of this
+contract and does not happen inside the gate: RDR 0001 owns
+it, and the kernel applies it in `Resolve` on the rows
+`gate` returns, only once no blocking refusal was raised.
+This RDR fixes three ordering facts and no others —
+guard-FALSE prunes first (D8), absent owned state is
+reported before an undecidable guard among survivors, and
+the aggregation veto below. `no_match` / `ambiguous_match`
+sit downstream of all three by RDR 0001's selection rule.
 
 Aggregation is scoped to one row set at a time (RDR 0001
 deviation D5): the candidate rows aggregate among
@@ -1525,6 +1661,12 @@ B achieves with a spec and fixtures.
       is accepted knowingly) — raised by the critique lens.
       Not a blocker for the domain rule itself; a blocker for
       claiming the refusal cannot be worked around.
+- [ ] **A14 verified** (`exists` carries a boolean literal;
+      `exists = false` is authorable in `all`) — raised by
+      the repeatability lens. Not a blocker for the domain
+      rule; it fixes whether a single-atom absence test
+      exists, which sets how hard A12 binds — if A14 fails,
+      the two-row pattern is again the only absence route.
 - [x] All other Critical Assumptions verified **except
       A6b**, which is carried open by decision: the
       read-failed vs genuinely-absent distinction is not
@@ -1600,6 +1742,17 @@ Two things this phase must build, neither of them reuse:
    scenarios 4/6/7/8 need an evaluator that actually reads
    the view. This is the domain rule's first executable
    expression.
+   It MUST be unexported (or otherwise not offered as a
+   reusable component): the normative evaluator is RDR
+   0003's future build, and shipping a second importable one
+   invites production use of a stopgap. It necessarily
+   defines some guard encoding to test against while A10 is
+   open — that encoding is **vector-local and
+   non-normative**, and MUST NOT be read as pre-empting the
+   `Row.Guard` mapping A10 hands to RDR 0003. If it were
+   normative, Phase 2 would be deciding A10 by
+   implementation, which is the drift this RDR exists to
+   prevent.
 2. **An exported conformance harness**, not an internal
    test. The suite MUST be callable against any
    `GuardEvaluator` (an exported function taking the seam),
@@ -1626,6 +1779,19 @@ Two things this phase must build, neither of them reuse:
      package name and vector encoding are Phase 2's to fix,
      but the shape MUST be "caller supplies the evaluator",
      not "suite constructs one".
+   - **View construction.** `TagSet` is a concrete struct
+     whose `tags` map is unexported, and `assemble` is
+     unexported, so **no caller outside package `resolve`
+     can build a view with chosen contents.** A vector that
+     needs a specific present/absent tag set must drive it
+     through `resolve.Input` (`Owned` / `Observed` /
+     `Recognized`) and let `Resolve` assemble it — which is
+     how every shipped test does it — or Phase 2 must add an
+     exported constructor. Phase 2 MUST pick one before
+     encoding rows 4/6/7/8; the choice is not free, because
+     driving through `Input` also exercises candidate
+     matching, so a vector isolating atom behavior needs the
+     constructor.
 
 ### Phase 3: Diagnostics and authoring handoff
 
@@ -1750,14 +1916,19 @@ normative expected value
    and assert on `Rows`.
    Backing: `resolve.go::escapeOrRefuse`; A3.
 
-6. **Scenario**: `exists` is total — a positive existence
-   atom over an absent key, and a negative existence atom
-   (`unless … exists`) over an absent key.
-   **Expected**: both decide (FALSE and TRUE respectively);
-   neither returns unevaluable. This is the one sanctioned
+6. **Scenario**: `exists` is total — over both an absent and
+   a present key, across both polarity channels: the literal
+   (`exists = true` / `exists = false` in `all`) and block
+   placement (`unless … exists = true`).
+   **Expected**: every combination decides TRUE or FALSE;
+   none returns unevaluable. Specifically `exists = false`
+   over an absent key decides TRUE, and the two channels
+   agree — `all … exists = false` and `unless … exists =
+   true` reach the same verdict. This is the one sanctioned
    route from absence to a decided verdict.
    Backing: A1; RDR 0003's `exists` row ("Tests presence
-   or absence, not value equality").
+   or absence, not value equality") and its boolean literal
+   shape; the existence clause's `presence == literal` rule.
 
 7. **Scenario**: `contains` over an absent set-valued tag.
    **Expected**: unevaluable — NOT false-by-empty-set.
