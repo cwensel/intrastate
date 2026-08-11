@@ -646,6 +646,66 @@ existence tests.
     normalization (not here), or a table with an omitted
     `unless` block disables every row carrying one — a
     silent whole-table failure.
+- **A10 The atom structure this RDR's domain rule quantifies
+  over (operator, referenced tag key, literal, `all`/`unless`
+  placement) is recoverable by the evaluator from what it is
+  handed at the `GuardEvaluator.Evaluate` seam — i.e. some
+  total, lossless mapping from the authored guard to
+  `Row.Guard string` exists or can be specified by RDR 0003
+  without reopening RDR 0001's `Row` shape.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Needed. Established so far: `Row.Guard` is
+    an opaque `string` and `Evaluate(guard string, view
+    TagSet)` is the whole seam
+    (`internal/resolve/resolve.go::GuardEvaluator`); the
+    kernel attaches no meaning to the text
+    (`evaluateGuard` only special-cases `""`). Guards are
+    authored *structurally* — RDR 0003's spike fixture uses
+    `[rule.guard.all.profile]`, `[rule.guard.unless.
+    prelock_iterations]` — and RDR 0002's normalization
+    "MUST combine both into one candidate-row" predicate
+    set. No RDR states what that combination yields at the
+    `Row.Guard` boundary, and the only in-tree consumer
+    (`fixtures_test.go::fixtureGuards`) treats it as an
+    opaque *name* keyed into `decided map[string]bool`.
+    Verify against RDR 0002's normalization contract and
+    RDR 0003's grammar whether the mapping is specified
+    anywhere; if not, it is an obligation handed to RDR 0003
+    (Phase 3), not a defect fixed here.
+  - **If wrong**: Every atom-level normative clause in this
+    RDR is unimplementable as written and the Phase 2
+    vectors for scenarios 4/6/7/8 cannot be encoded at all —
+    the domain rule would bind a seam that cannot see what
+    the rule is about. Raised by the 3amigo lens
+    (IMP-1/QA-1) as the hinge finding.
+- **A11 Deciding guard presence provenance-blind conflicts
+  with no shipped kernel behavior: no code path requires a
+  guard atom to see only owned tags.**
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: The view has exactly four readers.
+    `TagSet.Lookup` is provenance-blind (returns `ok` on any
+    key present, `resolve.go` L113–119) and is the only
+    *exported* accessor — the one an evaluator outside the
+    package can use at all. `TagSet.has` takes a provenance
+    and is unexported, with a single caller,
+    `missingOwned`, which is scoped to `RequiresOwned` and
+    the `owned_state_unavailable` diagnosis — a different
+    question from guard decidability. `TagSet.matches`
+    (candidate selection) compares key and value with no
+    provenance test, and `Len` is a count. So the
+    provenance-blind reading is both the only one an
+    external evaluator can implement and the one already
+    used everywhere except the deliberately owned-scoped
+    precheck. RDR 0003's fixture declares
+    `[tags.cluster_eligible] provenance = "observed"` and
+    guards it with `exists = true`, confirming the spec'd
+    intent is not owned-only.
+  - **If wrong**: `exists` over an observed or recognized
+    tag decides differently than over an owned one, RDR
+    0003's own fixture breaks, and absence tests become
+    silently provenance-dependent.
 
 ## Proposed Solution
 
@@ -701,6 +761,32 @@ conformance fixture set the 0003 evaluator must pass.
 #### Normative Contracts
 
 ```normative
+SCOPE OF THE ATOM VOCABULARY. The clauses below quantify
+over guard ATOMS — operator, referenced tag key, literal —
+and over the `all`/`unless` blocks that combine them. That
+structure is RDR 0003's; the kernel does not model it. At
+the kernel seam a guard is the opaque `Row.Guard string`
+handed to `GuardEvaluator.Evaluate`, and the kernel
+attaches no meaning to it (`resolve.go::GuardEvaluator`:
+"The kernel calls it; it does not implement operator
+semantics").
+
+This RDR therefore binds the EVALUATOR, not the kernel: the
+implementation of `Evaluate` MUST recover the atom
+structure of the guard it is given and apply these rules to
+it. How guard structure survives the trip from the
+authored table (RDR 0003's spike fixture authors it as
+`[rule.guard.all.<tag>]` / `[rule.guard.unless.<tag>]`)
+into `Row.Guard` — a parsed representation, or a key into
+one the evaluator holds — is RDR 0003's to state, and it
+MUST be stated before that evaluator is built. This RDR
+requires only that the mapping be total and lossless for
+operator, referenced tag key, literal, and block placement:
+an evaluator that cannot recover which tag keys an atom
+references cannot implement the domain rule at all.
+```
+
+```normative
 Value-comparing guard operators (equality, membership,
 bounded integer comparison, set containment) are PARTIAL
 over the assembled evaluation view: an atom whose
@@ -724,6 +810,27 @@ may act as an implicit existence test.
 ```
 
 ```normative
+PRESENCE IS PROVENANCE-BLIND. "Present in the assembled
+view" means the tag key is in the view under ANY
+provenance — owned, observed, or recognized. A guard atom
+MUST NOT be decided differently according to how a tag
+reached the view, and `exists` MUST decide TRUE for an
+observed- or recognized-supplied key exactly as for an
+owned one. (RDR 0003's own guard fixture puts `exists` on
+`cluster_eligible`, declared `provenance = "observed"`, so
+an owned-only reading would break a spec'd example.)
+
+This is deliberately NOT the kernel's owned-state
+predicate: `resolve.go::missingOwned` tests
+`view.has(key, ProvenanceOwned)` because
+`owned_state_unavailable` is about the owned snapshot
+specifically. Guard decidability is the broader question
+and takes the broader test — `TagSet.Lookup`'s
+provenance-blind `ok`. The two predicates answer different
+questions and MUST NOT be conflated.
+```
+
+```normative
 The domain rule governs guard ATOMS. A row carrying no
 guard has no atoms and is therefore outside the rule's
 scope: it is decided TRUE without consulting the evaluation
@@ -737,6 +844,9 @@ Empty atom blocks take the conventional identities: an empty
 `unless` block MUST be treated as absent — NOT as a
 vacuously-true conjunction, which under
 `all ∧ ¬(unless_conj)` would disable every row carrying one.
+(Conditional on A9, still Pending: if RDR 0002's
+normalization already fixes this identity, the clause is
+0002's and is struck from here rather than restated.)
 ```
 
 ```normative
@@ -763,16 +873,35 @@ The kernel maps GuardUnevaluable to the refusal kind
 `guard_unevaluable`, which is not a modelable escape class
 (RDR 0002). Missing artifact state MUST NOT be maskable
 behind an escapable refusal class.
+
+Among surviving rows, absent owned state is reported BEFORE
+an undecidable guard: a survivor set carrying both MUST
+refuse `owned_state_unavailable`, the more precise
+diagnosis. This is the shipped ordering
+(`resolve.go::gate` runs `missingOwned` before the
+undecidable loop) and is pinned here because no test
+currently contends the two within one survivor set.
+
+The refusal MUST identify the rows it came from:
+`Refusal.Rows` carries every undecidable row.
+`Refusal.Guard` is single-valued — the kernel selects the
+lowest row by `(RuleID, SourceLocator)` — so it is a
+diagnostic convenience, NOT the discriminator: any contract
+or test distinguishing *which* row went unevaluable MUST
+assert on `Rows`.
 ```
 
 ```normative
 Row.RequiresOwned names the owned tag keys the row's
-post-guard transition (writes and clears) depends on. Guard
-decidability is not RequiresOwned's job: a guard's input
-coverage is enforced by the domain rule above. Listing a
-guard-read owned key in RequiresOwned remains legal and
-yields the more precise owned_state_unavailable diagnosis
-among surviving rows.
+post-guard transition depends on — the keys its `Writes`
+require, which per RDR 0002 includes an authored clear
+(normalization "renders a `<clear>` write", so the kernel
+`Row` carries no separate clear list). Guard decidability is
+not RequiresOwned's job: a guard's input coverage is
+enforced by the domain rule above. Listing a guard-read
+owned key in RequiresOwned remains legal and yields the
+more precise owned_state_unavailable diagnosis among
+surviving rows.
 ```
 
 ```normative
@@ -791,6 +920,19 @@ decidable escape row. An unevaluable ESCAPE row yields
 guard_unevaluable in place of the candidate-set refusal:
 the kernel MUST NOT claim the escape failed to rescue when
 it could not decide the escape at all.
+
+This veto is intended, and it is the cost the RDR accepts:
+one unreadable row refuses a table whose other rows decide
+cleanly. It does not contradict D5's anti-poisoning
+rationale, which scopes evaluation to *matching* candidates
+so an UNRELATED row's obligation cannot poison a legal
+resolution. An unevaluable row that matched the outcome and
+the tag pattern is not unrelated — it is a live edge whose
+applicability is unknown, and selecting a sibling past it
+would assert exactly the "I could tell" the Problem
+Statement forbids. Narrowing the veto would require
+deciding that an undecided edge is a non-edge, which is
+absence-as-false at resolution scope.
 ```
 
 ```normative
@@ -864,6 +1006,20 @@ touching frozen kernel behavior, and the sibling-path check
 shows its discriminator already shipped
 (`GuardResult`/`KindGuardUnevaluable`), so B reuses an
 existing signal where A and C would bend or duplicate one.
+
+Operator recovery is the criterion the matrix does not
+score, and B is genuinely the worst of the three on it: a
+`guard_unevaluable` refusal is non-escapable, so a degraded
+artifact has no table-level recovery — the operator must fix
+the artifact or the accessor, and while A6b is open they
+cannot even tell a transient read failure from a real
+absence (Failure Modes, *Conflated recovery signal*). This
+is accepted, not overlooked: the alternative to "no recovery
+hatch" is precisely the escapable masking A rejects, so an
+escape hatch here would reintroduce the defect the RDR
+exists to close. The cost is bounded to tables that read
+state they cannot see, and the honest refusal is what makes
+the condition visible enough to fix.
 A is rejected because it *is* the masking path. C is
 rejected because declared reads duplicate what the guard
 text already names (drift = silent unsoundness), extend the
@@ -979,9 +1135,16 @@ B achieves with a spec and fixtures.
 
 ### Consequences
 
-- Positive: missing artifact state is never maskable behind
-  an escape; the user always learns "I could not tell" as a
-  distinct, non-escapable refusal.
+- Positive: missing artifact state becomes unmaskable
+  behind an escape — the user learns "I could not tell" as a
+  distinct, non-escapable refusal. This is a property of the
+  *contract*, realized when RDR 0003's evaluator implements
+  it; this RDR ships the rule, the doc narrowing, and the
+  conformance vectors, not a behavior change (Phase 1 is
+  doc-comments-only, and the kernel consumer side already
+  exists — A3). The masking path recorded under *Background*
+  stays open until that evaluator is built and runs the
+  Phase 2 harness.
 - Positive: no kernel code change; D8/D5 and the ADV suite
   stand as shipped; kata `xg7p`'s conflation resolves by
   doc-contract narrowing.
@@ -991,7 +1154,16 @@ B achieves with a spec and fixtures.
 - Negative: tables whose authors expected closed-world
   reads ("x == 1 just fails when x is missing") now refuse
   where they previously escaped or pruned; those guards
-  must be rewritten with explicit existence atoms.
+  must be rewritten with explicit existence atoms. The
+  exposure today is bounded — no `GuardEvaluator`
+  implementation exists yet, so no shipped table depends on
+  closed-world reads and there is no installed base to
+  migrate. The rule therefore lands *before* the first
+  evaluator rather than changing behavior under existing
+  authors, which is why this RDR must be Final before RDR
+  0003 is implemented (Prerequisites). If that sequencing
+  slips and an evaluator ships first, this bullet becomes a
+  real migration with no inventory tooling behind it.
 - Negative: `guard_unevaluable` is non-escapable by
   design, so an artifact in genuinely degraded state has no
   modeled-escape hatch through a guard that cannot read it;
@@ -1064,7 +1236,18 @@ B achieves with a spec and fixtures.
   the guard text; if that proves insufficient in practice,
   the enrichment belongs to RDR 0003's semantic-kind
   diagnostics (Phase 3 hands it off), not to a kernel enum
-  change.
+  change. Note the asymmetry this leaves against the
+  Problem Statement's promise of being "told plainly that
+  the artifact state needed to decide was missing": the
+  sibling `owned_state_unavailable` names its keys in
+  `MissingOwned`, while `guard_unevaluable` carries
+  `Refusal.Guard` (one row's guard text) and
+  `Refusal.Rows`. The refusal is therefore *actionable* —
+  it names the row and the predicate, and it is
+  non-escapable — but it does not name the absent tag
+  directly. Closing that last step is the Phase 3 handoff
+  above; it is a diagnostic enrichment, not a change to
+  the domain rule, and it does not reopen the masking path.
 - **Review-time blind spot guarded against**: a typo'd or
   undeclared guard key would be permanently absent —
   forever unevaluable, or forever shadowed when
@@ -1092,6 +1275,16 @@ B achieves with a spec and fixtures.
       found both this RDR and RDR 0003 silent on empty atom
       blocks. Must close before lock: the wrong identity
       disables every row carrying an omitted `unless` block.
+- [ ] **A10 verified** (guard-structure mapping at the
+      `Row.Guard` boundary) — raised by the 3amigo lens as
+      its hinge finding. Must close before lock: every
+      atom-level normative clause here binds an evaluator
+      that must recover atom structure from an opaque
+      string, and the Phase 2 vectors for scenarios 4/6/7/8
+      cannot be encoded until the mapping is known. If the
+      mapping is unspecified anywhere, the resolution is to
+      hand it to RDR 0003 as a named obligation, not to
+      specify a grammar here.
 - [x] All other Critical Assumptions verified **except
       A6b**, which is carried open by decision: the
       read-failed vs genuinely-absent distinction is not
@@ -1115,7 +1308,7 @@ Kernel-level tests (ADV-style, with a stub evaluator
 conforming to the domain rule) proving the masking probe
 inverts: a guard referencing an absent tag, plus an absent
 `RequiresOwned` key, plus a modeled `no_match` escape,
-yields `guard_unevaluable` with `Escaped:false` — while the
+yields a refusal of kind `guard_unevaluable` — while the
 same table with the tag present and decided FALSE still
 prunes and escapes (D8 preserved). Two named scenarios from
 the premortem are in scope: *unevaluable-not-no_match* (one
@@ -1160,18 +1353,42 @@ Two things this phase must build, neither of them reuse:
    in-tree stub proves nothing about 0003's build and would
    leave P-10 unmitigated.
 
+   Two constraints Phase 2 must satisfy, both currently
+   unmet by the tree:
+   - **Importability.** The harness MUST live in a
+     non-`_test` package so an external caller can import
+     it — `fixtures_test.go::fixtureGuards` is in package
+     `resolve_test` and is unimportable by construction, so
+     it is a model for the stub's *behavior* only, never a
+     reuse target for the harness. `GuardEvaluator` lives
+     under `internal/`, which is importable anywhere inside
+     `github.com/newcoinc/intrastate`; if RDR 0003's
+     evaluator lands outside this module, the harness
+     placement must be revisited before Phase 2 encodes it.
+   - **Signature.** The harness is an exported function
+     taking the seam and a `*testing.T`-like reporter, e.g.
+     `resolveconform.RunGuardVectors(t, eval)`; the exact
+     package name and vector encoding are Phase 2's to fix,
+     but the shape MUST be "caller supplies the evaluator",
+     not "suite constructs one".
+
 ### Phase 3: Diagnostics and authoring handoff
 
-Record with RDR 0003's surfaces: the "name the absent tag"
-diagnostic obligation (its A4 semantic kinds), confirmation
-that the declared-tag rule is a checkable vocabulary lint
-(A7), the authoring guidance — blessed two-row absence
-pattern, sentinel-stamping anti-pattern (A5) — and the
-**conformance obligation**: RDR 0003's implement stage must
-instantiate Phase 2's exported harness against its own
-evaluator, which is the only thing that actually catches
-drift (Risks). Together these make unevaluable refusals
-fully actionable without a kernel change.
+Record with RDR 0003's surfaces: the **guard-structure
+mapping** obligation (A10 — what `Row.Guard` carries and how
+the evaluator recovers operator, tag key, literal, and
+`all`/`unless` placement from it; this RDR's atom-level
+clauses are unimplementable until 0003 states it), the "name
+the absent tag" diagnostic obligation (its A4 semantic
+kinds), confirmation that the declared-tag rule is a
+checkable vocabulary lint (A7), the authoring guidance —
+blessed two-row absence pattern, sentinel-stamping
+anti-pattern (A5) — and the **conformance obligation**: RDR
+0003's implement stage must instantiate Phase 2's exported
+harness against its own evaluator, which is the only thing
+that actually catches drift (Risks). Together these make
+unevaluable refusals fully actionable without a kernel
+change.
 
 ## Validation
 
@@ -1195,6 +1412,17 @@ evaluator must pass verbatim. "Done" = every row green, and
 rows 1–2 fail loudly if any evaluator folds absence into
 `GuardFalse`.
 
+**Prerequisite for rows 4–8 (blocking).** These rows name
+operators, atoms, and `all`/`unless` placement, and no Go
+representation of any of that exists: `Row.Guard` is an
+opaque `string`, there is no atom type, and no `testdata/`
+exists repo-wide. The guard-structure mapping the Normative
+Contracts' *Scope of the atom vocabulary* clause requires
+(A10) MUST be settled before these vectors can be encoded —
+it fixes what a vector's input literally *is*. Rows 1–3 are
+unaffected: they hand the kernel a verdict and need no atom
+structure.
+
 Scenarios 3 and 5 are backed by a Resolve spike that ran
 against the shipped kernel; its captured output is the
 normative expected value
@@ -1205,20 +1433,30 @@ normative expected value
    plus an absent `RequiresOwned` key, plus a modeled
    `no_match` escape row (the masking probe from the
    Problem Statement).
-   **Expected**: `guard_unevaluable` with `Escaped:false` —
-   never `no_match`, never a plan. Inverts the observed
-   pre-RDR behavior recorded under *Background*.
+   **Expected**: `Result.Refused()` is true with
+   `Refusal.Kind == guard_unevaluable`, and `Result.Plan` is
+   nil — never `no_match`, never a plan. (`Escaped` is a
+   `Plan` field and is unreadable on a refusal; the
+   discriminator is `Refusal.Kind` plus a nil `Plan`.)
+   `Refusal.Rows` names the unevaluable row. Inverts the
+   observed pre-RDR behavior recorded under *Background*.
    Backing: `resolve.go::gate` undecidable branch; A3.
 
 2. **Scenario**: D8 preserved — the same table with the
    guard's tag *present* and the predicate decided FALSE.
    **Expected**: the row prunes and the modeled escape
-   rescues, exactly as
+   rescues. Guards against a fix to scenario 1 that
+   over-refuses.
    `adversarial_test.go::TestAdv1b_AllGuardsFalseIsNoMatchNotOwnedStateUnavailable`
-   already freezes. Guards against a fix to scenario 1
-   that over-refuses.
-   Backing: ADV-1/ADV-1b; A2 (`F ∧ U = F` is witnessed
-   falsity).
+   freezes the prune-and-rescue *disposition*, but it is
+   not the A/B control this scenario needs: it decides
+   `"never"` FALSE from guard text with the `TagSet`
+   discarded, and never varies tag presence. The paired
+   present/absent run is therefore **new work in Phase 2**
+   against the view-reading evaluator, not a reuse of
+   ADV-1b.
+   Backing: ADV-1/ADV-1b (disposition only); A2 (`F ∧ U = F`
+   is witnessed falsity).
 
 3. **Scenario**: *unevaluable-blocks-true-sibling* — row A
    unevaluable beside row B decided TRUE, both matching.
@@ -1244,14 +1482,17 @@ normative expected value
    escape row over a `no_match` candidate set; (b) an
    unevaluable candidate row beside a *decidable* escape
    row.
-   **Expected**: (a) `guard_unevaluable` carrying the
-   escape row's guard — spike Probe A observed exactly
-   this, and it is frozen by
-   `adversarial_test.go::TestAdv2` subtest "guard
+   **Expected**: both legs refuse `guard_unevaluable`; the
+   discriminator is `Refusal.Rows`, which MUST name the
+   escape row in (a) and the *candidate* row in (b) —
+   `Refusal.Guard` is single-valued and cannot separate the
+   legs when both guards carry the same text. (a) is frozen
+   by `adversarial_test.go::TestAdv2` subtest "guard
    UNEVALUABLE must not rescue" and
    `fixup_test.go::TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`;
-   (b) `guard_unevaluable` carrying the *candidate's*
-   guard — the escape path is never reached.
+   spike Probe A observed it. In (b) the escape path is
+   never reached, so give the two rows distinct `RuleID`s
+   and assert on `Rows`.
    Backing: `resolve.go::escapeOrRefuse`; A3.
 
 6. **Scenario**: `exists` is total — a positive existence
@@ -1289,6 +1530,15 @@ normative expected value
    not read as a vacuously-true conjunction. Guards the
    whole-table failure A9 names.
    Backing: A9; `resolve.go::evaluateGuard`.
+   **Test level**: (a) is a kernel test. (b) is *not*
+   assertable at the kernel seam — a row with an omitted
+   `unless` and no `all` reaches the kernel as
+   `Guard == ""`, which `evaluateGuard` answers `GuardTrue`
+   before the seam is consulted, so the wrong identity is
+   invisible there. (b) belongs to the evaluator's own
+   vector set (Phase 2) and presumes A10's mapping; if A9
+   resolves to RDR 0002 owning the identity, (b) moves there
+   with it.
 
 **Owned-state ordering gap (not MVV, flagged for Phase 2).**
 No shipped test contends missing owned state *and* an
