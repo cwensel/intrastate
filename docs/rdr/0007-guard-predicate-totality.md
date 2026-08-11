@@ -335,7 +335,10 @@ existence tests.
     `GuardFalse` arises in exactly two ways, and neither
     admits absence as the source of falsity:
     (i) `all_result = F` requires some atom `aᵢ = F` — a
-    *present* tag whose value comparison failed. An
+    *present* tag whose value comparison failed, or an
+    existence atom that decided presence (the one
+    sanctioned absence-decided falsity; it enters the
+    table as a decided F like any other). An
     absent-key value atom is `U`, and `U` never yields `F`
     in a conjunction (the `U` row/column contains no `F`
     except where an `F` operand is already present).
@@ -449,9 +452,15 @@ existence tests.
   carrying polarity — see the existence clause); only the
   DISJUNCTION needs the two-row pattern (one row guarded on
   absence, one on the value), because RDR 0003 rejects
-  intra-guard disjunction. Neither route is ambiguous under
-  exact-one selection, and neither drives authors to stamp
-  sentinel values upstream.**
+  intra-guard disjunction. The value row MUST itself be
+  guarded on existence (A15): a bare `X eq v` row is
+  GuardUnevaluable exactly when X is absent, it survives
+  (SURVIVOR MEMBERSHIP), and the aggregation veto then
+  refuses the absent leg instead of selecting the absence
+  row — the pattern with an unguarded value row defeats
+  itself. With the existence-guarded value row, neither
+  route is ambiguous under exact-one selection, and neither
+  drives authors to stamp sentinel values upstream.**
   - **Status**: Pending — the runtime half is settled; the
     **load-time** half is refuted pending A12. See *Carried
     constraint*.
@@ -781,7 +790,9 @@ existence tests.
     dimension with no absent member makes a row's
     accepted-assignment set empty, total, or undefined under
     0003's proof, and whether the two rows share a normalized
-    row group at all.
+    row group at all. Note the value row now carries an
+    existence atom of its own (A5/A15), which the overlap
+    proof must also accommodate.
   - **If wrong**: A5's blessed pattern is unusable — the
     domain rule leaves authors with no sanctioned way to
     express an absence-conditional row, and the only
@@ -850,6 +861,35 @@ existence tests.
     A12), and Scenario 6's `all … exists = false` leg is
     unauthorable.
 
+- **A15 RDR 0003's grammar admits a one-row guard that both
+  value-compares tag X and tests X's existence — either two
+  operator keys in one `[rule.guard.all.X]` table (read as
+  conjoined atoms) or the same tag guarded in both `all` and
+  `unless` — so the two-row pattern's value row can prune
+  (GuardFalse) on absence rather than survive unevaluable.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Needed. Established so far: the pattern's
+    value row must be existence-guarded or the aggregation
+    veto refuses the absent leg (A5). RDR 0003's fixture
+    keys atoms by tag — `[rule.guard.all.profile]` carries a
+    single operator key per table
+    (`0003-…/evidence/spikes/guard-fixture.toml`) — no
+    fixture shows two operator keys on one tag-table, and
+    none guards the same tag in both `all` and `unless`.
+    Verify against RDR 0003's grammar and RDR 0002's
+    normalization whether either shape parses as the
+    conjunction; if neither is legal, the guarded-value
+    shape is a grammar obligation handed to RDR 0003's
+    implement stage alongside A10's mapping.
+  - **If wrong**: the two-row pattern has no legal value
+    row — bare value rows self-veto (A5) — so the
+    disjunction "absent OR equals v" is inexpressible and
+    the authoring story fails harder than A12 alone:
+    sentinel-stamping becomes the only route to a
+    default-value row. Raised by the critique lens
+    (model-B pass, B-5).
+
 ## Proposed Solution
 
 ### Approach
@@ -865,8 +905,10 @@ operator is the sole total operator: presence/absence is
 exactly what it decides, so absence yields a decided
 verdict. Atom verdicts combine under strong-Kleene
 three-valued logic: a guard is `GuardFalse` or `GuardTrue`
-only when the present tags alone decide it; any dependence
-on an unevaluable atom makes the guard `GuardUnevaluable`.
+only when decided atoms alone determine it — value atoms
+over present tags, plus existence atoms deciding presence
+itself; any unresolved dependence on an unevaluable atom
+makes the guard `GuardUnevaluable`.
 The kernel (RDR 0001, already implemented) maps
 `GuardUnevaluable` to `guard_unevaluable`, which RDR 0002
 excludes from escape lists — so missing artifact state can
@@ -942,11 +984,18 @@ and undeclared tags are already rejected at load
 passed lint. `Evaluate` has no error return (below), which
 is deliberate and not an oversight: the seam reports
 verdicts, and a mapping failure is not a verdict. An
-evaluator MUST surface it the way the kernel surfaces
-programmer mistakes — outside the verdict channel
-(`resolve.go::Resolve`: "the error return is reserved for
-programmer mistakes, not for modeled refusals") — never by
-answering GuardUnevaluable.
+evaluator MUST surface it outside the verdict channel —
+never by answering GuardUnevaluable — and at this seam the
+only out-of-band surface that exists is a PANIC. That is
+named concretely because the alternatives do not exist:
+`Evaluate` returns a bare `GuardResult`, and the kernel's
+own error return (`resolve.go::Resolve`: "the error return
+is reserved for programmer mistakes, not for modeled
+refusals") is Resolve's, unreachable from inside the seam.
+A crash is the honest surface precisely because the case
+is unreachable for lint-passed guards: it is a programmer
+defect, and the kernel MUST NOT recover the panic into a
+verdict or refusal.
 
 `Evaluate` returns a bare `GuardResult` — the verdict is the
 whole of what the seam reports, and the kernel switches on it
@@ -1000,12 +1049,24 @@ key is present, and `exists = false` decides TRUE when the
 key is ABSENT. Polarity therefore lives in the literal, and
 `all`/`unless` placement composes with it rather than
 supplying it — an `exists` atom is NOT unary-over-a-key.
-Both channels reach the same verdicts, so a single-row
-absence test (`all … exists = false`) is expressible; A5's
-two-row pattern is required only for the DISJUNCTION
-"absent OR equals v", which no single row can carry because
-RDR 0003 rejects intra-guard disjunction.
+Both polarity channels reach the same verdicts.
 ```
+
+**Open grammar question (A14, Pending) — not part of the
+normative block above.** The `presence == literal` semantics
+is fixed here and holds either way; whether RDR 0003's
+placement rule ("Positive guard atoms MUST live in `all`")
+admits the literal `exists = false` in an `all` block is
+A14's to settle. While it holds, a single-row absence test
+(`all … exists = false`) is expressible; if A14 resolves
+against it, the `unless … exists = true` channel carries
+bare absence tests and Scenario 6's `all` leg moves with
+A14's answer. A5's two-row pattern is required only for the
+DISJUNCTION "absent OR equals v", which no single row can
+carry because RDR 0003 rejects intra-guard disjunction —
+and its value row must itself be guarded on existence
+(A5/A15), or the aggregation veto below refuses the absent
+leg the pattern exists for.
 
 ```normative
 PRESENCE IS PROVENANCE-BLIND. "Present in the assembled
@@ -1057,12 +1118,14 @@ identity itself is not in doubt — only which RDR owns it.
 ```normative
 Atom verdicts combine under strong-Kleene three-valued
 logic across `all` and `unless`. A guard verdict MUST be
-GuardTrue or GuardFalse only when the present tags alone
-decide it; if the combined verdict has any *unresolved*
-dependence on an unevaluable atom — one the present tags do
-not already decide — the evaluator MUST return
-GuardUnevaluable. Absence MUST NOT contribute truth or
-falsity to any value-comparing atom.
+GuardTrue or GuardFalse only when decided atoms alone
+determine it — value atoms over present tags, plus
+existence atoms, the one operator that decides from
+presence or absence by design; if the combined verdict has
+any *unresolved* dependence on an unevaluable atom — one
+the decided atoms do not already settle — the evaluator
+MUST return GuardUnevaluable. Absence MUST NOT contribute
+truth or falsity to any value-comparing atom.
 
 A present-tag atom decided FALSE therefore still yields
 GuardFalse for the whole `all` block even beside an
@@ -1208,7 +1271,10 @@ Deviation D8 (guard-FALSE prunes first; a pruned row
 contributes neither candidacy nor an owned-state
 obligation) is ratified as normative, conditional on the
 domain rule above: pruning is safe exactly because
-GuardFalse can only arise from tags present in the view.
+GuardFalse can only arise from decided atoms — value
+comparisons over present tags, or existence atoms, whose
+whole job is deciding presence — never from absence
+folding into a value comparison.
 ```
 
 #### Load-Bearing Decisions
@@ -1540,8 +1606,9 @@ B achieves with a spec and fixtures.
 - **Risk**: Authors defeat partiality by stamping sentinel
   values upstream so keys are never absent, making value
   comparisons decide on placeholders.
-  **Mitigation**: conditional on A12. A5's two-row pattern
-  is the intended legitimate outlet and authoring guidance
+  **Mitigation**: conditional on A12 and A15. A5's two-row
+  pattern (existence-guarded value row) is the intended
+  legitimate outlet and authoring guidance
   flags sentinel-stamping as the anti-pattern (premortem
   P-6) — but the pattern's load-time legality is open (A12),
   and sentinel-stamping is what authors fall back to if it is
@@ -1667,6 +1734,15 @@ B achieves with a spec and fixtures.
       rule; it fixes whether a single-atom absence test
       exists, which sets how hard A12 binds — if A14 fails,
       the two-row pattern is again the only absence route.
+- [ ] **A15 verified** (a one-row existence-guarded value
+      atom is grammar-legal) — raised by the critique lens
+      (model-B pass, B-5). Must close before lock alongside
+      A12: the two-row pattern's value row must prune on
+      absence rather than survive unevaluable, or the
+      pattern self-vetoes under the aggregation clause (A5).
+      If RDR 0003's grammar admits neither shape, the
+      grammar obligation is handed to 0003's implement
+      stage alongside A10's mapping.
 - [x] All other Critical Assumptions verified **except
       A6b**, which is carried open by decision: the
       read-failed vs genuinely-absent distinction is not
@@ -1676,10 +1752,15 @@ B achieves with a spec and fixtures.
       distinction either way), and the contract is sound
       without it; the exposure is recorded under Risks and
       Failure Modes.
-- [ ] Read-completeness obligation routed to RDR 0004 (or
-      the accessor executor's owning RDR) — A6b. Not a
-      blocker for this RDR's lock; a blocker for trusting
-      negative existence atoms in production.
+- [ ] Read-completeness obligation routed for A6b — and,
+      like A10's handoff, the destination must exist: RDR
+      0004 is Final and this project does not amend RDRs, so
+      the obligation lands on RDR 0004's *implement* stage
+      or on the successor RDR that owns the accessor
+      executor, and whichever it is MUST be named when the
+      routing lands. Not a blocker for this RDR's lock; a
+      blocker for trusting negative existence atoms in
+      production.
 - [ ] This RDR Final **before** RDR 0003's implementation
       begins (triage sequencing: D8 ratification precedes
       the evaluator build)
@@ -1803,8 +1884,14 @@ clauses are unimplementable until 0003 states it), the "name
 the absent tag" diagnostic obligation (its A4 semantic
 kinds), confirmation that the declared-tag rule is a
 checkable vocabulary lint (A7), the authoring guidance —
-blessed two-row absence pattern, sentinel-stamping
-anti-pattern (A5) — and the **conformance obligation**: RDR
+blessed two-row absence pattern with its existence-guarded
+value row (A5/A15), sentinel-stamping anti-pattern, and the
+predicate-PLACEMENT rule: the match pattern is closed-world
+by design (an absent matched tag is genuine non-match, per
+the exclusion clause recorded under *Background*), so a
+predicate whose absence must refuse rather than skip
+belongs in guard atoms, never in the match pattern — and
+the **conformance obligation**: RDR
 0003's implement stage must instantiate Phase 2's exported
 harness against its own evaluator, which is the only thing
 that actually catches drift (Risks). Together these make
@@ -1938,12 +2025,21 @@ normative expected value
    because RDR 0003 is silent on it.
 
 8. **Scenario**: the blessed two-row absence pattern — row
-   1 guarded `unless … exists` on tag X, row 2 guarded
-   `X eq v`, evaluated with X absent and then with X = v.
+   1 guarded on absence (`unless … exists = true` on tag X),
+   row 2 the existence-guarded value row (`X exists = true`
+   conjoined with `X eq v`; shape per A15), evaluated with
+   X absent and then with X = v.
    **Expected**: exactly one row selected in each case;
    never both (they are disjoint by construction), never
-   `ambiguous_match`.
-   Backing: A5.
+   `ambiguous_match`. With X absent, row 2 MUST prune as
+   GuardFalse (its existence atom decides; strong-Kleene
+   `F ∧ U = F`), never surface as an unevaluable survivor.
+   **Negative control**: the same pair with a BARE `X eq v`
+   value row, X absent. Expected: `guard_unevaluable` — the
+   bare value row survives unevaluable and the aggregation
+   veto fires; row 1 is not selected. Pins why the value
+   row must be existence-guarded (A5/A15).
+   Backing: A5, A15.
    **Load-time precondition (A12).** This scenario asserts
    *runtime* disjointness and presumes the pair loads at all.
    If RDR 0003's overlap proof rejects the pair over a domain
