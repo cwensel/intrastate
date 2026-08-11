@@ -833,6 +833,42 @@ at the same `area:internal-resolve` seam.
     The repair is a pointer landing in 0002 (a cross-RDR edit)
     or an explicit implementation-ordering prerequisite here.
 
+- **A13 `Input.Owned` and `Input.Observed` are ordered
+  sequences of key/value tags, not keyed maps, so duplicate tag
+  keys are admissible input the reserved-key predicate must
+  scan for rather than look up.**
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: `internal/resolve/resolve.go::Input` declares
+    `Owned []Tag` and `Observed []Tag`, where
+    `internal/resolve/resolve.go::Tag` is
+    `struct { Key, Value string }` — no map anywhere on the
+    input surface. `::assemble` consumes them as sequences
+    (`for _, t := range in.Observed` then
+    `for _, t := range in.Owned`, writing
+    `view.tags[t.Key]`), which is where the package doc's
+    "within one provenance the last tag wins" behavior comes
+    from: a duplicate key is not rejected, it is overwritten.
+    The `TagSet` the view exposes *is* map-backed
+    (`TagSet{tags: make(map[string]taggedValue, …)}`), which is
+    the likely source of the confusion — the assembled view is
+    keyed, the input is not.
+  - **Why it is load-bearing here**: block 4's predicate is
+    specified over `Input.Owned`/`Input.Observed`. Under a map
+    reading the reserved-key check is one lookup and
+    multiplicity cannot arise; under the actual slice reading
+    the same `Input` can carry the reserved key more than once,
+    which is precisely the case block 4's first-breach rule and
+    scenario 6's third variant now settle. Surfaced by the
+    repeatability lens: all three runs independently modeled
+    these as maps and dismissed the shape as irrelevant.
+  - **If wrong** (the shape changes under RDR 0001): the
+    duplicate-key variant of scenario 6 becomes unreachable and
+    block 4's scan wording reverts to a lookup — a
+    simplification, not a redesign. The first-breach rule is
+    unaffected either way, since block 5's `RequiresOwned`
+    channel is a `[]string` regardless.
+
 ## Proposed Solution
 
 ### Approach
@@ -1089,14 +1125,37 @@ that a conforming model's outcome row fires.
 Every `reserved_tag_key` failure — and any undeclared-tag
 failure whose offending key is the reserved name — MUST
 carry, at the data level, three distinct machine-readable
-fields: the offending name as authored, the required name
-(the literal `recognized`), and a stable rule identifier
-whose value is the literal `reserved-tag-key/kernel-owned`.
-The rule identifier is a comparable token, not prose: a
-golden test asserts it byte-for-byte, and human-readable
-wording is the renderer's to choose. A category consumer may
-map the failure, but the guidance travels in the failure
-data, not the renderer.
+fields: the offending name as authored, a **remedy name**, and
+a stable rule identifier. The rule identifier is a comparable
+token, not prose: a golden test asserts it byte-for-byte, and
+human-readable wording is the renderer's to choose. A category
+consumer may map the failure, but the guidance travels in the
+failure data, not the renderer.
+
+The remedy name and the rule identifier are **direction-
+specific**, because block 2's two naming rules have opposite
+remedies and a single pair would give one of them actively
+wrong advice:
+
+- A recognized-provenance declaration under a wrong name must
+  be renamed **to** the reserved key. Remedy name: the literal
+  `recognized`. Rule identifier:
+  `reserved-tag-key/kernel-owned`.
+- An owned or observed declaration named `recognized` must be
+  renamed **away from** the reserved key — no specific name is
+  required, since any non-reserved name conforms. Remedy name:
+  the **offending name repeated is forbidden**; the field
+  carries the empty string, and the rule identifier
+  `reserved-tag-key/author-must-rename` is what tells a
+  consumer the remedy is "choose any other name" rather than
+  "use this one". A renderer MUST NOT present the reserved key
+  as the required name in this direction.
+
+Both rule identifiers sit inside the one `reserved_tag_key`
+category — they are the finer key the category-vs-rule
+distinction below already contemplates ("A category gains rules
+over time"). Scenario 7 asserts the first pair byte-for-byte;
+scenario 2's owned-tag half asserts the second.
 
 The category's stable data-level value is the token
 `reserved_tag_key`, matching the snake_case discriminator
@@ -1109,8 +1168,9 @@ choose between them: `reserved_tag_key` is the **category**
 discriminator — the value a category-mapping consumer (RDR
 0005's exit-code map) keys on, and the only one that
 participates in RDR 0002's data-level category set.
-`reserved-tag-key/kernel-owned` is the **rule identifier**
-carried inside the failure payload, identifying which rule
+The **rule identifier** (`reserved-tag-key/kernel-owned` or
+`reserved-tag-key/author-must-rename`, per the direction above)
+is carried inside the failure payload, identifying which rule
 within the category fired; it is for golden assertions and
 remediation lookup, never for category dispatch. A category
 gains rules over time, so the rule id is the finer key and the
@@ -1145,6 +1205,31 @@ from RDR 0009, whose obligation is a *different rule* (escape
 -row shape) even where it reads the same `resolve.Row` values;
 the predicate's exported name MUST NOT be bound to any symbol
 name from RDR 0009.
+
+The predicate's read-domain is stated here rather than left to
+be recovered from block 5's ordering aside: it reads
+`Input.Owned`, `Input.Observed`, and each row's
+`RequiresOwned` reached through `Input.Table.Rows` — three
+sequences, no other `Input` field. `Owned` and `Observed` are
+**sequences of key/value tags, not maps**
+(`internal/resolve/resolve.go::Input` carries `Owned []Tag` /
+`Observed []Tag`, `Tag` being `{Key, Value string}`), so the
+check is a scan and a duplicate reserved key is admissible
+input rather than a structural impossibility. This is stated
+because a map reading makes the reserved-key check a single
+lookup and silently forecloses the multiplicity question the
+next paragraph settles.
+
+On multiplicity, the predicate reports **the first breach it
+finds and returns a single non-nil error**; it does not
+aggregate, and the order in which it scans the three sequences
+is implementation latitude. One breach is sufficient to reject
+the `Input`, and a producer holding a programmer mistake is
+not owed an exhaustive list. This is distinct from — and must
+not be read out of — the "detected whenever present" clause
+below, which governs this predicate against *RDR 0009's*
+separate precondition, not the reporting of multiple breaches
+within this one.
 
 RDR 0009 writes a structurally identical clause over the same
 entry point — "the conformance predicate MUST be exported by
@@ -1288,12 +1373,33 @@ disposition change for any conforming caller.
   make the reserved set unbounded). The mitigation is
   therefore additive rather than a change to identity: a
   declaration whose post-parse key is not `recognized` but
-  becomes `recognized` under Unicode-simple case folding *and*
-  trimming of leading/trailing whitespace MUST raise a
-  **non-blocking advisory** naming both spellings. Advisory,
-  not a failure, because the name is legal and this RDR must
-  not reject a tag it does not own. Scenario 4 pins the
-  dispositions; the advisory is asserted there alongside them.
+  becomes `recognized` under **either** Unicode-simple case
+  folding **or** trimming of leading/trailing whitespace, or
+  both applied together, MUST raise a **non-blocking advisory**
+  naming both spellings. The trigger is deliberately
+  disjunctive: `Recognized` (folding alone) and `" recognized"`
+  (trimming alone) are each near-misses on their own, and
+  scenario 4 requires the advisory on both, so a conjunctive
+  reading would fire on neither. Advisory, not a failure,
+  because the name is legal and this RDR must not reject a tag
+  it does not own. Scenario 4 pins the dispositions; the
+  advisory is asserted there alongside them.
+
+  **Advisory payload** — the advisory carries the same
+  machine-readable discipline as the failure payload (block 3),
+  because a normative artifact a golden test cannot compare
+  byte-for-byte is not testable: two distinct fields, the
+  **authored spelling** and the **reserved spelling** (the
+  literal `recognized`), plus a stable rule identifier whose
+  value is the literal `reserved-tag-key/near-miss`. It travels
+  on an advisory channel distinct from the validation-failure
+  list — it carries **no** `reserved_tag_key` category
+  discriminator, because it is not a validation failure and
+  MUST NOT participate in category dispatch or alter the
+  load/lint verdict. The carrier's Go type and field names are
+  RDR 0002's to choose, on the same footing as the failure
+  payload; this RDR constrains the values and the channel's
+  separateness.
 - **Naming** — canonical name `recognized`, matching the
   shipped `recognizedTagKey` constant and RDR 0001's frozen
   fixture. Rejected: a sigil-guarded name (`_recognized`, or
@@ -1627,7 +1733,7 @@ capability — the highest-cost, least-reversible branch.
   render the new category as generic and strip the guidance
   it exists to carry (premortem P-4/P-11).
   **Mitigation**: the refusal-text content is normative at
-  the data level — offending name, required name, rule —
+  the data level — offending name, remedy name, rule id —
   so a generic renderer still surfaces the resolution; a
   golden-text test is named in Phase 3.
 - **Risk**: near-spellings (`Recognized`, quoted/whitespace
@@ -1673,8 +1779,9 @@ Visible: a wrong-named recognized-provenance declaration (a
 second such declaration is wrong-named by construction), or
 a reserved-name owned/observed declaration, fails table
 load/lint in the `reserved_tag_key` category — the failure
-data carries the rule identifier, the offending name, and
-the required name, before any resolution runs. A producer
+data carries the direction-specific rule identifier, the
+offending name, and the remedy name, before any resolution
+runs. A producer
 supplying an owned/observed input tag keyed `recognized`, or a
 row naming it in `RequiresOwned`, breaches the producer
 obligation and surfaces on the Go error path as a programmer
@@ -1748,7 +1855,8 @@ tag named `recognized` loads and lints clean; the same table
 with the declaration renamed (and separately, with an owned
 tag named `recognized`) fails load/lint in the
 `reserved_tag_key` category whose failure data carries the
-required name — not a silent no-match at resolve time. This
+direction-appropriate remedy name and rule identifier — not a
+silent no-match at resolve time. This
 half is gated by the Prerequisite below, not deferred by
 choice.
 
@@ -1814,7 +1922,9 @@ form is reserved) **plus the near-miss advisory assertions**
 assertion** (block 5; A7), the conforming-`Input` nil-error
 pin including the existing empty-`Input{}` case
 (`resolve_test.go:748`), and the golden failure-data check
-(offending name, required name, rule identifier).
+(offending name, remedy name, rule identifier — both
+directions, since block 3 pins a distinct remedy/rule pair for
+each).
 
 ## Validation
 
@@ -1926,14 +2036,21 @@ implement a kernel predicate in isolation.
    no trimming); the quoted `"recognized"`, which parses to
    the identical key string as the bare form, **is**
    reserved. Additionally, each of the three unreserved
-   near-misses raises the **non-blocking advisory** (naming
-   both the authored and the reserved spelling) while
+   near-misses raises the **non-blocking advisory** while
    `[tags.result]` — an ordinary name that is not a near-miss —
    raises none, so the advisory is pinned as targeted rather
-   than blanket. The advisory MUST NOT change the load/lint
-   verdict for any of them. Pins the Load-Bearing Decisions /
-   Identity rule including its advisory clause (premortem
-   P-10).
+   than blanket. The three cover the trigger's disjunction
+   deliberately: `Recognized` and `RECOGNIZED` qualify by case
+   folding alone and `" recognized"` by trimming alone, so a
+   conjunctive (fold-*and*-trim) implementation fails this
+   scenario on all three. The advisory's payload is asserted
+   byte-for-byte like the failure payload: authored spelling,
+   reserved spelling `recognized`, rule identifier
+   `reserved-tag-key/near-miss`, and **no** `reserved_tag_key`
+   category discriminator. The advisory MUST NOT change the
+   load/lint verdict for any of them. Pins the Load-Bearing
+   Decisions / Identity rule including its advisory clause
+   (premortem P-10).
 
 5. **Scenario** (declaration cardinality, as a consequence of
    the naming rule): a model carrying two
@@ -1952,9 +2069,16 @@ implement a kernel predicate in isolation.
 6. **Scenario** (A6 — producer obligation): kernel `Input`
    carrying an owned or observed tag keyed `recognized`,
    constructed directly (bypassing lint, as a non-TOML
-   producer would), in two variants — one with a non-empty
-   `Input.Recognized`, one with it empty.
-   **Expected**: both variants breach. `Resolve` returns a
+   producer would), in three variants — one with a non-empty
+   `Input.Recognized`, one with it empty, and one carrying the
+   reserved key **twice** in the same tag sequence. The third
+   variant exists because `Input.Owned`/`Observed` are
+   `[]Tag` slices, not maps
+   (`internal/resolve/resolve.go::Input`), so duplicate keys
+   are admissible input; it pins block 4's first-breach rule —
+   the predicate returns one non-nil error, not two, and the
+   test asserts a single error rather than an aggregate.
+   **Expected**: all three variants breach. `Resolve` returns a
    non-nil `error` and a zero-valued `Result` (no `Plan`, no
    `Refusal`) — never a new `RefusalKind`, and never a
    modeled disposition. The exported predicate, called
@@ -1970,16 +2094,23 @@ implement a kernel predicate in isolation.
    clause), which is what distinguishes it from the empty
    `Input{}` case that carries no reserved key at all.
 
-7. **Scenario** (golden failure data; premortem P-4/P-11): a
-   `reserved_tag_key` failure passed to a synthetic consumer
-   that maps only the categories RDR 0002 enumerates today
-   (i.e. treats this one as unknown and falls through to a
-   generic branch).
+7. **Scenario** (golden failure data; premortem P-4/P-11):
+   **both directions** of the naming rule, each passed to a
+   synthetic consumer that maps only the categories RDR 0002
+   enumerates today (i.e. treats this one as unknown and falls
+   through to a generic branch).
    **Expected**: the failure **data** still carries all three
-   fields — the offending name as authored, the required name
-   `recognized`, and the rule identifier
-   `reserved-tag-key/kernel-owned` — asserted byte-for-byte,
-   independent of anything the consumer renders. The consumer
+   fields, asserted byte-for-byte and independent of anything
+   the consumer renders. Wrong-named recognized-provenance
+   declaration: offending name as authored, remedy name
+   `recognized`, rule identifier
+   `reserved-tag-key/kernel-owned`. Owned/observed declaration
+   named `recognized`: offending name `recognized`, remedy name
+   the empty string, rule identifier
+   `reserved-tag-key/author-must-rename` — pinning that the
+   reserved key is **not** presented as a required name in the
+   rename-away direction (block 3). Both carry the same
+   category discriminator `reserved_tag_key`. The consumer
    is a test stub, not RDR 0005's exit-code map: this RDR
    asserts the payload contract, and 0005 owns whatever
    mapping it later adds.
