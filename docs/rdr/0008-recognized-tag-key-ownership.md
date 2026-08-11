@@ -335,7 +335,11 @@ at the same `area:internal-resolve` seam.
     layout that admits any `[tags.<name>]` and no pointer to
     this constraint — which is why Phase 2 lands the check
     inside 0002's own normalizer work rather than as a
-    detached rule (A12).
+    detached rule. A12 has since confirmed that the missing
+    pointer is a real gap and not merely a stylistic one: no
+    engine mechanism carries this RDR's `Overrides` to a
+    `Final` peer's implementation, so the handoff is now an
+    explicit Prerequisite rather than an assumed traversal.
   - **If wrong**: the `reserved tag key` category cannot be
     added by this RDR; enforcement must be re-homed or RDR
     0002 reopened, surfacing as a Stage 8.1 cross-RDR
@@ -468,24 +472,25 @@ at the same `area:internal-resolve` seam.
     trips RDR 0002's pre-existing `unknown tag` category — a
     regression introduced *by* the migration, in a category
     this RDR does not own.
-  - **Open sub-question this surfaces (A9)**: in the canonical
-    fixture the recognized-provenance tag is *also* the
-    outcome-gating predicate — `[tags.outcome]` is matched by
+  - **Sub-question this surfaced, since closed (A9,
+    Verified)**: in the canonical fixture the
+    recognized-provenance tag is *also* the outcome-gating
+    predicate — `[tags.outcome]` is matched by
     `[rule.match.outcome] eq = "round-clean"` whose values are
     exactly the root `outcomes` alphabet
     (`rdr-fixture.toml:1,25,59`). Whether that predicate
-    normalizes into `Row.Match` (a tag pattern over the
-    assembled view) or into `Row.Outcome` (the first-class
-    non-tag gate A2 shows is unaffected by any tag-key rule)
-    is **not stated in RDR 0002 and not derivable here**. The
-    rename is mechanical under the first reading and a
-    semantics change under the second, so this RDR must not
-    assert which. Booked as A9 (`Pending`).
-  - **If wrong** (the second reading holds): the fixture
-    rename becomes a cross-RDR edit routed to RDR 0002 rather
-    than fixture work landing under this RDR's Phase 2, and
-    block 2's reference-position fall-through needs the
-    corresponding rewrite.
+    normalizes into `Row.Match` or into `Row.Outcome` is not
+    stated in RDR 0002, but it *is* decidable against 0002's
+    own normalizer spike, which A9 ran: the predicate lands in
+    the candidate row's predicate set and the normalized row
+    has no outcome field at all. The rename is therefore
+    mechanical, and this migration inventory stands as
+    written.
+  - **If wrong** (the spike's normalization is not what 0002
+    implements): the fixture rename becomes a cross-RDR edit
+    routed to RDR 0002 rather than fixture work landing under
+    this RDR's Phase 2, and block 2's reference-position
+    fall-through needs the corresponding rewrite.
 - **A5 The kernel's D3 precedence (`owned` > `observed` >
   `recognized`) can remain unchanged as the deterministic
   backstop, because a table that passes the reserved-key
@@ -608,28 +613,38 @@ at the same `area:internal-resolve` seam.
   which owns the field's *meaning*; and the unreserved case
   is reachable — a row naming `recognized` there yields
   `owned_state_unavailable` naming the reserved key.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search + Peer RDR
-  - **Verification plan**: the reachability half is already
-    read at Pre-Lock —
-    `internal/resolve/resolve.go::missingOwned` iterates
-    `row.RequiresOwned` and tests
+  - **Evidence**: both halves closed at Reconcile.
+    *Reachability* — `internal/resolve/resolve.go::missingOwned`
+    iterates `row.RequiresOwned` and tests
     `view.has(key, ProvenanceOwned)`, where
-    `::TagSet.has` compares `tv.provenance == prov`, so a
-    key present under `ProvenanceRecognized` fails the
-    owned-only test and is reported missing (a second
-    consumer exists at `resolve.go:559`). Confirm by test
-    (Testing Strategy scenario 9) rather than by reading
-    alone. The ownership half needs RDR 0007's concurrence
-    that a name reservation is not a semantics change: 0007
-    claims "the single normative home" of the *guard
-    decidability domain rule* and narrows `RequiresOwned` to
-    post-guard write-dependency keys as a consequence of it,
-    and forbids conflating `missingOwned`'s owned-only test
-    with provenance-blind guard presence — neither of which
-    this clause touches, since it constrains only which
-    *name* may appear. Reconcile at Stage 7.1
-    cluster-reconcile.
+    `::TagSet.has` compares `tv.provenance == prov`; the
+    reserved key enters the view under `ProvenanceRecognized`
+    (`::assemble`), so it fails the owned-only test, is
+    collected into `missing`, and `::gate` refuses
+    `KindOwnedStateUnavailable` naming it. Reachable, not
+    hypothetical; still pinned by test (scenario 9) rather
+    than by reading alone.
+    *Ownership* — RDR 0007 (`Final`) scopes its claim to
+    meaning, never to names: its "single normative home"
+    clause covers the *guard-decidability domain rule*, and
+    its `RequiresOwned` normative block is wholly semantic
+    (what the field means, what it is not responsible for,
+    what diagnosis a listed key yields). Decisively, 0007
+    *itself* cites this RDR's rule approvingly as a peer's
+    name constraint — "The single input-side producer
+    obligation in the whole RDR set constrains one reserved
+    key *name*, not provenance origin: RDR 0008's 'Producers
+    of kernel `Input` MUST NOT supply an owned or observed tag
+    keyed `recognized`'" (`0007…md:951-955`). 0007 draws the
+    name/meaning line itself and places this clause on the
+    name side, so no concurrence is outstanding and no
+    reopening is implied.
+  - **Residual for Stage 7.1**: none for ownership. The
+    cluster read carries only the standing watch item (0007
+    A13's negative-existential, falsifiable by a *future*
+    peer).
   - **Enforcement locus corrected at Pre-Lock (3amigo
     IMP-1)**: `RequiresOwned` has **no authored source
     form** — RDR 0002's normative field layout
@@ -711,95 +726,148 @@ at the same `area:internal-resolve` seam.
   rather than into `Row.Outcome`, so renaming the declaration
   carries all of them with it and changes no gating
   semantics.**
-  - **Status**: Pending
-  - **Method**: Peer RDR + Spike
-  - **Verification plan**: RDR 0002 fixes the field layout
-    (`0002…md:266-274`) and says rule predicates "live under
-    `[rule.match.<tag>]`", but never states which normalized
-    kernel field the outcome predicate produces. The canonical
-    fixture makes both readings live: `[tags.outcome]` is
-    declared with `provenance = "recognized"`
-    (`rdr-fixture.toml:25`) *and* matched by
-    `[rule.match.outcome] eq = "round-clean"` (`:59`) whose
-    values are exactly the root `outcomes` alphabet (`:1`).
-    The guard position needs the same answer separately:
-    `guard-fixture.toml` declares `[tags.rewind_target]` with
-    `provenance = "recognized"` (`:36`) and references it from
-    `[rule.guard.all.rewind_target]` (`:72`), which normalizes
-    into the row's guard field rather than `Row.Match` — a
-    third target, and the one whose predicates RDR 0007 owns.
-    Resolve all three against RDR 0002's implementation
-    prompt, or a normalization spike over the committed
-    fixtures, before the Phase 2 rename runs.
-  - **Why it is load-bearing here**: A4's migration inventory,
-    block 2's reference-position fall-through, and Phase 2's
-    fixture work all assume the first reading. Under the second
-    reading the recognized outcome is gated by a non-tag field
-    that no tag-key rule reaches, and the fixture rename is a
-    semantics change on a Final peer's canonical evidence.
-  - **If wrong**: the fixture rename routes to RDR 0002 as a
-    cross-RDR edit; this RDR's reserved-key rule still stands
-    for declarations, but its migration claim and the
-    reference-position argument both need rewriting.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: settled by re-running RDR 0002's own
+    normalizer spike — the peer's executable artifact, not a
+    reading of its prose — over all three committed fixtures.
+    Command and verbatim output:
+    `docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-normalization.md`.
+    Three findings, each decisive for one position. (1) The
+    normalized row has **no outcome field to receive a
+    predicate**: `0002-…/evidence/spikes/main.go::Row` is
+    `{Model, Rule, Kind, Source string; Match, Write []string}`.
+    (2) `[rule.match.<tag>]` lands in the predicate set —
+    `outcome.eq=round-clean` appears inside `match=[…]`,
+    unprefixed and sorted among `stage.eq`, `status.eq`,
+    `profile.in`, with no special-casing on the name. (3) Both
+    guard positions land in that same set, prefixed:
+    `::normalize` merges `rule.Match` (`""`),
+    `rule.Guard.All` (`"all:"`), and `rule.Guard.Unless`
+    (`"unless:"`) into one map, rendered as `all:iter.lt=3` /
+    `unless:profile.eq=small`. The root `outcomes` alphabet is
+    model metadata printed on the MODEL line, never routed into
+    a row. All three tag-predicate positions are therefore
+    view-read; none produces `Row.Outcome`.
+  - **Why `Row.Outcome` is not the destination**: it is not
+    RDR 0002's field to populate — 0002 never names it. It is
+    a kernel field fed from `Input.Recognized`, gated by
+    `row.Outcome != in.Recognized`
+    (`internal/resolve/resolve.go::Resolve`), while
+    `::assemble` separately injects the same value as a tag so
+    a row may *also* match it (RDR 0001 REQ-17; D2: "a future
+    RDR (0002 normalization) must spell the same key for a
+    table row to match on the recognized outcome **as a
+    tag**"). The two paths are complementary, which is why
+    both readings looked live: the fixture's
+    `[rule.match.outcome]` is a tag-level restatement of a
+    value the outcome gate reads independently.
+  - **Consequence**: the first reading holds, so A4's
+    migration inventory, block 2's reference-position
+    fall-through, and Phase 2's rename all stand as written.
+    The rename is mechanical and changes no gating semantics;
+    it does not route to RDR 0002. Noted rather than left
+    implicit: the rename makes those fixtures *newly
+    functional* against the kernel — the predicate key
+    `outcome` cannot match `assemble`'s injected key
+    `recognized` today and can afterward. That is a strict
+    improvement with nothing depending on the current
+    behavior, since no normalizer exists under `internal/` to
+    turn these fixtures into a `resolve.Table`.
 
 - **A10 No accessor-produced owned tag key at HEAD, and no
   key derivable from a committed artifact shape, spells
   `recognized` — so the `Input`-precondition breach is not
   reachable from real data today.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search + Peer RDR
-  - **Verification plan**: `Input.Owned` is "an
-    accessor-produced owned tag snapshot"
-    (`internal/resolve/resolve.go` package doc); RDR 0004 owns
-    the accessor layer that derives those keys from artifact
-    content. A8's literal sweep cannot see a data-derived key.
-    Enumerate how RDR 0004 binds an accessor result to a tag
-    *key* — whether the key is always the author-declared
-    `[tags.<tag>]` name (in which case the declaration channel
-    already governs it and the data channel adds no new
-    spelling), or whether any accessor path can emit a key the
-    model did not declare. Read RDR 0004 plus the
-    `[accessors.<id>]` binding in the committed fixtures
-    (`rdr-fixture.toml:34-40`, where tags carry
-    `accessor = "rdr-status"` and the accessor carries a
-    document `path`).
-  - **Why it is load-bearing here**: block 4 sends this breach
-    down the Go error path RDR 0001 reserves for *programmer*
-    mistakes. If a key can be data-derived, user data can be
-    reclassified as a programmer mistake — the wrong channel
-    for it, and a disposition change this RDR does not intend.
-  - **If wrong** (a data-derived `recognized` key is
-    reachable): block 4's breach must not travel the
-    programmer-mistake path for that origin. The likely repair
-    is scoping the precondition to producers the kernel can
-    hold responsible, and routing the accessor-origin case to a
-    typed refusal or to RDR 0004's own validation — a design
-    change this RDR would have to make before lock.
+  - **Evidence**: the accessor never names a key of its own —
+    the key is the `[tags.<tag>]` table name, so artifact
+    content supplies only the *value*. The reference direction
+    is one-way (tag → accessor): RDR 0002 Technical Design
+    declares "tag name, provenance …, value kind, and
+    **optional accessor reference** for observed or owned
+    read-back" (`0002…md:215-216`), and the committed fixture
+    shows the shape — `[tags.status]` carries
+    `accessor = "rdr-status"` while `[accessors.rdr-status]`
+    carries only `mode` and `path`
+    (`0002-…/evidence/spikes/rdr-fixture.toml`). The peer's
+    loader types confirm there is no key channel to carry a
+    spelling: `0002-…/evidence/spikes/main.go::Accessor` is
+    `{Mode, Path}` with **no key field**, while tags are the
+    keys of `Tags map[string]Tag`. RDR 0004 (`Final`) pins the
+    same binding from its side — an accessor definition
+    declares "a stable name, capability, artifact role,
+    **expected tag keys**, timeout policy …"
+    (`0004…md:208-212`), its identity is
+    `(flow id, accessor name, capability)` — a name, never a
+    data-derived key — and a read accessor "MUST return typed
+    tag values or a typed refusal" (`0004…md:257-260`): values,
+    not a key-space. RDR 0002's `unknown tag` category then
+    rejects any key that did arrive undeclared
+    (`0002…md:341-347`). So the data channel carries no
+    key-spelling authority; the declaration channel
+    (blocks 1–3) is where every spelling is decided, and block
+    4's breach is correctly a producer programmer mistake.
+  - **Scope of the guarantee (contractual, not yet
+    mechanical)**: RDR 0004's accessor layer is **unimplemented
+    at HEAD** — `internal/` holds only `cli`, `resolve`, and
+    `version`, and 0004's own audit records "Accessor executor
+    | None found under `internal/`" (`0004…md:350`). The claim
+    therefore rests on two `Final` peer contracts plus their
+    committed spikes, not on shipped code. One implementer
+    note follows from that: 0004's spike `read` returns the
+    whole fixture tag map unfiltered, so the "expected tag
+    keys" filter (`0004…md:208-212`) must actually be applied
+    when binding a read result into `Input.Owned` for this
+    guarantee to survive implementation.
+  - **Consequence for A8**: A8's literal sweep was not merely
+    incomplete for the data channel — it was sufficient, because
+    there was never a second spelling source to sweep. A8's
+    scope limit stands as written; A10 is what closes it.
 
 - **A11 RDR 0009's `Resolve`-entry precondition and this
   RDR's compose without either RDR having to reopen: they are
   decidable independently, so only the *reported* error for a
   doubly-breaching input is unsettled — which block 4 leaves
   deliberately open rather than blocking on.**
-  - **Status**: Pending
+  - **Status**: Verified (independence); report order remains
+    a Stage 7.1 item by design, not an open verification
   - **Method**: Peer RDR
-  - **Verification plan**: 0009 writes the same "one
-    predicate, two call sites" shape over the same entry point
-    (`0009…md:510-517`) and pins its own precedence — "the
-    breach error precedes every modeled disposition,
-    `unmodeled_outcome` included" (`0009…md:531-538`) — but
-    says nothing about a second precondition. This RDR says
-    nothing about 0009's. Confirm at Stage 7.1
-    cluster-reconcile that (i) the two predicates read
-    disjoint *fields* — this RDR's reads
-    `Input.Owned`/`Input.Observed` plus each row's
-    `RequiresOwned` (block 5's widening), 0009's reads each
-    row's `Escape`/`Writes` — so neither can change the
-    other's verdict even though both now traverse
-    `in.Table.Rows`, and (ii) fix the total order in one
-    place. 0009 is `Draft` with its predicate form "sharpened
-    at Pre-Lock", so the reconciliation may land in either RDR
-    — this one must not bind 0009's symbol name (block 4).
+  - **Evidence**: the independence half — the half that could
+    have forced a design change — is closed. The predicates
+    read **disjoint fields**: this RDR's read-domain is
+    `Input.Owned`, `Input.Observed`, and each row's
+    `RequiresOwned` (block 4, stated); RDR 0009's predicate is
+    "exactly `len(row.Escape) != 0 && len(row.Writes) != 0`,
+    applied to every row of the supplied table at `Resolve`
+    entry" (`0009…md:536-540`). Both traverse the row set;
+    neither touches a field the other reads, and both are pure
+    reads that mutate nothing — so neither can change or
+    suppress the other's verdict, and both are decidable in
+    one pass. Corroborating the disjointness at the document
+    level: the string `Input` occurs **zero** times in RDR
+    0009 (case-sensitive, whole file, re-counted at
+    Reconcile), so 0009's contracts speak only of "the
+    supplied table," never of this RDR's subject.
+    Neither RDR fixes a total order: 0009 pins its breach
+    ahead of *dispositions* ("precedes every modeled
+    disposition, `unmodeled_outcome` included") and is silent
+    on a peer precondition, exactly as this RDR is silent on
+    0009's.
+  - **What remains, and why it is not a Pending
+    verification**: only which of two errors a
+    doubly-breaching caller *sees*. That is a cross-RDR
+    decision neither RDR may take unilaterally — not a fact
+    either could look up — and block 4 already carries a
+    conforming interim rule ("either error is conforming;
+    what is *not* conforming is skipping this check because
+    another fired"). RDR 0009 is `Draft` at Stage 2/2.5 (its
+    evidence tree holds only `research/` and
+    `propose-premortem/`), with its predicate form explicitly
+    "sharpened at Pre-Lock", so the ordering clause may land
+    in either RDR and this one must not bind 0009's symbol
+    name. Carried to Stage 7.1 as a reconciliation item.
   - **If wrong** (the predicates are *not* independent — one
     can suppress the other's verdict, rather than merely
     reporting first): the breach this RDR detects could be
@@ -814,24 +882,53 @@ at the same `area:internal-resolve` seam.
   encounter this RDR's name constraint, because the
   implementation prompt extracts normative contracts from the
   RDR set rather than from one document.**
-  - **Status**: Pending
-  - **Method**: Peer RDR + Prior Art
-  - **Verification plan**: this RDR's whole enforcement story
-    assumes 0002's implementation absorbs a constraint that
-    0002's own text does not carry — its `[tags.<tag>]` grammar
-    block (`0002…md:266-274`) admits any tag name and points
-    at nothing. Confirm the mechanism by which a downstream
-    implementation prompt gathers cross-RDR obligations
-    (Stage 8 launch reads the RDR set, not a single file), and
-    that a `Final` peer's implementation is expected to pick up
-    a later RDR's `Overrides`. If no such mechanism is
-    guaranteed, the constraint needs a durable pointer inside
-    0002's own surface.
-  - **If wrong**: 0002 ships a normalizer accepting any
-    `[tags.<name>]`, and this RDR's rule arrives later as a
-    bug report against a Final spec that never mentioned it.
-    The repair is a pointer landing in 0002 (a cross-RDR edit)
-    or an explicit implementation-ordering prerequisite here.
+  - **Status**: **Refuted as stated** — the assumed mechanism
+    does not exist. Superseded by the explicit prerequisite
+    below, which is what this RDR now relies on instead.
+  - **Method**: Peer RDR + Source Search
+  - **Evidence**: three independent reads, all negative.
+    (1) The Stage 8 launch prompt implements **one** RDR and
+    disclaims the set: "RDRs are run one at a time… **Cross-RDR
+    orchestration is out of scope**"
+    (`$RDR_HOME/prompts/implementation/launch.md:14-15`); the
+    orchestrator's input is a single `{RDR_PATH}`, and Phase 0
+    writes `req-list.md` from that one document's testable
+    clauses. (2) The only cross-RDR traversal is the
+    `Predecessors` field, which is a *completion gate* pointing
+    **backward** — it cannot reach a higher-numbered RDR, and
+    0002 numerically precedes this one. (3) The `Overrides`
+    field is **never read by the engine**: `grep -rn "Overrides"`
+    over `$RDR_HOME/prompts/ stages/ skills/` returns no
+    matches, so this RDR's Overrides is a durable pointer only
+    inside *this* document — a 0002 implementer never opens it.
+    Confirming the gap at the destination: RDR 0002 carries
+    **zero** occurrences of `0008`, its `[tags.<tag>]` grammar
+    block admits any tag name and points nowhere, and
+    `reserved_tag_key` is absent from its enumerated category
+    list (extensible as *license*, but not named).
+  - **Why this is a downgrade, not a blocker**: A12 asserted a
+    *discoverability* mechanism, not a design premise. No
+    normative contract in this RDR changes — the rule, the
+    category, the payload, and the predicate all stand exactly
+    as written. What its falsification changes is enforcement
+    *reach*: a 0002 implementation that never learns of the
+    constraint ships a normalizer accepting any
+    `[tags.<name>]`, so the declaration-channel diagnosis
+    (blocks 2–3) would be missing while the kernel-side
+    predicate (blocks 4–5) still catches the breach at
+    `Resolve` entry. The authoring-time diagnosis is the part
+    at risk, which is precisely the Problem Statement's
+    outcome — so the repair is mandatory, not optional.
+  - **Repair, adopted here (this RDR's own "If wrong" branch)**:
+    an explicit implementation-ordering prerequisite rather
+    than a silent reliance on the launch prompt. Recorded in
+    Prerequisites: this RDR's carried half MUST be handed to
+    0002's implementation explicitly — 0002's Stage 8 run takes
+    this RDR's Normative Contracts as a named input, or a
+    pointer lands in 0002's own surface as a cross-RDR edit.
+    Which of the two is a cluster-level call, so the choice is
+    routed to Stage 7.1; the *obligation to do one of them* is
+    settled here and is no longer assumed away.
 
 - **A13 `Input.Owned` and `Input.Observed` are ordered
   sequences of key/value tags, not keyed maps, so duplicate tag
@@ -927,12 +1024,12 @@ the model conforms to it rather than choosing it. Concretely:
    naming the reserved key. Because `RequiresOwned` is a
    derived normalizer output with no authored TOML form, this
    is a producer obligation on the normalizer rather than a
-   source-lint rule. **Conditional on A7 (`Pending`)**: *if*
-   RDR 0007's narrowing to `[rule.write]`-derived keys holds,
-   RDR 0002's `write to non-owned tag` rule already discharges
-   it on that path; that discharge is a consequence of A7, not
-   an independently established fact, and it does not remove
-   the obligation for any other derivation path. So the
+   source-lint rule. Under RDR 0007's narrowing to
+   `[rule.write]`-derived keys (A7, Verified), RDR 0002's
+   `write to non-owned tag` rule already discharges it on that
+   path; that discharge is a consequence of the current
+   derivation path and does not remove the obligation for any
+   other one. So the
    obligation is *also* carried by the same exported `Input`
    predicate item 4 settles, which checks each row's
    `RequiresOwned` — one predicate covering both the data and
@@ -1298,10 +1395,10 @@ rule over authored TOML, and it does not share the
 declaration channel's `reserved_tag_key` category. Under RDR
 0007's narrowing the field derives from `[rule.write]` keys,
 where a `recognized` entry is already rejected by RDR 0002's
-pre-existing `write to non-owned tag` category; **if A7
-holds**, the obligation is therefore discharged by
-construction on today's derivation path, and it binds any
-future path that does not route through that rule.
+pre-existing `write to non-owned tag` category (A7,
+Verified), so the obligation is discharged by construction on
+today's derivation path, and it binds any future path that
+does not route through that rule.
 
 An obligation discharged by construction still needs an
 artifact that fails when the construction changes, or it is
@@ -1462,7 +1559,7 @@ disposition change for any conforming caller.
 | Tag declarations with provenance | Predecessor (RDR 0002, Final unimplemented) | Deferred | Name constraint on `recognized`-provenance declarations |
 | Load/lint name validation | Predecessor (RDR 0002 normalizer) | Deferred | One additive validation category: `reserved_tag_key`; upstream of RDR 0006's normalized-graph lint, not a competing acceptance rule |
 | Input-boundary producer enforcement | This RDR (pattern borrowed from RDR 0009) | Available | Settled at Pre-Lock: exported `Input` predicate + `Resolve` entry call, covering owned/observed tag keys **and** each row's `RequiresOwned` (Load-Bearing Decisions / Enforcement locus; A6, A8). Ordering vs RDR 0009's row-shape precondition is A11 |
-| `RequiresOwned` name reservation | This RDR; field meaning stays RDR 0007's | Pending (A7) | Producer obligation on the normalizer, not a source-lint rule — the field has no authored form. Discharge on the current derivation path is **conditional on A7**, not established. Cite 0007, do not restate its semantics |
+| `RequiresOwned` name reservation | This RDR; field meaning stays RDR 0007's | Available (A7 Verified) | Producer obligation on the normalizer, not a source-lint rule — the field has no authored form. Discharged on the current derivation path by 0002's `write to non-owned tag`; the exported `Input` predicate enforces it on any other path. Cite 0007, do not restate its semantics |
 
 ### Existing Infrastructure Audit
 
@@ -1767,11 +1864,12 @@ capability — the highest-cost, least-reversible branch.
   **Mitigation**: the migration is named work, not a
   discovered surprise — A4 carries the inventory (three
   declarations, six tag-predicate reference sites)
-  and Phase 2 carries the edits. The rename is mechanical
-  **only under A9's first reading**; A9 is `Pending` and gates
-  the fixture work, so Phase 2 must not run the rename before
-  A9 resolves. If A9 falls the other way the edits route to
-  RDR 0002 as a cross-RDR change.
+  and Phase 2 carries the edits. The rename is **mechanical**,
+  settled at Reconcile: A9 is Verified against RDR 0002's own
+  normalizer spike, which puts every tag predicate — match and
+  both guard positions — into the candidate row's predicate
+  set and produces no outcome field, so no gating semantics
+  move with the rename. The fixture work is no longer gated.
 
 ### Failure Modes
 
@@ -1786,11 +1884,12 @@ supplying an owned/observed input tag keyed `recognized`, or a
 row naming it in `RequiresOwned`, breaches the producer
 obligation and surfaces on the Go error path as a programmer
 mistake — caught by the exported `Input` predicate or by
-`Resolve` at entry (A6), never as a modeled refusal. Whether
-an *accessor-produced* owned key can spell `recognized` from
-artifact data is open (A10); if it can, that origin must not
-travel the programmer-mistake path and the block needs the
-repair A10 names.
+`Resolve` at entry (A6), never as a modeled refusal. The
+programmer-mistake channel is the right one for that breach:
+an *accessor-produced* owned key cannot introduce a spelling
+of its own (A10, Verified) — the key is always the declared
+`[tags.<tag>]` name and the artifact supplies only the value —
+so no user data is reclassified as a programmer mistake.
 
 Silent, residual — **and not a narrow path**: an author who
 declares an *observed* tag under an innocent name (`result`,
@@ -1833,6 +1932,20 @@ pointer to this RDR.
 - [ ] RDR 0002 implementation underway (the enforcement
       point is its normalizer's load/lint path; this RDR's
       checks land inside that work, not before it)
+- [ ] **The carried half is handed to 0002 explicitly** — this
+      RDR's Normative Contracts are a named input to RDR
+      0002's Stage 8 run, or a pointer to this RDR lands in
+      0002's own surface as a cross-RDR edit. Not optional and
+      not automatic: A12 established that no engine mechanism
+      carries a later RDR's `Overrides` to a `Final` peer's
+      implementation (the launch prompt implements one RDR and
+      puts cross-RDR orchestration out of scope; `Predecessors`
+      points backward only; `Overrides` is read by nothing).
+      Without this, 0002 ships a normalizer that accepts any
+      `[tags.<name>]` and the authoring-time diagnosis — the
+      Problem Statement's outcome — never arrives. Which of
+      the two forms is used is a Stage 7.1 call; that one of
+      them happens is a gate here.
 
 ### Minimum Viable Validation
 
@@ -1876,23 +1989,28 @@ recognized-provenance declarations and reserved-name
 owned/observed declarations report the `reserved_tag_key`
 data-level category with its three-field payload, plus the
 non-blocking near-miss advisory (Load-Bearing Decisions /
-Identity). The `RequiresOwned` reservation needs no check here
-**if A7 holds** — the field has no authored source form, and
-on RDR 0007's `[rule.write]` derivation it would already be
-covered by 0002's `write to non-owned tag` rule. A7 is
-`Pending`, so this is a conditional exemption: if it falls,
-Phase 2 gains the check.
+Identity). The `RequiresOwned` reservation needs no
+source-lint check here (A7, Verified) — the field has no
+authored source form, and on RDR 0007's `[rule.write]`
+derivation it is already covered by 0002's `write to non-owned
+tag` rule. Its enforcement is the exported `Input` predicate
+(block 5), which binds any future derivation path.
 
-Also in Phase 2, gated on A9: rename the three committed
+Also in Phase 2: rename the three committed
 recognized-provenance declarations and **all six** of their
 tag-predicate reference sites (A4's inventory — five
 `[rule.match.outcome]` plus `[rule.guard.all.rewind_target]`
 at `guard-fixture.toml:72`). A declaration renamed without
 every one of its references leaves an undeclared-tag
-reference and trips 0002's `unknown tag`. **Do not run the
-rename before A9 resolves** — under A9's second reading the
-edit is a semantics change on a Final peer's canonical
-evidence and routes to RDR 0002 instead.
+reference and trips 0002's `unknown tag`. The rename is
+mechanical and no longer gated: A9 is Verified, so every one
+of those references normalizes into the candidate row's
+predicate set and no gating semantics move. Expect the
+renamed fixtures to become *newly* matchable against the
+kernel (the key `outcome` cannot match `assemble`'s injected
+`recognized` today) — an improvement, and safe because no
+code path at HEAD normalizes these fixtures into a
+`resolve.Table`.
 
 Not RDR 0006's graph lint, and not a competing acceptance
 rule under its "MUST NOT define different acceptance rules"
@@ -2156,11 +2274,11 @@ implement a kernel predicate in isolation.
    while a caller going through the predicate is stopped
    first. Both are asserted; the pair is what makes block 5
    falsifiable rather than discharged-by-assertion. There is
-   **no source-lint half** *if A7 holds*: `RequiresOwned` has
-   no authored source form, so on that reading the
-   normalizer-side source check is unnecessary and the
-   corresponding negative test belongs to RDR 0002's
-   `write to non-owned tag` suite, not this RDR's.
+   **no source-lint half** (A7, Verified): `RequiresOwned` has
+   no authored source form, so the normalizer-side source
+   check is unnecessary and the corresponding negative test
+   belongs to RDR 0002's `write to non-owned tag` suite, not
+   this RDR's.
 
 ## Finalization Gate
 
