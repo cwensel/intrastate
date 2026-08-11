@@ -184,6 +184,23 @@ kernel has no second channel — the verdict is the only
 observable — so an honest transplant surfaces the error in
 the verdict itself.
 
+**What this citation does and does not authorize.** SCXML's
+*disposition* is to keep running: the machine folds the
+condition to false, raises `error.execution`, and continues.
+This RDR halts resolution instead. So the citation supports
+the narrow claim it is used for — that an undecidable
+condition MUST NOT silently become `false`, and that the
+error must be observable — and it supports nothing else. It
+does not underwrite the resolution-level veto (a table-wide
+halt is strictly stronger than SCXML's continue), and it
+does not underwrite omitting the absent tag from the
+refusal — SCXML mandates a payload naming what failed, which
+is the diagnostic gap this RDR records under Failure Modes
+and hands to Phase 3. On both of those points the citation
+cuts *against* the current design, and they stand on the
+in-repo house rule (A8) and the accepted-cost argument in
+Decision Rationale, not on SCXML.
+
 In-repo, the sibling-path check found both the *principle*
 and the *discriminator* already present rather than needing
 invention. The principle is settled at the adjacent seam:
@@ -430,8 +447,11 @@ existence tests.
   carry the disjunction, without ambiguity under exact-one
   selection and without driving authors to stamp sentinel
   values upstream.**
-  - **Status**: Verified
-  - **Method**: Design Decision
+  - **Status**: Pending — the runtime half is settled; the
+    **load-time** half is refuted pending A12. See *Carried
+    constraint*.
+  - **Method**: Design Decision (runtime) + Source Search
+    (load-time, owed)
   - **Evidence**: The decision: absence tests MUST be
     explicit existence atoms; implicit absence-as-false on
     value operators is rejected (Alternative 1). Verified
@@ -458,20 +478,36 @@ existence tests.
     Phase 3 authoring handoff. Premortem P-6 names the
     erosion risk: sentinel-stamping upstream defeats
     partiality wholesale.
-  - **Carried constraint**: RDR 0003's exhaustiveness
-    obligation is a permission ceiling on lint ("Lint MAY
-    claim guard exhaustiveness only for finite declared
-    domains"), not an authoring obligation, so the two-row
-    pattern violates nothing. But RDR 0003 does not say
-    whether *absence* is itself an element of the finite
-    domain product used for coverage proofs. If a lint must
-    ever *prove* an absence/value row pair exhaustive
-    (rather than merely evaluate it), that domain question
-    belongs to RDR 0003 and is handed off with Phase 3.
+  - **Carried constraint**: the sub-clauses above establish
+    disjointness at *runtime*, over assembled views, which is
+    the wrong forum for the binding risk. The author meets
+    **table load** first, and there the pattern is not
+    obviously legal. RDR 0003 computes "overlap is any
+    non-empty `row_i accepted assignments intersect row_j
+    accepted assignments`" over a *finite domain product*
+    built from declared domains, and no tag declaration in
+    the tree carries an absent member
+    (`0003-…/evidence/spikes/guard-fixture.toml`:
+    `cluster_eligible domain = [true, false]`,
+    `prelock_iterations min = 0 / max = 3`). If absence is
+    not an element of that product, the absence-row and the
+    value-row may project onto the same assignment set.
+    **Overlap is not downgradeable**: RDR 0002 retains
+    "ambiguous overlap" among the stable data-level
+    validation categories a table MUST be rejected on, unlike
+    the *exhaustiveness* claim RDR 0003 permits lint to
+    refuse or downgrade. An earlier draft of this constraint
+    scoped the question to exhaustiveness and therefore
+    under-read the risk. Whether RDR 0003's row-group scoping
+    ("MUST be scoped to a normalized row group … as one
+    product") narrows the two rows out of a shared product,
+    or whether absence needs standing in the domain, is A12.
   - **If wrong**: Authors cannot express a legitimate
     absence-conditional row and either demand a grammar
     extension from RDR 0003 or mask absence behind
-    sentinels at the authoring layer.
+    sentinels at the authoring layer — the anti-pattern whose
+    only sanctioned alternative *is* this pattern, so the
+    Risks mitigation for sentinel-stamping fails with it.
 - **A6a Kernel-side assembly is faithful: no tag key
   present in the input tuple is ever dropped from the
   assembled view by merge precedence or provenance
@@ -706,6 +742,77 @@ existence tests.
     tag decides differently than over an owned one, RDR
     0003's own fixture breaks, and absence tests become
     silently provenance-dependent.
+- **A12 The blessed two-row absence pattern (A5) survives
+  RDR 0003's load-time OVERLAP check, not merely runtime
+  evaluation: either row-group scoping keeps the
+  absence-guarded row and the value-guarded row out of one
+  compared product, or absence has standing in the declared
+  domain product — otherwise the pattern is rejected at table
+  load under RDR 0002's mandatory `ambiguous overlap`
+  category.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Needed. Established so far: RDR 0003
+    Technical Design defines overlap as "any non-empty
+    `row_i accepted assignments intersect row_j accepted
+    assignments`" over a product of declared finite domains,
+    and normatively requires coverage/overlap checks "MUST be
+    scoped to a normalized row group … as one product". RDR
+    0002 lists "ambiguous overlap" among validation
+    categories that "MUST retain stable data-level
+    categories" — a hard reject, not a downgradeable claim
+    (contrast RDR 0003's exhaustiveness permission ceiling,
+    which explicitly allows lint to "refuse or downgrade").
+    No tag declaration in the tree admits an absent element.
+    The asymmetry is textual: every "refuse or downgrade"
+    escape in RDR 0003 attaches to the *exhaustiveness*
+    claim, and none of them mentions overlap — so the weaker
+    claim is the only one with a relief valve, while the hard
+    reject runs over a product that cannot represent absence.
+    RDR 0003's own fixture sits on the fault line: the
+    `foundational-to-cove` rule guards `cluster_eligible`
+    with `exists = true` over a tag whose declared domain is
+    `[true, false]`. Verify whether an existence atom over a
+    dimension with no absent member makes a row's
+    accepted-assignment set empty, total, or undefined under
+    0003's proof, and whether the two rows share a normalized
+    row group at all.
+  - **If wrong**: A5's blessed pattern is unusable — the
+    domain rule leaves authors with no sanctioned way to
+    express an absence-conditional row, and the only
+    remaining outlets are the sentinel-stamping anti-pattern
+    or a grammar extension from RDR 0003. The domain rule
+    itself survives; its authoring story does not.
+- **A13 Provenance-blind guard presence is safe against
+  caller-supplied input, or the exposure is accepted
+  knowingly: an observed tag supplied by the caller can turn
+  a `guard_unevaluable` into a decided guard verdict, which
+  no shipped test contends.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Needed. Established so far: `Input.Observed`
+    is caller-supplied (`resolve.go::Input`; `ProvenanceObserved`
+    is documented as "a non-owned context tag supplied by the"
+    caller) and `assemble` writes it into `view.tags`
+    unconditionally, so presence under the provenance-blind
+    rule is caller-reachable. The kernel already refuses this
+    substitution on the *owned-state* path — frozen by
+    `adversarial_test.go::TestAdv4_ObservedTagsMustNotShadowTheOwnedSnapshot`
+    and `::TestAdv5_ObservedTagCannotSatisfyAnOwnedStateRequirement`
+    — but neither test covers the guard path, and before this
+    RDR nothing stated that guards read the view
+    provenance-blind. A11 verifies the rule *conforms* to
+    shipped `TagSet.Lookup` behavior; it does not establish
+    that conformance is safe. Verify whether the
+    accessor/input boundary (RDR 0004 / RDR 0005) constrains
+    what a caller may supply as observed, and record the
+    residue here if it does not.
+  - **If wrong**: an operator can unstick a
+    `guard_unevaluable` refusal by supplying the missing tag
+    on the command line, producing a plan whose `Writes` are
+    computed from caller input rather than artifact state —
+    the ADV-4/ADV-5 defect reintroduced one seam over, with
+    no test contending it.
 
 ## Proposed Solution
 
@@ -844,10 +951,16 @@ Empty atom blocks take the conventional identities: an empty
 `unless` block MUST be treated as absent — NOT as a
 vacuously-true conjunction, which under
 `all ∧ ¬(unless_conj)` would disable every row carrying one.
-(Conditional on A9, still Pending: if RDR 0002's
-normalization already fixes this identity, the clause is
-0002's and is struck from here rather than restated.)
 ```
+
+**Open ownership question (A9, Pending) — not part of the
+normative block above.** If RDR 0002's normalization already
+fixes the empty-`unless` identity, this clause is 0002's and
+is struck here rather than restated; if it does not, the
+clause stands as written. A normative MUST cannot carry its
+own strike-out condition, so the question is recorded here
+and A9 blocks lock until it is answered either way. The
+identity itself is not in doubt — only which RDR owns it.
 
 ```normative
 Atom verdicts combine under strong-Kleene three-valued
@@ -876,11 +989,30 @@ behind an escapable refusal class.
 
 Among surviving rows, absent owned state is reported BEFORE
 an undecidable guard: a survivor set carrying both MUST
-refuse `owned_state_unavailable`, the more precise
-diagnosis. This is the shipped ordering
-(`resolve.go::gate` runs `missingOwned` before the
+refuse `owned_state_unavailable`. This is the shipped
+ordering (`resolve.go::gate` runs `missingOwned` before the
 undecidable loop) and is pinned here because no test
 currently contends the two within one survivor set.
+
+The ordering is pinned to shipped behavior, NOT to its
+original rationale, which this RDR's narrowing invalidates.
+D8 justified the precedence as "absent owned state is the
+more precise diagnosis and is frequently the reason the seam
+could not decide the predicate"
+(`0001-…/artifacts/deviations.md`, echoed in
+`resolve.go::gate`'s doc comment) — true only while
+`RequiresOwned` named guard *inputs*. Once it names
+post-guard *write* dependencies, a missing RequiresOwned key
+is no longer a plausible cause of the guard's
+undecidability, so "more precise" no longer follows: the two
+refusals now diagnose independent problems. The precedence
+is retained anyway because it is frozen kernel behavior and
+reversing it is a kernel change this RDR declines to make
+(A3) — but the honest cost is that a row failing both ways
+surfaces the write-dependency problem first and the
+decidability problem only on the next run. Phase 2's pinning
+vector MUST assert the ordering as behavior, and the
+authoring docs MUST NOT repeat the superseded rationale.
 
 The refusal MUST identify the rows it came from:
 `Refusal.Rows` carries every undecidable row.
@@ -998,6 +1130,8 @@ user outcome — an actionable refusal, never a masked one):
 | Prior-art alignment | ✗ — SCXML pairs false with a mandatory error event; silent false has no support | ✓ — honest transplant of SCXML §5.9.1 into a one-channel kernel; matches K3 treatment of missing data (A4) | ~ — no prior system found declaring guard reads separately from guard text |
 | Reversibility | ~ — flipping later reclassifies shipped table behavior | ✓ — spec + fixtures now; evaluator unbuilt, kernel unchanged | ✗ — adds a declared-reads surface to Row that must be maintained forever |
 | Blast radius | Kernel unchanged, but D8 becomes unsound (prune on absence) | Kernel unchanged; D8 ratified sound; 0003 evaluator constrained | Kernel `gate` must grow a second precheck; ADV ordering re-opened |
+| Operability (recovery when a guard cannot read state) | ~ — masked, so nothing to recover *from*; the failure is silent | ✗ — worst of the three: `guard_unevaluable` is non-escapable, so there is no table-level hatch; recovery is fixing the artifact or accessor, and while A6b is open a transient read failure is indistinguishable from real absence | ~ — precheck refusal names the absent key directly, but is equally non-escapable |
+| Blast radius on the authoring surface | None — closed-world reads keep working | ✗ — absence-conditional rows need the two-row pattern, whose load-time legality is open (A12); the project's own fixtures become migration candidates (Consequences) | ~ — authors must maintain a declared-reads list |
 | Cost | Low now, high at first masked escape | Low — the discriminator already exists end to end | Medium — new Row field or overloaded RequiresOwned (re-creates xg7p's conflation) |
 
 The deciding rows are correctness fit and blast radius: B
@@ -1007,19 +1141,25 @@ shows its discriminator already shipped
 (`GuardResult`/`KindGuardUnevaluable`), so B reuses an
 existing signal where A and C would bend or duplicate one.
 
-Operator recovery is the criterion the matrix does not
-score, and B is genuinely the worst of the three on it: a
-`guard_unevaluable` refusal is non-escapable, so a degraded
-artifact has no table-level recovery — the operator must fix
-the artifact or the accessor, and while A6b is open they
-cannot even tell a transient read failure from a real
-absence (Failure Modes, *Conflated recovery signal*). This
-is accepted, not overlooked: the alternative to "no recovery
-hatch" is precisely the escapable masking A rejects, so an
-escape hatch here would reintroduce the defect the RDR
-exists to close. The cost is bounded to tables that read
-state they cannot see, and the honest refusal is what makes
-the condition visible enough to fix.
+B loses the operability and authoring-blast-radius rows
+outright, and is chosen anyway. That trade is accepted, not
+overlooked: the alternative to "no recovery hatch" is
+precisely the escapable masking A rejects, so an escape
+hatch here would reintroduce the defect the RDR exists to
+close. The cost is bounded to tables that read state they
+cannot see, and the honest refusal is what makes the
+condition visible enough to fix.
+
+The narrower variant the operability row invites — degrade
+an unevaluable row to an escapable class when a decided
+sibling exists — was considered and rejected under
+*Briefly Rejected* below: it is absence-as-false at
+resolution scope, since it decides that an undecided edge is
+a non-edge. What the matrix cannot settle is how *often* the
+veto fires on tables whose rows are unrelated in practice;
+that is an empirical question with no installed base to
+answer it (Consequences), so it is recorded as accepted risk
+rather than scored away.
 A is rejected because it *is* the masking path. C is
 rejected because declared reads duplicate what the guard
 text already names (drift = silent unsoundness), extend the
@@ -1130,6 +1270,19 @@ B achieves with a spec and fixtures.
 - **New refusal kind `guard_input_missing`**: reopens RDR
   0001's closed five-kind taxonomy for a distinction the
   refusal's guard text already carries.
+- **Narrowed veto (an unevaluable row degrades to an
+  escapable class when a decided-TRUE sibling exists)**:
+  buys back the operability the aggregation veto costs, and
+  is rejected because it *is* absence-as-false at resolution
+  scope — selecting the sibling asserts the unevaluable row
+  does not apply, which is exactly the "I could tell" the
+  Problem Statement forbids, and routes it through an
+  escapable class, which is the masking path Alternative 1
+  was rejected for. The variant that scopes the veto to rows
+  whose referenced tags intersect the selected row's
+  `Writes` fails differently: the evaluator cannot compute
+  that intersection without the atom structure A10 shows it
+  does not have.
 
 ## Trade-offs
 
@@ -1144,7 +1297,17 @@ B achieves with a spec and fixtures.
   doc-comments-only, and the kernel consumer side already
   exists — A3). The masking path recorded under *Background*
   stays open until that evaluator is built and runs the
-  Phase 2 harness.
+  Phase 2 harness. **Consequence for status:** this RDR's
+  own probe still reproduces on the shipped kernel after
+  Phases 1–3 land, because no code path changes. The
+  tracking kata (`xg7p`) is resolved by the contract, not by
+  the behavior, and it MUST be closed against that
+  distinction explicitly rather than against a green test
+  run — otherwise the same finding is re-derived later
+  against a kernel that never changed. The behavior closes
+  when RDR 0003's evaluator lands and passes the Phase 2
+  harness; until then the honest status of the *defect* is
+  open even when the status of the *RDR* is Implemented.
 - Positive: no kernel code change; D8/D5 and the ADV suite
   stand as shipped; kata `xg7p`'s conflation resolves by
   doc-contract narrowing.
@@ -1157,13 +1320,29 @@ B achieves with a spec and fixtures.
   must be rewritten with explicit existence atoms. The
   exposure today is bounded — no `GuardEvaluator`
   implementation exists yet, so no shipped table depends on
-  closed-world reads and there is no installed base to
-  migrate. The rule therefore lands *before* the first
-  evaluator rather than changing behavior under existing
-  authors, which is why this RDR must be Final before RDR
-  0003 is implemented (Prerequisites). If that sequencing
-  slips and an evaluator ships first, this bullet becomes a
-  real migration with no inventory tooling behind it.
+  closed-world reads and there is no *executing* installed
+  base to migrate. The rule therefore lands *before* the
+  first evaluator rather than changing behavior under
+  existing authors, which is why this RDR must be Final
+  before RDR 0003 is implemented (Prerequisites). If that
+  sequencing slips and an evaluator ships first, this bullet
+  becomes a real migration with no inventory tooling behind
+  it.
+  **Authored guards already exist, and they are the first
+  migration case.** "No installed base" counts
+  implementations, not authored intent:
+  `0003-…/evidence/spikes/guard-fixture.toml` authors guards
+  over `cluster_eligible` (`provenance = "observed"`) and
+  `prelock_iterations` (`int`, `min = 0 / max = 3`), and
+  `0002-…/evidence/spikes/rdr-fixture.toml` authors guards
+  over tags declared with no domain at all. Under the domain
+  rule, every value-comparing atom in those fixtures becomes
+  `guard_unevaluable` the moment its tag is absent from a
+  view. Phase 2 MUST classify each authored guard in the
+  tree as safe-or-migration when it encodes the vectors —
+  the reference fixtures are the smallest honest inventory,
+  and reclassifying them is cheap now and expensive after an
+  evaluator exists.
 - Negative: `guard_unevaluable` is non-escapable by
   design, so an artifact in genuinely degraded state has no
   modeled-escape hatch through a guard that cannot read it;
@@ -1189,8 +1368,19 @@ B achieves with a spec and fixtures.
   harness (an exported function taking a `GuardEvaluator`),
   and RDR 0003's implement stage MUST instantiate it against
   its own evaluator. That obligation is recorded in Phase 2
-  and handed to RDR 0003 in Phase 3; until RDR 0003 accepts
-  it, drift is caught by review only.
+  and handed to RDR 0003 in Phase 3.
+  **Residual status: UNMITIGATED, not partially mitigated.**
+  Nothing in this repo fails if RDR 0003 never instantiates
+  the harness — that is the definition of an unenforced
+  obligation, and it is the same hole as the risk it answers
+  (P-10). Building the harness is necessary and not
+  sufficient; the enforcement point is RDR 0003's implement
+  stage accepting it, which this RDR cannot compel. Because
+  RDR 0003 is Final and this project does not amend RDRs,
+  the acceptance must happen at 0003's *implement* stage
+  (which reads its Prerequisites), not by editing 0003's
+  text — and if that stage declines, the drift risk is
+  carried openly rather than recorded as closed.
 - **Risk**: Strong-Kleene combination has a subtle case
   where absence leaks into a decided verdict (e.g. `unless`
   negation).
@@ -1214,9 +1404,15 @@ B achieves with a spec and fixtures.
 - **Risk**: Authors defeat partiality by stamping sentinel
   values upstream so keys are never absent, making value
   comparisons decide on placeholders.
-  **Mitigation**: A5's blessed two-row pattern gives the
-  legitimate outlet; authoring guidance flags
-  sentinel-stamping as the anti-pattern (premortem P-6).
+  **Mitigation**: conditional on A12. A5's two-row pattern
+  is the intended legitimate outlet and authoring guidance
+  flags sentinel-stamping as the anti-pattern (premortem
+  P-6) — but the pattern's load-time legality is open (A12),
+  and sentinel-stamping is what authors fall back to if it is
+  rejected. So this mitigation stands or fails with A12: an
+  anti-pattern warning with no working alternative is not a
+  mitigation, it is a prohibition, and it would make the
+  sentinel path the only route to an absence-conditional row.
 
 ### Failure Modes
 
@@ -1255,6 +1451,27 @@ B achieves with a spec and fixtures.
   The catch is RDR 0003's declared-tag rule at parse/lint
   (A7): the defect fails table load, never reaching a
   production refusal.
+- **Refusal defeated by caller-supplied state** (A13, open):
+  because presence is provenance-blind and `Input.Observed`
+  is caller-supplied, an operator facing a
+  `guard_unevaluable` can supply the missing key as an
+  observed tag and convert the refusal into a decided
+  verdict — producing a plan whose `Writes` derive from
+  caller input rather than artifact state, with nothing in
+  the output marking the difference. The kernel already
+  refuses this substitution on the owned-state path
+  (`adversarial_test.go::TestAdv4_ObservedTagsMustNotShadowTheOwnedSnapshot`,
+  `::TestAdv5_ObservedTagCannotSatisfyAnOwnedStateRequirement`);
+  no equivalent test contends the guard path, and this RDR
+  is the first document to state that guards read the view
+  provenance-blind. The provenance-blind rule itself is not
+  in doubt — it is forced by `TagSet.Lookup` being the only
+  exported accessor and by RDR 0003's own fixture guarding
+  an observed tag (A11) — but "the refusal is
+  non-escapable" is a weaker guarantee than it reads: it is
+  unroutable *around within the table*, not unbypassable by
+  the caller. A Phase 2 vector should pin whatever A13
+  settles.
 - **Conflated recovery signal**: `guard_unevaluable`
   cannot itself distinguish transient read failure
   (retryable) from genuine absence (not retryable); until
@@ -1284,7 +1501,30 @@ B achieves with a spec and fixtures.
       cannot be encoded until the mapping is known. If the
       mapping is unspecified anywhere, the resolution is to
       hand it to RDR 0003 as a named obligation, not to
-      specify a grammar here.
+      specify a grammar here — **and the handoff needs a
+      destination that exists.** RDR 0003 is Final and this
+      project does not amend RDRs, so "state it in 0003"
+      cannot mean editing 0003's text. It means 0003's
+      *implement* stage owns the mapping as a named
+      prerequisite, or a successor RDR states it. Whichever
+      it is MUST be named when A10 closes; an obligation
+      addressed to a locked document is not a resolution,
+      and leaving it there is what turns Phase 2 into
+      indefinite deferral.
+- [ ] **A12 verified** (two-row absence pattern survives
+      RDR 0003's load-time overlap check) — raised by the
+      critique lens. Must close before lock: A5's blessed
+      pattern is the domain rule's only sanctioned outlet for
+      absence-conditional rows, and `ambiguous overlap` is a
+      mandatory rejection category, not a downgradeable
+      claim. If the pattern is overlap-rejected, the
+      authoring story needs a different answer before this
+      rule binds authors.
+- [ ] **A13 verified** (provenance-blind presence is safe
+      against caller-supplied observed tags, or the exposure
+      is accepted knowingly) — raised by the critique lens.
+      Not a blocker for the domain rule itself; a blocker for
+      claiming the refusal cannot be worked around.
 - [x] All other Critical Assumptions verified **except
       A6b**, which is carried open by decision: the
       read-failed vs genuinely-absent distinction is not
@@ -1318,6 +1558,21 @@ unevaluable beside row B decided true → refusal, no plan).
 Mixed-verdict combination cases (decided-FALSE beside
 unevaluable, in `all` and in `unless`) assert the
 strong-Kleene selection.
+
+**What the MVV does and does not prove.** Scenarios 1–2 hand
+the kernel a verdict and assert its already-frozen mapping,
+so they pass against the tree as it stands today — they are
+regression pins on the consumer side of the contract (A3's
+"no kernel change" claim), not evidence that the domain rule
+works. Scenario 3 (*unevaluable-blocks-true-sibling*) is the
+only MVV row pinning behavior no shipped test covers. The
+clauses that carry this RDR's actual content — the atom
+domain rule, `exists` totality, `contains` over an absent
+set, strong-Kleene combination — are Testing Strategy rows
+4–8, which cannot run until A10 fixes what a vector's input
+is. A "green MVV" therefore MUST NOT be read as validating
+the domain rule; the honest gate for that is the Phase 2
+harness.
 
 ### Phase 1: Contract doc alignment
 
@@ -1518,6 +1773,13 @@ normative expected value
    never both (they are disjoint by construction), never
    `ambiguous_match`.
    Backing: A5.
+   **Load-time precondition (A12).** This scenario asserts
+   *runtime* disjointness and presumes the pair loads at all.
+   If RDR 0003's overlap proof rejects the pair over a domain
+   product with no absent member, the vector is unreachable —
+   the table never reaches resolution. A12 MUST close first;
+   if it resolves against the pattern, this scenario changes
+   with whatever replaces it.
 
 9. **Scenario**: unguarded and empty-block rows — (a) a row
    with no guard at all, evaluated against a view missing
