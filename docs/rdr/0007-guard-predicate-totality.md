@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: foundational — one contract, the domain of
   guard-predicate evaluation over an incomplete view;
@@ -149,8 +149,8 @@ sits at the boundary between two Final RDRs:
   guard verdict onto its five refusal kinds.
 - **RDR 0003 — Guard predicate exhaustiveness** (`Final`,
   not yet implemented). Owns predicate semantics; its
-  assumption A4 already claims the "unevaluable guard"
-  semantic kind.
+  assumption A4 already enumerates "unevaluable guard"
+  among the predicate semantic kinds it owns.
 - **RDR 0002 — Transition table as reviewable data**
   (`Final`). Supplies the escapable-class constraint at
   L292.
@@ -1097,7 +1097,8 @@ the user outcome this RDR exists to secure.
 
 Ownership: **this RDR is the single normative home of the
 domain rule.** RDR 0003's evaluator *implements* it (its A4
-already claims the "unevaluable guard" semantic kind); RDR
+already enumerates "unevaluable guard" among its semantic
+kinds); RDR
 0001's kernel *consumes* it unchanged. `Row.RequiresOwned`
 is narrowed to its post-guard role: the owned tag keys the
 row's transition writes depend on once the guard holds.
@@ -1399,7 +1400,7 @@ assert on `Rows`.
 Row.RequiresOwned names the owned tag keys the row's
 post-guard transition depends on — the keys its `Writes`
 require, which per RDR 0002 includes an authored clear
-(normalization "renders a `<clear>` write", so the kernel
+(normalization "renders as a `<clear>` write", so the kernel
 `Row` carries no separate clear list). Guard decidability is
 not RequiresOwned's job: a guard's input coverage is
 enforced by the domain rule above. Listing a guard-read
@@ -1780,8 +1781,14 @@ B achieves with a spec and fixtures.
 - **Risk**: Strong-Kleene combination has a subtle case
   where absence leaks into a decided verdict (e.g. `unless`
   negation).
-  **Mitigation**: A2's truth-table derivation at Resolve;
-  MVV scenario exercises the mixed-verdict combinations.
+  **Mitigation**: partial. A2's truth-table derivation at
+  Resolve is the whole of what holds today; the tables are
+  restated normatively so the evaluator has no latitude. The
+  executable check — Testing Strategy row 4's mixed-verdict
+  matrix — is Phase 2 work blocked on A10, not MVV scope,
+  because `fixtureGuards` decides on guard text alone and
+  cannot express atom-level combination. Until row 4 runs,
+  strong-Kleene combination is held by derivation only.
 - **Risk**: View assembly drops state the artifact
   actually has — producing either spurious non-escapable
   `guard_unevaluable` refusal storms (value operators) or,
@@ -2042,9 +2049,11 @@ the premortem are in scope: *unevaluable-not-no_match* (one
 row, guard over an absent key → `guard_unevaluable`, never
 `no_match`) and *unevaluable-blocks-true-sibling* (row A
 unevaluable beside row B decided true → refusal, no plan).
-Mixed-verdict combination cases (decided-FALSE beside
-unevaluable, in `all` and in `unless`) assert the
-strong-Kleene selection.
+Mixed-verdict *atom* combination (decided-FALSE beside
+unevaluable, in `all` and in `unless`) is NOT in MVV scope:
+it is unrepresentable against `fixtureGuards`, which decides
+on guard text alone and cannot express atom structure. It is
+Testing Strategy row 4, blocked on A10 — see below.
 
 **What the MVV does and does not prove.** Scenarios 1–2 hand
 the kernel a verdict and assert its already-frozen mapping,
@@ -2353,75 +2362,7 @@ contract A6b leaves open.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
-### Contradiction Check
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
-
-### Cross-Cutting Concerns
-
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-### Proportionality
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile, correct the field and do not lock until the
-missing lenses have run. Also confirm form: value +
-one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Responses: 0007-guard-predicate-totality/artifacts/gate.md (Gate PASS 2026-08-11)
 
 ## References
 

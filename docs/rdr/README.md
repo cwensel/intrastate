@@ -15,7 +15,7 @@ engine README — this file is only the per-project index.
 | 0004 | Accessor execution safety model | Final | — |
 | 0005 | Skill integration CLI contract | Final | High |
 | 0006 | Graph lint authority and guarantees | Final | — |
-| [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Draft | Medium |
+| [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Final | Medium |
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Draft | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Draft | Medium |
 
