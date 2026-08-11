@@ -146,15 +146,16 @@ handed to the RDR 0004 accessor layer — precisely the
 "kernel guessing at persistence" that RDR 0001's ADV-2b
 names.
 
-Two escape rows in the frozen suite carry `Writes`, and
-both are *call-site overrides* rather than the builder:
+Every escape row in the frozen suite carries `Writes`, from
+two sources. The builder
+`internal/resolve/fixtures_test.go::escapeRow` sets
+`Writes: []resolve.Tag{{Key: "status", Value: "Blocked"}}`,
+which all sixteen of its call sites inherit; on top of that,
+two call sites *override* the value with `escape.Writes =
+[]resolve.Tag{{Key: "status", Value: "Escaped"}}` —
 `internal/resolve/adversarial_test.go:229` (ADV-2b) and
-`internal/resolve/fixup_test.go:103` (Fixup-1e), each
-assigning `escape.Writes = []resolve.Tag{{Key: "status",
-Value: "Escaped"}}`. The builder
-`internal/resolve/fixtures_test.go::escapeRow` populates
-`NextTags` only and sets no `Writes` at all. Conforming the
-two override sites is an implementation step of this RDR
+`internal/resolve/fixup_test.go:103` (Fixup-1e). Conforming
+all three sites is an implementation step of this RDR
 (Phase 2), superseding the "Noted, not filed" disposition in
 RDR 0001's `triage.md`; A3 confirmed the frozen suite still
 discriminates once they are stripped.
@@ -199,10 +200,15 @@ Go CLI (`intrastate`). The seam spans:
 - RDR 0006 (`0006-graph-lint-authority-and-guarantees`,
   `Final`) — the graph-level lint neighbor. Its blocking
   authority covers graph invariants over the normalized
-  model and, by its own boundary, leaves parse/render
-  fidelity and row-shape validation with RDR 0002 — so this
-  RDR's load-time enforcement assignment does not overlap
-  its authority; both RDRs reuse `internal/cli/clierr`'s
+  model, and it states its own boundary as "Parse/render
+  fidelity remains owned by RDR 0002." Row *shape* validation
+  is not named on either side of that line, so this RDR
+  assigns it rather than inheriting an assignment: the
+  authored-path half goes to RDR 0002 as the layer that
+  already forbids the construct and owns rendering, which is
+  the side of 0006's boundary it falls on. No overlap with
+  0006's graph-invariant authority results; both RDRs reuse
+  `internal/cli/clierr`'s
   implemented exit-code surface, whose normative home is
   RDR 0005.
 
@@ -363,6 +369,17 @@ structural check on `Table.Rows` before evaluation).
     only if the verb wraps the kernel error into
     `GroupInternal`; the Normative Contracts below bind
     that wrap.
+    **Second obligation (found at Pre-Lock):** the exit code
+    routes without an RDR 0005 change, but the *row identity*
+    does not travel the wire for free —
+    `clierr::CLIError.Cause` is `json:"-"`, so the Go error
+    chain carrying the `RowRef`s is not serialized. Reaching
+    an operator requires rendering the identities into a
+    serialized field (`Detail`, or a new `omitempty` field
+    under the type's documented "Extend with new optional
+    fields as needed"). That is additive to the envelope and
+    leaves the refusal-to-exit-code mapping untouched, so
+    A2's "no RDR 0005 contract change" verdict stands.
   - **If wrong**: Surfacing the breach requires reopening
     RDR 0005's envelope contract, and the error-path branch
     loses its no-peer-change advantage.
@@ -395,16 +412,18 @@ structural check on `Table.Rows` before evaluation).
     Fixup-1e, and `TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates`
     (`a3-conformed-mutant-gate-bypass.out`). Spike edits
     fully reverted; suite re-verified green.
-  - **Scope correction (found by this spike)**:
-    `internal/resolve/fixtures_test.go::escapeRow` populates
-    **`NextTags` only — it sets no `Writes` at all**. The
-    write-bearing escape rows are two *call-site overrides*:
-    `internal/resolve/adversarial_test.go:229` (ADV-2b) and
-    `internal/resolve/fixup_test.go:103` (Fixup-1e "missing
-    owned state"), each assigning
-    `escape.Writes = []resolve.Tag{{Key: "status", Value: "Escaped"}}`.
-    Conformance must edit all three sites; stripping only
-    the builder leaves two breaching rows.
+  - **Scope (measured by this spike)**: conformance must
+    edit **three** sites. The builder
+    `internal/resolve/fixtures_test.go::escapeRow` sets
+    `Writes: []resolve.Tag{{Key: "status", Value: "Blocked"}}`
+    (line 257), inherited by all sixteen of its call sites;
+    two of those sites additionally override it with
+    `escape.Writes = []resolve.Tag{{Key: "status", Value: "Escaped"}}`
+    — `internal/resolve/adversarial_test.go:229` (ADV-2b)
+    and `internal/resolve/fixup_test.go:103` (Fixup-1e
+    "missing owned state"). Stripping only the builder
+    leaves those two breaching; stripping only the overrides
+    leaves fourteen.
   - **If wrong**: A frozen test actually depends on a
     write-bearing escape row; the precondition would flip
     that test to an error and this RDR must re-open an RDR
@@ -567,6 +586,38 @@ structural check on `Table.Rows` before evaluation).
     error), which sharpens the contract at Pre-Lock but
     does not move ownership.
 
+- **A8 Collapsing equal `RowRef` identities is the only
+  tiebreak available to the multi-breach report, because
+  `compareRefs` does not totally order distinct rows and RDR
+  0001's REQ-2/REQ-10 forbid breaking the tie by table
+  position.**
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: `internal/resolve/resolve.go::compareRefs`
+    compares `RuleID` then `SourceLocator` and returns 0 when
+    both match; `::rowRefs` sorts with the non-stable
+    `slices.SortFunc`. Equal identities are constructible and
+    already present: `internal/resolve/fixup_test.go:79`,
+    `:101`, `:125` each build
+    `escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99",
+    …)`, and hand-built rows without source identity all
+    carry `RowRef{"",""}`. The positional tiebreak is
+    excluded by the frozen suite, not merely by preference:
+    `adversarial_test.go::TestAdv3b_MissingOwnedPayloadMustNotDependOnTableRowOrder`
+    and
+    `fixup_test.go::TestFixup3c_AmbiguousMatchRowsPayloadMustNotDependOnTableRowOrder`
+    both fail a payload that varies with row order, and
+    ADV-3b's comment rejects "stable order … with respect to
+    row order, which is not the same as stable with respect
+    to the input tuple." Fixup-3c grounds it in REQ-2: "two
+    orderings of the same row set at the same revision are
+    the same input."
+  - **If wrong**: If a consumer needs a per-row breach count
+    rather than per-identity, the report must carry a count
+    field instead of collapsing — the ordering rule is
+    unchanged either way.
+  - **Raised by**: cove (Pre-Lock), finding L-2.
+
 ## Proposed Solution
 
 ### Approach
@@ -610,11 +661,18 @@ Data flow is unchanged for every conforming table:
 `assemble` → candidate partition (`len(row.Escape) != 0`) →
 `gate` → selection → `planOf`. The one addition is a
 structural conformance predicate over `Table.Rows`, exported
-so any producer can call it at construction time, and called
-by `resolve.go::Resolve` at entry before `assemble` — the
-same function at both call sites. On the first row with
-non-empty `Escape` and non-empty `Writes`, `Resolve` returns
-a nil `Result` and a non-nil error naming the row. `planOf`
+as a `Table` method so any producer can call it at
+construction time, and called by `resolve.go::Resolve` at
+entry before `assemble` — the same function at both call
+sites. When any row carries both a non-empty `Escape` and a
+non-empty `Writes`, `Resolve` returns the zero `Result`
+(`Plan` and `Refusal` both nil — `Result` is a struct, so
+there is no nil `Result` to return) and a non-nil error
+naming every such row. Because the zero `Result` reports
+`Refused() == false`, callers MUST check the error before
+reading the disposition; a caller that branches on
+`Refused()` first would read a success-shaped value with a
+nil `Plan`. `planOf`
 stays unconditional — under the precondition it can no
 longer copy writes onto an escaped plan, so no stripping
 logic is added (stripping was rejected as silent divergence;
@@ -678,12 +736,24 @@ The breach error MUST be a TYPED error carrying the offending
 row identity as the kernel's existing RowRef value, inspectable
 via errors.As / errors.AsType without parsing message text, and
 MUST wrap a package-level sentinel naming the breach category so
-errors.Is can classify it. Row identity MUST NOT be recoverable
+errors.Is can classify it. Both the error type and the sentinel
+MUST be EXPORTED: an unexported sentinel would defeat the
+errors.Is classification this clause exists to provide, since the
+intended callers (a future flow verb, non-kernel table producers)
+are outside the package. Row identity MUST NOT be recoverable
 only from formatted prose. (Form sharpened at Pre-Lock; the
 binding requirement is value-level inspectability, matching the
 kernel's existing Refusal.Rows diagnostics and Go's own
 convention — encoding/json/v2 SemanticError, json.UnmarshalTypeError,
 go/types.Error.)
+
+Because errors.Join returns a wrapper even for a single error,
+callers MUST classify and extract with errors.Is / errors.As /
+errors.AsType rather than a direct type assertion or equality
+against the sentinel. The aggregate is the uniform return shape:
+Resolve MUST NOT return the bare per-row error in the
+one-breach case and the aggregate otherwise, so caller code has
+one shape to handle regardless of breach count.
 ```
 
 ```normative
@@ -697,6 +767,34 @@ compareRefs ordering, never by Table.Rows position, so the
 diagnostic payload is a function of the table value rather
 than of row order (the REQ-1/REQ-10 rule rowRefs already
 follows).
+
+Because compareRefs orders on (RuleID, SourceLocator) only,
+two distinct breaching rows sharing that pair compare EQUAL,
+so identity alone does not totally order the report. Hand-built
+rows are this precondition's whole target population (A5) and
+collide trivially: rows built with no source identity all carry
+RowRef{"",""}. Table.Rows position MUST NOT be used to break
+the tie. RDR 0001 forbids it: REQ-2 makes two orderings of the
+same row set THE SAME INPUT, and REQ-10 makes a diagnostic
+payload a function of that input — the frozen suite tests the
+rule directly (adversarial_test.go ADV-3b, fixup_test.go
+Fixup-3c, both named "MustNotDependOnTableRowOrder"), and
+ADV-3b's own comment rejects "stable with respect to row
+order" as not stable with respect to the input tuple. A
+positional tiebreak (SortStableFunc) would therefore
+reintroduce exactly the defect those tests freeze.
+
+The report is instead ordered by RowRef identity and made
+total by COLLAPSING equal identities: breaching rows sharing
+one RowRef contribute ONE reported error, not one per row.
+Identity is what the producer fixes by — the report names the
+distinct offending (RuleID, SourceLocator) pairs — so
+collapsing loses no actionable information, and the payload
+stays a function of the table value under any permutation.
+Rows carrying no source identity collapse to a single
+RowRef{"",""} entry; that is a degenerate producer, and the
+error MUST remain diagnostic in that case by stating the
+breach count alongside the identities.
 ```
 
 ```normative
@@ -706,10 +804,16 @@ producer, and Resolve's entry precondition MUST be that same
 function — one predicate, two call sites, so a non-TOML
 producer can fail at build or construction time rather than
 at first production Resolve, and the two enforcement points
-cannot drift. It MUST return error (nil when valid), and its
-name MUST follow Go's error-returning convention —
-CheckValid or Validate, never Valid/IsValid/OK, which Go
-reserves for bool-returning predicates. Precedent: the
+cannot drift. It MUST be a METHOD ON Table taking no
+arguments, matching both cited precedents (which are methods
+on the value they validate) and the package's own habit of
+exporting behavior on the type it belongs to (TagSet.Lookup,
+Result.Refused). The whole-table scope is thereby carried by
+the receiver rather than restated at each call site. It MUST
+return error (nil when valid), and its name MUST follow Go's
+error-returning convention — CheckValid or Validate, never
+Valid/IsValid/OK, which Go reserves for bool-returning
+predicates. Precedent: the
 exported-and-also-called-defensively arrangement is
 pprof.Profile.CheckValid (exported, re-checked at the parse
 boundary) and rsa.PrivateKey.Validate; copy the latter's doc
@@ -721,7 +825,17 @@ describing a problem."
 When a breach reaches the CLI, the verb MUST wrap it into a
 *clierr.CLIError carrying a stable Code, Group GroupInternal
 (exit 2), the offending row identity, and a Hint stating the
-remedy — the shipped config.Load wrapping pattern. Returning
+remedy — extending the shipped config.Load wrapping pattern
+(Code + Detail + Group + Cause), which carries no Hint of its
+own; this RDR adds one. Because clierr.CLIError.Cause is
+json:"-", the Go error chain that carries the RowRef values
+is NOT wire-visible: the offending row identities MUST reach
+the envelope through a serialized field, either the existing
+Detail (rendered from the row identities, never re-parsed by
+any consumer) or a new omitempty field added under the type's
+own "Extend with new optional fields as needed" allowance.
+This is an additive envelope change, not a change to RDR
+0005's refusal-to-exit-code mapping, so A2 stands. Returning
 the kernel error UNWRAPPED is a defect: clierr.ExitCodeFor
 defaults a non-CLIError to exit 1 and root.go's
 cobraErrorToCLIError stamps GroupUserEnv, so the documented
@@ -754,14 +868,20 @@ introduced at the kernel boundary.
   - *Nil-vs-empty* — length-based on purpose: a non-nil but
     empty slice is conforming. The predicate tests emptiness,
     never nil-ness. Three grounds: an empty write set is an
-    empty work set, so `[]Tag{}` provably cannot produce the
-    user-facing symptom (RDR 0004 applies only planned
-    writes); nil-sensitivity would make this the kernel's
+    empty work set — `copyTags` yields `len(Plan.Writes) == 0`
+    for both `nil` and `[]Tag{}`, so the two are
+    indistinguishable to any consumer that reads the plan's
+    writes, and RDR 0004 scopes the write accessor to planned
+    writes (a peer contract, not yet implemented — the
+    kernel-local half is what is verified here);
+    nil-sensitivity would make this the kernel's
     only nil-sensitive contract, against a package that is
     uniformly length-based (`len(row.Escape) != 0` is the
-    escape discriminator itself) and a frozen suite with
-    **zero** nil-sensitive assertions and four length-based
-    `Writes` checks; and `copyTags` is nil-preserving, so
+    escape discriminator itself) and a frozen suite whose
+    `Writes` assertions are **all four** length-based, with
+    **no** nil-ness assertion on `Writes` anywhere (the
+    suite's nil checks are `Plan`/`Refusal` presence tests,
+    a different question); and `copyTags` is nil-preserving, so
     nil-vs-empty is a representation artifact that survives
     into the Plan without behavioral meaning. Strictness
     about the *authored* form belongs upstream, where RDR
@@ -773,7 +893,11 @@ introduced at the kernel boundary.
     any future change is a single-site edit that cannot
     desynchronize the two enforcement points.
   - *Reporting* — aggregate, not fail-fast: all breaching
-    rows in one pass, sorted by `compareRefs`. Prior art is
+    rows in one pass, sorted by `compareRefs`, with
+    equal-identity rows collapsed to one entry (identity is
+    not a total order over distinct rows, and RDR 0001's
+    REQ-2/REQ-10 forbid breaking the tie by table position).
+    Prior art is
     split by audience — `fstest.TestFS` and
     `slogtest.TestHandler` aggregate via `errors.Join` for
     artifacts a human iterates on, while `analysis.Validate`
@@ -802,8 +926,8 @@ introduced at the kernel boundary.
 | --- | --- | --- | --- | --- |
 | Escape discrimination | `internal/resolve/resolve.go::rescues` + candidate partition in `::Resolve` | None | Reuse | The precondition keys on the same field; no row-kind added |
 | Plan construction | `internal/resolve/resolve.go::planOf` | Copies `Writes` unconditionally | Reuse | Unchanged — the precondition makes stripping unnecessary |
-| Error envelope | `internal/cli/clierr::GroupInternal` / `ExitCodeFor` | Exit 2 is shared with other internal errors | Reuse | Breach is diagnosable from the error text (A7), not a new code |
-| Escape fixtures | `internal/resolve/fixtures_test.go::escapeRow` (builder) + the `escape.Writes` overrides at `adversarial_test.go:229`, `fixup_test.go:103` | Builder sets `NextTags` only; the two overrides add `Writes` | Extend (conform the two override sites) | Fixtures must satisfy the precondition; supersedes the "Noted, not filed" cleanup |
+| Error envelope | `internal/cli/clierr::GroupInternal` / `ExitCodeFor` | Exit 2 is shared with other internal errors | Reuse | A stable `CLIError.Code` distinguishes the breach within the shared group; `clierr` codes are extensible, so no exit-group change (A2) |
+| Escape fixtures | `internal/resolve/fixtures_test.go::escapeRow` (builder) + the `escape.Writes` overrides at `adversarial_test.go:229`, `fixup_test.go:103` | Builder sets `Writes` (inherited by 16 call sites); the two overrides replace the value | Extend (conform all three sites) | Fixtures must satisfy the precondition; supersedes the "Noted, not filed" cleanup |
 | Row-identity diagnostics | `internal/resolve/resolve.go::RowRef` + `rowRefs`/`compareRefs` | Sorted for REQ-1/REQ-10 payload stability | Reuse | The typed breach error carries `RowRef`s in the same sorted order |
 
 ### Decision Rationale
@@ -963,10 +1087,15 @@ enforcement point without opening any peer contract.
   narrowed, not honored verbatim (recorded in Overrides).
 - Cost (measured against the existing path, not assumed):
   every `Resolve` call pays one additional O(rows)
-  conformance scan. `Resolve` already scans `Table.Rows`
-  twice per call (the candidate partition and
-  `escapeOrRefuse`), plus `gate`, so this is a constant
-  factor on an already-linear path, not a new cost class.
+  conformance scan. `Resolve` already walks `Table.Rows` for
+  the candidate partition, and again in `escapeOrRefuse` on
+  the zero-match and ambiguous arms, plus `gate` over the
+  survivors — so the added scan is one more linear pass on
+  an already-linear path, not a new cost class. It is not
+  free at the margin: on the exact-one-match success path
+  `escapeOrRefuse` never runs, so there the precondition
+  doubles the number of full `Table.Rows` passes (one to
+  two).
   RDR 0001's Performance Expectations set no throughput
   target and direct benchmarking "only if the RDR or kata
   tables become large enough to make table scans visible in
@@ -1034,11 +1163,16 @@ enforcement point without opening any peer contract.
   `RowRef`s (every breaching row, not just the first); at
   the CLI it surfaces through a `CLIError` with a stable
   code, exit 2, and a remedy `Hint`. Diagnosis: read the
-  row identities off the error value — `errors.As` /
-  `errors.AsType` for callers and tests, the rendered code
-  and detail for operators — pointing at the producing code
-  or fixture. Recovery: fix the producer — the table value
-  is broken; there is nothing to retry.
+  row identities off the error value — the rendered code and
+  detail for operators; for callers and tests, `errors.Is`
+  classifies the category and the identities are recovered by
+  walking `Unwrap() []error` over the aggregate. A single
+  `errors.As`/`AsType` call reports only the FIRST breach in
+  the chain, so it is the wrong instrument for reading a
+  multi-breach report — a test asserting on all offending
+  rows must traverse the aggregate. Recovery: fix the
+  producer — the table value is broken; there is nothing to
+  retry.
 - **Visible break (table author)**: the RDR 0002 normalizer
   rejects the rule at load under "malformed escape
   declaration," naming the source rule. Recovery: remove the
@@ -1086,7 +1220,11 @@ enforcement point without opening any peer contract.
 - [ ] The `flow` verb that first calls `Resolve` wraps a
       breach into `CLIError{Group: GroupInternal}` with the
       stable code and remedy `Hint` (A2's wiring
-      obligation; unwrapped, it would exit 1, not 2)
+      obligation; unwrapped, it would exit 1, not 2), and
+      renders the offending row identities into a serialized
+      envelope field — `Cause` is `json:"-"`, so identities
+      carried only on the Go error chain never reach an
+      operator
 
 ### Minimum Viable Validation
 
@@ -1113,12 +1251,14 @@ content is the observable behavior.
    `flows/rdr.toml:90`, `Escape` `[no_match]`) carrying
    `Writes: []Tag{{Key: "status", Value: "Escaped"}}`, in a
    table where it is selected via the escape path.
-   **Expected**: `Resolve` returns `Result{Plan: nil,
-   Refusal: nil}` and a non-nil error; the error yields that
-   row's `RowRef{"rdr.escape.needsowned",
+   **Expected**: `Resolve` returns the zero `Result`
+   (`Plan: nil, Refusal: nil`) and a non-nil error; the error
+   yields that row's `RowRef{"rdr.escape.needsowned",
    "flows/rdr.toml:90"}` through `errors.As`/`AsType`
    without parsing text, and `errors.Is` classifies it as
-   the escape-shape-breach category. The pre-fix behavior —
+   the escape-shape-breach category — both through the
+   `errors.Join` aggregate, which wraps even this
+   single-breach case. The pre-fix behavior —
    a `Plan` with `Escaped: true` carrying those writes — is
    never produced.
 2. **dormant-row-still-errors** — a table that resolves
@@ -1140,12 +1280,14 @@ content is the observable behavior.
 ### Phase 1: Exported predicate + kernel entry precondition
 
 Export the conformance predicate as a construction-time
-check (`CheckValid`/`Validate`-shaped, returning `error`,
-doc-commented in the `rsa.PrivateKey.Validate` form), call it
-at `Resolve` entry (breach → typed error carrying the
-offending `RowRef`s and wrapping the category sentinel;
-conforming tables unchanged), aggregate multiple breaches
-with `errors.Join` in `compareRefs` order, state the producer
+check — a no-argument method on `Table`,
+`CheckValid`/`Validate`-shaped, returning `error`,
+doc-commented in the `rsa.PrivateKey.Validate` form — call it
+at `Resolve` entry (breach → exported typed error carrying
+the offending `RowRef`s and wrapping the exported category
+sentinel; conforming tables unchanged), aggregate breaches
+with `errors.Join` in `compareRefs` order with equal
+identities collapsed, state the producer
 obligation on the `Row` doc contract, and record the
 kernel's validation surface — exactly which shape property
 it checks vs still assumes — so partial validation cannot be
@@ -1153,13 +1295,15 @@ read as general kernel ownership.
 
 ### Phase 2: Fixture conformance with discrimination check
 
-Bring the write-bearing escape rows into conformance by
-dropping `Writes` at the two call-site overrides —
+Bring the write-bearing escape rows into conformance at all
+three sites: drop the `Writes` field from the
+`internal/resolve/fixtures_test.go::escapeRow` builder (line
+257, inherited by its sixteen call sites), and drop the two
+call-site overrides —
 `internal/resolve/adversarial_test.go:229` (ADV-2b) and
 `internal/resolve/fixup_test.go:103` (Fixup-1e "missing
-owned state"). The `escapeRow` builder needs no change: it
-sets `NextTags` only, and A4 did not widen the predicate, so
-`NextTags` stays. A3's spike proves the frozen suite still
+owned state"). `NextTags` stays on the builder: A4 did not
+widen the predicate. A3's spike proves the frozen suite still
 discriminates after the strip (154 PASS, identical outcome
 set; escape-gate mutation still fails 11 assertions). Because
 no remaining fixture breaches, the mutation-style step
@@ -1235,21 +1379,36 @@ suite below is the coverage goal.
    length-based predicate deliberately does not duplicate.
 9. **Scenario**: A table with two or more breaching rows.
    **Expected**: One `Resolve` call reports **every** breaching
-   row, not just the first; each per-row error is individually
-   recoverable from the aggregate via `errors.As`/`AsType`
-   over `Unwrap() []error`.
-10. **Scenario**: The same multi-breach table supplied with its
-    rows in two different orders.
+   identity, not just the first; each per-row error is
+   individually recoverable by traversing the aggregate's
+   `Unwrap() []error` — a single `errors.As` finds only the
+   first match, so the assertion must walk the slice.
+10. **Scenario**: The same multi-breach table, rows carrying
+    *distinct* `RowRef` identities, supplied in two different
+    orders.
     **Expected**: Identical reported row sequence — ordered by
     `RowRef` identity (`compareRefs`), never by `Table.Rows`
     position. The REQ-1/REQ-10 payload-stability rule that
     `rowRefs` already follows, applied to the breach report.
+10b. **Scenario**: A multi-breach table whose breaching rows
+    share one `RowRef` identity (including the zero-value
+    `RowRef{"",""}` of rows built without source identity),
+    supplied in two different orders.
+    **Expected**: Identical report under both permutations —
+    equal identities collapse to one reported entry, and the
+    breach count is stated alongside. Pins the payload as a
+    function of the input tuple (REQ-2/REQ-10) rather than of
+    row position, the rule ADV-3b and Fixup-3c freeze.
 11. **Scenario** (binds the verb that first calls `Resolve`): a
     breach surfaced through the CLI.
     **Expected**: exit 2 via `CLIError{Group: GroupInternal}`
     carrying the stable code, the offending row identity, and
     the remedy `Hint` — not exit 1, which is what an
-    unwrapped kernel error would produce.
+    unwrapped kernel error would produce. The row identities
+    must be readable from the **serialized** envelope, not
+    only from the Go error chain: `CLIError.Cause` is
+    `json:"-"`, so an assertion that reads identities off the
+    JSON output is what proves the wire carrier exists.
 
 ### Performance Expectations
 
