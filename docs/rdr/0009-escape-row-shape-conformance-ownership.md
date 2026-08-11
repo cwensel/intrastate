@@ -362,13 +362,19 @@ structural check on `Table.Rows` before evaluation).
     HEAD (`internal/cli/root.go::NewRootCmd` registers only
     `newVersionCmd()`), so this path is specified, not
     shipped. An *unwrapped* Go error escaping a future
-    verb's `RunE` exits **1**, not 2 —
-    `clierr::ExitCodeFor` defaults a non-`CLIError` to 1 and
-    `root.go::cobraErrorToCLIError` stamps
-    `GroupUserEnv`/`command-error`. Exit 2 therefore holds
-    only if the verb wraps the kernel error into
-    `GroupInternal`; the Normative Contracts below bind
-    that wrap.
+    verb's `RunE` still exits **2**, but misclassified:
+    `root.go::ExecuteAndEmit` converts every non-`CLIError`
+    via `cobraErrorToCLIError`, stamping `GroupUserEnv`
+    (exit 2), `Code: "command-error"`, and the generic
+    `--help` hint — so the exit code cannot distinguish a
+    wrapped breach from a missing wrap (corrected at
+    Pre-Lock, critique: the earlier exit-1 reading stopped
+    at `ExitCodeFor`'s non-`CLIError` default, a path
+    `ExecuteAndEmit` never lets a verb error reach). The
+    wrap supplies the internal classification, the stable
+    code, the row identities, and the remedy `Hint`; the
+    Normative Contracts below bind that wrap, and
+    conformance is asserted on the `Code`, not the exit.
     **Second obligation (found at Pre-Lock):** the exit code
     routes without an RDR 0005 change, but the *row identity*
     does not travel the wire for free —
@@ -641,7 +647,12 @@ structural check on `Table.Rows` before evaluation).
     new optional fields as needed" allowance; (c) whether the
     `Cause` doc comment must be amended alongside — and if so,
     that the amendment is RDR 0005's to authorize, not this
-    RDR's to make unilaterally.
+    RDR's to make unilaterally; (d) the field's Go type keeps
+    `clierr` a leaf: it must not import `internal/resolve`,
+    so the carrier is a clierr-local representation (plain
+    strings/struct, not `resolve.RowRef`) — and the plan
+    settles whether the per-identity `Count` serializes
+    alongside the identities.
   - **If wrong**: the identities ride `Detail` as rendered
     prose after all (accepting a re-parse consumers are told
     not to perform), or RDR 0005's envelope contract must be
@@ -825,7 +836,10 @@ ordered by RowRef identity using the kernel's existing
 compareRefs ordering, never by Table.Rows position, so the
 diagnostic payload is a function of the table value rather
 than of row order (the REQ-1/REQ-10 rule rowRefs already
-follows).
+follows). REQ-2/REQ-10 bind modeled refusal payloads; the
+breach report sits on the error path outside that surface, so
+this clause is a DELIBERATE adoption of the same input-tuple
+determinism for the diagnostic, not an inherited obligation.
 
 Because compareRefs orders on (RuleID, SourceLocator) only,
 two distinct breaching rows sharing that pair compare EQUAL,
@@ -895,7 +909,12 @@ exported-and-also-called-defensively arrangement is
 pprof.Profile.CheckValid (exported, re-checked at the parse
 boundary) and rsa.PrivateKey.Validate; copy the latter's doc
 form — "returns nil if <x> is valid, or else an error
-describing a problem."
+describing a problem." The doc comment MUST also name the ONE
+property checked — escape-row shape conformance — and state
+that nothing else is checked (in particular not the
+Escape-class restriction to no_match/ambiguous_match that
+Row's doc records for RDR 0002), so a nil return is never
+read as general table validity.
 ```
 
 ```normative
@@ -912,16 +931,23 @@ a NEW omitempty field added under the type's own "Extend with
 new optional fields as needed" allowance — NOT the existing
 Detail, because reading identities out of Detail would require
 the consumer to re-parse rendered prose, which this RDR forbids
-everywhere else. The stable Code is "escape-row-shape-breach".
+everywhere else. The clause binds the carrier CLASS only; the
+field's name, its clierr-local type (clierr is a leaf package
+and MUST NOT import internal/resolve), and whether the
+per-identity Count serializes are A9's to settle. The stable
+Code is "escape-row-shape-breach".
 This is an additive envelope change, not a change to RDR
 0005's refusal-to-exit-code mapping, so A2 stands — subject to
 A9, which verifies the addition against clierr.CLIError.Cause's
 shipped doc comment naming Detail the sole wire-visible cause
 surface. Returning
-the kernel error UNWRAPPED is a defect: clierr.ExitCodeFor
-defaults a non-CLIError to exit 1 and root.go's
-cobraErrorToCLIError stamps GroupUserEnv, so the documented
-exit-2 behavior does not hold without the wrap. Adding this
+the kernel error UNWRAPPED is a defect the exit code does NOT
+reveal: root.go's ExecuteAndEmit converts every non-CLIError
+via cobraErrorToCLIError — GroupUserEnv, still exit 2, Code
+"command-error", the generic --help hint, no row identities.
+The wrap supplies the internal classification, the stable
+code, the identities, and the remedy; conformance MUST be
+asserted on the Code, never on the exit code alone. Adding this
 Code does NOT open RDR 0001's refusal taxonomy: the five
 refusal kinds stay closed and gain no member — clierr codes
 are a separate, explicitly extensible surface ("Add new
@@ -990,7 +1016,16 @@ introduced at the kernel boundary.
     evaluation order. No frozen test asserts on the comment
     text, so the amendment is documentation-only — the
     behavioral change it describes is the precedence pin
-    above, which scenario 4 covers per kind.
+    above, which scenario 4 covers per kind. The same
+    authorization covers the two disposition-cardinality doc
+    contracts the breach return would otherwise contradict —
+    `Result`'s "never both and never neither" and `Resolve`'s
+    "returns exactly one disposition" — each amended to scope
+    itself to nil-error returns. The frozen cardinality test
+    (`resolve_test.go::TestReq1_DispositionIsExactlyOneOfPlanOrRefusal`)
+    is unaffected: its inputs are conforming tables and its
+    helper checks the error before reading the disposition
+    (scenario 7b pins the breach-side behavior).
   - *Reporting* — aggregate, not fail-fast: all breaching
     rows in one pass, sorted by `compareRefs`, with
     equal-identity rows collapsed to one entry (identity is
@@ -1362,11 +1397,16 @@ enforcement point without opening any peer contract.
       the exact user symptom this RDR exists to prevent
       (A4, *Carried forward*). Recorded as a binding obligation
       rather than a note because RDR 0004 is the layer where
-      the harm actually occurs
+      the harm actually occurs. The obligation has a test form
+      0004's implement stage copies: a write accessor handed an
+      escaped plan with empty `Writes` and non-empty `NextTags`
+      applies zero owned-tag mutations
 - [ ] The `flow` verb that first calls `Resolve` wraps a
       breach into `CLIError{Group: GroupInternal}` with the
       stable code and remedy `Hint` (A2's wiring
-      obligation; unwrapped, it would exit 1, not 2), and
+      obligation; unwrapped it still exits 2 but as
+      `command-error`/`GroupUserEnv` with no row identities —
+      the stable code, not the exit, is the tripwire), and
       renders the offending row identities into a serialized
       envelope field — `Cause` is `json:"-"`, so identities
       carried only on the Go error chain never reach an
@@ -1448,6 +1488,12 @@ Exported surface (pinned above): `ErrEscapeShapeBreach`,
 `*EscapeShapeBreachError{Ref RowRef; Count int}`, and
 `Table.CheckValid() error`. The package gains `errors` (and
 `fmt` for the message); both clear the frozen import guards.
+
+Phases 1 and 2 land as ONE change: the moment the entry check
+exists, every write-bearing escape fixture errors at `Resolve`
+entry and `mustResolve` fatals across the frozen suite (the
+`escapeRow` builder feeds sixteen call sites), so Phase 1
+alone turns the suite red mid-plan.
 
 ### Phase 2: Fixture conformance with discrimination check
 
@@ -1556,7 +1602,12 @@ inherited, not run here. This RDR does not wait on them.
    pre-existing test set, which must be identical.
    "Still discriminates" is **not** asserted by this scenario —
    `go test` reports pass/fail, not discrimination. That
-   property is scenario 6's job.
+   property is scenario 6's job. The baseline is regenerable,
+   not frozen to the spike artifact: re-run the frozen suite
+   at the implementation's base commit immediately before
+   Phase 1 lands and diff sorted outcome sets over the tests
+   existing at that commit — the spike file records an
+   instance of the oracle, not its definition.
 6. **Scenario**: Mutation check — the check's non-vacuity.
    Two named mutants, run separately, with this RDR's **own**
    new tests (scenarios 1–4, 7, 9, 10, 10b) **excluded** from
@@ -1647,8 +1698,12 @@ inherited, not run here. This RDR does not wait on them.
     **Expected**: exit 2 via `CLIError{Group: GroupInternal}`
     carrying `Code: "escape-row-shape-breach"`, the offending
     row identity, and the remedy `Hint` "fix the table
-    producer: an escape row must carry no writes" — not exit
-    1, which is what an unwrapped kernel error would produce.
+    producer: an escape row must carry no writes" — asserted
+    on the `Code`: an unwrapped kernel error also exits 2
+    (`ExecuteAndEmit` → `cobraErrorToCLIError`,
+    `command-error`, `GroupUserEnv`, generic hint), so the
+    exit code cannot detect a missing wrap; the stable code
+    can.
     The row identities must be readable from the **serialized**
     envelope, not only from the Go error chain:
     `CLIError.Cause` is `json:"-"`, so the assertion reads the
