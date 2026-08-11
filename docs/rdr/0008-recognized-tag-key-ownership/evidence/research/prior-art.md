@@ -53,13 +53,31 @@ checkout named by resources.md as the interim source-level fallback):
   a carrier-owned reserved token adjacent to author-named vocabulary,
   syntactically outside declarable tag-name space.
 
-## Demoted (not openable locally — Resolve assumption, not load-bearing here)
+## Demoted at Stage 2 → RESOLVED at Stage 4 (A3)
 
-- W3C SCXML §5.10 system variables: the Processor MUST bind the processed
-  event to `_event`; names beginning `_` are reserved; authors must not
-  rebind system variables. Matches the accepted XState posture but the spec
-  text is not in any local corpus/checkout — verify at Resolve (Method:
-  Prior Art, fetch spec section).
+- W3C SCXML §5.10 system variables. Stage 2 could not open the spec text in
+  any local corpus/checkout and demoted the claim to assumption A3. Stage 4
+  fetched the Recommendation directly (`https://www.w3.org/TR/scxml/`
+  §5.10 "System Variables" [normative]) and quotes it verbatim:
+  - reserved namespace — "Variable names beginning with '_' are reserved for
+    system use. A conformant SCXML document MUST NOT contain ids beginning
+    with '_' in the `<data>` element."
+  - protection — "The Processor MUST cause any attempt to change the value of
+    a system variable to fail and MUST place the error 'error.execution' on
+    the internal event queue when such an attempt is made."
+  - `_event` — "The SCXML Processor MUST bind the _event variable when an
+    event is pulled off the internal or external event queue to be processed,
+    and MUST keep the variable bound to that event until another event is
+    processed."
+  - `_sessionid` — "The SCXML Processor MUST bind the variable _sessionid at
+    load time to the system-generated id for the current SCXML session."
+  ACCEPTED. Corroborates the XState/Inngest posture: the carrier fixes the
+  name of the injected datum and the author namespace may not rebind it.
+  Note the mechanism differs from RDR 0008's: SCXML reserves a whole sigil
+  *namespace* (`_`) and enforces at write time; RDR 0008 reserves one bare
+  word and enforces at load/lint. The transferable finding is the ownership
+  posture, not the sigil (the sigil form is rejected under Load-Bearing
+  Decisions / Naming).
 
 ## Negative results
 
