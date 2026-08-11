@@ -34,12 +34,10 @@
     not conflate.)
   -->
 - **Type**: Architecture
-- **Profile**: foundational — provisional; one contract
-  (which layer guarantees that an escape row bears no writes
-  and no clears, and in what form), but it binds RDR 0001's
-  kernel `Row` vocabulary to RDR 0002's normalizer duty, so
-  it spans two already-Final RDRs. Resolve overwrites from
-  the verified count.
+- **Profile**: foundational — one contract (which layer
+  guarantees that an escape row bears no writes and no
+  clears, and in what form), enforced across two modules:
+  RDR 0001's kernel and RDR 0002's normalizer.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -117,9 +115,7 @@ a **runtime check**, with the kernel rejecting malformed
 rows at evaluation. The third branch splits in two: rejection
 as a *modeled refusal* reaches past this seam into RDR 0001's
 closed five-kind taxonomy and RDR 0005's exit-code mapping,
-while rejection on the *reserved error path* does not (see
-Investigation — this corrects the seed's premise that any
-runtime check requires a new refusal kind).
+while rejection on the *reserved error path* does not.
 
 ## Context
 
@@ -138,12 +134,10 @@ plan without consulting whether the selection came from an
 escape edge. A row populating both fields therefore produces
 a write-bearing escape disposition.
 
-Reachability today is narrow. The conforming RDR 0002
-normalizer — the party that would reject such a rule — is
-not yet implemented, so no production path constructs rows
-at all; the combination is reachable only from
-hand-constructed `resolve.Row` values, meaning tests and any
-future non-TOML table producer. What makes it worth
+Reachability today is narrow: the RDR 0002 normalizer is not
+yet implemented, so the combination is reachable only from
+hand-constructed `resolve.Row` values — tests and any future
+non-TOML table producer (A5). What makes it worth
 adjudicating rather than dropping is the blast radius if it
 did become reachable: an escape disposition describing
 owned-tag persistence that no authored rule sanctioned,
@@ -151,17 +145,13 @@ handed to the RDR 0004 accessor layer — precisely the
 "kernel guessing at persistence" that RDR 0001's ADV-2b
 names.
 
-Triage confirmed no Phase 3 assertion depends on escape
-fixtures carrying `Writes`; every test still discriminates
-if they are stripped, so the existing evidence base does not
-constrain the answer. A related cleanup — `escapeRow` in
-`internal/resolve/fixtures_test.go` populating
-`Writes`/`NextTags` on an escape row — is mechanical and is
-recorded in RDR 0001's `triage.md` under "Noted, not filed";
-under the chosen approach it stops being independent: the
-kernel precondition forces the fixture conformance as an
-implementation step here (see Implementation Plan), which
-supersedes that "not filed" disposition.
+The escape fixtures in
+`internal/resolve/fixtures_test.go::escapeRow` populate
+`Writes`/`NextTags` on escape rows. Conforming them is an
+implementation step of this RDR (Phase 2), superseding the
+"Noted, not filed" disposition in RDR 0001's `triage.md`;
+whether the frozen suite still discriminates once they are
+stripped is A3.
 
 Triage also examined and rejected merging this with kata
 `z53t` (RDR 0008): both sit at the 0001↔0002 seam, but this
@@ -237,18 +227,19 @@ include "malformed escape declarations." So the value-level
 branch has a normative home already; what is missing is the
 ownership statement and any guarantee off the authored path.
 
-The decisive discovery corrects the seed's branch-3 premise.
-RDR 0001 states: "Modeled refusal is a value-level resolver
-disposition, not a CLI error and not the Go error path for
-parser bugs, IO failures, or programmer mistakes," and
+The decisive discovery is that a taxonomy-neutral runtime
+channel already exists. RDR 0001 states: "Modeled refusal is
+a value-level resolver disposition, not a CLI error and not
+the Go error path for parser bugs, IO failures, or
+programmer mistakes," and
 `internal/resolve/resolve.go::Resolve` documents "the error
 return is reserved for programmer mistakes, not for modeled
 refusals." A producer handing the kernel an illegal row
 shape *is* a programmer mistake — the breach class RDR 0001
 pre-allocated a channel for. Runtime rejection therefore
 does **not** require opening the five-kind taxonomy: only
-the modeled-refusal variant of the runtime branch does, and
-that variant is rejected (Alternative 2).
+the modeled-refusal variant does, and that variant is
+rejected (Alternative 2).
 
 Sibling-path check (discriminator reuse): the escape/ordinary
 discrimination already exists — `resolve.go::rescues` and
@@ -346,12 +337,8 @@ structural check on `Table.Rows` before evaluation).
   just a field: nothing downstream persists an escape plan's
   `NextTags` into owned tag state, so an escape row cannot
   mutate owned state through the blessed exit-route field.
-  RDR 0002's escape-row rendering names neither writes nor
-  next tags, so whether an escape row may carry `NextTags`
-  or must also render it empty is settled against RDR 0002's
-  rendering contract and RDR 0004's accessor write contract
-  at Resolve — and widening the conformance predicate to
-  `NextTags` would be mechanical, not an ownership change.**
+  If it can, the conformance predicate must also require an
+  empty `NextTags` on escape rows.**
   - **Status**: Pending
   - **Method**: Peer RDR
   - **Evidence**: RDR 0002 Normative Contracts, escape-row
@@ -360,11 +347,10 @@ structural check on `Table.Rows` before evaluation).
     modeled failure class list"); RDR 0001's `Plan.NextTags`
     vs `Plan.Writes` doc contracts (writes are what "the
     accessor layer applies"); RDR 0004's contract for what
-    an accessor may persist. Premortem P-5 names the miss
-    this must rule out: the original complaint ("an owned
-    tag has a value no rule set") reproduced via NextTags
-    persistence while the Writes-only invariant reports the
-    table conforming.
+    an accessor may persist. The miss this must rule out:
+    the original complaint ("an owned tag has a value no
+    rule set") reproduced via NextTags persistence while a
+    Writes-only invariant reports the table conforming.
   - **If wrong**: The invariant guards the wrong field for
     the stated problem — the user symptom recurs through
     `NextTags` — and the predicate must widen before lock;
@@ -424,9 +410,7 @@ kind, never a `Row` type split.**
 
 Concretely: any component that constructs `resolve.Row`
 values must not populate `Writes` on a row whose `Escape`
-list is non-empty (clears are `<clear>` writes after RDR
-0002 normalization, so this single predicate carries "no
-writes and no clears" at the kernel boundary). On the
+list is non-empty. On the
 authored path, RDR 0002's normalizer rejects the rule at
 load — its existing "malformed escape declaration"
 validation class, diagnosable to the source rule. Off the
@@ -437,9 +421,7 @@ offending row's `RuleID` and `SourceLocator`. The error is
 the channel RDR 0001 explicitly reserves for "programmer
 mistakes": a malformed table is a broken producer, not a
 behavioral disposition of the input tuple, so the five-kind
-refusal taxonomy stays closed — consistent with RDR 0001's
-A5 design decision and with RDR 0007's precedent of
-declining to mint a new refusal kind at an adjacent seam.
+refusal taxonomy stays closed (Alternative 2).
 
 Ownership: **this RDR is the single normative home of the
 escape-row shape rule.** RDR 0002's normalizer *implements*
@@ -472,12 +454,17 @@ signal, reused.
 #### Normative Contracts
 
 ```normative
-Escape-row shape conformance — an escape row bears no writes
-and no clears — is a PRODUCER obligation on every constructor
-of resolve.Row values: a Row with a non-empty Escape list
-MUST have an empty Writes slice. (Authored clears normalize
-to `<clear>` writes per RDR 0002, so this one predicate
-carries both halves of the invariant at the kernel boundary.)
+Escape-row shape conformance — an escape row carries no
+owned-state mutation — is a PRODUCER obligation on every
+constructor of resolve.Row values: a Row with a non-empty
+Escape list MUST have an empty Writes slice. (Authored clears
+normalize to `<clear>` writes per RDR 0002, so the Writes
+predicate carries both "no writes" and "no clears" at the
+kernel boundary.) Whether the conformance predicate also
+requires an empty NextTags is OPEN pending A4, which settles
+it against RDR 0002's escape-row rendering and RDR 0004's
+accessor write contract; the obligation, its owner, and its
+enforcement channel do not depend on that outcome.
 ```
 
 ```normative
@@ -492,9 +479,9 @@ conformance fixture set; RDR 0002's grammar is unchanged.
 
 ```normative
 The kernel enforces the same obligation as an entry
-precondition of Resolve: a table containing a row with
-non-empty Escape and non-empty Writes MUST cause Resolve to
-return a non-nil Go error identifying the offending row by
+precondition of Resolve: a table containing a row that
+breaches the conformance predicate above MUST cause Resolve
+to return a non-nil Go error identifying the offending row by
 RuleID and SourceLocator, with no Result disposition. The
 precondition is evaluated over the WHOLE table before any
 evaluation step: a breach surfaces even when no resolution
@@ -527,24 +514,29 @@ introduced at the kernel boundary.
 
 #### Load-Bearing Decisions
 
-- **Selection / predicate** — the conformance predicate is
-  exactly `len(row.Escape) != 0 && len(row.Writes) != 0`,
-  applied to every row of the supplied table at `Resolve`
-  entry (not only to rows the resolution touches): a
-  malformed table is malformed as a value, and checking only
-  reached rows would make the breach appear and disappear
-  with the input tuple. Length-based on purpose: a non-nil
-  but empty `Writes` slice is conforming (premortem P-9's
-  nil-vs-empty pin). Precedence is pinned: the breach error
-  precedes every modeled disposition, `unmodeled_outcome`
-  included. Whether the predicate must widen to `NextTags`
-  is A4's Resolve question; widening is mechanical.
+- **Selection / predicate** — the breach predicate over a
+  single row is `len(row.Escape) != 0 && <mutation test>`,
+  where the mutation test is `len(row.Writes) != 0` today and
+  becomes `(len(row.Writes) != 0 || len(row.NextTags) != 0)`
+  if A4 finds that `NextTags` on an escape row can reach
+  owned state. **A4 is the only open input**; these are
+  pinned regardless of its outcome:
+  - *Scope* — evaluated over every row of the supplied table
+    at `Resolve` entry, not only rows the resolution touches:
+    a malformed table is malformed as a value, and checking
+    only reached rows would make the breach appear and
+    disappear with the input tuple.
+  - *Nil-vs-empty* — length-based on purpose: a non-nil but
+    empty slice is conforming. The predicate tests emptiness,
+    never nil-ness.
+  - *Precedence* — the breach error precedes every modeled
+    disposition, `unmodeled_outcome` included.
+  - *Locus* — one exported function, called at both sites, so
+    widening under A4 is a single-site edit that cannot
+    desynchronize the two enforcement points.
 - **Naming** — the breach is "escape-row shape breach,"
-  carried as a Go error (form sharpened at Pre-Lock: opaque
-  vs sentinel/typed is open, constrained by A7); rejected: a
-  new refusal kind (`malformed_row` or similar), which would
-  open RDR 0001's closed five-kind taxonomy — the same
-  rejection RDR 0007 recorded for `guard_input_missing`.
+  carried as a Go error. Its form (opaque vs sentinel/typed)
+  is open, sharpened at Pre-Lock and constrained by A7.
 
 ### Capability Dependencies
 
@@ -596,51 +588,20 @@ yet misbehave and leaves open the only path that can. B is
 rejected on blast radius and reversibility: Go's lack of sum
 types makes the split a permanent two-type public surface
 that reopens two locked RDRs to prevent a state one
-predicate detects. C is rejected because a malformed table
-is not a behavioral disposition of the input tuple — it is a
-broken producer — and RDR 0001 both closed the behavioral
-taxonomy (A5) and pre-allocated the programmer-mistake
-channel; RDR 0007's rejection of `guard_input_missing` is
-the standing precedent at the adjacent seam, and this RDR's
-grounding independently reaches the same answer (no
-joint-check collision: the seed's premise that a runtime
-check *requires* a new kind was wrong — see Investigation).
+predicate detects. C is rejected on taxonomy alignment
+(Alternative 2): a malformed table is a broken producer, not
+a behavioral disposition of the input tuple, and RDR 0001
+both closed the behavioral taxonomy (A5) and pre-allocated
+the programmer-mistake channel.
 
-Premortem: hardened — critic verdict PASS, no switch forced;
-the ownership structure survived every negation, and the
-findings cluster at the seams the brief left unwritten.
-Folded: P-2 (no construction-time gate for non-TOML
-producers → new normative clause: the predicate is exported
-and Resolve's entry check is the same function — one
-predicate, two call sites); P-4 (whole-table vs on-path and
-error-vs-refusal precedence unpinned → both pinned in the
-kernel clause and Load-Bearing Decisions; the dormant-row
-behavior change named in Consequences and MVV); P-5 (the
-user's invariant is an *outcome*, the design's a *field*:
-NextTags persistence could reproduce the original symptom →
-A4 widened to the outcome claim against RDR 0004's accessor
-contract); P-6/P-10 (cross-layer drift: the clears-as-
-`<clear>`-writes reduction and the write-free convention
-live in two documents at different maturity → Phase 3's
-fixture set made shared and normative, including the
-sentinel-clear case, run by both kernel and future
-normalizer suites); P-9 (stripped fixtures make the suite
-vacuous about the check → MVV carries the positive breach
-test; Phase 2 adds a discrimination step; nil-vs-empty
-pinned length-based); P-3/P-11 (exit-2 misroute and
-error-channel creep → recorded decision in Failure Modes
-that the breach is code-indistinguishable from internal
-errors, with the escalation path named; the normative clause
-states what qualifies for the error channel). Answered from
-withheld facts, no change needed: P-7 (Row carries
-`RuleID`/`SourceLocator` — the error names the row by
-contract) and P-1's window scenario (no authored-TOML path
-exists before the normalizer — the normalizer *is* the
-loader; the residual implementer-shortcut risk stays in
-Risks). P-8 (partial-validation ownership creep) is carried
-as the "kernel validation surface" listing obligation in
-Phase 1.
-Ledger: `docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/propose-premortem/critic.md`.
+Premortem: hardened — critic verdict PASS, no switch forced.
+The ownership structure survived every negation; the
+findings landed at unwritten seams, not at the choice, and
+are discharged in the live text above (the exported-predicate
+clause, the whole-table and precedence pins, A4's outcome
+framing, the shared Phase 3 fixtures, and the recorded
+exit-2 diagnostic decision in Failure Modes). Ledger:
+`docs/rdr/0009-escape-row-shape-conformance-ownership/evidence/propose-premortem/critic.md`.
 
 Joint-check: clear (7 peers)
 
@@ -684,8 +645,7 @@ on an existing channel.
 **Description**: The kernel treats a write-bearing escape
 row as a value-level refusal — a sixth kind (e.g.
 `malformed_row`) alongside the behavioral five — mapped by
-RDR 0005 to a CLI code. This is the seed's third branch as
-originally stated.
+RDR 0005 to a CLI code.
 
 **Pros**:
 
@@ -762,9 +722,11 @@ enforcement point without opening any peer contract.
 - Negative (behavior change, deliberate): a hand-built table
   carrying a *dormant* malformed row — one no resolution
   path reaches — previously resolved fine and now errors on
-  every `Resolve` (whole-table precondition, premortem P-4).
-  There is no production producer at HEAD (A5), so no
-  deployed table can regress; the MVV pins the new outcome.
+  every `Resolve` (whole-table precondition). The MVV pins
+  the new outcome. Whether any deployed table can regress
+  turns on A5 (no production `resolve.Row` constructor at
+  HEAD); if A5 fails, a migration step becomes a
+  prerequisite.
 
 ### Risks and Mitigations
 
@@ -825,7 +787,7 @@ enforcement point without opening any peer contract.
   (A7). An operator runbook entry therefore reads "exit 2
   from a resolve: read the error text; a row-identified
   escape-shape breach means a broken table producer, not a
-  tool defect" (premortem P-3). If operational experience
+  tool defect". If operational experience
   needs a machine-branchable code, that is an RDR 0005
   envelope question — explicitly out of scope here, and the
   recorded cost of keeping the taxonomy closed.
@@ -833,7 +795,7 @@ enforcement point without opening any peer contract.
   normative clause states what qualifies for the error path
   (a producer/programmer contract breach, never a modeled
   condition), so the next borrower argues against text, not
-  precedent (premortem P-11).
+  precedent.
 
 ## Implementation Plan
 
@@ -854,7 +816,7 @@ that row's `RuleID` and `SourceLocator`, with no `Plan` and
 no `Refusal` — while the same table with the writes removed
 resolves, escapes, and refuses exactly as the frozen ADV
 suite proves today (zero disposition change for conforming
-tables). Three scenarios from the premortem are in scope:
+tables). Three scenarios are in scope:
 *breach-yields-error-not-plan* (the pre-fix probe — a
 write-bearing escape row selected via escape → plan with
 `Escaped:true` carrying writes — now yields the error, never
@@ -873,17 +835,16 @@ the row; conforming tables unchanged), state the producer
 obligation on the `Row` doc contract, and record the
 kernel's validation surface — exactly which shape property
 it checks vs still assumes — so partial validation cannot be
-read as general kernel ownership (premortem P-8).
+read as general kernel ownership.
 
 ### Phase 2: Fixture conformance with discrimination check
 
-Bring `escapeRow` fixtures into conformance (drop `Writes`;
-`NextTags` per A4's outcome) — supersedes RDR 0001 triage's
-"Noted, not filed" cleanup; A3's spike proves the frozen
-suite still discriminates, and one mutation-style step
-(revert the entry check; at least one test must fail)
-proves the stripped fixtures did not leave the check
-untested (premortem P-9).
+Bring `escapeRow` fixtures into conformance: drop `Writes`,
+and drop `NextTags` only if A4 widened the predicate. A3's
+spike proves the frozen suite still discriminates, and one
+mutation-style step (revert the entry check; at least one
+test must fail) proves the stripped fixtures did not leave
+the check untested.
 
 ### Phase 3: Shared normalizer conformance fixtures
 
@@ -895,19 +856,52 @@ escape rows render write-free; and one canonical
 authored-clear case pins the `<clear>`-sentinel-write
 representation identically for the kernel suite and the
 normalizer suite, so the two enforcers of one invariant
-cannot drift (premortem P-6/P-10).
+cannot drift.
 
 ## Validation
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Done means: every producer path is closed, no conforming
+table changes disposition, and the check itself is proven
+non-vacuous. The MVV's three scenarios are the core; the
+suite below is the coverage goal.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: Escape row with populated `Writes`, selected
+   via the escape path.
+   **Expected**: `Resolve` returns a non-nil error naming the
+   row's `RuleID` and `SourceLocator`; no `Plan`, no
+   `Refusal`.
+2. **Scenario**: Escape row with populated `Writes` that no
+   resolution path reaches (dormant).
+   **Expected**: Same error — the precondition is whole-table,
+   not on-path.
+3. **Scenario**: Escape row with a non-nil but empty `Writes`
+   slice.
+   **Expected**: No error; resolves normally. Pins the
+   length-based predicate against a nil-ness reading.
+4. **Scenario**: Breach coexists with a table state that would
+   otherwise yield `unmodeled_outcome`.
+   **Expected**: The breach error wins — precedence over every
+   modeled disposition.
+5. **Scenario**: The full frozen `internal/resolve` suite
+   (ADV/MVV/boundary) run against conformed escape fixtures.
+   **Expected**: Every assertion still passes and still
+   discriminates — no test silently becomes vacuous (A3).
+6. **Scenario**: Mutation check — revert the entry check and
+   re-run.
+   **Expected**: At least one test fails, proving the
+   conformed fixtures did not leave the check untested.
+7. **Scenario**: The exported predicate called directly by a
+   producer at construction time, on the same tables as
+   scenarios 1–3.
+   **Expected**: Verdicts identical to `Resolve`'s entry check
+   — one predicate, two call sites, no drift.
+8. **Scenario** (binds RDR 0002's build): authored escape rule
+   carrying a write block, and one carrying a clear list.
+   **Expected**: Both rejected at load under "malformed escape
+   declaration," naming the source rule; normalized escape
+   rows render write-free.
 
 ## Finalization Gate
 
