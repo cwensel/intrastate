@@ -11,7 +11,9 @@ instance body). -->
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-08-11; re-verify A6, A11 — A6/A11
+  are `Verified` on a false negative-existential about Final RDR 0009 ("the
+  string `Input` appears zero times"; it appears 5×), with stale line citations]
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real
@@ -2306,3 +2308,80 @@ Responses: `0008-recognized-tag-key-ownership/artifacts/gate.md`
   demoted to A3). External source paths there and above are
   relative to the `../state-machines` sibling checkout, not
   this repo.
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+**Cluster**: `0002-0009` · **Date**: 2026-08-11 · **Peer pair**: 0008 ↔ 0009
+**Report**: `docs/rdr/cluster-reconcile/0002-0009/report.md`
+**Evidence**: `docs/rdr/cluster-reconcile/0002-0009/pairwise-0008-0009.md`
+
+### Defect
+
+Assumptions **A6** and **A11** carry `Status: Verified` / `Method: Peer RDR` on
+a mechanically false claim about Final RDR 0009. The offending lines:
+
+> The string `Input` appears **zero** times in RDR
+> 0009 (case-sensitive, whole file).
+
+and, in A11:
+
+> Corroborating the disjointness at the document
+> level: the string `Input` occurs **zero** times in RDR
+> 0009 (case-sensitive, whole file, re-counted at
+> Reconcile), so 0009's contracts speak only of "the
+> supplied table," never of this RDR's subject.
+
+Verified at cluster-reconcile: `Input` occurs **5×** in Final 0009 (lines 509,
+736, 741, 742, 857), including inside 0009's own Normative Contracts, which
+reach the checked table *through* the input (`in.Table`). The count was true of
+the **Draft** 0009 this RDR read; 0009 subsequently gained A10 (raised by its
+repeatability lens, reconstructing a two-parameter `Resolve`), which introduced
+exactly the `Input` references that falsify the count, and then locked to Final.
+
+Two line citations into 0009 are also stale: `0009…md:536-540`, quoted as
+0009's "at `Resolve` entry" contract, resolves in Final 0009 to unrelated prose
+about uSCXML conformance; `0009…md:510-517` likewise no longer covers the
+claimed subject.
+
+### Target re-entry stage
+
+**Stage 4 — Resolve.** Re-verify A6 and A11 against the *Final* text of RDR
+0009 and repair the citations to durable anchors (`path::Symbol`, section
+heading, or assumption ID — not bare line numbers, which is what went stale).
+
+### Re-entry scope
+
+**STAGE-SCOPED.** The `re-verify` set is exactly {A6, A11}; every other
+assumption's lock-time `Verified` stamp is undisturbed and stays lock-audited.
+The chosen approach — reserving the `recognized` key name and siting enforcement
+at the kernel input boundary — is not voided; what fails is the *evidence* for
+the enforcement-locus conclusion, which A6 drew from the false negative. Not
+FULL-FLOW: no foundational assumption is voided and the Problem Statement is
+untouched.
+
+### Resolution direction
+
+A6 concluded that 0009's producer-obligation seam "does not reach this RDR's
+data channel," so the reserved-key precondition "needs an enforcement locus of
+its own." Re-derive that conclusion against Final 0009, where both RDRs now
+place a whole-table precondition on the same `Resolve` entry. Two outcomes are
+legitimate:
+
+1. The conclusion survives on sound evidence (the predicates read disjoint
+   fields — 0009 reads `Escape`/`Writes`, this RDR reads the tag-key name), in
+   which case A6/A11 are re-stamped with corrected evidence; or
+2. The co-residency is load-bearing, in which case the precedence question
+   between the two entry preconditions is **JD-5** in the cluster report and
+   belongs to the umbrella decision, not to this RDR alone.
+
+Either way, do **not** restate 0009's rule here — cite it.
+
+### Also note (not part of the re-verify set)
+
+The cluster report records nine JOINT-DECISIONS touching this RDR (JD-4, JD-5,
+JD-8, JD-9, JD-10). They are not defects in this RDR and do not widen this
+re-entry; they need a normative home before the cluster implements. In
+particular **JD-10** — that this RDR's name constraint invalidates all three of
+RDR 0002's canonical fixtures, contradicting its own `Overrides` claim to
+"narrow nothing in either peer" — should be settled at the umbrella, not
+absorbed here.
