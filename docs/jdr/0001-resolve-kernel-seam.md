@@ -192,6 +192,16 @@ versus the structured envelope every other failure produces.
   decide this" indistinguishable at the seam, so the panic is a workaround for a
   representation defect rather than a design.
 
+  **The kernel does not need to learn the grammar.** 0007's rationale for the
+  opaque string is decoupling — the evaluator owns the guard vocabulary, and a
+  structured field would drag RDR 0003's grammar into the kernel. That objection
+  is answerable: the kernel must carry *cardinality*, not *meaning*. A slice of
+  atoms with kernel-neutral shape (key, operator token, literal, block) lets the
+  kernel transport N atoms without interpreting any operator — it stays exactly
+  as grammar-agnostic as it is today for `Match []Tag` and `Writes []Tag`, which
+  it already carries without interpreting. What changes is that the type stops
+  misrepresenting one-per-row as the only case.
+
   **Cost, stated plainly:** this reopens RDR 0001's kernel `Row` type — which
   0007 explicitly declined to touch (its A3, "reversing it is a kernel change
   this RDR declines to make") — and reopens 0007's seam definition at
@@ -199,6 +209,18 @@ versus the structured envelope every other failure produces.
   code is the source of truth there; its implementation has zero production
   consumers, making the change a refactor of test-covered code rather than a
   migration.
+
+  **Procedurally**, `Implemented` has no backward edge in the RDR lifecycle —
+  the statuses are Draft/Final/Implemented/Reverted/Abandoned/Superseded/Demoted,
+  and none of them means "reopened." So (d) lands one of two ways, and the choice
+  should be explicit rather than discovered mid-flight: either **0007 absorbs the
+  `Row` change into its own FULL-FLOW re-entry** (it has precedent — its
+  `Overrides` already "fixes the meaning of `Row.RequiresOwned`," a 0001 field),
+  or **a new RDR supersedes 0001's row-shape contract** and 0007 cites it. The
+  first is cheaper and keeps one owner for the seam; the second is cleaner if the
+  row shape turns out to serve more than the guard question — which **JD-3**
+  hints it might, since `RequiresOwned` is a second under-specified field on the
+  same type.
 
 *Principles:* **P3** rules out (a) — a stack trace is not a structured failure,
 and the skill consuming JSON cannot parse it. **P7** rules out (c) once
@@ -249,25 +271,65 @@ the *preferred* refusal whenever a survivor set carries both — has **no row at
 all** in 0005's twelve-row table. A sweep for `owned.state|state-unavailable`
 returns one unrelated prose hit.
 
-- **(a) Keep `GroupUserEnv` for both** — cheapest, and wrong for the
-  accessor-produced half: it tells the user to fix input they cannot reach.
-- **(b) Split by cause — recommended** — `flow-guard-unevaluable` keeps
-  `GroupUserEnv` when the missing key was caller-suppliable; a new
-  `flow-owned-state-unavailable` row takes `GroupEnvUnavailable` (exit 3, the
-  bucket that already means "the environment could not answer"). This uses
-  0005's existing taxonomy rather than widening it, and it makes the exit code
-  carry the remedy.
-- **(c) One new group** — add `GroupInternal` and route both there. Simplest to
-  state; loses the distinction between "you can fix this" and "you cannot," and
-  RDR 0009 independently needs `GroupInternal` for its breach (JD-8), so this
-  overloads one group with two unrelated meanings.
+> **Correction (2026-08-12).** This decision was originally framed around
+> "widening 0005's group taxonomy," and that framing was wrong on two counts,
+> both checked against shipped code rather than RDR prose.
+>
+> 1. **`GroupInternal` already exists.** `internal/cli/clierr/clierr.go`
+>    declares `GroupSuccess`, `GroupWarning`, `GroupUserEnv`,
+>    `GroupEnvUnavailable`, `GroupInternal`, `GroupSignalCancel`, and
+>    `ExitCodeFor` maps all of them. RDR 0005's sentence — "`ExitCodeFor` maps
+>    existing groups to exit 2 for user/model/input refusals, exit 3 for
+>    environment unavailability, and 130 for interruption" — is an *incomplete
+>    summary of code that already ships*, not a closed taxonomy awaiting
+>    extension. Code is the source of truth; 0005's prose is simply behind it.
+>    The gate's finding here was spec-vs-spec, and it does not survive contact
+>    with the package.
+> 2. **`GroupUserEnv` and `GroupInternal` both return exit 2.** So the original
+>    recommendation's rationale — "it makes the exit code carry the remedy" —
+>    was not achievable as stated. The *only* remedy distinction the exit code
+>    can express is exit 3 (`GroupEnvUnavailable`) versus exit 2 (everything
+>    else). Everything finer must ride `Code`, `Detail`, and `Hint`.
+>
+> RDR 0005's own A-block already anticipates this and answers it:
+> "Resolver/accessor-specific values only require new `Code` constants or
+> literals, **not new envelope fields or exit groups**." The envelope
+> (`CLIError`) already carries `Code`, `Param`, `Detail`, and `Hint`, and
+> `clierr` renders `detail:` and `hint:` in text mode as well as JSON.
 
-*Principles:* **P4** rules out (a) and (c) — both hand the user an exit code
-whose implied remedy is wrong for at least one cause. (b) is the only option
-where the code carries the remedy, and **P7** favors it further: adding a row to
-an unreleased taxonomy costs nothing.
+So the real question is narrower than "which group": **does an
+accessor-caused refusal deserve exit 3?** That is the one distinction a script
+can branch on without parsing the envelope.
 
-**Resolved:** _pending — needs a call._
+- **(a) Everything exit 2** — `flow-guard-unevaluable` and a new
+  `flow-owned-state-unavailable` both take `GroupUserEnv`. Distinguished only by
+  `Code`. Cheapest, and defensible since a skill parsing JSON reads `Code`
+  anyway. Cost: a shell script cannot tell "your input is wrong" from "the
+  artifact could not be read," so retry logic cannot be written without JSON.
+- **(b) Route accessor-caused unavailability to exit 3 — recommended** —
+  `owned_state_unavailable` is, by construction, "a required external facility
+  could not answer": the accessor could not produce the owned snapshot. That is
+  what `GroupEnvUnavailable`/exit 3 already means, and it is the one place the
+  exit code can carry real information. `flow-guard-unevaluable` stays exit 2
+  when the missing key was caller-suppliable. Cost: the two kinds must be
+  distinguishable at the point the CLI builds the error — which they are, since
+  the kernel returns distinct refusal kinds.
+- **(c) A distinct code, group deferred** — add
+  `flow-owned-state-unavailable` as a `Code` now and leave its group to the
+  implementer. Honest about what is undecided, but it defers the only part that
+  is actually a decision.
+
+*Principles:* **P4** survives the correction but relocates: since exit 2 cannot
+separate causes, "who can fix it" must be carried by `Code`/`Hint` in every
+option — so P4 no longer rules options out, it constrains all of them equally.
+The live question is whether exit 3 is *also* warranted, and P4 favors (b)
+because exit 3 is the one signal reaching a caller who never parses the body.
+**P7** is neutral here: all three are additive to unreleased code.
+
+**Resolved:** _pending — needs a call._ Note this is a **smaller** decision than
+originally written: no RDR needs reopening, no envelope field is added, and
+0005's A-block pre-authorizes the `Code` additions. See §Entry grading — this is
+a *fork* only in its exit-3 half; the rest is a blank the implementer fills.
 
 ### D3 — May `--tag` satisfy owned state?
 
@@ -299,15 +361,88 @@ makes it reachable, so the bound expires exactly when the code lands.
   must track every model's tag vocabulary; brittle, and it fails open for
   anything new.
 
+> **Update (2026-08-12) — the kernel already enforces this; (b) is a wiring
+> constraint, not a new mechanism.** Checked against shipped code:
+> `resolve.Input` carries `Owned []Tag` and `Observed []Tag` as *separate
+> fields*; `assemble` stamps each with its provenance; and the function's own
+> contract states the invariant — precedence is "owned over observed over
+> recognized, so the accessor-produced snapshot is **never shadowed by
+> caller-supplied context**." `TagSet.Lookup` returns provenance alongside the
+> value.
+>
+> So a caller-supplied tag *cannot today* override accessor-read owned state.
+> The `--tag` exposure opens only if the future `flow` verb wires `--tag` into
+> `Input.Owned` instead of `Input.Observed`. Option (b) therefore costs one
+> wiring rule on a verb that does not exist yet, plus a sentence making it
+> normative — not a new provenance mechanism, which is already built.
+
 *Principles:* **P1** rules out (a) outright — accepting the bypass is precisely
 "missing artifact state masked," here by the user rather than by the resolver,
 and the kernel already refuses the equivalent on the owned-state path. It also
 rules out (c), which fails open for any key not yet listed. (b) is the only
-option that holds P1 at the producer that can violate it.
+option that holds P1 at the producer that can violate it, and the update above
+makes it nearly free.
 
-**Resolved:** _pending — needs a call._
+**Resolved:** _pending — needs a call,_ but this is the cheapest of the three
+and the code already leans this way. See §Entry grading — a *constraint*, not a
+fork: the kernel's existing precedence rule determines the answer, and what
+remains is writing it down before someone wires the verb wrong.
 
 ---
+
+## Entry grading
+
+*Added 2026-08-12, after checking every entry against shipped code rather than
+RDR prose. This section exists because the registry as first written
+over-gated: ten entries all marked `open`, which under Stage 7.1 means "do not
+implement," when most are not decisions at all.*
+
+The cluster gate grades findings by severity (`blocks-impl` / `risks-impl` /
+`cosmetic`). That axis measures *whether an implementer must confront the
+question*, which is true of a thousand micro-decisions in any implementation —
+so `blocks-impl` inflates. What matters for sequencing is a different axis:
+
+| Grade | Meaning | Gates implementation? |
+| --- | --- | --- |
+| **Fork** | A genuine either/or with divergent consequences. Choosing wrong costs rework or ships a defect. | **Yes** — decide first. |
+| **Constraint** | The answer is already determined by shipped code or a stated principle. Nothing to negotiate; it must be *written down* so nobody implements against it. | No — record it, proceed. |
+| **Blank** | A detail the implementer fills (a code string, a test's home). The RDRs are silent because silence is appropriate. | No — name the owner. |
+
+Grading this registry:
+
+- **Forks (3)** — **JD-2** (resolver control flow: gate-then-count vs
+  match-then-count changes the algorithm's shape), **JD-7** (read completeness —
+  a soundness hole where a truncated read yields a confident plan; the one entry
+  whose wrong answer ships a silent bug), and **D1/JD-1** (the `Row.Guard`
+  representation, which every downstream contract inherits).
+- **Constraints (4)** — **D3/JD-9** (the kernel's provenance precedence already
+  decides it), **JD-4** (P5 decides it: a green lint must mean resolution
+  succeeds; what remains is which document says so), **JD-5** (pick an order,
+  pin it with a test — ten minutes, and either order is defensible), **JD-10**'s
+  fixture half (three fixtures to rename; there are no users to migrate).
+- **Blanks (3)** — **JD-8**'s code strings (0005's A-block pre-authorizes them:
+  "only require new `Code` constants or literals"), **JD-3**'s producer (whoever
+  writes the normalizer names it), **JD-10**'s totality half — genuinely
+  undecidable until a normalizer exists to observe the empty-outcome case.
+
+**Consequence for sequencing.** Only the three forks need resolving before code.
+The constraints need *recording* — which this document does — and the blanks
+need an owner, not a negotiation. A cluster held at NOT RECONCILED over ten
+entries when three are forks is paying gate cost for bookkeeping.
+
+**A caution against over-applying this.** The grades are a judgement about
+*consequence*, not about how hard something was to find. JD-7 is graded a fork
+precisely because it is easy to wave through: RDR 0004's clause reads fine, and
+the defect only appears when you notice the disjunction has no completeness
+requirement. Cheap-to-fix is not the same as safe-to-defer.
+
+**What this does *not* license.** The gate verdict stands at NOT RECONCILED
+until the three forks resolve and RDR 0008 re-locks — re-grading changes which
+entries hold the gate, not whether it is held. Two further items are outside
+this registry's authority and unaffected: RDR 0008's demotion (a genuine
+single-RDR SPEC-DEFECT — A6/A11 `Verified` on a false claim about Final 0009)
+and RDR 0002's internal dump/round-trip contradiction (recorded as withdrawn
+JD-11, routed as a RE-LOCK-ONLY defect). Both are real, both still owed.
 
 ## Interface record
 
@@ -357,9 +492,13 @@ provenance. Edit in place; normative once `decided`.
   meaning "resolution succeeds." No invariant category in 0006 detects
   unevaluability risk, and 0003's coverage algebra has no image for the absent
   case under `contains`, `eq`, `in`, or comparison. Stake: what a green
-  `intrastate lint` actually promises. *Status:* `open` — the promise must be
-  restated or the lint must gain a category; both are cross-RDR. *(0007×0006 F2,
-  0007×0003 F3, 0008×0006 F3, blocks-impl)*
+  `intrastate lint` actually promises. *Status:* **`constraint`** *(re-graded
+  2026-08-12)* — **P5** already decides the substance: a green lint must mean
+  resolution succeeds, so where the two disagree the *promise* is what gives, not
+  the runtime. What remains is which document records the narrowed promise and
+  whether lint gains a warning category — an ownership question, not a design
+  fork. Re-grade to `open` if implementation shows the narrowed promise leaves
+  lint with nothing useful to assert. *(0007×0006 F2, 0007×0003 F3, 0008×0006 F3)*
 
 - **JD-5 Precedence of the two whole-table entry preconditions.** RDR 0009 adds
   a breach check at `Resolve` entry and orders it "before every modeled
@@ -367,8 +506,12 @@ provenance. Edit in place; normative once `decided`.
   entry. Neither orders itself against the other — 0009's precedence clause
   ranks itself against *dispositions*, not against a peer precondition, and is
   silent on one. Stake: which error a table with both defects reports, and
-  therefore which one the author fixes first. *Status:* `open`. *(0007×0009 F1,
-  0008×0009 F2, blocks-impl)*
+  therefore which one the author fixes first. *Status:* **`constraint`**
+  *(re-graded 2026-08-12)* — both orders are defensible and neither loses
+  information; what is unacceptable is leaving it unpinned so two
+  implementations differ. Pick one, pin it with a test asserting a table that
+  breaches both reports the chosen error. The decision is cheap; the silence is
+  not. *(0007×0009 F1, 0008×0009 F2)*
 
 - **JD-6 Producer-defect surface.** Governed by §D1. Until D1 resolves, the
   kernel seam and the CLI boundary specify contradictory behavior for the same
@@ -397,15 +540,22 @@ provenance. Edit in place; normative once `decided`.
   fields," but 0007 needs `Refusal.Rows`/`MissingOwned` and 0009 needs row
   identity to reach the user. Stake: whether the operator learns *which* rows
   and *what* state, or just that something failed. Scoping half governed by §D2.
-  *Status:* `open → §D2` for the scoping; the missing rows are additive and
-  settle with the `flow` verb. *(0007×0005 F1/F2/F3, 0009×0005 F1/F2,
-  0008×0005 F1, blocks-impl)*
+  *Status:* **`blank`** *(re-graded 2026-08-12)* — RDR 0005's A-block already
+  pre-authorizes the additions: "Resolver/accessor-specific values only require
+  new `Code` constants or literals, **not new envelope fields or exit groups**."
+  `GroupInternal` ships. `Detail` and `Hint` ship and render in both modes. So
+  the "0005 must widen its taxonomy" framing was wrong — this is code-string
+  bookkeeping owned by whoever writes the `flow` verb, except the exit-3
+  question held in §D2. *(0007×0005 F1/F2/F3, 0009×0005 F1/F2, 0008×0005 F1)*
 
 - **JD-9 `--tag` provenance.** Governed by §D3. Also reaches 0008: a caller
   passing `--tag recognized=…` collides with the reserved key, which 0008 classes
   a programmer mistake and 0005 would class user input. Stake: whether a
   guarantee the kernel enforces can be bypassed from the command line.
-  *Status:* `open → §D3`. *(0007×0005 F4, 0008×0005 F2, blocks-impl)*
+  *Status:* **`constraint → §D3`** *(re-graded 2026-08-12)* — `assemble` already
+  pins owned-over-observed precedence so caller context "never shadows" the
+  accessor snapshot; what remains is making the `--tag` → `Input.Observed`
+  wiring normative before the verb is written. *(0007×0005 F4, 0008×0005 F2)*
 
 - **JD-10 Recognized-tag totality and fixture ownership.** RDR 0008's
   declaration channel is total (a declared `recognized` tag always exists in the
@@ -417,8 +567,15 @@ provenance. Edit in place; normative once `decided`.
   canonical examples implementation tests must promote." 0008's `Overrides`
   claims it "narrows nothing in either peer"; that claim is false for the
   name-constraint half. Stake: whether existing authored tables still load, and
-  who owns renaming the fixtures. *Status:* `open`. *(0008×0002 F1/F2/F3,
-  0008×0009 F3, blocks-impl)*
+  who owns renaming the fixtures. *Status:* **split** *(re-graded 2026-08-12)* —
+  the **fixture half is a `constraint`**: three committed fixtures to rename,
+  zero users to migrate, and the collision with 0002's "canonical examples
+  implementation tests must promote" is resolved by editing them. The
+  **totality half stays `open`**: whether a declared recognized tag is total
+  (always present, possibly empty) or partial (absent when no outcome is in
+  flight) determines whether an empty-outcome row is satisfiable, dead, or a
+  lint error — and no normalizer exists yet to observe the case. *(0008×0002
+  F1/F2/F3, 0008×0009 F3)*
 
 ### Withdrawn
 
