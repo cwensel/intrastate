@@ -32,36 +32,10 @@ No older member references any newer one. Meanwhile 0007 names
 routes A6b to 0004's implement stage. An obligation filed on a document that
 never received it binds nobody.
 
-## Next steps
-
-**All three decisions are resolved (2026-08-12). No open fork remains.** The
-document stays `open` rather than `settled` because two entries still await code
-that can observe them — JD-8's exit-3 call and JD-10's totality question — but
-neither gates the re-entry work below. What is owed is RDR re-entry, in
-dependency order:
-
-1. **0007 — FULL-FLOW re-entry.** Carries the largest change: `Row` gains parsed
-   atoms (§D1), the panic clause and A10/A15's mapping obligations drop, A3 is
-   superseded, and the gate-then-count ordering (§D2) is stated as the kernel's.
-   Everything else waits on this, because it changes the type the others cite.
-2. **0004 — re-lock.** Add the read-completeness clause and its MVV scenario
-   (§D3). Independent of 0007; can run in parallel.
-3. **0002 — re-lock.** Restate the resolver flow as gate-then-count (§D2);
-   reconcile the dump contract with the round-trip invariant (JD-11); name the
-   `RequiresOwned` producer (JD-3); rename the three fixtures (JD-10).
-4. **0003 — re-lock.** Cite the atom shape §D1 fixes rather than restating it;
-   record the narrowed lint promise (JD-4).
-5. **0008 — `/rdr-resolve 0008`.** Its own defect (A6/A11 verified on a false
-   claim about Final 0009), unrelated to these decisions. Also settle the
-   precondition precedence (JD-5) with 0009.
-6. **0005, 0006, 0009 — no re-entry owed** beyond citations. 0005's A-block
-   already pre-authorizes the new `Code` values (JD-8); wire `--tag` to
-   `Input.Observed` (JD-9) when the `flow` verb is written.
-7. **Then implement.** JD-8's exit-3 call and JD-10's totality question settle
-   when the code that can observe them exists.
-
-Nothing in `internal/resolve` has a production consumer today — one non-test
-file, no `flow` verb — so every change above is a refactor of test-covered code.
+Nothing in `internal/resolve` has a production consumer — one non-test file, no
+`flow` verb — so every decision here is settled against test-covered code rather
+than a shipped surface. That is why the decisions below prefer the clean shape
+over the compatible one.
 
 ## Principles
 
@@ -118,20 +92,23 @@ channel.
   *Cheap:* the only `GuardEvaluator` implementation in the repo is
   `fixtureGuards` in `fixtures_test.go:20`; `resolve.go` is the sole non-test
   file referencing the interface. *Not free:* reopens 0001's `Row` type, which
-  0007 declined to touch (A3), at FULL-FLOW scale for 0007. `Implemented` has no
-  backward edge, so this lands either as 0007 absorbing the change (precedent:
-  it already redefines `Row.RequiresOwned`) or a new RDR superseding 0001's row
-  shape.
+  0007 declined to touch (A3). `Implemented` has no backward edge, so this lands
+  either as 0007 absorbing the change (precedent: it already redefines
+  `Row.RequiresOwned`) or a new RDR superseding 0001's row shape.
 
 *The current fixture is the argument:* given a guard it cannot map it returns
 `GuardUnevaluable` — the exact conflation 0007's panic clause exists to forbid.
 
 **Resolved: (d).** `Row` carries parsed atoms; the mandated panic and the
-mapping-failure question both disappear. Lands as a FULL-FLOW re-entry of 0007
-absorbing the `Row` change (it already redefines `Row.RequiresOwned`), with
-0003 citing the atom shape rather than restating it. JD-1 is closed by this.
-0007's A3 ("a kernel change this RDR declines to make") is superseded — the
-decline was justified by cost that the zero-consumer state does not support.
+mapping-failure question both disappear. JD-1 is closed by this.
+
+*Lands in **0007**, which absorbs the `Row` change (it already redefines
+`Row.RequiresOwned`): the panic clause and A10/A15's mapping obligations drop,
+and A3 ("a kernel change this RDR declines to make") is superseded — the decline
+was justified by a cost the zero-consumer state does not support. Because the
+chosen approach changes, 0007 re-enters the flow at propose rather than at a
+later stage, and its `foundational` profile carries the full lens set. **0003**
+cites the atom shape rather than restating it.*
 
 ## D2 — Does the aggregation veto run before or after match counting?
 
@@ -153,11 +130,13 @@ implementer reading 0002 builds two stages; reading 0007, three.
 
 **Resolved: (b).** Gate, then count. `Resolve` evaluates guards over surviving
 candidates, refuses `guard_unevaluable` if any is undecidable, and only then
-applies exact-one matching and escape reachability. 0002 restates its resolver
-flow as gate-then-count at its re-lock, and its Scenario 4 expectation gains the
-qualifier that no sibling candidate is unevaluable. P1 is decisive: counting
+applies exact-one matching and escape reachability. P1 is decisive: counting
 first prunes the unevaluable row into an escapable `no_match`, which is the
 masking 0007 exists to prevent.
+
+*Lands in **0002**, which restates its resolver flow as gate-then-count and adds
+to its Scenario 4 expectation the qualifier that no sibling candidate is
+unevaluable; and in **0007**, which states the ordering as the kernel's.*
 
 ## D3 — Must a read accessor return a *complete* tag set?
 
@@ -186,11 +165,13 @@ against state that exists. It is also the easiest entry to wave through, because
 
 **Resolved: (b).** A read accessor MUST return the complete tag set for the keys
 it was asked for, or take the refusal branch; a partial read is a refusal, not a
-value. Lands in 0004 as one normative clause plus an MVV scenario asserting a
-truncated read refuses. This closes 0007's A6b, which 0004 can now carry as its
-own obligation rather than receiving it by reference from an RDR it never cites.
-(c) stays available if implementation shows the kernel needs to distinguish
-read-failed from absent, but (b) is the prerequisite either way.
+value. (c) stays available if implementation shows the kernel needs to
+distinguish read-failed from absent, but (b) is the prerequisite either way.
+
+*Lands in **0004** as one normative clause plus an MVV scenario asserting a
+truncated read refuses — no assumption of its own is disturbed. This closes
+0007's A6b, which 0004 now carries as its own obligation rather than receiving
+it by reference from an RDR it never cites.*
 
 ---
 
@@ -253,13 +234,14 @@ single-RDR defect: 0002's round-trip invariant requires the dump to preserve
 "row kind … and escape failure classes" while its dump-derivation contract
 sixty lines away omits both. Both are `normative` blocks inside 0002, so the
 contradiction is visible reading 0002 alone; 0009 only escalates it to
-breach-laundering. Routed as a SPEC-DEFECT against 0002, RE-LOCK-ONLY. Entry
+breach-laundering. Routed as a spec defect against 0002, fixable at re-lock with
+no round re-runs. Entry
 kept so the anchor never dangles. *(0009×0002 F3)*
 
 ## What this does not decide
 
 - **RDR 0008's re-entry** — A6/A11 verified on a false claim about Final 0009;
-  already demoted, re-enters at Stage 4, STAGE-SCOPED.
+  already demoted; re-enters at resolve, scoped to those two assumptions.
 - **RDR 0002's dump contradiction** — JD-11 above; a 0002 re-lock.
 - **RDR 0004's Prerequisites** — `Final` with every box unchecked, including
   "All Critical Assumptions verified." A finalize-gate question for 0004.

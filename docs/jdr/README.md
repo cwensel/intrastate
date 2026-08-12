@@ -9,7 +9,7 @@ Prototyped here in `intrastate`; intended to be pushed down into the RDR engine
 
 ## Why this exists
 
-Stage 7.1 (cluster reconcile) types a cross-RDR finding one of three ways. The
+The cluster gate (`/rdr-cluster-reconcile`) types a cross-RDR finding one of three ways. The
 third, **JOINT-DECISION**, is explicitly *not* a spec defect: the siblings
 contradict over a decision that is jointly theirs. The prescribed cure is to
 **hoist** it to a single normative home that the siblings **cite** rather than
@@ -192,14 +192,22 @@ and silently unsound if skipped is a fork.
 2. `# JDR NNNN <Title>` — a **question**, not a noun phrase; plus a
    non-normative note
 3. `## Problem statement` — what the members jointly decide
-4. `## Next steps` — what to do now. Keep it near the top; a reader who knows
-   only this section should know what happens next.
-5. `## Principles` — **required.** See below.
-6. `## D1…Dn` — the genuine forks, as `(a)/(b)/(c)` with trade-offs and a
-   recommendation; each closes with a bolded **Resolved:**
-7. `## Interface record` — the `JD-n` entries, each stating its answer, the
+4. `## Principles` — **required.** See below.
+5. `## D1…Dn` — the genuine forks, as `(a)/(b)/(c)` with trade-offs and a
+   recommendation; each closes with a bolded **Resolved:** naming **which RDRs
+   the decision lands in and what changes there**
+6. `## Interface record` — the `JD-n` entries, each stating its answer, the
    user-visible stake, and a short provenance parenthetical
-8. `## What this does not decide` — local items that stay with their RDRs
+7. `## What this does not decide` — local items that stay with their RDRs
+
+**No work plan.** A JDR records decisions, not the sequence for executing them.
+A "next steps" section is stale the moment the first RDR re-locks, nothing
+updates it, and it duplicates what the RDR `Status` lines and `/rdr-status`
+already say authoritatively — the same two-copies-drift failure this document
+type exists to prevent, turned on the document itself. A section that must be
+*emptied* before the JDR can reach `settled` is one nobody remembers to empty,
+and half-true is worse than absent. Each **Resolved:** names its landing RDRs;
+that is the durable half, and it stays true after the work is done.
 
 **Keep instances short.** Rationale and decisions only. Convention lives here in
 this README and is never repeated in an instance; process history lives in git
