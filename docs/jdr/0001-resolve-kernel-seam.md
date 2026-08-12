@@ -34,21 +34,34 @@ never received it binds nobody.
 
 ## Next steps
 
-**Three decisions below need a call. Nothing else here blocks.**
+**All three decisions are resolved (2026-08-12). No open fork remains.** The
+document stays `open` rather than `settled` because two entries still await code
+that can observe them — JD-8's exit-3 call and JD-10's totality question — but
+neither gates the re-entry work below. What is owed is RDR re-entry, in
+dependency order:
 
-1. **Decide D1, D2, D3** — the only genuine forks. Each has options and a
-   recommendation.
-2. **`/rdr-resolve 0008`** — demoted at the gate for a real defect of its own
-   (A6/A11 `Verified` on a false claim about Final 0009). Independent of this
-   registry.
-3. **Re-lock 0002** — its dump contract and round-trip invariant contradict each
-   other (withdrawn JD-11 below). RE-LOCK-ONLY.
-4. Then implement. The interface record's remaining entries are answers or
-   blanks, not gates.
+1. **0007 — FULL-FLOW re-entry.** Carries the largest change: `Row` gains parsed
+   atoms (§D1), the panic clause and A10/A15's mapping obligations drop, A3 is
+   superseded, and the gate-then-count ordering (§D2) is stated as the kernel's.
+   Everything else waits on this, because it changes the type the others cite.
+2. **0004 — re-lock.** Add the read-completeness clause and its MVV scenario
+   (§D3). Independent of 0007; can run in parallel.
+3. **0002 — re-lock.** Restate the resolver flow as gate-then-count (§D2);
+   reconcile the dump contract with the round-trip invariant (JD-11); name the
+   `RequiresOwned` producer (JD-3); rename the three fixtures (JD-10).
+4. **0003 — re-lock.** Cite the atom shape §D1 fixes rather than restating it;
+   record the narrowed lint promise (JD-4).
+5. **0008 — `/rdr-resolve 0008`.** Its own defect (A6/A11 verified on a false
+   claim about Final 0009), unrelated to these decisions. Also settle the
+   precondition precedence (JD-5) with 0009.
+6. **0005, 0006, 0009 — no re-entry owed** beyond citations. 0005's A-block
+   already pre-authorizes the new `Code` values (JD-8); wire `--tag` to
+   `Input.Observed` (JD-9) when the `flow` verb is written.
+7. **Then implement.** JD-8's exit-3 call and JD-10's totality question settle
+   when the code that can observe them exists.
 
 Nothing in `internal/resolve` has a production consumer today — one non-test
-file, no `flow` verb. Entries marked *(blank)* are settled by writing that code,
-not by more specification.
+file, no `flow` verb — so every change above is a refactor of test-covered code.
 
 ## Principles
 
@@ -113,7 +126,12 @@ channel.
 *The current fixture is the argument:* given a guard it cannot map it returns
 `GuardUnevaluable` — the exact conflation 0007's panic clause exists to forbid.
 
-**Resolved:** _pending._
+**Resolved: (d).** `Row` carries parsed atoms; the mandated panic and the
+mapping-failure question both disappear. Lands as a FULL-FLOW re-entry of 0007
+absorbing the `Row` change (it already redefines `Row.RequiresOwned`), with
+0003 citing the atom shape rather than restating it. JD-1 is closed by this.
+0007's A3 ("a kernel change this RDR declines to make") is superseded — the
+decline was justified by cost that the zero-consumer state does not support.
 
 ## D2 — Does the aggregation veto run before or after match counting?
 
@@ -133,7 +151,13 @@ implementer reading 0002 builds two stages; reading 0007, three.
   0002 states the counting rule in its own voice, so 0007's deferral to 0001
   does not reach it.
 
-**Resolved:** _pending._
+**Resolved: (b).** Gate, then count. `Resolve` evaluates guards over surviving
+candidates, refuses `guard_unevaluable` if any is undecidable, and only then
+applies exact-one matching and escape reachability. 0002 restates its resolver
+flow as gate-then-count at its re-lock, and its Scenario 4 expectation gains the
+qualifier that no sibling candidate is unevaluable. P1 is decisive: counting
+first prunes the unevaluable row into an escapable `no_match`, which is the
+masking 0007 exists to prevent.
 
 ## D3 — Must a read accessor return a *complete* tag set?
 
@@ -160,7 +184,13 @@ against state that exists. It is also the easiest entry to wave through, because
   read-failed from absent. More expressive, more surface, and 0004 still has to
   say when to use it — so (b) is a prerequisite either way.
 
-**Resolved:** _pending._
+**Resolved: (b).** A read accessor MUST return the complete tag set for the keys
+it was asked for, or take the refusal branch; a partial read is a refusal, not a
+value. Lands in 0004 as one normative clause plus an MVV scenario asserting a
+truncated read refuses. This closes 0007's A6b, which 0004 can now carry as its
+own obligation rather than receiving it by reference from an RDR it never cites.
+(c) stays available if implementation shows the kernel needs to distinguish
+read-failed from absent, but (b) is the prerequisite either way.
 
 ---
 
@@ -169,10 +199,11 @@ against state that exists. It is also the easiest entry to wave through, because
 Cite `JDR 0001 §JD-n`; never restate. Entries marked *(blank)* name an owner,
 not a negotiation.
 
-- **JD-1 Guard atom transport.** Decided by §D1(d): carrying parsed atoms
-  removes the N-atoms-through-one-slot problem. Reverts to an open question at
-  0003's Phase 1 if D1 resolves otherwise. *(0007×0003 F1)*
-- **JD-2 Resolver control flow.** See §D2. *(0007×0002 F1)*
+- **JD-1 Guard atom transport.** **Closed by §D1.** `Row` carries parsed atoms,
+  so a row's N predicates cross the seam natively; 0003's per-atom identity no
+  longer has to survive a one-slot channel. *(0007×0003 F1)*
+- **JD-2 Resolver control flow.** **Closed by §D2** — gate, then count.
+  *(0007×0002 F1)*
 - **JD-3 `RequiresOwned` producer.** The field appears **zero** times in 0002,
   which owns the normalized row and enumerates what the dump preserves — so no
   layer is obliged to populate it, and 0007's owned-before-guard ordering may
@@ -189,8 +220,11 @@ not a negotiation.
   Either order is defensible — pick one and pin it with a test on a table that
   breaches both. The silence is the defect, not the choice. *(0007×0009 F1,
   0008×0009 F2)*
-- **JD-6 Producer-defect surface.** See §D1. *(0007×0009 F3)*
-- **JD-7 Read completeness.** See §D3. *(0007×0004 F1/F3, 0009×0004 F1)*
+- **JD-6 Producer-defect surface.** **Closed by §D1** — with no reconstruction
+  step there is no mapping failure to surface, so 0007's panic clause has no
+  trigger and 0005's structured-envelope contract is unopposed. *(0007×0009 F3)*
+- **JD-7 Read completeness.** **Closed by §D3** — a partial read refuses.
+  *(0007×0004 F1/F3, 0009×0004 F1)*
 - **JD-8 Refusal codes.** `owned_state_unavailable` and `reserved_tag_key` need
   `Code` values; 0009 needs `GroupInternal`, which **already ships** in
   `clierr.go`. 0005's own A-block pre-authorizes this: resolver-specific values
