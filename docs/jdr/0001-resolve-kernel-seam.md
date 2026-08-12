@@ -7,620 +7,229 @@ labels: intrastate, internal-resolve, refusals, guard-evaluation, rdr-cluster
 
 # JDR 0001 What the Resolver Can Trust, and What the User Sees When It Can't
 
-*All Go identifiers, code spellings, and CLI transcripts below are
-**non-normative** illustrations. The decisions are normative once resolved; the
-RDRs own exact contracts. Extracted from the `0002-0009` cluster gate
-(`docs/rdr/cluster-reconcile/0002-0009/report.md`, 13 pairwise scans plus a
-whole-set critique, 2026-08-11).*
+*Go identifiers and CLI transcripts below are **non-normative**; the RDRs own
+exact contracts. Source: the `0002-0009` cluster gate —
+`docs/rdr/cluster-reconcile/0002-0009/`.*
 
-## Problem Statement
+## Problem statement
 
 Eight RDRs jointly decide one thing: **when the resolver cannot decide, what
-happens.** One RDR owns the table format (0002), one the guard vocabulary
-(0003), one accessor execution (0004), one the CLI surface (0005), one graph
-lint (0006). Three later RDRs — 0007 (guard evaluation domain), 0008 (recognized
-tag key), 0009 (escape-row shape) — each landed on the `area:internal-resolve`
-seam between them, two months after the first five locked.
+happens.** 0002 owns the table format, 0003 the guard vocabulary, 0004 accessor
+execution, 0005 the CLI surface, 0006 graph lint. Three later RDRs — 0007
+(guard evaluation domain), 0008 (recognized tag key), 0009 (escape-row shape) —
+each landed on the `area:internal-resolve` seam between them, two months after
+the first five locked.
 
-The gate found the structural cause of every finding, and it is mechanically
-checkable:
+The structural cause of every finding is one grep:
 
 ```
 grep -cE 'RDR 0007|RDR 0008|RDR 0009' 0002…md 0003…md 0004…md 0005…md 0006…md
 → 0, 0, 0, 0, 0
 ```
 
-**No older member references any newer one.** Citation traffic is entirely
-one-directional. Meanwhile 0007 names `Obligation destination (NAMED): RDR
-0003's implement stage` three times, routes A6b to 0004's implement stage, and
-0008/0009 route further obligations to 0002/0004/0005. RDR 0003's Prerequisites
-still read `- [x] All Critical Assumptions verified`, checked before those
-obligations existed.
+No older member references any newer one. Meanwhile 0007 names
+`Obligation destination (NAMED): RDR 0003's implement stage` three times and
+routes A6b to 0004's implement stage. An obligation filed on a document that
+never received it binds nobody.
 
-An obligation filed on a document that never received it binds nobody. That is
-what this registry fixes: the shared halves live here, the RDRs cite them, and
-the decisions that need a human get made once, below.
+## Next steps
 
-## Scope
+**Three decisions below need a call. Nothing else here blocks.**
 
-Members are the eight Final-and-unimplemented RDRs above. RDR 0001 is
-`Implemented` and out of scope — code is the source of truth there.
+1. **Decide D1, D2, D3** — the only genuine forks. Each has options and a
+   recommendation.
+2. **`/rdr-resolve 0008`** — demoted at the gate for a real defect of its own
+   (A6/A11 `Verified` on a false claim about Final 0009). Independent of this
+   registry.
+3. **Re-lock 0002** — its dump contract and round-trip invariant contradict each
+   other (withdrawn JD-11 below). RE-LOCK-ONLY.
+4. Then implement. The interface record's remaining entries are answers or
+   blanks, not gates.
 
-One JDR, not several, because these ten entries span a single connected set of
-RDRs: nine of ten touch 0007, and the tenth (JD-10) reaches the rest through
-0008. There is no clean partition, and per `README.md` §Identity a JDR is keyed
-to the sharing set rather than to the theme or the gate run.
+Nothing in `internal/resolve` has a production consumer today — one non-test
+file, no `flow` verb. Entries marked *(blank)* are settled by writing that code,
+not by more specification.
 
-## How to use this document
+## Principles
 
-Cite `JDR 0001 §JD-n`. **Never restate the mechanism** in an RDR — the cluster
-gate treats a restatement as the defect. When an entry moves to `decided`, the
-siblings it spans may carry `Final [joint decision → JDR 0001 §JD-n]`. While an
-entry is `open`, no tolerance qualifier is warranted: the sibling is not free to
-implement across it.
+Steering criteria for every decision here. Each is derived from text the members
+already lock.
 
-## Guiding principles
-
-Standing commitments every resolution below must satisfy. Each is **derived from
-normative text the members already lock** — none is invented here. They exist so
-ten entries resolve into one coherent behavior instead of ten locally-reasonable
-answers that do not compose. Where a principle rules an option out, the entry
-says so.
-
-**P1 — Missing artifact state is never masked.** RDR 0007's whole design turns
-on this: the choice of guard domain "decides whether missing artifact state can
-be masked behind an escapable refusal class," and it closes that path
-deliberately. Any resolution that lets absent owned state reach the user as an
-escapable `no_match`, or as a plan computed around it, violates the reason 0007
-exists. *Binds:* D3, JD-7, JD-9, JD-2.
-
-**P2 — The kernel refuses rather than guesses.** The typed-refusal taxonomy is
-the kernel's answer to every undecidable case; RDR 0004 states the same shape
-for accessors — "Indeterminate MUST be a refusal-class result, not a false allow
-and not a false deny." A resolution that produces a confident answer from
-incomplete input fails this even when no contract forbids it in terms. *Binds:*
-JD-1, JD-4, JD-7, JD-10.
-
-**P3 — Every user-visible failure is structured.** RDR 0005 routes every verb's
-failure through `respond.Fail(cmd, *clierr.CLIError)` and sets `SilenceErrors`,
-because the consumer is a skill parsing JSON. A failure that reaches the user as
-anything else is a breach of the contract 0005 exists to provide, regardless of
-which layer produced it. *Binds:* D1, JD-6, JD-8.
-
-**P4 — A refusal names what was missing and who can fix it.** The "what" is
-0007's stated user outcome — told plainly that the state needed to decide was
-missing, not handed a plan that routed around it. The "who" is 0005's exit-code
-grouping, which already encodes remedy: `GroupUserEnv` (exit 2) means *you* can
-fix it, `GroupEnvUnavailable` (exit 3) means the environment could not answer.
-A refusal whose code implies the wrong remedy is wrong even if it is
-well-formed. *Binds:* D2, JD-8.
-
-**P5 — A green lint means resolution succeeds.** RDR 0006 locks blocking
-authority; the value of that authority is the promise it makes to an author
-before runtime. If lint can prove a partition exhaustive and the runtime can
-still refuse an assignment inside that proof, the promise is void and the
-authority is theater. *Binds:* JD-4, JD-1.
-
-**P6 — One home per contract; cite, never restate.** The engine doctrine —
-"Two copies of one contract drift into self-contradiction… the cure is deletion,
-not a lint to keep them in sync." This is why this registry exists, and it
-constrains resolutions too: a resolution that asks two RDRs to each state the
-rule has failed, however carefully worded. *Binds:* every entry.
-
-**P7 — Pre-release, prefer the clean shape over the compatible one.** A
-resolution should not carry a bridge, a shim, or a deprecation path to protect a
-caller that does not exist. Verified: `internal/resolve` has one non-test file
-and zero production importers — nothing under `cmd/` or `internal/cli/` reaches
-it. *Binds:* D1, D2, JD-3, JD-10. **Provenance differs from P1–P6:** those quote
-locked RDR text; this one rests on a standing project convention (unreleased, no
-backward compatibility) that is *not* written down in the repo. Confirm it holds
-before leaning on it, or promote it to repo text.
+1. **Missing artifact state is never masked** — 0007's reason for existing: the
+   domain choice "decides whether missing artifact state can be masked behind an
+   escapable refusal class."
+2. **The kernel refuses rather than guesses** — 0004: "Indeterminate MUST be a
+   refusal-class result, not a false allow and not a false deny."
+3. **Every user-visible failure is structured** — 0005 routes all failure
+   through `respond.Fail(cmd, *clierr.CLIError)`; the consumer parses JSON.
+4. **A refusal names what was missing and who can fix it** — 0007's user
+   outcome, plus 0005's exit-code grouping, which encodes remedy.
+5. **A green lint means resolution succeeds** — otherwise 0006's blocking
+   authority promises nothing.
+6. **One home per contract; cite, never restate** — the engine doctrine, and
+   why this registry exists.
+7. **Pre-release, prefer the clean shape** — no shims for callers that do not
+   exist. *(Rests on a project convention, not repo text — confirm before
+   leaning on it.)*
 
 ---
 
-## Decisions requiring a call
+## D1 — How does the guard seam carry a predicate?
 
-Three entries are genuine forks that cannot be settled by re-reading the RDRs.
-The rest of the registry records decisions already implied by the evidence, or
-defers them to the implementation that will settle them honestly.
+`resolve.Row.Guard` is a `string` (`resolve.go:185`) — an opaque predicate. The
+evaluator must reconstruct structure from it and can fail doing so, and 0007
+answers that failure with a mandated panic the kernel "MUST NOT recover." 0005
+requires every user-visible failure to be a structured envelope. Neither RDR
+mentions the other.
 
-### D1 — How does a producer defect surface: panic, or the error envelope?
+The same opacity causes a second defect: 0003's predicate identity is
+*per-atom*, so an ordinary two-condition row needs N keys through a one-slot
+channel.
 
-RDR 0007 makes this normative for the guard seam:
+- **(a) Panic stands.** A stack trace reaches a JSON consumer. Violates P3.
+- **(b) Error channel on `Evaluate`.** 0007 rejected it: a second channel lets
+  the evaluator report undecidability outside the verdict taxonomy. The
+  objection conflates a *verdict* (cannot decide — modeled as
+  `GuardUnevaluable`) with a *defect* (structure is broken), but under (b) the
+  distinction is held by discipline rather than structure.
+- **(c) Panic at the seam, recover at the CLI.** `panic`/`recover` must cross
+  `internal/resolve` → `internal/cli`; recovering only the mapping panic needs a
+  typed value and a re-panic default, and every non-CLI consumer inherits the
+  obligation. Was the recommendation while "do not reopen Final RDRs" held.
+- **(d) Carry the parsed predicate — recommended.** Row carries a slice of atoms
+  (key, operator token, literal, block) instead of a string. No reconstruction
+  step, so no mapping failure, so no channel question. The kernel carries
+  *cardinality*, not *meaning* — it stays as grammar-agnostic as it already is
+  for `Match []Tag` and `Writes []Tag`. **Dissolves JD-1.**
 
-> A crash is the honest surface precisely because the case is unreachable for
-> lint-passed guards: it is a programmer defect, and the kernel MUST NOT recover
-> the panic into a verdict or refusal.
+  *Cheap:* the only `GuardEvaluator` implementation in the repo is
+  `fixtureGuards` in `fixtures_test.go:20`; `resolve.go` is the sole non-test
+  file referencing the interface. *Not free:* reopens 0001's `Row` type, which
+  0007 declined to touch (A3), at FULL-FLOW scale for 0007. `Implemented` has no
+  backward edge, so this lands either as 0007 absorbing the change (precedent:
+  it already redefines `Row.RequiresOwned`) or a new RDR superseding 0001's row
+  shape.
 
-RDR 0005 makes the opposite normative for everything the user touches: every
-verb routes failure through `respond.Fail(cmd, *clierr.CLIError)` under a
-never-silent contract, and `internal/cli/root.go` sets `SilenceErrors`. Neither
-RDR mentions the other; 0005 contains the string `panic` zero times.
+*The current fixture is the argument:* given a guard it cannot map it returns
+`GuardUnevaluable` — the exact conflation 0007's panic clause exists to forbid.
 
-The user-visible difference (non-normative):
+**Resolved:** _pending._
 
-```
-$ intrastate flow next --model m.toml --tag stage=review
-panic: guard mapping failed for row 4
-goroutine 1 [running]: ...stack trace...
-exit status 2
-```
+## D2 — Does the aggregation veto run before or after match counting?
 
-versus the structured envelope every other failure produces.
+0002 states escape reachability as a function of the match count over non-escape
+rows. 0007 refuses *before* counting: "if any surviving candidate row's guard is
+GuardUnevaluable, the resolution MUST refuse `guard_unevaluable`." An
+implementer reading 0002 builds two stages; reading 0007, three.
 
-- **(a) Panic stands** — 0007's reasoning is that `Evaluate` returns a bare
-  `GuardResult` with no error channel, so a mapping failure has no in-band
-  surface. Cost: the one failure mode that indicates a *programmer* defect is
-  the one that breaks the skill-integration contract, because a panic is
-  unparseable by the JSON consumer 0005 exists to serve.
-- **(b) Widen the seam** — give the evaluator an out-of-band error channel so
-  the kernel can map it to a refusal. Cost: 0007 rejected this deliberately —
-  "Adding a second channel would give the evaluator a way to report
-  undecidability that the kernel's refusal taxonomy does not model." Reopening
-  it reopens 0007's design.
-- **(c) Panic at the seam, recover at the boundary** — 0007's clause binds the
-  *kernel*, and the CLI is not the kernel. The `flow` verb recovers at its own
-  boundary and renders a `GroupInternal` envelope with a stable code. 0007's
-  "MUST NOT recover into a verdict or refusal" is honored literally: the
-  recovery produces neither. **Was the recommendation while "do not reopen
-  0007" was treated as a constraint; withdrawn once it was not.** Its costs are
-  long-term: `panic`/`recover` must cross `internal/resolve` → `internal/cli`
-  (0007 forbids the kernel recovering), which is the Go anti-pattern in its
-  worst form; recovering *only* the mapping panic needs a typed panic value and
-  a type switch that re-panics on everything else, and getting that slightly
-  wrong launders a genuine nil-deref into a misleading "guard mapping failed"
-  envelope; and every non-CLI consumer — test harness, server, alternate
-  frontend — inherits the obligation to write its own recover.
-- **(d) Make the mapping failure unrepresentable — recommended** — the whole
-  question descends from one representation choice: `resolve.Row.Guard` is a
-  `string` (`resolve.go:185`), an opaque predicate handed across the seam, so
-  the evaluator must *reconstruct* structure at evaluation time and can fail
-  doing it. RDR 0002 already produces the structure upstream — normalization
-  "MUST combine both into one candidate-row predicate set" — and the kernel
-  boundary flattens it. Carry the parsed predicate set across the seam instead
-  and there is no mapping step, therefore no mapping failure, therefore no
-  channel question. "Parse, don't validate."
+- **(a) Count first (0002's shape).** An unevaluable row is pruned, the
+  resolution reports `no_match` — which 0002 makes escapable. Violates P1: the
+  missing state is masked behind an escapable class. This is precisely the
+  outcome 0007 was written to prevent.
+- **(b) Gate first (0007's shape) — recommended.** Evaluate guards, veto on
+  unevaluable, then count survivors. `guard_unevaluable` is not a modelable
+  escape class, so the refusal reaches the user intact. Cost: 0002's Technical
+  Design prose and its Scenario 4 expectation need restating at its re-lock —
+  0002 states the counting rule in its own voice, so 0007's deferral to 0001
+  does not reach it.
 
-  Verified cheap: the **only** implementation of `GuardEvaluator` in the repo is
-  `fixtureGuards` in `internal/resolve/fixtures_test.go:20`; the sole non-test
-  file referencing the interface is `resolve.go` itself. Changing the seam
-  signature is a test-only refactor.
+**Resolved:** _pending._
 
-  The current fixture is itself the argument: given a guard it cannot map it
-  returns `GuardUnevaluable` — precisely the conflation 0007's panic clause
-  exists to forbid. The opaque string makes "I cannot parse this" and "I cannot
-  decide this" indistinguishable at the seam, so the panic is a workaround for a
-  representation defect rather than a design.
+## D3 — Must a read accessor return a *complete* tag set?
 
-  **The kernel does not need to learn the grammar.** 0007's rationale for the
-  opaque string is decoupling — the evaluator owns the guard vocabulary, and a
-  structured field would drag RDR 0003's grammar into the kernel. That objection
-  is answerable: the kernel must carry *cardinality*, not *meaning*. A slice of
-  atoms with kernel-neutral shape (key, operator token, literal, block) lets the
-  kernel transport N atoms without interpreting any operator — it stays exactly
-  as grammar-agnostic as it is today for `Match []Tag` and `Writes []Tag`, which
-  it already carries without interpreting. What changes is that the type stops
-  misrepresenting one-per-row as the only case.
+0004 says only: "A read accessor MUST return typed tag values or a typed
+refusal." A disjunction with no completeness requirement — a partially-read
+artifact may conformantly return what it got. `Input.Owned` has no error
+channel, so a truncated snapshot and a genuine absence are the same input.
 
-  **Cost, stated plainly:** this reopens RDR 0001's kernel `Row` type — which
-  0007 explicitly declined to touch (its A3, "reversing it is a kernel change
-  this RDR declines to make") — and reopens 0007's seam definition at
-  FULL-FLOW scale rather than as a wording fix. RDR 0001 is `Implemented`, so
-  code is the source of truth there; its implementation has zero production
-  consumers, making the change a refactor of test-covered code rather than a
-  migration.
+0007 names this A6b, marks it `Pending`, and routes it to 0004's implement
+stage. 0004 mentions 0007 zero times.
 
-  **Procedurally**, `Implemented` has no backward edge in the RDR lifecycle —
-  the statuses are Draft/Final/Implemented/Reverted/Abandoned/Superseded/Demoted,
-  and none of them means "reopened." So (d) lands one of two ways, and the choice
-  should be explicit rather than discovered mid-flight: either **0007 absorbs the
-  `Row` change into its own FULL-FLOW re-entry** (it has precedent — its
-  `Overrides` already "fixes the meaning of `Row.RequiresOwned`," a 0001 field),
-  or **a new RDR supersedes 0001's row-shape contract** and 0007 cites it. The
-  first is cheaper and keeps one owner for the seam; the second is cleaner if the
-  row shape turns out to serve more than the guard question — which **JD-3**
-  hints it might, since `RequiresOwned` is a second under-specified field on the
-  same type.
+This is the floor under every presence/absence contract in the cluster: a
+truncated read makes `exists = false` decide TRUE, and a plan is produced
+against state that exists. It is also the easiest entry to wave through, because
+0004's clause reads fine until you notice what it omits.
 
-*Principles:* **P3** rules out (a) — a stack trace is not a structured failure,
-and the skill consuming JSON cannot parse it. **P7** rules out (c) once
-reopening is permitted: `panic`/`recover` across a package boundary is the
-compatible shape chosen to avoid touching a Final RDR, and there is no caller to
-protect. **P2** favors (d) over (b): under (b) the parse/decide distinction is
-maintained by discipline (a contract saying the error channel must not report
-undecidability), while under (d) it is structural — an unparseable guard cannot
-reach the evaluator at all. **P6** notes that (b)'s discipline contract would be
-a second place stating a rule RDR 0001 already states one level up ("the error
-return is reserved for programmer mistakes, not for modeled refusals").
+- **(a) Status quo.** Partial reads stay conformant and indistinguishable.
+  Violates P2 — the kernel guesses.
+- **(b) Require completeness — recommended.** A read accessor MUST return the
+  complete tag set for the keys it was asked for, or take the refusal branch.
+  States the rule 0007 needs at the layer that owns it. Cost: one normative
+  clause in 0004 plus an MVV scenario asserting a partial read refuses.
+- **(c) Error channel on `Input.Owned`.** Lets the kernel distinguish
+  read-failed from absent. More expressive, more surface, and 0004 still has to
+  say when to use it — so (b) is a prerequisite either way.
 
-*On 0007's objection to (b)* — "Adding a second channel would give the evaluator
-a way to report undecidability that the kernel's refusal taxonomy does not
-model" — the argument conflates a **verdict** (cannot decide from this view;
-modeled, as `GuardUnevaluable`) with a **defect** (the guard structure is
-broken). RDR 0001 already runs exactly that two-channel discipline one level up,
-and 0007 quotes it approvingly. The objection is therefore a reason to prefer
-(d) over (b), not a reason to keep the panic.
-
-*Linkage:* **(d) also dissolves JD-1.** That entry is the gate's hardest
-blocking finding — `Row.Guard` is one string per row while RDR 0003's identity
-key is per-*atom*, so an N-atom row needs N keys through a one-slot channel, and
-it was deferred to 0003's Phase 1 as unresolvable on paper. Carrying structure
-across the seam removes the transport problem outright. One representation fix
-closes two blocking entries.
-
-**Resolved:** _pending — needs a call._ Recommendation moved (c) → (d) on
-2026-08-12 after the constraint "do not reopen Final RDRs" was lifted for
-changes that reduce long-term debt and improve usability, with user DX named a
-primary concern.
-
-### D2 — Is `flow-guard-unevaluable` about supplied facts, or about the view?
-
-RDR 0005's code table declares:
-
-> | guard cannot be evaluated from supplied facts | `flow-guard-unevaluable` | `GroupUserEnv` |
-
-`GroupUserEnv` maps to exit 2 — the bad-input bucket, whose remedy is "fix your
-input." RDR 0007 defines the identical condition over the *assembled view*,
-which includes accessor-produced owned state the caller cannot supply, and its
-whole premise is that the user is told the artifact state needed to decide was
-missing. Under 0007, "supply the missing fact" is frequently not an available
-remedy.
-
-The sibling kind is worse off: `owned_state_unavailable` — which 0007 pins as
-the *preferred* refusal whenever a survivor set carries both — has **no row at
-all** in 0005's twelve-row table. A sweep for `owned.state|state-unavailable`
-returns one unrelated prose hit.
-
-> **Correction (2026-08-12).** This decision was originally framed around
-> "widening 0005's group taxonomy," and that framing was wrong on two counts,
-> both checked against shipped code rather than RDR prose.
->
-> 1. **`GroupInternal` already exists.** `internal/cli/clierr/clierr.go`
->    declares `GroupSuccess`, `GroupWarning`, `GroupUserEnv`,
->    `GroupEnvUnavailable`, `GroupInternal`, `GroupSignalCancel`, and
->    `ExitCodeFor` maps all of them. RDR 0005's sentence — "`ExitCodeFor` maps
->    existing groups to exit 2 for user/model/input refusals, exit 3 for
->    environment unavailability, and 130 for interruption" — is an *incomplete
->    summary of code that already ships*, not a closed taxonomy awaiting
->    extension. Code is the source of truth; 0005's prose is simply behind it.
->    The gate's finding here was spec-vs-spec, and it does not survive contact
->    with the package.
-> 2. **`GroupUserEnv` and `GroupInternal` both return exit 2.** So the original
->    recommendation's rationale — "it makes the exit code carry the remedy" —
->    was not achievable as stated. The *only* remedy distinction the exit code
->    can express is exit 3 (`GroupEnvUnavailable`) versus exit 2 (everything
->    else). Everything finer must ride `Code`, `Detail`, and `Hint`.
->
-> RDR 0005's own A-block already anticipates this and answers it:
-> "Resolver/accessor-specific values only require new `Code` constants or
-> literals, **not new envelope fields or exit groups**." The envelope
-> (`CLIError`) already carries `Code`, `Param`, `Detail`, and `Hint`, and
-> `clierr` renders `detail:` and `hint:` in text mode as well as JSON.
-
-So the real question is narrower than "which group": **does an
-accessor-caused refusal deserve exit 3?** That is the one distinction a script
-can branch on without parsing the envelope.
-
-- **(a) Everything exit 2** — `flow-guard-unevaluable` and a new
-  `flow-owned-state-unavailable` both take `GroupUserEnv`. Distinguished only by
-  `Code`. Cheapest, and defensible since a skill parsing JSON reads `Code`
-  anyway. Cost: a shell script cannot tell "your input is wrong" from "the
-  artifact could not be read," so retry logic cannot be written without JSON.
-- **(b) Route accessor-caused unavailability to exit 3 — recommended** —
-  `owned_state_unavailable` is, by construction, "a required external facility
-  could not answer": the accessor could not produce the owned snapshot. That is
-  what `GroupEnvUnavailable`/exit 3 already means, and it is the one place the
-  exit code can carry real information. `flow-guard-unevaluable` stays exit 2
-  when the missing key was caller-suppliable. Cost: the two kinds must be
-  distinguishable at the point the CLI builds the error — which they are, since
-  the kernel returns distinct refusal kinds.
-- **(c) A distinct code, group deferred** — add
-  `flow-owned-state-unavailable` as a `Code` now and leave its group to the
-  implementer. Honest about what is undecided, but it defers the only part that
-  is actually a decision.
-
-*Principles:* **P4** survives the correction but relocates: since exit 2 cannot
-separate causes, "who can fix it" must be carried by `Code`/`Hint` in every
-option — so P4 no longer rules options out, it constrains all of them equally.
-The live question is whether exit 3 is *also* warranted, and P4 favors (b)
-because exit 3 is the one signal reaching a caller who never parses the body.
-**P7** is neutral here: all three are additive to unreleased code.
-
-**Resolved:** _pending — needs a call._ Note this is a **smaller** decision than
-originally written: no RDR needs reopening, no envelope field is added, and
-0005's A-block pre-authorizes the `Code` additions. See §Entry grading — this is
-a *fork* only in its exit-3 half; the rest is a blank the implementer fills.
-
-### D3 — May `--tag` satisfy owned state?
-
-RDR 0005 specifies `--tag name=value` as
-
-> context already known to the caller.
-
-with no allowlist, validation, or accessor-origin requirement. RDR 0007's
-presence rule is provenance-blind by design: a key present under *any*
-provenance decides a guard. Composed, an operator who hits a
-`guard_unevaluable` refusal can re-run with `--tag` and get a plan — writes
-computed from typed-in state, with nothing in the output marking it.
-
-RDR 0007 records this as assumption A13, an "accepted exposure," on the ground
-that the exposure is currently unreachable. Implementing 0005 is the event that
-makes it reachable, so the bound expires exactly when the code lands.
-
-- **(a) Accept** — `--tag` is a power-user affordance; document it. Cost: the
-  cluster's headline guarantee (missing artifact state can never be masked) is
-  bypassable from the command line, and the kernel already refuses the
-  equivalent on the owned-state path.
-- **(b) Provenance-tag the CLI channel — recommended** — tags arriving via
-  `--tag` enter as `ProvenanceObserved` and may never satisfy an owned-state
-  dependency; a guard needing owned state still refuses. Preserves 0007's
-  guarantee at the only producer that can violate it, and matches the kernel's
-  existing owned-state stance. Cost: `read-state` → `--tag` round-tripping stops
-  working as a state-restoration trick.
-- **(c) Allowlist** — enumerate which keys `--tag` may set. Cost: a list that
-  must track every model's tag vocabulary; brittle, and it fails open for
-  anything new.
-
-> **Update (2026-08-12) — the kernel already enforces this; (b) is a wiring
-> constraint, not a new mechanism.** Checked against shipped code:
-> `resolve.Input` carries `Owned []Tag` and `Observed []Tag` as *separate
-> fields*; `assemble` stamps each with its provenance; and the function's own
-> contract states the invariant — precedence is "owned over observed over
-> recognized, so the accessor-produced snapshot is **never shadowed by
-> caller-supplied context**." `TagSet.Lookup` returns provenance alongside the
-> value.
->
-> So a caller-supplied tag *cannot today* override accessor-read owned state.
-> The `--tag` exposure opens only if the future `flow` verb wires `--tag` into
-> `Input.Owned` instead of `Input.Observed`. Option (b) therefore costs one
-> wiring rule on a verb that does not exist yet, plus a sentence making it
-> normative — not a new provenance mechanism, which is already built.
-
-*Principles:* **P1** rules out (a) outright — accepting the bypass is precisely
-"missing artifact state masked," here by the user rather than by the resolver,
-and the kernel already refuses the equivalent on the owned-state path. It also
-rules out (c), which fails open for any key not yet listed. (b) is the only
-option that holds P1 at the producer that can violate it, and the update above
-makes it nearly free.
-
-**Resolved:** _pending — needs a call,_ but this is the cheapest of the three
-and the code already leans this way. See §Entry grading — a *constraint*, not a
-fork: the kernel's existing precedence rule determines the answer, and what
-remains is writing it down before someone wires the verb wrong.
+**Resolved:** _pending._
 
 ---
-
-## Entry grading
-
-*Added 2026-08-12, after checking every entry against shipped code rather than
-RDR prose. This section exists because the registry as first written
-over-gated: ten entries all marked `open`, which under Stage 7.1 means "do not
-implement," when most are not decisions at all.*
-
-The cluster gate grades findings by severity (`blocks-impl` / `risks-impl` /
-`cosmetic`). That axis measures *whether an implementer must confront the
-question*, which is true of a thousand micro-decisions in any implementation —
-so `blocks-impl` inflates. What matters for sequencing is a different axis:
-
-| Grade | Meaning | Gates implementation? |
-| --- | --- | --- |
-| **Fork** | A genuine either/or with divergent consequences. Choosing wrong costs rework or ships a defect. | **Yes** — decide first. |
-| **Constraint** | The answer is already determined by shipped code or a stated principle. Nothing to negotiate; it must be *written down* so nobody implements against it. | No — record it, proceed. |
-| **Blank** | A detail the implementer fills (a code string, a test's home). The RDRs are silent because silence is appropriate. | No — name the owner. |
-
-Grading this registry:
-
-- **Forks (3)** — **JD-2** (resolver control flow: gate-then-count vs
-  match-then-count changes the algorithm's shape), **JD-7** (read completeness —
-  a soundness hole where a truncated read yields a confident plan; the one entry
-  whose wrong answer ships a silent bug), and **D1/JD-1** (the `Row.Guard`
-  representation, which every downstream contract inherits).
-- **Constraints (4)** — **D3/JD-9** (the kernel's provenance precedence already
-  decides it), **JD-4** (P5 decides it: a green lint must mean resolution
-  succeeds; what remains is which document says so), **JD-5** (pick an order,
-  pin it with a test — ten minutes, and either order is defensible), **JD-10**'s
-  fixture half (three fixtures to rename; there are no users to migrate).
-- **Blanks (3)** — **JD-8**'s code strings (0005's A-block pre-authorizes them:
-  "only require new `Code` constants or literals"), **JD-3**'s producer (whoever
-  writes the normalizer names it), **JD-10**'s totality half — genuinely
-  undecidable until a normalizer exists to observe the empty-outcome case.
-
-**Consequence for sequencing.** Only the three forks need resolving before code.
-The constraints need *recording* — which this document does — and the blanks
-need an owner, not a negotiation. A cluster held at NOT RECONCILED over ten
-entries when three are forks is paying gate cost for bookkeeping.
-
-**A caution against over-applying this.** The grades are a judgement about
-*consequence*, not about how hard something was to find. JD-7 is graded a fork
-precisely because it is easy to wave through: RDR 0004's clause reads fine, and
-the defect only appears when you notice the disjunction has no completeness
-requirement. Cheap-to-fix is not the same as safe-to-defer.
-
-**What this does *not* license.** The gate verdict stands at NOT RECONCILED
-until the three forks resolve and RDR 0008 re-locks — re-grading changes which
-entries hold the gate, not whether it is held. Two further items are outside
-this registry's authority and unaffected: RDR 0008's demotion (a genuine
-single-RDR SPEC-DEFECT — A6/A11 `Verified` on a false claim about Final 0009)
-and RDR 0002's internal dump/round-trip contradiction (recorded as withdrawn
-JD-11, routed as a RE-LOCK-ONLY defect). Both are real, both still owed.
 
 ## Interface record
 
-Each line is the joint decision plus the user-visible stake, its status, and its
-provenance. Edit in place; normative once `decided`.
+Cite `JDR 0001 §JD-n`; never restate. Entries marked *(blank)* name an owner,
+not a negotiation.
 
-- **JD-1 Guard atom transport.** `Row.Guard` is one `string` per row, but RDR
-  0003's Identity key is per-*atom* ("its position within `all` or `unless`"), so
-  an ordinary multi-atom row needs N keys through a one-slot channel. RDR 0003
-  disclaims the bridge: "This RDR introduces no encode/decode pair." RDR 0007's
-  A10 verified this mapping as sufficient on a key whose cardinality it did not
-  check. Stake: every guard with two conditions — the common case, and the case
-  both RDRs' own example TOML shows. *Status:* `open → §D1(d)` — **re-routed
-  2026-08-12.** Previously `deferred → 0003 Phase 1` on the reasoning that the
-  encoding is a property of the evaluator. That reasoning presumed the opaque
-  `Row.Guard string` seam as fixed. §D1's option (d) removes the seam's
-  flattening, which removes the N-atoms-through-one-slot problem rather than
-  encoding around it — so this entry is decided by D1, not deferred past it. If
-  D1 resolves to (a), (b), or (c), this reverts to `deferred → 0003 Phase 1`.
-  *(0007×0003 F1, blocks-impl)*
+- **JD-1 Guard atom transport.** Decided by §D1(d): carrying parsed atoms
+  removes the N-atoms-through-one-slot problem. Reverts to an open question at
+  0003's Phase 1 if D1 resolves otherwise. *(0007×0003 F1)*
+- **JD-2 Resolver control flow.** See §D2. *(0007×0002 F1)*
+- **JD-3 `RequiresOwned` producer.** The field appears **zero** times in 0002,
+  which owns the normalized row and enumerates what the dump preserves — so no
+  layer is obliged to populate it, and 0007's owned-before-guard ordering may
+  quantify over an always-empty set. On escape rows 0007 derives it from
+  `Writes` while 0009 empties `Writes`. Not answered by D1, but D1 reopens the
+  same type and is the natural occasion to settle it. *(0007×0002 F3,
+  0007×0009 F2)*
+- **JD-4 Lint's promise is what gives.** Where 0006's exhaustiveness proof and
+  0007's veto disagree, the *promise* narrows — P5 decides the substance. Open
+  only as to which document records the narrowing and whether lint gains a
+  warning category. *(0007×0006 F2, 0007×0003 F3)*
+- **JD-5 Precondition precedence.** 0009's breach check and 0008's reserved-key
+  check both land at `Resolve` entry; neither orders itself against the other.
+  Either order is defensible — pick one and pin it with a test on a table that
+  breaches both. The silence is the defect, not the choice. *(0007×0009 F1,
+  0008×0009 F2)*
+- **JD-6 Producer-defect surface.** See §D1. *(0007×0009 F3)*
+- **JD-7 Read completeness.** See §D3. *(0007×0004 F1/F3, 0009×0004 F1)*
+- **JD-8 Refusal codes.** `owned_state_unavailable` and `reserved_tag_key` need
+  `Code` values; 0009 needs `GroupInternal`, which **already ships** in
+  `clierr.go`. 0005's own A-block pre-authorizes this: resolver-specific values
+  "only require new `Code` constants or literals, **not new envelope fields or
+  exit groups**." `Detail` and `Hint` ship and render in text and JSON. One live
+  question: `GroupUserEnv` and `GroupInternal` both exit 2, so the only remedy
+  distinction an exit code can carry is exit 3 — and an accessor that could not
+  read the artifact is what `GroupEnvUnavailable` already means. *(blank, except
+  the exit-3 call)* *(0007×0005 F1/F2/F3, 0009×0005 F1/F2, 0008×0005 F1)*
+- **JD-9 `--tag` provenance.** Caller-supplied tags enter as
+  `ProvenanceObserved` and never satisfy an owned-state dependency. `assemble`
+  already pins owned-over-observed precedence so the accessor snapshot is "never
+  shadowed by caller-supplied context"; the exposure opens only if the `flow`
+  verb wires `--tag` into `Input.Owned`. Wire it to `Observed`.
+  *(0007×0005 F4, 0008×0005 F2)*
+- **JD-10 Recognized-tag totality.** 0008's name constraint invalidates all
+  three of 0002's canonical fixtures, which 0002 declares normative — rename
+  them; there are no users to migrate. Still open: whether a declared
+  `recognized` tag is total (always present, possibly empty) or partial (absent
+  with no outcome in flight), which decides whether an empty-outcome row is
+  satisfiable, dead, or a lint error. No normalizer exists yet to observe it.
+  *(0008×0002 F1/F2/F3, 0008×0009 F3)*
 
-- **JD-2 Resolver flow: gate-then-count, or match-then-count?** RDR 0002 states
-  the escape-reachability condition as a total function of the match count over
-  non-escape rows; RDR 0007's aggregation veto refuses *before* any counting,
-  and can kill a table where exactly one row matches and is decided true, purely
-  because an unevaluable sibling also matched. An implementer reading 0002
-  builds two stages; reading 0007, three. Stake: whether a table with one good
-  match resolves. *Status:* `open` — 0002 and 0007 specify different control
-  flow for the same call. *(0007×0002 F1, blocks-impl)*
-
-- **JD-3 `RequiresOwned` producer and preservation.** RDR 0007 redefines
-  `Row.RequiresOwned` as post-guard write-dependency keys and pins an ordering
-  rule over its contents. The string appears **zero** times in RDR 0002, which
-  owns the normalized row and enumerates what the dump must preserve — so the
-  producer is unnamed and the field may be dropped across the round trip. On
-  escape rows the two new RDRs disagree by construction: 0007 derives the field
-  from `Writes`, 0009 empties `Writes`. Stake: whether 0007's owned-before-guard
-  ordering quantifies over anything at all. *Status:* `open`. **Not** resolved by
-  §D1(d): `RequiresOwned` is a field with no named producer, which is a
-  different defect from `Guard`'s flattening — (d) touches the same `Row` type
-  and so provides a natural occasion to settle this, but does not answer it.
-  *(0007×0002 F3, 0007×0009 F2, blocks-impl)*
-
-- **JD-4 Static/runtime correspondence.** RDR 0006's lint proves a partition
-  exhaustive; RDR 0007's veto can refuse an assignment *inside* that proven set.
-  The forward proof holds and the inverse fails, so "lint is green" stops
-  meaning "resolution succeeds." No invariant category in 0006 detects
-  unevaluability risk, and 0003's coverage algebra has no image for the absent
-  case under `contains`, `eq`, `in`, or comparison. Stake: what a green
-  `intrastate lint` actually promises. *Status:* **`constraint`** *(re-graded
-  2026-08-12)* — **P5** already decides the substance: a green lint must mean
-  resolution succeeds, so where the two disagree the *promise* is what gives, not
-  the runtime. What remains is which document records the narrowed promise and
-  whether lint gains a warning category — an ownership question, not a design
-  fork. Re-grade to `open` if implementation shows the narrowed promise leaves
-  lint with nothing useful to assert. *(0007×0006 F2, 0007×0003 F3, 0008×0006 F3)*
-
-- **JD-5 Precedence of the two whole-table entry preconditions.** RDR 0009 adds
-  a breach check at `Resolve` entry and orders it "before every modeled
-  disposition"; RDR 0008 adds a reserved-key input precondition at the same
-  entry. Neither orders itself against the other — 0009's precedence clause
-  ranks itself against *dispositions*, not against a peer precondition, and is
-  silent on one. Stake: which error a table with both defects reports, and
-  therefore which one the author fixes first. *Status:* **`constraint`**
-  *(re-graded 2026-08-12)* — both orders are defensible and neither loses
-  information; what is unacceptable is leaving it unpinned so two
-  implementations differ. Pick one, pin it with a test asserting a table that
-  breaches both reports the chosen error. The decision is cheap; the silence is
-  not. *(0007×0009 F1, 0008×0009 F2)*
-
-- **JD-6 Producer-defect surface.** Governed by §D1. Until D1 resolves, the
-  kernel seam and the CLI boundary specify contradictory behavior for the same
-  event. Stake: whether a programmer defect reaches the user as a stack trace or
-  an envelope. *Status:* `open → §D1`. *(0007×0009 F3, whole-set critique C-8/C-9)*
-
-- **JD-7 Read completeness at the accessor→kernel boundary.** RDR 0004 says only
-  "A read accessor MUST return typed tag values or a typed refusal" — a
-  disjunction with no completeness requirement, so a partially-read artifact may
-  conformantly return what it got. `Input.Owned` has no error channel, so a
-  truncated snapshot and a genuine absence are the same input. RDR 0007 names
-  this as A6b, marks it `Pending`, and routes it to RDR 0004's implement stage;
-  RDR 0004 mentions 0007 zero times. Stake: this is the floor under every
-  presence/absence contract in the cluster — the critique's "each RDR verified
-  its own edge; nobody verified the floor." A truncated read makes `exists =
-  false` decide true, and a plan is produced against state that exists.
-  *Status:* `open` — the highest-consequence entry here. *(0007×0004 F1/F3,
-  0009×0004 F1, blocks-impl)*
-
-- **JD-8 CLI surface for the new refusals.** Three separate gaps at one seam:
-  `owned_state_unavailable` has no code row (JD-2's preferred refusal, absent
-  from 0005's twelve-row table); `reserved_tag_key` (0008) has no code or exit
-  mapping; and 0009 requires `GroupInternal`, which 0005's declared mapping does
-  not contain — 0005 enumerates exactly three buckets and assigns all twelve
-  codes to two of them. Compounding it, 0005's audit row says "no new envelope
-  fields," but 0007 needs `Refusal.Rows`/`MissingOwned` and 0009 needs row
-  identity to reach the user. Stake: whether the operator learns *which* rows
-  and *what* state, or just that something failed. Scoping half governed by §D2.
-  *Status:* **`blank`** *(re-graded 2026-08-12)* — RDR 0005's A-block already
-  pre-authorizes the additions: "Resolver/accessor-specific values only require
-  new `Code` constants or literals, **not new envelope fields or exit groups**."
-  `GroupInternal` ships. `Detail` and `Hint` ship and render in both modes. So
-  the "0005 must widen its taxonomy" framing was wrong — this is code-string
-  bookkeeping owned by whoever writes the `flow` verb, except the exit-3
-  question held in §D2. *(0007×0005 F1/F2/F3, 0009×0005 F1/F2, 0008×0005 F1)*
-
-- **JD-9 `--tag` provenance.** Governed by §D3. Also reaches 0008: a caller
-  passing `--tag recognized=…` collides with the reserved key, which 0008 classes
-  a programmer mistake and 0005 would class user input. Stake: whether a
-  guarantee the kernel enforces can be bypassed from the command line.
-  *Status:* **`constraint → §D3`** *(re-graded 2026-08-12)* — `assemble` already
-  pins owned-over-observed precedence so caller context "never shadows" the
-  accessor snapshot; what remains is making the `--tag` → `Input.Observed`
-  wiring normative before the verb is written. *(0007×0005 F4, 0008×0005 F2)*
-
-- **JD-10 Recognized-tag totality and fixture ownership.** RDR 0008's
-  declaration channel is total (a declared `recognized` tag always exists in the
-  model) while the emit channel is conditional (`assemble` injects only for a
-  non-empty `Input.Recognized`), so on the empty-outcome input class a row
-  matching the reserved tag sees no key rather than a declared-empty one. And
-  0008's name constraint invalidates all three of RDR 0002's canonical fixtures
-  — which 0002 declares normative: "The RDR and kata spike fixtures are the
-  canonical examples implementation tests must promote." 0008's `Overrides`
-  claims it "narrows nothing in either peer"; that claim is false for the
-  name-constraint half. Stake: whether existing authored tables still load, and
-  who owns renaming the fixtures. *Status:* **split** *(re-graded 2026-08-12)* —
-  the **fixture half is a `constraint`**: three committed fixtures to rename,
-  zero users to migrate, and the collision with 0002's "canonical examples
-  implementation tests must promote" is resolved by editing them. The
-  **totality half stays `open`**: whether a declared recognized tag is total
-  (always present, possibly empty) or partial (absent when no outcome is in
-  flight) determines whether an empty-outcome row is satisfiable, dead, or a
-  lint error — and no normalizer exists yet to observe the case. *(0008×0002
-  F1/F2/F3, 0008×0009 F3)*
-
-### Withdrawn
-
-- **JD-11 Escape-row identity across the dump** — *withdrawn, re-triaged as a
-  single-RDR defect.* RDR 0002's round-trip invariant requires the dump to
-  preserve "row kind … and escape failure classes"; its dump-derivation contract
-  sixty lines away enumerates "model id, row identity, source locator,
-  predicates, and writes." Both are `normative` blocks **inside RDR 0002**, so
-  the contradiction is visible reading 0002 alone — RDR 0009 only escalates it
-  from a fidelity issue to breach-laundering (under 0009's `len(Escape) != 0`
-  sole discriminator, a dumped-and-reloaded escape row becomes a conforming
-  ordinary row). Not joint. Routed as a SPEC-DEFECT against 0002 at
-  **RE-LOCK-ONLY** scope (`re-verify none` — reconcile two field lists). Entry
-  retained so the anchor never dangles. *(0009×0002 F3)*
+**Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
+single-RDR defect: 0002's round-trip invariant requires the dump to preserve
+"row kind … and escape failure classes" while its dump-derivation contract
+sixty lines away omits both. Both are `normative` blocks inside 0002, so the
+contradiction is visible reading 0002 alone; 0009 only escalates it to
+breach-laundering. Routed as a SPEC-DEFECT against 0002, RE-LOCK-ONLY. Entry
+kept so the anchor never dangles. *(0009×0002 F3)*
 
 ## What this does not decide
 
-Local items stay with their RDRs:
-
-- **RDR 0008's re-entry** — A6/A11 are `Verified` on a false negative-existential
-  about Final 0009 ("the string `Input` appears **zero** times"; it appears five
-  times, including inside 0009's own Normative Contracts). Already demoted to
-  `Draft [revised from Final 2026-08-11; re-verify A6, A11]` with a re-entry note;
-  re-enters at Stage 4, STAGE-SCOPED. That is 0008's defect, not a joint one.
-- **RDR 0002's dump/round-trip contradiction** — see JD-11 above; a 0002 re-lock.
+- **RDR 0008's re-entry** — A6/A11 verified on a false claim about Final 0009;
+  already demoted, re-enters at Stage 4, STAGE-SCOPED.
+- **RDR 0002's dump contradiction** — JD-11 above; a 0002 re-lock.
 - **RDR 0004's Prerequisites** — `Final` with every box unchecked, including
-  `- [ ] All Critical Assumptions verified`. A finalize-gate question for 0004.
-- **RDR 0009's frozen API surface** — `ErrEscapeShapeBreach`, `Unwrap() []error`
-  "EXACTLY ONE LEVEL", "return CheckValid's error VERBATIM". Internal to 0009,
-  and flagged by the critique as the most likely near-term rewrite.
-- **Exact code spellings, exit integers, and envelope field names** — the RDRs
-  own them once the decisions above fix the shape.
-
-## Provenance
-
-Cluster gate `0002-0009`, 2026-08-11: whole-set critique (34 rows) plus 13
-pairwise scans, all under
-`docs/rdr/cluster-reconcile/0002-0009/`. 31 findings, 24 `blocks-impl`. Verdict
-NOT RECONCILED — one SPEC-DEFECT (0008, demoted) and these entries, which had no
-home until this registry.
-
-**A standing note on why these are hard to resolve on paper.**
-`internal/resolve` contains exactly one non-test file and **zero production
-consumers** — nothing in `cmd/` or `internal/cli/` imports it. Every entry above
-sits at a seam no shipping code has ever exercised. Entries marked `deferred`
-are marked so deliberately: manufacturing a paper answer for a question the
-first vertical slice would settle is what produced this registry's contents in
-the first place.
+  "All Critical Assumptions verified." A finalize-gate question for 0004.
+- **RDR 0009's frozen API surface** — `Unwrap() []error` "EXACTLY ONE LEVEL",
+  "return CheckValid's error VERBATIM". Internal to 0009.
+- **Exact code strings, exit integers, envelope field names** — the RDRs own
+  them once the decisions above fix the shape.
