@@ -6,7 +6,9 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-08-12; re-verify A3, A10, A15 —
+  JDR 0001 §D1 replaces the opaque-guard seam with parsed atoms, voiding the
+  chosen approach; §D2 makes gate-then-count the kernel's stated ordering]
 - **Type**: Architecture
 - **Profile**: foundational — one contract, the domain of
   guard-predicate evaluation over an incomplete view;
@@ -2396,3 +2398,31 @@ Responses: 0007-guard-predicate-totality/artifacts/gate.md (Gate PASS 2026-08-11
 - Stage 4 aggregation spike:
   `docs/rdr/0007-guard-predicate-totality/evidence/spikes/aggregation-probe.md`
 - kata `xg7p` (originating finding)
+
+## Refinement Context (JDR re-entry — delete on re-lock)
+
+Source: **JDR 0001 §D1** and **§D2** (`docs/jdr/0001-resolve-kernel-seam.md`).
+
+**Defect.** This RDR built its guard domain on the opaque `resolve.Row.Guard
+string` seam and accepted a mandated panic as the only out-of-band surface for a
+mapping failure. JDR 0001 §D1 resolves that the row carries **parsed atoms**
+instead, so no reconstruction step exists and no mapping failure can occur.
+
+**Re-verify A3, A10, A15.**
+
+- **A3** ("The kernel requires no behavior change") is superseded: the `Row` type
+  changes. Its decline was justified by a cost the zero-consumer state does not
+  support — `internal/resolve` has one non-test file and no production importer.
+- **A10** and **A15** verified the string encoding as sufficient. That premise is
+  gone; the obligations they routed to RDR 0003's implement stage drop with it.
+
+**Also from §D2:** gate-then-count becomes the kernel's stated ordering —
+evaluate guards, veto on unevaluable, then count survivors.
+
+**Re-entry stage: propose.** The chosen approach changed, so the premortem and
+every pre-lock lens are stale; a narrower re-entry would re-lock over an
+un-re-examined contradiction. `Profile: foundational` carries the full lens set.
+
+**Direction.** Keep the domain rule (absence is unevaluable, never false) — it is
+unaffected. Replace the seam definition, drop the panic clause, and cite the atom
+shape as the single normative home rather than restating it.

@@ -6,7 +6,9 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-08-12; re-verify none —
+  JDR 0001 §D3 adds one normative clause (a read accessor returns the complete
+  tag set or refuses) plus its MVV scenario; no existing assumption disturbed]
 - **Type**: Architecture
 - **Profile**: large — locks one accessor execution safety contract governing authoritative artifact mutation.
 - **Priority**: High
@@ -712,3 +714,28 @@ contract governs authoritative artifact mutation.
 - OpenTofu state-write prior art: `TaintCommand::Run`,
   `stateMgr.WriteState`, `stateMgr.PersistState`
 - Local ADO transition helper prior art: `Client::transitionWorkItem`
+
+## Refinement Context (JDR re-entry — delete on re-lock)
+
+Source: **JDR 0001 §D3** (`docs/jdr/0001-resolve-kernel-seam.md`).
+
+**Defect.** "A read accessor MUST return typed tag values or a typed refusal" is
+a disjunction with **no completeness requirement** on the values branch, so a
+partially-read artifact may conformantly return what it got. `Input.Owned` has no
+error channel, so a truncated snapshot and a genuine absence are the same input
+at the kernel boundary. A truncated read therefore makes `exists = false` decide
+TRUE and a plan is produced against state that exists.
+
+RDR 0007 named this A6b, marked it `Pending`, and routed it here. This RDR
+mentions RDR 0007 zero times — the obligation bound nobody.
+
+**Re-verify: none.** No existing assumption is disturbed; this is an addition.
+
+**Re-entry stage: refine.**
+
+**Direction.** Add one normative clause — a read accessor MUST return the
+complete tag set for the keys it was asked for, or take the refusal branch — plus
+an MVV scenario asserting a truncated read refuses. This closes 0007's A6b as
+this RDR's own obligation. Note also that every Prerequisite box in this RDR is
+unchecked, including "All Critical Assumptions verified"; resolve that before
+re-locking.

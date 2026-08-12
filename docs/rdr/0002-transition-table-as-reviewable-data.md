@@ -6,7 +6,9 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-08-12; re-verify A2, A7 —
+  JDR 0001 §D2 restates the resolver flow as gate-then-count; JD-11 reconciles
+  the dump contract with this RDR's own round-trip invariant]
 - **Type**: Architecture
 - **Profile**: large — locks the sparse transition-model data format.
 - **Priority**: High
@@ -828,3 +830,33 @@ additional split is required before implementation.
 - RDR and kata flow audits from the state-machine prior-art corpus.
 - Tool-fit assessment for FSM libraries as validation/visualization tools, not
   runtime orchestrators.
+
+## Refinement Context (JDR re-entry — delete on re-lock)
+
+Source: **JDR 0001 §D2** and **§JD-11** (`docs/jdr/0001-resolve-kernel-seam.md`).
+
+**Defects.**
+
+1. **Resolver flow (§D2).** This RDR states escape reachability as a function of
+   the match count over non-escape rows. The resolution is **gate-then-count**:
+   guards evaluate first and an unevaluable candidate vetoes the resolution
+   before counting. Counting first prunes the unevaluable row into an escapable
+   `no_match`, masking missing state.
+2. **JD-11 — internal contradiction.** The Round-Trip invariant requires the dump
+   to preserve "row identity, source locator, **row kind**, predicates, writes,
+   and **escape failure classes**"; the dump-derivation contract sixty lines
+   earlier enumerates only "model id, row identity, source locator, predicates,
+   and writes." Both are `normative` blocks in this RDR. Under RDR 0009's
+   `len(Escape) != 0` sole discriminator, a dumped-and-reloaded escape row
+   becomes a conforming ordinary row — the round trip launders a breach.
+
+**Re-verify A2, A7.** A2 (row order is not part of selection) and A7
+(deterministic expanded-table ordering as a format contract) both sit on the
+surfaces these fixes touch.
+
+**Re-entry stage: refine.** The approach holds; the contract wording changes.
+
+**Direction.** Restate the resolver flow as gate-then-count and qualify Scenario
+4 so no sibling candidate is unevaluable. Add `row kind` and `escape failure
+classes` to the dump-derivation field list. Name the `RequiresOwned` producer
+(JD-3) and rename the three canonical fixtures (JD-10).

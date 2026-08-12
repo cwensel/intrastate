@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-5]
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real

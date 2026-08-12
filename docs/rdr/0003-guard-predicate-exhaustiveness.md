@@ -6,7 +6,9 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-08-12; re-verify A5 —
+  JDR 0001 §D1 fixes the normalized atom shape this RDR must cite rather than
+  restate; JD-4 narrows the lint promise where it and runtime disagree]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -852,3 +854,25 @@ into terminal dispositions or named implementation MVV obligations.
 - Prior-art corpus: `../state-machines` audits, evals, contrasts, and checked
   repositories for `transitions`, stateless/qmuntal-stateless, SCXML/scxmlcc,
   Sismic, StateSmith, and Statewright.
+
+## Refinement Context (JDR re-entry — delete on re-lock)
+
+Source: **JDR 0001 §D1** and **§JD-4** (`docs/jdr/0001-resolve-kernel-seam.md`).
+
+**Defect.** RDR 0007 routed three obligations (A10, A12, A15) to this RDR's
+implement stage; this RDR's text never received them, and its Prerequisites read
+`- [x] All Critical Assumptions verified` — a checklist that predates them.
+JDR 0001 §D1 removes the underlying cause by fixing the normalized atom shape at
+the kernel seam, so the encoding question those obligations carried no longer
+exists.
+
+**Re-verify A5** ("The normalized predicate representation can retain source
+identity for lint and refusal reporting") — the representation is now fixed by
+§D1 rather than by this RDR.
+
+**Also from JD-4:** where this RDR's exhaustiveness proof and RDR 0007's
+aggregation veto disagree, the **promise narrows** — a green lint must mean
+resolution succeeds. Record the narrowed promise; do not weaken the runtime.
+
+**Re-entry stage: refine.** Approach holds; cite the atom shape rather than
+restating it, and clear the stale Prerequisites checkbox.
