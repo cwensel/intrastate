@@ -660,6 +660,31 @@ structural check on `Table.Rows` before evaluation).
     change" verdict.
   - **Raised by**: 3amigo (Pre-Lock), finding T-3.
 
+- **A10 `Resolve` takes exactly one parameter and the table it
+  checks is reached through it, so the entry precondition adds
+  no parameter and changes no arity: the signature is
+  `func Resolve(in Input) (Result, error)` and the table is
+  `in.Table`.**
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: `internal/resolve/resolve.go::Resolve` is
+    declared `func Resolve(in Input) (Result, error)` — one
+    parameter. `internal/resolve/resolve.go::Input` carries
+    `Table Table` alongside `Flow`, `Owned`, `Observed`,
+    `Recognized`, and `Guards`, and `Resolve`'s own body already
+    reaches the rows as `in.Table.Rows` for the candidate
+    partition. So `in.Table.CheckValid()` is a call on a value
+    the function already holds; no signature change is implied
+    by the precondition.
+  - **If wrong**: the precondition cannot be a first statement
+    on the existing entry point without changing RDR 0001's
+    locked arity, which this RDR does not authorize and which
+    would break all sixteen `escapeRow` call sites and the
+    frozen suite — the placement decision and the
+    no-peer-change claim would both have to be reopened.
+  - **Raised by**: repeatability (Pre-Lock), diff finding D-1
+    (run-1 reconstructed a two-parameter `Resolve`).
+
 ## Proposed Solution
 
 ### Approach
@@ -758,7 +783,15 @@ conformance fixture set; RDR 0002's grammar is unchanged.
 
 ```normative
 The kernel enforces the same obligation as an entry
-precondition of Resolve: a table containing a row that
+precondition of Resolve. Resolve's signature is UNCHANGED —
+`func Resolve(in Input) (Result, error)`, one parameter — and
+the checked table is the one already reached through the input,
+`in.Table`; the precondition adds no parameter and takes no
+table argument of its own. (Stated because the RDR otherwise
+names the table only as "the supplied table": a reconstruction
+that reads the precondition as taking its own Table parameter
+changes RDR 0001's locked entry-point arity, which this RDR
+does not authorize.) A table containing a row that
 breaches the conformance predicate above MUST cause Resolve
 to return a non-nil Go error identifying the offending row by
 RuleID and SourceLocator, with no Result disposition. The
@@ -1001,7 +1034,8 @@ introduced at the kernel boundary.
     any future change is a single-site edit that cannot
     desynchronize the two enforcement points.
   - *Placement* — the call is `Resolve`'s first statement,
-    above the existing `view := assemble(in)`, so a breaching
+    `in.Table.CheckValid()`, above the existing
+    `view := assemble(in)`, so a breaching
     table costs no view assembly. This is a **cheapness
     preference, not an observable contract**: `assemble` is
     pure and allocation-only, so placing the check after it
@@ -1380,7 +1414,8 @@ enforcement point without opening any peer contract.
 
 - [ ] All Critical Assumptions verified — A1–A8 verified at
       Stage 4 (A6 verified contrary to its Propose-stage
-      wording); **A9 is Pending**, raised by the 3amigo
+      wording), A10 verified at Pre-Lock (repeatability);
+      **A9 is Pending**, raised by the 3amigo
       pre-lock lens and owed to Stage 6
 - [x] A3 spike green (conformed fixtures, full
       `internal/resolve` suite) before the precondition
@@ -1678,6 +1713,15 @@ inherited, not run here. This RDR does not wait on them.
     `RowRef` identity (`compareRefs`), never by `Table.Rows`
     position. The REQ-1/REQ-10 payload-stability rule that
     `rowRefs` already follows, applied to the breach report.
+    The table MUST be **mixed** — at least one row carrying
+    source identity and at least one built without it
+    (`RowRef{"",""}`) — so the report's ordering is pinned
+    across the two identity classes rather than only within
+    one. Scenarios 10 and 10b are otherwise homogeneous (all
+    distinct, all degenerate), which would leave the relative
+    position of the zero-value identity unasserted;
+    `compareRefs` compares strings, so it sorts first, and this
+    scenario is what holds that.
 10b. **Scenario**: A multi-breach table whose breaching rows
     share one `RowRef` identity (including the zero-value
     `RowRef{"",""}` of rows built without source identity),
