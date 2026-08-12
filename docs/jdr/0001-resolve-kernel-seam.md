@@ -158,21 +158,78 @@ versus the structured envelope every other failure produces.
   "Adding a second channel would give the evaluator a way to report
   undecidability that the kernel's refusal taxonomy does not model." Reopening
   it reopens 0007's design.
-- **(c) Panic at the seam, recover at the boundary — recommended** — 0007's
-  clause binds the *kernel*, and the CLI is not the kernel. The `flow` verb
-  recovers at its own boundary and renders a `GroupInternal` envelope with a
-  stable code. 0007's "MUST NOT recover into a verdict or refusal" is honored
-  literally: the recovery produces neither — it produces a crash report in
-  structured form. Cost: one recover site, which must be narrowly scoped so it
-  never swallows genuine panics into silence.
+- **(c) Panic at the seam, recover at the boundary** — 0007's clause binds the
+  *kernel*, and the CLI is not the kernel. The `flow` verb recovers at its own
+  boundary and renders a `GroupInternal` envelope with a stable code. 0007's
+  "MUST NOT recover into a verdict or refusal" is honored literally: the
+  recovery produces neither. **Was the recommendation while "do not reopen
+  0007" was treated as a constraint; withdrawn once it was not.** Its costs are
+  long-term: `panic`/`recover` must cross `internal/resolve` → `internal/cli`
+  (0007 forbids the kernel recovering), which is the Go anti-pattern in its
+  worst form; recovering *only* the mapping panic needs a typed panic value and
+  a type switch that re-panics on everything else, and getting that slightly
+  wrong launders a genuine nil-deref into a misleading "guard mapping failed"
+  envelope; and every non-CLI consumer — test harness, server, alternate
+  frontend — inherits the obligation to write its own recover.
+- **(d) Make the mapping failure unrepresentable — recommended** — the whole
+  question descends from one representation choice: `resolve.Row.Guard` is a
+  `string` (`resolve.go:185`), an opaque predicate handed across the seam, so
+  the evaluator must *reconstruct* structure at evaluation time and can fail
+  doing it. RDR 0002 already produces the structure upstream — normalization
+  "MUST combine both into one candidate-row predicate set" — and the kernel
+  boundary flattens it. Carry the parsed predicate set across the seam instead
+  and there is no mapping step, therefore no mapping failure, therefore no
+  channel question. "Parse, don't validate."
+
+  Verified cheap: the **only** implementation of `GuardEvaluator` in the repo is
+  `fixtureGuards` in `internal/resolve/fixtures_test.go:20`; the sole non-test
+  file referencing the interface is `resolve.go` itself. Changing the seam
+  signature is a test-only refactor.
+
+  The current fixture is itself the argument: given a guard it cannot map it
+  returns `GuardUnevaluable` — precisely the conflation 0007's panic clause
+  exists to forbid. The opaque string makes "I cannot parse this" and "I cannot
+  decide this" indistinguishable at the seam, so the panic is a workaround for a
+  representation defect rather than a design.
+
+  **Cost, stated plainly:** this reopens RDR 0001's kernel `Row` type — which
+  0007 explicitly declined to touch (its A3, "reversing it is a kernel change
+  this RDR declines to make") — and reopens 0007's seam definition at
+  FULL-FLOW scale rather than as a wording fix. RDR 0001 is `Implemented`, so
+  code is the source of truth there; its implementation has zero production
+  consumers, making the change a refactor of test-covered code rather than a
+  migration.
 
 *Principles:* **P3** rules out (a) — a stack trace is not a structured failure,
-and the skill consuming JSON cannot parse it. **P7** weakens the case for (b):
-widening the seam is the compatible shape, but there is no caller to protect, so
-the cost is design churn rather than migration. (c) satisfies P3 without
-reopening 0007.
+and the skill consuming JSON cannot parse it. **P7** rules out (c) once
+reopening is permitted: `panic`/`recover` across a package boundary is the
+compatible shape chosen to avoid touching a Final RDR, and there is no caller to
+protect. **P2** favors (d) over (b): under (b) the parse/decide distinction is
+maintained by discipline (a contract saying the error channel must not report
+undecidability), while under (d) it is structural — an unparseable guard cannot
+reach the evaluator at all. **P6** notes that (b)'s discipline contract would be
+a second place stating a rule RDR 0001 already states one level up ("the error
+return is reserved for programmer mistakes, not for modeled refusals").
 
-**Resolved:** _pending — needs a call._
+*On 0007's objection to (b)* — "Adding a second channel would give the evaluator
+a way to report undecidability that the kernel's refusal taxonomy does not
+model" — the argument conflates a **verdict** (cannot decide from this view;
+modeled, as `GuardUnevaluable`) with a **defect** (the guard structure is
+broken). RDR 0001 already runs exactly that two-channel discipline one level up,
+and 0007 quotes it approvingly. The objection is therefore a reason to prefer
+(d) over (b), not a reason to keep the panic.
+
+*Linkage:* **(d) also dissolves JD-1.** That entry is the gate's hardest
+blocking finding — `Row.Guard` is one string per row while RDR 0003's identity
+key is per-*atom*, so an N-atom row needs N keys through a one-slot channel, and
+it was deferred to 0003's Phase 1 as unresolvable on paper. Carrying structure
+across the seam removes the transport problem outright. One representation fix
+closes two blocking entries.
+
+**Resolved:** _pending — needs a call._ Recommendation moved (c) → (d) on
+2026-08-12 after the constraint "do not reopen Final RDRs" was lifted for
+changes that reduce long-term debt and improve usability, with user DX named a
+primary concern.
 
 ### D2 — Is `flow-guard-unevaluable` about supplied facts, or about the view?
 
@@ -263,9 +320,14 @@ provenance. Edit in place; normative once `decided`.
   disclaims the bridge: "This RDR introduces no encode/decode pair." RDR 0007's
   A10 verified this mapping as sufficient on a key whose cardinality it did not
   check. Stake: every guard with two conditions — the common case, and the case
-  both RDRs' own example TOML shows. *Status:* `deferred → 0003 Phase 1
-  (Predicate Model)` — the encoding is a property of the evaluator, unresolvable
-  on paper. *(0007×0003 F1, blocks-impl)*
+  both RDRs' own example TOML shows. *Status:* `open → §D1(d)` — **re-routed
+  2026-08-12.** Previously `deferred → 0003 Phase 1` on the reasoning that the
+  encoding is a property of the evaluator. That reasoning presumed the opaque
+  `Row.Guard string` seam as fixed. §D1's option (d) removes the seam's
+  flattening, which removes the N-atoms-through-one-slot problem rather than
+  encoding around it — so this entry is decided by D1, not deferred past it. If
+  D1 resolves to (a), (b), or (c), this reverts to `deferred → 0003 Phase 1`.
+  *(0007×0003 F1, blocks-impl)*
 
 - **JD-2 Resolver flow: gate-then-count, or match-then-count?** RDR 0002 states
   the escape-reachability condition as a total function of the match count over
@@ -283,8 +345,11 @@ provenance. Edit in place; normative once `decided`.
   producer is unnamed and the field may be dropped across the round trip. On
   escape rows the two new RDRs disagree by construction: 0007 derives the field
   from `Writes`, 0009 empties `Writes`. Stake: whether 0007's owned-before-guard
-  ordering quantifies over anything at all. *Status:* `open`. *(0007×0002 F3,
-  0007×0009 F2, blocks-impl)*
+  ordering quantifies over anything at all. *Status:* `open`. **Not** resolved by
+  §D1(d): `RequiresOwned` is a field with no named producer, which is a
+  different defect from `Guard`'s flattening — (d) touches the same `Row` type
+  and so provides a natural occasion to settle this, but does not answer it.
+  *(0007×0002 F3, 0007×0009 F2, blocks-impl)*
 
 - **JD-4 Static/runtime correspondence.** RDR 0006's lint proves a partition
   exhaustive; RDR 0007's veto can refuse an assignment *inside* that proven set.
