@@ -386,6 +386,16 @@ structural check on `Table.Rows` before evaluation).
     fields as needed"). That is additive to the envelope and
     leaves the refusal-to-exit-code mapping untouched, so
     A2's "no RDR 0005 contract change" verdict stands.
+    **Re-confirmed at Stage 6** (critique carried the
+    corrected exit-2 wiring claim forward for
+    re-verification): A9's source search closed the additive
+    question against `internal/cli/clierr/clierr.go` — the
+    `CLIError` type's own doc comment authorizes `omitempty`
+    extension, no consumer or test reads an exact field set,
+    and `ExitCodeFor`'s refusal-to-exit-code mapping is
+    untouched by the addition. The corrected reading
+    (`ExecuteAndEmit` → `cobraErrorToCLIError` → exit 2,
+    never exit 1) stands.
   - **If wrong**: Surfacing the breach requires reopening
     RDR 0005's envelope contract, and the error-path branch
     loses its no-peer-change advantage.
@@ -634,31 +644,91 @@ structural check on `Table.Rows` before evaluation).
   envelope and breaks no shipped consumer — even though
   `Cause`'s own doc comment currently states "the wire-visible
   cause surface is Detail."**
-  - **Status**: Pending
+  - **Status**: Verified — with a named amendment obligation
+    (the `Cause` doc comment; see (c))
   - **Method**: Source Search
-  - **Plan**: The Pre-Lock decision (3amigo T-3) rejected
-    rendering identities into `Detail`, because a consumer
-    would have to re-parse prose this RDR forbids re-parsing.
-    That choice contradicts a shipped doc comment at
-    `internal/cli/clierr/clierr.go::CLIError.Cause`, so verify:
-    (a) no shipped consumer or golden-output test depends on
-    `Detail` being the *sole* wire cause surface; (b) adding a
-    field is consistent with the type's documented "Extend with
-    new optional fields as needed" allowance; (c) whether the
-    `Cause` doc comment must be amended alongside — and if so,
-    that the amendment is RDR 0005's to authorize, not this
-    RDR's to make unilaterally; (d) the field's Go type keeps
-    `clierr` a leaf: it must not import `internal/resolve`,
-    so the carrier is a clierr-local representation (plain
-    strings/struct, not `resolve.RowRef`) — and the plan
-    settles whether the per-identity `Count` serializes
-    alongside the identities.
+  - **Evidence**: All four plan items closed at Stage 6.
+    **(a) No consumer depends on `Detail` being the sole wire
+    cause surface.** `internal/cli/` carries exactly one test
+    file, `internal/cli/version_test.go`, and no `testdata/`,
+    golden files, or snapshot fixtures exist anywhere in the
+    CLI tree. Its only JSON assertion,
+    `version_test.go::TestVersion_JSON`, unmarshals into a
+    *partial anonymous struct* (`Type`, `Data.Version`), which
+    ignores unknown fields — and it tests the `respond.Success`
+    envelope, not `CLIError`. The two error-path tests
+    (`::TestUnknownCommand_IsStructured`,
+    `::TestInvalidMode_IsRefused`) assert only on
+    `clierr.ErrorCode` / `clierr.ExitCodeFor` and never inspect
+    serialized bytes. The shapes that *would* break on an added
+    field — whole-JSON-string comparison, `DeepEqual` over an
+    unmarshalled map, `DisallowUnknownFields` — exist nowhere in
+    the repo (every `reflect.DeepEqual` hit is in
+    `internal/resolve/*_test.go` over kernel types). No non-Go
+    consumer parses the envelope either. So the addition breaks
+    nothing whether or not the field is populated.
+    **(b) The allowance is real and conditional.**
+    `internal/cli/clierr/clierr.go::CLIError`'s doc comment
+    reads verbatim: "Extend with new optional fields as needed —
+    keep them `omitempty` so the envelope stays append-only and
+    stable for tools." The condition (`omitempty`) is exactly
+    what this RDR's clause already requires. Corroborated by RDR
+    0005 ("Error envelopes stay append-only through `CLIError`
+    fields"); its reuse-audit "no new envelope fields required"
+    row scopes 0005's own MVP verbs and is not a prohibition.
+    Serialization is a plain `json.Marshal(e)` in
+    `clierr.go::EmitJSON` with no custom `MarshalJSON`, so a
+    tagged field reaches the wire with no other code change.
+    Field tags confirmed: `Code`/`Message` unconditional,
+    `Param`/`Detail`/`Hint` already `omitempty`, `Group` and
+    `Cause` both `json:"-"`.
+    **(c) The `Cause` doc comment must be amended alongside —
+    and this RDR authorizes only the amendment, not a contract
+    change.** Verbatim at
+    `internal/cli/clierr/clierr.go::CLIError.Cause`: "Cause
+    preserves the underlying Go error for errors.Is/errors.As
+    traversal. Not serialized — the wire-visible cause surface
+    is Detail." The definite article makes that a uniqueness
+    claim, and row identities are cause information, so the
+    sentence becomes false once the field lands. The defect is
+    documentary, not behavioral: nothing branches on the claim
+    and `Cause` stays `json:"-"`. Recorded as a Prerequisite
+    obligation to reword the second clause (and to update
+    `docs/cli-output-contract.md`'s envelope field list) in the
+    same change. The comment's normative home is RDR 0005
+    (which names `internal/cli/clierr::CLIError` in its Touched
+    Surfaces); amending a stale *code comment* to match an
+    additive field is not reopening 0005's envelope contract,
+    which is what A2's verdict turns on.
+    **(d) `clierr` stays a leaf.** `go list` gives its complete
+    import set as four stdlib packages — `encoding/json errors
+    fmt io` — with no intra-repo import at all, and its package
+    doc records that as deliberate (it exists "so other internal
+    packages … can construct CLIErrors without importing
+    internal/cli and forming an import cycle"). Nothing forces a
+    `resolve` import; `internal/resolve/resolve.go` imports only
+    `slices` and `strings` and could not absorb the reverse
+    dependency either. Note the direction guard runs one way —
+    `internal/resolve/resolve_test.go::TestReq11_KernelImportsNoCLIOutputOrPersistenceFacility`
+    forbids the kernel importing `clierr`, not the converse — so
+    the leaf property is preserved by design intent, not by a
+    test. **Settled: the carrier is a clierr-local
+    representation** (plain strings or a small row-identity
+    struct declared in `clierr`), never `resolve.RowRef`; the
+    CLI verb layer, which already imports both, does the
+    conversion. **Settled: the per-identity `Count` DOES
+    serialize alongside the identities** — the kernel carries it
+    structurally precisely so no consumer parses prose for it,
+    and dropping it at the wire would force exactly that
+    re-parse for the degenerate `RowRef{"",""}` case the
+    multi-breach clause calls out.
   - **If wrong**: the identities ride `Detail` as rendered
     prose after all (accepting a re-parse consumers are told
     not to perform), or RDR 0005's envelope contract must be
     reopened — which would cost A2 its "no RDR 0005 contract
     change" verdict.
-  - **Raised by**: 3amigo (Pre-Lock), finding T-3.
+  - **Raised by**: 3amigo (Pre-Lock), finding T-3; closed at
+    Stage 6 (reconcile).
 
 - **A10 `Resolve` takes exactly one parameter and the table it
   checks is reached through it, so the entry precondition adds
@@ -948,6 +1018,13 @@ that nothing else is checked (in particular not the
 Escape-class restriction to no_match/ambiguous_match that
 Row's doc records for RDR 0002), so a nil return is never
 read as general table validity.
+
+A table with no rows (empty or nil Rows) conforms VACUOUSLY:
+CheckValid MUST return nil, since no row can breach a predicate
+quantified over rows and errors.Join of nothing is nil. Stated
+because the kernel already admits that shape — REQ-20's
+empty-input region reaches it — and a nil return there is the
+vacuous truth, never a signal that validation was skipped.
 ```
 
 ```normative
@@ -965,15 +1042,27 @@ new optional fields as needed" allowance — NOT the existing
 Detail, because reading identities out of Detail would require
 the consumer to re-parse rendered prose, which this RDR forbids
 everywhere else. The clause binds the carrier CLASS only; the
-field's name, its clierr-local type (clierr is a leaf package
-and MUST NOT import internal/resolve), and whether the
-per-identity Count serializes are A9's to settle. The stable
+field's NAME stays the implementer's. A9 settled the rest at
+Stage 6: the field's type MUST be a clierr-local
+representation (plain strings or a small row-identity struct
+declared in clierr) and MUST NOT be resolve.RowRef, keeping
+clierr a leaf that does not import internal/resolve — the CLI
+verb layer, which already imports both, does the conversion;
+and the per-identity Count MUST serialize alongside the
+identities, since carrying it structurally in the kernel and
+then dropping it at the wire would force exactly the prose
+re-parse this RDR forbids. The stable
 Code is "escape-row-shape-breach".
 This is an additive envelope change, not a change to RDR
-0005's refusal-to-exit-code mapping, so A2 stands — subject to
-A9, which verifies the addition against clierr.CLIError.Cause's
-shipped doc comment naming Detail the sole wire-visible cause
-surface. Returning
+0005's refusal-to-exit-code mapping, so A2 stands. A9 verified
+the addition against clierr.CLIError.Cause's shipped doc
+comment naming Detail the sole wire-visible cause surface: the
+addition is authorized by the CLIError type's own "Extend with
+new optional fields as needed — keep them omitempty" allowance,
+and the Cause comment's now-stale second clause MUST be
+amended in the same change (a Prerequisite; amending a stale
+code comment is not reopening RDR 0005's envelope contract).
+Returning
 the kernel error UNWRAPPED is a defect the exit code does NOT
 reveal: root.go's ExecuteAndEmit converts every non-CLIError
 via cobraErrorToCLIError — GroupUserEnv, still exit 2, Code
@@ -1412,11 +1501,11 @@ enforcement point without opening any peer contract.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified — A1–A8 verified at
+- [x] All Critical Assumptions verified — A1–A8 verified at
       Stage 4 (A6 verified contrary to its Propose-stage
-      wording), A10 verified at Pre-Lock (repeatability);
-      **A9 is Pending**, raised by the 3amigo
-      pre-lock lens and owed to Stage 6
+      wording), A10 verified at Pre-Lock (repeatability), A9
+      verified at Stage 6 (reconcile) with the `Cause`
+      doc-comment amendment named below. None Pending
 - [x] A3 spike green (conformed fixtures, full
       `internal/resolve` suite) before the precondition
       lands —
@@ -1446,6 +1535,17 @@ enforcement point without opening any peer contract.
       envelope field — `Cause` is `json:"-"`, so identities
       carried only on the Go error chain never reach an
       operator
+- [ ] The same change that adds the `omitempty` identity
+      field to `clierr.CLIError` amends the now-stale second
+      clause of `internal/cli/clierr/clierr.go::CLIError.Cause`'s
+      doc comment ("Not serialized — the wire-visible cause
+      surface is Detail"), which the addition makes false, and
+      updates `docs/cli-output-contract.md`'s error-envelope
+      field list alongside. A9 verified this is a stale-comment
+      correction riding an additive field, not a reopening of
+      RDR 0005's envelope contract — but shipping the field
+      without the amendment leaves the package documenting the
+      opposite of what it does
 
 ### Minimum Viable Validation
 
@@ -1755,11 +1855,12 @@ inherited, not run here. This RDR does not wait on them.
     new `omitempty` field on `CLIError` — **not** rendered
     prose in `Detail`, which would force the consumer
     re-parsing this RDR forbids; `Detail` carries the human
-    sentence, the new field carries the identities. That choice
-    is **pending A9**, which must confirm the addition is
-    additive to RDR 0005's envelope, given that `Cause`'s
-    shipped doc comment presently names `Detail` the sole
-    wire-visible cause surface. The kernel cannot serialize
+    sentence, the new field carries the identities, and the
+    per-identity `Count` serializes with them (A9). A9
+    **confirmed** the addition is additive to RDR 0005's
+    envelope; the field's clierr-local type and the same-change
+    amendment of `Cause`'s now-stale doc comment are recorded on
+    A9 and in Prerequisites. The kernel cannot serialize
     its own breach: frozen guards REQ-37 and REQ-28 forbid it
     importing `encoding/json` or any CLI package, so the wire
     carrier is necessarily CLI-side work.
@@ -1901,7 +2002,13 @@ matrix/provenance prose left from the template or Seed
 - `internal/cli/clierr` (`GroupInternal`, `ExitCodeFor`)
 - kata `tgzh` (originating finding)
 - `internal/cli/clierr/clierr.go` (`CLIError.Detail`,
-  `.Hint`, `.Cause`; `ExitCodeFor` non-`CLIError` → exit 1)
+  `.Hint`, `.Cause` — `json:"-"`, doc comment "the
+  wire-visible cause surface is Detail"; the type's "Extend
+  with new optional fields as needed — keep them `omitempty`"
+  allowance; `ExitCodeFor`'s non-`CLIError` default returns
+  exit 1 but is **unreachable for a verb error**, which
+  `root.go::ExecuteAndEmit` converts via
+  `cobraErrorToCLIError` first — exit 2)
 - `internal/cli/config/config.go::Load` (shipped precedent:
   Go error → `GroupInternal` + stable code + `Hint`)
 - `internal/cli/root.go` (`NewRootCmd` registers only
