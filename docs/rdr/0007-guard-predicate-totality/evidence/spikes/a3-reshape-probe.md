@@ -114,7 +114,10 @@ are never parsed — which is exactly why they re-key onto atoms mechanically.
 ## 4. The spike
 
 Scratchpad: `/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/`
-Diffs and the probe file are copied to `evidence/spikes/a3-reshape/`.
+The probe file is kept at `evidence/spikes/a3-reshape/`. The working
+diffs (kernel, fixtures, tests) were scratchpad-only and have been
+removed; the substance of each is quoted inline below, and the reshape is
+re-derivable from the section that follows.
 
 ### Commands
 
@@ -145,7 +148,7 @@ ok  	github.com/newcoinc/intrastate/internal/resolve	0.182s
 
 ### The reshape applied
 
-Kernel (`evidence/spikes/a3-reshape/kernel.diff`, 165 diff lines, 5 hunks):
+Kernel (165 diff lines, 5 hunks):
 
 - `Row.Guard string` → `Guard []GuardAtom`.
 - New `GuardAtom{Key, Op, Literal, Block string}`.
@@ -160,7 +163,7 @@ Kernel (`evidence/spikes/a3-reshape/kernel.diff`, 165 diff lines, 5 hunks):
   UNEVALUABLE; present key + `exists` → TRUE; otherwise delegate the value
   comparison. **The seam is never called for an absent key.**
 
-Fixtures (`fixtures_test.diff`, `tests.diff`): `fixtureGuards` migrated to the
+Fixtures: `fixtureGuards` migrated to the
 atom seam — it now implements `EvaluateAtom` and decides by comparing the
 **bound value** to `atom.Literal`, keyed on `atom.Block`. A `guardAtoms(names...)`
 helper re-encodes each old predicate label as a single-atom conjunction over
