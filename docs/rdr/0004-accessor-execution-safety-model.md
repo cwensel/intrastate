@@ -6,11 +6,11 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-12; re-verify none —
-  JDR 0001 §D3 added one normative clause (a read accessor returns the complete
-  tag set or refuses) plus its MVV scenario; no existing assumption disturbed]
+- **Status**: Draft [revised from Final 2026-08-12; re-verified A8 —
+  JDR 0001 §D3's read-completeness clause carried its own exactness claim and is
+  now backed by an extended Resolve spike; A1-A7 carried forward Verified]
 - **Type**: Architecture
-- **Profile**: large — locks one accessor execution safety contract governing authoritative artifact mutation.
+- **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, and write read-back) governing authoritative artifact mutation.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -111,7 +111,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   existing CLI failure gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr::CLIError` defines append-only structured codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr::ExitCodeFor` maps groups to stable exits, and `internal/cli/respond::Fail` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, and read-back mismatch (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::refusal`, `output.txt:3-9`) without accessor-level printing beyond the test harness.
+  - **Evidence**: `internal/cli/clierr::CLIError` defines append-only structured codes/messages with optional detail/hint and non-serialized exit group, `internal/cli/clierr::ExitCodeFor` maps groups to stable exits, and `internal/cli/respond::Fail` emits failures centrally. The spike's refusal enum and output lines cover timeout, execution failure, gate indeterminate, capability mismatch, unknown accessor, read-back mismatch, and incomplete read (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::refusal`, `output.txt:3-9`, `output.txt:12`) without accessor-level printing beyond the test harness.
   - **If wrong**: Accessor errors would need a separate user-facing output
     contract or would leak implementation errors to callers.
 - **A4 Accessor execution can be deterministic enough for resolver replay when
@@ -119,7 +119,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   returned tag values.**
   - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::replay`), while sorted map formatting prevents map-order drift in the transcript (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::formatMap`). Transcript line 11 shows identical success disposition for two runs; line 12 shows an injected gate-indeterminate refusal remains stable (`output.txt:11-12`).
+  - **Evidence**: MVV Scenario 4 is `TestAccessorReplayDisposition`: the spike's `replay` function rebuilds the same fixture artifacts and records accessor name/capability/role/timeout outcomes (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::replay`), while sorted map formatting prevents map-order drift in the transcript (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::formatMap`). Transcript line 14 shows identical success disposition for two runs; line 15 shows an injected gate-indeterminate refusal remains stable (`output.txt:14-15`).
   - **If wrong**: Resolver replay could depend on ambient process state rather
     than declared model inputs.
 - **A5 External API accessors can be constrained by declared capability and
@@ -133,7 +133,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   before the resolver runs.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validateDefinitions`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validationCases`); transcript lines 13-20 capture every validation disposition (`output.txt:13-20`).
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` runs `validateDefinitions`, which rejects missing accessors, multiply-bound identities, capability mismatches, missing/non-positive timeout metadata, missing write read-back metadata, ambient artifact discovery, and non-owned writes before runtime (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validateDefinitions`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::validationCases`); transcript lines 16-23 capture every validation disposition (`output.txt:16-23`).
   - **If wrong**: Unsafe or ambiguous accessor definitions could reach runtime
     and turn typed refusals into late execution surprises.
 - **A7 Write read-back verification can detect unintended mutation of
@@ -143,6 +143,15 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` snapshots pre-write tag values, skips the planned owned tag during the non-owned comparison, and returns `read_back_mismatch` when any other observed tag changes (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::write`). Transcript line 10 shows `status=Final` was written as planned while non-owned `profile` changed from `large` to `small`, producing `read_back_mismatch` (`output.txt:10`).
   - **If wrong**: A write accessor could corrupt caller-observed state while
     still passing the owned-tag success check.
+- **A8 A read accessor can resolve every requested key or refuse, such that a
+  key the artifact genuinely lacks and a key the accessor could not read take
+  different branches.**
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` resolves reads against an explicit requested key set, returning `incomplete_read` when any requested key is unreadable and `<absent>` as a value when the artifact legitimately lacks it (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::read`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::absentValue`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::completeRead`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::truncatedRead`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::absentKeyRead`). Transcript line 11 shows a complete read, line 12 the unreadable-key refusal, line 13 the genuine-absence success carrying `profile=<absent>` (`output.txt:11-13`) — the two failure shapes are distinguishable by branch, not by inspecting a thinned value set. The kernel cannot recover the distinction downstream: `internal/resolve/resolve.go::missingOwned` decides on `internal/resolve/resolve.go::TagSet.has` (map presence) alone, so an absent and an unread owned key both become `owned_state_unavailable`, which is why the rule binds at the accessor boundary.
+  - **If wrong**: A truncated read reaches a consumer shaped like genuine
+    absence, so a presence/absence predicate decides on state that was never
+    read.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -324,7 +333,11 @@ write to stdout or stderr directly.
   requested key resolved", not "at least one key resolved". A key the artifact
   genuinely does not carry resolves as an absent value; a key the accessor could
   not read is an `incomplete_read` refusal. Consumers may therefore treat a
-  returned tag set as total over the requested keys.
+  returned tag set as total over the requested keys. The contract constrains
+  which branch is taken, not how an absent value is represented in the success
+  branch; the Resolve spike's `<absent>` sentinel is fixture shorthand, not a
+  normative representation, and implementation may choose a typed absence
+  marker instead.
 
 #### Round-Trip / Inverse Invariants
 
@@ -528,7 +541,7 @@ timeout, and expected versus observed tag values.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified (A1-A7; see Assumption Verification)
+- [x] All Critical Assumptions verified (A1-A8; see Assumption Verification)
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
 - [ ] RDR 0002 carries accessor references, tag provenance, and artifact roles
@@ -591,7 +604,8 @@ executor boundary. The Resolve spike at
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go`
 already exercises the test matrix as a fixture proof: declared read/gate/write
 bindings over caller-supplied artifacts, bounded timeouts, typed refusals,
-unsafe definition validation, write read-back verification, and stable replay.
+read completeness over an explicit requested key set, unsafe definition
+validation, write read-back verification, and stable replay.
 Done means those spike cases become package tests without direct stdout/stderr
 output from the accessor package. The write success tests must assert the
 re-read owned-tag value equals the transition plan's expected value and that
@@ -614,6 +628,9 @@ unchanged.
    refusal classes. A read missing any requested key refuses rather than
    returning a partial set; an artifact that genuinely lacks a requested key
    returns it as an absent value, not a refusal.
+   The read dispositions are proven at `output.txt:11-13`: a complete read, an
+   `incomplete_read` refusal for an unreadable key, and a genuine absence
+   returned as a value (`profile=<absent>`).
 3. **Scenario**: Execute a successful transition plan through a write accessor,
    then re-read the same artifact role.
    **Expected**: Matching expected owned-tag values report success; mismatched
@@ -663,7 +680,7 @@ the read and gate clauses state the same rule at both layers.
 
 ### Assumption Verification
 
-Critical Assumptions A1-A7 are verified. A1 and A2 are backed by the Resolve
+Critical Assumptions A1-A8 are verified. A1 and A2 are backed by the Resolve
 spike and transcript under
 `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
 by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
@@ -672,7 +689,10 @@ the explicit scoping decision that credentials and remote resource lifecycle
 remain outside intrastate; A6 is backed by the same Resolve spike's
 definition-validation harness and transcript; A7 is backed by the same spike's
 collateral-mutation read-back mismatch case, which is also what carries A2's
-non-owned-tag half. None of the verified evidence cites
+non-owned-tag half; A8 is backed by that spike's three read dispositions —
+complete, unreadable-key refusal, and genuine absence as a value — and grounded
+against `internal/resolve/resolve.go::missingOwned`, which shows the kernel
+cannot recover the distinction after the fact. None of the verified evidence cites
 this RDR or its artifact directory as self-proof.
 
 ### Scope Verification
