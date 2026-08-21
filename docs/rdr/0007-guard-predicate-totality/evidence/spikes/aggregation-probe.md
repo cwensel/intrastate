@@ -7,13 +7,15 @@ aggregation clause asserts, against the shipped kernel at `44b83e3`.
 
 Both probes are throwaway tests compiled into `package resolve_test` (reusing
 `fixtureGuards`, `noMatchInput`, `escapeRow`, `singleMatchTable` from
-`fixtures_test.go`), run, then removed. Source: `aggregation-probe_test.go`
-beside this file.
+`fixtures_test.go`), run, then removed. The probe source is inlined under
+**Probe source** below rather than left as a `.go` file beside this file: as a
+standalone package under `docs/` it cannot compile (its fixtures live in
+`internal/resolve`), which broke `go vet ./...` for the whole module.
 
 ## Command
 
 ```sh
-cp aggregation-probe_test.go internal/resolve/zz_probe_test.go
+# paste the Probe source below into the file, then:
 go test ./internal/resolve/ -run 'TestProbe' -v
 rm internal/resolve/zz_probe_test.go
 ```
@@ -92,3 +94,61 @@ only — Phase 2's golden vector suite is where it should be pinned.
   frozen kernel behavior. The RDR text must change, or three shipped tests
   and RDR 0001 deviation D5 must be re-opened.
 - Probe B: RDR 0007's candidate half is **confirmed**, currently untested.
+
+## Probe source
+
+Recreate as `internal/resolve/zz_probe_test.go` to re-run (see **Command**
+above). Kept inline, not as a sibling `.go` file — under `docs/` it is a
+package that cannot compile, and it broke `go vet ./...` module-wide until it
+was removed.
+
+```go
+package resolve_test
+
+import (
+	"testing"
+
+	"github.com/newcoinc/intrastate/internal/resolve"
+)
+
+// Probe A: unevaluable ESCAPE row over a no_match candidate set.
+// RDR 0007's aggregation clause says this MUST NOT become guard_unevaluable.
+func TestProbeA_UnevaluableEscapeOverNoMatch(t *testing.T) {
+	esc := escapeRow("rdr.escape.unev", "flows/rdr.toml:90", resolve.KindNoMatch)
+	esc.Guard = "unknown-predicate"
+	in := noMatchInput()
+	in.Table.Revision = "probe-a"
+	in.Table.Rows = append(in.Table.Rows, esc)
+	in.Guards = fixtureGuards{}
+	got, _ := resolve.Resolve(in)
+	if got.Refusal == nil {
+		t.Fatalf("PROBE A: plan=%+v", got.Plan)
+	}
+	t.Logf("PROBE A: kind=%q guard=%q  (RDR 0007 clause wants no_match)", got.Refusal.Kind, got.Refusal.Guard)
+}
+
+// Probe B: unevaluable CANDIDATE row beside a decided-true sibling.
+// RDR 0007 MVV scenario *unevaluable-blocks-true-sibling*.
+func TestProbeB_UnevaluableBlocksTrueSibling(t *testing.T) {
+	tbl := singleMatchTable()
+	tbl.Revision = "probe-b"
+	tbl.Rows[0].RuleID = "rdr.true"
+	tbl.Rows[0].Guard = "always"
+	unev := tbl.Rows[0]
+	unev.RuleID = "rdr.unev"
+	unev.SourceLocator = "flows/rdr.toml:20"
+	unev.Guard = "unknown-predicate"
+	tbl.Rows = append(tbl.Rows, unev)
+	in := resolve.Input{
+		Flow: "rdr", Table: tbl,
+		Owned:      []resolve.Tag{{Key: "status", Value: "Draft"}},
+		Recognized: "successful",
+		Guards:     allGuardsTrue("always"),
+	}
+	got, _ := resolve.Resolve(in)
+	if got.Refusal == nil {
+		t.Fatalf("PROBE B: MASKING — plan=%q", got.Plan.RuleID)
+	}
+	t.Logf("PROBE B: kind=%q guard=%q  (blocks true sibling: correct)", got.Refusal.Kind, got.Refusal.Guard)
+}
+```
