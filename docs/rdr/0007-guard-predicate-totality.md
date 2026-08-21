@@ -710,7 +710,7 @@ existing one.
     `Detail` is documented human prose ("the underlying syscall
     reason, a parser diagnostic"); serializing a two-level
     sorted array into it puts a second, undocumented encoding
-    inside a string, which defeats the sorted-by-row-then-key
+    inside a string, which defeats the total-order
     determinism whose only purpose is machine consumption.
     Further, §JD-8's "not new envelope fields" is a
     SUFFICIENCY claim about the `Code` values RDR 0005
@@ -739,7 +739,7 @@ existing one.
     RDR 0007's payload contract needs a two-level
     array-of-objects (per undecidable row its
     `(RuleID, SourceLocator)`; per unevaluable atom its key,
-    block, and reason), sorted by row then key. RDR 0005's
+    block, and reason), sorted on the total tuple. RDR 0005's
     normative split puts structure on the SUCCESS side only
     ("Failures MUST use the existing CLIError JSON/text
     envelope defined by `docs/cli-output-contract.md` and
@@ -866,6 +866,48 @@ existing one.
     kernel — an unevaluable refusal, never a plan (fail
     closed), but one that misdiagnoses a producer defect as
     missing state.
+- **A23 The named payload surface — `Refusal.Undecided
+  []UndecidedRow`, its `UndecidedAtom` element, and the closed
+  `Reason` constant set — is additive on `Refusal` and reopens
+  no frozen kernel contract: no shipped test asserts `Refusal`'s
+  field set exhaustively, and the closed-set pattern it copies
+  (`RefusalKind`/`RefusalKinds()`) is the kernel's own.**
+  - **Status**: Pending — named by the 3amigo iteration-2 pass
+    (H-1); the names are new normative surface this RDR now
+    states, so they must be checked against the frozen suite
+    before lock rather than assumed.
+  - **Method**: Spike (folded into A3's re-spike — the same
+    reshape with `Refusal.Guard` actually removed is where
+    these names land)
+  - **Evidence**: Pending. `resolve.go::Refusal` is flat
+    scalars plus `Rows []RowRef` / `MissingOwned []string`, and
+    the Existing Infrastructure Audit already records this as
+    the kernel's first two-level payload;
+    `resolve_test.go::TestReq7_RefusalKindSetIsExactlyTheFiveNamedKinds`
+    pins the KIND set, not the field set, so a new field is not
+    obviously frozen — that is the claim to verify.
+  - **If wrong**: a frozen test does constrain `Refusal`'s
+    shape, and the payload lands as a nested type behind an
+    accessor rather than a bare field.
+- **A24 The kernel can compare an existence atom's literal
+  against two exported constants without parsing: the literal
+  reaches the kernel as an already-typed boolean-shaped token
+  the normalizer emitted, so verbatim comparison is total over
+  well-formed input and every other value is `uncomparable`.**
+  - **Status**: Pending — the kernel half is a design decision
+    this RDR may make; the PRODUCER half rides on the same
+    unlanded 0002 duty as A16 and A22.
+  - **Method**: Source Search (RDR 0002 normalization; RDR
+    0003 literal typing) + Design Decision
+  - **Evidence**: Pending. Note the A3 spike's existence atom
+    is `{Key: "guard.missing", Op: resolve.OpExists}` with NO
+    `Literal` set — it decides on a zero value, which the
+    `presence == literal` rule forbids; the fail-closed clause
+    added this pass (missing literal ⇒ `uncomparable`) is
+    exactly what the re-spike must exercise.
+  - **If wrong**: the kernel needs a literal-parse step, which
+    reopens "cardinality, not meaning" wider than the one
+    grammar fact §D4(b) prices.
 
 ## Proposed Solution
 
@@ -992,12 +1034,26 @@ value-comparing operator may act as an implicit existence
 test. The kernel recognizes the existence operator by one
 operator token, and its literal by exactly two boolean
 literal forms, all three exported as kernel constants that
-the normalizer MUST emit for existence atoms (A16). Drift at
-this boundary fails CLOSED: an existence atom carrying a
-foreign token is a value atom to the kernel (unevaluable on
-absence, handed to the seam on presence), and a foreign
-literal is a producer defect the normalizer MUST reject at
-load — neither can yield a plan from absence.
+the normalizer MUST emit for existence atoms (A16). The
+constants are `OpExists` (the operator token) and
+`LiteralTrue` / `LiteralFalse` (the two boolean literal
+forms); the kernel compares an atom's operator and literal
+against these values verbatim, performing no parsing,
+case-folding, or coercion of its own.
+
+Drift at this boundary fails CLOSED: an existence atom carrying
+a foreign TOKEN is a value atom to the kernel (unevaluable on
+absence, handed to the seam on presence). A foreign LITERAL on
+an `OpExists` atom — any value that is neither `LiteralTrue` nor
+`LiteralFalse`, the empty literal included — is UNEVALUABLE at
+the kernel, reason `uncomparable`; the kernel MUST NOT decide
+such an atom from presence, and MUST NOT treat a missing literal
+as `LiteralFalse`. The normalizer additionally MUST reject a
+foreign literal at load (RDR 0002's typed validation), so the
+kernel rule is the fail-closed backstop for a producer that did
+not, not a duplicate of it: load rejection is upstream and
+`internal/resolve` has no load path of its own. Neither route
+can yield a plan from absence.
 ```
 
 ```normative
@@ -1020,10 +1076,16 @@ conflated.
 A row with no atoms is decided TRUE without consulting the
 view (shipped: `evaluateGuard`'s empty-guard branch). Empty
 atom blocks take the conventional identities: an empty `all`
-block is TRUE (empty conjunction); an empty or omitted
-`unless` block is ABSENT and contributes nothing — NOT a
-vacuously-true conjunction, which under `all ∧ ¬(unless_conj)`
-would disable every row carrying one.
+block is TRUE (empty conjunction). An empty or omitted
+`unless` block is ABSENT: the `¬(unless_conj)` TERM DROPS OUT
+of the row verdict, which reduces to `all_result`. It is NOT
+a vacuously-true conjunction — `unless_conj = T` would give
+`¬T = F` and disable every row carrying an empty block — and
+it is NOT `unless_conj = F` either, which would be a claim
+about atoms that do not exist. The block contributes no
+operand, not a neutral one; the reduction is stated on the
+verdict, not on `unless_conj`, because a conjunction over
+zero atoms has no value to state here.
 ```
 
 ```normative
@@ -1039,9 +1101,11 @@ negation is `¬T = F`, `¬F = T`, `¬U = U`:
 
 The row verdict is `all_result ∧ ¬(unless_conj)`, where
 `unless_conj` is the conjunction of the `unless` block's atoms
-(`unless` is block-level negation, NOT per-atom negation). A
-guard is GuardTrue or GuardFalse only when decided atoms
-alone determine it; any unresolved dependence on an
+(`unless` is block-level negation, NOT per-atom negation).
+When the `unless` block is empty or omitted the `¬(unless_conj)`
+term drops out and the verdict is `all_result` alone (empty-block
+clause above). A guard is GuardTrue or GuardFalse only when
+decided atoms alone determine it; any unresolved dependence on an
 unevaluable atom yields GuardUnevaluable. A present-tag atom
 decided FALSE still yields GuardFalse beside an unevaluable
 atom (`F ∧ U = F`): the falsity is witnessed by present
@@ -1090,7 +1154,27 @@ SourceLocator)` and, for each of its unevaluable atoms, the
 referenced key, the block, and a reason drawn from a closed
 set — `absent` (the key was not in the view) or
 `uncomparable` (the key was present and the seam could not
-compare the value, A18). This payload replaces the
+compare the value, A18).
+
+The payload is named surface, not shape-by-description; every
+assertion below and RDR 0005's renderer type against it.
+`Refusal` carries the field `Undecided []UndecidedRow`, where
+an `UndecidedRow` names its `RuleID`, `SourceLocator`, and
+`Atoms []UndecidedAtom`, and an `UndecidedAtom` names its
+`Key`, `Block`, `Operator`, `Literal`, and `Reason`. `Reason`
+is a kernel-owned closed constant set — `ReasonAbsent`,
+`ReasonUncomparable` — spelled and enumerated the way
+`resolve.go::RefusalKind` / `RefusalKinds()` already spell the
+refusal taxonomy, so RDR 0005 maps it the same way and a test
+can pin the set exactly. `Block` is the same exported constant
+type the atom carries, not a separately-spelled payload value.
+This is the kernel's first two-level payload; it is additive on
+`Refusal` and reopens no closed taxonomy (Load-Bearing
+Decisions: a field, not a sixth kind). The spike's
+`UndecidedAtoms` is NOT this shape — it sat beside a retained
+`Refusal.Guard` (A3).
+
+This payload replaces the
 single-valued `Refusal.Guard` text — and with it the shipped
 selection of ONE representative row
 (`gate`'s `slices.MinFunc` over the undecidable set, which
@@ -1101,11 +1185,27 @@ retired, not re-typed. `Refusal.Guard` has no referent
 once guards are atoms; `Refusal.Rows` continues to carry
 every undecidable row. The kernel MUST evaluate every atom
 of every survivor — no short-circuit on a decided block —
-and MUST sort the payload by row identity then key, so the
-payload is a function of the input tuple (RDR 0001 REQ-1),
-never of atom or row order. Any contract or test
-distinguishing WHICH row went unevaluable MUST assert on the
-row entries.
+and MUST sort the payload so it is a function of the input
+tuple (RDR 0001 REQ-1), never of atom or row order.
+
+The sort key MUST be TOTAL over payload entries. Row identity
+then key is NOT total: this RDR's own sanctioned idioms put two
+atoms on one key in one row — A5's conjoined value row
+(`X exists = true` beside `X eq v`; Testing Strategy row 9) and
+the `unless` idiom in Failure Modes (`legal_hold exists = true`
+beside `legal_hold eq true`) — and one key may go unevaluable in
+both blocks of the same row. Two entries would then tie on
+`(row, key)` and differ only in block, operator, or reason,
+leaving the order to an unstable tie-break — the atom-order
+dependence this clause exists to forbid, one level below the
+row order ADV-3 already freezes. The ordering is therefore the
+tuple `(RuleID, SourceLocator, key, block, operator token,
+literal)`, compared field by field in that order. Those are the
+row's identity plus the atom's four §D1 fields, so the tuple is
+total by construction: two entries equal on all six name the
+same atom, which the kernel MUST NOT report twice. Any contract
+or test distinguishing WHICH row went unevaluable MUST assert on
+the row entries.
 
 What the payload does NOT promise: a row pruned as
 GuardFalse under `F ∧ U = F` is not a survivor, so its
@@ -1514,12 +1614,17 @@ ownership change JDR 0001 did not make.
       deletes that field, so 0009's evidence goes stale on
       implementation. Re-run its conformance evidence against
       the atom-shaped refusal.
-- [ ] A3, A16–A19, A21, A22 verified (Resolve). A16, A17,
+- [ ] A3, A16–A19, A21–A24 verified (Resolve). A16, A17,
       A18, A21 verified 2026-08-21. A3 returned to Pending at
       cove iteration 2 — the spike proved a superset of the
       specified shape (it kept `Refusal.Guard`); its bound
       and importer halves stand. A19 and A22 remain Pending
-      on the peer-document items above.
+      on the peer-document items above. A23 (the named payload
+      surface) and A24 (verbatim existence-literal comparison)
+      were added by the 3amigo iteration-2 pass and fold into
+      A3's re-spike — the same reshape with `Refusal.Guard`
+      actually removed is where both land, so one spike closes
+      three.
 - [ ] This RDR Final **before** RDR 0003's implementation
       begins: 0003's evaluator is built against this seam.
 
@@ -1622,9 +1727,21 @@ Every scenario is a kernel test in `internal/resolve`
 stub — never by injecting row verdicts, which would leave
 the kernel combinator off the tested path (premortem P-20).
 The A3 spike (`evidence/spikes/a3-reshape-probe.md`)
-established the baseline this matrix extends: the frozen
-154-test suite passes unchanged under the reshape, so every
-row below is ADDED surface, not a re-encoding.
+established the baseline this matrix extends, with one
+exception the spike did not prove. The frozen 154-test suite
+passes unchanged under the reshape the spike ran — but that
+reshape RETAINED `Refusal.Guard` (retyped) and added the
+payload beside it, whereas this RDR REPLACES the field. A3 is
+Pending on exactly that difference. Under "replace,"
+`fixup_test.go::TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`
+must be RE-DECIDED rather than re-encoded (its assertion reads
+`Refusal.Guard`, which ceases to exist), and the SEAM clause
+above already states why its stated proposition no longer holds
+on that fixture. So: every row below is ADDED surface, and the
+frozen suite is expected to pass re-encoded EXCEPT Fixup-1d,
+whose disposition Phase 1 re-decides and records. Phase 1's
+exit condition is the re-spike's count with the field actually
+removed — not the 154 the superset spike returned.
 
 **The coverage floor this matrix exists to hold.** The spike
 mutation-tested the combinator: swapping strong-Kleene
@@ -1647,15 +1764,15 @@ be re-mutation-tested against them.
 | 8 | `contains` over an ABSENT set-valued tag ⇒ unevaluable, NOT the empty set | A1, A17 | the clause A1 pins against RDR 0003's silence |
 | 9 | Two-row absence pattern (`X exists = false` row ‖ `X exists = true` + `X eq v` row), plus a bare-value-row negative control that must refuse | A5, A14 | disjointness; authoring grammar handed to 0003 (Phase 4) |
 | 10 | Unguarded row (empty atom slice) ⇒ TRUE without consulting the view; empty `all` ⇒ TRUE; omitted `unless` ⇒ absent, contributes nothing | A9 | shipped empty-guard branch in `evaluateGuard`; 9(b) is now a kernel test |
-| 11 | Foreign existence token fails CLOSED: an atom carrying a non-exported token is a VALUE atom (unevaluable on absence, seam on presence); a foreign boolean literal is rejected at load | A16 | the drift boundary §D4 prices |
+| 11 | Foreign existence token fails CLOSED: an atom carrying a non-exported token is a VALUE atom (unevaluable on absence, seam on presence). Foreign/missing LITERAL on an `OpExists` atom ⇒ kernel-unevaluable, reason `uncomparable` — asserted in `internal/resolve`; the load-rejection leg is RDR 0002's and is NOT a kernel test (no load path exists under `internal/resolve`) | A16 | the drift boundary §D4 prices |
 | 12 | Seam answers unevaluable on a PRESENT value it cannot compare ⇒ payload reason `uncomparable`, not `absent` | A18 | the reason field is what keeps skew from reading as absence |
 | 13 | Owned-before-unevaluable precedence within ONE survivor set (a row failing both ways surfaces the write-dependency first) | A20, A21 | `gate` order pinned to shipped behavior, not to D8's superseded rationale |
 | 14 | Escape-set scoping, both legs: an unevaluable CANDIDATE is never masked by a decidable escape row; an unevaluable ESCAPE row yields `guard_unevaluable` | A20 | `escapeOrRefuse` (spike: ZERO diff); frozen ADV-2 + Fixup-1d |
-| 15 | Escape row raises no `owned_state_unavailable` of its own (empty `RequiresOwned` by composition) | A21 | `missingOwned` over an empty slice never enters the loop |
-| 16 | Guard-path observed-tag substitution: a caller-supplied observed tag turns `guard_unevaluable` into a decided verdict — the accepted exposure, pinned so it cannot regress silently | A11, A13 | no existing test contends the GUARD path (ADV-4/ADV-5 defend only the owned path) |
-| 17 | Payload determinism: sorted by row identity then key, so it is a function of the input tuple and never of atom or row order (RDR 0001 REQ-1) | A3 | `undecidedAtoms`/`compareAtoms` (both PROPOSED — modeled on shipped `resolve.go::compareRefs`/`copyTags`); frozen ADV-3 is the order-independence precedent |
+| 15 | Escape row raises no `owned_state_unavailable` of its own (empty `RequiresOwned` by composition). The kernel enforces NO part of this — A21 is a producer composition — so the test MUST build the escape row explicitly with empty `Writes` and empty `RequiresOwned` and assert the kernel consequence; the shipped `fixtures_test.go::escapeRow` is non-conforming on BOTH fields and must not be reused as-is | A21 | `missingOwned` over an empty slice never enters the loop; conformance itself is RDR 0002's producer duty (§JD-3), untested here |
+| 16 | Guard-path observed-tag substitution: a caller-supplied observed tag turns `guard_unevaluable` into a SPECIFIC verdict — assert the exact disposition (`--tag X=v` against `X eq v` ⇒ row selected and a plan; against `X eq w` ⇒ row pruned, no plan), never merely "not `guard_unevaluable`", which the masking path would also satisfy | A11, A13 | no existing test contends the GUARD path (ADV-4/ADV-5 defend only the owned path) |
+| 17 | Payload determinism: sorted on the TOTAL tuple `(RuleID, SourceLocator, key, block, operator, literal)`, so it is a function of the input tuple and never of atom or row order (RDR 0001 REQ-1). Includes the tie case the total order exists for: one row carrying two atoms over ONE key (A5's conjoined row; the `unless` idiom), permuted in the slice — both payloads MUST compare equal | A3 | `undecidedAtoms`/`compareAtoms` (both PROPOSED — modeled on shipped `resolve.go::compareRefs`/`copyTags`); frozen ADV-3 is the order-independence precedent |
 | 18 | Provenance-blindness: an atom decides identically whether its key arrived owned, observed, or recognized | A11 | `TagSet.Lookup` `ok`, not `TagSet.has` |
-| 19 | Nil seam is per-atom, not whole-guard: a row of only `exists`/absent-key atoms DECIDES under a nil seam; only a value atom over a PRESENT key goes unevaluable for want of a seam | A3, A17 | narrows shipped `evaluateGuard`'s `seam == nil` branch; Fixup-1d must be re-read (its `iterations` key is absent from the fixture view, so the kernel now decides it) |
+| 19 | Nil seam is per-atom, not whole-guard. The DISCRIMINATING leg is the `exists` atom over a PRESENT key: shipped `evaluateGuard` returns GuardUnevaluable for any non-empty guard when `seam == nil`, whereas this rule decides it TRUE/FALSE — a nil-seam row that now yields a PLAN. (The absent-key leg is non-discriminating: unevaluable either way, though the REASON becomes `absent` rather than want-of-a-seam, and a nil seam is never itself a payload reason.) | A3, A17 | narrows shipped `evaluateGuard`'s `seam == nil` branch; Fixup-1d must be re-read (its `iterations` key is absent from the fixture view, so the kernel now decides it) |
 | 20 | Every undecidable row appears in the payload — no representative row is chosen (shipped `gate` picked one via `slices.MinFunc` to fill `Refusal.Guard`; that selection retires with the field) | A3 | `gate`'s `MinFunc` call; ADV-3 order-independence still applies to the sorted payload |
 
 **Not covered here, by ownership.** Value-operator semantics
@@ -1711,13 +1828,26 @@ insufficient — scenarios 3–5 exist to kill that mutant.
 | --- | --- | --- | --- | --- |
 | All atoms decided TRUE | row selected → plan | 0 | none | loud (plan) |
 | Any atom decided FALSE from present state | row PRUNED (D8) | n/a | none — pruned rows report no absences | silent by design |
-| Survivor missing an owned `RequiresOwned` key | `owned_state_unavailable` | `GroupUserEnv` | `MissingOwned` + `Rows` | loud |
+| Survivor missing an owned `RequiresOwned` key | `owned_state_unavailable` | **no code row yet** (JDR §JD-8) | `MissingOwned` + `Rows` | loud |
 | Survivor with an unevaluable atom (absent key) | `guard_unevaluable` | `GroupUserEnv` | per-row/per-atom, reason `absent` | loud |
 | Survivor with an unevaluable atom (present, uncomparable) | `guard_unevaluable` | `GroupUserEnv` | per-row/per-atom, reason `uncomparable` | loud |
 | Row failing BOTH ways in one survivor set | `owned_state_unavailable` first | `GroupUserEnv` | owned payload only | loud (the accepted cost) |
 | Unevaluable ESCAPE row | `guard_unevaluable` replaces the candidate refusal | `GroupUserEnv` | escape set's payload | loud (ADV-2 / Fixup-1d) |
 | Foreign existence token | treated as VALUE atom ⇒ unevaluable on absence | `GroupUserEnv` | reason `absent` | loud (fails closed) |
-| Foreign boolean literal | rejected at load by the normalizer | producer defect | n/a | loud, upstream |
+| Foreign boolean literal on an `OpExists` atom | kernel: unevaluable, reason `uncomparable`; normalizer: rejected at load | `GroupUserEnv` (kernel leg) / producer defect (load leg) | per-row/per-atom | loud, both legs |
+
+Two exit-group notes, both upstream of this RDR and neither
+fixable here. (1) `owned_state_unavailable` has NO row in RDR
+0005's stable-code table — the gap JDR 0001 §JD-8 names
+explicitly ("`owned_state_unavailable` … need `Code` values").
+The cell above says so rather than asserting a mapping that
+does not exist. (2) `flow-guard-unevaluable` DOES have a row,
+but scoped there to "guard cannot be evaluated from supplied
+facts" — while this RDR's flagship case is missing *artifact*
+state, which `GroupUserEnv` (exit 2, "bad input") mis-signals
+as a caller-input problem. Both are RDR 0005's to fix at its
+re-lock; recorded here so the payload's remedy story is not
+read as settled.
 
 **`trace`** — the MVV walked stepwise against every assertion in force.
 
@@ -1727,9 +1857,9 @@ insufficient — scenarios 3–5 exist to kill that mutant.
 | 2. Evaluate each atom | domain rule; existence totality; seam only on present keys; nil seam is per-atom (row 19) | absent-key value atom ⇒ U, seam never called |
 | 3. Combine per row | K3 `min`; `all ∧ ¬(unless_conj)`; empty `unless` contributes nothing | one U atom, no F ⇒ row U |
 | 4. Prune | only GuardFalse prunes; F∧U=F is witnessed falsity | MVV row 2 prunes; MVV row 1 does not |
-| 5. Owned sweep over SURVIVORS | unevaluable rows ARE survivors, so their `RequiresOwned` counts; owned-before-unevaluable | MVV row 1's `RequiresOwned` is satisfied ⇒ passes through to step 6 |
+| 5. Owned sweep over SURVIVORS | unevaluable rows ARE survivors, so their `RequiresOwned` counts; owned-before-unevaluable | MVV row 1's `RequiresOwned` is satisfied ⇒ passes through to step 6. That witness is non-discriminating by construction (it passes under either ordering); the ordering's witness is Testing Strategy row 13, where one row fails BOTH ways and `owned_state_unavailable` MUST win |
 | 6. Undecidable veto | any surviving U ⇒ refuse; no decided-TRUE sibling escapes | MVV row 3: B not selected |
-| 7. Mint payload | every undecidable row, sorted row-then-key; no representative row (row 20) | `MinFunc` retired |
+| 7. Mint payload | every undecidable row, sorted on the total tuple `(RuleID, SourceLocator, key, block, operator, literal)`; no representative row (row 20) | `MinFunc` retired |
 | 8. Escape gating | escape set gated identically; unevaluable escape replaces the candidate refusal | Fixup-1d |
 
 **One CONTRADICTION found and fixed in this pass.** Step 5
