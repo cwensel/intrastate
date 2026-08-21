@@ -25,14 +25,22 @@ const (
 	refusalCapabilityMismatch refusal = "capability_mismatch"
 	refusalExecutionFailure   refusal = "execution_failure"
 	refusalGateIndeterminate  refusal = "gate_indeterminate"
+	refusalIncompleteRead     refusal = "incomplete_read"
 	refusalReadBackMismatch   refusal = "read_back_mismatch"
 	refusalTimeout            refusal = "timeout"
 	refusalUnknownAccessor    refusal = "unknown_accessor"
 )
 
+// absentValue marks a requested key the accessor read successfully and found the
+// artifact does not carry. Absence is a value; unreadability takes a refusal branch.
+const absentValue = "<absent>"
+
 type artifact struct {
 	role string
 	tags map[string]string
+	// unreadable names keys whose backing read errors. Distinct from a key the
+	// artifact legitimately lacks, which reads fine and resolves to absentValue.
+	unreadable map[string]bool
 }
 
 type accessor struct {
@@ -134,7 +142,10 @@ func withTimeout(a accessor, run func(context.Context) *result) *result {
 	return run(ctx)
 }
 
-func read(r registry, artifacts map[string]*artifact, name string) result {
+// read resolves exactly the requested key set. Every requested key must resolve to
+// a read value or to absentValue; any key the accessor cannot read makes the whole
+// read a refusal rather than a thinned value set.
+func read(r registry, artifacts map[string]*artifact, name string, requested ...string) result {
 	a, failure := r.lookup(name, readCap)
 	if failure != nil {
 		return *failure
@@ -151,8 +162,32 @@ func read(r registry, artifacts map[string]*artifact, name string) result {
 		if !ok {
 			return &result{name: name, cap: readCap, refusal: refusalExecutionFailure}
 		}
-		return &result{name: name, cap: readCap, tags: clone(art.tags)}
+		if len(requested) == 0 {
+			requested = expectedTagKeys(art)
+		}
+		tags := make(map[string]string, len(requested))
+		for _, key := range requested {
+			if art.unreadable[key] {
+				return &result{name: name, cap: readCap, refusal: refusalIncompleteRead}
+			}
+			value, carried := art.tags[key]
+			if !carried {
+				value = absentValue
+			}
+			tags[key] = value
+		}
+		return &result{name: name, cap: readCap, tags: tags}
 	})
+}
+
+// expectedTagKeys is the default requested key set: the keys the artifact declares.
+func expectedTagKeys(art *artifact) []string {
+	keys := make([]string, 0, len(art.tags))
+	for k := range art.tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func gate(r registry, mode string) result {
@@ -252,6 +287,26 @@ func newArtifacts() map[string]*artifact {
 	}
 }
 
+// newPartialArtifacts binds the read role to an artifact whose backing read errors
+// on "profile" while "status" reads fine, so truncation is deterministic.
+func newPartialArtifacts() map[string]*artifact {
+	return map[string]*artifact{
+		"state": {
+			role:       "state",
+			tags:       map[string]string{"status": "Draft", "profile": "large"},
+			unreadable: map[string]bool{"profile": true},
+		},
+	}
+}
+
+// newSparseArtifacts binds the read role to an artifact that legitimately does not
+// carry "profile". Every key reads fine; the missing one is an absent value.
+func newSparseArtifacts() map[string]*artifact {
+	return map[string]*artifact{
+		"state": {role: "state", tags: map[string]string{"status": "Draft"}},
+	}
+}
+
 func stableLine(r result) string {
 	parts := []string{fmt.Sprintf("%s/%s", r.name, r.cap)}
 	if r.refusal != "" {
@@ -301,6 +356,12 @@ func main() {
 	}
 
 	artifacts := newArtifacts()
+
+	// The three read-completeness dispositions, named so each branch is citable.
+	completeRead := read(reg, newArtifacts(), "state.read", "status", "profile")
+	truncatedRead := read(reg, newPartialArtifacts(), "state.read", "status", "profile")
+	absentKeyRead := read(reg, newSparseArtifacts(), "state.read", "status", "profile")
+
 	cases := []result{
 		read(reg, artifacts, "state.read"),
 		gate(reg, "allow"),
@@ -312,9 +373,22 @@ func main() {
 		write(reg, artifacts, map[string]string{"status": "Final"}, corruptNone),
 		write(reg, newArtifacts(), map[string]string{"status": "Final"}, corruptOwned),
 		write(reg, newArtifacts(), map[string]string{"status": "Final"}, corruptObserved),
+		completeRead,
+		truncatedRead,
+		absentKeyRead,
 	}
 	for _, c := range cases {
 		fmt.Println(stableLine(c))
+	}
+
+	if completeRead.refusal != "" || len(completeRead.tags) != 2 {
+		panic(errors.New("expected complete read to resolve every requested key"))
+	}
+	if truncatedRead.refusal != refusalIncompleteRead || len(truncatedRead.tags) != 0 {
+		panic(errors.New("expected unreadable key to refuse, not thin the value set"))
+	}
+	if absentKeyRead.refusal != "" || absentKeyRead.tags["profile"] != absentValue {
+		panic(errors.New("expected genuine absence to be a value, not a refusal"))
 	}
 
 	first := replay(reg, false)
