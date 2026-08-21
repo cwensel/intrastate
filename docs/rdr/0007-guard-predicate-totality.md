@@ -6,9 +6,8 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Draft [revised from Final 2026-08-12; re-proposed
-  2026-08-21 under JDR 0001 §D1/§D2/§D3 — re-verify A3, A16, A17,
-  A18, A19, A21, A22]
+- **Status**: Draft [revised from Final 2026-08-12 — re-verify
+  A3, A16, A17, A18, A19, A21, A22]
 - **Type**: Architecture
 - **Profile**: foundational — one contract, the domain of
   guard-predicate evaluation over an incomplete view, now
@@ -22,14 +21,12 @@
 - **Predecessors**: 0001-resolution-kernel,
   0003-guard-predicate-exhaustiveness; JDR 0001
   (`docs/jdr/0001-resolve-kernel-seam.md`) §D1, §D2, §D3.
-- **Overrides**: None superseded. This RDR *absorbs* the
+- **Overrides**: None superseded. This RDR carries the
   `resolve.Row` change JDR 0001 §D1 assigns to it (the guard
   seam carries parsed atoms, not a string), *fixes* the
   meaning of `Row.RequiresOwned` (post-guard write-dependency
   keys), and is the single normative home of the
-  guard-evaluation domain rule. RDR 0001 (`Implemented`) has
-  no backward edge; its `Row` shape changes here by JDR
-  decision, not by amendment.
+  guard-evaluation domain rule and its enforcement site.
 - **Seam Lineage**: `area:internal-resolve` (guard-verdict
   semantics at the RDR 0001 ↔ 0003 boundary) — no prior
   accretion.
@@ -51,9 +48,10 @@ find out."
 
 Internally, the resolution kernel must fix the **domain of
 guard-predicate evaluation**. When a guard atom references
-a tag absent from the assembled evaluation view, the seam
-today may answer with a two-valued verdict — treating
-absence as non-satisfaction — or refuse to answer at all.
+a tag absent from the assembled evaluation view, nothing
+stops the answering component from returning a two-valued
+verdict — treating absence as non-satisfaction — rather than
+refusing to answer.
 The two answers are not interchangeable: a `GuardFalse`
 prunes the row before it can raise an owned-state
 obligation, and the resulting `no_match` is escapable per
@@ -93,7 +91,7 @@ Observed current behavior, not a design position:
   `Escaped:true`. This is the path where missing artifact
   state is masked.
 
-Constraints inherited from prior rounds. RDR 0001's
+Constraints this rule must hold. RDR 0001's
 deviation **D8** (guard-FALSE prunes first; a pruned row
 contributes neither candidacy nor an owned-state
 obligation) is pinned by frozen tests ADV-1 and ADV-1b.
@@ -102,31 +100,26 @@ to candidate rows only. RDR 0002 closes escape lists to
 `no_match` and `ambiguous_match`, which is the asymmetry that
 makes verdict ordering load-bearing.
 
-**JDR 0001 re-entry (2026-08-12).** The cluster gate found
-the prior Final of this RDR built on the opaque
-`Row.Guard string` seam, with a mandated panic as the only
-surface for an evaluator that could not parse its guard.
-JDR 0001 resolved three decisions this RDR now absorbs:
+**JDR 0001 decisions this RDR inherits.** Three cluster
+decisions fix the ground this RDR builds on:
 
 - **§D1** — the row carries **parsed atoms** (key, operator
   token, literal, block); no reconstruction step, so no
-  mapping failure and no panic clause. Lands in this RDR,
-  which takes the `Row` change. The prior A3 ("no kernel
-  change") is superseded; A10 and A15 (string-encoding
-  obligations routed to RDR 0003) are dropped.
+  mapping failure exists and no panic or error channel is
+  needed for one. This RDR takes the `Row` change.
 - **§D2** — **gate, then count**: guards evaluate over
   surviving candidates, an unevaluable candidate vetoes,
   and only then exact-one matching and escape reachability
   apply. Stated here as the kernel's ordering; RDR 0002
   restates its resolver flow to match.
 - **§D3** — a read accessor MUST return the complete tag
-  set or refuse. Closes the prior A6b; RDR 0004 carries the
-  clause as its own.
+  set or refuse. RDR 0004 carries the clause as its own;
+  this RDR cites it (A6b).
 
-RDR 0003 and RDR 0002 are both **Draft** again (re-entry at
-refine) and cite the §D1 atom shape rather than restating
-it. 0003 owns operator vocabulary and typed semantics; its
-evaluator becomes a *value* evaluator under this RDR.
+RDR 0003 and RDR 0002 are both **Draft** and cite the §D1
+atom shape rather than restating it. 0003 owns operator
+vocabulary and typed semantics; its evaluator is a *value*
+evaluator under this RDR.
 
 ### Technical Environment
 
@@ -224,14 +217,6 @@ three-valued verdicts across atoms — searched
 combination is new kernel logic, not a parallel of an
 existing one.
 
-**Dropped at re-entry.** A10 (string-encoding mapping) and
-A15 (conjoined atoms through one string) verified premises
-§D1 removed; both are struck, not re-verified. Their
-authoring-grammar residue (may one tag carry two operator
-keys in TOML; may a tag sit in both blocks) is RDR 0003's,
-now Draft, and is handed over in Phase 4 rather than routed
-as an obligation onto a Final peer.
-
 ### Key Discoveries
 
 - **Documented** — SCXML §5.9.1: unevaluable → `false` is
@@ -319,15 +304,14 @@ as an obligation onto a Final peer.
   test fixture — but leave `gate`'s prune → owned-state →
   undecidable order, `escapeOrRefuse`'s uniform gating, and
   the frozen ADV/Fixup dispositions unchanged.**
-  - **Status**: Pending — supersedes the prior A3 ("no
-    kernel behavior change"), which JDR 0001 §D1 voided.
-    The "zero production importers" bound is a
-    point-in-time fact about callers sibling RDRs (0003's
-    evaluator, 0005's CLI) have not written yet — the
-    escaped-defect class in this project's ledger — so it
-    carries a re-verification trigger: re-run the importer
-    sweep at Phase 1 start, and if an importer exists, the
-    `Row` change is a coordinated migration, not a free one.
+  - **Status**: Pending. The "zero production importers"
+    bound is a point-in-time fact about callers sibling RDRs
+    (0003's evaluator, 0005's CLI) have not written yet —
+    the escaped-defect class in this project's ledger — so
+    it carries a re-verification trigger: re-run the
+    importer sweep at Phase 1 start, and if an importer
+    exists, the `Row` change is a coordinated migration, not
+    a free one.
   - **Method**: Spike
   - **Evidence**: Inspection so far: `resolve.go::gate`
     consumes only the `GuardResult` from
@@ -489,9 +473,10 @@ as an obligation onto a Final peer.
   load-time overlap check: either row-group scoping keeps
   the rows out of one compared product, or absence has
   standing in the declared-domain product.**
-  - **Status**: Verified — indeterminate by RDR 0003's
-    silence; an inherited obligation with home JDR 0001
-    §JD-4 (lint's promise narrows), not a refutation.
+  - **Status**: Deferred — RDR 0003 is silent on the
+    projection, so the question is open, not refuted; an
+    inherited obligation with home JDR 0001 §JD-4 (lint's
+    promise narrows).
   - **Method**: Source Search
   - **Evidence**: RDR 0003 defines overlap over a product of
     declared finite domains and is silent on how an
@@ -622,8 +607,9 @@ as an obligation onto a Final peer.
     `Hint` ship and render in text and JSON." The kernel
     field replaces `Refusal.Guard string` (one row's guard
     text — meaningless once guards are atoms) with the
-    sorted, deduplicated absent keys across every
-    undecidable row; `Refusal.Rows` keeps row identity.
+    per-row, per-atom payload the Normative Contracts fix
+    (row identity, then each unevaluable atom's key, block,
+    and reason); `Refusal.Rows` keeps row identity.
   - **If wrong**: the refusal names the rows but not the
     keys, and the Problem Statement's "told plainly … was
     missing" is met only at row granularity.
@@ -721,9 +707,11 @@ can only come from decided atoms.
 The change is confined to `internal/resolve/resolve.go`:
 `Row.Guard` becomes an atom slice; `GuardEvaluator` narrows
 to a per-atom value seam; `evaluateGuard` grows presence,
-existence, and combination; `Refusal` names absent keys.
-`assemble`, `gate`, `missingOwned`, `escapeOrRefuse`, and
-`Resolve` are untouched in control flow. Test fixtures
+existence, and combination; `Refusal.Guard` is replaced by
+the per-row, per-atom payload. `assemble`, `gate`,
+`missingOwned`, `escapeOrRefuse`, and `Resolve` are
+untouched in control flow (the payload is a data change
+`gate` populates, not a reordering). Test fixtures
 migrate from text-keyed verdicts to atoms.
 
 #### Normative Contracts
@@ -950,9 +938,8 @@ comparison.
   existence, and combination; the evaluator decides only
   value comparisons over present keys. Why: a domain rule
   held by evaluator discipline plus an optional conformance
-  harness is unenforced (the prior draft's own "UNMITIGATED"
-  residual); held by the kernel it cannot drift, and the
-  refusal can name the absent keys.
+  harness is unenforced; held by the kernel it cannot drift,
+  and the refusal can name the absent keys.
 - **Selection / predicate** — strong-Kleene combination in
   the kernel: a `GuardFalse` derivable from decided atoms
   prunes (D8); otherwise any unevaluable atom forces
@@ -1006,7 +993,7 @@ actionable refusal, never a masked one):
 | --- | --- | --- | --- |
 | Correctness fit (masking closed?) | ✓ by discipline — a conforming evaluator closes it; a drifting one reopens it silently | ✓ by structure — the evaluator is never asked about an absent key | ✓ by structure |
 | Prior-art alignment | ~ — SCXML/K3 satisfied; no host-side precedent claimed | ✓ — SQL:2003 strict routines: host short-circuits, routine "is not invoked" (C3); §D1 "cardinality, not meaning" holds except one token (A16) | ✗ — the kernel would own typed semantics RDR 0003 declares; no declarations in the kernel |
-| Drift enforcement (premortem P-10) | ✗ — conformance harness nothing compels 0003 to run; prior draft's UNMITIGATED residual | ✓ — no evaluator code path exists for absence; only value semantics can drift, and those are 0003's to test | ✓ |
+| Drift enforcement (premortem P-10) | ✗ — a conformance harness nothing compels 0003 to run leaves the residual unmitigated | ✓ — no evaluator code path exists for absence; only value semantics can drift, and those are 0003's to test | ✓ |
 | Refusal names the missing key (JDR P4) | ~ — possible via a richer seam return, but the key set is then the evaluator's word | ✓ — kernel decided presence, so the payload is kernel truth | ✓ |
 | Blast radius | `Row` + seam signature; `evaluateGuard` unchanged | `Row` + seam + `evaluateGuard` + `Refusal` payload; `gate` order unchanged; ~all test fixtures re-encoded | `Row` + kernel grows operator/kind semantics; 0003's evaluator ownership dissolves |
 | Reversibility | ✓ | ✓ — kernel-side enforcement can be relaxed to A by widening the seam; the reverse migration (A → B) costs the same | ✗ — re-separating semantics later is a rewrite |
@@ -1018,10 +1005,10 @@ approach that closes the masking path without trusting a
 component this RDR does not build, and it is the only one
 whose refusal meets the Problem Statement's "told plainly
 that the artifact state needed to decide was missing" at key
-granularity. Its cost over A is bounded kernel logic that the
-prior draft would otherwise have built anyway as a
-"vector-local, non-normative" view-reading evaluator — B
-makes that code the normative one instead of a stopgap. The
+granularity. Its cost over A is bounded kernel logic that A would
+otherwise need anyway as a "vector-local, non-normative"
+view-reading evaluator — B makes that code the normative one
+instead of a stopgap. The
 one grammar token the kernel learns (A16) is the honest
 price of "never call the evaluator on absence"; the
 alternative is the evaluator re-deciding presence, which is
@@ -1040,37 +1027,17 @@ not the absence of drift, is the argument.
 
 Premortem: hardened — critic verdict PASS, no switch
 forced; "kernel-owned absence is the right trust boundary."
-Folded: P-16 (Alternative 1's rejection reason corrected
-from capability to trust); P-6/P-9/P-12 (refusal payload
-made per-row, per-atom, with reason `absent|uncomparable`,
-order-independent); P-3/P-4/P-15/P-17 (kernel-owned grammar
-facts — token, literal form, key identity — pinned as
-exported constants with the fail-closed direction stated;
-A22 added); P-5/P-13 (`unless`-over-absent veto and
-pruned-row absences not reported — stated honestly under
-Failure Modes / payload clause); P-7/P-8 (seam ceiling
-stated as a constraint on RDR 0003 in A17); P-9/P-10
-(malformed caller value denial; evaluator skew — Failure
-Modes); P-11, P-18 (policy surface; load-time parse —
-accepted, one line each); P-14 (the "zero importers" seed
-class — re-verify trigger on A3); P-20 (suite must drive
-atoms, Phase 1); P-1/P-2/P-19 (observed tags satisfying
-presence — already A13; RequiresOwned clause now states the
-non-subset rule and the owned-protection route).
-Ledger: `docs/rdr/0007-guard-predicate-totality/evidence/propose-premortem/iter-2/critic.md`
-(iteration 1 at `…/propose-premortem/critic.md`).
+Ledger: `docs/rdr/0007-guard-predicate-totality/evidence/propose-premortem/iter-2/critic.md`.
 
 Ground-sweep: clean (24 anchors) — 15 code anchors
 (`resolve.go`, test files, `root.go`), 9 peer-document
-passages; two cosmetic wording notes fixed inline (JD-3
-phrasing; C3 blockquote wrap).
+passages.
 
 Joint-check: fired → 0003, 0002, 0009 (home: JDR 0001 §D4 /
-§JD-12), 0008, 0004 (home: JDR 0001 §D1). Context beside the
-fire: §D1 settles the *transport* (atoms on `Row`, the seam
-change 0008/0004 cite as shipped code); §D4 — hoisted on the
-user's decision 2026-08-21 — settles the *enforcement site*:
-the value-only per-atom seam, the kernel-exported existence
+§JD-12), 0008, 0004 (home: JDR 0001 §D1). §D1 settles the
+*transport* (atoms on `Row`, the seam change 0008/0004 cite
+as shipped code); §D4 settles the *enforcement site*: the
+value-only per-atom seam, the kernel-exported existence
 constants RDR 0002's normalizer must emit (A16), key identity
 (A22), and the per-atom payload replacing `Refusal.Guard`
 (which Final RDR 0009 cites; stale, rides to its re-lock per
@@ -1087,8 +1054,7 @@ a surface this plan introduces.
 seam — `Evaluate(atoms, view) GuardResult` — so RDR 0003's
 evaluator applies the domain rule and the strong-Kleene
 tables itself; the kernel stays fully grammar-agnostic and
-only maps the verdict. This is the prior Final's design
-transplanted onto atoms.
+only maps the verdict.
 
 **Pros**:
 
@@ -1099,8 +1065,8 @@ transplanted onto atoms.
 **Cons**:
 
 - The domain rule is held by discipline: a conformance
-  harness that nothing compels RDR 0003's build to run —
-  the prior draft recorded this residual as UNMITIGATED.
+  harness that nothing compels RDR 0003's build to run, so
+  the residual is unmitigated.
 - The refusal payload could be carried (a seam returning
   `(GuardResult, unevaluable atoms)`), so capability is not
   the objection — **trust** is: whoever decides presence
@@ -1353,8 +1319,8 @@ sentinel-stamping as the anti-pattern.
 ### Testing Strategy
 
 _Draft placeholder — Resolve re-derives the matrix against
-the atom-level seam._ Carried forward as candidate scenarios
-from the prior Final: (1) unevaluable-not-no_match,
+the atom-level seam._ Candidate scenarios:
+(1) unevaluable-not-no_match,
 (2) D8 preserved with the key present, (3)
 unevaluable-blocks-true-sibling, (4) strong-Kleene matrix
 across `all`/`unless`, (5) escape-set scoping both legs,
@@ -1368,13 +1334,16 @@ guard-path observed-tag substitution (A13).
 
 ### Performance Expectations
 
-_Draft placeholder._
+No performance dimension. Evaluation stays linear in the
+atom count per candidate row — the kernel replaces one seam
+call per row with one presence lookup per atom plus a seam
+call per present-key value atom — and the payload sort is
+over undecidable rows only, on the refusal path. `Resolve`
+is pure and in-process; no new I/O.
 
 ## Finalization Gate
 
-Reopened 2026-08-21 — the prior Gate PASS (2026-08-11,
-`0007-guard-predicate-totality/artifacts/gate.md`) is voided
-by the JDR 0001 re-entry; re-run at Stage 7.
+_Not yet run — Stage 7 authors the gate responses._
 
 ## References
 
