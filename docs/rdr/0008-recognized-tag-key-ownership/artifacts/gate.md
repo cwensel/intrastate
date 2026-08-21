@@ -1,236 +1,196 @@
 # Finalization Gate — RDR 0008: Ownership of the recognized-outcome tag key name
 
 - **RDR**: `0008-recognized-tag-key-ownership.md`
-- **Date**: 2026-08-11
+- **Date**: 2026-08-21
 - **Profile**: foundational
-- **Mechanical pre-sweep**: PASS (`evidence/tooling-pass/tooling-pass.md`, C1–C6 no findings)
+- **Lock**: re-lock following the 08.1 cluster demotion of 2026-08-11
+  (supersedes the 2026-08-11 gate record)
+- **Mechanical pre-sweep**: PASS
+  (`evidence/tooling-pass/iter-2/tooling-pass.md`, C1–C6 no findings;
+  C9 advisory, 1 field 1 line over budget)
 - **Verdict**: **PASS — READY to lock**
 
 ## Contradiction Check
 
-No contradictions found between research findings, design principles, and
-proposed solution. Three places where a conflict could plausibly have hidden
-were checked directly, because each is a spot where the rounds moved text:
+No contradictions between Research Findings and the Proposed Solution, and none
+between planned features and stated principles. The 2026-08-11 gate cleared
+three candidate conflicts (prior art vs. mechanism; "no kernel change" vs. the
+settled enforcement locus; A4's finding vs. the Approach); all three passages
+survive this pass unchanged and their resolutions still hold. This pass
+re-checked only what the demotion and the two re-entry stages moved:
 
-1. **Prior art vs. the chosen mechanism.** Key Discoveries reports that
-   surveyed engines fix the injected datum's name in a namespace *disjoint*
-   from author vocabulary (XState's `GuardArgs.event`, SCXML's `_`-sigil
-   reservation), while this RDR carves a bare word out of the author's single
-   flat `[tags.*]` namespace. That is a genuine gap, and the Problem Statement
-   concedes it in text rather than papering over it — the prior art supports
-   the *posture* (carrier owns the injected datum's name), not the
-   *mechanism*, which is exactly why this RDR needs a validation category
-   where XState needs none. Concession stated, not contradicted.
+1. **A6/A11's re-derived conclusion vs. the Approach.** The demotion falsified
+   the *evidence* for A6's conclusion, not the conclusion. Final RDR 0009 does
+   place a whole-table precondition at `Resolve` entry, so the boundary A6 had
+   called virgin is shared. The design is unchanged because the predicates read
+   disjoint fields — 0009's is a method on `Table` and cannot read
+   `Input.Owned`/`Input.Observed` at all, which is exactly what this RDR's
+   check must read. What changed is the rationale, now weaker in the direction
+   A6's own "If wrong" line anticipated: less novel surface, not more. Research
+   Findings and Technical Design tell the same story.
 
-2. **"No kernel change" vs. the settled Enforcement locus.** The Approach's
-   original framing (ratify D2, no code change) would contradict block 4's
-   exported `Input` predicate and `Resolve`-entry call. It does not, because
-   the claim is scoped in three places to *disposition for conforming input*:
-   Load-Bearing Decisions ("Surface conceded, stated plainly"), Trade-offs
-   (third Negative), and the Decision Rationale's re-scored blast-radius row,
-   which explicitly records that R "is no longer the zero-kernel-change branch
-   it was chosen as" and that the margin narrowed. The QOC ranking is
-   re-derived under the settled cost rather than inherited from the
-   pre-settlement scoring.
+2. **`Overrides` vs. A4's three-violation finding.** This was the cluster's
+   `contradiction / blocks-impl` item, and it is closed. The body always
+   disclosed the collision (A4: three committed declarations violate the rule);
+   only the Metadata summary denied it with "narrows nothing in either peer."
+   The field now states the narrowing and cites JDR 0001 §JD-10's ruling
+   ("rename them; there are no users to migrate"). Summary and body agree.
 
-3. **A4's finding vs. the Approach.** Research findings establish that all
-   three committed recognized-provenance declarations violate the rule's first
-   clause — every observed author exercised the freedom this RDR withdraws.
-   The Proposed Solution does not contradict this; Phase 2 carries the rename
-   of three declarations plus six reference sites, and the Problem Statement
-   names the cost against observed convention. A finding that cuts against the
-   decision is carried as cost, which is the conforming shape.
+3. **Failure Modes' reclassification claim vs. A10's actual reach.** The
+   reconcile refuted "no user data is reclassified as a programmer mistake" as
+   written — A10 sweeps only the accessor half, while RDR 0005's planned `flow`
+   verbs feed `Input.Observed` from `--tag name=value`, making
+   `--tag recognized=x` a reachable user invocation. The claim is now scoped to
+   what A10 proves, A10's "Consequence for A8" is corrected from "closes it" to
+   "closes the accessor half," and the open remainder is latched at JD-9. The
+   over-reach is gone rather than papered over.
 
-The Failure Modes section likewise states the intent-channel gap (a
-conforming model whose row still never fires) rather than letting block 2 be
-read as a guarantee it does not make.
+4. **Block 4's interim ordering rule vs. JD-5's openness.** Block 4 licenses
+   "either error is conforming; what is *not* conforming is skipping this check
+   because another fired." JD-5 says "either order is defensible." These agree;
+   block 4 is strictly the weaker claim and forecloses nothing JD-5 might pick.
 
 ## Assumption Verification
 
-Thirteen Critical Assumption Evidence Records, all internally consistent —
-Status, Method, and Evidence agree, and every record carries a non-empty "If
-wrong" or an explicit statement of what its falsification changes.
+Thirteen Evidence Records, every one internally consistent — Status, Method, and
+Evidence agree, and no "If wrong" line is empty.
 
-- **Status distribution**: A1–A11, A13 `Verified`; **A12 `Refuted as
-  stated`**. Zero `Pending`, zero `Unverified`.
-- **No `Docs Only` records** — the category that blocks lock is empty (C4).
-- **No `Source Search` self-reference** — every Source Search record (A2, A4,
-  A7, A8, A10, A12, A13) resolves to `internal/resolve/*.go`,
-  `internal/cli/respond/respond.go`, peer RDR bodies, peer spike fixtures, or
-  the RDR engine's prompt tree; none cites this RDR or its artifacts (C3).
-- **Every cited `path::Symbol` resolves at HEAD `1caf456`** (C5, delegated
-  verification): `recognizedTagKey`, `assemble`, `Resolve`, `missingOwned`,
-  `gate`, `evaluateGuard`, `escapeOrRefuse`, `refuse`, `Input`, `Tag`,
-  `TagSet.has`/`Lookup`/`Len`, `Row`, `ProvenanceOwned`,
-  `ProvenanceRecognized`, `Table.models`, `recognizedTagSensitiveTable`,
-  `fixtureGuards.Evaluate`, `mustResolve`,
-  `TestReq17_OwnedObservedAndRecognizedTagsAllReachSelection`. Two
-  independently re-checked load-bearing properties held:
-  `fixtureGuards.Evaluate` does discard the `TagSet` (so A2's test gap is
-  real and scenario 3 is net-new coverage), and `Resolve`'s body returns
-  `nil` on all four paths with no `errors.`/`fmt.Errorf` in the file (so A8's
-  "first non-nil error path" is accurate).
-- **Peer-RDR anchors resolve**: RDR 0002's "including at minimum" fence and
-  its canonical-examples sentence; RDR 0009 carries zero `Input` occurrences,
-  confirming A6's negative conclusion and A11's disjointness leg; RDR 0007
-  (`Final`) cites this RDR's producer sentence as a peer's *name* constraint,
-  which is what closes A7's ownership half without a concurrence round.
-- **A4's inventory verifies exactly**: three declarations
-  (`rdr-fixture.toml:25`, `kata-fixture.toml:22`, `guard-fixture.toml:36`)
-  and six reference sites (`rdr-fixture.toml:59,74,86`,
-  `kata-fixture.toml:47,57`, `guard-fixture.toml:72`) — including the guard
-  site the critique lens found missing at iter-2, now present and propagated
-  into Phase 2.
+- **Status terminality**: zero `Pending`, zero `Unverified`. Twelve `Verified`
+  (four carrying a qualifier that narrows a *consequence*, not the assumption);
+  A12 `Refuted as stated`, a terminal disposition whose repair is written as a
+  hard Prerequisite gate item rather than left open.
+- **The re-verify set {A6, A11}**: both re-derived against the *Final* text of
+  RDR 0009 and against source, not against the retired Draft. A6's six quoted
+  claims were located verbatim in Final 0009; `::Resolve`, `::Input`, `::Row`,
+  `::recognizedTagKey` all confirm the shape at HEAD, including that all five
+  `return` sites pair `Result` with a literal `nil`. A11's disjointness now
+  rests on the two field sets, not on the withdrawn `Input`-count negative.
+  The false negative-existential survives only inside `Corrects:` bullets and
+  the delete-on-re-lock defect record, correctly labeled withdrawn.
+- **Method vocabulary**: all thirteen in the sanctioned eight (compound labels
+  are `+`-joined members, not paraphrases). No load-bearing `Docs Only` exists —
+  the label appears zero times.
+- **Source Search self-reference**: none. No Evidence path resolves to this RDR
+  or its artifact directory.
+- **Anchor durability**: the mechanism that produced this demotion — bare
+  peer-RDR line citations — is repaired at the root. All 15 live ones are now
+  section-heading or assumption-ID anchors (0002 ×6, 0004 ×4, 0006 ×3,
+  0007 ×2). Source anchors are `path::Symbol` and every one resolves at HEAD.
 
-**A12's refutation is not a blocker, and the reason is recorded rather than
-asserted.** A12 claimed a *discoverability mechanism* (that RDR 0002's
-implementer would encounter this constraint via the implementation prompt),
-not a design premise. Its falsification changes no normative contract — the
-rule, the category, the payload, and the predicate all stand — but it does
-change enforcement *reach*, and the RDR repairs that in-document by promoting
-the handoff to an explicit **Prerequisite** ("this RDR's Normative Contracts
-are a named input to RDR 0002's Stage 8 run, or a pointer lands in 0002's own
-surface"). The obligation is settled here; only its *form* routes to Stage
-7.1. That is a refuted assumption converted into a written gate, which is the
-disposition the flow wants.
-
-**Status consistency**: no settled-fact prose depends on an unsettled
-assumption (C6). A11's split status (`Verified` for independence; report
-order a Stage 7.1 item by design) is matched by block 4, which licenses an
-interim rule — "either error is conforming; what is *not* conforming is
-skipping this check because another fired" — rather than asserting an order
-neither RDR may set unilaterally. The Prerequisites checklist's three
-unchecked boxes gate *implementation*, not lock, and do not contradict this
-gate.
+The postmortem (`0008-recognized-tag-key-ownership-postmortem.md`) records both
+defects this cycle surfaced and their shared root cause — an assumption verified
+against a *moving* peer or a *future* caller, stamped with a point-in-time fact
+and no re-verification trigger. That ledger is opened, not owed.
 
 ## Scope Verification
 
-The Minimum Viable Validation is **in scope and split across two owners**,
-and the split is a real property of the seam rather than a deferral.
+The Minimum Viable Validation is in scope and split in two, matching the Done
+split in Testing Strategy. The split is a genuine ownership boundary, not a
+deferral of convenience:
 
-**Kernel half — executed during this RDR's implementation, runnable at HEAD:**
+- **Kernel half — runs during this RDR's implementation.** A row matching on the
+  tag `recognized` fires against a recognized outcome, asserted through the real
+  kernel's assembled view (behavioral conformance, per premortem P-5); and an
+  `Input` supplying an owned or observed tag keyed `recognized`, or a row naming
+  it in `RequiresOwned`, is rejected by the exported predicate and by `Resolve`
+  at entry. Both run against `internal/resolve` as it stands.
+- **Normalizer half — runs inside RDR 0002's implementation**, because the
+  normalizer is 0002's code. A table declaring a recognized-provenance tag named
+  `recognized` loads and lints clean; renamed (and separately, with an owned tag
+  so keyed) it fails load/lint in the `reserved_tag_key` category carrying a
+  direction-appropriate remedy name and rule identifier — not a silent no-match
+  at resolve time.
 
-- A row matching on the tag `recognized` fires against a recognized outcome,
-  asserted through the **real kernel's** assembled view — never by comparing
-  two hardcoded literals (scenario 1's kernel half; the behavioral form
-  premortem P-5 requires).
-- An `Input` supplying an owned or observed tag keyed `recognized` — or a row
-  naming it in `RequiresOwned` — is rejected by the exported predicate *and*
-  by `Resolve` at entry, in three variants including the duplicate-key case
-  A13 surfaced (scenario 6), with the kernel-side `owned_state_unavailable`
-  residual and its predicate-side breach both asserted (scenario 9).
+The RDR states plainly that the kernel half alone does not deliver the Problem
+Statement's outcome, and gates the normalizer half behind a **written hard
+Prerequisite** rather than behind an intention. The gate blocks claiming the
+Problem Statement outcome, so the split cannot ship silently half-done. Nothing
+MVV-critical is deferred: no JD this RDR latches (JD-4/5/8/9/10) is load-bearing
+for what the MVV proves — each bears on peer surfaces, report channels, or lint
+semantics downstream of the naming rule the MVV exercises.
 
-Done for this RDR's own implementation is scenarios 1's kernel half, 3, 6, 8,
-and 9 green plus Phase 1's pointer comment.
-
-**Normalizer half — executed inside RDR 0002's implementation** (scenarios 2,
-4, 5, 7 and the MVV's lint half): a table declaring a recognized-provenance
-tag named `recognized` lints clean; the same table renamed, and separately
-with an owned tag named `recognized`, fails load/lint in the
-`reserved_tag_key` category with the direction-appropriate remedy name and
-rule identifier.
-
-This half is **not deferred in the Gate's sense** — it is scoped to the peer
-that owns the code (no normalizer exists at HEAD; the reuse audit confirms
-it), and it is gated by a written Prerequisite rather than by intent. The RDR
-states the binding consequence itself: every scenario delivering the Problem
-Statement's user outcome sits in the carried half, so "this RDR's Close MUST
-NOT claim the Problem Statement outcome until the carried half is green."
-Declaring that in the document is what makes the split honest rather than an
-accounting artifact, and it is the right disposition for a cross-RDR producer
-whose peer is Final-but-unimplemented.
+Determinacy: `foundational` requires the full repeatability variant. Present —
+three runs with three **distinct** model stamps (`claude-opus-5[1m]`,
+`claude-fable-5`, `glm-5.2:cloud`) plus `diff.md` and `resolve.md`. No variant
+mismatch, so no `determinacy: n/a` disposition is owed.
 
 ## Cross-Cutting Concerns
 
-- **Character encoding** — load-bearing here, and addressed. Identity is
-  byte-exact on the **post-parse** key string: no case folding, no trimming,
-  no aliasing. TOML quoting is resolved explicitly as a surface artifact
-  (`[tags."recognized"]` and `[tags.recognized]` parse to the identical key
-  and are both reserved), while `Recognized`, `RECOGNIZED`, and
-  `" recognized"` are ordinary unreserved names. Because that rule *creates* a
-  human-invisible near-miss hazard, the non-blocking advisory is settled as
-  normative alongside it, with a deliberately **disjunctive** trigger (fold
-  alone or trim alone), pinned by scenario 4 on all three near-misses plus a
-  negative control (`[tags.result]`).
-- **Incremental adoption** — addressed, with the cost named. The rule's first
-  clause breaks all three committed recognized-provenance declarations on day
-  one, including the two RDR 0002 designates canonical. A4 carries the
-  inventory, Phase 2 carries the edits, and A9 (Spike, against RDR 0002's own
-  normalizer) establishes the rename is mechanical — every tag predicate lands
-  in the candidate row's predicate set, the normalized row has no outcome
-  field, so no gating semantics move. The project carries no back-compat
-  obligation, so no migration shim is owed.
-- **Versioning / API compatibility** — addressed. The kernel gains one
-  exported `Input` predicate and its `Resolve`-entry call; `Resolve`'s
-  signature does not widen (already `(Result, error)`), and the error channel
-  is one RDR 0001 REQ-6 affirmatively reserves for programmer mistakes.
-  Conforming callers see no behavior change; the predicate's exported name is
-  implementation latitude and MUST NOT bind to any symbol from the still-Draft
-  RDR 0009.
-- **Determinism** — applies in the weak form only, and is satisfied. This RDR
-  claims no hash, no content-addressed identity, and no byte-identical output,
-  so the hash/pre-image checklist does not apply. What it does claim is that
-  RDR 0001 D3's precedence remains the deterministic backstop for input
-  bypassing the precondition; scenario 8 pins that the same non-conforming
-  input yields the same disposition on repeat runs, with the honest scope note
-  that A5's *unreachability* half is a derivation, not a test, because the
-  overwrite in `assemble` has no observable at the package boundary.
-- **Concurrency model** — does not apply; omitted from the response rather
-  than N/A-bulleted, along with build tooling, licensing, deployment model,
-  IDE compatibility, secret lifecycle, and memory management.
+- **Incremental adoption.** The constraint invalidates all three of RDR 0002's
+  canonical fixtures — this RDR's largest cross-cutting cost, and it is
+  disclosed in `Overrides` rather than buried. The policy is not this RDR's to
+  set: JDR 0001 §JD-10 owns it and has ruled ("rename them; there are no users
+  to migrate"). Phase 2 carries the three renames plus six reference sites.
+- **Canonical-form / determinism.** Applies only in the weak sense: this RDR
+  fixes an *identifier* (`recognized`) in the assembled view. It claims no
+  byte-identical output, no content-addressed identity, and no replay-stable
+  hash, so the hash/pre-image/iteration-order sub-checklist does not engage. The
+  one determinism property it does assert — that a reserved-key breach is
+  detected whenever present, never skipped because another precondition fired —
+  is stated normatively in block 4 and tested by scenario 6.
+- **Versioning of the validation surface.** The `reserved_tag_key` category is
+  additive within RDR 0002's "including at minimum" extensible list, and RDR
+  0005's A-block pre-authorizes resolver-specific `Code` values as needing "not
+  new envelope fields or exit groups." Where the code lands in the CLI envelope
+  is JD-8's, and the RDR disclaims it to RDR 0005 rather than deciding it.
 
-Cross-RDR policy ownership, stated where it is not this RDR's: the
-user-facing surface and exit-code mapping for the `reserved_tag_key` category
-belong to **RDR 0005** (charted, not settled here); the *meaning* of
-`RequiresOwned` belongs to **RDR 0007** (cited, not restated, per 0007's own
-convention); the normalized-graph lint layer belongs to **RDR 0006**, and
-Phase 2 argues explicitly that declaration-name validation is upstream of
-0006's input contract rather than a competing acceptance rule.
+Omitted as inapplicable: licensing, deployment model, IDE compatibility,
+secret/credential lifecycle, memory management, concurrency model, character
+encoding, build-tool compatibility.
 
 ## Proportionality
 
-**Right-sized; nothing flagged for trimming.**
+Right-sized; nothing to trim before locking.
 
-**Contract count: one.** This RDR is the sole author of exactly one
-independent load-bearing contract — the identity of the recognized-provenance
-tag key. The six normative blocks are that one contract expressed across the
-three channels the key can arrive through (declaration: blocks 1–3;
-resolve-time data: block 4; row-level owned-key references: block 5), plus
-block 6 which is a negative contract stating what does not change. They are
-not separable seams: reserving only the declaration channel leaves the
-silent-shadowing hole this RDR exists to close, and reserving only the data
-channel leaves the load-time diagnosis unfixed.
+**Contract count — the split test.** Six ```normative``` fences, but they are
+clauses of a **single** independent contract: the reserved-key identity rule and
+its enforcement. No second independent seam is present — no distinct hash, wire
+format, taxonomy, or destructive-op policy — so the ≥2 split signal does not
+fire and there is nothing to split out.
 
-The RDR does not merely assert "three channels" — it owes and pays a
-**closure argument**, derived from the code rather than from inspection of its
-own text: `assemble` is the sole constructor of the view (A2, whole-package
-sweep) and writes exactly three sources; rows reference view keys through
-`Match`, `RequiresOwned`, and the guard seam, of which `RequiresOwned` is the
-one field read *by provenance*. A fourth channel would require a second view
-constructor or a new provenance-sensitive row field — both kernel changes
-this RDR would have to reopen anyway. The ≥2 split signal is therefore not
-tripped.
+**Profile re-validation.** `foundational` confirmed against the contracts just
+counted, and it comes from the cross-RDR-producer trigger rather than the
+contract axis. The re-verification *strengthens* it: 0008 binds RDR 0001's
+kernel carrier to RDR 0002's declared model, extends 0002's validation surface,
+and now additionally co-resides with RDR 0009 at `Resolve` entry. That is more
+cross-RDR coupling than at the original lock, never less. The accretion floor
+does not apply — `Seam Lineage` records zero prior closed point-fixes, below the
+≥2 threshold — and could only have raised a profile already at the ceiling. All
+four required lenses (`cove`, `3amigo`, `critique`, `repeatability`) have
+evidence dirs; the documented single-model `critique` fallback is recorded in
+`resources.md` and was compensated by repeatability's genuine multi-model draw.
 
-**Profile re-validated: `foundational` is correct and stands.** It is earned
-on the cross-RDR axis, not on contract count — this RDR binds RDR 0001's
-kernel carrier to RDR 0002's declared model, extends 0002's validation
-surface, cites 0007 for `RequiresOwned` semantics, borrows 0009's pattern, and
-charts to 0005. The accretion axis does not force it independently (`Seam
-Lineage` records no prior accretion at this locus), so the contract axis'
-cross-RDR-producer trigger is what sets it. The lenses the matrix requires for
-`foundational` all ran and are resolved: `cove`, `3amigo`, `critique` (passes
-A and B plus an iter-2 delta), and `repeatability` in the **full** variant —
-three runs across three distinct base models (`claude-opus-5[1m]`,
-`claude-fable-5`, `glm-5.2:cloud`) plus `diff.md` and `resolve.md`. The
-determinacy requirement for a contract naming identity is satisfied by that
-full repeatability set rather than by an `n/a` disposition.
+**Length.** 2,567 lines is at the top of the corpus, and the mass is
+load-bearing: thirteen Evidence Records carrying the verification anchors the
+grounding sweep reads, plus the JD latches this RDR must cite rather than
+restate. C9 flags exactly one Evidence field one line over an advisory budget.
+Cutting there would blind the sweep for no gain.
 
-The Profile field's form is correct: value plus one clause naming the
-contract, with no matrix or provenance prose left from the template.
+## Note on the JD-5 lock question
 
-Length is proportionate to a foundational cross-RDR producer whose
-enumeration was extended twice under review — the closure argument, the
-direction-specific payload split, and the A12 repair are each load-bearing
-text that a shorter document would have had to omit at the cost of the
-contract. No section is redundant with another, and the change-history
-narration Refine removes has not crept back.
+The Stage 4 re-entry's author round recorded "cite JD-5, stay Draft" on the
+reasoning that block 4's interim rule depends on JD-5, and that a Status latch
+"would compose awkwardly with the `re-verify` qualifier Stage 8 expects to
+self-clear." Both halves are resolved, so this is not a blocker at the Gate:
+
+- **The corpus convention is settled and unanimous.** An open joint decision is
+  carried as a Status latch on a **Final** RDR — RDR 0005 `Final [joint decision
+  → JDR 0001 §JD-8, §JD-9]`, RDR 0006 `Final [… §JD-4]`, and RDR 0009 `Final […
+  §JD-5]`, which is this RDR's own peer on this very decision. Holding 0008 at
+  Draft for JD-5 while 0009 is Final for JD-5 would make the two sides of one
+  joint decision disagree about what an open JD means.
+- **The Stage 6 reconcile answered the composition worry.** The re-lock
+  overwrites the whole Status value, so the latch *replaces* the `re-verify`
+  qualifier cleanly — there is nothing to compose.
+- **The gate is on implementing, not on locking.** The cluster verdict is NOT
+  RECONCILED, "Do not implement over these," and the RDR's own
+  implementation-ordering passage already holds itself at Final-unimplemented
+  until 0002 starts and the depended-on JDs close. The reconcile states it
+  directly: "Locking remains correct; the gate is on implementing."
+- **Block 4 is implementable as written today.** Its interim rule is the weaker
+  claim JD-5 may later narrow, and the RDR says so: "nothing here forecloses
+  that, and no implementer needs to invent one to proceed." Scenario 6's fourth
+  variant asserts only the non-silent-skip property and is marked as the test
+  that pins JD-5 once it closes.
+
+Locked as `Final [joint decision → JDR 0001 §JD-5]`.
