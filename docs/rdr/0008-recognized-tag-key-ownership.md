@@ -550,65 +550,94 @@ at the same `area:internal-resolve` seam.
     tables and the silent no-match returns; the kernel would
     then need its own reserved-key breach check, changing
     kernel surface.
-- **A6 RDR 0009's producer-obligation seam does not reach
-  this RDR's data channel, so the reserved-key input
-  precondition needs an enforcement locus of its own.**
-  - **Status**: Verified
-  - **Method**: Peer RDR
-  - **Evidence**: RDR 0009 Normative Contracts scope the
-    obligation to "a PRODUCER obligation on every constructor
-    of resolve.Row values", with the predicate "exactly
-    `len(row.Escape) != 0 && len(row.Writes) != 0`" applied
-    to every row "at `Resolve` entry" via a kernel-exported
-    check. The string `Input` appears **zero** times in RDR
-    0009 (case-sensitive, whole file). The exclusion is
-    structural, not merely an omission: 0009's own rationale
-    is that its breach is a property of the table value
-    "independent of the input tuple" — the opposite trigger
-    from an `Input` precondition. So 0009 supplies the
-    *pattern* but no boundary this RDR can ride, and the
-    Enforcement-locus decision stands as this RDR's own.
-    (This is a claim about *obligations*, not about which
-    values each predicate reads: block 5's widening means both
-    predicates traverse `in.Table.Rows`, over disjoint fields.
-    That co-residency is what A11 reconciles; it does not make
-    0009's obligation reach this RDR's subject.)
-    Candidate (b) is confirmed available at the
-    kernel: `internal/resolve/resolve.go::Resolve` has
-    signature `(Result, error)` and its doc comment reserves
-    the channel verbatim — "the error return is reserved for
+- **A6 RDR 0009's entry precondition and this RDR's reserved-key
+  precondition are co-resident at the same boundary — both are
+  evaluated at `Resolve` entry over `in.Table` — so this RDR
+  still owns its own predicate, but it does NOT own the
+  precedence between the two. That ordering is JDR 0001
+  §JD-5.**
+  - **Status**: Verified (co-residency + own-predicate
+    ownership); precedence is deferred to JDR 0001 §JD-5 by
+    that record's own assignment, not left open here
+  - **Method**: Peer RDR + Source Search
+  - **Corrects**: the pre-demotion text of this assumption
+    concluded that 0009's seam "does not reach this RDR's data
+    channel," resting on a negative existential — "the string
+    `Input` appears zero times in RDR 0009" — that was true of
+    the **Draft** 0009 this RDR read and false of the Final.
+    0009 subsequently gained its A10 (raised by its
+    repeatability lens), which reconstructed the signature and
+    introduced the `Input` references. The negative is
+    withdrawn; the conclusion it carried does not survive.
+  - **Evidence**: Final RDR 0009's Normative Contracts state
+    the obligation in two places, not one. It is a producer
+    obligation — "a PRODUCER obligation on every constructor
+    of resolve.Row values: a Row with a non-empty Escape list
+    MUST have an empty Writes slice" — **and** a kernel entry
+    precondition: "The conformance predicate MUST be exported
+    by the kernel package as a construction-time check
+    callable by any table producer, and Resolve's entry
+    precondition MUST be that same function — one predicate,
+    two call sites." Its scope clause pins the boundary
+    explicitly: "evaluated over every row of the supplied
+    table at `Resolve` entry, not only rows the resolution
+    touches." 0009's A10 fixes the channel as this RDR's:
+    "the signature is `func Resolve(in Input) (Result, error)`
+    and the table is `in.Table`." So the boundary this RDR
+    reasoned it would have to establish alone already carries
+    a peer precondition.
+    Confirmed against implemented source (RDR 0001 is
+    `Implemented`): `internal/resolve/resolve.go::Resolve` is
+    declared `func Resolve(in Input) (Result, error)` and
+    `internal/resolve/resolve.go::Input` carries `Table Table`
+    alongside `Flow`, `Owned`, `Observed`, `Recognized`,
+    `Guards`. The error channel this RDR's precondition lands
+    on is real and unexercised: `Resolve`'s doc comment
+    reserves it verbatim — "the error return is reserved for
     programmer mistakes, not for modeled refusals" (RDR 0001
-    REQ-6; `Resolve`'s body currently has no non-nil error
-    path, so the reserved return is unexercised surface an
-    `Input` precondition would land on).
-  - **Dependency qualification (RDR 0009 is `Draft`, not
-    Final)**: 0009 is an original Draft at pre-Resolve (all
-    seven of its assumptions `Pending`). The *negative*
-    conclusion above is robust regardless — it rests on what
-    0009 excludes, and a Draft is likelier to widen than
-    narrow. But the *positive* inference is precedent to
-    cite, not a contract to depend on: 0009's predicate form
-    is explicitly "sharpened at Pre-Lock", so this RDR must
-    not bind to `ValidateTable` or any other symbol name from
-    0009 (illustrative there, not fixed). No ordering
-    dependency is created — RDR 0009's Background records
-    "Disjoint answer spaces, no ordering dependency" against
-    this RDR's kata (0009's own self-assessment in prose; it
-    keeps no `triage.md` artifact).
-  - **If wrong** (0009's seam does reach `Input` after all):
-    the obligation rides it as originally drafted and the
-    Enforcement-locus decision collapses to a cross-reference
-    — strictly less surface than the chosen pairing.
-  - **Residual closed at Pre-Lock**: verification confirmed no
-    peer seam carries this channel, so the Enforcement-locus
-    decision was genuinely this RDR's to make. It is now made
-    — (b)+(c) paired, one predicate at two call sites (see
-    Load-Bearing Decisions / Enforcement locus). Candidate (a)
-    was rejected on the user-outcome criterion: it would leave
-    resolve-time data keyed `recognized` shadowing the
-    recognized outcome under D3 (premortem P-1/P-6), detected
-    by nothing. The surface that choice concedes is carried by
-    A8.
+    REQ-6) — and every `return` in the function body pairs its
+    `Result` with a literal `nil`, so no non-nil error path
+    exists at HEAD. Neither precondition is implemented yet;
+    both are contracts awaiting the same landing site.
+  - **What survives, and why the Enforcement-locus decision
+    stands**: co-residency does not transfer ownership. 0009's
+    predicate is `len(row.Escape) != 0 && len(row.Writes) != 0`
+    over `Escape`/`Writes`; this RDR's reads the tag-key name
+    (`Input.Owned`, `Input.Observed`, `Row.RequiresOwned`).
+    Disjoint read-domains, disjoint breach conditions, disjoint
+    refusal codes — 0009's obligation is about a row's *shape*,
+    this RDR's about a *name*. The separation is structural, not
+    incidental: 0009's Normative Contracts require the predicate
+    be "a METHOD ON Table taking no arguments," so its receiver
+    is `Table` and it cannot read `Input.Owned` or
+    `Input.Observed` at all — the very fields this RDR's
+    precondition must read. 0009 reaches the table *through*
+    `Input` but checks a property of the table value alone
+    ("a malformed table is malformed as a value, independent of
+    the input tuple"). A shape check on `Table` cannot detect a
+    reserved-key breach over the input's tag snapshots, so
+    riding 0009's contract was never available and candidate
+    (b)+(c) is unchanged. What changes
+    is the *rationale*: the locus is shared infrastructure this
+    RDR joins, not virgin boundary it establishes. Strictly
+    less novel surface than the pre-demotion text claimed —
+    the direction the "If wrong" line anticipated.
+  - **What this RDR must NOT do**: state a precedence between
+    the two entry preconditions. JDR 0001 §JD-5 owns it —
+    "0009's breach check and 0008's reserved-key check both
+    land at `Resolve` entry; neither orders itself against the
+    other. Either order is defensible — pick one and pin it
+    with a test on a table that breaches both. The silence is
+    the defect, not the choice." 0009 carries the matching
+    latch on its own Status (`Final [joint decision → JDR 0001
+    §JD-5]`). Cite it; do not restate 0009's rule here.
+  - **If wrong** (the two predicates are not in fact separable
+    — one subsumes or suppresses the other): the reserved-key
+    check folds into 0009's exported `Table` method as a second
+    clause rather than a peer call, which is a smaller change
+    than the chosen pairing, not a larger one. Surfaces as a
+    conformance test that breaches both and observes only one
+    error.
 
 - **A7 Reserving the key in `Row.RequiresOwned` is a name
   constraint this RDR may impose without reopening RDR 0007,
@@ -831,54 +860,78 @@ at the same `area:internal-resolve` seam.
 - **A11 RDR 0009's `Resolve`-entry precondition and this
   RDR's compose without either RDR having to reopen: they are
   decidable independently, so only the *reported* error for a
-  doubly-breaching input is unsettled — which block 4 leaves
-  deliberately open rather than blocking on.**
-  - **Status**: Verified (independence); report order remains
-    a Stage 7.1 item by design, not an open verification
-  - **Method**: Peer RDR
-  - **Evidence**: the independence half — the half that could
-    have forced a design change — is closed. The predicates
-    read **disjoint fields**: this RDR's read-domain is
-    `Input.Owned`, `Input.Observed`, and each row's
-    `RequiresOwned` (block 4, stated); RDR 0009's predicate is
-    "exactly `len(row.Escape) != 0 && len(row.Writes) != 0`,
-    applied to every row of the supplied table at `Resolve`
-    entry" (`0009…md:536-540`). Both traverse the row set;
-    neither touches a field the other reads, and both are pure
-    reads that mutate nothing — so neither can change or
-    suppress the other's verdict, and both are decidable in
-    one pass. Corroborating the disjointness at the document
-    level: the string `Input` occurs **zero** times in RDR
-    0009 (case-sensitive, whole file, re-counted at
-    Reconcile), so 0009's contracts speak only of "the
-    supplied table," never of this RDR's subject.
-    Neither RDR fixes a total order: 0009 pins its breach
-    ahead of *dispositions* ("precedes every modeled
-    disposition, `unmodeled_outcome` included") and is silent
-    on a peer precondition, exactly as this RDR is silent on
-    0009's.
+  doubly-breaching input is unsettled — and that ordering is
+  now owned by JDR 0001 §JD-5, where it is open.**
+  - **Status**: Verified (independence); the report-order
+    remainder is routed to JDR 0001 §JD-5, not carried here
+  - **Method**: Peer RDR + Source Search
+  - **Corrects**: the pre-demotion text rested its
+    disjointness on a false negative existential ("the string
+    `Input` occurs zero times in RDR 0009") and cited two line
+    ranges into 0009 (`:536-540`, `:510-517`) that no longer
+    cover their claimed subjects in the Final text. Both are
+    withdrawn and replaced with durable anchors below. It also
+    routed the remainder to "Stage 7.1"; that item has since
+    landed at JDR 0001 §JD-5.
+  - **Evidence (independence — the half that could have
+    forced a design change)**: the predicates read **disjoint
+    fields**, re-derived from each RDR's own contract rather
+    than from either's self-description. This RDR's
+    read-domain is `Input.Owned`, `Input.Observed`, and each
+    row's `RequiresOwned` (block 4, stated). RDR 0009's is
+    `Row.Escape` and `Row.Writes` only — its Normative
+    Contracts pin the predicate as
+    `len(row.Escape) != 0 && len(row.Writes) != 0` and
+    explicitly foreclose widening: "The predicate is
+    Writes-only and does NOT extend to NextTags." Both
+    traverse the row set; neither touches a field the other
+    reads; both are pure reads that mutate nothing — so
+    neither can change or suppress the other's verdict, and
+    both are decidable in one pass. Confirmed against
+    implemented source: `internal/resolve/resolve.go::Row`
+    carries `RequiresOwned []string` (this RDR's field)
+    alongside `Escape []RefusalKind` and `Writes []Tag`
+    (0009's), so the two predicates are co-resident over one
+    row type without overlapping on any field.
+    Independently re-derived at cluster-reconcile rather than
+    taken from either RDR:
+    `docs/rdr/cluster-reconcile/0002-0009/pairwise-0008-0009.md`
+    → FINDING 2.
+  - **What the corrected reading changes**: the two
+    preconditions are *co-resident*, not disjoint at the
+    boundary — 0009's Normative Contracts place its check at
+    "`Resolve` entry" over `in.Table` (see A6), the same entry
+    this RDR's precondition lands on, and both claim the same
+    single `error` return, which at HEAD has no non-nil path
+    (`internal/resolve/resolve.go::Resolve`). Co-residency at
+    one boundary is what makes the report-order question real;
+    it does not disturb the independence verdict above, which
+    is a property of the read-domains, not of the locus.
   - **What remains, and why it is not a Pending
     verification**: only which of two errors a
     doubly-breaching caller *sees*. That is a cross-RDR
     decision neither RDR may take unilaterally — not a fact
-    either could look up — and block 4 already carries a
-    conforming interim rule ("either error is conforming;
-    what is *not* conforming is skipping this check because
-    another fired"). RDR 0009 is `Draft` at Stage 2/2.5 (its
-    evidence tree holds only `research/` and
-    `propose-premortem/`), with its predicate form explicitly
-    "sharpened at Pre-Lock", so the ordering clause may land
-    in either RDR and this one must not bind 0009's symbol
-    name. Carried to Stage 7.1 as a reconciliation item.
+    either could look up — and it now has a named home: JDR
+    0001 §JD-5 ("Either order is defensible — pick one and pin
+    it with a test on a table that breaches both. The silence
+    is the defect, not the choice."), still open there. RDR
+    0009 carries the matching latch on its Status (`Final
+    [joint decision → JDR 0001 §JD-5]`). Block 4's interim
+    rule — "either error is conforming; what is *not*
+    conforming is skipping this check because another fired" —
+    is compatible with JD-5's "either order is defensible" and
+    stands until JD-5 closes. This RDR must not pin the order
+    itself, and must not bind 0009's symbol names
+    (`CheckValid`/`Validate` are 0009's to fix).
   - **If wrong** (the predicates are *not* independent — one
     can suppress the other's verdict, rather than merely
     reporting first): the breach this RDR detects could be
     skipped entirely for some inputs, which block 4 forbids,
     and the interim "either error is conforming" licence is
     unsafe. The repair is then a single normative ordering
-    clause owned by whichever RDR locks last. Mere
+    clause, owned by JD-5 rather than by either RDR. Mere
     report-order variation is *not* a falsification — block 4
-    already licenses it pending this reconciliation.
+    already licenses it pending JD-5.
 
 - **A12 An RDR 0002 implementer reading 0002 alone will
   encounter this RDR's name constraint, because the
@@ -1334,10 +1387,12 @@ RDR 0009 writes a structurally identical clause over the same
 entry point — "the conformance predicate MUST be exported by
 the kernel package … and Resolve's entry precondition MUST be
 that same function — one predicate, two call sites"
-(`0009…md:510-517`) — over a disjoint subject (`resolve.Row`
-shape, not `Input`). Two entry preconditions therefore land on
-one `Resolve`, and neither RDR alone can settle their order.
-This RDR binds only what it owns. The two predicates decide
+(RDR 0009 → Technical Design → Normative Contracts) — over a
+disjoint subject (`resolve.Row` shape, checked as a method on
+`Table`, not the `Input` tag snapshots). Two entry
+preconditions therefore land on one `Resolve`, and neither RDR
+alone can settle their order: that is JDR 0001 §JD-5, open at
+time of writing. This RDR binds only what it owns. The two predicates decide
 **different questions over different fields** (this one:
 reserved-key occupancy in `Input.Owned`/`Input.Observed` and
 in each row's `RequiresOwned`; RDR 0009's: escape/writes
@@ -1350,14 +1405,15 @@ skipped because another precondition also fired.
 Which breach a doubly-breaching caller *sees* is an ordering
 question, and `Resolve` returns a single `error`, so one of
 the two necessarily reports. That order is a cross-RDR
-decision neither RDR may take unilaterally; it is reconciled
-at Stage 7.1 (A11). Until then the implementable rule is:
+decision neither RDR may take unilaterally; it is owned by
+JDR 0001 §JD-5, open at time of writing (A11). Until it
+closes, the implementable rule is:
 **apply this predicate at entry and report its breach; if the
 table also breaches RDR 0009's shape rule, either error is
 conforming.** A doubly-breaching input is a producer with two
 programmer mistakes, not a case whose exact error text this
 RDR owes a guarantee on. What is *not* conforming is skipping
-this check because another fired. Stage 7.1 may narrow this
+this check because another fired. JD-5 may narrow this
 to a fixed order; nothing here forecloses that, and no
 implementer needs to invent one to proceed.
 
@@ -2213,6 +2269,19 @@ implement a kernel predicate in isolation.
    breach on the reserved key alone (block 4's unconditional
    clause), which is what distinguishes it from the empty
    `Input{}` case that carries no reserved key at all.
+   **Doubly-breaching variant (A11; JDR 0001 §JD-5)**: a
+   fourth variant whose table breaches *both* this RDR's
+   reserved-key rule and RDR 0009's escape-row shape rule (a
+   row with non-empty `Escape` and non-empty `Writes`). While
+   JD-5 is open, this test asserts only what block 4's interim
+   rule licenses — that `Resolve` returns a non-nil `error`
+   and that the reserved-key breach is **not silently
+   skipped** because the peer check fired — and it must NOT
+   assert which of the two errors is reported. When JD-5
+   closes on a fixed order, this variant is the test that pins
+   it (JD-5: "pin it with a test on a table that breaches
+   both"); until then an order-asserting form of it would
+   encode a decision this RDR does not own.
 
 7. **Scenario** (golden failure data; premortem P-4/P-11):
    **both directions** of the naming rule, each passed to a
