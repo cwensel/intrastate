@@ -310,17 +310,34 @@ existing one.
   test fixture — but leave `gate`'s prune → owned-state →
   undecidable order, `escapeOrRefuse`'s uniform gating, and
   the frozen ADV/Fixup dispositions unchanged.**
-  - **Status**: Verified — spike executed. The touch-list is
-    additive beyond the five names above: the reshape also
+  - **Status**: Pending — the BOUND is verified; the SHAPE
+    the spike proved is not the shape this RDR specifies.
+    The spike retained `Refusal.Guard` (retyped to
+    `[]GuardAtom`) and added `UndecidedAtoms` BESIDE it,
+    whereas the Normative Contracts and JDR 0001 §D4 both say
+    the payload REPLACES `Refusal.Guard`. Its PASS for
+    `fixup_test.go::TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`
+    depends on that retention — it re-encodes `!=` to
+    `reflect.DeepEqual` over a field that, under "replace,"
+    does not exist. Under the specified design that test must
+    be RE-DECIDED, not re-encoded, which is this assumption's
+    own "If wrong" branch. Re-verification plan (Method:
+    Spike): re-run the reshape with `Refusal.Guard` actually
+    removed and record the frozen suite's disposition for
+    that one test.
+    Verified independently of the shape: the touch-list is
+    additive beyond the five names above — the reshape also
     introduces `GuardAtom`, `evaluateAtom` (where the
     presence/existence rule lands), and
     `undecidedAtoms`/`compareAtoms`/`copyAtoms` to keep the
-    slice-valued payload tuple-deterministic under REQ-1.
+    slice-valued payload tuple-deterministic under REQ-1
+    (proposed names; none exists under `internal/` today).
     The "zero production importers" bound was a point-in-time
     fact, so it carried a re-verification trigger; the sweep
-    was re-run this stage and is still CLEAN, so the `Row`
-    change is a free change, not a coordinated migration. The
-    trigger stands for Phase 1 start.
+    was re-run this stage (cove iteration 2) and is still
+    CLEAN — 154 PASS / 0 FAIL, no production importer — so
+    the `Row` change is a free change, not a coordinated
+    migration. The trigger stands for Phase 1 start.
   - **Method**: Spike
   - **Evidence**: Spike record
     `docs/rdr/0007-guard-predicate-totality/evidence/spikes/a3-reshape-probe.md`
@@ -580,7 +597,9 @@ existing one.
     absence being the `false` literal. The other four rows
     (`eq`, `in`, `lt`/`lte`/`gt`/`gte`, `contains`) are
     stated purely as domain-narrowing value comparisons, and
-    RDR 0003's vocabulary clause closes the set at five.
+    RDR 0003's vocabulary clause closes the set at five
+    operator CLASSES (eight tokens — bounded comparison
+    spells `lt`, `lte`, `gt`, `gte`).
     JDR 0001 §D1 fixes the atom as "(key, operator token,
     literal, block)" and says the kernel "carries
     *cardinality*, not *meaning*"; §D4(b) prices the
@@ -588,9 +607,16 @@ existing one.
     (the existence operator token and its two boolean literal
     forms), exported as constants 0002's normalizer MUST
     emit." RDR 0003 and RDR 0002 each carry the identical
-    joint-check line naming that kernel-exported token, so
-    the obligation is acknowledged in both receiving
-    documents; their bodies restate it at their re-lock.
+    joint-check line naming that kernel-exported token.
+    The KERNEL half — one token, two literal forms, exported
+    as constants — is fully verified and is what this RDR
+    owns. The PRODUCER half is not yet a duty on 0002: its
+    Refinement Context Direction list names the
+    `RequiresOwned` producer and the fixture rename, and
+    carries neither the existence-token emission duty nor
+    A22's canonicalization duty. The joint-check line is an
+    acknowledgement, not a clause; both duties are added to
+    0002's direction list by the same Prerequisite.
   - **If wrong**: the kernel cannot separate `exists` from
     value operators and the enforcement site falls back to
     the evaluator (Alternative 1) for that distinction.
@@ -605,7 +631,8 @@ existing one.
     compares a tag value to one typed literal; membership
     checks a scalar tag against a typed literal set; bounded
     integer comparison uses `lt`, `lte`, `gt`, and `gte`;
-    existence checks presence"; set containment "Narrows
+    existence checks presence of an optional tag value";
+    set containment "Narrows
     the set-valued domain to assignments containing every
     listed element" — each reads one value against one
     literal. The declared kind needed to *parse* the value
@@ -667,15 +694,41 @@ existing one.
   the original "without a new envelope field" reading is
   refuted.**
   - **Status**: Pending — blocked on a peer-document change,
-    not on evidence. The kernel half is Verified; the
-    envelope half is settled in DIRECTION by the author's
-    round (2026-08-21: structured field, not flattened text)
-    but cannot be stated by this RDR, because it contradicts
-    §JD-8 as written. Named plan: raise the field at JDR
-    0001 as a §JD-8 amendment (or at RDR 0005's re-lock),
-    then this assumption cites that decision and flips to
-    Verified. RDR 0005 is `Final`, so 0007 MUST NOT
+    not on evidence. The kernel half is Verified.
+    **This is a REVERSAL of a closed joint decision, not an
+    open question.** JDR 0001 §D4 already routed this payload:
+    it "reaches the CLI through §JD-8's `Detail`" — flattened
+    text — and §JD-12 records §D4 as Closed. The author's
+    2026-08-21 round chose the option §D4 rejected. This RDR
+    must therefore reopen §D4, not merely amend §JD-8.
+    Why the reversal is nonetheless right, on engineering
+    grounds independent of precedence: `clierr.CLIError`'s own
+    type doc invites exactly this extension — "Extend with new
+    optional fields as needed — keep them `omitempty` so the
+    envelope stays append-only and stable for tools" — and an
+    `omitempty` field is invisible to every existing consumer.
+    `Detail` is documented human prose ("the underlying syscall
+    reason, a parser diagnostic"); serializing a two-level
+    sorted array into it puts a second, undocumented encoding
+    inside a string, which defeats the sorted-by-row-then-key
+    determinism whose only purpose is machine consumption.
+    Further, §JD-8's "not new envelope fields" is a
+    SUFFICIENCY claim about the `Code` values RDR 0005
+    enumerated — inherited verbatim from 0005's A5 evidence,
+    written before this payload existed — not a prohibition.
+    Named plan: reopen §D4 at JDR 0001 with the §JD-8
+    amendment granting ONE `omitempty` structured field
+    (scoped to the machine-readable refusal payload; no new
+    exit group), then this assumption cites that decision and
+    flips to Verified. RDR 0005 is `Final`, so 0007 MUST NOT
     unilaterally widen its envelope.
+    **Fallback if the reopening is declined**: flatten the
+    payload into `Detail` as §D4 originally ruled, and record
+    here that the JSON envelope carries the payload as text
+    only — machine consumers re-parse it. The choice is
+    reversible in both directions (an `omitempty` field is
+    append-only and breaks nothing later), which is why this
+    does NOT need to block lock; see Prerequisites.
   - **Method**: Source Search (RDR 0005 envelope; JDR 0001
     §JD-8) + `internal/cli/clierr` source
   - **Evidence**: The refutation is in shipped source:
@@ -735,8 +788,14 @@ existing one.
     Dependency, not as a claim of this RDR.
   - **Method**: Source Search (RDR 0009 Final; RDR 0002's
     §JD-3 producer clause)
-  - **Evidence**: RDR 0009 Normative Contracts: "a Row with a
-    non-empty Escape list MUST have an empty Writes slice."
+  - **Evidence**: RDR 0009 Normative Contracts, quoted with
+    its governing scope: escape-row shape conformance "is a
+    PRODUCER obligation on every constructor of `resolve.Row`
+    values: a Row with a non-empty Escape list MUST have an
+    empty Writes slice." It binds producers, NOT the kernel
+    boundary — so this composition holds for rows a
+    conforming producer built, and the kernel enforces no
+    part of it.
     JDR 0001 §JD-3 names this the open composition (0007
     derives from `Writes`, 0009 empties `Writes`), notes the
     field "appears **zero** times in 0002, which owns the
@@ -884,6 +943,30 @@ test). Then:
 The kernel therefore enforces the domain rule by structure:
 an evaluator cannot fold absence into false, because it is
 never asked about an absent key.
+
+A NIL seam does not make a row unevaluable by itself. The
+kernel decides existence atoms and absent-key atoms without
+consulting the seam, so a row whose atoms are all
+kernel-decidable resolves under a nil seam exactly as it
+would under a present one. A nil seam yields unevaluable
+only for an atom that WOULD have been handed to it — a
+value-comparing atom over a present key. This narrows the
+shipped whole-guard behavior (`evaluateGuard` returns
+GuardUnevaluable for any non-empty guard when `seam == nil`)
+to a per-atom rule.
+
+Frozen `TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`
+keeps its verdict but changes its REASON, and Phase 1 must
+re-read it rather than re-encode it: its guard
+`iterations >= 3` references a key the fixture view does not
+carry (`legalInput` supplies `status`, `reviews`,
+`recognized`), so after the reshape the KERNEL decides that
+atom unevaluable on absence and the nil seam is never
+consulted. The refusal kind the test asserts still holds; the
+proposition its name states — that an absent seam is what
+refuses — no longer does on this fixture. To keep testing the
+nil-seam rule the fixture needs a value atom over a PRESENT
+key (e.g. `reviews >= 3`).
 ```
 
 ```normative
@@ -1008,7 +1091,13 @@ referenced key, the block, and a reason drawn from a closed
 set — `absent` (the key was not in the view) or
 `uncomparable` (the key was present and the seam could not
 compare the value, A18). This payload replaces the
-single-valued `Refusal.Guard` text, which has no referent
+single-valued `Refusal.Guard` text — and with it the shipped
+selection of ONE representative row
+(`gate`'s `slices.MinFunc` over the undecidable set, which
+picked the lowest `(RuleID, SourceLocator)` to fill that
+field). Every undecidable row appears in the payload, so
+there is no representative to choose; the `MinFunc` call is
+retired, not re-typed. `Refusal.Guard` has no referent
 once guards are atoms; `Refusal.Rows` continues to carry
 every undecidable row. The kernel MUST evaluate every atom
 of every survivor — no short-circuit on a decided block —
@@ -1111,7 +1200,7 @@ comparison.
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Presence predicate | `internal/resolve/resolve.go::TagSet.Lookup` | None for this use (provenance-blind `ok`) | Reuse | The kernel's atom presence test |
-| Undecidability verdict + refusal mapping | `resolve.go::GuardUnevaluable`, `resolve.go::gate` | Refusal carries guard text, not keys | Reuse + extend | Payload becomes absent keys |
+| Undecidability verdict + refusal mapping | `resolve.go::GuardUnevaluable`, `resolve.go::gate` | `Refusal` is flat scalars plus `[]RowRef`/`[]string`; it carries guard text, not keys, and has never held a nested value | Reuse the verdict + kind; EXTEND `Refusal` with the kernel's first two-level payload | Per-row/per-atom array-of-objects — the reason the A19 envelope question exists |
 | Per-row verdict hook | `resolve.go::evaluateGuard` | Delegates whole guard to seam | Extend | Presence, existence, K3 live here |
 | Owned-state precheck | `resolve.go::missingOwned` | Owned-provenance only | Reuse | Unchanged; escape rows yield empty |
 | Verdict stub for tests | `internal/resolve/fixtures_test.go::fixtureGuards` | Keyed on guard text; discards the view | Replace | Atom-level fixture evaluator |
@@ -1392,26 +1481,45 @@ ownership change JDR 0001 did not make.
       kernel's existence token (A16), and states its reading
       of the placement MUST against `exists = false` in
       `all` (A14; pairwise 0007×0003 F2 → §JD-1).
-- [ ] **The structured failure field is granted at JDR 0001
-      (a §JD-8 amendment) or at RDR 0005's re-lock (A19).**
-      RDR 0005 is `Final` and its failure envelope
-      (`internal/cli/clierr::CLIError`) carries flat strings
-      only, so the per-row/per-atom payload cannot reach a
-      JSON consumer as structure until one `omitempty`
-      structured field is granted. Author's round 2026-08-21
-      chose the structured field over flattening into
-      `Detail` text. This RDR MUST NOT state that field
-      itself. **Blocks lock**, not just implementation.
-- [ ] Canonicalization of authored tag-key spellings is
-      bound in RDR 0002 as a normative clause (A22;
-      JDR 0001 §D4 landing note). Author's round 2026-08-21
-      chose binding it in 0002 over narrowing A22 to the
-      kernel. The duty is NOT currently on 0002's Refinement
-      Context Direction list — add it there, or A22 stays an
-      inference and the §D4 obligation dangles.
-- [ ] A3, A16–A19, A21, A22 verified (Resolve). A3, A16,
-      A17, A18, A21 verified 2026-08-21; A19 and A22 remain
-      Pending on the two peer-document items above.
+- [ ] **JDR 0001 §D4 is reopened and §JD-8 amended to grant
+      ONE `omitempty` structured field on `CLIError` (A19).**
+      §D4 (Closed) routed this payload through §JD-8's
+      `Detail` as flattened text; the author's round
+      2026-08-21 chose a structured field instead, so this is
+      a REVERSAL of that ruling and must be taken back to the
+      JDR, not folded in here. This RDR MUST NOT state the
+      field itself. **Does not block lock**: the direction is
+      reversible either way (an `omitempty` field is
+      append-only), and A19 carries a `Detail`-flattening
+      fallback if the reopening is declined. Blocks RDR
+      0005's implementation of the JSON rendering only.
+- [ ] Two duties are added to RDR 0002's Refinement Context
+      Direction list, which currently carries neither —
+      it names only the `RequiresOwned` producer (JD-3) and
+      the fixture rename (JD-10):
+      (a) the normalizer emits the kernel's exported
+      existence token and its two boolean literal forms
+      (A16); (b) canonicalization of authored tag-key
+      spellings is bound as a normative clause (A22; JDR 0001
+      §D4 landing note). Until (a) lands, A16's producer half
+      is acknowledged only by a joint-check line; until (b)
+      lands, A22 stays an inference and the §D4 obligation
+      dangles. A22's fallback is to narrow it to kernel-side
+      only and re-file canonicalization as an obligation on
+      0002.
+- [ ] **RDR 0009 re-locks against the loss of
+      `Refusal.Guard`.** 0009 is `Final` and names
+      `Refusal.Kind` / `Refusal.Guard` as the asserted
+      properties carrying its non-vacuity evidence; this RDR
+      deletes that field, so 0009's evidence goes stale on
+      implementation. Re-run its conformance evidence against
+      the atom-shaped refusal.
+- [ ] A3, A16–A19, A21, A22 verified (Resolve). A16, A17,
+      A18, A21 verified 2026-08-21. A3 returned to Pending at
+      cove iteration 2 — the spike proved a superset of the
+      specified shape (it kept `Refusal.Guard`); its bound
+      and importer halves stand. A19 and A22 remain Pending
+      on the peer-document items above.
 - [ ] This RDR Final **before** RDR 0003's implementation
       begins: 0003's evaluator is built against this seam.
 
@@ -1419,12 +1527,22 @@ ownership change JDR 0001 did not make.
 
 Against the real kernel with a real atom — no stub — the
 masking probe inverts: one candidate row whose guard is a
-value atom over an absent key, an absent `RequiresOwned`
-key, and a modeled `no_match` escape row yield
+value atom over an absent key, whose `RequiresOwned` is
+SATISFIED, and a modeled `no_match` escape row yield
 `Refusal.Kind == guard_unevaluable`, a nil `Plan`, the absent
 key in the payload, and the row in `Refusal.Rows`; the same
 table with the key present and the value decided FALSE
-prunes and escapes (D8 preserved). Third scenario:
+prunes and escapes (D8 preserved).
+
+The satisfied `RequiresOwned` is load-bearing, not
+incidental: an unevaluable row is a SURVIVOR, so the owned
+sweep runs over it and reports first (GATE, THEN COUNT;
+Testing Strategy row 13). A row carrying BOTH an absent
+owned key and an unevaluable atom yields
+`owned_state_unavailable`, not `guard_unevaluable` — that
+pairing is scenario 13's subject, and putting it in the
+masking probe would test the owned sweep while claiming to
+test the domain rule. Third scenario:
 *unevaluable-blocks-true-sibling* — row A unevaluable beside
 row B decided TRUE → refusal naming A, no plan. Fourth: an
 `exists = false` atom over the absent key decides TRUE and
@@ -1451,7 +1569,13 @@ survivor set; encode the domain-rule matrix as kernel tests
 (operators × present/absent × `all`/`unless` × {T,F,U}
 combinations, empty blocks, two-row pattern, escape-set
 scoping, foreign existence token); classify each authored
-guard in the reference fixtures as safe-or-migration.
+guard in the reference fixtures as safe-or-migration. Retire
+`gate`'s `slices.MinFunc` representative-row selection with
+the field it fed. Rewrite `gate`'s doc comment, which still
+states D8's superseded rationale verbatim ("absent owned
+state … is frequently the reason the seam could not decide
+the predicate") — the clause above forbids repeating it, and
+the kernel comment is the authoring doc closest to the code.
 
 ### Phase 3: Value-seam contract tests
 
@@ -1459,6 +1583,19 @@ Export a small contract-test function for the value seam
 (present value × literal × operator; unparseable value →
 unevaluable, never false) that RDR 0003's implement stage
 instantiates against its evaluator.
+
+**Blocked on one RDR 0003 declaration.** `resolve.Tag.Value`
+is a bare `string`, so a set-valued tag reaches the seam as
+one opaque string with no stated element encoding. The
+`contains` leg of this contract test therefore cannot be
+written from any current document, and neither can Testing
+Strategy scenario 8's present-key half. This RDR
+deliberately does not invent the encoding — element
+representation is part of RDR 0003's typed operator
+semantics. What this RDR fixes is unchanged and needs no
+encoding: an ABSENT set-valued tag is unevaluable, decided
+by the kernel on presence alone. Phase 4 carries the
+declaration request.
 
 ### Phase 4: Authoring and diagnostics handoff to RDR 0003
 
@@ -1471,7 +1608,10 @@ onto the declared-domain product (A12, §JD-4); the
 predicate-PLACEMENT guidance (the match pattern is
 closed-world by design, so a predicate whose absence must
 refuse belongs in guard atoms, never in the match pattern);
-sentinel-stamping as the anti-pattern.
+sentinel-stamping as the anti-pattern; and the REQUEST that
+0003 declare the element encoding of a set-valued tag value,
+without which Phase 3's `contains` contract test cannot be
+written.
 
 ## Validation
 
@@ -1513,8 +1653,10 @@ be re-mutation-tested against them.
 | 14 | Escape-set scoping, both legs: an unevaluable CANDIDATE is never masked by a decidable escape row; an unevaluable ESCAPE row yields `guard_unevaluable` | A20 | `escapeOrRefuse` (spike: ZERO diff); frozen ADV-2 + Fixup-1d |
 | 15 | Escape row raises no `owned_state_unavailable` of its own (empty `RequiresOwned` by composition) | A21 | `missingOwned` over an empty slice never enters the loop |
 | 16 | Guard-path observed-tag substitution: a caller-supplied observed tag turns `guard_unevaluable` into a decided verdict — the accepted exposure, pinned so it cannot regress silently | A11, A13 | no existing test contends the GUARD path (ADV-4/ADV-5 defend only the owned path) |
-| 17 | Payload determinism: sorted by row identity then key, so it is a function of the input tuple and never of atom or row order (RDR 0001 REQ-1) | A3 | `undecidedAtoms`/`compareAtoms`; frozen ADV-3 is the order-independence precedent |
+| 17 | Payload determinism: sorted by row identity then key, so it is a function of the input tuple and never of atom or row order (RDR 0001 REQ-1) | A3 | `undecidedAtoms`/`compareAtoms` (both PROPOSED — modeled on shipped `resolve.go::compareRefs`/`copyTags`); frozen ADV-3 is the order-independence precedent |
 | 18 | Provenance-blindness: an atom decides identically whether its key arrived owned, observed, or recognized | A11 | `TagSet.Lookup` `ok`, not `TagSet.has` |
+| 19 | Nil seam is per-atom, not whole-guard: a row of only `exists`/absent-key atoms DECIDES under a nil seam; only a value atom over a PRESENT key goes unevaluable for want of a seam | A3, A17 | narrows shipped `evaluateGuard`'s `seam == nil` branch; Fixup-1d must be re-read (its `iterations` key is absent from the fixture view, so the kernel now decides it) |
+| 20 | Every undecidable row appears in the payload — no representative row is chosen (shipped `gate` picked one via `slices.MinFunc` to fill `Refusal.Guard`; that selection retires with the field) | A3 | `gate`'s `MinFunc` call; ADV-3 order-independence still applies to the sorted payload |
 
 **Not covered here, by ownership.** Value-operator semantics
 over a present value are RDR 0003's; Phase 3 exports a
@@ -1522,7 +1664,86 @@ contract-test function (present value × literal × operator;
 unparseable value ⇒ unevaluable, never false) that 0003's
 implement stage instantiates against its evaluator. The CLI
 rendering of the payload is RDR 0005's and is blocked on the
-A19 envelope-field grant.
+A19 envelope-field grant — or, if that reopening is
+declined, on A19's `Detail`-flattening fallback. The kernel
+side is unblocked either way: the payload exists on
+`Refusal` regardless of how the CLI renders it.
+
+#### Mini-checks
+
+Four structural cues fire on this draft (source-authority,
+test-discriminability, disposition, desk trace); round-trip
+/ fidelity does not — the draft's "migrate" is fixture
+migration, and no inverse invariant is claimed.
+
+**`authority`** — who decides what, and which decision is canonical.
+
+| Input / decision | Writer | Readers | Sibling arms | Canonical |
+| --- | --- | --- | --- | --- |
+| Atom presence in the view | kernel (`TagSet.Lookup` `ok`) | `evaluateAtom` | none — the seam never sees the view | **kernel**, provenance-blind |
+| Existence-atom verdict | kernel, from presence alone | combination step | seam is NOT consulted | **kernel** |
+| Value-atom verdict over a PRESENT key | evaluator seam `Evaluate(atom, value)` | combination step | kernel decides nothing here | **seam** (RDR 0003 semantics) |
+| Value-atom verdict over an ABSENT key | kernel (unevaluable) | combination step | seam is NOT consulted | **kernel** — the domain rule |
+| Atom combination (K3) | kernel | `gate` | evaluator holds no part of the tables | **kernel** |
+| Tag-key canonicalization | RDR 0002 normalizer, pre-`Row` | kernel compares exact strings | kernel performs none (A22) | **normalizer** (duty not yet a 0002 clause) |
+| Existence token + literal forms | kernel exports constants | 0002 normalizer emits them | foreign token ⇒ value atom (fails closed) | **kernel constants** (A16) |
+| Guard-input coverage | the domain rule | — | `RequiresOwned` is post-guard writes only | **domain rule**, NOT `RequiresOwned` |
+| Refusal payload CLI transport | JDR 0001 §D4 (`Detail`) vs A19 (structured field) | RDR 0005 renderer | **unresolved — see A19** | §D4 stands until reopened |
+
+**`oracle`** — each MVV row's discriminating power and its failing control.
+
+| MVV row | Fails if X is wrong because Y | Negative / failing control |
+| --- | --- | --- |
+| 1 — value atom over absent key ⇒ `guard_unevaluable`, key in payload, row in `Rows` | asserts on refusal KIND + payload CONTENT, so absence-folded-to-false surfaces as a plan instead of a refusal | same table, key present + value TRUE ⇒ plan; the pre-RDR kernel returns a plan here |
+| 2 — key present, value FALSE ⇒ prunes and escape plans (D8) | asserts a PLAN is produced, so a regression that refuses on decided falsity fails loudly | row 1 is the control: same shape, absent key, must NOT plan |
+| 3 — unevaluable A beside decided-TRUE B ⇒ refusal naming A | asserts B is NOT selected; the aggregation veto is the only thing stopping it | drop the veto ⇒ B is selected and the test fails |
+| 4 — `exists = false` over absent key ⇒ row SELECTED | asserts the one sanctioned absence⇒verdict route still works; guards against over-refusing | row 1 is the control: a VALUE atom over the same absent key must refuse |
+
+Not absence-of-error oracles: every row asserts a specific
+kind or a specific selection, and each has a sibling that
+must come out the other way. The spike's mutation result is
+the standing evidence that verdict-only assertions are
+insufficient — scenarios 3–5 exist to kill that mutant.
+
+**`disposition`** — input class ⇒ outcome.
+
+| Input class | Refusal kind / outcome | Exit group | Payload minted | Silent or loud |
+| --- | --- | --- | --- | --- |
+| All atoms decided TRUE | row selected → plan | 0 | none | loud (plan) |
+| Any atom decided FALSE from present state | row PRUNED (D8) | n/a | none — pruned rows report no absences | silent by design |
+| Survivor missing an owned `RequiresOwned` key | `owned_state_unavailable` | `GroupUserEnv` | `MissingOwned` + `Rows` | loud |
+| Survivor with an unevaluable atom (absent key) | `guard_unevaluable` | `GroupUserEnv` | per-row/per-atom, reason `absent` | loud |
+| Survivor with an unevaluable atom (present, uncomparable) | `guard_unevaluable` | `GroupUserEnv` | per-row/per-atom, reason `uncomparable` | loud |
+| Row failing BOTH ways in one survivor set | `owned_state_unavailable` first | `GroupUserEnv` | owned payload only | loud (the accepted cost) |
+| Unevaluable ESCAPE row | `guard_unevaluable` replaces the candidate refusal | `GroupUserEnv` | escape set's payload | loud (ADV-2 / Fixup-1d) |
+| Foreign existence token | treated as VALUE atom ⇒ unevaluable on absence | `GroupUserEnv` | reason `absent` | loud (fails closed) |
+| Foreign boolean literal | rejected at load by the normalizer | producer defect | n/a | loud, upstream |
+
+**`trace`** — the MVV walked stepwise against every assertion in force.
+
+| Step | Assertions in force | Witness |
+| --- | --- | --- |
+| 1. Assemble view | provenance precedence owned > observed > recognized; presence is provenance-blind | `legalInput`: `status`(owned), `reviews`(observed), `recognized` |
+| 2. Evaluate each atom | domain rule; existence totality; seam only on present keys; nil seam is per-atom (row 19) | absent-key value atom ⇒ U, seam never called |
+| 3. Combine per row | K3 `min`; `all ∧ ¬(unless_conj)`; empty `unless` contributes nothing | one U atom, no F ⇒ row U |
+| 4. Prune | only GuardFalse prunes; F∧U=F is witnessed falsity | MVV row 2 prunes; MVV row 1 does not |
+| 5. Owned sweep over SURVIVORS | unevaluable rows ARE survivors, so their `RequiresOwned` counts; owned-before-unevaluable | MVV row 1's `RequiresOwned` is satisfied ⇒ passes through to step 6 |
+| 6. Undecidable veto | any surviving U ⇒ refuse; no decided-TRUE sibling escapes | MVV row 3: B not selected |
+| 7. Mint payload | every undecidable row, sorted row-then-key; no representative row (row 20) | `MinFunc` retired |
+| 8. Escape gating | escape set gated identically; unevaluable escape replaces the candidate refusal | Fixup-1d |
+
+**One CONTRADICTION found and fixed in this pass.** Step 5
+caught it: the MVV previously gave scenario 1 an absent
+`RequiresOwned` key AND an unevaluable atom while asserting
+`guard_unevaluable`. Under this RDR's own SURVIVOR
+MEMBERSHIP and GATE-THEN-COUNT clauses — and under shipped
+`resolve.go::gate`, which returns `KindOwnedStateUnavailable`
+before reaching the undecidable loop — that input yields
+`owned_state_unavailable`. The primary validation scenario
+contradicted three clauses of its own draft and would have
+failed on first implementation. The MVV now requires the
+row's `RequiresOwned` to be satisfied; the both-ways pairing
+stays where it belongs, in Testing Strategy row 13.
 
 ### Performance Expectations
 
