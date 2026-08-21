@@ -7,7 +7,7 @@
 
 - **Date**: 2026-06-19
 - **Status**: Draft [revised from Final 2026-08-12; re-verify none —
-  JDR 0001 §D3 adds one normative clause (a read accessor returns the complete
+  JDR 0001 §D3 added one normative clause (a read accessor returns the complete
   tag set or refuses) plus its MVV scenario; no existing assumption disturbed]
 - **Type**: Architecture
 - **Profile**: large — locks one accessor execution safety contract governing authoritative artifact mutation.
@@ -98,8 +98,9 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` binds `state.read`, `state.gate`, and `state.persist` as declared read/gate/write accessors over caller-supplied `state` artifacts (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::main`); transcript lines 1-8 show read success, gate allow, typed gate/refusal cases, capability mismatch, and write success without raw shell strings or callbacks (`output.txt:1-8`).
   - **If wrong**: The capability vocabulary is too small, and authors will
     pressure the model toward unsafe command execution.
-- **A2 Write accessors can verify their intended owned-tag effect by re-reading
-  the same artifact boundary after the write.**
+- **A2 Write accessors can verify their intended owned-tag effect, and the
+  absence of collateral change to non-owned tags, by re-reading the same
+  artifact boundary after the write.**
   - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: The spike writes planned owned tags, clones the same role's observed tags, and returns `read_back_mismatch` when observed values differ (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::write`); transcript line 8 shows matching `status=Final`, and line 9 captures the mismatch with expected and observed values (`output.txt:8-9`).
@@ -192,8 +193,9 @@ Evidence Record or by the Minimum Viable Validation.
 
 Use a declared-capability accessor model. The transition model names accessors;
 the accessor registry binds each name to one capability class: `read`, `gate`,
-or `write`. A read accessor returns typed tag values from a caller-supplied
-artifact role. A gate accessor returns allow, deny, or indeterminate with a
+or `write`. A read accessor returns the complete typed tag values for the
+keys it was asked for from a caller-supplied artifact role, or refuses; a
+partial read is a refusal, never a thinned value set. A gate accessor returns allow, deny, or indeterminate with a
 reason. A write accessor applies a planned owned-tag mutation to a
 caller-supplied artifact role, then re-reads the same role and verifies that the
 expected owned-tag values are present.
@@ -218,8 +220,10 @@ missing or multiply-bound accessor identities, capability mismatches, writes to
 non-owned tags, missing timeout/read-back metadata, non-positive timeouts, and
 ambient artifact discovery before resolution. Second, runtime invocation applies
 read and gate accessors to caller-supplied artifacts and classifies timeout,
-unavailable artifact, execution error, gate denied, and gate-indeterminate
-outcomes. Third, write accessors execute only from a successful transition plan.
+unavailable artifact, execution error, incomplete read, gate denied, and
+gate-indeterminate outcomes. A read that cannot produce every requested key
+takes the refusal branch, so a downstream consumer never sees a truncated
+snapshot that is shaped like a genuine absence. Third, write accessors execute only from a successful transition plan.
 Before the write, the executor records the same caller-supplied artifact role's
 observed and recognized tag values. After command-level success, it immediately
 re-reads that same role from the write binding, compares expected owned-tag
@@ -259,6 +263,14 @@ MUST NOT discover authoritative artifacts from ambient process state.
 ```normative
 A read accessor MUST return typed tag values or a typed refusal. It MUST NOT
 mutate authoritative artifacts.
+```
+
+```normative
+The typed-tag-values branch carries a completeness guarantee: a read accessor
+MUST return the complete tag set for the keys it was asked for, or take the
+refusal branch. A partial or truncated read is a refusal, not a value. A missing
+key MUST be distinguishable from an unread key only by which branch is taken —
+absence is a value, unreadability is a refusal.
 ```
 
 ```normative
@@ -308,6 +320,11 @@ write to stdout or stderr directly.
 - **Selection / predicate** — when an accessor reference names a capability, the
   executor selects only a binding with the same accessor identity and capability.
   Missing or multiply-bound accessors are validation failures.
+- **Read completeness** — the success predicate for a read accessor is "every
+  requested key resolved", not "at least one key resolved". A key the artifact
+  genuinely does not carry resolves as an absent value; a key the accessor could
+  not read is an `incomplete_read` refusal. Consumers may therefore treat a
+  returned tag set as total over the requested keys.
 
 #### Round-Trip / Inverse Invariants
 
@@ -408,18 +425,10 @@ bounded power for authoritative artifacts.
 **Description**: Accessor references contain shell commands or scripts that the
 runtime executes for reads, gates, and writes.
 
-**Pros**:
-
-- Most flexible integration surface.
-- Easy to prototype against existing CLI tools.
-- Can express remote calls without adding typed bindings first.
-
-**Cons**:
-
-- Grants ambient process authority unrelated to the transition model.
-- Makes static review nearly impossible; the shell script becomes the real
-  contract.
-- Timeout and read-back can be bolted on, but command semantics remain opaque.
+**Trade-off**: Most flexible integration surface and the easiest to prototype,
+but it grants ambient process authority unrelated to the transition model and
+makes static review nearly impossible — the shell script becomes the real
+contract.
 
 **Reason for rejection**: It solves integration speed by accepting the exact
 blast radius the problem statement asks this RDR to control.
@@ -429,19 +438,10 @@ blast radius the problem statement asks this RDR to control.
 **Description**: The model may call only configured executable names or command
 prefixes.
 
-**Pros**:
-
-- Safer than raw shell-out.
-- Simple to explain and audit at a coarse level.
-- Compatible with external tools already installed on user machines.
-
-**Cons**:
-
-- An executable allowlist does not prove the command has read capability, gate
-  capability, or write authority over the intended artifact role.
-- One allowlist tends to accrete broad authority as new integrations appear.
-- Read-back verification is still a separate discipline rather than part of the
-  accessor identity.
+**Trade-off**: Safer than raw shell-out and coarsely auditable, but an
+executable allowlist does not prove a command has read, gate, or write authority
+over the intended artifact role, and one allowlist accretes broad authority as
+integrations appear.
 
 **Reason for rejection**: It constrains mechanism but not semantic power.
 
@@ -450,19 +450,10 @@ prefixes.
 **Description**: Intrastate only reads and gates; callers persist all owned-tag
 writes themselves.
 
-**Pros**:
-
-- Lowest mutation risk inside intrastate.
-- Keeps the resolver/accessor boundary very simple.
-- Avoids partial-write and read-back mismatch handling.
-
-**Cons**:
-
-- Contradicts the seeded requirement that write accessors mutate authoritative
-  artifacts as reliable passthroughs.
-- Pushes persistence safety back into every skill or caller.
-- Weakens RDR 0001's plan/write split because the returned transition plan would
-  have no standard application path.
+**Trade-off**: Lowest mutation risk and the simplest boundary, but it
+contradicts the requirement that write accessors mutate authoritative artifacts
+as reliable passthroughs, pushes persistence safety into every caller, and
+leaves RDR 0001's returned transition plan with no standard application path.
 
 **Reason for rejection**: It is safe by omission, but incomplete.
 
@@ -471,18 +462,10 @@ writes themselves.
 **Description**: Treat accessors like state-machine entry/exit/transition
 actions and execute host-language callbacks during transition handling.
 
-**Pros**:
-
-- Familiar from state-machine libraries.
-- Very expressive and easy to extend in Go code.
-- Can share ordinary application helpers.
-
-**Cons**:
-
-- Hides authority in code rather than model data.
-- Static lint cannot reason about side effects, timeouts, or read-back behavior.
-- Couples transition selection to action execution, undermining the stateless
-  resolver boundary.
+**Trade-off**: Familiar and very expressive, but it hides authority in code
+rather than model data, leaves static lint unable to reason about side effects,
+timeouts, or read-back behavior, and couples transition selection to action
+execution.
 
 **Reason for rejection**: It imports the callback power of FSM libraries without
 their runtime ownership model, and it breaks the reviewable-data premise.
@@ -516,6 +499,12 @@ their runtime ownership model, and it breaks the reviewable-data premise.
   tag.
   **Mitigation**: Require same-role read-back verification against expected
   owned-tag values.
+- **Risk**: A read accessor returns a truncated tag set that a consumer cannot
+  distinguish from genuine absence, so a presence/absence predicate decides on
+  state that was never read.
+  **Mitigation**: Completeness is normative — a read that cannot resolve every
+  requested key refuses, and the MVV asserts the truncated case takes the
+  refusal branch.
 - **Risk**: Timeout and gate-indeterminate failures are collapsed into generic
   execution errors.
   **Mitigation**: Make them separate refusal classes and verify CLI mapping.
@@ -526,18 +515,20 @@ their runtime ownership model, and it breaks the reviewable-data premise.
 ### Failure Modes
 
 Visible failures are typed refusals: unknown accessor, capability mismatch,
-artifact unavailable, timeout, execution failure, gate denied, gate
-indeterminate, write attempted for a non-owned tag, and read-back mismatch.
-Silent failure would mean a write command reported success but the owned tag did
-not change as expected; the mandatory read-back check is the guard against that
-case. Diagnosis starts with the accessor identity, capability, artifact role,
+artifact unavailable, timeout, execution failure, incomplete read, gate denied,
+gate indeterminate, write attempted for a non-owned tag, and read-back mismatch.
+There are two silent-failure shapes, each with a mandatory guard. A write command
+reports success but the owned tag did not change as expected, or a non-owned tag
+changed alongside it — the read-back check covers both. A read returns fewer keys
+than requested and the shortfall reads downstream as genuine absence — the
+completeness requirement turns that into an `incomplete_read` refusal. Diagnosis starts with the accessor identity, capability, artifact role,
 timeout, and expected versus observed tag values.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
+- [x] All Critical Assumptions verified (A1-A7; see Assumption Verification)
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
 - [ ] RDR 0002 carries accessor references, tag provenance, and artifact roles
@@ -549,10 +540,13 @@ timeout, and expected versus observed tag values.
 
 Build a fixture flow with one read accessor, one gate accessor, and one write
 accessor over caller-supplied artifact roles. Prove success, timeout, gate
-denied, gate-indeterminate, execution failure, capability mismatch, unsafe
-definition validation, and write read-back-mismatch dispositions. The write
-success test must assert the re-read owned-tag value equals the transition
-plan's expected value.
+denied, gate-indeterminate, execution failure, incomplete read, capability
+mismatch, unsafe definition validation, and write read-back-mismatch
+dispositions. The write success test must assert the re-read owned-tag value
+equals the transition plan's expected value. The read test must assert that an
+accessor which can resolve only some of the requested keys takes the refusal
+branch and is distinguishable from one whose artifact genuinely lacks those
+keys.
 
 ### Phase 1: Accessor Model
 
@@ -612,10 +606,14 @@ unchanged.
    non-positive timeouts, missing write read-back metadata, and ambient artifact
    discovery attempts also fail before resolution.
 2. **Scenario**: Invoke read and gate accessors that succeed, time out, return
-   an execution failure, or return gate indeterminate.
-   **Expected**: Successful reads return typed tag values, gate allow/deny
-   returns typed gate results, and timeout, execution failure, and gate
-   indeterminate remain distinct refusal classes.
+   an execution failure, return only a subset of the requested tag keys, or
+   return gate indeterminate.
+   **Expected**: Successful reads return the complete typed tag values for every
+   requested key, gate allow/deny returns typed gate results, and timeout,
+   execution failure, incomplete read, and gate indeterminate remain distinct
+   refusal classes. A read missing any requested key refuses rather than
+   returning a partial set; an artifact that genuinely lacks a requested key
+   returns it as an absent value, not a refusal.
 3. **Scenario**: Execute a successful transition plan through a write accessor,
    then re-read the same artifact role.
    **Expected**: Matching expected owned-tag values report success; mismatched
@@ -655,10 +653,13 @@ transition boundaries, not inside graph-wide lint loops.
 
 ### Contradiction Check
 
-No contradictions found between research findings, design principles, and the
-proposed solution. The prior-art callback model is cited only as a contrast;
-the selected design remains data-declared accessors with typed capabilities and
-refusals.
+No contradictions remain between research findings, design principles, and the
+proposed solution. The prior-art callback model is cited only as a contrast; the
+selected design remains data-declared accessors with typed capabilities and
+refusals. The read-accessor clause previously allowed a partial read to take the
+typed-values branch, which contradicted this RDR's own rule that an indeterminate
+result is a refusal rather than a guess; read completeness is now normative, so
+the read and gate clauses state the same rule at both layers.
 
 ### Assumption Verification
 
@@ -670,14 +671,15 @@ source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
 the explicit scoping decision that credentials and remote resource lifecycle
 remain outside intrastate; A6 is backed by the same Resolve spike's
 definition-validation harness and transcript; A7 is backed by the same spike's
-collateral-mutation read-back mismatch case. None of the verified evidence cites
+collateral-mutation read-back mismatch case, which is also what carries A2's
+non-owned-tag half. None of the verified evidence cites
 this RDR or its artifact directory as self-proof.
 
 ### Scope Verification
 
 The MVV is in scope: a fixture flow with read, gate, and write accessors must
-prove success, timeout, gate-indeterminate, execution failure, capability
-mismatch, and write read-back mismatch dispositions. The implementation tests
+prove success, timeout, gate-indeterminate, execution failure, incomplete read,
+capability mismatch, and write read-back mismatch dispositions. The implementation tests
 must include the named replay scenario and the no-direct-output CLI mapping
 scenario.
 
@@ -699,13 +701,16 @@ scenario.
 This RDR is right-sized by contract count. It owns one load-bearing contract:
 accessor execution safety for declared read, gate, and write accessors,
 including refusal classes, timeout behavior, and write read-back verification.
-RDR 0002 owns the table carrier, RDR 0003 owns predicate semantics, and RDR 0005
-owns the user-facing CLI mapping. The `large` Profile is retained because this
+Read completeness is part of that same contract — it is the success predicate of
+the read capability, not a separate obligation — so carrying it here does not
+widen the RDR. RDR 0002 owns the table carrier, RDR 0003 owns predicate
+semantics, and RDR 0005 owns the user-facing CLI mapping. The `large` Profile is retained because this
 contract governs authoritative artifact mutation.
 
 ## References
 
 - `docs/cli-output-contract.md`
+- JDR 0001 §D3: read-accessor completeness (`docs/jdr/0001-resolve-kernel-seam.md`)
 - RDR 0001: Resolution Kernel
 - RDR 0002: Transition Table as Reviewable Data
 - RDR 0003: Guard Predicate Exhaustiveness
@@ -715,27 +720,3 @@ contract governs authoritative artifact mutation.
   `stateMgr.WriteState`, `stateMgr.PersistState`
 - Local ADO transition helper prior art: `Client::transitionWorkItem`
 
-## Refinement Context (JDR re-entry — delete on re-lock)
-
-Source: **JDR 0001 §D3** (`docs/jdr/0001-resolve-kernel-seam.md`).
-
-**Defect.** "A read accessor MUST return typed tag values or a typed refusal" is
-a disjunction with **no completeness requirement** on the values branch, so a
-partially-read artifact may conformantly return what it got. `Input.Owned` has no
-error channel, so a truncated snapshot and a genuine absence are the same input
-at the kernel boundary. A truncated read therefore makes `exists = false` decide
-TRUE and a plan is produced against state that exists.
-
-RDR 0007 named this A6b, marked it `Pending`, and routed it here. This RDR
-mentions RDR 0007 zero times — the obligation bound nobody.
-
-**Re-verify: none.** No existing assumption is disturbed; this is an addition.
-
-**Re-entry stage: refine.**
-
-**Direction.** Add one normative clause — a read accessor MUST return the
-complete tag set for the keys it was asked for, or take the refusal branch — plus
-an MVV scenario asserting a truncated read refuses. This closes 0007's A6b as
-this RDR's own obligation. Note also that every Prerequisite box in this RDR is
-unchecked, including "All Critical Assumptions verified"; resolve that before
-re-locking.
