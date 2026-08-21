@@ -6,9 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-12; re-verified A8 —
-  JDR 0001 §D3's read-completeness clause carried its own exactness claim and is
-  now backed by an extended Resolve spike; A1-A7 carried forward Verified]
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, and write read-back) governing authoritative artifact mutation.
 - **Priority**: High
@@ -201,49 +199,6 @@ accessor safety contract and reuses existing CLI failure plumbing later.
     caller must treat every write refusal as possibly-applied (widening the
     recovery burden) or the RDR must claim transactional semantics it has
     explicitly declined in Alternative 4.
-
-**Method vocabulary** (pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
 
 ## Proposed Solution
 
@@ -965,99 +920,7 @@ transition boundaries, not inside graph-wide lint loops.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
-### Contradiction Check
-
-No contradictions remain between research findings, design principles, and the
-proposed solution. The prior-art callback model is cited only as a contrast; the
-selected design remains data-declared accessors with typed capabilities and
-refusals. The read-accessor clause previously allowed a partial read to take the
-typed-values branch, which contradicted this RDR's own rule that an indeterminate
-result is a refusal rather than a guess; read completeness is now normative, so
-the read and gate clauses state the same rule at both layers.
-
-### Assumption Verification
-
-Critical Assumptions A1-A8 are verified. A1 and A2 are backed by the Resolve
-spike and transcript under
-`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/`; A3 is backed
-by the existing `clierr.CLIError`, `clierr.ExitCodeFor`, and `respond.Fail`
-source; A4 is backed by MVV Scenario 4 and the spike replay transcript; A5 is
-the explicit scoping decision that credentials and remote resource lifecycle
-remain outside intrastate; A6 is backed by the same Resolve spike's
-definition-validation harness and transcript; A7 is backed by the same spike's
-collateral-mutation read-back mismatch case, which is also what carries A2's
-non-owned-tag half; A8 is backed by that spike's three read dispositions —
-complete, unreadable-key refusal, and genuine absence as a value — and grounded
-against `internal/resolve/resolve.go::Input.Owned` and
-`internal/resolve/resolve.go::missingOwned`, which together show the distinction
-dies at the seam type before the kernel runs. None of the verified evidence cites
-this RDR or its artifact directory as self-proof.
-
-A9 and A10 are **Pending — DOWNGRADED at Stage 6** and are the assumptions this
-RDR carries unverified into lock. The downgrade is explicit: each names the MVV
-scenario that will run during implementation, and neither is MVV-critical in the
-sense the no-defer rule guards — both are properties the MVV *proves*, not
-fixtures or external behavior it *consumes*. A9 books the four rules the pre-lock persona pass added to close the
-absence half of read completeness — seam omission, a validated requested-key set,
-timeout precedence, and `read_back_incomplete` — none of which the Resolve spike
-witnesses; the four are independent and retire per-rule. A10 books the
-post-mutation reporting rule the critique pass added: a write refusal raised
-after the command ran must read as "may have been applied, unverified" without
-the accessor compensating. Both use the MVV rather than a spike extension because
-each binds at the accessor→resolver boundary the implementation builds, and the
-existing fixture double cannot exercise a real binding's classification — its
-`write` re-reads by cloning the tag map, so its re-read cannot fail independently
-of the write.
-
-### Scope Verification
-
-The MVV is in scope: a fixture flow with read, gate, and write accessors must
-prove success, timeout, gate denied, gate-indeterminate, execution failure,
-incomplete read, capability mismatch, unsafe definition validation, write
-read-back mismatch, and `read_back_incomplete` dispositions, plus the A9
-boundary cases (an absent required key carried through to the resolver as
-`owned_state_unavailable`, and a timed-out partial read classified as `timeout`)
-and A10's post-mutation case. The implementation tests
-must include the named replay scenario and the no-direct-output CLI mapping
-scenario.
-
-### Cross-Cutting Concerns
-
-- **Secret/credential lifecycle**: intrastate does not own credentials or remote
-  resource lifecycle; external API accessors receive caller-provided
-  environment and return typed success/refusal only.
-- **Concurrency model**: every invocation is context-bound and has a declared
-  timeout; write accessors verify effects through same-role read-back rather
-  than relying on fire-and-forget mutation.
-- **Determinism**: the RDR claims stable replay disposition, not byte-identical
-  output or replay-stable hashes. A4 and the MVV replay scenario must verify
-  that identical model inputs and fixture artifacts produce the same success or
-  typed refusal.
-
-### Proportionality
-
-This RDR is right-sized by contract count. It owns one load-bearing contract:
-accessor execution safety for declared read, gate, and write accessors,
-including refusal classes, timeout behavior, and write read-back verification.
-Read completeness is part of that same contract — it is the success predicate of
-the read capability, not a separate obligation — so carrying it here does not
-widen the RDR. The same holds for what the success branch hands across the seam:
-naming the resolver-visible encoding of an absent key is what makes the branch
-rule mean anything, and it constrains this RDR's own output rather than
-reopening RDR 0001's `Input` shape, which is unchanged. RDR 0002 owns the table carrier, RDR 0003 owns predicate
-semantics, and RDR 0005 owns the user-facing CLI mapping. The `large` Profile is retained because this
-contract governs authoritative artifact mutation.
+Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 2026-08-21)
 
 ## References
 
