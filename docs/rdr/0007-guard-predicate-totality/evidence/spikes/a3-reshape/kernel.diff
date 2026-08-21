@@ -1,0 +1,165 @@
+--- /Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/resolve.go	2026-08-11 15:14:38
++++ /private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/internal/resolve/resolve.go	2026-08-21 16:01:10
+@@ -86,11 +86,24 @@
+ 	GuardUnevaluable
+ )
+ 
++// GuardAtom is one parsed guard predicate atom. RDR 0002 owns parsing;
++// the kernel consumes the parsed shape. Block groups atoms that share a
++// presence obligation.
++type GuardAtom struct {
++	Key     string
++	Op      string
++	Literal string
++	Block   string
++}
++
+ // GuardEvaluator is the delegated guard-evaluation seam owned by RDR
+-// 0003. The kernel calls it; it does not implement operator semantics.
++// 0003, narrowed to a per-atom VALUE comparison. Presence, existence, and
++// combination are kernel-owned; the seam only decides one atom against one
++// present value.
+ type GuardEvaluator interface {
+-	// Evaluate decides guard over the assembled tag-set view.
+-	Evaluate(guard string, view TagSet) GuardResult
++	// EvaluateAtom decides atom against the value bound to atom.Key. The
++	// kernel only calls it when the key is present in the view.
++	EvaluateAtom(atom GuardAtom, value string, view TagSet) GuardResult
+ }
+ 
+ // TagSet is the assembled evaluation view: owned, observed, and freshly
+@@ -180,9 +193,9 @@
+ 	// RequiresOwned names owned tag keys the row's evaluation needs.
+ 	// A key absent from the owned snapshot yields owned_state_unavailable.
+ 	RequiresOwned []string
+-	// Guard is the predicate handed to the guard seam. Empty means no
+-	// guard.
+-	Guard string
++	// Guard is the parsed predicate: a conjunction of atoms handed one at
++	// a time to the guard seam. Empty means no guard.
++	Guard []GuardAtom
+ 
+ 	// NextTags is the next state the row transitions to.
+ 	NextTags []Tag
+@@ -267,9 +280,11 @@
+ 	// MissingOwned names owned tag keys absent from the snapshot, on
+ 	// owned_state_unavailable.
+ 	MissingOwned []string
+-	// Guard names the predicate the seam could not decide, on
+-	// guard_unevaluable.
+-	Guard string
++	// Guard names the parsed atoms of the predicate the kernel could not
++	// decide, on guard_unevaluable.
++	Guard []GuardAtom
++	// UndecidedAtoms names the specific atoms that were undecided, sorted.
++	UndecidedAtoms []GuardAtom
+ }
+ 
+ // RowRef is the source identity of one implicated table row.
+@@ -410,9 +425,10 @@
+ 			return compareRefs(refOf(a), refOf(b))
+ 		})
+ 		return nil, &Refusal{
+-			Kind:  KindGuardUnevaluable,
+-			Guard: lowest.Guard,
+-			Rows:  rowRefs(undecidable),
++			Kind:           KindGuardUnevaluable,
++			Guard:          copyAtoms(lowest.Guard),
++			UndecidedAtoms: undecidedAtoms(lowest.Guard, seam, view),
++			Rows:           rowRefs(undecidable),
+ 		}
+ 	}
+ 
+@@ -422,16 +438,89 @@
+ // evaluateGuard delegates the predicate to the injected seam (REQ-23). An
+ // unguarded row needs no seam; a guarded row with no seam is undecidable,
+ // never evaluated by the kernel itself.
+-func evaluateGuard(seam GuardEvaluator, guard string, view TagSet) GuardResult {
+-	if guard == "" {
++func evaluateGuard(seam GuardEvaluator, guard []GuardAtom, view TagSet) GuardResult {
++	if len(guard) == 0 {
+ 		return GuardTrue
+ 	}
+ 	if seam == nil {
+ 		return GuardUnevaluable
+ 	}
+-	return seam.Evaluate(guard, view)
++
++	// Strong-Kleene conjunction: any decided FALSE makes the whole
++	// predicate FALSE even if a sibling atom is undecided; otherwise a
++	// single undecided atom makes the predicate undecidable.
++	result := GuardTrue
++	for _, atom := range guard {
++		switch evaluateAtom(seam, atom, view) {
++		case GuardFalse:
++			return GuardFalse
++		case GuardUnevaluable:
++			result = GuardUnevaluable
++		case GuardTrue:
++			// keep going
++		}
++	}
++	return result
+ }
+ 
++// evaluateAtom applies the kernel-owned presence/existence step before
++// delegating the value comparison to the seam. An atom naming a key the
++// view does not carry is decided by the kernel, never by the seam.
++func evaluateAtom(seam GuardEvaluator, atom GuardAtom, view TagSet) GuardResult {
++	value, _, ok := view.Lookup(atom.Key)
++	if !ok {
++		// Presence: an existence atom over an absent key is decided FALSE;
++		// any other atom over an absent key is undecidable.
++		if atom.Op == OpExists {
++			return GuardFalse
++		}
++		return GuardUnevaluable
++	}
++	if atom.Op == OpExists {
++		return GuardTrue
++	}
++	return seam.EvaluateAtom(atom, value, view)
++}
++
++// OpExists is the kernel-decided presence operator.
++const OpExists = "exists"
++
++// undecidedAtoms reports the atoms of guard the kernel could not decide,
++// sorted by key then op then literal so the payload is a function of the
++// tuple rather than of atom order.
++func undecidedAtoms(guard []GuardAtom, seam GuardEvaluator, view TagSet) []GuardAtom {
++	var out []GuardAtom
++	for _, atom := range guard {
++		if seam == nil || evaluateAtom(seam, atom, view) == GuardUnevaluable {
++			out = append(out, atom)
++		}
++	}
++	slices.SortFunc(out, compareAtoms)
++	return out
++}
++
++func compareAtoms(a, b GuardAtom) int {
++	if c := strings.Compare(a.Key, b.Key); c != 0 {
++		return c
++	}
++	if c := strings.Compare(a.Op, b.Op); c != 0 {
++		return c
++	}
++	if c := strings.Compare(a.Literal, b.Literal); c != 0 {
++		return c
++	}
++	return strings.Compare(a.Block, b.Block)
++}
++
++func copyAtoms(in []GuardAtom) []GuardAtom {
++	if in == nil {
++		return nil
++	}
++	out := make([]GuardAtom, len(in))
++	copy(out, in)
++	return out
++}
++
+ // missingOwned returns the owned tag keys any candidate requires that the
+ // accessor-produced snapshot does not carry, sorted by key.
+ //

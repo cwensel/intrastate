@@ -1,0 +1,139 @@
+--- /Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/adversarial_test.go	2026-08-11 15:14:55
++++ /private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/internal/resolve/adversarial_test.go	2026-08-21 16:01:37
+@@ -60,7 +60,7 @@
+ 				Outcome:       "successful",
+ 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+ 				RequiresOwned: []string{"status"},
+-				Guard:         "always",
++				Guard:         guardAtoms("always"),
+ 				NextTags:      []resolve.Tag{{Key: "status", Value: "Final"}},
+ 				Writes:        []resolve.Tag{{Key: "status", Value: "Final"}},
+ 			},
+@@ -70,7 +70,7 @@
+ 				Outcome:       "successful",
+ 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+ 				RequiresOwned: []string{"never-present"},
+-				Guard:         "never",
++				Guard:         guardAtoms("never"),
+ 				NextTags:      []resolve.Tag{{Key: "status", Value: "Abandoned"}},
+ 			},
+ 		},
+@@ -122,7 +122,7 @@
+ 				Outcome:       "successful",
+ 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+ 				RequiresOwned: []string{"never-present"},
+-				Guard:         "never",
++				Guard:         guardAtoms("never"),
+ 				NextTags:      []resolve.Tag{{Key: "status", Value: "Abandoned"}},
+ 			},
+ 			escapeRow("rdr.escape.nomatch", "flows/rdr.toml:90", resolve.KindNoMatch),
+@@ -169,7 +169,7 @@
+ func TestAdv2_EscapeEdgeMustNotBypassTheGuardSeam(t *testing.T) {
+ 	t.Run("guard FALSE must not rescue", func(t *testing.T) {
+ 		escape := escapeRow("rdr.escape.guarded", "flows/rdr.toml:90", resolve.KindNoMatch)
+-		escape.Guard = "never"
++		escape.Guard = guardAtoms("never")
+ 
+ 		in := noMatchInput()
+ 		in.Table.Revision = "rev-adv-2-false"
+@@ -191,7 +191,7 @@
+ 
+ 	t.Run("guard UNEVALUABLE must not rescue", func(t *testing.T) {
+ 		escape := escapeRow("rdr.escape.guarded", "flows/rdr.toml:90", resolve.KindNoMatch)
+-		escape.Guard = "unknown-predicate"
++		escape.Guard = guardAtoms("unknown-predicate")
+ 
+ 		in := noMatchInput()
+ 		in.Table.Revision = "rev-adv-2-unevaluable"
+@@ -270,7 +270,7 @@
+ 		Outcome:       "successful",
+ 		Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+ 		RequiresOwned: []string{"status"},
+-		Guard:         "unknown-a",
++		Guard:         guardAtoms("unknown-a"),
+ 		NextTags:      []resolve.Tag{{Key: "status", Value: "A"}},
+ 	}
+ 	rowB := resolve.Row{
+@@ -279,7 +279,7 @@
+ 		Outcome:       "successful",
+ 		Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+ 		RequiresOwned: []string{"status"},
+-		Guard:         "unknown-b",
++		Guard:         guardAtoms("unknown-b"),
+ 		NextTags:      []resolve.Tag{{Key: "status", Value: "B"}},
+ 	}
+ 
+--- /Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/fixup_test.go	2026-08-11 15:14:55
++++ /private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/internal/resolve/fixup_test.go	2026-08-21 16:01:37
+@@ -41,7 +41,7 @@
+ // on the one path where no ordinary edge was available to check it.
+ func TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue(t *testing.T) {
+ 	escape := escapeRow("rdr.escape.nilseam", "flows/rdr.toml:90", resolve.KindNoMatch)
+-	escape.Guard = "iterations >= 3"
++	escape.Guard = guardAtoms("iterations >= 3")
+ 
+ 	in := noMatchInput()
+ 	in.Table.Revision = "rev-fixup-1d"
+@@ -61,8 +61,8 @@
+ 			"let the escape edge through unevaluated",
+ 			got.Refusal.Kind, resolve.KindGuardUnevaluable)
+ 	}
+-	if got.Refusal.Guard != escape.Guard {
+-		t.Errorf("refusal names guard %q; want %q for diagnosis",
++	if !reflect.DeepEqual(got.Refusal.Guard, escape.Guard) {
++		t.Errorf("refusal names guard %v; want %v for diagnosis",
+ 			got.Refusal.Guard, escape.Guard)
+ 	}
+ }
+@@ -77,7 +77,7 @@
+ func TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate(t *testing.T) {
+ 	t.Run("guard FALSE must not rescue an ambiguity", func(t *testing.T) {
+ 		escape := escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99", resolve.KindAmbiguousMatch)
+-		escape.Guard = "never"
++		escape.Guard = guardAtoms("never")
+ 
+ 		in := ambiguousInput()
+ 		in.Table.Revision = "rev-fixup-1e-false"
+@@ -123,7 +123,7 @@
+ 	t.Run("a viable ambiguous-class escape still rescues", func(t *testing.T) {
+ 		// Control: the gate must prune and refuse, not disable the rescue.
+ 		escape := escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99", resolve.KindAmbiguousMatch)
+-		escape.Guard = "always"
++		escape.Guard = guardAtoms("always")
+ 
+ 		in := ambiguousInput()
+ 		in.Table.Revision = "rev-fixup-1e-control"
+@@ -258,12 +258,12 @@
+ 			want:   resolve.KindOwnedStateUnavailable,
+ 		},
+ 		"undecidable guard": {
+-			mutate: func(row *resolve.Row) { row.Guard = "unknown-predicate" },
++			mutate: func(row *resolve.Row) { row.Guard = guardAtoms("unknown-predicate") },
+ 			guards: fixtureGuards{},
+ 			want:   resolve.KindGuardUnevaluable,
+ 		},
+ 		"absent guard seam": {
+-			mutate: func(row *resolve.Row) { row.Guard = "any-predicate" },
++			mutate: func(row *resolve.Row) { row.Guard = guardAtoms("any-predicate") },
+ 			guards: nil,
+ 			want:   resolve.KindGuardUnevaluable,
+ 		},
+--- /Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/resolve_test.go	2026-08-09 11:02:46
++++ /private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/internal/resolve/resolve_test.go	2026-08-21 16:02:06
+@@ -13,6 +13,7 @@
+ // value; the error return is reserved for programmer mistakes.
+ func mustResolve(t *testing.T, in resolve.Input) resolve.Result {
+ 	t.Helper()
++	in.Observed = append(guardObserved(in.Table.Rows), in.Observed...)
+ 	got, err := resolve.Resolve(in)
+ 	if err != nil {
+ 		t.Fatalf("Resolve returned a Go error for a modeled disposition: %v", err)
+@@ -1088,7 +1089,7 @@
+ 		if r.Kind != resolve.KindGuardUnevaluable {
+ 			t.Errorf("refusal kind = %q; want %q", r.Kind, resolve.KindGuardUnevaluable)
+ 		}
+-		if r.Guard == "" {
++		if len(r.Guard) == 0 {
+ 			t.Error("refusal names no undecidable guard for diagnosis")
+ 		}
+ 	})

@@ -1,0 +1,84 @@
+package resolve_test
+
+import (
+	"testing"
+
+	"github.com/newcoinc/intrastate/internal/resolve"
+)
+
+// SPIKE-ONLY probe (not part of the frozen suite): the frozen tests all use
+// single-atom guards, so they cannot observe combination. This pins the two
+// properties A3's "presence + strong-Kleene combination" claim adds.
+func TestSpikeStrongKleeneAndPresence(t *testing.T) {
+	base := func(guard []resolve.GuardAtom, observed []resolve.Tag, seam resolve.GuardEvaluator) resolve.Input {
+		return resolve.Input{
+			Flow: "rdr",
+			Table: resolve.Table{
+				Revision: "rev-spike",
+				Outcomes: []string{"successful"},
+				Rows: []resolve.Row{{
+					RuleID: "r", SourceLocator: "l:1", Outcome: "successful",
+					Match: []resolve.Tag{{Key: "status", Value: "Draft"}},
+					Guard: guard,
+				}},
+			},
+			Owned:      []resolve.Tag{{Key: "status", Value: "Draft"}},
+			Observed:   observed,
+			Recognized: "successful",
+			Guards:     seam,
+		}
+	}
+	seam := fixtureGuards{decided: map[string]bool{"yes": true, "no": false}}
+	bind := []resolve.Tag{{Key: "guard.yes", Value: "hold"}, {Key: "guard.no", Value: "hold"}}
+
+	t.Run("FALSE dominates an undecided sibling", func(t *testing.T) {
+		// atom "no" is FALSE; atom "unknown" is undecided (seam has no entry).
+		g := append(guardAtoms("no"), resolve.GuardAtom{Key: "guard.unknown", Op: "==", Literal: "hold", Block: "unknown"})
+		obs := append(append([]resolve.Tag{}, bind...), resolve.Tag{Key: "guard.unknown", Value: "hold"})
+		got, err := resolve.Resolve(base(g, obs, seam))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// FALSE dominance => row pruned => no_match, NOT guard_unevaluable.
+		if got.Refusal == nil || got.Refusal.Kind != resolve.KindNoMatch {
+			t.Fatalf("got %+v; want no_match — a decided-FALSE atom must prune the row "+
+				"even beside an undecided sibling", got.Refusal)
+		}
+	})
+
+	t.Run("undecided with all-TRUE siblings is undecidable", func(t *testing.T) {
+		g := append(guardAtoms("yes"), resolve.GuardAtom{Key: "guard.unknown", Op: "==", Literal: "hold", Block: "unknown"})
+		obs := append(append([]resolve.Tag{}, bind...), resolve.Tag{Key: "guard.unknown", Value: "hold"})
+		got, _ := resolve.Resolve(base(g, obs, seam))
+		if got.Refusal == nil || got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Fatalf("got %+v; want guard_unevaluable", got.Refusal)
+		}
+		if len(got.Refusal.UndecidedAtoms) != 1 || got.Refusal.UndecidedAtoms[0].Block != "unknown" {
+			t.Errorf("UndecidedAtoms = %v; want just the unknown atom", got.Refusal.UndecidedAtoms)
+		}
+	})
+
+	t.Run("all TRUE conjunction selects the row", func(t *testing.T) {
+		got, _ := resolve.Resolve(base(guardAtoms("yes", "yes"), bind, seam))
+		if got.Plan == nil {
+			t.Fatalf("got refusal %+v; want a plan", got.Refusal)
+		}
+	})
+
+	t.Run("presence: absent key is kernel-decided, seam never consulted", func(t *testing.T) {
+		// no Observed binding at all -> guard.yes absent from the view.
+		got, _ := resolve.Resolve(base(guardAtoms("yes"), nil, seam))
+		if got.Refusal == nil || got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Fatalf("got %+v; want guard_unevaluable for an absent guard key", got.Refusal)
+		}
+	})
+
+	t.Run("presence: exists atom over an absent key is FALSE, not undecidable", func(t *testing.T) {
+		g := []resolve.GuardAtom{{Key: "guard.missing", Op: resolve.OpExists}}
+		got, _ := resolve.Resolve(base(g, nil, seam))
+		if got.Refusal == nil || got.Refusal.Kind != resolve.KindNoMatch {
+			t.Fatalf("got %+v; want no_match — an exists atom over an absent key "+
+				"is DECIDED false, so the row is pruned", got.Refusal)
+		}
+	})
+}
