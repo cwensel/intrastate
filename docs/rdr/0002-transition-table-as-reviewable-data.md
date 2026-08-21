@@ -441,7 +441,7 @@ outcome.eq = "round-clean"
 
 ### Decision Rationale
 
-Joint-check: fired → 0007 (home: OPEN) — RDR 0007's re-propose (2026-08-21) places guard-domain enforcement in the kernel: a value-only per-atom `GuardEvaluator` seam, an existence operator token and boolean literal forms exported by the kernel that the normalizer MUST emit, exact key identity at the kernel, and a per-atom `guard_unevaluable` payload replacing `Refusal.Guard`. JDR 0001 §D1 homes the atom transport only; the enforcement site and seam shape await a home (JDR 0001 §D4, or the interface declared in both RDRs).
+Joint-check: fired → 0007 (home: JDR 0001 §D4 / §JD-12) — RDR 0007's re-propose (2026-08-21) places guard-domain enforcement in the kernel; §D4 settles the value-only per-atom `GuardEvaluator` seam, the kernel-exported existence operator token and boolean literal forms the normalizer MUST emit, exact key identity at the kernel, and the per-atom `guard_unevaluable` payload replacing `Refusal.Guard`. 0007 is the landing document; this RDR cites §D4 rather than restating it.
 
 Sparse TOML is the best fit because the source is meant to be reviewed and
 edited by humans, while the expanded table is a mechanical view for lint,

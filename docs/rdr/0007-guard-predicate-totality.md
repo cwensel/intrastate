@@ -1065,19 +1065,17 @@ Ground-sweep: clean (24 anchors) — 15 code anchors
 passages; two cosmetic wording notes fixed inline (JD-3
 phrasing; C3 blockquote wrap).
 
-Joint-check: fired → 0003, 0002 (home: OPEN), 0009 (home:
-OPEN), 0008, 0004 (home: JDR 0001 §D1). Context beside the
-fire: JDR 0001 §D1 settles the *transport* (atoms on `Row`,
-the seam change 0008/0004 cite as shipped code) but not the
-*enforcement site* — the value-only per-atom seam, the kernel
-holding the existence token and literal constants that RDR
-0002's normalizer must emit (A16), exact key identity (A22),
-and the per-atom refusal payload that removes `Refusal.Guard`
-(which Final RDR 0009 cites as a refusal property). Those
-need one home: hoist into JDR 0001 as a §D4 (cite-don't-
-restate), or declare the seam interface in both 0007 and
-0003. Final peers are not edited; their coupling rides to
-7.1. Absence arm: n/a (no refusal is converted to an
+Joint-check: fired → 0003, 0002, 0009 (home: JDR 0001 §D4 /
+§JD-12), 0008, 0004 (home: JDR 0001 §D1). Context beside the
+fire: §D1 settles the *transport* (atoms on `Row`, the seam
+change 0008/0004 cite as shipped code); §D4 — hoisted on the
+user's decision 2026-08-21 — settles the *enforcement site*:
+the value-only per-atom seam, the kernel-exported existence
+constants RDR 0002's normalizer must emit (A16), key identity
+(A22), and the per-atom payload replacing `Refusal.Guard`
+(which Final RDR 0009 cites; stale, rides to its re-lock per
+§JD-12). This RDR is §D4's landing document; 0003 and 0002
+cite. Absence arm: n/a (no refusal is converted to an
 acceptance). Bridge sub-check: n/a — no sibling plan retires
 a surface this plan introduces.
 

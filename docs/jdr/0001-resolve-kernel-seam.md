@@ -173,6 +173,49 @@ truncated read refuses — no assumption of its own is disturbed. This closes
 0007's A6b, which 0004 now carries as its own obligation rather than receiving
 it by reference from an RDR it never cites.*
 
+## D4 — Who enforces the guard domain once the row carries atoms?
+
+§D1 put parsed atoms on the row and said the kernel "carries *cardinality*,
+not *meaning*." That left one question open: 0007's domain rule — an atom over
+an absent key is unevaluable, never false — can now be applied by the kernel,
+which sees every atom's key, or left to 0003's evaluator as before. The prior
+0007 Final held it in the evaluator plus a conformance harness and recorded the
+residual as UNMITIGATED: nothing compels 0003's build to run the harness.
+
+- **(a) Evaluator-enforced.** Row-level seam `Evaluate(atoms, view)`; the
+  evaluator decides presence and combines verdicts. Kernel stays
+  grammar-blind. The domain rule is held by discipline; drift at the seam can
+  yield a plan from absence. Violates P1 conditionally.
+- **(b) Kernel-enforced — recommended.** The kernel decides presence
+  (provenance-blind), decides `exists` from presence alone, marks an
+  absent-key value atom unevaluable **without calling the evaluator**, hands
+  only present-key value atoms to a per-atom seam `Evaluate(atom, value)`,
+  and combines under strong Kleene itself. Prior art: SQL:2003 strict
+  routines — on a null argument "the function itself is not invoked." Cost:
+  the kernel learns one grammar fact (the existence operator token and its
+  two boolean literal forms), exported as constants 0002's normalizer MUST
+  emit. Drift at that boundary fails closed (unevaluable refusal or load
+  rejection), never as a masked plan.
+- **(c) Kernel evaluates every operator.** Typed kinds and domains are 0003's
+  declarations; the kernel has none. Dissolves 0003's evaluator.
+
+**Resolved: (b).** The kernel enforces the guard domain; the evaluator decides
+value comparisons over present keys and never sees the view. The
+`guard_unevaluable` refusal names what blocked the verdict per row and per
+atom — key, block, reason `absent` | `uncomparable` — replacing the
+single-valued `Refusal.Guard` text, which has no referent once guards are
+atoms; it reaches the CLI through §JD-8's `Detail`. P1 and P4 decide: the
+masking path closes by structure rather than by a harness nobody runs, and the
+refusal names the missing key.
+
+*Lands in **0007**, the single normative home of the seam, the domain rule,
+and the payload. **0003** cites it: its evaluator's scope narrows to value
+semantics over a present value, and its placement MUST is read against
+`exists = false` there. **0002** cites it: the normalizer emits the kernel's
+existence constants and canonicalizes key spellings before a row exists.
+**0009** (Final) cites `Refusal.Guard` as a refusal property; that citation is
+stale under this decision and rides to 0009's re-lock — see JD-12.*
+
 ---
 
 ## Interface record
@@ -228,6 +271,14 @@ not a negotiation.
   with no outcome in flight), which decides whether an empty-outcome row is
   satisfiable, dead, or a lint error. No normalizer exists yet to observe it.
   *(0008×0002 F1/F2/F3, 0008×0009 F3)*
+
+- **JD-12 Guard enforcement site.** **Closed by §D4** — the kernel enforces
+  presence, `exists`, and combination; the evaluator seam is per-atom over a
+  present value; the normalizer emits the kernel's existence constants; the
+  refusal payload is per-atom and replaces `Refusal.Guard`. 0009's citation of
+  `Refusal.Guard` as a refusal property is stale and is corrected at its
+  re-lock; entry kept so the anchor never dangles. *(0007×0003 F1/F2 residue,
+  0007×0002 normalizer obligation, 0007×0009 `Refusal.Guard`)*
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve
