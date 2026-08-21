@@ -148,7 +148,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   different branches.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` resolves reads against an explicit requested key set, returning `incomplete_read` when any requested key is unreadable and `<absent>` as a value when the artifact legitimately lacks it (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::read`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::absentValue`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newArtifacts`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newPartialArtifacts`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newSparseArtifacts`). Transcript line 11 shows a complete read, line 12 the unreadable-key refusal, line 13 the genuine-absence success carrying `profile=<absent>` (`output.txt:11-13`) — the two failure shapes are distinguishable by branch, not by inspecting a thinned value set. The kernel cannot recover the distinction downstream: `internal/resolve/resolve.go::missingOwned` decides on `internal/resolve/resolve.go::TagSet.has` (map presence) alone, so an absent and an unread owned key both become `owned_state_unavailable`, which is why the rule binds at the accessor boundary.
+  - **Evidence**: `cd docs/rdr/0004-accessor-execution-safety-model/evidence/spikes && go run .` resolves reads against an explicit requested key set, returning `incomplete_read` when any requested key is unreadable and `<absent>` as a value when the artifact legitimately lacks it (`docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::read`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::absentValue`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newArtifacts`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newPartialArtifacts`, `docs/rdr/0004-accessor-execution-safety-model/evidence/spikes/main.go::newSparseArtifacts`). Transcript line 11 shows a complete read, line 12 the unreadable-key refusal, line 13 the genuine-absence success carrying `profile=<absent>` (`output.txt:11-13`) — the two failure shapes are distinguishable by branch, not by inspecting a thinned value set. The distinction cannot survive the seam *type*, one layer above the kernel: `internal/resolve/resolve.go::Input.Owned` is `[]Tag`, and `internal/resolve/resolve.go::Tag` is a two-field Key/Value pair with no third state to carry it. Downstream, `internal/resolve/resolve.go::missingOwned` then decides on `internal/resolve/resolve.go::TagSet.has` (map presence and provenance) alone, so an absent and an unread owned key both become `owned_state_unavailable`. The rule therefore binds at the accessor boundary — it is the last layer that still holds the distinction.
   - **If wrong**: A truncated read reaches a consumer shaped like genuine
     absence, so a presence/absence predicate decides on state that was never
     read.
@@ -168,10 +168,30 @@ accessor safety contract and reuses existing CLI failure plumbing later.
     default key set from the artifact, holds absence as an in-map sentinel,
     sleeps before its key loop so timeout and truncation never overlap, and
     re-reads by cloning the tag map without going through `read`.
+  - **Note on bundling**: the four rules are independent; a refutation of one
+    does not refute the others. Verify and retire them per-rule rather than
+    flipping A9 as a unit, and split A9 if any single rule blocks.
   - **If wrong**: One of the four rules is unimplementable at a real binding and
     the contract must weaken to what the boundary can observe, most likely by
     moving the absence encoding into RDR 0001's `Input` shape (JDR 0001 §D3
     option (c)) rather than the accessor's output.
+- **A10 A write accessor's post-mutation refusals (`read_back_incomplete`, and a
+  `timeout` raised after the write command ran) can be reported such that the
+  caller can distinguish "may have been applied, unverified" from "did not
+  occur", without the accessor layer retrying, undoing, or re-deriving artifact
+  state.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: To be verified by the MVV — a write whose re-read cannot read a
+    compared key must surface a refusal carrying the applied-but-unverified
+    sense, and the test must assert the accessor performed no second write and no
+    compensating action. The Resolve spike does not witness it: its `write`
+    re-reads by cloning the tag map rather than going through `read`, so the
+    re-read cannot fail independently of the write.
+  - **If wrong**: The boundary cannot report the distinction, and either the
+    caller must treat every write refusal as possibly-applied (widening the
+    recovery burden) or the RDR must claim transactional semantics it has
+    explicitly declined in Alternative 4.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -358,6 +378,15 @@ which asserts the artifact is wrong, nor as success.
 ```
 
 ```normative
+`read_back_incomplete` and a post-mutation `timeout` are reported after the write
+command already ran. The refusal MUST be understood as "the mutation may have
+been applied and was not verified" — it MUST NOT be represented to callers as a
+write that did not occur. The accessor layer MUST NOT attempt compensation: it
+does not retry the write, does not undo it, and does not re-derive the artifact's
+state. Recovery is the caller's, and its safe move is to re-read before acting.
+```
+
+```normative
 Every accessor invocation MUST have a bounded timeout. Timeout MUST be reported
 as its own refusal class, distinct from execution failure and read-back
 mismatch.
@@ -405,7 +434,12 @@ write to stdout or stderr directly.
   decides on map presence through `internal/resolve/resolve.go::TagSet.has`. A
   sentinel value would make an absent key read as *present* and silently retire
   `owned_state_unavailable` for it — the one encoding that turns this RDR's
-  safety rule into a regression. The spike's `<absent>` string is fixture
+  safety rule into a regression. **Nothing in the type system prevents that**:
+  `Input.Owned` is `[]Tag`, so `Tag{Key: "profile", Value: "<absent>"}`
+  typechecks, and no accessor or executor package exists under `internal/` yet
+  for a compiler to check against. The prohibition is carried by this contract
+  and by MVV Scenario 6, not by a build error — which is what makes stating it
+  load-bearing rather than decorative. The spike's `<absent>` string is fixture
   shorthand, not that seam value.
 - **Read refusal granularity** — one unreadable requested key refuses the entire
   read rather than returning the keys that did resolve. This is the conservative
@@ -443,7 +477,7 @@ Witness column cites the Resolve spike transcript
 | --- | --- | --- | --- | --- |
 | All requested keys read | success | — (typed tag values) | loud (values returned) | `output.txt:11` |
 | Requested key unreadable | refusal | `incomplete_read` | loud | `output.txt:12` |
-| Requested key absent from artifact | success | — (absent value; key omitted from the owned snapshot at the seam) | loud one layer down: a row requiring the key refuses `owned_state_unavailable` naming it | `output.txt:13` (spike sentinel; the seam encoding is A9) |
+| Requested key absent from artifact | success | — (absent value; key omitted from the owned snapshot at the seam) | loud one layer down **iff** a surviving row declares the key in `Row.RequiresOwned`; otherwise `no_match`, escapable (see the note below the table) | `output.txt:13` (spike sentinel; the seam encoding is A9) |
 | Accessor exceeds its timeout | refusal | `timeout` | loud | `output.txt:5` |
 | Read times out with keys still unresolved | refusal | `timeout` (takes precedence over `incomplete_read`) | loud | not witnessed — see A9 |
 | Accessor name not bound | refusal | `unknown_accessor` | loud | `output.txt:6` |
@@ -455,13 +489,32 @@ Witness column cites the Resolve spike transcript
 | Write succeeds, owned tag differs | refusal | `read_back_mismatch` | loud | `output.txt:9` |
 | Write succeeds, non-owned tag changed | refusal | `read_back_mismatch` | loud | `output.txt:10` |
 | Write succeeds, read-back cannot read a compared key | refusal | `read_back_incomplete` | loud | not witnessed — see A9 |
+| Write command runs, then the invocation exceeds its timeout | refusal | `timeout`, carrying the applied-but-unverified sense | loud | not witnessed — see A10 |
 | Definition invalid (8 shapes) | validation failure | pre-runtime, per shape | loud | `output.txt:17-23`; the missing/empty requested-key-set arm is not witnessed — see A9 |
 
-No input class exits silently: every row either returns a value, mints a named
-refusal, or — for a genuinely-absent key — omits that key from the owned snapshot
-so the resolver refuses `owned_state_unavailable` naming it. Omission is loud one
-layer down, which is the point of the seam clause: the alternative encoding, a
-placeholder value, is the one shape that would exit this table silently.
+No input class exits silently **at this boundary**: every row either returns a
+value, mints a named refusal, or — for a genuinely-absent key — omits that key
+from the owned snapshot. Omission is loud one layer down, which is the point of
+the seam clause: the alternative encoding, a placeholder value, is the one shape
+that would exit this table silently.
+
+The absent-key row's loudness is **conditional, and the condition is not this
+RDR's to enforce**. `internal/resolve/resolve.go::missingOwned` quantifies over
+`internal/resolve/resolve.go::Row.RequiresOwned`, a per-row declaration, and only
+over rows that survived match filtering. A row that consumes the key through
+`Row.Match` or a guard string alone is dropped by
+`internal/resolve/resolve.go::TagSet.matches` (which is provenance-blind) before
+`missingOwned` runs, yielding `no_match`, which
+`internal/resolve/resolve.go::escapeOrRefuse` may rescue into a plan with
+`Escaped = true`. That is the kernel's specified behavior, asserted by
+`internal/resolve/adversarial_test.go::TestAdv1b_AllGuardsFalseIsNoMatchNotOwnedStateUnavailable`
+— not a defect to fix here. But it means this RDR's seam guarantee delivers
+`owned_state_unavailable` **only when the consuming row declares the key in
+`RequiresOwned`**, and JDR 0001 §JD-3 records that no layer is yet obliged to
+populate that field. Omitting the key is still strictly safer than a placeholder,
+which would mask the absence unconditionally; the seam clause is therefore
+necessary but not sufficient, and the remainder is tracked as a dependency below.
+
 `exit code` is out of scope here — RDR 0005 owns the CLI mapping; this
 table stops at the structured value the accessor package returns.
 
@@ -478,6 +531,7 @@ negative control that makes the pass meaningful.
 | 4 — replay stability | Fails if disposition depends on ambient state or map order, because the two identical runs are compared for equality (`replay-identical=true`) rather than for absence of error | The injected-refusal run (`output.txt:15`) — a replay that returns success unconditionally fails it |
 | 6 — absence reaches the resolver (A9) | Fails if the accessor emits an absent key as a present tag, because the assertion is on the *resolver's* disposition (`owned_state_unavailable` naming the key), not on the accessor's branch — a placeholder value makes `TagSet.has` true and the refusal never fires | A key the artifact *does* carry must resolve normally through the same path — an implementation that omits every key passes the refusal assertion vacuously |
 | 7 — timeout precedence (A9) | Fails if the executor classifies on first-unreadable-key rather than on deadline, because the fixture makes both classes true at once and asserts the name `timeout` | The truncation fixture from scenario 2, which must still return `incomplete_read` — an implementation that always reports `timeout` fails it |
+| 8 — post-mutation reporting (A10) | Fails if the boundary reports a post-mutation refusal as a write that did not occur, because the assertion is on the refusal carrying the applied-but-unverified sense *and* on the invocation count — a layer that retries or undoes shows a second write | The `read_back_mismatch` fixture, which must still assert the artifact is wrong rather than unverified — an implementation that collapses both into one "write failed" shape fails that row |
 | 5 — no package prints | Fails only by absence-of-output, which is weak. Strengthened at implementation: the accessor package test asserts the returned structured value carries the refusal class, and the no-print property is asserted by capturing stdout/stderr around the call and requiring both empty | A test that deliberately prints must fail the capture assertion; without that control this scenario passes vacuously |
 
 Scenario 5 is the one absence-of-error oracle; the named capture control is what
@@ -512,7 +566,7 @@ above.
 | 2. Invoke read accessor | read returns typed values or a typed refusal; completeness — exactly the requested keys or refuse; requested set is validated definition metadata, never derived from what resolved; one unreadable key refuses the whole read; absence crosses the seam as omission, not a placeholder value; timeout outranks incomplete read; no mutation of authoritative artifacts; bounded timeout; no direct stdout/stderr | `tags={profile=large,status=Draft}` (`output.txt:11`); `refusal=incomplete_read` (`output.txt:12`); `tags={profile=<absent>,status=Draft}` (`output.txt:13`) |
 | 3. Invoke gate accessor | gate returns allow, deny, or indeterminate; indeterminate is refusal-class, never a false allow or deny; bounded timeout | `gate=allow` (`output.txt:2`); `refusal=gate_indeterminate` (`output.txt:3`) |
 | 4. Execute planned write | write applies only planned owned-tag writes from a successful transition; never observed or recognized tags | `tags={status=Final}` (`output.txt:8`) |
-| 5. Read back the same role | re-read the *same* caller-supplied role named by the write binding; the re-read is itself subject to read completeness — an unreadable compared key is `read_back_incomplete`, not mismatch and not success; verify expected owned-tag values; verify pre-write observed/recognized values unchanged; no ambient or unrelated-role read; mismatch is a write failure | owned mismatch `expected={status=Final} observed={profile=large,status=corrupt}` (`output.txt:9`); non-owned mismatch `expected={profile=large,status=Draft} observed={profile=small,status=Final}` (`output.txt:10`) |
+| 5. Read back the same role | re-read the *same* caller-supplied role named by the write binding; the re-read is itself subject to read completeness — an unreadable compared key is `read_back_incomplete`, not mismatch and not success; a post-mutation refusal reads as applied-but-unverified, never as a write that did not occur, and the accessor performs no retry, undo, or re-derivation; verify expected owned-tag values; verify pre-write observed/recognized values unchanged; no ambient or unrelated-role read; mismatch is a write failure | owned mismatch `expected={status=Final} observed={profile=large,status=corrupt}` (`output.txt:9`); non-owned mismatch `expected={profile=large,status=Draft} observed={profile=small,status=Final}` (`output.txt:10`) |
 | 6. Return to caller | structured success/refusal values only; timeout is its own class, distinct from execution failure and read-back mismatch | distinct lines for `timeout` (`output.txt:5`), `execution_failure` (`output.txt:4`), `read_back_mismatch` (`output.txt:9`) |
 
 No CONTRADICTION row, on two pairs. The first — "a read accessor MUST return
@@ -546,6 +600,7 @@ Illustrative execution shape only:
 | Guard evaluation after binding | RDR 0003 | Pending | Accessors provide tag values; guards consume them symbolically. |
 | Stateless transition plan | RDR 0001 | Pending | Write accessors execute only a successful planned transition. |
 | Accessor capability taxonomy | This RDR | Introduced | Defines read, gate, write, and refusal classes. |
+| `Row.RequiresOwned` populated by some layer | RDR 0002 / JDR 0001 §JD-3 | **Open** | This RDR's absence-as-omission seam only reaches `owned_state_unavailable` for keys a surviving row declares in `RequiresOwned`. JD-3 records the field appears zero times in 0002, so the guarantee is currently conditional on an unclosed joint decision. Not resolvable here — 0002 owns the normalized row. |
 | CLI output mapping | Existing `respond` / `clierr`; RDR 0005 for user surface | Available / deferred | Accessor package returns values; CLI maps them later. |
 
 ### Existing Infrastructure Audit
@@ -700,6 +755,14 @@ their runtime ownership model, and it breaks the reviewable-data premise.
   **Mitigation**: Absence crosses as omission from the owned snapshot; the MVV
   carries an absent required key through to the resolver and asserts the refusal
   still fires.
+- **Risk**: A write is applied but its verification cannot run
+  (`read_back_incomplete`, or a timeout after the command mutated the artifact),
+  and the caller reads the refusal as "nothing happened", so the artifact
+  advances while the flow believes it did not.
+  **Mitigation**: The contract states the refusal means "may have been applied,
+  not verified", forbids accessor-level compensation, and puts recovery on the
+  caller via re-read. No undo is claimed — see Alternative 4 and Day 2
+  Operations.
 - **Risk**: Timeout and gate-indeterminate failures are collapsed into generic
   execution errors.
   **Mitigation**: Make them separate refusal classes and verify CLI mapping.
@@ -710,27 +773,40 @@ their runtime ownership model, and it breaks the reviewable-data premise.
 ### Failure Modes
 
 Visible failures are typed refusals: unknown accessor, capability mismatch,
-artifact unavailable, timeout, execution failure, incomplete read, gate denied,
-gate indeterminate, write attempted for a non-owned tag, read-back mismatch, and
-read-back incomplete.
-There are three silent-failure shapes, each with a mandatory guard. A write
-command
-reports success but the owned tag did not change as expected, or a non-owned tag
-changed alongside it — the read-back check covers both. A read returns fewer keys
-than requested and the shortfall reads downstream as genuine absence — the
-completeness requirement turns that into an `incomplete_read` refusal. A
-genuinely-absent key reaches the resolver as a *present* tag carrying a
-placeholder, so a key the artifact never carried reads as answered state and
-`owned_state_unavailable` never fires — the seam clause requiring absence to
-cross as omission is that guard. Diagnosis starts with the accessor identity, capability, artifact role,
+timeout, execution failure, incomplete read, gate denied, gate indeterminate,
+write attempted for a non-owned tag, read-back mismatch, and read-back
+incomplete. An unsupplied or unreadable artifact role is **not** a separate class
+— it is `execution_failure`, matching the Disposition Table. These are accessor
+refusal classes and are disjoint from the kernel's closed five-kind
+`internal/resolve/resolve.go::RefusalKinds` set, which this RDR does not extend;
+mapping accessor refusals onto CLI codes is RDR 0005's, and
+`internal/cli/clierr` today has no artifact-unavailability code to reuse.
+A silent failure is any outcome where the accessor returns a **success-shaped**
+result over state it did not establish; enumerating that class rather than
+collecting incidents is what keeps the list closed. Each shape has a mandatory
+guard. A write command reports success but the owned tag did not change as
+expected, or a non-owned tag changed alongside it — the read-back check covers
+both. A read returns fewer keys than requested and the shortfall reads downstream
+as genuine absence — the completeness requirement turns that into an
+`incomplete_read` refusal. A genuinely-absent key reaches the resolver as a
+*present* tag carrying a placeholder, so a key the artifact never carried reads
+as answered state and `owned_state_unavailable` never fires — the seam clause
+requiring absence to cross as omission is that guard.
+
+One shape is guarded but **not** fully closed by this RDR: a key omitted at the
+seam is loud only where a surviving row declares it in `Row.RequiresOwned` (see
+the note under the Disposition Table). Omission remains strictly safer than a
+placeholder, but the residual is a cross-RDR obligation, tracked in Capability
+Dependencies rather than claimed closed here. Diagnosis starts with the accessor identity, capability, artifact role,
 timeout, and expected versus observed tag values.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9 Pending** — the
-  seam/boundary rules the 3amigo pass added, verified by the MVV; see Assumption
+- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9 and A10 Pending** —
+  the seam/boundary rules the 3amigo pass added and the post-mutation reporting
+  rule the critique pass added, both verified by the MVV; see Assumption
   Verification)
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
@@ -747,7 +823,9 @@ denied, gate-indeterminate, execution failure, incomplete read, capability
 mismatch, unsafe definition validation, write read-back-mismatch, and
 `read_back_incomplete` dispositions, plus the two A9 boundary cases: an absent
 required key refused as `owned_state_unavailable` at the resolver, and a
-timed-out partial read classified as `timeout`. The write success test must assert the re-read owned-tag value
+timed-out partial read classified as `timeout`; plus A10's case: a write whose
+re-read cannot read a compared key surfaces the applied-but-unverified sense and
+the test asserts no second write and no compensating action occurred. The write success test must assert the re-read owned-tag value
 equals the transition plan's expected value. The read test must assert that an
 accessor which can resolve only some of the requested keys takes the refusal
 branch and is distinguishable from one whose artifact genuinely lacks those
@@ -857,6 +935,13 @@ unchanged.
    then exceeds its timeout (A9).
    **Expected**: The refusal is `timeout`, not `incomplete_read` — the two input
    classes overlap and timeout takes precedence.
+8. **Scenario**: Execute a write whose command succeeds, then make the re-read
+   fail on a key it must compare (A10).
+   **Expected**: The refusal is `read_back_incomplete` and carries the
+   applied-but-unverified sense rather than reading as a write that did not
+   occur. The test asserts the accessor issued exactly one write invocation and
+   performed no undo, retry, or re-derivation — compensation is forbidden, and
+   recovery is the caller's.
 
 ### Performance Expectations
 
@@ -904,17 +989,23 @@ definition-validation harness and transcript; A7 is backed by the same spike's
 collateral-mutation read-back mismatch case, which is also what carries A2's
 non-owned-tag half; A8 is backed by that spike's three read dispositions —
 complete, unreadable-key refusal, and genuine absence as a value — and grounded
-against `internal/resolve/resolve.go::missingOwned`, which shows the kernel
-cannot recover the distinction after the fact. None of the verified evidence cites
+against `internal/resolve/resolve.go::Input.Owned` and
+`internal/resolve/resolve.go::missingOwned`, which together show the distinction
+dies at the seam type before the kernel runs. None of the verified evidence cites
 this RDR or its artifact directory as self-proof.
 
-A9 is **Pending** and is the one assumption this RDR carries unverified into
-lock. It books the four rules the pre-lock persona pass added to close the
+A9 and A10 are **Pending** and are the assumptions this RDR carries unverified
+into lock. A9 books the four rules the pre-lock persona pass added to close the
 absence half of read completeness — seam omission, a validated requested-key set,
 timeout precedence, and `read_back_incomplete` — none of which the Resolve spike
-witnesses. Its method is the MVV rather than a spike extension because each rule
-binds at the accessor→resolver boundary the implementation builds, and the
-existing fixture double cannot exercise a real binding's classification.
+witnesses; the four are independent and retire per-rule. A10 books the
+post-mutation reporting rule the critique pass added: a write refusal raised
+after the command ran must read as "may have been applied, unverified" without
+the accessor compensating. Both use the MVV rather than a spike extension because
+each binds at the accessor→resolver boundary the implementation builds, and the
+existing fixture double cannot exercise a real binding's classification — its
+`write` re-reads by cloning the tag map, so its re-read cannot fail independently
+of the write.
 
 ### Scope Verification
 
