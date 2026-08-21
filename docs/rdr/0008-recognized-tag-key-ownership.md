@@ -83,8 +83,11 @@ instance body). -->
   surface with a name constraint on recognized-provenance
   declarations and one additional data-level validation
   category (`reserved tag key`, within its "including at
-  minimum" extensible list). Narrows nothing in either
-  peer.
+  minimum" extensible list). Narrows RDR 0002's
+  `[tags.<tag>]` naming freedom for exactly one provenance
+  value, and invalidates its three canonical fixtures; JDR
+  0001 §JD-10 rules the rename ("rename them; there are no
+  users to migrate"). Narrows nothing in RDR 0001.
 - **Seam Lineage**: `area:internal-resolve` (recognized-tag
   key identity at the RDR 0001 ↔ 0002 boundary) — no prior
   accretion.
@@ -322,17 +325,22 @@ at the same `area:internal-resolve` seam.
     unclaimed vacancy, not a collision.
   - **Scope limit — this covers the category list only**: the
     "including at minimum" fence lives in RDR 0002's
-    *validation-category* normative block (`0002…md:342-348`).
+    *validation-category* normative block (RDR 0002 ->
+    Technical Design, validation-category normative block).
     This RDR's name constraint does not land there; it
     constrains the **`[tags.<tag>]` declaration grammar**,
     which is a *separate* normative block ("The source schema
     MUST use the Resolve spike field layout: root `outcomes`,
-    `[model]`, `[tags.<tag>]`, …", `0002…md:266-274`) carrying
+    `[model]`, `[tags.<tag>]`, …" — RDR 0002 -> Technical
+    Design, source-schema normative block) carrying
     no extensibility fence of its own. So A1 licenses the new
     *category* but not the new *constraint on tag names*; that
     half is licensed by this RDR's Overrides field, which
-    states the extension explicitly and is what a Stage 7.1
-    cross-RDR read must adjudicate. The distinction matters
+    states the extension explicitly. Stage 7.1 has since
+    adjudicated it: JDR 0001 §JD-10 accepts the narrowing and
+    rules the consequent fixture rename ("rename them; there
+    are no users to migrate"), and the Overrides field now
+    states the narrowing rather than denying it. The distinction matters
     because an 0002 implementer reading 0002 alone sees a field
     layout that admits any `[tags.<name>]` and no pointer to
     this constraint — which is why Phase 2 lands the check
@@ -457,7 +465,8 @@ at the same `area:internal-resolve` seam.
     `0003-…/evidence/spikes/guard-fixture.toml:36`
     (`[tags.rewind_target]`). RDR 0002 Load-Bearing Decisions
     names these "the canonical examples implementation tests
-    must promote" (`0002…md:361`), so the rule's first
+    must promote" (RDR 0002 -> Technical Design,
+    Load-Bearing Decisions), so the rule's first
     enforcement lands on the peer's own worked examples.
   - **Migration inventory**: the three declarations above plus
     **six** reference sites across all three fixtures —
@@ -468,7 +477,8 @@ at the same `area:internal-resolve` seam.
     the match sites do: RDR 0002's grammar puts
     `[rule.match.<tag>]`, `[rule.guard.all.<tag>]`, and
     `[rule.guard.unless.<tag>]` in one tag-predicate family
-    (`0002…md:266-274`), so a renamed declaration carries every
+    (RDR 0002 -> Technical Design, tag-predicate grammar), so a
+    renamed declaration carries every
     one of them. Renaming a declaration without its guard
     reference would leave an undeclared-tag reference that
     trips RDR 0002's pre-existing `unknown tag` category — a
@@ -668,14 +678,20 @@ at the same `area:internal-resolve` seam.
     obligation in the whole RDR set constrains one reserved
     key *name*, not provenance origin: RDR 0008's 'Producers
     of kernel `Input` MUST NOT supply an owned or observed tag
-    keyed `recognized`'" (`0007…md:951-955`). 0007 draws the
+    keyed `recognized`'" (RDR 0007 -> Critical Assumptions ->
+    A13 Evidence; anchored by assumption ID, not line, since
+    bare peer line numbers are what went stale for A6/A11).
+    0007 draws the
     name/meaning line itself and places this clause on the
     name side, so no concurrence is outstanding and no
     reopening is implied.
-  - **Residual for Stage 7.1**: none for ownership. The
-    cluster read carries only the standing watch item (0007
-    A13's negative-existential, falsifiable by a *future*
-    peer).
+  - **Residual after Stage 7.1** (it has run): none for
+    ownership — the 0007x0008 pairwise recorded "No
+    duplication finding." It raised two `blocks-impl` items on
+    the *absent*-key evaluation domain instead, both routed to
+    JDR 0001 §JD-4 and open there (see Risks). Also standing:
+    the watch item on 0007 A13's negative-existential,
+    falsifiable by a *future* peer.
   - **Enforcement locus corrected at Pre-Lock (3amigo
     IMP-1)**: `RequiresOwned` has **no authored source
     form** — RDR 0002's normative field layout
@@ -818,7 +834,8 @@ at the same `area:internal-resolve` seam.
     is one-way (tag → accessor): RDR 0002 Technical Design
     declares "tag name, provenance …, value kind, and
     **optional accessor reference** for observed or owned
-    read-back" (`0002…md:215-216`), and the committed fixture
+    read-back" (RDR 0002 -> Technical Design), and the committed
+    fixture
     shows the shape — `[tags.status]` carries
     `accessor = "rdr-status"` while `[accessors.rdr-status]`
     carries only `mode` and `path`
@@ -830,13 +847,15 @@ at the same `area:internal-resolve` seam.
     same binding from its side — an accessor definition
     declares "a stable name, capability, artifact role,
     **expected tag keys**, timeout policy …"
-    (`0004…md:208-212`), its identity is
+    (RDR 0004 -> Technical Design), its identity is
     `(flow id, accessor name, capability)` — a name, never a
     data-derived key — and a read accessor "MUST return typed
-    tag values or a typed refusal" (`0004…md:257-260`): values,
+    tag values or a typed refusal" (RDR 0004 -> Technical
+    Design): values,
     not a key-space. RDR 0002's `unknown tag` category then
     rejects any key that did arrive undeclared
-    (`0002…md:341-347`). So the data channel carries no
+    (RDR 0002 -> Technical Design, validation-category normative
+    block). So the data channel carries no
     key-spelling authority; the declaration channel
     (blocks 1–3) is where every spelling is decided, and block
     4's breach is correctly a producer programmer mistake.
@@ -844,18 +863,35 @@ at the same `area:internal-resolve` seam.
     mechanical)**: RDR 0004's accessor layer is **unimplemented
     at HEAD** — `internal/` holds only `cli`, `resolve`, and
     `version`, and 0004's own audit records "Accessor executor
-    | None found under `internal/`" (`0004…md:350`). The claim
+    | None found under `internal/`" (RDR 0004 -> Existing
+    Infrastructure Audit). The claim
     therefore rests on two `Final` peer contracts plus their
     committed spikes, not on shipped code. One implementer
     note follows from that: 0004's spike `read` returns the
     whole fixture tag map unfiltered, so the "expected tag
-    keys" filter (`0004…md:208-212`) must actually be applied
+    keys" filter (RDR 0004 -> Technical Design) must actually be
+    applied
     when binding a read result into `Input.Owned` for this
     guarantee to survive implementation.
   - **Consequence for A8**: A8's literal sweep was not merely
-    incomplete for the data channel — it was sufficient, because
-    there was never a second spelling source to sweep. A8's
-    scope limit stands as written; A10 is what closes it.
+    incomplete for the data channel — it was sufficient *for
+    the accessor half*, because there was never a second
+    accessor-borne spelling source to sweep. A8's scope limit
+    stands as written; A10 closes the accessor half of it.
+  - **What A10 does NOT close** (Stage 7.1, JDR 0001 §JD-9 —
+    open): the *caller-supplied observed* half. `Input.Observed`
+    is fed by RDR 0005's planned `flow` verbs from repeated
+    `--tag name=value` flags, a channel where the **user**
+    types the key directly, so a user can spell `recognized`
+    without any accessor involved. That path is unreachable at
+    HEAD for the reason A8 gives (zero non-test callers), which
+    is exactly why it escaped both sweeps — 0005's verbs are the
+    first non-test callers and do not exist yet. Whether that
+    invocation is a user-input refusal or a producer programmer
+    mistake is JD-9's to settle, not this RDR's; see Failure
+    Modes' scope correction. Nothing above changes: the key is
+    reserved on both halves either way, and only the *channel
+    the breach is reported on* is open.
 
 - **A11 RDR 0009's `Resolve`-entry precondition and this
   RDR's compose without either RDR having to reopen: they are
@@ -981,9 +1017,12 @@ at the same `area:internal-resolve` seam.
     0002's implementation explicitly — 0002's Stage 8 run takes
     this RDR's Normative Contracts as a named input, or a
     pointer lands in 0002's own surface as a cross-RDR edit.
-    Which of the two is a cluster-level call, so the choice is
-    routed to Stage 7.1; the *obligation to do one of them* is
-    settled here and is no longer assumed away.
+    Which of the two is a cluster-level call. Stage 7.1 has
+    run and gave that choice a named home without picking a
+    form — JDR 0001 §JD-10 carries it ("No pointer from 0002
+    to 0008; handoff form undetermined"), open there. The
+    *obligation to do one of them* is settled here and is no
+    longer assumed away.
 
 - **A13 `Input.Owned` and `Input.Observed` are ordered
   sequences of key/value tags, not keyed maps, so duplicate tag
@@ -1053,8 +1092,13 @@ the model conforms to it rather than choosing it. Concretely:
    *exists and carries its guidance* at load/lint; which
    user-facing command surfaces it, and under which exit
    code, is RDR 0005's mapping decision and is not settled
-   here (charted). No new refusal kind; no kernel
-   disposition change for conforming tables.
+   here. Stage 7.1 gave that remainder a named home: JDR 0001
+   §JD-8 carries it ("`reserved_tag_key` has no CLI code or
+   exit mapping"), open there, and notes 0005's own A-block
+   pre-authorizes resolver-specific `Code` values without new
+   envelope fields or exit groups — so the mapping is expected
+   to be additive, not a reopening of this RDR. No new refusal
+   kind; no kernel disposition change for conforming tables.
 4. **Reserve the key on the input data channel too.** Lint
    sees declarations, not resolve-time data: owned/observed
    input tags arrive at the kernel as data no normalizer
@@ -1250,7 +1294,8 @@ pre-existing rule and must not be folded into the sentence
 above: once a model legally declares `[tags.recognized]` the
 name is a **known** tag, so `unknown tag` no longer fires on
 `[rule.write] recognized = …`; what rejects it is RDR 0002's
-`write to non-owned tag` category (`0002…md:346`), because a
+`write to non-owned tag` category (RDR 0002 -> Technical
+Design, validation-category normative block), because a
 recognized-provenance tag is not owned. This RDR adds no write
 -position check and depends on that category holding.
 
@@ -1272,6 +1317,24 @@ out-of-scope heuristic the Failure Modes section charts
 and says so; a reader must not read block 2 as a guarantee
 that a conforming model's outcome row fires.
 ```
+
+**Boundary against JDR 0001 §JD-10 (open).** JD-10 leaves open
+"whether a declared `recognized` tag is total (always present,
+possibly empty) or partial (absent with no outcome in
+flight)," which decides whether an empty-outcome row is
+satisfiable, dead, or a lint error. Blocks 1 and 2 do **not**
+settle it and must not be read as doing so. Block 1's "an
+absent outcome yields a view with no `recognized` key" is not
+a design choice this RDR takes — it is a *source fact* about
+implemented RDR 0001 (`internal/resolve/resolve.go::assemble`
+injects only for a non-empty `Input.Recognized`), which is the
+kernel-side input JD-10 reasons over, not its answer. Block
+2's no-lower-bound rule quantifies over whether a model
+*declares* a recognized-provenance tag at all; JD-10 asks what
+a *declared* one denotes when no outcome is in flight. Distinct
+quantifiers, distinct subjects. Whichever way JD-10 settles,
+the naming rules above are unchanged: totality bears on
+satisfiability and lint, never on which name the key may take.
 
 ```normative
 Every `reserved_tag_key` failure — and any undeclared-tag
@@ -1708,14 +1771,17 @@ P-numbers are cited inline where each cure lives.
 Joint-check: clear (7 peers). One inbound reference, not a
 dependency: RDR 0007 (`Final`) quotes this RDR's `Input`
 producer sentence in its A13 evidence
-(`0007…md:952-958`) as the last item in a five-peer sweep
+(RDR 0007 -> Critical Assumptions -> A13 Evidence) as the
+last item in a five-peer sweep
 showing *no* constraint on caller-supplied observed tags. It
 corroborates a negative-existential rather than supplying a
 premise — A13's "accepted exposure" verdict is unchanged or
 reinforced however this RDR's enforcement locus settles, and
 0007 elsewhere lists this RDR under "Related but distinct
-seams, deliberately not folded in" (`:158-163`) and
-disclaims that it owns anything 0007 depends on (`:811-815`).
+seams, deliberately not folded in" (RDR 0007 -> Context ->
+Background) and disclaims that it owns anything 0007 depends
+on (RDR 0007 -> Critical Assumptions, guard-grammar ownership
+note).
 What the reference does create: A13's claim that the RDR set
 holds exactly one input-side producer obligation is
 falsifiable by any *future* peer adding a second one — a
@@ -1874,8 +1940,21 @@ capability — the highest-cost, least-reversible branch.
   own "peers cite rather than restate" convention; it
   touches neither the post-guard write-dependency definition
   nor the provenance-blind-vs-owned-only test distinction
-  0007 pins. Reconciled at Stage 7.1; if it does encroach,
-  A7's "If wrong" downgrades it to an advisory rule.
+  0007 pins. Stage 7.1 has since cleared the encroachment
+  outright — the 0007x0008 pairwise records "No duplication
+  finding," the name/meaning split respected on both sides
+  (`docs/rdr/cluster-reconcile/0002-0009/pairwise-0007-0008.md`
+  -> "Not raised as findings"). If it nonetheless does
+  encroach, A7's "If wrong" downgrades it to an advisory rule.
+  What that pairwise raised instead is a *different* pair of
+  `blocks-impl` items, both routed to JDR 0001 §JD-4 and open
+  there: whether an absent `recognized` key makes a guard
+  unevaluable (0007's table-wide veto) or a plain no-match,
+  and whether `exists` on the reserved key is an unowned
+  outcome-gating backdoor. Neither is this RDR's to settle —
+  0007 owns the verdict for an absent key, this RDR owns only
+  whether the key is absent — and neither disturbs the name
+  reservation above. Cite JD-4; do not pre-empt it.
 - **Risk**: kernel and normalizer spellings drift (two
   constants, one contract).
   **Mitigation**: the conformance test is normatively
@@ -1916,7 +1995,8 @@ capability — the highest-cost, least-reversible branch.
   worked examples on day one — all three committed
   recognized-provenance declarations are wrong-named under it,
   and RDR 0002 designates them "the canonical examples
-  implementation tests must promote" (`0002…md:361`). The
+  implementation tests must promote" (RDR 0002 -> Technical
+  Design, Load-Bearing Decisions). The
   reserved-key rule's debut is a red test on the reference
   model (A4, first clause).
   **Mitigation**: the migration is named work, not a
@@ -1943,11 +2023,34 @@ row naming it in `RequiresOwned`, breaches the producer
 obligation and surfaces on the Go error path as a programmer
 mistake — caught by the exported `Input` predicate or by
 `Resolve` at entry (A6), never as a modeled refusal. The
-programmer-mistake channel is the right one for that breach:
-an *accessor-produced* owned key cannot introduce a spelling
-of its own (A10, Verified) — the key is always the declared
+programmer-mistake channel is the right one for that breach
+**on the accessor half of the data channel**: an
+*accessor-produced* owned key cannot introduce a spelling of
+its own (A10, Verified) — the key is always the declared
 `[tags.<tag>]` name and the artifact supplies only the value —
-so no user data is reclassified as a programmer mistake.
+so no accessor-borne user data is reclassified as a programmer
+mistake.
+
+**Scope correction (Stage 7.1, JDR 0001 §JD-9 — open).** The
+sentence above previously generalized to "no user data,"
+which A10 does not support and which Stage 7.1 falsified: A10
+closes only the accessor half, and says nothing about the
+*caller-supplied observed* half. RDR 0005's planned `flow`
+verbs feed `Input.Observed` straight from repeated
+`--tag name=value` flags, so
+`intrastate flow resolve --flow rdr --tag recognized=x` is a
+reachable **user** invocation that trips this block's producer
+precondition and would be classed a programmer mistake. A8's
+"zero non-test callers at HEAD" is why this was not caught —
+0005's verbs are the first non-test callers and do not exist
+yet. Whether a user typing the reserved key is a user-input
+refusal (0005's adjacent `flow-tag-*` codes are `GroupUserEnv`)
+or a producer programmer mistake is a cross-RDR call neither
+RDR may take alone; it is JDR 0001 §JD-9, open, and it is
+where the repair lands. Nothing in this RDR's naming rules,
+category, payload, or predicate depends on the answer — what
+depended on it was this paragraph's blast-radius claim, now
+scoped to what A10 actually proves.
 
 Silent, residual — **and not a narrow path**: an author who
 declares an *observed* tag under an innocent name (`result`,
@@ -2002,8 +2105,8 @@ pointer to this RDR.
       Without this, 0002 ships a normalizer that accepts any
       `[tags.<name>]` and the authoring-time diagnosis — the
       Problem Statement's outcome — never arrives. Which of
-      the two forms is used is a Stage 7.1 call; that one of
-      them happens is a gate here.
+      the two forms is used is owned by JDR 0001 §JD-10, open
+      there; that one of them happens is a gate here.
 
 ### Minimum Viable Validation
 
@@ -2073,10 +2176,11 @@ code path at HEAD normalizes these fixtures into a
 Not RDR 0006's graph lint, and not a competing acceptance
 rule under its "MUST NOT define different acceptance rules"
 clause: 0006 consumes "a normalized graph value, not Cobra
-command state and **not sparse TOML**" (`0006…md:244-246`),
-takes declared tags with provenance as already-valid input
-(`:251`), and leaves "table source and normalization … in RDR
-0002" (`:458-460`). Declaration-name validation is upstream
+command state and **not sparse TOML**" (RDR 0006 -> Technical
+Design), takes declared tags with provenance as already-valid
+input (same section), and leaves "table source and
+normalization … in RDR 0002" (RDR 0006 -> Decision
+Rationale). Declaration-name validation is upstream
 of 0006's input contract, in the same pre-acceptance layer
 where 0002 already homes `unknown tag`, `unknown context`,
 and `unknown accessor`.
@@ -2153,12 +2257,19 @@ declaring this RDR's problem solved**, not merely on running
 the carried tests: this RDR's Close MUST NOT claim the
 Problem Statement outcome until the carried half is green.
 Second, the implementation-ordering fact — that 0008 alone
-changes nothing an author perceives — belongs in the Stage 7.1
+changes nothing an author perceives — went to the Stage 7.1
 cluster read, because it determines whether locking 0008
-before 0002 is implemented buys anything. If cluster-reconcile
-finds it does not, the honest disposition is to hold this RDR
-at Final-unimplemented until 0002's work starts rather than
-implement a kernel predicate in isolation.
+before 0002 is implemented buys anything. That read has run
+and answered it: `docs/rdr/cluster-reconcile/0002-0009/report.md`
+returns **NOT RECONCILED** for the cluster and states plainly
+"Do not implement over these," with twelve joint decisions
+(this RDR touches JD-4, JD-5, JD-8, JD-9, JD-10) owed a
+normative home first. So the honest disposition named here is
+the operative one: hold this RDR at Final-unimplemented until
+0002's work starts and the JDs this RDR depends on close,
+rather than implement a kernel predicate in isolation. Locking
+is still correct — lock records the decision; the gate is on
+implementing, not on locking.
 
 1. **Scenario** (MVV a; A2): a table declaring a
    recognized-provenance tag named `recognized` loads, lints
