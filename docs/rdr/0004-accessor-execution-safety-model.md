@@ -157,13 +157,18 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   owned snapshot, a validated requested-key set is rejectable before execution,
   `timeout` outranks `incomplete_read` on a partial read, and a read-back re-read
   that cannot read a compared key is reportable as `read_back_incomplete`.**
-  - **Status**: Pending
+  - **Status**: Pending — DOWNGRADED at Stage 6 by explicit decision. Each of
+    the four rules is a property the MVV *proves*, not a fixture or external
+    behavior the MVV *consumes*, so the no-MVV-critical-defer rule does not
+    bind: the named scenarios below are the verification, and they cannot run
+    before the accessor executor they exercise exists.
   - **Method**: MVV Test
   - **Evidence**: To be verified by the MVV — Scenario 1's eighth validation arm
-    (missing/empty requested key set), Scenario 2's absent-required-key case
-    carried through to the resolver asserting `owned_state_unavailable`, its
-    timeout-with-unresolved-keys case asserting `timeout`, and Scenario 3's
-    read-back-with-unreadable-key case asserting `read_back_incomplete`. The
+    (missing/empty requested key set), Scenario 6's absent-required-key case
+    carried through to the resolver asserting `owned_state_unavailable`,
+    Scenario 7's timeout-with-unresolved-keys case asserting `timeout`, and
+    Scenario 3's read-back-with-unreadable-key case asserting
+    `read_back_incomplete`. The
     existing Resolve spike does not witness any of the four: it derives its
     default key set from the artifact, holds absence as an in-map sentinel,
     sleeps before its key loop so timeout and truncation never overlap, and
@@ -180,9 +185,13 @@ accessor safety contract and reuses existing CLI failure plumbing later.
   caller can distinguish "may have been applied, unverified" from "did not
   occur", without the accessor layer retrying, undoing, or re-deriving artifact
   state.**
-  - **Status**: Pending
+  - **Status**: Pending — DOWNGRADED at Stage 6 by explicit decision, on the
+    same basis as A9: the reporting sense is what MVV Scenario 8 asserts, not an
+    input it consumes, and no fixture double can exercise it — a re-read that
+    cannot fail independently of the write has nothing to report.
   - **Method**: MVV Test
-  - **Evidence**: To be verified by the MVV — a write whose re-read cannot read a
+  - **Evidence**: To be verified by the MVV — Scenario 8: a write whose re-read
+    cannot read a
     compared key must surface a refusal carrying the applied-but-unverified
     sense, and the test must assert the accessor performed no second write and no
     compensating action. The Resolve spike does not witness it: its `write`
@@ -804,9 +813,10 @@ timeout, and expected versus observed tag values.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9 and A10 Pending** —
-  the seam/boundary rules the 3amigo pass added and the post-mutation reporting
-  rule the critique pass added, both verified by the MVV; see Assumption
+- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9 and A10 Pending,
+  DOWNGRADED at Stage 6** — the seam/boundary rules the 3amigo pass added and the
+  post-mutation reporting rule the critique pass added, both carried to lock with
+  the MVV as the named implementation-time plan; see Assumption
   Verification)
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
@@ -994,8 +1004,11 @@ against `internal/resolve/resolve.go::Input.Owned` and
 dies at the seam type before the kernel runs. None of the verified evidence cites
 this RDR or its artifact directory as self-proof.
 
-A9 and A10 are **Pending** and are the assumptions this RDR carries unverified
-into lock. A9 books the four rules the pre-lock persona pass added to close the
+A9 and A10 are **Pending — DOWNGRADED at Stage 6** and are the assumptions this
+RDR carries unverified into lock. The downgrade is explicit: each names the MVV
+scenario that will run during implementation, and neither is MVV-critical in the
+sense the no-defer rule guards — both are properties the MVV *proves*, not
+fixtures or external behavior it *consumes*. A9 books the four rules the pre-lock persona pass added to close the
 absence half of read completeness — seam omission, a validated requested-key set,
 timeout precedence, and `read_back_incomplete` — none of which the Resolve spike
 witnesses; the four are independent and retire per-rule. A10 books the
@@ -1010,8 +1023,12 @@ of the write.
 ### Scope Verification
 
 The MVV is in scope: a fixture flow with read, gate, and write accessors must
-prove success, timeout, gate-indeterminate, execution failure, incomplete read,
-capability mismatch, and write read-back mismatch dispositions. The implementation tests
+prove success, timeout, gate denied, gate-indeterminate, execution failure,
+incomplete read, capability mismatch, unsafe definition validation, write
+read-back mismatch, and `read_back_incomplete` dispositions, plus the A9
+boundary cases (an absent required key carried through to the resolver as
+`owned_state_unavailable`, and a timed-out partial read classified as `timeout`)
+and A10's post-mutation case. The implementation tests
 must include the named replay scenario and the no-direct-output CLI mapping
 scenario.
 
