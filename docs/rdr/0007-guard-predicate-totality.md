@@ -312,28 +312,42 @@ existing one.
   test fixture — but leave `gate`'s prune → owned-state →
   undecidable order, `escapeOrRefuse`'s uniform gating, and
   the frozen ADV/Fixup dispositions unchanged.**
-  - **Status**: Pending — the BOUND is verified; the SHAPE
-    the spike proved is not the shape this RDR specifies.
-    The spike retained `Refusal.Guard` (retyped to
-    `[]GuardAtom`) and added `UndecidedAtoms` BESIDE it,
-    whereas the Normative Contracts and JDR 0001 §D4 both say
-    the payload REPLACES `Refusal.Guard`. Its PASS for
-    `fixup_test.go::TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`
-    depends on that retention — it re-encodes `!=` to
-    `reflect.DeepEqual` over a field that, under "replace,"
-    does not exist. Under the specified design that test must
-    be RE-DECIDED, not re-encoded, which is this assumption's
-    own "If wrong" branch. Re-verification plan (Method:
-    Spike): re-run the reshape with `Refusal.Guard` actually
-    removed and record the frozen suite's disposition for
-    that one test.
+  - **Status**: Verified — re-spiked against the SPECIFIED
+    shape (`Refusal.Guard` deleted, view-free per-atom seam,
+    explicit existence literals). The bound holds:
+    `escapeOrRefuse` has ZERO diff, `gate`'s prune →
+    owned-state → undecidable order is byte-identical,
+    `boundary_test.go` and `mvv_test.go` are untouched, and
+    the frozen suite is 154 PASS / 0 FAIL.
+    **`Fixup1d` is a RE-DECIDE, as this assumption predicted**,
+    and for a deeper reason than the deleted field: its
+    fixture guard `iterations >= 3` names a key the view does
+    not carry, so under the reshape the KERNEL decides that
+    atom unevaluable on ABSENCE (captured verbatim:
+    `Reason:absent`) and the nil seam is never consulted — the
+    property the test's NAME asserts is gone, and it would go
+    green while testing nothing about the nil seam. The SEAM
+    clause's prescribed fix (move the atom to the PRESENT key
+    `reviews`, expect `uncomparable`) restores it; Phase 1
+    carries it. Two other tests needed compile-forced
+    re-encodes only (`TestReq33` non-emptiness check;
+    `TestAdv3`'s `t.Errorf` format string).
+    Coverage gap CONFIRMED and sharpened: every frozen guard
+    is a single atom, so the frozen suite cannot specify the
+    combinator. A FALSE-vs-UNEVALUABLE dominance mutant
+    survives all 154 and is killed only by the multi-atom
+    probe — Phase 1 must add combination tests.
     Verified independently of the shape: the touch-list is
     additive beyond the five names above — the reshape also
     introduces `GuardAtom`, `evaluateAtom` (where the
     presence/existence rule lands), and
-    `undecidedAtoms`/`compareAtoms`/`copyAtoms` to keep the
-    slice-valued payload tuple-deterministic under REQ-1
-    (proposed names; none exists under `internal/` today).
+    `truthRank`/`kleeneAnd`/`kleeneNot`/`sortUndecided`/
+    `compareUndecidedAtoms` to keep the slice-valued payload
+    tuple-deterministic under REQ-1 (proposed names; none
+    exists under `internal/` today). Note the "replace" shape
+    needs NO copy helper: the payload is built fresh from the
+    verdict pass rather than echoing the row's guard slice, so
+    it cannot alias the caller's table.
     The "zero production importers" bound was a point-in-time
     fact, so it carried a re-verification trigger; the sweep
     was re-run this stage (cove iteration 2) and is still
@@ -341,11 +355,22 @@ existing one.
     the `Row` change is a free change, not a coordinated
     migration. The trigger stands for Phase 1 start.
   - **Method**: Spike
-  - **Evidence**: Spike record
-    `docs/rdr/0007-guard-predicate-totality/evidence/spikes/a3-reshape-probe.md`
-    (reshape applied to a scratchpad copy; `internal/`
-    untouched). Baseline 154 PASS / 0 FAIL; post-reshape
-    154 PASS / 0 FAIL with identical dispositions.
+  - **Evidence**: Re-spike record (AUTHORITATIVE — the
+    specified shape)
+    `docs/rdr/0007-guard-predicate-totality/evidence/spikes/a3-reshape-respike.md`,
+    with the proved kernel and probes captured under
+    `evidence/spikes/a3-reshape/respike_*.txt`. It supersedes
+    the first spike record
+    `evidence/spikes/a3-reshape-probe.md`, which proved a
+    SUPERSET shape (it kept `Refusal.Guard`, passed the view
+    to the seam, and used a literal-less existence atom) and
+    whose existence case is confirmed WRONG against this
+    draft. Both are kept: the first is the record of what the
+    re-spike had to correct.
+    (Reshape applied to a scratchpad copy; `internal/`
+    untouched, `go vet ./...` exit 0.) Baseline 154 PASS / 0
+    FAIL; post-reshape 154 PASS / 0 FAIL with identical
+    dispositions (180 PASS with the probes added).
     `escapeOrRefuse` needed ZERO changes and `gate`'s
     prune → owned-state → undecidable partition is
     byte-identical — its only hunk builds the refusal
@@ -563,10 +588,21 @@ existing one.
   load-time overlap check: either row-group scoping keeps
   the rows out of one compared product, or absence has
   standing in the declared-domain product.**
-  - **Status**: Deferred — RDR 0003 is silent on the
+  - **Status**: DOWNGRADED — RDR 0003 is silent on the
     projection, so the question is open, not refuted; an
     inherited obligation with home JDR 0001 §JD-4 (lint's
-    promise narrows).
+    promise narrows), re-confirmed open this stage (§JD-4 is
+    not among the Closed entries; its SUBSTANCE is already
+    decided — "the *promise* narrows — P5 decides" — leaving
+    open only which document records the narrowing and whether
+    lint gains a warning category).
+    Survivable, and not this RDR's to close: the projection
+    rule belongs to RDR 0003/0006, both Draft. Named plan: it
+    lands when 0003 states its existence-atom projection, and
+    rides that document's lock rather than this one. Nothing
+    in the kernel's domain rule depends on the answer — as
+    "If wrong" records, the rule survives and only the
+    AUTHORING story for the disjunction case degrades.
   - **Method**: Source Search
   - **Evidence**: RDR 0003 defines overlap over a product of
     declared finite domains and is silent on how an
@@ -730,8 +766,17 @@ existing one.
   optional envelope field on RDR 0005's failure envelope —
   the original "without a new envelope field" reading is
   refuted.**
-  - **Status**: Pending — blocked on a peer-document change,
-    not on evidence. The kernel half is Verified.
+  - **Status**: DOWNGRADED — blocked on a peer-document
+    change, not on evidence; nothing further is verifiable
+    here before lock. The kernel half is Verified.
+    Survivable, and the fallback is named and costed below:
+    if the reopening is declined, the payload flattens into
+    `Detail` exactly as §D4 originally ruled. The direction is
+    reversible EITHER way — an `omitempty` field is
+    append-only and breaks no existing consumer — so lock does
+    not foreclose the choice. Named plan: the reopening runs
+    as a Prerequisite against JDR 0001, and blocks RDR 0005's
+    JSON rendering only, not this RDR's implementation.
     **This is a REVERSAL of a closed joint decision, not an
     open question.** JDR 0001 §D4 already routed this payload:
     it "reaches the CLI through §JD-8's `Detail`" — flattened
@@ -887,9 +932,19 @@ existing one.
   0002's normalizer before a `Row` exists — so an atom's key
   and the assembled view's key agree byte-for-byte whenever
   the author meant the same tag.**
-  - **Status**: Pending — kernel half Verified; the
+  - **Status**: DOWNGRADED — kernel half Verified; the
     producer half is an UNSTATED INFERENCE against RDR 0002's
-    current text. Named plan: bind it at RDR 0002's re-lock
+    current text, re-confirmed this stage (the token
+    `canonicaliz` appears ZERO times in RDR 0002, and its
+    Refinement Context Direction list names only the
+    `RequiresOwned` producer (JD-3) and the fixture rename
+    (JD-10)). Survivable: the failure direction is CLOSED —
+    a spelling the normalizer lets through inconsistently
+    yields an unevaluable refusal, never a plan — and the
+    fallback below (narrow A22 to a kernel-side input
+    precondition, which is fully verified today) requires no
+    code change, only a change in where the obligation is
+    filed. Named plan: bind it at RDR 0002's re-lock
     as one normative clause (tag keys are canonicalized —
     naming case, namespace, whitespace — during
     normalization, so a `Row` carries only canonical keys),
@@ -932,20 +987,35 @@ existing one.
   no frozen kernel contract: no shipped test asserts `Refusal`'s
   field set exhaustively, and the closed-set pattern it copies
   (`RefusalKind`/`RefusalKinds()`) is the kernel's own.**
-  - **Status**: Pending — named by the 3amigo iteration-2 pass
-    (H-1); the names are new normative surface this RDR now
-    states, so they must be checked against the frozen suite
-    before lock rather than assumed.
+  - **Status**: Verified — closed by A3's re-spike, which
+    landed the surface with `Refusal.Guard` actually deleted.
   - **Method**: Spike (folded into A3's re-spike — the same
     reshape with `Refusal.Guard` actually removed is where
     these names land)
-  - **Evidence**: Pending. `resolve.go::Refusal` is flat
-    scalars plus `Rows []RowRef` / `MissingOwned []string`, and
-    the Existing Infrastructure Audit already records this as
-    the kernel's first two-level payload;
+  - **Evidence**: `evidence/spikes/a3-reshape-respike.md`
+    §Q-A23. `Refusal.Undecided` lands as a bare field and
+    `UndecidedRow` / `UndecidedAtom` / `Reason` / `Reasons()`
+    as new top-level surface, with NO frozen contract
+    reopened. Three grounds: (1) no test constructs a
+    `Refusal` composite literal at all (`grep 'Refusal{'` over
+    `internal/resolve/*_test.go` → zero hits), so no test can
+    break through that route; (2) all four
+    `reflect.DeepEqual`-over-`Refusal` sites
+    (`adversarial_test.go:313,375`; `fixup_test.go:200,236`)
+    are SELF-comparisons of forward vs. reversed row order —
+    structurally agnostic to the field set, and they needed
+    zero edits. They are also what would catch a
+    non-deterministic payload, so their passing is independent
+    evidence that `sortUndecided` makes `Undecided` a function
+    of the input tuple; (3)
     `resolve_test.go::TestReq7_RefusalKindSetIsExactlyTheFiveNamedKinds`
-    pins the KIND set, not the field set, so a new field is not
-    obviously frozen — that is the claim to verify.
+    PASSES UNEDITED — it pins the KIND set, and the new
+    `Reason` closed set is a separate type that never enters
+    `RefusalKinds()`. The payload is a field, not a sixth
+    kind, exactly as the Load-Bearing Decision states.
+    Only two tests needed edits and both were compile-forced
+    by the deletion, neither by `Refusal`'s shape being
+    frozen.
   - **If wrong**: a frozen test does constrain `Refusal`'s
     shape, and the payload lands as a nested type behind an
     accessor rather than a bare field.
@@ -954,26 +1024,64 @@ existing one.
   reaches the kernel as an already-typed boolean-shaped token
   the normalizer emitted, so verbatim comparison is total over
   well-formed input and every other value is `uncomparable`.**
-  - **Status**: Pending — the kernel half is a design decision
-    this RDR may make; the PRODUCER half rides on the same
-    unlanded 0002 duty as A16 and A22.
-  - **Method**: Source Search (RDR 0002 normalization; RDR
-    0003 literal typing) + Design Decision
-  - **Evidence**: Pending. Note the A3 spike's existence atom
-    is `{Key: "guard.missing", Op: resolve.OpExists}` with NO
-    `Literal` set — it decides on a zero value, which the
-    `presence == literal` rule forbids; the fail-closed clause
-    added this pass (missing literal ⇒ `uncomparable`) is
-    exactly what the re-spike must exercise.
+  - **Status**: Verified (kernel half) — closed by A3's
+    re-spike. The PRODUCER half rides on the same unlanded
+    0002 duty as A16 and A22 (Prerequisites), and fails
+    CLOSED if it never lands, which is why it does not block.
+  - **Method**: Spike (folded into A3's re-spike) + Design
+    Decision
+  - **Evidence**: `evidence/spikes/a3-reshape-respike.md`
+    §Q-A24. Verbatim comparison against the two exported
+    constants is TOTAL over well-formed input, and the kernel
+    needs no literal-parse step: implementation is
+    `switch atom.Literal` over `LiteralTrue`/`LiteralFalse`
+    with `default:` → `(GuardUnevaluable, ReasonUncomparable)`
+    — no parsing, case-folding, or coercion.
+    Both polarities asserted with an EXPLICIT literal, all
+    four PASS: `exists=true` over an absent key decides FALSE
+    (row pruned); `exists=false` over an absent key decides
+    TRUE (row selected); both present-key mirrors hold. Each
+    case also asserts the seam was NEVER consulted, per the
+    clause's "the evaluator MUST NOT be consulted for it".
+    The fail-closed leg PASSES over six cases — three literal
+    shapes (`""` zero-value, `"True"` case-drift, `"yes"`
+    foreign) × present/absent key — each yielding
+    `guard_unevaluable` with reason `uncomparable`, asserted
+    by `reflect.DeepEqual` over the full payload. Critically,
+    the absent-key/missing-literal case does NOT decide TRUE,
+    which is what treating a missing literal as `LiteralFalse`
+    would have produced. The first spike's literal-less
+    existence atom is confirmed WRONG against this draft and
+    is superseded.
   - **If wrong**: the kernel needs a literal-parse step, which
     reopens "cardinality, not meaning" wider than the one
     grammar fact §D4(b) prices.
 - **A25 RDR 0009's kernel entry precondition and this RDR's
   fixture migration can be sequenced without either reopening
   the other's frozen contracts.**
-  - **Status**: Pending — the collision is confirmed on
-    source; the sequencing is not decided. Named by the
-    critique iteration-2 dual-model pass (C-3/C-4).
+  - **Status**: DOWNGRADED — the collision is Verified on
+    source (re-confirmed this stage: `fixtures_test.go::escapeRow`
+    sets `Writes: []resolve.Tag{{Key:"status", Value:"Blocked"}}`
+    AND `RequiresOwned: []string{"status"}` beside a non-empty
+    `Escape` list, breaching 0009's predicate on both fields).
+    What stays open is only the SEQUENCING, which is a cluster
+    decision this RDR cannot settle alone — it is 0009's
+    re-lock that must order itself against this RDR's Phase 1,
+    and the Prerequisites carry it as an explicit 0009 item.
+    Named plan: settle the order at cluster-reconcile
+    (`/rdr-cluster-reconcile`) before either implementation
+    starts; whichever lands second re-runs a suite the first
+    already re-encoded, so the cost of getting it wrong is
+    rework, not a wrong contract.
+    Survivable because both migrations rewrite the SAME four
+    frozen dispositions (ADV-1b, ADV-2, Fixup-1d, Fixup-1e)
+    toward the SAME end state — an escape row with empty
+    `Writes` and empty `RequiresOwned`. Neither changes what
+    the fixtures must become; only who edits them first.
+    A3's re-spike further narrows the exposure: it migrated
+    `escapeRow` and ran all four to green without touching
+    `boundary_test.go` or `mvv_test.go`, so the migration is
+    known to be mechanical.
   - **Method**: Source Search (RDR 0009 kernel-precondition
     block; `internal/resolve/fixtures_test.go`)
   - **Evidence**: 0009 (`Final`) states "The kernel enforces
@@ -998,13 +1106,10 @@ existing one.
   `ReasonUncomparable`, `Reasons`, `Block`, `BlockAll`,
   `BlockUnless`, or `TestGuardEvaluatorContract` collides with
   a banned name.**
-  - **Status**: Pending — named by the critique iteration-2
-    pass (C-12); the last four names added by the
-    repeatability iteration-2 pass, which spelled the `Block`
-    constants, the `Reasons()` enumerator and the exported
-    contract-test function that its runs could not
-    reconstruct. Folded into A3's re-spike, which is where the
-    names first exist to be swept.
+  - **Status**: Verified — closed by A3's re-spike. All three
+    frozen boundary tests PASS against the compiled surface,
+    and no proposed name collides under EITHER matching rule
+    (see the correction below).
   - **Method**: Spike (the re-spike compiles the surface, then
     runs REQ-25/REQ-36/REQ-37)
   - **Evidence**: `internal/resolve/boundary_test.go::exportedKernelSymbols`
@@ -1016,11 +1121,31 @@ existing one.
     `::TestReq36_KernelExposesNoEncodeDecodeOrInverseOperation`,
     and `::TestReq37_KernelIntroducesNoHashOrCanonicalSerialization`
     (`Hash`, `Checksum`, `Canonicalize`, `Fingerprint`,
-    `Digest`). No proposed name contains a banned substring on
-    inspection, but the sweep is mechanical and has not been
-    run. REQ-37 also forecloses A22's fallback being
-    implemented kernel-side under any name containing
-    `Canonicalize`.
+    `Digest`). SWEEP RUN (`evidence/spikes/a3-reshape-respike.md`
+    §Q-A26): all three PASS against the compiled surface, and
+    a standalone sweep clears every one of the fourteen names
+    against the union of all three banned lists.
+    **Correction — these are EXACT-match lists, not substring
+    lists.** All three tests compare `if n == b` over
+    `exportedKernelSymbols(t)`; nothing tests containment. The
+    re-spike swept under both readings and found no collision
+    either way, so the verdict is unchanged — but the
+    consequence for A22 is weaker than previously stated: only
+    the bare name `Canonicalize` is banned, so a kernel-side
+    `CanonicalizeKey` would PASS REQ-37. That constraint on
+    A22's fallback is therefore a house-style preference, not
+    a frozen-test prohibition.
+    **Scope note.** `Undecided` is a FIELD of `Refusal`, not a
+    top-level declaration, and `exportedKernelSymbols` walks
+    top-level decls only — it never descends into struct
+    fields. The three frozen tests are structurally incapable
+    of seeing it, so its clearance rests on the standalone
+    sweep, not on REQ-25/36/37. The same holds for every field
+    name on the new payload types (`Key`, `Block`, `Operator`,
+    `Literal`, `Reason`, `Atoms`, `RuleID`, `SourceLocator`).
+    `TestGuardEvaluatorContract` is Phase 3 surface, swept as
+    a name only; it also lives in a `_test.go` file, which
+    `parseKernelPackage` filters out.
   - **If wrong**: a normative name this RDR fixes by spelling
     collides with a frozen boundary test, and Phase 1 must
     either rename the normative surface or reopen an RDR 0001
@@ -1032,15 +1157,34 @@ existing one.
   spellings RDR 0002's normalizer and RDR 0003's grammar
   already use, so fixing them here pins a shared spelling
   rather than forking one.**
-  - **Status**: Pending — named by the repeatability
-    iteration-2 pass (G-2/G-3). The kernel half is this RDR's
-    to decide and is decided; the PRODUCER half rides on the
-    same unlanded RDR 0002 duty as A16, A22 and A24. The
-    values were previously unstated, which is why three
-    independent reconstructions each guessed them.
+  - **Status**: Verified (kernel half) — the five spellings
+    are confirmed consistent with every authored surface that
+    exists today. The PRODUCER half rides on the same unlanded
+    RDR 0002 duty as A16, A22 and A24, and fails CLOSED on
+    mismatch, which is why it does not block. Named by the
+    repeatability iteration-2 pass (G-2/G-3); the values were
+    previously unstated, which is why three independent
+    reconstructions each guessed them.
   - **Method**: Source Search (RDR 0003 operator vocabulary;
     RDR 0002 normalization; any authored fixture table)
-  - **Evidence**: Pending. The contract is byte equality
+  - **Evidence**: All five values check out against the only
+    surfaces that spell them. Block names: RDR 0003 uses
+    `all` / `unless` throughout its normative text — "Positive
+    `all` predicates are conjunctive requirements. Negative
+    `unless` predicates are also conjunctive" — and RDR 0002's
+    `all`/`unless` split is the authored shape both cite.
+    Operator token: RDR 0003's operator/kind matrix names
+    `exists` ("Tests presence or absence, not value
+    equality"). Boolean literals: the only authored guard
+    table in the repo,
+    `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/guard-fixture.toml`,
+    spells `[rule.guard.all.cluster_eligible]` / `exists = true`
+    and a declared `domain = [true, false]` — lower-case,
+    matching `LiteralTrue`/`LiteralFalse` exactly, and using
+    the `all` block name in the same path. RDR 0002 contains
+    no competing spelling (it has no tag-name grammar at all —
+    see A22). So this RDR pins a shared spelling rather than
+    forking one. The contract is byte equality
     performed by the kernel with no case-folding, so a
     spelling mismatch against what 0002 emits fails closed
     (a foreign token becomes a value atom; a foreign literal
@@ -1330,6 +1474,16 @@ this RDR's narrowing invalidates: once `RequiresOwned` names
 post-guard write dependencies, the two refusals diagnose
 independent problems. The honest cost is that a row failing
 both ways surfaces the write-dependency problem first.
+Combined reporting — one refusal carrying BOTH payloads, for
+which this RDR's per-row/per-atom surface would be the
+vehicle — is REJECTED here: `Refusal.Kind` is RDR 0001's
+single stable discriminator that RDR 0005 maps to one CLI
+code, so a both-ways refusal would need either a new kind or
+a kind whose meaning depends on which payload fields are
+populated. Both reopen a frozen taxonomy (REQ-7 pins the kind
+set at exactly five) for a diagnosis the second round already
+delivers. The two-round loop is the accepted cost of keeping
+one refusal, one kind.
 Authoring docs MUST NOT repeat the superseded rationale.
 ```
 
@@ -1913,21 +2067,20 @@ ownership change JDR 0001 did not make.
       verdict rule. Until 0003 states it, lint and the kernel
       may select different row sets — JDR 0001 P5's promise
       failing in the direction that makes lint worthless.
-- [ ] A3, A16–A19, A21–A26 verified (Resolve). A16, A17,
-      A18, A21 verified 2026-08-21. A3 returned to Pending at
-      cove iteration 2 — the spike proved a superset of the
-      specified shape (it kept `Refusal.Guard`); its bound
-      and importer halves stand. A19 and A22 remain Pending
-      on the peer-document items above. A23 (the named payload
-      surface) and A24 (verbatim existence-literal comparison)
-      were added by the 3amigo iteration-2 pass; A25 (the 0009
-      fixture collision) and A26 (the exported-name sweep) by
-      the critique iteration-2 dual-model pass. A23, A24 and
-      A26 fold into A3's re-spike — the same reshape with
-      `Refusal.Guard` actually removed is where those names
-      land and where the boundary tests can run — so one spike
-      closes four. A25 is a sequencing decision, not a spike
-      result.
+- [x] A3, A16–A19, A21–A27 dispositioned (Stage 6 reconcile,
+      2026-08-21). A16, A17, A18, A21 verified 2026-08-21.
+      **A3, A23, A24, A26 VERIFIED** by one re-spike — the
+      reshape with `Refusal.Guard` actually removed
+      (`evidence/spikes/a3-reshape-respike.md`; 154/154 frozen,
+      180/180 with probes, `go vet` clean). It supersedes the
+      first spike, which proved a superset shape. **A27
+      VERIFIED** (kernel half) against RDR 0003's vocabulary
+      and the authored `guard-fixture.toml`. **A19, A22, A25
+      and A12 DOWNGRADED** — each blocked on a peer document
+      or a cluster decision, not on evidence this RDR can
+      produce; each carries a named plan and a survivable,
+      fail-closed fallback recorded at the assumption. No
+      assumption remains Pending and none is MVV-critical.
 - [ ] This RDR Final **before** RDR 0003's implementation
       begins: 0003's evaluator is built against this seam.
 
@@ -2034,22 +2187,30 @@ Every scenario is a kernel test in `internal/resolve`
 (package `resolve_test`), driven THROUGH atoms and a value
 stub — never by injecting row verdicts, which would leave
 the kernel combinator off the tested path (premortem P-20).
-The A3 spike (`evidence/spikes/a3-reshape-probe.md`)
-established the baseline this matrix extends, with one
-exception the spike did not prove. The frozen 154-test suite
-passes unchanged under the reshape the spike ran — but that
-reshape RETAINED `Refusal.Guard` (retyped) and added the
-payload beside it, whereas this RDR REPLACES the field. A3 is
-Pending on exactly that difference. Under "replace,"
+The A3 RE-SPIKE (`evidence/spikes/a3-reshape-respike.md`)
+established the baseline this matrix extends, running the
+reshape as specified — `Refusal.Guard` DELETED, the seam
+view-free, existence literals explicit. The frozen 154-test
+suite passes under it (154/154; 180/180 with the probes), so
+every row below is ADDED surface and the frozen suite is
+expected to pass re-encoded EXCEPT Fixup-1d.
 `fixup_test.go::TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue`
-must be RE-DECIDED rather than re-encoded (its assertion reads
-`Refusal.Guard`, which ceases to exist), and the SEAM clause
-above already states why its stated proposition no longer holds
-on that fixture. So: every row below is ADDED surface, and the
-frozen suite is expected to pass re-encoded EXCEPT Fixup-1d,
-whose disposition Phase 1 re-decides and records. Phase 1's
-exit condition is the re-spike's count with the field actually
-removed — not the 154 the superset spike returned.
+is RE-DECIDED, not re-encoded, and the re-spike showed the
+reason runs deeper than the deleted field: that fixture's
+guard names an ABSENT key, so the kernel decides it on
+absence (`Reason:absent`, captured verbatim) and the nil seam
+is never consulted — the test would go green while testing
+nothing about the nil seam. Phase 1 moves the atom to the
+PRESENT key `reviews` (expect `uncomparable`), per the SEAM
+clause, and records the disposition. Phase 1's exit condition
+is that count with the field actually removed — not the 154
+the superseded superset spike
+(`evidence/spikes/a3-reshape-probe.md`) returned.
+One coverage gap the re-spike PROVED rather than inferred:
+every frozen guard is a single atom, so the 154 cannot
+specify the combinator — a FALSE-vs-UNEVALUABLE dominance
+mutant survives all of them and is killed only by a
+multi-atom conjunction (row 21).
 
 **The coverage floor this matrix exists to hold.** The spike
 mutation-tested the combinator: swapping strong-Kleene
@@ -2082,7 +2243,7 @@ be re-mutation-tested against them.
 | 18 | Provenance-blindness: an atom decides identically whether its key arrived owned, observed, or recognized | A11 | `TagSet.Lookup` `ok`, not `TagSet.has` |
 | 19 | Nil seam is per-atom, not whole-guard. The DISCRIMINATING leg is the `exists` atom over a PRESENT key: shipped `evaluateGuard` returns GuardUnevaluable for any non-empty guard when `seam == nil`, whereas this rule decides it TRUE/FALSE — a nil-seam row that now yields a PLAN. This leg is REQUIRED, not optional: it is a widening of shipped behavior (previously any non-empty guard refused without a seam; now a pure-`exists` row plans and its `Writes` land), and no frozen test asserts it, so without this row a wiring bug that leaves `Input.Guards` unset ships as silent plan-production. Assert both that the plan is produced AND that a value atom over a present key still refuses under the same nil seam. (The absent-key leg is non-discriminating: unevaluable either way, though the REASON becomes `absent` rather than want-of-a-seam, and a nil seam is never itself a payload reason.) | A3, A17 | narrows shipped `evaluateGuard`'s `seam == nil` branch; Fixup-1d must be re-read (its `iterations` key is absent from the fixture view, so the kernel now decides it) |
 | 20 | Every undecidable row appears in the payload — no representative row is chosen (shipped `gate` picked one via `slices.MinFunc` to fill `Refusal.Guard`; that selection retires with the field) | A3 | `gate`'s `MinFunc` call; ADV-3 order-independence still applies to the sorted payload |
-| 21 | Combination is table-driven, NOT integer `min` over the shipped constants: assert `T ∧ U = U`. Shipped `GuardResult` declares `F, T, U` as `iota` 0,1,2, so a raw `min` returns `T` here and passes every other cell — this row is the one that catches it | A4 | the K3 clause's explicit non-`min` statement; **mutation-killing** |
+| 21 | Combination is table-driven, NOT integer `min` over the shipped constants: assert `T ∧ U = U` AND, on a MULTI-ATOM conjunction, that `F` dominates `U` (`F ∧ U = F` ⇒ the row is PRUNED, not undecidable). Shipped `GuardResult` declares `F, T, U` as `iota` 0,1,2. The re-spike mutation-tested both legs: a raw `min` is caught by the frozen suite already (`T <= U` folds even a single-atom `U` to `T`), but swapping FALSE-dominance for UNEVALUABLE-dominance **survives all 154** and is observable only across two atoms — that leg is this row's real work | A4 | the K3 clause's explicit non-`min` statement; **mutation-killing (verified: `evidence/spikes/a3-reshape-respike.md` §Q-A3)** |
 | 22 | A value atom over a PRESENT key under a NIL seam appears in the payload with reason `uncomparable` — not omitted, and not `absent`. Pairs with row 19's nil-seam legs: assert the payload entry, not just the refusal kind | A18 | the widened `uncomparable` definition (outcome, not producer); the per-atom completeness obligation |
 | 23 | `MissingOwned` is the deduplicated, sorted union across survivors: two survivor rows requiring the same absent owned key yield ONE entry, and permuting the rows yields an equal slice | A20 | shipped `missingOwned` `seen`-map + `slices.Sort`; REQ-1 purity over the whole result |
 
