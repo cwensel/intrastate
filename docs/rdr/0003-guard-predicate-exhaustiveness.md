@@ -12,7 +12,8 @@
   it names RDR 0006 and leaves the recording document open — see A8. The
   dual-model critique pass demoted A1 and A2 to `Pending` and narrowed A6 to
   provenance labels; A10–A14 are new. A11 is the parent producer gap that A7
-  and A9 hang from.]
+  and A9 hang from. The repeatability-lite pass closed A13 by stating the
+  set-literal clause and opened A15 on the cardinality bound.]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -160,7 +161,7 @@ parallel guard model.
     fixture were invented by the fixture and are not backed by RDR 0002's
     schema — reading them back as evidence would be circular. A7 and A9 book two
     *subfields* (optionality, element universe) of a domain field that is itself
-    absent; A11 books the field. The derivation: lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that vary inside that group: enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
+    absent; A11 books the field. The derivation: lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that participate in that group (every key any row's `all` or `unless` carries, whether or not it discriminates — see the participation clause in `Normative Contracts`): enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
@@ -315,7 +316,10 @@ parallel guard model.
     parent of A7 (optionality) and A9 (element universe): both book subfields of
     a field that does not exist. Verification is RDR 0002 recording a domain
     declaration — enum values, `{min..max}` bounds, and element universes — for
-    tags used in guard dimensions.
+    tags used in guard dimensions. The participation clause sizes this request:
+    it covers every key any guard atom names, not only keys that discriminate
+    within a group, so a shared non-discriminating key such as a group's common
+    `status` still needs a declared domain.
   - **Plan**: one consolidated producer request to RDR 0002 carrying A11, A7, and
     A9 together; RDR 0002 is `Draft`, so this is a live request rather than a
     route-back.
@@ -340,16 +344,20 @@ parallel guard model.
     the narrowing has no decision procedure.
 - **A13 The canonical byte spelling of a set literal is fixed by this RDR for
   both `in` and `contains`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence needed**: RDR 0007 (`docs/rdr/0007-guard-predicate-totality.md:1585-1595`)
+  - **Evidence**: RDR 0007 (`docs/rdr/0007-guard-predicate-totality.md:1585-1595`)
     assigns the canonical spelling duty to this RDR and names `in` explicitly.
     A9 books only the *element universe* for `contains`, which is a different
     thing from the literal's encoding: `in` takes a typed literal **set** and is
     already inside the spike/MVV operator subset, so the gap affects an operator
-    this RDR claims as proven, not just the deferred one.
-  - **Plan**: state the set-literal encoding as a normative clause before lock —
-    this one is owned here and needs no peer, unlike A9's producer request.
+    this RDR claims as proven, not just the deferred one. The duty is now
+    discharged: the `Normative Contracts` set-literal clause fixes the spelling
+    as an unordered, duplicate-free typed set canonicalized before it enters the
+    identity tuple, with repeated elements rejected at parse. The rejected
+    alternative is an ordered slice preserving authored order, which would make
+    `["mid","large"]` and `["large","mid"]` distinct atoms and break MVV
+    Scenario 5's reorder invariant.
   - **If wrong**: two implementations spell the same set literal differently, so
     a fixture that parses under one build fails under another, and the identity
     tuple's `literal` component is not stable across producers.
@@ -369,6 +377,28 @@ parallel guard model.
   - **If wrong**: `unless` collapses into `all` after normalization, the identity
     tuple loses a component that makes it total, and a row's excluded
     intersection can no longer be subtracted from its accepted assignments.
+- **A15 A single published cardinality bound is sufficient for the
+  too-large-to-prove refusal to be model-independent.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence needed**: the `Normative Contracts` bound clause now fixes the
+    *unit* (cardinality of the scoped product) and the *shape* (one published
+    integer constant, reported beside the computed cardinality), which is what
+    the clause's cross-implementation determinism promise requires. What is not
+    yet established is that a single scalar cardinality is the right
+    discriminator: the proof cost of a symbolic or bitset representation may
+    depend on dimension count or per-dimension width, not on cardinality alone,
+    in which case two products of equal cardinality could differ in provability
+    and the bound would not predict the verdict it gates.
+  - **Plan**: MVV Scenario 3 already lints "a declared finite product too large
+    for the deterministic proof representation" — extend it to assert the
+    refusal reports both figures, and to compare two equal-cardinality products
+    of differing shape (few wide dimensions vs. many narrow ones) for the same
+    verdict. If they diverge, the bound needs a second term and this clause is
+    restated before lock.
+  - **If wrong**: the published bound does not predict provability, so two
+    conforming implementations disagree on the same model and the
+    model-independence the clause promises is unmet.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -598,6 +628,12 @@ covered examples as complete.
 Coverage and overlap checks MUST be scoped to a normalized row group supplied by
 the transition/lint model, and MUST evaluate the participating guard dimensions
 as one product rather than as independent one-dimensional checks.
+
+A dimension **participates** in a row group when any row in that group carries
+an atom over that key, in either `all` or `unless` — not only when the rows
+constrain it differently. A key every row constrains identically still bounds
+the product and still requires a finite declared domain; it MUST NOT be dropped
+from the product because it does not discriminate.
 ```
 
 ```normative
@@ -635,6 +671,19 @@ exit code alone cannot distinguish a withheld claim from a proved one.
 > requirement with no producer, and the row-naming half is satisfiable today.
 
 ```normative
+Lint MUST report every defect it can decide in one pass over a row group, not
+the first one it encounters. Withholding a group's exhaustiveness claim MUST NOT
+suppress overlap findings, coverage findings, or further withholding reasons for
+that same group: each unprovable dimension, each refusing row, each overlapping
+pair, and any coverage gap over a provable product is its own finding. A group
+with two refusing rows MUST emit a finding for each, so the emitted set does not
+depend on row or dimension iteration order — the same source-order independence
+matching already requires. A withheld claim and a coverage or overlap finding
+MAY be emitted together; what MUST NOT be emitted is a green exhaustiveness
+result alongside any withholding reason.
+```
+
+```normative
 "Refuse" and "downgrade" are one outcome, not an author's choice: every case
 this RDR sends to refuse-or-downgrade — a non-finite dimension, a finite
 product too large to prove deterministically, and a withheld claim under the
@@ -654,6 +703,17 @@ claim merely because some assignment in the product is unreached.
 ```
 
 ```normative
+A set literal — the right-hand side of `in` and of `contains` — has one
+canonical spelling: an unordered set of typed elements, duplicate-free, and
+compared as a set. Two authored spellings differing only in element order or in
+repeated elements MUST parse to the same literal and therefore to the same atom
+under the identity tuple; a repeated element MUST be rejected at parse rather
+than silently collapsed. Implementations MUST canonicalize before the literal
+enters the identity tuple, so reordering a set literal cannot change a
+diagnostic — the source-order independence MVV Scenario 5 requires.
+```
+
+```normative
 Set-valued guard domains MUST be proved with a deterministic symbolic or
 bitset-equivalent representation. If the finite product is too large for that
 proof, lint MUST refuse or downgrade the exhaustiveness claim rather than
@@ -668,11 +728,27 @@ implementation. A bound discovered by exhausting memory or wall-clock is not a
 conforming bound. The refusal diagnostic MUST report the product size it
 computed and the bound it exceeded, so an author can tell an over-large product
 from an undeclared dimension.
+
+The quantity both figures report is the **cardinality of the scoped product** —
+the number of assignments in it, the product of every participating dimension's
+declared domain size — not a bitset width, byte size, or row count. The bound is
+a single integer constant published by the implementation and reported in the
+diagnostic beside the computed cardinality; it is not per-model, per-group, or
+configurable per run, since either would make the verdict model-dependent. Two
+conforming implementations MAY publish different bounds, but each MUST return
+the same verdict for the same model and MUST report which bound it applied.
 ```
 
 ```normative
 Overlap and coverage diagnostics MUST name the source rule id or context id
 that contributed each predicate involved in the finding.
+
+A coverage gap has no contributing predicate — it is an absence — so it is
+attributed differently: a gap finding MUST name the selection context that
+scopes the group, every source rule id in that group, and at least one concrete
+uncovered assignment from the scoped product, so the author can see which
+combination no row accepts. Naming the group without a witness assignment MUST
+NOT satisfy this clause.
 ```
 
 ```normative
@@ -712,12 +788,12 @@ unevaluable).
 | Full `unless` block decides true | Row disabled | Excluded intersection subtracted | none | Silent by design |
 | Value atom over an absent key | `guard_unevaluable` refusal (RDR 0007 veto) | Exhaustiveness claim **withheld** for that group | Runtime: RDR 0007's per-row/per-atom payload (key, block, reason `absent`). Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
 | Existence atom over an absent key | Decided (`presence == literal`) — never unevaluable | Selects `{absent}` on the presence dimension (A7) | none | — |
-| Zero rows qualify | RDR 0001 refuses | Coverage gap if the product is provable | `graph-coverage-gap` (RDR 0006) | Loud |
+| Zero rows qualify | RDR 0001 refuses | Coverage gap if the product is provable | `graph-coverage-gap` (RDR 0006), naming the selection context, every rule id in the group, and one uncovered assignment | Loud |
 | Two or more rows qualify | RDR 0001 refuses — never first-match | Overlap finding | Overlap code (RDR 0006), naming both source rule ids | Loud |
-| Guard dimension lacks a finite declared domain | Evaluable at runtime | **Refuse or downgrade** the claim — never treat examples as complete | Inability-to-prove finding | Loud |
-| Finite product too large to prove deterministically | Evaluable at runtime | **Refuse or downgrade** — never silently cap enumeration | Inability-to-prove finding | Loud |
+| Guard dimension lacks a finite declared domain | Evaluable at runtime | **Refuse or downgrade** the group's claim, one finding per unprovable dimension — never treat examples as complete, never stop at the first | Inability-to-prove finding naming the dimension | Loud |
+| Finite product too large to prove deterministically | Evaluable at runtime | **Refuse or downgrade** — never silently cap enumeration | Inability-to-prove finding reporting the computed product cardinality and the published bound | Loud |
 | Unknown operator / unknown tag / operator–kind mismatch / literal parse failure | Rejected before resolution | Rejected at load | Predicate semantic kind (this RDR) → RDR 0006 finding → RDR 0005 envelope | Loud |
-| Row group is domain-exhaustive but a participating row can refuse | Refusal stands | Claim withheld — the narrowing | RDR 0007 payload at runtime **and** a blocking lint finding naming the refusing atom — absence of a green result is not the artifact | Loud |
+| Row group is domain-exhaustive but a participating row can refuse | Refusal stands | Claim withheld — the narrowing; one finding per refusing row, never just the first | RDR 0007 payload at runtime **and** a blocking lint finding naming the refusing atom — absence of a green result is not the artifact | Loud |
 
 #### `trace` — desk trace over the MVV
 
@@ -729,13 +805,13 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | --- | --- | --- | --- |
 | 1. Load the RDR/kata slice as normalized candidate rows | atoms-not-callbacks; closed typed operator vocabulary; operator declares accepted kinds | `profile-to-grounding` parses to `profile in [mid,large]` + `unless prelock_iterations gte 3`; operators all in the matrix | OK |
 | 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
-| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`; both finite | OK |
+| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* dimension enters the product, including one every row constrains identically | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`; `status` participates too — the group's shared `status eq "Draft"` atom does not discriminate but still requires a declared domain | OK, and it is the participation clause that puts `status` in the product — under a discriminates-only reading it would silently drop out |
 | 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
 | 5. Project the `exists` atom | A7 presence dimension — **Pending** | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no element selects presence | **GAP — booked as A7, not a contradiction.** Without the presence dimension this step has no defined result. A7 is `Pending` with a plan; the draft does not claim the step succeeds. |
 | 6. Compute coverage | `union(row_i accepted) == scoped product` | Step 5 unresolved for this group; groups with no `exists` atom compute normally (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK for `exists`-free groups; blocked on A7 otherwise |
 | 7. Compute overlap | any non-empty pairwise intersection; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → rows disjoint on that dimension | OK |
 | 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 6's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
-| 9. Emit the verdict | diagnostics name the contributing source rule/context id | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row` | OK |
+| 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
 | 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | RDR 0006 carries no `guard_unevaluable` narrowing | **GAP — booked as A8.** Not a contradiction inside this draft; a divergence with a `Final` sibling that needs a §JD-4 assignment, not duplicated prose. |
 
 No CONTRADICTION row. The two GAP rows are A7 and A8, each carrying a named
@@ -1120,9 +1196,15 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   over selection contexts. Done-condition: the owned-tag clause and the "can
   refuse" clause each cite a reachability contract instead of asserting one.
   Venue: cluster reconcile.
-- [ ] **A13 closed.** Route: state the canonical set-literal spelling as a
-  normative clause. Owned here — RDR 0007 assigned this duty to this RDR. Affects
-  `in`, which is inside the claimed-proven operator subset.
+- [x] **A13 closed.** The canonical set-literal spelling is stated as a
+  normative clause: unordered, duplicate-free, canonicalized before entering the
+  identity tuple, repeats rejected at parse. Owned here — RDR 0007 assigned this
+  duty to this RDR. Affects `in`, which is inside the claimed-proven operator
+  subset.
+- [ ] **A15 closed.** Route: MVV Scenario 3 compares two equal-cardinality
+  products of differing shape for the same verdict, confirming a scalar
+  cardinality bound predicts provability. Owned here; discharged by the MVV
+  rather than a peer.
 - [ ] **A10 closed.** Route: RDR 0006 confirms the row-group division of labour
   this RDR now states. Venue: cluster reconcile, with A8 and A12.
 - [ ] **A7 closed.** Route: RDR 0002 adds a per-tag optionality declaration,
@@ -1176,7 +1258,7 @@ assumptions that block it, so no phase is picked up on document order alone:
 
 | Phase | Blocked on | Startable today |
 | --- | --- | --- |
-| 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`); A13 for set literals | Partially — the matrix, not the atom slice |
+| 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`) — A13's set-literal spelling is now stated | Partially — the matrix and the set-literal canonicalization, not the atom slice |
 | 2 Finite-Domain Lint Semantics | **A11** (no domain producer), A2, A10, A12 | No |
 | 3 Target-Flow Fixture | **A9** for `contains`, A7 for `exists`, A1's evaluation harness | No — the gating predicates are unauthorable |
 | 4 Integration With Peer RDRs | A8, A10, A12 (all cluster-reconcile items) | No |
@@ -1247,19 +1329,28 @@ before the full closed operator vocabulary is accepted.
    intentional gap visible only in the multi-dimensional product, and one
    intentional overlap visible only in the multi-dimensional product.
    **Expected**: Complete partitions pass; product-level gaps and overlaps fail
-   with source rule/context ids.
+   with source rule/context ids. The gap and the overlap are both reported from
+   one run over the group — detecting only the first is a failure. The gap
+   finding names the selection context, every rule id in the group, and one
+   concrete uncovered assignment; the overlap names both contributing rule ids.
 3. **Scenario**: Lint an otherwise valid guard over an unbounded integer or
    undeclared finite domain, and lint a declared finite product too large for
-   the deterministic proof representation.
+   the deterministic proof representation. Include a group with two separately
+   unprovable dimensions, and two equal-cardinality products of differing shape
+   (few wide dimensions vs. many narrow ones).
    **Expected**: Runtime evaluation remains available, but lint refuses or
-   downgrades the exhaustiveness claim for that dimension/product.
+   downgrades the exhaustiveness claim for that dimension/product. The
+   two-dimension group emits two findings, not one. The over-large refusal
+   reports both the computed product cardinality and the published bound. The
+   two equal-cardinality products receive the same verdict — a divergence
+   refutes A15 and the bound clause is restated before lock.
 4. **Scenario**: Parse malformed guard atoms: unknown tag, unknown operator,
    unsupported operator/tag-kind pair, and literal parse mismatch.
    **Expected**: Each failure is rejected before resolution with a predicate
    semantic kind that RDR 0006 can map to a lint finding and RDR 0005 can map to
    the structured CLI gateway.
 5. **Scenario**: Reorder authored rows and guard atoms without changing their
-   semantics.
+   semantics, including reordering the elements inside an `in` set literal.
    **Expected**: Successful matching and lint findings are unchanged because
    source order is not a selection mechanism; an ambiguous pair remains a
    multiple-match refusal instead of becoming a first-match success.
@@ -1329,9 +1420,11 @@ Each record uses an allowed Method label, carries concrete Evidence or an
 Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
-half split out as A12. Verified: A3, A4, A5, and A6 (labels). Pending: A1, A2,
-A7, A8, A9, A10, A11, A12, A13, A14 — each with a named plan. None is
-`Unverified`.
+half split out as A12. Verified: A3, A4, A5, A6 (labels), and A13. Pending: A1,
+A2, A7, A8, A9, A10, A11, A12, A14, A15 — each with a named plan. None is
+`Unverified`. The repeatability pass closed A13 by stating the set-literal
+clause it owed and opened A15 on the cardinality bound the too-large clause now
+declares.
 
 The demotions matter because this section previously reported label hygiene as
 verification: every record *had* a Method and an Evidence line, so the audit
@@ -1382,12 +1475,14 @@ field that RDR 0002 does not carry at all. A11, A7, A9, and A14 travel to RDR
 0002 as **one** producer request for four fields; RDR 0002 is `Draft`, so this
 is a live request rather than a route-back.
 
-**A10, A12, and A13 are Pending.** A10 (row-group division of labour) and A12
-(predecessor reachability) join A8 at cluster reconcile — all three are RDR 0006
-agreements this RDR cannot make unilaterally. A13 (canonical set-literal
-spelling) is owned **here**, assigned by RDR 0007, and needs no peer; it is the
-one Pending record closable on this RDR's own initiative, and it affects `in`,
-an operator inside the subset this RDR treats as proven.
+**A10 and A12 are Pending.** Both join A8 at cluster reconcile — A10 (row-group
+division of labour) and A12 (predecessor reachability) are RDR 0006 agreements
+this RDR cannot make unilaterally. A13 (canonical set-literal spelling) was the
+one record closable on this RDR's own initiative and is now `Verified`: the
+repeatability pass stated the clause RDR 0007 assigned here, which matters
+because it affects `in`, an operator inside the subset this RDR treats as
+proven. A15 (cardinality bound) replaces it as the self-owned open record, and
+is discharged by the MVV rather than a peer.
 
 ### Scope Verification
 
