@@ -871,3 +871,10 @@ invariant taxonomy are unchanged. Only contract wording and citations move.
    found this defect found the same pattern in RDR 0005 (`§JD-8`/`§JD-9`, zero
    body references) and RDR 0009 (stale `Refusal.Guard`), so check for it here
    deliberately.
+
+**Stale inbound citation (not this RDR's to fix).** RDR 0007's Predecessors
+block (`docs/rdr/0007-guard-predicate-totality.md`) describes this RDR as
+"**RDR 0006** (`Final`, tolerance §JD-4)". That is stale as of this demotion,
+and RDR 0007 is itself `Final`, so it is corrected at RDR 0007's re-lock or at
+cluster reconcile — not by an edit here. Recorded so the staleness is tracked
+rather than discovered again.

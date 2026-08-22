@@ -160,10 +160,11 @@ parallel guard model.
     `{eq,in,lt,lte,gt,gte,exists,contains}`.
   - **Scope of this record**: it establishes vocabulary *sufficiency and
     decidability* over the target-flow slice — evaluation consumes tag values,
-    not declared domains, so it is independent of the A11/A7/A9 producer gap,
-    which governs exhaustiveness (A2) rather than evaluation. The `contains`
-    cell is evaluated over a declared set **kind**; A9's element *universe*
-    remains open and is what Phase 3's acceptance gate still waits on.
+    not declared domains, so it is independent of the declaration model, which
+    governs exhaustiveness (A2) rather than evaluation. The `contains` cell is
+    evaluated over a declared set **kind**; the element *universe* the
+    exhaustiveness claim needs is a separate fact, declared by A11's model and
+    recorded by A9.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
 - **A2 Every exhaustiveness claim can be reduced to scoped finite declared
@@ -325,12 +326,13 @@ parallel guard model.
     `Final`-document constraint.
   - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** RDR
     0006 is now `Draft` and its Refinement Context Direction carries this item,
-    so the confirmation is a scheduled edit rather than a route-back. The
-    cycle this record was opened to break is already broken *in this document*:
+    so the confirmation is a scheduled edit on an open peer rather than a
+    route-back. The cycle this record was opened to break is already broken
+    *in this document*:
     the row group is defined here as rows sharing one source state and one
     recognized outcome, so this RDR no longer reads its grouping back from RDR
     0006. What remains is peer confirmation of that division of labour, which a
-    `Final` peer cannot give by edit here. Survivable because a divergence would
+    peer cannot give from inside this document. Survivable because a divergence would
     surface as a cluster-reconcile finding before either document is
     implemented, and the MVV does not consume the peer's agreement. Travels with
     A8 and A12 — same venue, same peer.
@@ -939,16 +941,18 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
 | 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* dimension enters the product, including one every row constrains identically | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`; `status` participates too — the group's shared `status eq "Draft"` atom does not discriminate but still requires a declared domain | OK, and it is the participation clause that puts `status` in the product — under a discriminates-only reading it would silently drop out |
 | 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
-| 5. Project the `exists` atom | A7 presence dimension — **Pending** | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no element selects presence | **GAP — booked as A7, not a contradiction.** Without the presence dimension this step has no defined result. A7 is `Pending` with a plan; the draft does not claim the step succeeds. |
-| 6. Compute coverage | `union(row_i accepted) == scoped product` | Step 5 unresolved for this group; groups with no `exists` atom compute normally (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK for `exists`-free groups; blocked on A7 otherwise |
+| 5. Project the `exists` atom | A7 presence dimension — stated as a normative clause | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no *value* element selects presence — the atom lands on the separate `{present, absent}` presence dimension the projection clause adds | OK — witness: the presence-dimension clause in `Normative Contracts`, on the derivation in `evidence/research/iter-2-projection-derivation.md` |
+| 6. Compute coverage | `union(row_i accepted) == scoped product` | Both kinds of group compute: `exists`-bearing groups over the product including the presence dimension (step 5), `exists`-free groups over the value dimensions alone (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK |
 | 7. Compute overlap | any non-empty pairwise intersection; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → rows disjoint on that dimension | OK |
 | 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 6's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
 | 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
-| 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | RDR 0006 carries no `guard_unevaluable` narrowing | **GAP — booked as A8.** Not a contradiction inside this draft; a divergence with a `Final` sibling that needs a §JD-4 assignment, not duplicated prose. |
+| 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | RDR 0006 carries no `guard_unevaluable` narrowing | **GAP — booked as A8.** Not a contradiction inside this draft; a divergence with an open peer (RDR 0006 is `Draft` since 2026-08-21) that needs a §JD-4 assignment, not duplicated prose. |
 
-No CONTRADICTION row. The two GAP rows are A7 and A8, each carrying a named
-plan; neither is asserted as already true. A9 has no row here because it blocks
-the Phase 3 operator-acceptance gate rather than a step in this trace.
+No CONTRADICTION row. One GAP row remains — A8, the cross-document assignment —
+carrying a named plan and not asserted as already true. Step 5's former gap
+closed when the presence-dimension projection was stated; A9 and A11 have no row
+here because the declaration model they record is an input to step 3, which the
+trace already exercises.
 
 #### Load-Bearing Decisions
 
@@ -1047,10 +1051,11 @@ decides the substance but leaves the recording document open, and names RDR
 
 The fixed symbolic atom model best matches the user's outcome: flow authors can
 write conditional edges, and lint can still prove whether those edges are
-complete and mutually exclusive — with the scope A7 and A8 currently bound. Two
-classes are not yet provable: a row group carrying an `exists` atom (A7, until
-the presence-dimension projection is stated) and any group whose narrowing
-verdict depends on the cross-document agreement A8 tracks. Consumers inheriting
+complete and mutually exclusive — with the scope A8 currently bounds. One class
+is not yet provable: a group whose narrowing verdict depends on the
+cross-document agreement A8 tracks. The `exists`-bearing class was the other,
+and it closed when the presence-dimension projection was stated as a normative
+clause (A7). Consumers inheriting
 this promise — RDR 0006's findings and RDR 0005's envelope — inherit those
 bounds with it. It preserves RDR 0002's readable `all`/`unless`
 authoring form while giving RDR 0006 finite-domain constraints to analyze. It
@@ -1269,13 +1274,13 @@ skills.
 - Unbounded integer or free-form string dimensions cannot receive silent
   exhaustiveness claims; authors must declare finite domains or accept a lint
   limitation.
-- **`exists` is in the closed vocabulary but not yet in the proof.** Until A7
-  states the presence-dimension projection, a row group carrying an `exists`
-  atom cannot be certified exhaustive — including this RDR's own fixture group
-  (`profile-to-grounding` ‖ `foundational-to-cove`) and RDR 0007's sanctioned
-  two-row absence pattern. The operator remains authorable and evaluable at
-  runtime; only the exhaustiveness claim is withheld. This is a stated scope
-  bound of the current draft, not merely a consequence of A7 failing.
+- **`exists` is in the closed vocabulary and in the proof.** The
+  presence-dimension projection (A7) puts an `exists` atom on a `{present,
+  absent}` dimension of the scoped product, so a row group carrying one stays
+  provable — including this RDR's own fixture group (`profile-to-grounding` ‖
+  `foundational-to-cove`) and RDR 0007's sanctioned two-row absence pattern. A
+  key declared always-present contributes no presence dimension, which is what
+  keeps the narrowing's negative control tight rather than vacuous.
 
 ### Risks and Mitigations
 
