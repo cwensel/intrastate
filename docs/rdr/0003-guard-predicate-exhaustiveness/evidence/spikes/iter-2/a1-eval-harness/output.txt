@@ -1,0 +1,52 @@
+A1 EVALUATION HARNESS — RDR 0003
+claim: target-flow guard rows are expressible AND decidable in the closed typed vocabulary
+fixture: evidence/spikes/guard-fixture.toml (4 rules) + 2 rows added for contains/lte/gt
+
+== Evaluation cases ==
+  ok    foundational-to-cove         large draft, first prel... -> FALSE
+  ok    profile-to-grounding         large draft, first prel... -> TRUE
+  ok    foundational-to-cove         large draft at iteratio... -> FALSE
+  ok    profile-to-grounding         large draft at iteratio... -> FALSE
+  ok    foundational-to-cove         foundational draft with... -> TRUE
+  ok    profile-to-grounding         foundational draft with... -> FALSE
+  ok    foundational-to-cove         foundational draft, clu... -> FALSE
+  ok    profile-to-grounding         foundational draft, clu... -> FALSE
+  ok    continue-prelock-lenses      prelock, lens set membe... -> TRUE
+  ok    iteration-band               prelock, lens set membe... -> TRUE
+  ok    lens-row-complete            prelock, lens set membe... -> TRUE
+  ok    continue-prelock-lenses      prelock at iteration ca... -> FALSE
+  ok    iteration-band               prelock at iteration ca... -> FALSE
+  ok    lens-row-complete            prelock at iteration ca... -> FALSE
+  ok    continue-prelock-lenses      prelock, iteration 0 ->... -> TRUE
+  ok    iteration-band               prelock, iteration 0 ->... -> FALSE
+  ok    lens-row-complete            prelock, iteration 0 ->... -> TRUE
+  ok    reconcile-rewind-legality    reconcile with legal re... -> TRUE
+  ok    reconcile-rewind-legality    reconcile on an Impleme... -> FALSE
+  ok    reconcile-rewind-legality    reconcile with illegal ... -> FALSE
+  ok    continue-prelock-lenses      prelock, lens key ABSEN... -> UNEVALUABLE
+  ok    iteration-band               prelock, lens key ABSEN... -> TRUE
+  ok    lens-row-complete            prelock, lens key ABSEN... -> FALSE
+
+== Well-formedness negative controls (closed+typed) ==
+  ok    rejected: unknown operator         (unknown operator "matches" on key "profile")
+  ok    rejected: lt on enum               (operator "lt" not allowed on kind "enum" (key "profile"))
+  ok    rejected: contains on enum         (operator "contains" not allowed on kind "enum" (key "profile"))
+  ok    rejected: literal kind mismatch    (literal kind "enum" does not match declared kind "int" (key "prelock_iterations"))
+  ok    rejected: in with scalar literal   (operator "in" literal set-ness mismatch on key "profile")
+
+== Operator coverage (measured, not asserted) ==
+  eq        atoms=2  covered
+  in        atoms=3  covered
+  lt        atoms=1  covered
+  lte       atoms=1  covered
+  gt        atoms=1  covered
+  gte       atoms=1  covered
+  exists    atoms=1  covered
+  contains  atoms=1  covered
+
+== Operators REQUIRED but absent from the closed set ==
+  none — every target-flow guard row above was encoded without
+  an operator outside {eq,in,lt,lte,gt,gte,exists,contains}.
+
+RESULT: pass=28 fail=0 uncovered_operators=[]
+VERDICT: A1 SUPPORTED — vocabulary sufficient and decidable over the target-flow slice
