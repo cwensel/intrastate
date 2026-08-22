@@ -6,7 +6,12 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-4]
+- **Status**: Draft [demoted from Final 2026-08-21 — re-verify A2, A5.
+  JDR 0001 §JD-4 leaves the `guard_unevaluable` narrowing's recording document
+  unassigned and this RDR carries the tolerance without the clause; RDR 0003's
+  A8, A10, and A12 are peer agreements this RDR must give and cannot give while
+  locked; and this RDR's lint input contract already requires finite-domain
+  metadata whose normative home moved to RDR 0003. Re-entry stage: refine.]
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
@@ -116,7 +121,12 @@ existing CLI output contract.
     non-empty row intersection over finite enum/boolean, declared set-universe,
     and bounded-int domains; its `Normative Contracts` require finite domains
     for exhaustiveness claims and blocking refusal/downgrade when proof is not
-    possible.
+    possible. RDR 0003 also owns the **tag declaration model** that supplies
+    those domains (rehomed there 2026-08-21; JDR 0001 *Ownership corrections*),
+    so the finite-domain metadata this RDR's input contract requires has a
+    normative producer. **Re-verify at refine**: confirm this RDR's scoped
+    grouping matches RDR 0003's row-group definition (its A10) and that the
+    predecessor-reachability contract this RDR owes (its A12) is stated.
   - **If wrong**: The lint would either miss ambiguous/gap cases or block valid
     guarded edges with false positives.
 - **A3 Owned-tag read-before-write can be checked over the normalized graph
@@ -248,8 +258,10 @@ input contract is:
 - model identity and version;
 - normalized candidate rows with deterministic row identity, source rule id,
   optional source span, match predicates, guard predicates, writes, and clears;
-- declared tags with provenance, value kind, finite-domain metadata when
-  exhaustiveness is claimed, and single-valued grouping when applicable;
+- declared tags with provenance (RDR 0002) and the RDR 0003 tag declaration
+  model — value kind, and finite-domain metadata (enum value set, `{min..max}`
+  bound, set-element universe) plus optionality when exhaustiveness is claimed —
+  and single-valued grouping when applicable;
 - recognized outcome alphabet, declared terminal states, and declared escape
   rows;
 - accessor references and context references only as normalized identifiers
@@ -795,3 +807,67 @@ accretion in Seam Lineage.
 - `docs/rdr/0005-skill-integration-cli-contract.md`
 - `internal/cli/clierr`
 - `internal/cli/respond`
+
+## Refinement Context (demotion re-entry — delete on re-lock)
+
+Source: **JDR 0001 §JD-4** and RDR 0003's Stage 6 reconcile (2026-08-21).
+
+**Why this RDR was demoted.** It was `Final` while carrying three obligations it
+could not discharge from a locked state. RDR 0003 booked A8, A10, and A12 as
+agreements only this document can give, and each was blocked on the reasoning
+"RDR 0006 is `Final`, so this cannot close by an edit here" — a deadlock, not a
+disagreement. Demoting is cheaper than a route-back for each.
+
+**Defects.**
+
+1. **§JD-4 recording document (RDR 0003 A8).** This RDR's Status line has
+   carried `[joint decision → JDR 0001 §JD-4]` while the token
+   `guard_unevaluable` appears **zero** times in the body — a Status-line
+   citation standing in for absorbed text. The substance is decided ("the
+   *promise* narrows"); only the recording document is open. This RDR's own
+   exhaustiveness clause fires on a **non-finite dimension**; RDR 0003's
+   narrowing covers a **fully-finite product whose participating row can still
+   refuse** — a different trigger this RDR's text does not reach.
+2. **Row-group division of labour (RDR 0003 A10).** The term `row group` occurs
+   zero times here, while RDR 0003 now defines it (rows sharing one source state
+   and one recognized outcome, the set RDR 0001 resolves exact-one over) and A2
+   here takes the coverage/overlap derivation *from* RDR 0003. Confirm this
+   RDR reads the same division rather than grouping rows its own way.
+3. **Predecessor reachability (RDR 0003 A12).** Two RDR 0003 clauses quantify
+   over "every reachable predecessor". This RDR owns graph traversal but states
+   no reachability contract a peer can cite; `reachable predecessor` occurs once
+   here and not at all in RDR 0002.
+4. **Finite-domain metadata source (A2).** The lint input contract requires
+   "declared tags with provenance, value kind, finite-domain metadata when
+   exhaustiveness is claimed". That metadata had no normative producer anywhere
+   in the cluster; its home is now RDR 0003's tag declaration model. A2 must
+   cite that model rather than an unhomed field.
+
+**Re-verify A2, A5.** A2 (predicate lint can decide overlap/coverage for finite
+domains) rests on RDR 0003's derivation and now on its declaration model. A5
+(CI runs `intrastate lint` as blocking authority) is `Pending` on an MVV test
+and should be re-read against the demotion.
+
+**Re-entry stage: refine.** The approach holds — blocking authority and the
+invariant taxonomy are unchanged. Only contract wording and citations move.
+
+**Direction.**
+
+1. **Record or cite the §JD-4 narrowing, and say which.** Recommended: RDR 0003
+   records it (the clause must name the *refusing atom*, and `atom` occurs once
+   in this RDR, only to delegate atoms to RDR 0003); this RDR cites RDR 0003 and
+   reuses `graph-unprovable-coverage`, whose stated meaning — "Required
+   finite-domain proof unavailable" — already covers a withheld claim. Minting a
+   second code would imply a non-blocking tier RDR 0003 forbids and §JD-4 leaves
+   open. Whichever arm is taken, exactly one document states it.
+2. **Adopt RDR 0003's row-group definition explicitly**, so the exhaustiveness
+   verdict means the same thing on both sides of the seam.
+3. **State a predecessor-reachability contract** over selection contexts that
+   RDR 0003's owned-tag and "can refuse" clauses can cite, and confirm lint may
+   decide the predicate syntactically over declarations.
+4. **Re-point A2 and the lint input contract** at RDR 0003's tag declaration
+   model as the normative source of finite-domain metadata.
+5. **Absorb §JD-4 into the body**, not just the Status line — the audit that
+   found this defect found the same pattern in RDR 0005 (`§JD-8`/`§JD-9`, zero
+   body references) and RDR 0009 (stale `Refusal.Guard`), so check for it here
+   deliberately.

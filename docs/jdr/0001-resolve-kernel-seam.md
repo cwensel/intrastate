@@ -238,7 +238,16 @@ not a negotiation.
 - **JD-4 Lint's promise is what gives.** Where 0006's exhaustiveness proof and
   0007's veto disagree, the *promise* narrows — P5 decides the substance. Open
   only as to which document records the narrowing and whether lint gains a
-  warning category. *(0007×0006 F2, 0007×0003 F3)*
+  warning category. **Recommended arm (2026-08-21, from 0003's Stage 6):** 0003
+  records it and 0006 cites it. 0006's clause fires on a *non-finite dimension*;
+  0003's case is a *fully-finite product whose participating row can still
+  refuse* — a different trigger 0006's text does not reach. The clause must also
+  name the **refusing atom**, and `atom` occurs once in 0006, only to delegate
+  atoms to 0003. On the warning category: reuse `graph-unprovable-coverage`
+  ("Required finite-domain proof unavailable" already covers a withheld claim);
+  minting a second code implies a non-blocking tier 0003 forbids. 0006 was
+  demoted to `Draft` (2026-08-21) so this can be recorded without a route-back.
+  *(0007×0006 F2, 0007×0003 F3)*
 - **JD-5 Precondition precedence.** 0009's breach check and 0008's reserved-key
   check both land at `Resolve` entry; neither orders itself against the other.
   Either order is defensible — pick one and pin it with a test on a table that
@@ -288,6 +297,30 @@ contradiction is visible reading 0002 alone; 0009 only escalates it to
 breach-laundering. Routed as a spec defect against 0002, fixable at re-lock with
 no round re-runs. Entry
 kept so the anchor never dangles. *(0009×0002 F3)*
+
+## Ownership corrections
+
+Recorded here because they change which document a cluster member cites, and a
+reader arriving at a stale citation needs the pointer.
+
+- **Tag declaration model → RDR 0003** (2026-08-21, from 0003's Stage 6
+  reconcile). The typed alphabet guard atoms are written against — value kind,
+  finite domain, per-tag optionality, set-element universe — was booked as a
+  producer request against 0002 by 0003's A11/A7/A9. It is **rehomed to 0003**.
+  The finding: 0002's only normative tag clause requires *provenance* alone;
+  `value kind` is normative nowhere in the cluster (0002 names it in a prose
+  schema list, and peers quote that prose as if it were a contract); 0002's
+  normative validation categories are entirely structural, with no type or
+  value-domain axis; and **0007 already records the same division** — "typed
+  literals and value kinds (bounded integers, set universes) are RDR 0003's
+  declarations" (its rejected-alternative analysis). The model was homeless, not
+  homed elsewhere. 0002 keeps provenance, authoring location under
+  `[tags.<tag>]`, and normalization carriage, and cites 0003 for meaning; 0006's
+  lint input contract re-points at 0003 for finite-domain metadata. This follows
+  §D1/§D4's own pattern — one home per contract, cite never restate, and the
+  home is the document that owns the surrounding contract. One field does **not**
+  travel: per-atom `block` retention (0003 A14) stays a request on 0002, because
+  retention through normalization is carriage, not declaration semantics.
 
 ## What this does not decide
 

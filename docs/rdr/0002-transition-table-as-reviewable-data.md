@@ -215,7 +215,10 @@ The source schema has six conceptual parts:
 
 1. Flow metadata: table id, version, and human description.
 2. Tag declarations: tag name, provenance (`owned`, `observed`, `recognized`),
-   value kind, and optional accessor reference for observed or owned read-back.
+   the RDR 0003 type model (value kind, and optionally finite domain,
+   optionality, and set-element universe), and optional accessor reference for
+   observed or owned read-back. Provenance is this RDR's; the type model is
+   RDR 0003's and is cited, not restated.
 3. Recognized outcome alphabet: the closed set of outcome tags that the
    recognizer may emit for the flow.
 4. Shared match contexts: named predicate blocks for dimensions such as RDR
@@ -333,6 +336,18 @@ otherwise zero or multiple matches remain kernel-owned typed refusals.
 ```normative
 The model MUST declare every tag it matches or writes, including each tag's
 provenance: owned, observed, or recognized.
+```
+
+```normative
+A tag declaration also carries its **type model** — value kind, and optionally a
+finite domain, an optionality marker, and a set-element universe. RDR 0003 is
+the normative home of that model: what those fields mean, which kinds admit a
+finite domain, and how domain/kind disagreement is rejected are stated there and
+MUST NOT be restated here. This RDR owns where a declaration is authored — under
+`[tags.<tag>]`, beside `provenance` and the optional accessor reference — and
+requires normalization to carry every declared field through to the normalized
+model without loss, so lint (RDR 0006) and the guard proof (RDR 0003) read the
+same declaration the author wrote.
 ```
 
 ```normative
@@ -858,7 +873,47 @@ surfaces these fixes touch.
 
 **Re-entry stage: refine.** The approach holds; the contract wording changes.
 
-**Direction.** Restate the resolver flow as gate-then-count and qualify Scenario
-4 so no sibling candidate is unevaluable. Add `row kind` and `escape failure
-classes` to the dump-derivation field list. Name the `RequiresOwned` producer
-(JD-3) and rename the three canonical fixtures (JD-10).
+**Direction.** Eight duties, four carried since the JDR demotion and four added
+at RDR 0003's Stage 6 reconcile (2026-08-21):
+
+1. **§D2 — gate-then-count.** Restate the resolver flow so guards evaluate
+   first and an unevaluable candidate vetoes before counting; qualify Scenario 4
+   so no sibling candidate is unevaluable. *Not yet in the body: the token
+   `unevaluable` appears only in this section, and the normative selection
+   clause is still pure counting.*
+2. **§JD-11 — dump contradiction.** Add `row kind` and `escape failure classes`
+   to the dump-derivation field list so it matches the round-trip invariant.
+3. **§JD-3 — name the `RequiresOwned` producer.**
+4. **§JD-10 (a) — rename the three canonical fixtures** invalidated by RDR
+   0008's name constraint.
+5. **§D4 / RDR 0007 A16 — normalizer emits the kernel's existence constants.**
+   The kernel exports the existence operator token and its two boolean literal
+   forms; the normalizer MUST emit them. Currently acknowledged only by a
+   joint-check line in `Decision Rationale`, with no normative clause.
+6. **§D4 / RDR 0007 A22 — tag-key canonicalization.** Bind as a normative
+   clause: authored tag-key spellings (case, namespace, whitespace) are
+   canonicalized during normalization, so a `Row` carries only canonical keys.
+   The token `canonicaliz` currently appears zero times in this RDR.
+7. **RDR 0003 A14 — per-atom `block` retention.** Normalization currently
+   promises only that a candidate row retains rule id and locator. State that
+   each atom also retains the block it was authored in (`all` vs `unless`), which
+   RDR 0003's identity tuple and `unless` semantics both depend on. This is
+   carriage, this RDR's charter — distinct from the declaration *semantics*
+   rehomed to RDR 0003 (below).
+8. **§JD-10 (b) — recognized-tag totality.** Decide whether a declared
+   `recognized` tag is total (always present, possibly empty) or partial (absent
+   with no outcome in flight), which decides whether an empty-outcome row is
+   satisfiable, dead, or a lint error. Currently homeless: named in no RDR's
+   Direction list and no Status line.
+
+**Not a duty — an ownership correction.** The tag *type model* (value kind,
+finite domain, optionality, set-element universe) was booked against this RDR by
+RDR 0003's A11/A7/A9. It is **rehomed to RDR 0003**, which owns the guard
+algebra the model is the alphabet for. The finding: this RDR's only normative
+tag clause requires provenance alone, `value kind` is normative nowhere in the
+cluster, this RDR's normative validation categories are entirely structural with
+no type or value-domain axis, and RDR 0007 (`Final`) records that value kinds and
+set universes "are RDR 0003's declarations". This RDR keeps provenance (its
+consumers RDR 0004 and RDR 0006 read it), keeps authoring location under
+`[tags.<tag>]`, and keeps normalization carriage — and cites RDR 0003 for
+meaning. A new normative clause recording that split is already in the body.
