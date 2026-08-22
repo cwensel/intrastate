@@ -6,8 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Draft [revised from Final 2026-08-12 — re-verify
-  A3, A16, A17, A18, A19, A21, A22]
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer at the
   0001↔0003 seam, consumed by RDR 0003's value evaluator and
@@ -483,7 +482,7 @@ existing one.
 - **A6b Read completeness at the accessor→kernel boundary is
   stated by RDR 0004, not here.**
   - **Status**: Verified — closed by JDR 0001 §D3 / §JD-7.
-  - **Method**: Prior Decision
+  - **Method**: Peer RDR
   - **Evidence**: JDR 0001 §D3: "A read accessor MUST return
     the complete tag set for the keys it was asked for, or
     take the refusal branch; a partial read is a refusal,
@@ -528,9 +527,9 @@ existing one.
   absent, not a vacuously-true conjunction, and normalization
   never synthesizes one.**
   - **Status**: Verified (kernel half); the agreement with RDR
-    0003's subtractive lint algebra is Pending — 0003 states
-    no empty-block identity, so the concord is an inference
-    (see *Downgraded* below).
+    0003's subtractive lint algebra is DOWNGRADED — 0003
+    states no empty-block identity, so the concord is an
+    inference (see *Downgraded* below).
   - **Method**: Source Search
   - **Evidence**: RDR 0002's only `unless` normative fixes
     representation and combination timing ("Guard predicates
@@ -812,7 +811,7 @@ existing one.
     append-only and breaks nothing later), which is why this
     does NOT need to block lock; see Prerequisites.
   - **Method**: Source Search (RDR 0005 envelope; JDR 0001
-    §JD-8) + `internal/cli/clierr` source
+    §JD-8; `internal/cli/clierr` source)
   - **Evidence**: The refutation is in shipped source:
     `internal/cli/clierr/clierr.go::CLIError` carries only
     flat strings — `Code`, `Message`, `Param`, `Detail`,
@@ -1001,7 +1000,10 @@ existing one.
     `internal/resolve/*_test.go` → zero hits), so no test can
     break through that route; (2) all four
     `reflect.DeepEqual`-over-`Refusal` sites
-    (`adversarial_test.go:313,375`; `fixup_test.go:200,236`)
+    (`adversarial_test.go::TestAdv3_GuardUnevaluableRefusalMustNotDependOnTableRowOrder`,
+    `::TestAdv3b_MissingOwnedPayloadMustNotDependOnTableRowOrder`;
+    `fixup_test.go::TestFixup3c_AmbiguousMatchRowsPayloadMustNotDependOnTableRowOrder`,
+    `::TestFixup3c_DegradedEscapeAmbiguityPayloadMustNotDependOnRowOrder`)
     are SELF-comparisons of forward vs. reversed row order —
     structurally agnostic to the field set, and they needed
     zero edits. They are also what would catch a
@@ -1190,7 +1192,8 @@ existing one.
     (a foreign token becomes a value atom; a foreign literal
     becomes `uncomparable`) rather than producing a plan —
     the direction of failure is safe either way, which is why
-    this is Pending rather than blocking.
+    the producer half is carried as a downgrade rather than a
+    blocker.
   - **If wrong**: 0002/0003 already spell one of these
     differently and the kernel constants adopt that spelling
     instead; no rule changes, only the five byte values.
@@ -2358,7 +2361,7 @@ is pure and in-process; no new I/O.
 
 ## Finalization Gate
 
-_Not yet run — Stage 7 authors the gate responses._
+Responses: 0007-guard-predicate-totality/artifacts/gate.md (Gate PASS 2026-08-21)
 
 ## References
 
