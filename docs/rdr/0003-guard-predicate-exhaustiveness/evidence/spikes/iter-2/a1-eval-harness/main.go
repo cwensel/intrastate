@@ -70,12 +70,12 @@ type Value struct {
 
 // Literal is an atom's right-hand side: a typed scalar or a typed set.
 type Literal struct {
-	Kind   Kind
-	S      string
-	I      int
-	B      bool
-	Set    []string // for `in` and `contains`
-	IsSet  bool
+	Kind  Kind
+	S     string
+	I     int
+	B     bool
+	Set   []string // for `in` and `contains`
+	IsSet bool
 }
 
 type Atom struct {
