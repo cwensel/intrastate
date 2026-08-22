@@ -13,7 +13,11 @@
   dual-model critique pass demoted A1 and A2 to `Pending` and narrowed A6 to
   provenance labels; A10–A14 are new. A11 is the parent producer gap that A7
   and A9 hang from. The repeatability-lite pass closed A13 by stating the
-  set-literal clause and opened A15 on the cardinality bound.]
+  set-literal clause and opened A15 on the cardinality bound. Stage 6 reconcile
+  closed A1 by running the evaluation harness and blocked lock on A11/A7/A9:
+  the MVV is unauthorable against RDR 0002's tag declaration, so those three
+  cannot defer past lock. The route is a producer request to `Draft` RDR 0002,
+  not a stage return here.]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -127,23 +131,38 @@ parallel guard model.
 ### Critical Assumptions
 
 - **A1 The target RDR and kata flows fit a closed typed predicate vocabulary.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence needed**: The recorded spike does **not** establish this. `check.sh`
-    is an awk scan over operator *spellings* in the fixture's TOML section
-    headers: it rejects tokens outside `eq|in|lt|lte|gt|gte|exists|contains`,
-    counts rules, and prints a `coverage=` line that is a hardcoded `printf`
-    constant, not a measured result. It evaluates no predicate, parses no
-    literal, and type-checks no operator/kind pairing, so it cannot show the
-    vocabulary is *sufficient* — only that the fixture author spelled operators
-    from the allowed list. Its reporting loop is additionally hardcoded to
-    `split("eq in lt gte exists")`, so `lte`, `gt`, and `contains` cannot appear
-    in the transcript even when used. What would establish A1: encode the RDR and
-    kata flow slices as normalized rows and *evaluate* them against representative
-    tag inputs, asserting each row's expected qualify/prune verdict — the MVV
-    fixture, run as a spike rather than described.
-  - **Plan**: re-run the spike as an evaluation harness before lock, or carry A1
-    into implementation as the MVV's first acceptance gate.
+  - **Evidence**: The prior `check.sh` did **not** establish this — it is an awk
+    scan over operator *spellings* in TOML section headers whose `coverage=` line
+    is a hardcoded `printf` constant and whose report loop is hardcoded to
+    `split("eq in lt gte exists")`, so it evaluates no predicate and cannot show
+    the vocabulary is *sufficient*. Stage 6 re-ran it as the evaluation harness
+    A1's plan named. Command:
+    `cd docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/iter-2/a1-eval-harness && go run .`;
+    captured output at
+    `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/iter-2/a1-eval-harness/output.txt`.
+    The harness encodes the fixture's four target-flow rules as normalized atoms
+    (key, operator, literal, block), adds a `contains` row over a set-valued tag
+    and a `gt`/`lte` band row, and **evaluates** them against eleven
+    representative tag views, asserting each row's expected qualify/prune
+    verdict: 28 assertions pass, 0 fail. All eight operators of the closed set
+    carry at least one evaluated atom — including `lte`, `gt`, and `contains`,
+    which the old transcript could not print. Five negative controls confirm the
+    vocabulary is closed *and typed*: unknown operator, `lt` on an enum,
+    `contains` on an enum, literal/kind mismatch, and `in` with a scalar literal
+    are each rejected at well-formedness before evaluation. The harness also
+    reproduces the seam split it must not violate — `exists` decides on presence
+    alone (an absent `cluster_eligible` yields a decided FALSE, never
+    unevaluable) while a value atom over an absent key yields UNEVALUABLE under
+    RDR 0007's veto. No target-flow row required an operator outside
+    `{eq,in,lt,lte,gt,gte,exists,contains}`.
+  - **Scope of this record**: it establishes vocabulary *sufficiency and
+    decidability* over the target-flow slice — evaluation consumes tag values,
+    not declared domains, so it is independent of the A11/A7/A9 producer gap,
+    which governs exhaustiveness (A2) rather than evaluation. The `contains`
+    cell is evaluated over a declared set **kind**; A9's element *universe*
+    remains open and is what Phase 3's acceptance gate still waits on.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
 - **A2 Every exhaustiveness claim can be reduced to scoped finite declared
@@ -162,6 +181,11 @@ parallel guard model.
     schema — reading them back as evidence would be circular. A7 and A9 book two
     *subfields* (optionality, element universe) of a domain field that is itself
     absent; A11 books the field. The derivation: lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that participate in that group (every key any row's `all` or `unless` carries, whether or not it discriminates — see the participation clause in `Normative Contracts`): enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
+  - **Stage 6 disposition — BLOCKER (behind A11).** The derivation is sound and
+    unchanged; what it lacks is a producer, and that producer is A11. It closes
+    the moment RDR 0002 records the domain field, and not before — restamping it
+    on the fixture's invented `domain`/`min`/`max` keys is the circularity this
+    record was corrected for.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
@@ -230,6 +254,10 @@ parallel guard model.
     that request: RDR 0002's tag declaration carries name, provenance, value kind,
     and optional accessor reference, with no optionality field, so no producer
     can today declare which keys may be absent. RDR 0002 is itself `Draft`.
+  - **Stage 6 disposition — BLOCKER (subfield of A11).** The possibly-absent-key
+    MVV case and its always-present negative control both need this optionality
+    field, so A7 sits under the same non-deferral rule as its parent. Not
+    downgradable while the MVV consumes it.
   - **If wrong**: lint either drops `exists` atoms from the product — certifying
     a row group exhaustive that refuses `guard_unevaluable` at runtime, which
     breaches the §JD-4 narrowing this RDR just adopted — or refuses every group
@@ -265,6 +293,16 @@ parallel guard model.
     leave exactly one normative statement; the route-back asks §JD-4 to pick,
     and also asks whether the withheld-claim case reuses
     `graph-unprovable-coverage` or earns a code of its own.
+  - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** Not
+    closable inside this RDR: RDR 0006 is `Final` and JDR 0001 §JD-4 is an open
+    ledger entry, so the assignment is a joint decision, not an edit. Survivable
+    to that venue because the divergence is a *duplication* risk between two
+    documents that currently agree on the substance, not a contradiction in
+    this RDR's own semantics — the clause here is stated and self-consistent,
+    and whichever arm §JD-4 picks leaves it either normative or a citation. The
+    MVV does not consume this record, so the non-deferral rule does not reach
+    it. Named plan: the cluster-reconcile pass over 0003 · 0006 · 0007 carries
+    §JD-4 and returns the recording assignment plus the finding-code question.
   - **If wrong**: the two documents state one lint promise two ways — the
     single-source failure §JD-4 exists to prevent — and an implementer reading
     only RDR 0006 certifies a row group exhaustive that this RDR forbids.
@@ -286,6 +324,12 @@ parallel guard model.
     fields. RDR 0002 is `Draft`, so this is a live request. Until then the
     operator vocabulary is closed *as specified* but exercised only over the
     target-flow subset the spike proved.
+  - **Stage 6 disposition — BLOCKER (subfield of A11).** The Stage 6 A1 harness
+    evaluated a `contains` atom over a set-valued tag, which settles the
+    *vocabulary* half (A1) but not this one: evaluation needs only the tag's
+    kind, while an exhaustiveness claim needs the declared element universe.
+    The MVV's `contains` case remains unauthorable, so A9 is not deferrable
+    either.
   - **If wrong**: `contains` cannot carry an exhaustiveness claim, the closed
     vocabulary ships one operator it cannot prove, and Phase 3's acceptance
     gate cannot be met with the fixture format as it stands.
@@ -303,6 +347,15 @@ parallel guard model.
     reads the same division of labour.
   - **Plan**: raise with A8 at cluster reconcile — same venue, same peer, same
     `Final`-document constraint.
+  - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** The
+    cycle this record was opened to break is already broken *in this document*:
+    the row group is defined here as rows sharing one source state and one
+    recognized outcome, so this RDR no longer reads its grouping back from RDR
+    0006. What remains is peer confirmation of that division of labour, which a
+    `Final` peer cannot give by edit here. Survivable because a divergence would
+    surface as a cluster-reconcile finding before either document is
+    implemented, and the MVV does not consume the peer's agreement. Travels with
+    A8 and A12 — same venue, same peer.
   - **If wrong**: the two documents group rows differently, so a gap proved
     absent in one grouping is present in the other, and the exhaustiveness claim
     means different things on each side of the seam.
@@ -320,9 +373,19 @@ parallel guard model.
     it covers every key any guard atom names, not only keys that discriminate
     within a group, so a shared non-discriminating key such as a group's common
     `status` still needs a declared domain.
-  - **Plan**: one consolidated producer request to RDR 0002 carrying A11, A7, and
-    A9 together; RDR 0002 is `Draft`, so this is a live request rather than a
-    route-back.
+  - **Plan**: one consolidated producer request to RDR 0002 carrying A11, A7,
+    A9, and A14 together; RDR 0002 is `Draft`, so this is a live request rather
+    than a route-back.
+  - **Stage 6 disposition — BLOCKER, not deferrable.** Confirmed against source:
+    RDR 0002 `Technical Design` part 2 declares tag name, provenance, value
+    kind, and an optional accessor reference, and its tag normative contract
+    adds only provenance — no domain, bound, optionality, or element-universe
+    field exists anywhere in that document, and RDR 0002 books no reciprocal
+    obligation to supply one. This record therefore cannot be DOWNGRADED: the
+    MVV's authorability gate names A11 as blocking four of the MVV's six
+    required cases, and an assumption the Minimum Viable Validation itself
+    depends on is a pre-lock prerequisite, not a post-lock follow-up. Locking
+    here would freeze a contract whose only falsifier is unrunnable.
   - **If wrong**: no row group is ever exhaustiveness-eligible, every group takes
     the blocking inability-to-prove outcome, and this RDR's central guarantee is
     unreachable in practice while remaining true in theory.
@@ -339,6 +402,14 @@ parallel guard model.
   - **Plan**: confirm with RDR 0006 at cluster reconcile alongside A8 and A10 that
     it exposes a predecessor relation over selection contexts, and that lint may
     decide the predicate syntactically over declarations.
+  - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** Same
+    constraint as A8 and A10: the predecessor relation is RDR 0006's graph
+    property and RDR 0006 is `Final`, so this cannot close on this RDR's
+    initiative. Survivable to that venue because the demotion already did the
+    protective work — the reachability quantifier was removed from assertion and
+    booked here, so no clause in this RDR now claims a decision procedure it
+    cannot cite. The MVV's possibly-absent-key case is gated by A7's optionality
+    field, not by this record. Travels with A8 and A10.
   - **If wrong**: both clauses are unimplementable as written — lint cannot decide
     whether an owned tag is set before match, nor whether a row "can refuse", so
     the narrowing has no decision procedure.
@@ -374,6 +445,16 @@ parallel guard model.
     contradiction to resolve.
   - **Plan**: fold into the RDR 0002 producer request carrying A11/A7/A9 — one
     request, four fields.
+  - **Stage 6 disposition — DOWNGRADED, carried on the A11 producer request.**
+    Survivable because it is a gap to close, not a contradiction to resolve:
+    RDR 0002's container-level "combine both into one candidate-row predicate
+    set" is compatible with per-atom `block` retention, and RDR 0007 already
+    fixes `Block` as an atom field, so no peer currently asserts the opposite.
+    The Stage 6 A1 harness is corroborating rather than closing evidence — it
+    carries `block` per atom through its own encoding and shows `unless` behaving
+    as a conjunctive exclusion block distinct from `all`, but it is this RDR's
+    encoding, not RDR 0002's, so it cannot discharge a producer request. Rides
+    the same four-field request as A11/A7/A9; not independently MVV-critical.
   - **If wrong**: `unless` collapses into `all` after normalization, the identity
     tuple loses a component that makes it total, and a row's excluded
     intersection can no longer be subtracted from its accepted assignments.
@@ -396,6 +477,18 @@ parallel guard model.
     of differing shape (few wide dimensions vs. many narrow ones) for the same
     verdict. If they diverge, the bound needs a second term and this clause is
     restated before lock.
+  - **Stage 6 disposition — DOWNGRADED to the named MVV test.** The clause's
+    *unit* and *shape* are pinned in `Normative Contracts` (cardinality of the
+    scoped product; one published integer constant reported beside the computed
+    cardinality), so what remains open is whether that scalar predicts
+    provability — a comparison that is not runnable at draft time because it
+    needs the finite products A11 has no producer for. Survivable because the
+    "If wrong" is bounded and stated: a divergence adds a second bound term and
+    restates one clause, it does not disturb the grammar, the identity tuple, or
+    the coverage derivation. Named plan: MVV Scenario 3, which already lints an
+    over-large product and now also compares two equal-cardinality products of
+    differing shape (few wide dimensions vs. many narrow ones) for the same
+    verdict.
   - **If wrong**: the published bound does not predict provability, so two
     conforming implementations disagree on the same model and the
     model-independence the clause promises is unmet.
@@ -1178,10 +1271,13 @@ every exactness claim tied to A2 and the MVV fixture before Final.
 
 ### Prerequisites
 
-- [ ] **A1 closed.** Route: re-run the spike as an evaluation harness (or accept
-  it as the MVV's first gate). Done-condition: representative rows are
-  *evaluated* against tag inputs with asserted qualify/prune verdicts — the
-  current `check.sh` only scans operator spellings. Owned here; needs no peer.
+- [x] **A1 closed.** The Stage 6 evaluation harness ran: representative rows are
+  *evaluated* against tag inputs with asserted qualify/prune verdicts (28 pass /
+  0 fail), all eight operators carry an evaluated atom, and five typed-rejection
+  negative controls confirm the vocabulary is closed and typed. Evidence:
+  `evidence/spikes/iter-2/a1-eval-harness/{main.go,output.txt}`. Owned here;
+  needed no peer. Vocabulary sufficiency is independent of the A11/A7/A9
+  producer gap — evaluation consumes tag values, not declared domains.
 - [ ] **A2 closed.** Blocked on A11 — the derivation is sound but has no
   producer for its finite-domain inputs. Done-condition: A11 lands, then A2's
   inputs are authorable and the derivation re-stamps.
@@ -1260,7 +1356,7 @@ assumptions that block it, so no phase is picked up on document order alone:
 | --- | --- | --- |
 | 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`) — A13's set-literal spelling is now stated | Partially — the matrix and the set-literal canonicalization, not the atom slice |
 | 2 Finite-Domain Lint Semantics | **A11** (no domain producer), A2, A10, A12 | No |
-| 3 Target-Flow Fixture | **A9** for `contains`, A7 for `exists`, A1's evaluation harness | No — the gating predicates are unauthorable |
+| 3 Target-Flow Fixture | **A9** for `contains`, A7 for `exists` — A1's evaluation harness has run (`evidence/spikes/iter-2/a1-eval-harness/`) and no longer gates this phase | No — the gating predicates are unauthorable |
 | 4 Integration With Peer RDRs | A8, A10, A12 (all cluster-reconcile items) | No |
 
 Building Phase 1 against the *current* `Row.Guard string` shape produces work
@@ -1315,8 +1411,16 @@ Resolve evidence for the representative authoring shape lives in
 `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/`: the fixture
 covers profile routing, cap-3 handling, prelock lens sets, cluster eligibility,
 and rewind legality with the target-flow subset `eq`, `in`, `lt`, `gte`, and
-`exists`. The implementation MVV must extend that coverage with `contains`
-before the full closed operator vocabulary is accepted.
+`exists`. The Stage 6 A1 harness
+(`evidence/spikes/iter-2/a1-eval-harness/`) evaluates those rows against
+representative tag views and asserts each qualify/prune verdict, and exercises
+`lte`, `gt`, and `contains` besides — so the closed vocabulary is decided, not
+merely spelled. It is a spike, not a production test: it carries its own TOML-to-
+atom encoding because the kernel reshape is unshipped, and it consumes no
+declared domain, so it proves evaluation and not exhaustiveness. The
+implementation MVV must still exercise `contains` over a **declared** set-valued
+tag with an element universe before the full closed operator vocabulary is
+accepted.
 
 1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
    membership, set containment, bounded integer comparison, existence, and mixed
@@ -1420,11 +1524,12 @@ Each record uses an allowed Method label, carries concrete Evidence or an
 Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
-half split out as A12. Verified: A3, A4, A5, A6 (labels), and A13. Pending: A1,
+half split out as A12. Verified: A1, A3, A4, A5, A6 (labels), and A13. Pending:
 A2, A7, A8, A9, A10, A11, A12, A14, A15 — each with a named plan. None is
 `Unverified`. The repeatability pass closed A13 by stating the set-literal
 clause it owed and opened A15 on the cardinality bound the too-large clause now
-declares.
+declares. The Stage 6 reconcile closed A1 by running the evaluation harness the
+critique pass's demotion demanded.
 
 The demotions matter because this section previously reported label hygiene as
 verification: every record *had* a Method and an Evidence line, so the audit
@@ -1432,7 +1537,10 @@ passed while A1's cited spike proved nothing about the claim and A2's derivation
 had no producer for its inputs. A conforming record is not a verified one.
 
 A1 was stamped on a spike that scans operator *spellings* and cannot evaluate a
-predicate; it is now `Pending` with an evaluation-harness plan. A2's derivation
+predicate. The demotion was correct and the remedy has now run: Stage 6 replaced
+that spike with an evaluation harness that decides the fixture's rows against
+representative tag views and asserts every qualify/prune verdict, so A1 is
+`Verified` on a spike that measures rather than describes. A2's derivation
 is sound but consumes declared finite domains that RDR 0002 cannot express; it
 is `Pending` behind A11. A3 is an explicit design
 decision that rejects inline negation and nested boolean expressions. A4 cites
