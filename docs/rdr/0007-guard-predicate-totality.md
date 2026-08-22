@@ -156,9 +156,10 @@ The contract sits at the boundary between:
   (JDR 0001 §JD-3).
 - **RDR 0004** (`Final`) carries read completeness (§D3);
   **RDR 0005** (`Final`, tolerance §JD-8/§JD-9) renders
-  refusals; **RDR 0006** (`Final`, tolerance §JD-4) narrows
-  lint's promise where this RDR's veto and its proof
-  disagree.
+  refusals; **RDR 0006** (`Draft`, re-entry at refine)
+  narrows lint's promise where this RDR's veto and its proof
+  disagree — the narrowing is recorded by RDR 0003
+  (JDR 0001 §JD-4, closed 2026-08-22) and cited by RDR 0006.
 
 ## Research Findings
 

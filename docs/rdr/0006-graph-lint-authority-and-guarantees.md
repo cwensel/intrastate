@@ -7,11 +7,14 @@
 
 - **Date**: 2026-06-19
 - **Status**: Draft [demoted from Final 2026-08-21 — re-verify A2, A5.
-  JDR 0001 §JD-4 leaves the `guard_unevaluable` narrowing's recording document
-  unassigned and this RDR carries the tolerance without the clause; RDR 0003's
-  A8, A10, and A12 are peer agreements this RDR must give and cannot give while
-  locked; and this RDR's lint input contract already requires finite-domain
-  metadata whose normative home moved to RDR 0003. Re-entry stage: refine.]
+  JDR 0001 §JD-4 is **closed** (2026-08-22, `0003-0006-0007` cluster gate): RDR
+  0003 records the `guard_unevaluable` narrowing and this RDR cites it, reusing
+  `graph-unprovable-coverage` with no new code and no non-blocking tier. Owed at
+  refine: that citation, an atom-level field on the finding contract, RDR 0003's
+  A10/A12 agreements (row-group division, predecessor-reachability contract),
+  §JD-13's single-valued citation, and §JD-14's repair of invariants 3 and 4 to
+  match this RDR's own Load-Bearing Decision on escape rows. Re-entry stage:
+  refine.]
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
@@ -872,9 +875,50 @@ invariant taxonomy are unchanged. Only contract wording and citations move.
    body references) and RDR 0009 (stale `Refusal.Guard`), so check for it here
    deliberately.
 
-**Stale inbound citation (not this RDR's to fix).** RDR 0007's Predecessors
-block (`docs/rdr/0007-guard-predicate-totality.md`) describes this RDR as
-"**RDR 0006** (`Final`, tolerance §JD-4)". That is stale as of this demotion,
-and RDR 0007 is itself `Final`, so it is corrected at RDR 0007's re-lock or at
-cluster reconcile — not by an edit here. Recorded so the staleness is tracked
-rather than discovered again.
+**Stale inbound citation — RESOLVED 2026-08-22.** RDR 0007's Context block
+described this RDR as "**RDR 0006** (`Final`, tolerance §JD-4)". The
+`0003-0006-0007` cluster gate repaired it in place as a citation repair; RDR
+0007 stays `Final`. No action owed here.
+
+## Cluster-reconcile disposition (0003 · 0006 · 0007, 2026-08-22)
+
+The gate closed the entry this RDR's Direction 1 was waiting on, and homed two
+defects that were on no prior list. Evidence:
+`docs/rdr/cluster-reconcile/0003-0006-0007/`.
+
+1. **§JD-4 CLOSED — this RDR cites, RDR 0003 records.** Direction 1's
+   recommended arm is now the decision. Add a normative **citation** to RDR
+   0003's narrowing clause — never a restatement; a restatement is itself a
+   gate finding. **Reuse `graph-unprovable-coverage`; mint no code and add no
+   non-blocking tier for this class.** It already sits in this RDR's mandatory
+   blocking table and its MVV fixture matrix, so reuse costs no new test
+   scaffolding — only a widened trigger. Keep the existing advisory tier scoped
+   to "redundant rows or unreachable rules"; it MUST NOT absorb a withheld claim.
+2. **Consequent duty — extend the finding record with an atom-level field.**
+   RDR 0003's clause requires the finding to name the *refusing atom*; the
+   finding contract here carries no such field, so that half of the clause has
+   no producer. This is a payload extension, not a restatement.
+3. **§JD-13 — `single-valued grouping`.** The lint input contract attributes it
+   to "the RDR 0003 tag declaration model", which never declares it (`single-valued`
+   occurs zero times in RDR 0003 and zero in RDR 0002) while a *mandatory
+   blocking* code and an MVV assertion depend on it. Decided: RDR 0003's model
+   gains the field; cite it here like the rest of the model.
+4. **§JD-14 — escape rows.** Invariant 3's overlap exemption ("unless the model
+   explicitly routes to one deterministic escape row") and invariant 4's
+   coverage disjunct contradict RDR 0003's normative clause that escape rows
+   participate in the union and are never excluded from overlap checks. **This
+   RDR is split against itself** — the Load-Bearing Decision ("explicit escape
+   rows are modeled graph edges, not a tie-breaker") sides with RDR 0003.
+   Decided: RDR 0003's reading governs; repair invariants 3 and 4 to match the
+   Load-Bearing Decision. Rider: "claims closed coverage" is **default-on** for
+   every scoped row group whose participating dimensions are all finitely
+   declared — not an opt-in annotation.
+5. **Defect 4 above is already closed** — the body's lint input contract and A2
+   already cite RDR 0003's declaration model by name. The appendix is behind the
+   body; no work owed.
+
+Still owed to RDR 0003 as standing tolerances (its A10, A12): state the
+row-group division of labour explicitly, and publish a predecessor-reachability
+contract a peer can cite. On A12, note that this RDR frames the check as *graph
+reachability* while RDR 0003 requires a *syntactic decision over declarations* —
+say which.

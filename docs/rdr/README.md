@@ -11,10 +11,10 @@ engine README — this file is only the per-project index.
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Implemented | — |
 | 0002 | Transition table as reviewable data | Draft [revised from Final 2026-08-12; re-verify A2, A7] | High |
-| 0003 | Guard predicate exhaustiveness | Draft [revised from Final 2026-08-12; re-verify A5; owns the tag declaration model as of 2026-08-21] | High |
+| 0003 | Guard predicate exhaustiveness | Draft [revised from Final 2026-08-12; re-verify A5; owns the tag declaration model as of 2026-08-21; records the §JD-4 narrowing as of 2026-08-22 — A8 closed] | High |
 | 0004 | Accessor execution safety model | Final | High |
 | 0005 | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9] | High |
-| 0006 | Graph lint authority and guarantees | Draft [demoted from Final 2026-08-21; re-verify A2, A5 — §JD-4 recording, row-group + reachability agreements] | High |
+| 0006 | Graph lint authority and guarantees | Draft [demoted from Final 2026-08-21; re-verify A2, A5 — cites RDR 0003's §JD-4 narrowing (closed 2026-08-22), row-group + reachability agreements, §JD-13/§JD-14 repairs] | High |
 | [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Final | Medium |
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Final [joint decision → JDR 0001 §JD-5] | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Final [joint decision → JDR 0001 §JD-5] | Medium |

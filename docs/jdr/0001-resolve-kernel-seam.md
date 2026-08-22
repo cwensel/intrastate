@@ -236,18 +236,32 @@ not a negotiation.
   same type and is the natural occasion to settle it. *(0007×0002 F3,
   0007×0009 F2)*
 - **JD-4 Lint's promise is what gives.** Where 0006's exhaustiveness proof and
-  0007's veto disagree, the *promise* narrows — P5 decides the substance. Open
-  only as to which document records the narrowing and whether lint gains a
-  warning category. **Recommended arm (2026-08-21, from 0003's Stage 6):** 0003
-  records it and 0006 cites it. 0006's clause fires on a *non-finite dimension*;
-  0003's case is a *fully-finite product whose participating row can still
-  refuse* — a different trigger 0006's text does not reach. The clause must also
-  name the **refusing atom**, and `atom` occurs once in 0006, only to delegate
-  atoms to 0003. On the warning category: reuse `graph-unprovable-coverage`
-  ("Required finite-domain proof unavailable" already covers a withheld claim);
-  minting a second code implies a non-blocking tier 0003 forbids. 0006 was
-  demoted to `Draft` (2026-08-21) so this can be recorded without a route-back.
-  *(0007×0006 F2, 0007×0003 F3)*
+  0007's veto disagree, the *promise* narrows — P5 decides the substance.
+  **CLOSED 2026-08-22** by the `0003-0006-0007` cluster gate, which is the venue
+  0003 A8, 0006 Direction 1, and this entry's own recommended arm all routed to.
+  **RDR 0003 is the recording document; RDR 0006 cites it and mints no code.**
+  Both halves are now decided:
+  - **Recording.** 0003 records the narrowing normatively
+    (`0003:781-786`, already written). 0006 carries a citation, never a
+    restatement. The two triggers genuinely differ and both must survive: 0006's
+    clause fires on a *non-finite dimension*; 0003's on a *fully-finite product
+    whose participating row can still refuse*. 0003 is the recording document
+    because the clause must name the **refusing atom**, and `atom` occurs once
+    in 0006, only to delegate atoms to 0003.
+  - **Warning category — no.** Lint gains no new code and no non-blocking tier
+    for this class. 0006 reuses `graph-unprovable-coverage`, whose stated
+    meaning ("Required finite-domain proof unavailable") already covers a
+    withheld claim and which already sits in 0006's *mandatory blocking* table
+    (`0006:314`) and its MVV fixture matrix (`0006:639`) — so reuse costs no new
+    test scaffolding, only a widened trigger. 0006's existing advisory tier stays
+    scoped to "redundant rows or unreachable rules" (`0006:302-304`) and MUST NOT
+    absorb the withheld claim. This retires the 0003 clause's dependency on this
+    entry (`0003:818-826`, "whether lint gains one at all is open under §JD-4").
+  - **Consequent duty on 0006 (not a restatement).** 0006's finding contract
+    (`0006:363-367`) carries no atom-level field, so the atom-naming half of
+    0003's clause has no producer. 0006 MUST extend the finding record to carry
+    the refusing atom. This is a payload extension, discharged at 0006's refine.
+  *(0007×0006 F2, 0007×0003 F3; closed via `docs/rdr/cluster-reconcile/0003-0006-0007/`)*
 - **JD-5 Precondition precedence.** 0009's breach check and 0008's reserved-key
   check both land at `Resolve` entry; neither orders itself against the other.
   Either order is defensible — pick one and pin it with a test on a table that
@@ -288,6 +302,39 @@ not a negotiation.
   `Refusal.Guard` as a refusal property is stale and is corrected at its
   re-lock; entry kept so the anchor never dangles. *(0007×0003 F1/F2 residue,
   0007×0002 normalizer obligation, 0007×0009 `Refusal.Guard`)*
+
+- **JD-13 Single-valued grouping has no producer.** 0006's lint input contract
+  attributes "single-valued grouping when applicable" to "the RDR 0003 tag
+  declaration model" (`0006:261-264`), and gates a *mandatory blocking* code on
+  it (`graph-single-valued-state`, `0006:315`, asserted by its MVV at
+  `0006:640`). But `single-valued` occurs **zero** times in 0003 and **zero**
+  times in 0002 — 0003's declaration model enumerates value kind, finite domain,
+  optionality, and set-element universe, and stops there (`0003:670-678`). This
+  is the same unhomed-producer defect the 2026-08-21 declaration-model rehoming
+  was performed to close, surviving in one field the rehoming did not sweep.
+  **Decided 2026-08-22: 0003's tag declaration model gains the field**, beside
+  the four it already carries — it is a property of a tag class, it is consumed
+  by a finite-domain proof, and every sibling property already lives there.
+  0006 cites it like the rest of the model. Discharged at 0003's refine, with
+  0006's citation at its own. *(0003×0006 F7 — new at this gate, on no prior
+  list)*
+- **JD-14 Escape rows in the coverage union and the overlap check.** 0003 states
+  normatively that an escape row "participates in the coverage identity like any
+  other row", that lint "MUST NOT treat 'an escape row exists' as a separate
+  coverage-satisfying fact outside the union", and "MUST NOT exclude escape rows
+  from overlap checks" (`0003:771-779`). 0006's invariant 3 grants the opposite
+  exemption — two rows may overlap "unless the model explicitly routes to one
+  deterministic escape row" (`0006:286-288`) — and its invariant 4 phrases escape
+  rows as an alternative disjunct satisfying coverage outside the union
+  (`0006:289-291`). The same fixture earns a blocking `graph-overlap` under 0003
+  and passes under 0006. **0006 is additionally split against itself**: its own
+  Load-Bearing Decision says "explicit escape rows are modeled graph edges, not a
+  tie-breaker" (`0006:412-414`), siding with 0003 against its own invariant 3.
+  **Decided 2026-08-22: 0003's reading governs** — escape rows are ordinary
+  participants in both the union and the overlap check, per P5 (a green lint must
+  imply resolution succeeds) and RDR 0001's runtime refusal of ambiguity. 0006
+  repairs invariants 3 and 4 to match its own Load-Bearing Decision at its
+  refine. *(0003×0006 F8 — new at this gate, on no prior list)*
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve

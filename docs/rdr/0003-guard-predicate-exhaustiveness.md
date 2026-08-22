@@ -17,8 +17,11 @@
   closed A1 by running the evaluation harness. The tag declaration model (value
   kind, finite domain, optionality, element universe) is **rehomed from RDR 0002
   to this RDR**, closing A11/A7/A9 and A2 behind them; RDR 0002 owns authoring
-  location and normalization carriage and cites this model. A8 is the one record
-  still gating lock and needs a §JD-4 recording assignment.]
+  location and normalization carriage and cites this model. The
+  `0003-0006-0007` cluster gate (2026-08-22) closed JDR 0001 §JD-4 naming this
+  RDR the recording document, which **closes A8**; A10 and A12 remain as
+  tolerances on RDR 0006's refine, and §JD-13 adds a single-valued field to the
+  declaration model.]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -1355,13 +1358,33 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   Its optionality input is declared by this RDR's own declaration model, so the
   clause no longer waits on a peer. RDR 0007 A12 routed this question here and
   it is answered here.
-- [ ] **A8 closed.** Route: a JDR 0001 §JD-4 disposition assigning the
-  narrowing to exactly one document. Done-condition: §JD-4 names the recording
-  document, and whichever document is not it carries a citation rather than a
-  restatement. Venue: cluster reconcile (0003 · 0006 · 0007). Recommended
-  disposition: record it here (this RDR has the atom vocabulary the clause needs;
-  `atom` occurs once in RDR 0006 and only to delegate atoms to this RDR), with
-  RDR 0006 citing it and reusing `graph-unprovable-coverage`.
+- [x] **A8 closed — 2026-08-22, by the `0003-0006-0007` cluster gate.**
+  JDR 0001 §JD-4 is **CLOSED** and names **this RDR as the recording document**;
+  RDR 0006 cites the clause and mints no code, reusing
+  `graph-unprovable-coverage`. The done-condition is met: §JD-4 names one
+  recording document, and the other carries a citation rather than a
+  restatement. The clause this RDR already states (`Normative Contracts`, the
+  narrowing plus the withheld-claim form) is the record and needs no new prose.
+  §JD-4 also settled the second half: **lint gains no warning category and no
+  non-blocking tier for this class**, which retires this RDR's standing
+  dependency on that question. Consequent duty on RDR 0006, recorded at the
+  home: extend its finding contract with an atom-level field, since this RDR's
+  clause requires the finding to name the refusing atom. Evidence:
+  `docs/rdr/cluster-reconcile/0003-0006-0007/`.
+- [ ] **§JD-13 discharged (new, 2026-08-22).** The `0003-0006-0007` cluster gate
+  found that RDR 0006's lint input contract attributes "single-valued grouping"
+  to *this RDR's* tag declaration model, which never declares it — `single-valued`
+  occurs zero times here and zero times in RDR 0002 — while a mandatory blocking
+  code (`graph-single-valued-state`) and an MVV assertion depend on it. JDR 0001
+  §JD-13 decides that **this RDR's declaration model gains the field**, beside
+  value kind, finite domain, optionality, and set-element universe. Add the
+  declaration clause at refine; RDR 0006 then cites it like the rest of the model.
+- [ ] **§JD-14 noted (new, 2026-08-22).** The same gate found RDR 0006's
+  invariant 3 granting an escape-row overlap exemption this RDR normatively
+  forbids. §JD-14 decides **this RDR's reading governs** — escape rows
+  participate in the coverage union and are never excluded from overlap checks —
+  and that "claims closed coverage" is **default-on**, as this RDR reads it. The
+  repair is RDR 0006's; no edit is owed here, and the clauses stand as written.
 - [ ] **A14 closed.** Route: single-field request to RDR 0002 for a
   normalization clause retaining each atom's authored block. RDR 0002 is
   `Draft`; this is the one field that stays a peer request, because per-atom
