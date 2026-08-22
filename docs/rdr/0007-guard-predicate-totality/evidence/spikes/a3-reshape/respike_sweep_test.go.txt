@@ -1,0 +1,61 @@
+package resolve_test
+
+import (
+	"strings"
+	"testing"
+)
+
+// Q-A26: mechanical sweep of the NEW exported names against the three
+// frozen boundary tests' banned lists. The frozen tests compare with `==`
+// (exact name match); this also reports SUBSTRING containment, which is
+// the stricter reading A26 states.
+func TestRespikeNewExportedNamesClearBannedLists(t *testing.T) {
+	proposed := []string{
+		"GuardAtom", "UndecidedRow", "UndecidedAtom", "Undecided",
+		"OpExists", "LiteralTrue", "LiteralFalse",
+		"ReasonAbsent", "ReasonUncomparable", "Reasons",
+		"Block", "BlockAll", "BlockUnless", "TestGuardEvaluatorContract",
+	}
+	banned := []string{
+		// REQ-25
+		"Run", "Execute", "Apply", "Persist", "Save", "Commit", "Start", "Orchestrate",
+		// REQ-36
+		"Encode", "Decode", "Marshal", "Unmarshal",
+		"Import", "Export", "Parse", "Serialize", "Deserialize", "Invert",
+		// REQ-37
+		"Hash", "Checksum", "Canonicalize", "Fingerprint", "Digest",
+	}
+	for _, n := range proposed {
+		for _, b := range banned {
+			if n == b {
+				t.Errorf("proposed name %q IS a banned name %q", n, b)
+			}
+			if len(n) > len(b) && strings.Contains(n, b) {
+				t.Errorf("proposed name %q CONTAINS banned substring %q", n, b)
+			}
+		}
+	}
+
+	// The frozen tests walk the real package; assert the surface actually
+	// declares what this RDR spells.
+	declared := map[string]bool{}
+	for _, n := range exportedKernelSymbols(t) {
+		declared[n] = true
+	}
+	for _, n := range proposed {
+		switch n {
+		case "TestGuardEvaluatorContract":
+			// Phase 3 surface; not declared by this re-spike.
+			continue
+		case "Undecided":
+			// A FIELD of Refusal, not a top-level declaration.
+			// exportedKernelSymbols walks top-level decls only, so the
+			// three frozen boundary tests never see a field name at all —
+			// `Undecided` is out of their reach by construction.
+			continue
+		}
+		if !declared[n] {
+			t.Errorf("this RDR spells %q but the kernel does not declare it", n)
+		}
+	}
+}

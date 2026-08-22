@@ -1,0 +1,325 @@
+package resolve_test
+
+// RE-SPIKE probe for RDR 0007 (A3 / A23 / A24). NOT part of the frozen
+// suite. It pins the two things the 154 frozen tests cannot see: the
+// strong-Kleene combinator (every frozen guard is a single atom, so a
+// one-atom conjunction cannot observe combination order) and the
+// existence-operator rule with an EXPLICIT literal in both polarities.
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/newcoinc/intrastate/internal/resolve"
+)
+
+// valueSeam is a per-atom VALUE seam. It never sees the view: the kernel
+// has already decided presence and hands over the bound value. It decides
+// only "eq"; anything else it answers unevaluable (A18).
+type valueSeam struct{ calls *[]resolve.GuardAtom }
+
+func (s valueSeam) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
+	if s.calls != nil {
+		*s.calls = append(*s.calls, atom)
+	}
+	if atom.Operator != "eq" {
+		return resolve.GuardUnevaluable
+	}
+	if value == atom.Literal {
+		return resolve.GuardTrue
+	}
+	return resolve.GuardFalse
+}
+
+func atom(key, op, lit string, blk resolve.Block) resolve.GuardAtom {
+	return resolve.GuardAtom{Key: key, Operator: op, Literal: lit, Block: blk}
+}
+
+// probeInput builds a one-row table whose sole candidate carries guard.
+// The view carries status:Draft (owned) and reviews:2 (observed).
+func probeInput(guard []resolve.GuardAtom, seam resolve.GuardEvaluator) resolve.Input {
+	return resolve.Input{
+		Flow: "rdr",
+		Table: resolve.Table{
+			Revision: "rev-respike",
+			Outcomes: []string{"successful"},
+			Rows: []resolve.Row{{
+				RuleID:        "rdr.probe",
+				SourceLocator: "flows/rdr.toml:1",
+				Outcome:       "successful",
+				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
+				RequiresOwned: []string{"status"},
+				Guard:         guard,
+				NextTags:      []resolve.Tag{{Key: "status", Value: "Final"}},
+				Writes:        []resolve.Tag{{Key: "status", Value: "Final"}},
+			}},
+		},
+		Owned:      []resolve.Tag{{Key: "status", Value: "Draft"}},
+		Observed:   []resolve.Tag{{Key: "reviews", Value: "2"}},
+		Recognized: "successful",
+		Guards:     seam,
+	}
+}
+
+func resolveProbe(t *testing.T, guard []resolve.GuardAtom, seam resolve.GuardEvaluator) resolve.Result {
+	t.Helper()
+	got, err := resolve.Resolve(probeInput(guard, seam))
+	if err != nil {
+		t.Fatalf("Resolve returned a Go error: %v", err)
+	}
+	return got
+}
+
+// ---------------------------------------------------------------------------
+// Q-A24: the existence operator, with an EXPLICIT literal, in BOTH
+// polarities. RDR 0007: "Its verdict is `presence == literal`: `exists =
+// true` decides TRUE when the key is present, `exists = false` decides TRUE
+// when it is absent."
+// ---------------------------------------------------------------------------
+
+func TestRespikeExistenceBothPolarities(t *testing.T) {
+	cases := []struct {
+		name       string
+		key        string
+		literal    string
+		wantPlan   bool
+		wantRefusal resolve.RefusalKind
+	}{
+		// ABSENT key. `exists=true` decides FALSE -> the row is pruned, so
+		// zero candidates survive -> no_match (the row does not apply).
+		{"exists=true over an ABSENT key decides FALSE", "guard.missing", resolve.LiteralTrue, false, resolve.KindNoMatch},
+		// ABSENT key. `exists=false` decides TRUE -> the row is selected.
+		// This is the RDR's "one sanctioned route from absence to a verdict".
+		{"exists=false over an ABSENT key decides TRUE", "guard.missing", resolve.LiteralFalse, true, ""},
+		// PRESENT key, the mirror image of both.
+		{"exists=true over a PRESENT key decides TRUE", "reviews", resolve.LiteralTrue, true, ""},
+		{"exists=false over a PRESENT key decides FALSE", "reviews", resolve.LiteralFalse, false, resolve.KindNoMatch},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls []resolve.GuardAtom
+			seam := valueSeam{calls: &calls}
+			got := resolveProbe(t, []resolve.GuardAtom{
+				atom(tc.key, resolve.OpExists, tc.literal, resolve.BlockAll),
+			}, seam)
+
+			if len(calls) != 0 {
+				t.Errorf("the seam was consulted for an existence atom (%+v); the "+
+					"kernel MUST decide existence atoms from presence alone", calls)
+			}
+			if tc.wantPlan {
+				if got.Refused() {
+					t.Fatalf("refused %q; want the row selected", got.Refusal.Kind)
+				}
+				if got.Plan.RuleID != "rdr.probe" {
+					t.Errorf("selected rule = %q; want rdr.probe", got.Plan.RuleID)
+				}
+				return
+			}
+			if !got.Refused() {
+				t.Fatalf("emitted a plan for rule %q; want the row pruned", got.Plan.RuleID)
+			}
+			if got.Refusal.Kind != tc.wantRefusal {
+				t.Errorf("refusal kind = %q; want %q", got.Refusal.Kind, tc.wantRefusal)
+			}
+			if len(got.Refusal.Undecided) != 0 {
+				t.Errorf("a DECIDED existence atom reported an undecided payload: %+v",
+					got.Refusal.Undecided)
+			}
+		})
+	}
+}
+
+// Q-A24 fail-closed leg. RDR 0007: "A foreign LITERAL on an `OpExists` atom
+// — any value that is neither `LiteralTrue` nor `LiteralFalse`, the empty
+// literal included — is UNEVALUABLE at the kernel, reason `uncomparable`;
+// the kernel MUST NOT decide such an atom from presence, and MUST NOT treat
+// a missing literal as `LiteralFalse`."
+func TestRespikeExistenceForeignLiteralFailsClosed(t *testing.T) {
+	cases := map[string]string{
+		"MISSING literal (zero value)": "",
+		"malformed literal":            "True",
+		"foreign literal":              "yes",
+	}
+	for name, lit := range cases {
+		for _, key := range []string{"reviews" /* present */, "guard.missing" /* absent */} {
+			t.Run(name+" / key="+key, func(t *testing.T) {
+				var calls []resolve.GuardAtom
+				got := resolveProbe(t, []resolve.GuardAtom{
+					atom(key, resolve.OpExists, lit, resolve.BlockAll),
+				}, valueSeam{calls: &calls})
+
+				if len(calls) != 0 {
+					t.Errorf("the seam was consulted (%+v); an OpExists atom never "+
+						"reaches the seam", calls)
+				}
+				if !got.Refused() {
+					t.Fatalf("emitted a plan for rule %q; a foreign/missing literal "+
+						"on OpExists MUST NOT be decided from presence",
+						got.Plan.RuleID)
+				}
+				if got.Refusal.Kind != resolve.KindGuardUnevaluable {
+					t.Fatalf("refusal kind = %q; want %q", got.Refusal.Kind,
+						resolve.KindGuardUnevaluable)
+				}
+				want := []resolve.UndecidedRow{{
+					RuleID: "rdr.probe", SourceLocator: "flows/rdr.toml:1",
+					Atoms: []resolve.UndecidedAtom{{
+						Key: key, Block: resolve.BlockAll,
+						Operator: resolve.OpExists, Literal: lit,
+						Reason: resolve.ReasonUncomparable,
+					}},
+				}}
+				if !reflect.DeepEqual(got.Refusal.Undecided, want) {
+					t.Errorf("undecided payload = %+v; want %+v", got.Refusal.Undecided, want)
+				}
+			})
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Strong-Kleene combination. This is the surface the frozen suite cannot
+// see: every frozen guard is a single atom.
+// ---------------------------------------------------------------------------
+
+func TestRespikeStrongKleeneCombination(t *testing.T) {
+	present := atom("reviews", "eq", "2", resolve.BlockAll)          // TRUE
+	presentFalse := atom("reviews", "eq", "99", resolve.BlockAll)    // FALSE
+	absentValue := atom("guard.missing", "eq", "x", resolve.BlockAll) // UNEVALUABLE (absent)
+	uncomparable := atom("reviews", "gte", "3", resolve.BlockAll)     // UNEVALUABLE (seam)
+
+	t.Run("F dominates U (F AND U = F): the row is pruned, not undecidable", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{presentFalse, absentValue}, valueSeam{})
+		if !got.Refused() {
+			t.Fatalf("emitted a plan for %q", got.Plan.RuleID)
+		}
+		if got.Refusal.Kind != resolve.KindNoMatch {
+			t.Errorf("refusal kind = %q; want %q — a present-tag atom decided FALSE "+
+				"beside an unevaluable atom still yields GuardFalse (F AND U = F), "+
+				"so the row is PRUNED", got.Refusal.Kind, resolve.KindNoMatch)
+		}
+	})
+
+	t.Run("T AND U = U, not T", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{present, absentValue}, valueSeam{})
+		if !got.Refused() {
+			t.Fatalf("emitted a plan for %q; T AND U must be U, not T", got.Plan.RuleID)
+		}
+		if got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Errorf("refusal kind = %q; want %q", got.Refusal.Kind, resolve.KindGuardUnevaluable)
+		}
+	})
+
+	t.Run("all-TRUE conjunction selects the row", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{
+			present, atom("status", "eq", "Draft", resolve.BlockAll),
+			atom("reviews", resolve.OpExists, resolve.LiteralTrue, resolve.BlockAll),
+		}, valueSeam{})
+		if got.Refused() {
+			t.Fatalf("refused %q; want the row selected", got.Refusal.Kind)
+		}
+	})
+
+	t.Run("payload names EVERY unevaluable atom, sorted, with per-atom reasons", func(t *testing.T) {
+		// Deliberately supplied in an order the sort must correct.
+		got := resolveProbe(t, []resolve.GuardAtom{uncomparable, absentValue, present}, valueSeam{})
+		if !got.Refused() || got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Fatalf("want guard_unevaluable; got refused=%v", got.Refused())
+		}
+		want := []resolve.UndecidedRow{{
+			RuleID: "rdr.probe", SourceLocator: "flows/rdr.toml:1",
+			Atoms: []resolve.UndecidedAtom{
+				{Key: "guard.missing", Block: resolve.BlockAll, Operator: "eq", Literal: "x", Reason: resolve.ReasonAbsent},
+				{Key: "reviews", Block: resolve.BlockAll, Operator: "gte", Literal: "3", Reason: resolve.ReasonUncomparable},
+			},
+		}}
+		if !reflect.DeepEqual(got.Refusal.Undecided, want) {
+			t.Errorf("undecided payload = %+v; want %+v", got.Refusal.Undecided, want)
+		}
+	})
+
+	t.Run("a NIL seam does not make a kernel-decidable row unevaluable", func(t *testing.T) {
+		// Existence atoms and absent-key atoms are kernel-decided, so this
+		// row resolves under a nil seam exactly as it would under a present one.
+		got := resolveProbe(t, []resolve.GuardAtom{
+			atom("reviews", resolve.OpExists, resolve.LiteralTrue, resolve.BlockAll),
+			atom("guard.missing", resolve.OpExists, resolve.LiteralFalse, resolve.BlockAll),
+		}, nil)
+		if got.Refused() {
+			t.Fatalf("refused %q under a nil seam; the kernel decides existence "+
+				"atoms without consulting the seam", got.Refusal.Kind)
+		}
+	})
+
+	t.Run("a NIL seam yields uncomparable only for a present-key VALUE atom", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{present}, nil)
+		if !got.Refused() || got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Fatalf("want guard_unevaluable under a nil seam; refused=%v", got.Refused())
+		}
+		atoms := got.Refusal.Undecided[0].Atoms
+		if len(atoms) != 1 || atoms[0].Reason != resolve.ReasonUncomparable {
+			t.Errorf("atoms = %+v; want reason %q — the key is PRESENT, so %q "+
+				"would be a lie, and a nil seam is not itself a reason",
+				atoms, resolve.ReasonUncomparable, resolve.ReasonAbsent)
+		}
+	})
+}
+
+// unless-block negation and the empty-block identities.
+func TestRespikeUnlessBlock(t *testing.T) {
+	t.Run("unless block is negated as a block", func(t *testing.T) {
+		// all: TRUE; unless: TRUE -> verdict T AND NOT T = F -> pruned.
+		got := resolveProbe(t, []resolve.GuardAtom{
+			atom("reviews", "eq", "2", resolve.BlockAll),
+			atom("status", "eq", "Draft", resolve.BlockUnless),
+		}, valueSeam{})
+		if !got.Refused() || got.Refusal.Kind != resolve.KindNoMatch {
+			t.Errorf("want no_match (row pruned by the unless block); refused=%v", got.Refused())
+		}
+	})
+
+	t.Run("unless FALSE leaves the row selected", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{
+			atom("reviews", "eq", "2", resolve.BlockAll),
+			atom("status", "eq", "Landed", resolve.BlockUnless),
+		}, valueSeam{})
+		if got.Refused() {
+			t.Fatalf("refused %q; T AND NOT F = T", got.Refusal.Kind)
+		}
+	})
+
+	t.Run("NOT U = U", func(t *testing.T) {
+		got := resolveProbe(t, []resolve.GuardAtom{
+			atom("reviews", "eq", "2", resolve.BlockAll),
+			atom("guard.missing", "eq", "x", resolve.BlockUnless),
+		}, valueSeam{})
+		if !got.Refused() || got.Refusal.Kind != resolve.KindGuardUnevaluable {
+			t.Errorf("want guard_unevaluable; refused=%v", got.Refused())
+		}
+	})
+
+	t.Run("an empty atom slice is TRUE without consulting the view", func(t *testing.T) {
+		if got := resolveProbe(t, nil, nil); got.Refused() {
+			t.Errorf("refused %q; a row with no atoms is TRUE", got.Refusal.Kind)
+		}
+	})
+}
+
+// Q-A23: the Reason set is closed and enumerable, mirroring RefusalKinds().
+func TestRespikeReasonSetIsClosed(t *testing.T) {
+	want := []resolve.Reason{resolve.ReasonAbsent, resolve.ReasonUncomparable}
+	if !reflect.DeepEqual(resolve.Reasons(), want) {
+		t.Errorf("Reasons() = %v; want %v in declaration order", resolve.Reasons(), want)
+	}
+	if string(resolve.ReasonAbsent) != "absent" || string(resolve.ReasonUncomparable) != "uncomparable" {
+		t.Errorf("reason spellings drifted: %q %q", resolve.ReasonAbsent, resolve.ReasonUncomparable)
+	}
+	if resolve.OpExists != "exists" || resolve.LiteralTrue != "true" || resolve.LiteralFalse != "false" {
+		t.Errorf("existence constants drifted: %q %q %q",
+			resolve.OpExists, resolve.LiteralTrue, resolve.LiteralFalse)
+	}
+	if resolve.BlockAll != "all" || resolve.BlockUnless != "unless" {
+		t.Errorf("block constants drifted: %q %q", resolve.BlockAll, resolve.BlockUnless)
+	}
+}
