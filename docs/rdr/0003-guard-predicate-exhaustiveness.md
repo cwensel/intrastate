@@ -37,9 +37,11 @@ intrastate is a Go CLI wired through `internal/cli`. Guard predicates are consum
 
 ### Investigation
 
-The seed is still current: there is no implemented resolver, transition table,
-or guard package under `internal/`; the only current consumers are the peer RDRs
-and the future lint/resolver seams. RDR 0001 requires guard evaluation to feed
+RDR 0001's kernel now ships as `internal/resolve`; there is still no transition
+table or guard-predicate package under `internal/`, and no guard evaluator. The
+kernel calls the guard seam this RDR owns (`resolve.go::GuardEvaluator`) but
+supplies no implementation of it. Remaining consumers are the peer RDRs and the
+future lint seam. RDR 0001 requires guard evaluation to feed
 exact-one edge selection, RDR 0002 names positive `all` and negative `unless`
 guard lists but delegates the operator grammar here, and RDR 0006 will depend on
 this RDR for static determinism and exhaustiveness checks.
@@ -85,10 +87,11 @@ Sibling-path check for an existing guard identity or predicate signal:
 rg -n "resolve|resolver|transition|state|guard|tag|predicate|recognized|outcome|next legal|illegal|refus" internal cmd docs
 ```
 
-The search found no implemented guard predicate evaluator under `internal/`.
-The adjacent design signal is RDR 0002's `all`/`unless` split and exact-one row
-selection, so this RDR extends that signal instead of inventing a parallel
-guard model.
+The search found no implemented guard predicate evaluator under `internal/` —
+`internal/resolve` declares the `GuardEvaluator` seam and calls it, but no type
+satisfies it. The adjacent design signal is RDR 0002's `all`/`unless` split and
+exact-one row selection, so this RDR extends that signal instead of inventing a
+parallel guard model.
 
 ### Key Discoveries
 
@@ -149,7 +152,7 @@ guard model.
   actionable diagnostics.**
   - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: The normalized atom shape is fixed at the kernel seam by JDR 0001 §D1 and landed in RDR 0007 — a row carries parsed atoms (key, operator token, literal, block), not an opaque predicate string, so there is no reconstruction step that could lose identity. RDR 0002 `Normative Contracts` require each normalized candidate row to retain source rule id and source locator, and its `Validation / Testing Strategy` carries those through `all`/`unless` expansion; RDR 0006 consumes the same source rule ids/spans for graph lint findings.
+  - **Evidence**: The normalized atom shape is fixed at the kernel seam by JDR 0001 §D1; RDR 0007 is the landing document and states it normatively — a row carries parsed atoms (key, operator token, literal, block), not an opaque predicate string, so there is no reconstruction step that could lose identity. RDR 0007 is `Final`, not yet implemented: the shipped kernel still carries `Row.Guard string`, and 0007's A3 scopes the reshape. The source identity this assumption is about already ships — `internal/resolve/resolve.go::Row` carries `RuleID` and `SourceLocator`. RDR 0002 `Normative Contracts` require each normalized candidate row to retain source rule id and source locator, and its `Validation / Testing Strategy` carries those through `all`/`unless` expansion; RDR 0006 consumes the same source rule ids/spans for graph lint findings.
   - **If wrong**: Lint may detect an error but fail to point reviewers at the
     guard to fix.
 - **A6 Tag provenance is available to predicate lint.**
@@ -158,6 +161,38 @@ guard model.
   - **Evidence**: RDR 0002 `Normative Contracts` require the model to declare every matched or written tag, including `owned`, `observed`, or `recognized` provenance. RDR 0006 `Technical Design` consumes tag provenance and owned-tag write effects from normalized rows for owned-set-before-match and coverage checks.
   - **If wrong**: Predicate lint can still evaluate runtime truth, but it cannot
     prove that owned tags are set before they are matched.
+- **A7 An existence atom projects onto the declared-domain product as a
+  per-key presence dimension, so a row group carrying `exists` atoms stays
+  provable.**
+  - **Status**: Pending
+  - **Method**: Design Decision
+  - **Evidence**: Derivation recorded in
+    `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/research/iter-2-projection-derivation.md`.
+    RDR 0007 A12 routes the question here (`DOWNGRADED`; "it lands when 0003
+    states its existence-atom projection"), and its Phase 4 hands it over with
+    six sibling items. The row-group branch of A12's disjunction is closed:
+    RDR 0007's two-row absence pattern answers one source-state/outcome pair,
+    so both rows share one selection group and scoping cannot separate them.
+    RDR 0007 fixes `exists` as the sole TOTAL operator (`presence == literal`),
+    and A2 above requires every atom to denote a subset of the scoped product;
+    an `exists` atom denotes `{present}` or `{absent}`, which are subsets of a
+    presence dimension. Without that dimension the atom denotes nothing and
+    A2's coverage identity drops a live constraint. The bounded prior-art pass
+    is a recorded negative — no decision-table/DMN/rule-base verification
+    material in `PapersFast`, `StateMachineLit`, or `StateMachineRes` — so this
+    resolves as a Design Decision, never as Prior Art.
+  - **Plan**: state the projection rule as a normative clause before lock, and
+    carry the RDR 0002 producer request it depends on (below). Blocked on that
+    request: RDR 0002's tag declaration carries name, provenance, value kind,
+    and optional accessor reference, with no optionality field, so no producer
+    can today declare which keys may be absent. RDR 0002 is itself `Draft`.
+  - **If wrong**: lint either drops `exists` atoms from the product — certifying
+    a row group exhaustive that refuses `guard_unevaluable` at runtime, which
+    breaches the §JD-4 narrowing this RDR just adopted — or refuses every group
+    containing an `exists` atom, which disqualifies this RDR's own representative
+    fixture row `foundational-to-cove` and leaves RDR 0007's sanctioned two-row
+    absence pattern permanently unprovable, pushing authors back to the
+    sentinel-stamping anti-pattern.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -216,8 +251,8 @@ operator set is deliberately small: equality, membership, bounded integer
 comparison, existence, and set containment. There is no embedded host predicate
 and no free-form expression grammar.
 
-Enforcement of the guard domain is split, per JDR 0001 §D4 (landed in RDR
-0007): the kernel decides key presence, decides existence atoms from presence
+Enforcement of the guard domain is split, per JDR 0001 §D4 (normative in RDR
+0007, its landing document): the kernel decides key presence, decides existence atoms from presence
 alone, marks a value atom over an absent key unevaluable without consulting
 this RDR's evaluator, and combines per-atom verdicts. This RDR's evaluator owns
 **value semantics over a present value** — nothing more; it never sees the tag
@@ -433,6 +468,7 @@ prelock_iterations.gte = 3
 | Accessor read/write safety | RDR 0004 | Pending | Guard evaluation consumes tag values after accessor binding; it does not execute accessors. |
 | Graph lint authority | RDR 0006 | Pending | Exhaustiveness and overlap findings become blocking lint there. |
 | Kernel guard-domain enforcement and `guard_unevaluable` payload | RDR 0007 | Pending | The kernel decides presence and existence atoms; this RDR's evaluator narrows to value semantics over a present value. |
+| Per-tag optionality declaration (which keys may be absent) | RDR 0002 | Requested | A7's presence dimension needs it; RDR 0002's tag declaration carries name, provenance, value kind, and accessor reference only. Requested alongside the set-valued element encoding RDR 0007 Phase 4 routes here. |
 
 ### Existing Infrastructure Audit
 
@@ -705,12 +741,15 @@ every exactness claim tied to A2 and the MVV fixture before Final.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified (A5 re-verified against the kernel-fixed
-  atom shape, JDR 0001 §D1)
+- [ ] All Critical Assumptions verified — A1-A6 hold (A5 re-verified against the
+  kernel-fixed atom shape, JDR 0001 §D1); **A7 is Pending**, blocked on RDR
+  0002's optionality declaration
 - [x] RDR 0002's sparse table/container contract is stable enough to host guard
   atoms.
 - [x] RDR 0007 is the normative home of the guard seam, the domain rule, and the
-  `guard_unevaluable` payload this RDR cites.
+  `guard_unevaluable` payload this RDR cites. RDR 0007 is `Final`; its kernel
+  reshape is specified, not yet implemented, so this RDR's implementation
+  sequences after it.
 
 ### Minimum Viable Validation
 
@@ -863,9 +902,20 @@ source-search anchors that resolve now:
 `internal/cli/clierr/clierr.go::CLIError`,
 `internal/cli/respond/respond.go::Fail`, and
 `internal/cli/config/config.go::Load`. A5 rests on the kernel-fixed parsed-atom shape (JDR 0001 §D1, normative in RDR
-0007) plus RDR 0002's source-identity contract; A6 relies on peer RDR contracts
-in RDR 0002 and RDR 0006. Neither is self-reference. No `Source Search` Evidence
-cites this RDR or its artifact directory.
+0007) plus RDR 0002's source-identity contract, and on
+`internal/resolve/resolve.go::Row`, which already carries `RuleID` and
+`SourceLocator`; A6 relies on peer RDR contracts in RDR 0002 and RDR 0006.
+Neither is self-reference. No `Source Search` Evidence cites this RDR or its
+artifact directory.
+
+**A7 is Pending and this RDR is NOT lockable until it resolves.** It carries the
+existence-atom projection RDR 0007 A12 routed here, and it is blocked on a
+producer request to RDR 0002 (a per-tag optionality declaration) that RDR 0002,
+itself `Draft`, does not yet carry. The derivation is recorded in
+`evidence/research/iter-2-projection-derivation.md`; the bounded prior-art pass
+returned a clean negative, so it resolves as a Design Decision. Until it is
+stated as a normative clause, this RDR's exhaustiveness proof is silent on the
+one operator RDR 0007 makes total.
 
 ### Scope Verification
 
