@@ -8,7 +8,8 @@
 - **Date**: 2026-06-19
 - **Status**: Draft [revised from Final 2026-08-12; re-verify A5 —
   JDR 0001 §D1 fixes the normalized atom shape this RDR must cite rather than
-  restate; JD-4 narrows the lint promise where it and runtime disagree]
+  restate; JD-4 narrows the lint promise where it and runtime disagree, though
+  it names RDR 0006 and leaves the recording document open — see A8]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -193,6 +194,29 @@ parallel guard model.
     fixture row `foundational-to-cove` and leaves RDR 0007's sanctioned two-row
     absence pattern permanently unprovable, pushing authors back to the
     sentinel-stamping anti-pattern.
+- **A8 RDR 0006 can carry the same `guard_unevaluable` narrowing this RDR
+  states, so the two documents agree on one lint promise.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: JDR 0001 §JD-4 decides the substance ("the *promise*
+    narrows — P5 decides") but is an open entry as to which document records
+    it, and its head clause names RDR 0006's proof, not this RDR's. RDR 0007
+    reads it the same way: its Predecessors block names "**RDR 0006** (`Final`,
+    tolerance §JD-4) narrows lint's promise", and RDR 0006 carries
+    `Final [joint decision → JDR 0001 §JD-4]` on its Status line. But RDR
+    0006's exhaustiveness contract narrows only for a non-finite dimension
+    ("If a required dimension is not finite, lint MUST emit a blocking
+    inability-to-prove finding"); it says nothing about a fully-finite product
+    whose participating row can still refuse `guard_unevaluable`. This RDR now
+    states that case. Verification is a route-back to RDR 0006 confirming it
+    adopts the same wording, or a §JD-4 disposition assigning the recording to
+    one document.
+  - **Plan**: raise the divergence at cluster reconcile before either document
+    locks; RDR 0006 is `Final`, so closing this needs a route-back, not a
+    silent edit here.
+  - **If wrong**: the two documents state one lint promise two ways — the
+    single-source failure §JD-4 exists to prevent — and an implementer reading
+    only RDR 0006 certifies a row group exhaustive that this RDR forbids.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -331,10 +355,19 @@ refuse or downgrade the exhaustiveness claim instead of silently capping the
 proof.
 
 Where this exhaustiveness proof and RDR 0007's aggregation veto disagree, the
-**promise narrows** (JDR 0001 §JD-4): a green exhaustiveness result must mean
-resolution succeeds. Lint therefore cannot certify a row group exhaustive when
-any participating row could refuse `guard_unevaluable` at runtime; the runtime
-veto is not weakened to make lint's claim true. Provenance affects lint: recognized tags are fresh event inputs, observed
+**promise narrows**: a green exhaustiveness result must mean resolution
+succeeds. Lint therefore cannot certify a row group exhaustive when any
+participating row could refuse `guard_unevaluable` at runtime; the runtime veto
+is not weakened to make lint's claim true.
+
+JDR 0001 §JD-4 decides that substance ("the *promise* narrows — P5 decides")
+but leaves open **which document records it**, and its head clause names RDR
+0006's proof rather than this RDR's. This RDR records the narrowing for the
+proof it defines, because the constraint binds what its own finite-domain
+product may claim. RDR 0006 is `Final` under the §JD-4 tolerance and its
+exhaustiveness clause covers only the non-finite-dimension refusal, so it does
+not yet carry this case; A8 tracks the agreement the two documents owe each
+other. Provenance affects lint: recognized tags are fresh event inputs, observed
 tags are re-read before matching, and owned tags must have a reachable
 predecessor write before a row may match them.
 
@@ -391,7 +424,9 @@ as one product rather than as independent one-dimensional checks.
 An exhaustiveness claim MUST NOT be stronger than the runtime it describes: lint
 MUST NOT certify a row group exhaustive when a participating row can refuse
 `guard_unevaluable` under RDR 0007's aggregation veto. Where the two disagree
-the lint promise narrows; the runtime veto MUST NOT be weakened.
+the lint promise narrows; the runtime veto MUST NOT be weakened. RDR 0006, which
+holds the JDR 0001 §JD-4 tolerance, MUST carry this same narrowing for the
+findings it emits; the two documents MUST NOT state it differently.
 ```
 
 ```normative
@@ -411,6 +446,64 @@ Predicate lint MUST distinguish owned, observed, and recognized tags. A row
 that matches an owned tag MUST be rejected unless every reachable predecessor
 sets or preserves that tag before the match.
 ```
+
+#### `authority` — source-authority census
+
+Cue: the exhaustiveness verdict has more than one candidate source of truth
+(this RDR and RDR 0006), and guard-domain enforcement is split across the kernel
+and this RDR's evaluator.
+
+| Input / decision | Writer (canonical) | Readers | Sibling arms | Which is canonical |
+| --- | --- | --- | --- | --- |
+| Key presence | Kernel (RDR 0007, JDR 0001 §D4) | This RDR's lint; RDR 0001 selection | This RDR's evaluator — **explicitly not an arm**; it never reads the tag view | Kernel |
+| Existence-atom verdict | Kernel, from presence alone (`presence == literal`) | Lint's presence dimension (A7) | Value atoms over the same key (unevaluable on absence) | Kernel |
+| Value-atom verdict over a present value | This RDR's evaluator | Kernel combinator | None | This RDR |
+| Per-atom verdict combination | Kernel (strong Kleene) | RDR 0001 exact-one selection | None | Kernel |
+| Exhaustiveness verdict for a row group | **This RDR** (finite-domain product proof) | RDR 0006 lint findings; RDR 0005 envelope | RDR 0006's own exhaustiveness clause — non-finite-dimension case only | **Contested — A8.** This RDR states the `guard_unevaluable` narrowing; RDR 0006 holds the §JD-4 tolerance but does not carry it. Must converge before lock. |
+| Guard atom shape | Kernel seam (JDR 0001 §D1, normative in RDR 0007) | This RDR's grammar; RDR 0002's normalizer | Shipped `Row.Guard string` — the pre-reshape form | Kernel seam (specified); the shipped string form is superseded, not an arm |
+| Source identity for diagnostics | RDR 0002 normalization (`RuleID`, `SourceLocator`) | This RDR's diagnostics; RDR 0006 findings | None | RDR 0002 |
+| Per-tag optionality (which keys may be absent) | RDR 0002 — **not yet declared** | A7's presence dimension | None | RDR 0002 (requested; A7 blocked on it) |
+
+#### `disposition` — input class × outcome
+
+Cue: the draft sets outcomes over input classes (refuse, downgrade, prune,
+unevaluable).
+
+| Input class | Runtime outcome | Lint outcome | Diagnostic minted | Silent or loud |
+| --- | --- | --- | --- | --- |
+| Every `all` atom decides true; `unless` block not fully true | Row qualifies | Row contributes its accepted assignments | none | — |
+| `all` atom decides false | Row pruned | Row contributes nothing | none | Silent by design — a decided false is not a defect |
+| Full `unless` block decides true | Row disabled | Excluded intersection subtracted | none | Silent by design |
+| Value atom over an absent key | `guard_unevaluable` refusal (RDR 0007 veto) | Exhaustiveness claim **withheld** for that group | Per-row/per-atom payload — RDR 0007's (key, block, reason `absent`) | Loud |
+| Existence atom over an absent key | Decided (`presence == literal`) — never unevaluable | Selects `{absent}` on the presence dimension (A7) | none | — |
+| Zero rows qualify | RDR 0001 refuses | Coverage gap if the product is provable | `graph-coverage-gap` (RDR 0006) | Loud |
+| Two or more rows qualify | RDR 0001 refuses — never first-match | Overlap finding | Overlap code (RDR 0006), naming both source rule ids | Loud |
+| Guard dimension lacks a finite declared domain | Evaluable at runtime | **Refuse or downgrade** the claim — never treat examples as complete | Inability-to-prove finding | Loud |
+| Finite product too large to prove deterministically | Evaluable at runtime | **Refuse or downgrade** — never silently cap enumeration | Inability-to-prove finding | Loud |
+| Unknown operator / unknown tag / operator–kind mismatch / literal parse failure | Rejected before resolution | Rejected at load | Predicate semantic kind (this RDR) → RDR 0006 finding → RDR 0005 envelope | Loud |
+| Row group is domain-exhaustive but a participating row can refuse | Refusal stands | Claim withheld — the narrowing | RDR 0007 payload; no green certification | Loud |
+
+#### `trace` — desk trace over the MVV
+
+Cue: ten normative clauses bear on one output surface — the exhaustiveness
+verdict for a row group. Walked stepwise against the MVV, with witnesses from
+`evidence/spikes/guard-fixture.toml`.
+
+| Step | Assertions in force | Witness | Verdict |
+| --- | --- | --- | --- |
+| 1. Load the RDR/kata slice as normalized candidate rows | atoms-not-callbacks; closed typed operator vocabulary; operator declares accepted kinds | `profile-to-grounding` parses to `profile in [mid,large]` + `unless prelock_iterations gte 3`; operators all in the matrix | OK |
+| 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
+| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`; both finite | OK |
+| 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
+| 5. Project the `exists` atom | A7 presence dimension — **Pending** | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no element selects presence | **GAP — booked as A7, not a contradiction.** Without the presence dimension this step has no defined result. A7 is `Pending` with a plan; the draft does not claim the step succeeds. |
+| 6. Compute coverage | `union(row_i accepted) == scoped product` | Step 5 unresolved for this group; groups with no `exists` atom compute normally (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK for `exists`-free groups; blocked on A7 otherwise |
+| 7. Compute overlap | any non-empty pairwise intersection; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → rows disjoint on that dimension | OK |
+| 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 6's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
+| 9. Emit the verdict | diagnostics name the contributing source rule/context id | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row` | OK |
+| 10. Cross-document agreement | the two documents MUST NOT state the narrowing differently | RDR 0006 carries no `guard_unevaluable` narrowing | **GAP — booked as A8.** Not a contradiction inside this draft; a divergence with a `Final` sibling that needs a route-back. |
+
+No CONTRADICTION row. The two GAP rows are the draft's two `Pending`
+assumptions, each carrying a named plan; neither is asserted as already true.
 
 #### Load-Bearing Decisions
 
@@ -485,7 +578,9 @@ Joint-check: fired → RDR 0007 is the normative home of the guard seam (JDR 000
 `GuardEvaluator` seam, the kernel-exported existence operator token and boolean
 literal forms RDR 0002's normalizer emits, exact key identity at the kernel, and
 the per-atom `guard_unevaluable` payload. This RDR cites those rather than
-restating them, and narrows its own lint promise under §JD-4.
+restating them. It also records the §JD-4 narrowing for its own proof — §JD-4
+decides the substance but leaves the recording document open, and names RDR
+0006's proof in its head clause; A8 carries the resulting sibling obligation.
 
 The fixed symbolic atom model best matches the user's outcome: flow authors can
 write conditional edges, and lint can still prove whether those edges are
@@ -743,7 +838,8 @@ every exactness claim tied to A2 and the MVV fixture before Final.
 
 - [ ] All Critical Assumptions verified — A1-A6 hold (A5 re-verified against the
   kernel-fixed atom shape, JDR 0001 §D1); **A7 is Pending**, blocked on RDR
-  0002's optionality declaration
+  0002's optionality declaration; **A8 is Pending**, blocked on a route-back to
+  `Final` RDR 0006 to agree one lint promise
 - [x] RDR 0002's sparse table/container contract is stable enough to host guard
   atoms.
 - [x] RDR 0007 is the normative home of the guard seam, the domain rule, and the
@@ -880,19 +976,24 @@ The research supports a symbolic guard-atom model over declared tag domains, and
 the proposed solution keeps host callbacks and free-form expression strings out
 of the contract so lint can prove finite-domain coverage and overlap.
 
-Two boundary contradictions with RDR 0007 are resolved rather than open. First,
-guard-domain enforcement: the kernel decides presence and existence atoms, so
-this RDR's evaluator is scoped to value semantics over a present value (JDR 0001
-§D4). Second, the strength of the exhaustiveness claim: where this RDR's proof
-and RDR 0007's aggregation veto disagree, the lint promise narrows and the
-runtime veto stands (§JD-4).
+Guard-domain enforcement is resolved rather than open: the kernel decides
+presence and existence atoms, so this RDR's evaluator is scoped to value
+semantics over a present value (JDR 0001 §D4, a Closed entry).
+
+The strength of the exhaustiveness claim is decided in substance but not yet
+agreed across documents. §JD-4 settles that the lint promise narrows and the
+runtime veto stands, and this RDR now states that for its own proof. §JD-4
+remains open as to which document records it and names RDR 0006's proof; RDR
+0006 is `Final` under that tolerance and carries no `guard_unevaluable`
+narrowing. A8 tracks the resulting divergence, which must close before lock.
 
 ### Assumption Verification
 
 All Critical Assumption records are internally consistent: A1 through A6 are
 `Verified`, each uses an allowed Method label, each has concrete Evidence, and
-each has a non-empty "If wrong" consequence. No record uses `Docs Only`, and no
-record remains `Pending` or `Unverified`.
+each has a non-empty "If wrong" consequence. No record uses `Docs Only`. Two
+records remain `Pending` — A7 and A8, each with a named plan below; neither is
+`Unverified`.
 
 A1 is backed by the Resolve spike transcript in
 `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/output.txt`. A2
@@ -916,6 +1017,12 @@ itself `Draft`, does not yet carry. The derivation is recorded in
 returned a clean negative, so it resolves as a Design Decision. Until it is
 stated as a normative clause, this RDR's exhaustiveness proof is silent on the
 one operator RDR 0007 makes total.
+
+**A8 is Pending and also blocks lock.** This RDR now records the §JD-4
+narrowing for its own proof, but §JD-4 is an open ledger entry that names RDR
+0006's proof and leaves the recording document unassigned, and `Final` RDR 0006
+carries no `guard_unevaluable` narrowing. Closing it needs a route-back to RDR
+0006 or a §JD-4 disposition, not an edit here.
 
 ### Scope Verification
 
@@ -952,7 +1059,9 @@ The `large` Profile still matches because this RDR locks a grammar and
 finite-domain proof semantics. The required large-profile lenses ran
 (`grounding`, `3amigo`, and `critique`); every finding they raised is either
 resolved in the live text above or carried as a named obligation in the Minimum
-Viable Validation and Testing Strategy.
+Viable Validation and Testing Strategy. The re-entry re-runs that row against
+the revised text: `grounding` iteration 2 is complete, and its `authority`,
+`disposition`, and `trace` mini-check tables are carried above.
 
 ## References
 
@@ -962,7 +1071,8 @@ Viable Validation and Testing Strategy.
 - RDR 0007, Guard Predicate Totality — normative home of the guard seam, the
   domain rule, and the `guard_unevaluable` payload.
 - JDR 0001, Resolve Kernel Seam — §D1 (parsed-atom row shape), §D4 (kernel
-  enforces the guard domain), §JD-4 (the lint promise narrows).
+  enforces the guard domain), §JD-4 (the lint promise narrows — substance
+  decided, recording document still open, head clause names RDR 0006).
 - `docs/cli-output-contract.md`.
 - Resource index: `.rdr/resources.md`.
 - Seed prior: `../state-machines/BUILD-SEEDS.md`, especially the guard
