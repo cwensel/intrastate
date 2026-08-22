@@ -122,7 +122,6 @@ guard model.
   - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: `cd docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes && sh check.sh guard-fixture.toml` validated four representative guard rows covering status/profile routing, cap-3 handling, prelock lens sets, cluster eligibility, and rewind legality with only `eq`, `in`, `lt`, `gte`, and `exists`; transcript captured in `docs/rdr/0003-guard-predicate-exhaustiveness/evidence/spikes/output.txt`.
-  - **Reconciliation**: Stage 6 treats the pre-lock `contains` finding as a validation obligation, not as evidence for the target-flow subset: Phase 3 and MVV Scenario 1 require at least one `contains` predicate over a declared set-valued tag before accepting the full operator vocabulary.
   - **If wrong**: The fixed operator set is too small, and authors will need an
     expression grammar or host predicates that weaken static lint.
 - **A2 Every exhaustiveness claim can be reduced to scoped finite declared
@@ -130,7 +129,6 @@ guard model.
   - **Status**: Verified
   - **Method**: Derivation
   - **Evidence**: For every exhaustiveness-eligible row group, lint receives the candidate rows that share a selection context from the normalized model plus finite domains for the guard dimensions that vary inside that group: enum/boolean values as declared sets, set-valued tags as a symbolic set over the declared element universe, and bounded integers as `{min..max}`. A row with `all` atoms denotes the intersection of each atom's allowed subset of the scoped product; its `unless` block denotes an excluded intersection that is subtracted from the row's accepted assignments. Coverage is `union(row_i accepted assignments) == scoped product` for that row group, and overlap is any non-empty `row_i accepted assignments intersect row_j accepted assignments`. If any participating dimension lacks a finite domain, or the finite product cannot be represented by the implementation's symbolic/bitset-equivalent proof, lint must refuse or downgrade the exhaustiveness claim.
-  - **Reconciliation**: Stage 6 confirms the critique findings are absorbed: MVV Scenario 2 requires row-group gap and overlap cases visible only in the multi-dimensional product, and MVV Scenario 3 requires refusal/downgrade when a finite product is too large to prove deterministically.
   - **If wrong**: Lint may falsely claim guard coverage or miss legal gaps in
     cap/profile/lens routing.
 - **A3 `all` plus `unless` is enough polarity; inline `not` operators are not
@@ -138,22 +136,20 @@ guard model.
   - **Status**: Verified
   - **Method**: Design Decision
   - **Evidence**: This RDR chooses separate positive and negative guard lists: `all` is the required conjunctive predicate set, `unless` is the conjunctive exclusion set, and RDR 0002's normalized candidate-row contract combines both before ambiguity checks. Inline `not` and nested boolean expressions are rejected to keep each diagnostic tied to an authored atom and to preserve finite-domain coverage/overlap derivation.
-  - **Reconciliation**: Stage 6 confirms the 3amigo `unless` finding is absorbed: MVV Scenario 1 requires a disabled-row assertion where every positive predicate matches and the full conjunctive `unless` block disables the row.
   - **If wrong**: Authors will duplicate rows or encode confusing inverse
     predicates that make overlap diagnostics harder to understand.
 - **A4 Guard predicate errors can use the existing structured CLI failure
   gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, and unevaluable guard; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
-  - **Reconciliation**: Stage 6 confirms the critique handoff finding is absorbed: Testing Scenario 4 requires one documented ownership chain from predicate semantic kind through RDR 0006 lint finding to RDR 0005 CLI envelope.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, and unsupported operator/tag-kind pairing; the per-row/per-atom `guard_unevaluable` payload is RDR 0007's under JDR 0001 §D4; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
   - **If wrong**: This RDR or RDR 0005 must add a separate user-facing error
     contract before implementation.
 - **A5 The normalized predicate representation can retain source identity for
   actionable diagnostics.**
   - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0002 `Normative Contracts` require each normalized candidate row to retain source rule id and source locator; its `Validation / Testing Strategy` requires normalized rows to retain source rule ids/source locators while inherited predicates and `all`/`unless` guards are expanded. RDR 0006 also consumes source rule ids/spans for graph lint findings.
+  - **Evidence**: The normalized atom shape is fixed at the kernel seam by JDR 0001 §D1 and landed in RDR 0007 — a row carries parsed atoms (key, operator token, literal, block), not an opaque predicate string, so there is no reconstruction step that could lose identity. RDR 0002 `Normative Contracts` require each normalized candidate row to retain source rule id and source locator, and its `Validation / Testing Strategy` carries those through `all`/`unless` expansion; RDR 0006 consumes the same source rule ids/spans for graph lint findings.
   - **If wrong**: Lint may detect an error but fail to point reviewers at the
     guard to fix.
 - **A6 Tag provenance is available to predicate lint.**
@@ -220,6 +216,13 @@ operator set is deliberately small: equality, membership, bounded integer
 comparison, existence, and set containment. There is no embedded host predicate
 and no free-form expression grammar.
 
+Enforcement of the guard domain is split, per JDR 0001 §D4 (landed in RDR
+0007): the kernel decides key presence, decides existence atoms from presence
+alone, marks a value atom over an absent key unevaluable without consulting
+this RDR's evaluator, and combines per-atom verdicts. This RDR's evaluator owns
+**value semantics over a present value** — nothing more; it never sees the tag
+view.
+
 Each tag declaration supplies the value kind and, when lint must prove
 exhaustiveness, the finite domain: enum values, boolean values, set element
 universe, or bounded integer range. Runtime guard evaluation is simple predicate
@@ -236,7 +239,7 @@ The initial operator/kind matrix is:
 | `eq` | enum, boolean, integer, string-like scalar | one typed scalar | Narrows the tag domain to one value. |
 | `in` | enum, boolean, integer, string-like scalar | non-empty typed scalar set | Narrows the tag domain to the listed values. |
 | `lt`, `lte`, `gt`, `gte` | integer | one typed integer | Narrows a bounded integer domain by comparison; remains runtime-only for an unbounded integer. |
-| `exists` | optional scalar or optional set-valued tag | boolean | Tests presence or absence, not value equality. |
+| `exists` | optional scalar or optional set-valued tag | boolean | Tests presence or absence, not value equality. Decided by the kernel from presence alone (JDR 0001 §D4); it never reaches this RDR's evaluator. |
 | `contains` | set-valued tag with a declared element universe | non-empty typed element set | Narrows the set-valued domain to assignments containing every listed element. |
 
 This intentionally aligns with prior art that separates positive and negative
@@ -257,7 +260,16 @@ A predicate atom has four conceptual fields: tag name, operator, expected value,
 and source identity. The tag name must resolve to a declared tag. The operator
 must be allowed by the operator/kind matrix above. The expected value must parse
 to the operator's literal shape. Source identity is inherited from the RDR 0002
-row/context so diagnostics can point back to the authored guard.
+row/context so diagnostics can point back to the authored guard. The atom shape
+itself is fixed at the kernel seam by JDR 0001 §D1 and stated normatively in RDR
+0007; this RDR cites it rather than restating it.
+
+Because the kernel decides presence, a value atom over an absent key is
+unevaluable rather than false, and an existence atom over an absent key is
+decided — not unevaluable. This RDR's requirement that every guard resolve to a
+declared tag is therefore read against `exists = false`: an author expressing
+"this row applies when tag X is absent" writes an existence atom, not a value
+atom that happens to miss.
 
 Positive `all` predicates are conjunctive requirements. Negative `unless`
 predicates are also conjunctive within the excluded predicate set: if all
@@ -281,7 +293,13 @@ still compare an unbounded integer at runtime, but lint must report that it
 cannot prove exhaustive coverage for that dimension. If a finite scoped product
 is too large for the implementation to prove deterministically, lint must also
 refuse or downgrade the exhaustiveness claim instead of silently capping the
-proof. Provenance affects lint: recognized tags are fresh event inputs, observed
+proof.
+
+Where this exhaustiveness proof and RDR 0007's aggregation veto disagree, the
+**promise narrows** (JDR 0001 §JD-4): a green exhaustiveness result must mean
+resolution succeeds. Lint therefore cannot certify a row group exhaustive when
+any participating row could refuse `guard_unevaluable` at runtime; the runtime
+veto is not weakened to make lint's claim true. Provenance affects lint: recognized tags are fresh event inputs, observed
 tags are re-read before matching, and owned tags must have a reachable
 predecessor write before a row may match them.
 
@@ -305,6 +323,13 @@ resolution.
 ```
 
 ```normative
+This RDR's guard evaluator MUST decide value semantics over a present value
+only. Key presence, existence atoms, absent-key unevaluability, and the
+combination of per-atom verdicts belong to the kernel (JDR 0001 §D4, normative
+in RDR 0007); the evaluator MUST NOT read the tag view.
+```
+
+```normative
 Positive guard atoms MUST live in `all`; negative guard atoms MUST live in
 `unless`. Successful row matching MUST NOT depend on source order or
 first-match priority.
@@ -325,6 +350,13 @@ covered examples as complete.
 Coverage and overlap checks MUST be scoped to a normalized row group supplied by
 the transition/lint model, and MUST evaluate the participating guard dimensions
 as one product rather than as independent one-dimensional checks.
+```
+
+```normative
+An exhaustiveness claim MUST NOT be stronger than the runtime it describes: lint
+MUST NOT certify a row group exhaustive when a participating row can refuse
+`guard_unevaluable` under RDR 0007's aggregation veto. Where the two disagree
+the lint promise narrows; the runtime veto MUST NOT be weakened.
 ```
 
 ```normative
@@ -365,9 +397,10 @@ sets or preserves that tag before the match.
   observed in fixtures. Unbounded dimensions and finite products that cannot be
   represented deterministically remain runtime-evaluable but cannot satisfy an
   exhaustiveness proof.
-- **Error ownership** — this RDR names predicate semantic kinds; RDR 0006 maps
-  graph-level predicate failures to lint finding codes, and RDR 0005 maps those
-  findings/refusals to the CLI envelope.
+- **Error ownership** — this RDR names predicate semantic kinds over present
+  values; RDR 0007 owns the per-row/per-atom `guard_unevaluable` payload (JDR
+  0001 §D4), RDR 0006 maps graph-level predicate failures to lint finding codes,
+  and RDR 0005 maps those findings/refusals to the CLI envelope.
 - **Selection / predicate** — a row qualifies only when every `all` atom is true
   and the `unless` predicate set is not fully true; if multiple rows qualify,
   RDR 0001's exact-one resolver refuses instead of choosing by priority.
@@ -399,6 +432,7 @@ prelock_iterations.gte = 3
 | Guard predicate grammar and finite-domain semantics | This RDR | Introduced | Lint and runtime share one symbolic predicate model. |
 | Accessor read/write safety | RDR 0004 | Pending | Guard evaluation consumes tag values after accessor binding; it does not execute accessors. |
 | Graph lint authority | RDR 0006 | Pending | Exhaustiveness and overlap findings become blocking lint there. |
+| Kernel guard-domain enforcement and `guard_unevaluable` payload | RDR 0007 | Pending | The kernel decides presence and existence atoms; this RDR's evaluator narrows to value semantics over a present value. |
 
 ### Existing Infrastructure Audit
 
@@ -410,7 +444,12 @@ prelock_iterations.gte = 3
 
 ### Decision Rationale
 
-Joint-check: fired → 0007 (home: JDR 0001 §D4 / §JD-12) — RDR 0007's re-propose (2026-08-21) places guard-domain enforcement in the kernel; §D4 settles the value-only per-atom `GuardEvaluator` seam, the kernel-exported existence operator token and boolean literal forms the normalizer MUST emit, exact key identity at the kernel, and the per-atom `guard_unevaluable` payload replacing `Refusal.Guard`. 0007 is the landing document; this RDR cites §D4 rather than restating it.
+Joint-check: fired → RDR 0007 is the normative home of the guard seam (JDR 0001
+§D1, §D4). It fixes the parsed-atom row shape, the value-only per-atom
+`GuardEvaluator` seam, the kernel-exported existence operator token and boolean
+literal forms RDR 0002's normalizer emits, exact key identity at the kernel, and
+the per-atom `guard_unevaluable` payload. This RDR cites those rather than
+restating them, and narrows its own lint promise under §JD-4.
 
 The fixed symbolic atom model best matches the user's outcome: flow authors can
 write conditional edges, and lint can still prove whether those edges are
@@ -656,7 +695,9 @@ skills.
 Visible failures should be typed parse or lint failures: unknown operator,
 operator/tag-kind mismatch, literal parse failure, unknown tag, non-exhaustive
 finite domain, overlapping candidate rows, guard dimension not provable because
-it lacks a finite domain, or finite scoped product too large to prove. Silent
+it lacks a finite domain, or finite scoped product too large to prove. A guard
+that cannot be decided at runtime surfaces as RDR 0007's `guard_unevaluable`
+refusal, not as a predicate parse kind owned here. Silent
 failure would be a false exhaustiveness claim; the recovery path is to keep
 every exactness claim tied to A2 and the MVV fixture before Final.
 
@@ -664,9 +705,12 @@ every exactness claim tied to A2 and the MVV fixture before Final.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified
+- [x] All Critical Assumptions verified (A5 re-verified against the kernel-fixed
+  atom shape, JDR 0001 §D1)
 - [x] RDR 0002's sparse table/container contract is stable enough to host guard
   atoms.
+- [x] RDR 0007 is the normative home of the guard seam, the domain rule, and the
+  `guard_unevaluable` payload this RDR cites.
 
 ### Minimum Viable Validation
 
@@ -675,7 +719,10 @@ including equality, enum membership, set containment, bounded integer
 comparison, and mixed `all`/`unless` guards. Lint must prove one exhaustive and
 mutually exclusive scoped row group, then detect one intentional gap and one
 intentional overlap that only appear in the multi-dimensional product, with
-source rule/context ids in the diagnostic.
+source rule/context ids in the diagnostic. The fixture must also include one row
+group that is domain-exhaustive yet contains a possibly-absent guard key, and
+assert that lint withholds the exhaustiveness claim there rather than
+contradicting the runtime refusal.
 
 ### Phase 1: Predicate Model
 
@@ -755,6 +802,14 @@ before the full closed operator vocabulary is accepted.
    **Expected**: Successful matching and lint findings are unchanged because
    source order is not a selection mechanism; an ambiguous pair remains a
    multiple-match refusal instead of becoming a first-match success.
+6. **Scenario**: Evaluate a row group whose guards are exhaustive over their
+   declared domains but where one participating row carries a value atom over a
+   key that can be absent.
+   **Expected**: The value atom is unevaluable rather than false, resolution
+   refuses `guard_unevaluable` under RDR 0007's veto, and lint does not certify
+   that row group exhaustive — the green-lint-implies-resolution-succeeds
+   promise holds. An existence atom over the same absent key decides instead of
+   refusing, and this RDR's evaluator is never consulted for either.
 
 ### Performance Expectations
 
@@ -782,11 +837,16 @@ refusal behavior.
 
 ### Contradiction Check
 
-No contradictions found between research findings, design principles, and
-proposed solution. The research supports a symbolic guard-atom model over
-declared tag domains; the proposed solution keeps host callbacks and free-form
-expression strings out of the contract so lint can prove finite-domain coverage
-and overlap.
+The research supports a symbolic guard-atom model over declared tag domains, and
+the proposed solution keeps host callbacks and free-form expression strings out
+of the contract so lint can prove finite-domain coverage and overlap.
+
+Two boundary contradictions with RDR 0007 are resolved rather than open. First,
+guard-domain enforcement: the kernel decides presence and existence atoms, so
+this RDR's evaluator is scoped to value semantics over a present value (JDR 0001
+§D4). Second, the strength of the exhaustiveness claim: where this RDR's proof
+and RDR 0007's aggregation veto disagree, the lint promise narrows and the
+runtime veto stands (§JD-4).
 
 ### Assumption Verification
 
@@ -802,8 +862,9 @@ decision that rejects inline negation and nested boolean expressions. A4 cites
 source-search anchors that resolve now:
 `internal/cli/clierr/clierr.go::CLIError`,
 `internal/cli/respond/respond.go::Fail`, and
-`internal/cli/config/config.go::Load`. A5 and A6 rely on peer RDR contracts in
-RDR 0002 and RDR 0006 rather than self-reference. No `Source Search` Evidence
+`internal/cli/config/config.go::Load`. A5 rests on the kernel-fixed parsed-atom shape (JDR 0001 §D1, normative in RDR
+0007) plus RDR 0002's source-identity contract; A6 relies on peer RDR contracts
+in RDR 0002 and RDR 0006. Neither is self-reference. No `Source Search` Evidence
 cites this RDR or its artifact directory.
 
 ### Scope Verification
@@ -839,14 +900,19 @@ than locked here: sparse table shape to RDR 0002, exact-one resolution to RDR
 
 The `large` Profile still matches because this RDR locks a grammar and
 finite-domain proof semantics. The required large-profile lenses ran
-(`grounding`, `3amigo`, and `critique`), and Stage 6 reconciled their findings
-into terminal dispositions or named implementation MVV obligations.
+(`grounding`, `3amigo`, and `critique`); every finding they raised is either
+resolved in the live text above or carried as a named obligation in the Minimum
+Viable Validation and Testing Strategy.
 
 ## References
 
 - RDR 0001, Resolution Kernel Contract.
 - RDR 0002, Transition Table As Reviewable Data.
 - RDR 0006, Graph Lint Authority and Guarantees.
+- RDR 0007, Guard Predicate Totality — normative home of the guard seam, the
+  domain rule, and the `guard_unevaluable` payload.
+- JDR 0001, Resolve Kernel Seam — §D1 (parsed-atom row shape), §D4 (kernel
+  enforces the guard domain), §JD-4 (the lint promise narrows).
 - `docs/cli-output-contract.md`.
 - Resource index: `.rdr/resources.md`.
 - Seed prior: `../state-machines/BUILD-SEEDS.md`, especially the guard
@@ -856,25 +922,3 @@ into terminal dispositions or named implementation MVV obligations.
 - Prior-art corpus: `../state-machines` audits, evals, contrasts, and checked
   repositories for `transitions`, stateless/qmuntal-stateless, SCXML/scxmlcc,
   Sismic, StateSmith, and Statewright.
-
-## Refinement Context (JDR re-entry — delete on re-lock)
-
-Source: **JDR 0001 §D1** and **§JD-4** (`docs/jdr/0001-resolve-kernel-seam.md`).
-
-**Defect.** RDR 0007 routed three obligations (A10, A12, A15) to this RDR's
-implement stage; this RDR's text never received them, and its Prerequisites read
-`- [x] All Critical Assumptions verified` — a checklist that predates them.
-JDR 0001 §D1 removes the underlying cause by fixing the normalized atom shape at
-the kernel seam, so the encoding question those obligations carried no longer
-exists.
-
-**Re-verify A5** ("The normalized predicate representation can retain source
-identity for lint and refusal reporting") — the representation is now fixed by
-§D1 rather than by this RDR.
-
-**Also from JD-4:** where this RDR's exhaustiveness proof and RDR 0007's
-aggregation veto disagree, the **promise narrows** — a green lint must mean
-resolution succeeds. Record the narrowed promise; do not weaken the runtime.
-
-**Re-entry stage: refine.** Approach holds; cite the atom shape rather than
-restating it, and clear the stale Prerequisites checkbox.
