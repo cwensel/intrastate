@@ -136,7 +136,9 @@ JDR 0001 P7 prefers the clean shape over a compatible one.
 The contract sits at the boundary between:
 
 - **RDR 0001 — Resolution kernel** (`Implemented`). Owns
-  the closed five-kind refusal taxonomy
+  the closed five-kind refusal taxonomy — `no_match`,
+  `ambiguous_match`, `owned_state_unavailable`,
+  `guard_unevaluable`, `unmodeled_outcome`
   (`resolve.go::RefusalKinds`, pinned by
   `resolve_test.go::TestReq7_RefusalKindSetIsExactlyTheFiveNamedKinds`)
   and the selection rule ("exactly one matching edge after
@@ -993,10 +995,15 @@ existing one.
   frozen boundary-symbol tests: none of `GuardAtom`,
   `UndecidedRow`, `UndecidedAtom`, `Undecided`, `OpExists`,
   `LiteralTrue`, `LiteralFalse`, `ReasonAbsent`,
-  `ReasonUncomparable`, or the `Block` constants collides with
+  `ReasonUncomparable`, `Reasons`, `Block`, `BlockAll`,
+  `BlockUnless`, or `TestGuardEvaluatorContract` collides with
   a banned name.**
   - **Status**: Pending — named by the critique iteration-2
-    pass (C-12); folded into A3's re-spike, which is where the
+    pass (C-12); the last four names added by the
+    repeatability iteration-2 pass, which spelled the `Block`
+    constants, the `Reasons()` enumerator and the exported
+    contract-test function that its runs could not
+    reconstruct. Folded into A3's re-spike, which is where the
     names first exist to be swept.
   - **Method**: Spike (the re-spike compiles the surface, then
     runs REQ-25/REQ-36/REQ-37)
@@ -1018,6 +1025,31 @@ existing one.
     collides with a frozen boundary test, and Phase 1 must
     either rename the normative surface or reopen an RDR 0001
     contract.
+- **A27 The literal byte values this RDR now spells —
+  `OpExists = "exists"`, `LiteralTrue = "true"`,
+  `LiteralFalse = "false"`, `BlockAll = "all"`,
+  `BlockUnless = "unless"` — are consistent with the token
+  spellings RDR 0002's normalizer and RDR 0003's grammar
+  already use, so fixing them here pins a shared spelling
+  rather than forking one.**
+  - **Status**: Pending — named by the repeatability
+    iteration-2 pass (G-2/G-3). The kernel half is this RDR's
+    to decide and is decided; the PRODUCER half rides on the
+    same unlanded RDR 0002 duty as A16, A22 and A24. The
+    values were previously unstated, which is why three
+    independent reconstructions each guessed them.
+  - **Method**: Source Search (RDR 0003 operator vocabulary;
+    RDR 0002 normalization; any authored fixture table)
+  - **Evidence**: Pending. The contract is byte equality
+    performed by the kernel with no case-folding, so a
+    spelling mismatch against what 0002 emits fails closed
+    (a foreign token becomes a value atom; a foreign literal
+    becomes `uncomparable`) rather than producing a plan —
+    the direction of failure is safe either way, which is why
+    this is Pending rather than blocking.
+  - **If wrong**: 0002/0003 already spell one of these
+    differently and the kernel constants adopt that spelling
+    instead; no rule changes, only the five byte values.
 
 ## Proposed Solution
 
@@ -1076,6 +1108,20 @@ There is no opaque guard string and no reconstruction step,
 so no mapping failure exists and no panic or error channel is
 needed for one.
 
+Two spellings of that shape are fixed HERE because this RDR's
+payload depends on them, not because it is re-deciding §D1's
+grammar. (1) The atom's four fields are named `Key`,
+`Operator`, `Literal`, `Block` — the payload's `UndecidedAtom`
+mirrors them by name, so divergent spellings would make the
+mirror a mapping. (2) `Block` is an exported named STRING type
+carrying exactly two constants, `BlockAll = "all"` and
+`BlockUnless = "unless"`. The payload clause below requires the
+payload's `Block` to be "the same exported constant type the
+atom carries"; that requirement is unstatable while the type
+and its members are unnamed. Nothing else about the atom —
+operator vocabulary beyond `OpExists`, literal typing, the
+parse — is this RDR's, and §D1 continues to own it.
+
 The kernel evaluates a guard ATOM BY ATOM. For each atom it
 MUST first decide presence of the referenced key in the
 assembled view, provenance-blind (the `TagSet.Lookup` `ok`
@@ -1087,7 +1133,10 @@ test). Then:
   consulted for it;
 - a value-comparing atom whose key is PRESENT is handed to
   the evaluator seam with the atom and the present value:
-  `Evaluate(atom, value) GuardResult`. The seam decides
+  `Evaluate(atom, value) GuardResult` — a single-method
+  INTERFACE named `GuardEvaluator`, not a func type, so the
+  nil-seam rule above is a nil interface value and RDR 0003's
+  evaluator satisfies it by declaring the method. The seam decides
   true or false under RDR 0003's typed operator semantics,
   and MAY answer unevaluable for a present value it cannot
   compare (A18). It never sees the view.
@@ -1102,7 +1151,11 @@ consulting the seam, so a row whose atoms are all
 kernel-decidable resolves under a nil seam exactly as it
 would under a present one. A nil seam yields unevaluable
 only for an atom that WOULD have been handed to it — a
-value-comparing atom over a present key. This narrows the
+value-comparing atom over a present key. Such an atom is
+reported in the payload like any other unevaluable atom,
+with reason `uncomparable` (its key is present, so `absent`
+would be a lie); the payload never omits it and never names
+the nil seam as a reason. This narrows the
 shipped whole-guard behavior (`evaluateGuard` returns
 GuardUnevaluable for any non-empty guard when `seam == nil`)
 to a per-atom rule.
@@ -1150,6 +1203,15 @@ constants are `OpExists` (the operator token) and
 forms); the kernel compares an atom's operator and literal
 against these values verbatim, performing no parsing,
 case-folding, or coercion of its own.
+
+Because that comparison IS byte equality, the bytes are
+normative and stated here: `OpExists = "exists"`,
+`LiteralTrue = "true"`, `LiteralFalse = "false"`, all
+lower-case. A16's cross-component MUST ("the normalizer MUST
+emit exactly these values") has no content without them — a
+producer cannot emit what the contract does not spell, and
+`"exists"` versus `"Exists"` is the whole difference between a
+decided atom and a fail-closed value atom.
 
 Drift at this boundary fails CLOSED: an existence atom carrying
 a foreign TOKEN is a value atom to the kernel (unevaluable on
@@ -1200,14 +1262,27 @@ zero atoms has no value to state here.
 
 ```normative
 Atom verdicts combine in the KERNEL under strong-Kleene
-three-valued logic. Conjunction is `min` under `F < U < T`;
-negation is `¬T = F`, `¬F = T`, `¬U = U`:
+three-valued logic. Conjunction is `min` under the TRUTH
+order `F < U < T`; negation is `¬T = F`, `¬F = T`, `¬U = U`:
 
 | ∧ | T | F | U |
 |---|---|---|---|
 | **T** | T | F | U |
 | **F** | F | F | F |
 | **U** | U | F | U |
+
+The TABLES are normative; `min` names the lattice, NOT an
+implementation. Shipped `resolve.go::GuardResult` declares
+`GuardFalse, GuardTrue, GuardUnevaluable` (`iota` 0, 1, 2) —
+the order `F < T < U`, which is NOT the truth order. Integer
+`min` over those constants reproduces 7 of the table's 9
+cells and fails exactly the commutative pair `T ∧ U`, which it
+computes as `T` where the table requires `U`. The kernel MUST implement
+combination against the tables (or against an explicit
+truth-order rank), and MUST NOT `min` the raw constant values;
+the constant order is a shipped fact this RDR does not
+renumber (renumbering would be a silent behavior change for
+any existing comparison).
 
 The row verdict is `all_result ∧ ¬(unless_conj)`, where
 `unless_conj` is the conjunction of the `unless` block's atoms
@@ -1235,7 +1310,12 @@ count run over the rows the gate returned, and only then is
 escape reachability consulted. `no_match` and
 `ambiguous_match` sit downstream of all three gate facts.
 The escape set is gated identically, as its own row set
-(D5): an unevaluable CANDIDATE is never masked by a decidable
+(D5) — "identically" by DELEGATION, not by a parallel
+implementation: shipped `escapeOrRefuse` filters the escape
+rows and then calls the same `gate` function
+(`gate(escapes, in.Guards, view)`), which is why it needs no
+change here and inherits the payload for free. An unevaluable
+CANDIDATE is never masked by a decidable
 escape row (the gate returns before the escape path is
 reached), and an unevaluable ESCAPE row yields
 `guard_unevaluable` in place of the candidate-set refusal
@@ -1263,8 +1343,21 @@ atom: for every undecidable row, its `(RuleID,
 SourceLocator)` and, for each of its unevaluable atoms, the
 referenced key, the block, and a reason drawn from a closed
 set — `absent` (the key was not in the view) or
-`uncomparable` (the key was present and the seam could not
-compare the value, A18).
+`uncomparable` (the key was present and its value was not
+compared to a verdict).
+
+`uncomparable` is defined by the OUTCOME, not by which
+component produced it, and covers all three ways a present
+key fails to decide: the seam answered unevaluable (A18); the
+atom carries a foreign or missing literal on `OpExists`; or
+the seam is NIL, so no comparison could be attempted. The
+closed set stays at two members and every unevaluable atom of
+an undecidable row therefore carries a reason — the payload's
+per-atom completeness obligation above admits no third state
+and no omitted entry. A nil seam is not itself a reason (it
+is a wiring fact, not a property of the input tuple), which is
+why the present-key/nil-seam atom reports `uncomparable`
+rather than a reason of its own.
 
 The payload is named surface, not shape-by-description; every
 assertion below and RDR 0005's renderer type against it.
@@ -1275,9 +1368,24 @@ an `UndecidedRow` names its `RuleID`, `SourceLocator`, and
 is a kernel-owned closed constant set — `ReasonAbsent`,
 `ReasonUncomparable` — spelled and enumerated the way
 `resolve.go::RefusalKind` / `RefusalKinds()` already spell the
-refusal taxonomy, so RDR 0005 maps it the same way and a test
-can pin the set exactly. `Block` is the same exported constant
-type the atom carries, not a separately-spelled payload value.
+refusal taxonomy: a named STRING type with exported constants
+plus an exported enumerator `Reasons() []Reason` returning the
+set in declaration order, mirroring `RefusalKinds()`. The
+enumerator is required surface, not an implementation choice —
+"a test can pin the set exactly" is unsatisfiable without it.
+RDR 0005 maps it the same way. `Block` is the same exported
+constant type the atom carries, not a separately-spelled
+payload value.
+
+The reason values are PRODUCED BY THE VERDICT PASS, not
+re-derived: the per-atom evaluation that decides an atom
+unevaluable emits that atom's payload entry at the same step,
+and the kernel carries the entries forward with the row
+verdict. A second walk over the atoms after the row is known
+undecidable is FORBIDDEN — it would consult the seam twice for
+every present-key atom, and the seam is not required to be
+pure or cheap. This fixes the kernel's internal data flow only;
+the exported surface is the payload above.
 This is the kernel's first two-level payload; it is additive on
 `Refusal` and reopens no closed taxonomy (Load-Bearing
 Decisions: a field, not a sixth kind). The spike's
@@ -1368,6 +1476,17 @@ pruned. The owned-state scan runs over survivors, so an
 unevaluable row's RequiresOwned keys DO raise
 owned_state_unavailable, and the undecidable check runs over
 the same set (shipped partition in `gate`).
+
+The owned scan runs ONCE over the whole survivor set, and
+`MissingOwned` is the deduplicated, sorted union of the
+missing keys across survivors — shipped `missingOwned` already
+takes `[]Row`, dedupes through a `seen` map, and
+`slices.Sort`s before returning. Stated because REQ-1 purity is
+claimed for the whole result and this RDR pins determinism
+only for the `Undecided` payload: a per-row scan whose results
+were concatenated would be row-order-dependent and
+duplicate-bearing. This is shipped behavior restated, not a
+change.
 
 Aggregation is resolution-level: if any surviving candidate
 row's guard is GuardUnevaluable, the resolution MUST refuse
@@ -1871,7 +1990,12 @@ the kernel comment is the authoring doc closest to the code.
 Export a small contract-test function for the value seam
 (present value × literal × operator; unparseable value →
 unevaluable, never false) that RDR 0003's implement stage
-instantiates against its evaluator.
+instantiates against its evaluator. It is
+`resolve.TestGuardEvaluatorContract(t *testing.T, seam
+GuardEvaluator)` — named here because it is a CROSS-RDR
+surface 0003 must call by name, and a caller cannot
+instantiate a function whose name and signature the
+contract leaves open.
 
 **Blocked on one RDR 0003 declaration.** `resolve.Tag.Value`
 is a bare `string`, so a set-valued tag reaches the seam as
@@ -1958,6 +2082,9 @@ be re-mutation-tested against them.
 | 18 | Provenance-blindness: an atom decides identically whether its key arrived owned, observed, or recognized | A11 | `TagSet.Lookup` `ok`, not `TagSet.has` |
 | 19 | Nil seam is per-atom, not whole-guard. The DISCRIMINATING leg is the `exists` atom over a PRESENT key: shipped `evaluateGuard` returns GuardUnevaluable for any non-empty guard when `seam == nil`, whereas this rule decides it TRUE/FALSE — a nil-seam row that now yields a PLAN. This leg is REQUIRED, not optional: it is a widening of shipped behavior (previously any non-empty guard refused without a seam; now a pure-`exists` row plans and its `Writes` land), and no frozen test asserts it, so without this row a wiring bug that leaves `Input.Guards` unset ships as silent plan-production. Assert both that the plan is produced AND that a value atom over a present key still refuses under the same nil seam. (The absent-key leg is non-discriminating: unevaluable either way, though the REASON becomes `absent` rather than want-of-a-seam, and a nil seam is never itself a payload reason.) | A3, A17 | narrows shipped `evaluateGuard`'s `seam == nil` branch; Fixup-1d must be re-read (its `iterations` key is absent from the fixture view, so the kernel now decides it) |
 | 20 | Every undecidable row appears in the payload — no representative row is chosen (shipped `gate` picked one via `slices.MinFunc` to fill `Refusal.Guard`; that selection retires with the field) | A3 | `gate`'s `MinFunc` call; ADV-3 order-independence still applies to the sorted payload |
+| 21 | Combination is table-driven, NOT integer `min` over the shipped constants: assert `T ∧ U = U`. Shipped `GuardResult` declares `F, T, U` as `iota` 0,1,2, so a raw `min` returns `T` here and passes every other cell — this row is the one that catches it | A4 | the K3 clause's explicit non-`min` statement; **mutation-killing** |
+| 22 | A value atom over a PRESENT key under a NIL seam appears in the payload with reason `uncomparable` — not omitted, and not `absent`. Pairs with row 19's nil-seam legs: assert the payload entry, not just the refusal kind | A18 | the widened `uncomparable` definition (outcome, not producer); the per-atom completeness obligation |
+| 23 | `MissingOwned` is the deduplicated, sorted union across survivors: two survivor rows requiring the same absent owned key yield ONE entry, and permuting the rows yields an equal slice | A20 | shipped `missingOwned` `seen`-map + `slices.Sort`; REQ-1 purity over the whole result |
 
 **Not covered here, by ownership.** Value-operator semantics
 over a present value are RDR 0003's; Phase 3 exports a
@@ -2039,7 +2166,7 @@ read as settled.
 | --- | --- | --- |
 | 1. Assemble view | provenance precedence owned > observed > recognized; presence is provenance-blind | `legalInput`: `status`(owned), `reviews`(observed), `recognized` |
 | 2. Evaluate each atom | domain rule; existence totality; seam only on present keys; nil seam is per-atom (row 19) | absent-key value atom ⇒ U, seam never called |
-| 3. Combine per row | K3 `min`; `all ∧ ¬(unless_conj)`; empty `unless` contributes nothing | one U atom, no F ⇒ row U |
+| 3. Combine per row | K3 tables (`min` names the truth order, not an implementation over the shipped `F,T,U` constants); `all ∧ ¬(unless_conj)`; empty `unless` contributes nothing | one U atom, no F ⇒ row U |
 | 4. Prune | only GuardFalse prunes; F∧U=F is witnessed falsity | MVV row 2 prunes; MVV row 1 does not |
 | 5. Owned sweep over SURVIVORS | unevaluable rows ARE survivors, so their `RequiresOwned` counts; owned-before-unevaluable | MVV row 1's `RequiresOwned` is satisfied ⇒ passes through to step 6. That witness is non-discriminating by construction (it passes under either ordering); the ordering's witness is Testing Strategy row 13, where one row fails BOTH ways and `owned_state_unavailable` MUST win |
 | 6. Undecidable veto | any surviving U ⇒ refuse; no decided-TRUE sibling escapes | MVV row 3: B not selected |
