@@ -329,9 +329,12 @@ parallel guard model.
     group here (rows sharing one source state and one recognized outcome, the set
     RDR 0001 resolves exact-one over). Verification is RDR 0006 confirming it
     reads the same division of labour.
-  - **Plan**: raise with A8 at cluster reconcile — same venue, same peer, same
-    `Final`-document constraint.
-  - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** RDR
+  - **Plan**: the `0003-0006-0007` cluster gate (2026-08-22) recorded this as a
+    standing tolerance homed at **RDR 0006's refine**, with the open question
+    named: does RDR 0006 read the same row-group division of labour? Its answer
+    there closes this record.
+  - **Stage 6 disposition — DOWNGRADED; the cluster gate then homed it at RDR
+    0006's refine.** RDR
     0006 is now `Draft` and its Refinement Context Direction carries this item,
     so the confirmation is a scheduled edit on an open peer rather than a
     route-back. The cycle this record was opened to break is already broken
@@ -340,9 +343,9 @@ parallel guard model.
     recognized outcome, so this RDR no longer reads its grouping back from RDR
     0006. What remains is peer confirmation of that division of labour, which a
     peer cannot give from inside this document. Survivable because a divergence would
-    surface as a cluster-reconcile finding before either document is
+    surface at RDR 0006's refine before either document is
     implemented, and the MVV does not consume the peer's agreement. Travels with
-    A8 and A12 — same venue, same peer.
+    A12 — same peer, same venue.
   - **If wrong**: the two documents group rows differently, so a gap proved
     absent in one grouping is present in the other, and the exhaustiveness claim
     means different things on each side of the seam.
@@ -383,17 +386,21 @@ parallel guard model.
     a graph property; RDR 0006 owns graph traversal but states no reachability
     contract this RDR can cite, and `reachable predecessor` appears once there and
     not at all in RDR 0002.
-  - **Plan**: confirm with RDR 0006 at cluster reconcile alongside A8 and A10 that
-    it exposes a predecessor relation over selection contexts, and that lint may
-    decide the predicate syntactically over declarations.
-  - **Stage 6 disposition — DOWNGRADED to the cluster-reconcile venue.** The
+  - **Plan**: the `0003-0006-0007` cluster gate (2026-08-22) recorded this as a
+    standing tolerance homed at **RDR 0006's refine**: it must publish a citable
+    predecessor relation over selection contexts and state which decision
+    procedure governs — the gate noted RDR 0006 frames the check as *graph
+    reachability* while this RDR requires a *syntactic decision over
+    declarations*, which are different procedures over the same predicate.
+  - **Stage 6 disposition — DOWNGRADED; the cluster gate then homed it at RDR
+    0006's refine.** The
     predecessor relation is RDR 0006's graph property, so this cannot close on
     this RDR's initiative — but RDR 0006 is now `Draft` and its Direction
     carries the reachability contract, so the input has a scheduled producer. Survivable to that venue because the demotion already did the
     protective work — the reachability quantifier was removed from assertion and
     booked here, so no clause in this RDR now claims a decision procedure it
     cannot cite. The MVV's possibly-absent-key case is gated by A7's optionality
-    field, not by this record. Travels with A8 and A10.
+    field, not by this record. Travels with A10 — same peer, same venue.
   - **If wrong**: both clauses are unimplementable as written — lint cannot decide
     whether an owned tag is set before match, nor whether a row "can refuse", so
     the narrowing has no decision procedure.
@@ -623,8 +630,8 @@ and no document defines how a group makes that claim: this RDR reads it as
 **default-on for every scoped row group whose participating dimensions are all
 finitely declared**, since an opt-in flag would let the exhaustiveness guarantee
 be silently skipped exactly where it matters. If RDR 0006 intends an explicit
-per-group annotation instead, that is a divergence to settle at cluster
-reconcile alongside A8.
+per-group annotation instead, that is a divergence for its refine pass to
+settle against this clause.
 
 **Leaving a dimension undeclared is not an opt-out.** An undeclared dimension
 does not remove the row group from proof; it makes the proof unavailable, which
@@ -661,9 +668,9 @@ but leaves open **which document records it**, and its head clause names RDR
 0006's proof rather than this RDR's. This RDR records the narrowing for the
 proof it defines, because the constraint binds what its own finite-domain
 product may claim. RDR 0006's exhaustiveness clause covers only the
-non-finite-dimension refusal, so it does not yet carry this case; RDR 0006 is
-now `Draft` and carries the §JD-4 recording question in its Refinement Context.
-A8 tracks the agreement the two documents owe each other. Provenance affects lint: recognized tags are fresh event inputs, observed
+non-finite-dimension refusal, so the two triggers differ and both survive.
+§JD-4 (closed 2026-08-22) names this RDR the recording document; RDR 0006 cites
+this clause and mints no code. Provenance affects lint: recognized tags are fresh event inputs, observed
 tags are re-read before matching, and owned tags must have a reachable
 predecessor write before a row may match them.
 
@@ -815,13 +822,14 @@ predicate diagnostic names. Emitting nothing MUST NOT satisfy this clause: an
 exit code alone cannot distinguish a withheld claim from a proved one.
 ```
 
-> **Peer obligation, not yet agreed (A8).** RDR 0006's finding contract carries
-> a stable code, model identity, severity, message, and "the source rule/context
-> id or source span" — it has **no atom-level field**. Naming *the refusing
-> atom* is therefore a payload extension this RDR requests of a `Final`
-> document, not a capability it can assume. The route-back in A8 must carry it
-> explicitly; until then the atom-naming half of the clause above is a stated
-> requirement with no producer, and the row-naming half is satisfiable today.
+> **Consequent duty on RDR 0006 (§JD-4, closed 2026-08-22).** RDR 0006's finding
+> contract carries a stable code, model identity, severity, message, and "the
+> source rule/context id or source span" — it has **no atom-level field**
+> (`docs/rdr/0006-graph-lint-authority-and-guarantees.md:363-367`). §JD-4 records
+> the atom-level extension as a decided duty on RDR 0006, discharged at its
+> refine. Until that lands the atom-naming half of the clause above has no
+> producer; the row-naming half is satisfiable today. This does not gate this
+> RDR's lock — a missing producer field surfaces as an RDR 0006 refine item.
 
 ```normative
 Lint MUST report every defect it can decide in one pass over a row group, not
@@ -923,7 +931,7 @@ and this RDR's evaluator.
 | Existence-atom verdict | Kernel, from presence alone (`presence == literal`) | Lint's presence dimension (A7) | Value atoms over the same key (unevaluable on absence) | Kernel |
 | Value-atom verdict over a present value | This RDR's evaluator | Kernel combinator | None | This RDR |
 | Per-atom verdict combination | Kernel (strong Kleene) | RDR 0001 exact-one selection | None | Kernel |
-| Exhaustiveness verdict for a row group | **This RDR** (finite-domain product proof) | RDR 0006 lint findings; RDR 0005 envelope | RDR 0006's own exhaustiveness clause — non-finite-dimension case only | **Contested — A8.** This RDR states the `guard_unevaluable` narrowing; RDR 0006 holds the §JD-4 tolerance but does not carry it. A8 closes on §JD-4 assigning ONE recording document, not on both restating it. |
+| Exhaustiveness verdict for a row group | **This RDR** (finite-domain product proof) | RDR 0006 lint findings; RDR 0005 envelope | RDR 0006's own exhaustiveness clause — non-finite-dimension case only | **This RDR** — JDR 0001 §JD-4 (closed 2026-08-22) names it the recording document; RDR 0006 cites the clause and does not restate it. The two triggers differ and both survive: RDR 0006's fires on a non-finite dimension, this RDR's on a fully-finite product whose participating row can still refuse. |
 | Guard atom shape | Kernel seam (JDR 0001 §D1, normative in RDR 0007) | This RDR's grammar; RDR 0002's normalizer | Shipped `Row.Guard string` — the pre-reshape form | Kernel seam (specified); the shipped string form is superseded, not an arm |
 | Source identity for diagnostics | RDR 0002 normalization (`RuleID`, `SourceLocator`) | This RDR's diagnostics; RDR 0006 findings | None | RDR 0002 |
 | Tag declaration model (value kind, finite domain, optionality, single-valuedness, element universe) | **This RDR** (`Normative Contracts` declaration clauses) | RDR 0002's authoring schema and normalizer; RDR 0006's lint input contract; this RDR's own product proof | RDR 0002's prose schema list, which names `value kind` non-normatively | **This RDR.** RDR 0002 declares provenance normatively and nothing else about a tag's type; RDR 0007 (`Final`) states value kinds and set universes "are RDR 0003's declarations". RDR 0002 cites this model for meaning and owns where it is authored. |
@@ -969,13 +977,12 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | 7. Compute overlap | any non-empty pairwise intersection; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → rows disjoint on that dimension | OK |
 | 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 6's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
 | 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
-| 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | RDR 0006 carries no `guard_unevaluable` narrowing | **GAP — booked as A8.** Not a contradiction inside this draft; a divergence with an open peer (RDR 0006 is `Draft` since 2026-08-21) that needs a §JD-4 assignment, not duplicated prose. |
+| 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | §JD-4 (closed 2026-08-22) names this RDR the recording document; RDR 0006 records the same assignment on its Status line (`0006:10-13`) and reuses `graph-unprovable-coverage` | OK |
 
-No CONTRADICTION row. One GAP row remains — A8, the cross-document assignment —
-carrying a named plan and not asserted as already true. Step 5's former gap
-closed when the presence-dimension projection was stated; A9 and A11 have no row
-here because the declaration model they record is an input to step 3, which the
-trace already exercises.
+No CONTRADICTION row and no GAP row. Step 10 closed when §JD-4 assigned the
+recording document (A8); step 5's former gap closed when the presence-dimension
+projection was stated. A9 and A11 have no row here because the declaration model
+they record is an input to step 3, which the trace already exercises.
 
 #### Load-Bearing Decisions
 
@@ -1068,17 +1075,16 @@ Joint-check: fired → RDR 0007 is the normative home of the guard seam (JDR 000
 `GuardEvaluator` seam, the kernel-exported existence operator token and boolean
 literal forms RDR 0002's normalizer emits, exact key identity at the kernel, and
 the per-atom `guard_unevaluable` payload. This RDR cites those rather than
-restating them. It also records the §JD-4 narrowing for its own proof — §JD-4
-decides the substance but leaves the recording document open, and names RDR
-0006's proof in its head clause; A8 carries the resulting sibling obligation.
+restating them. It also records the §JD-4 narrowing for its own proof: §JD-4 decides the
+substance and, closed 2026-08-22, names this RDR the recording document, with
+RDR 0006 citing the clause and minting no code (A8).
 
 The fixed symbolic atom model best matches the user's outcome: flow authors can
 write conditional edges, and lint can still prove whether those edges are
-complete and mutually exclusive — with the scope A8 currently bounds. One class
-is not yet provable: a group whose narrowing verdict depends on the
-cross-document agreement A8 tracks. The `exists`-bearing class was the other,
-and it closed when the presence-dimension projection was stated as a normative
-clause (A7). Consumers inheriting
+complete and mutually exclusive. The two classes that were not yet provable have
+both closed: the cross-document narrowing verdict, when §JD-4 assigned the
+recording document (A8), and the `exists`-bearing class, when the
+presence-dimension projection was stated as a normative clause (A7). Consumers inheriting
 this promise — RDR 0006's findings and RDR 0005's envelope — inherit those
 bounds with it. It preserves RDR 0002's readable `all`/`unless`
 authoring form while giving RDR 0006 finite-domain constraints to analyze. It
@@ -1361,7 +1367,10 @@ every exactness claim tied to A2 and the MVV fixture before Final.
 - [ ] **A12 closed.** Route: RDR 0006 confirms it exposes a predecessor relation
   over selection contexts. Done-condition: the owned-tag clause and the "can
   refuse" clause each cite a reachability contract instead of asserting one.
-  Venue: cluster reconcile.
+  Venue: RDR 0006's refine — recorded as a standing tolerance by the 2026-08-22
+  cluster gate, which also flagged that RDR 0006 must state which decision
+  procedure governs (graph reachability vs. syntactic decision over
+  declarations).
 - [x] **A13 closed.** The canonical set-literal spelling is stated as a
   normative clause: unordered, duplicate-free, canonicalized before entering the
   identity tuple, repeats rejected at parse. Owned here — RDR 0007 assigned this
@@ -1372,7 +1381,8 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   cardinality bound predicts provability. Owned here; discharged by the MVV
   rather than a peer.
 - [ ] **A10 closed.** Route: RDR 0006 confirms the row-group division of labour
-  this RDR now states. Venue: cluster reconcile, with A8 and A12.
+  this RDR now states. Venue: RDR 0006's refine, with A12 — recorded as a
+  standing tolerance by the 2026-08-22 cluster gate.
 - [x] **A7 closed.** The presence-dimension projection is stated as a normative
   clause, on the derivation in `evidence/research/iter-2-projection-derivation.md`.
   Its optionality input is declared by this RDR's own declaration model, so the
@@ -1626,14 +1636,14 @@ Guard-domain enforcement is resolved rather than open: the kernel decides
 presence and existence atoms, so this RDR's evaluator is scoped to value
 semantics over a present value (JDR 0001 §D4, a Closed entry).
 
-The strength of the exhaustiveness claim is decided in substance but not yet
-agreed across documents. §JD-4 settles that the lint promise narrows and the
-runtime veto stands, and this RDR now states that for its own proof. §JD-4
-remains open as to which document records it and names RDR 0006's proof; RDR
-0006 carries no `guard_unevaluable` narrowing. RDR 0006 was demoted to `Draft`
-(2026-08-21) and carries the recording question in its Refinement Context, so
-the divergence closes by a scheduled edit on an open peer rather than a
-route-back. A8 tracks it, and it must close before lock.
+The strength of the exhaustiveness claim is decided and agreed across documents.
+§JD-4 settles that the lint promise narrows and the runtime veto stands, and —
+closed 2026-08-22 by the `0003-0006-0007` cluster gate — names this RDR the
+recording document. RDR 0006 cites the clause, reuses `graph-unprovable-coverage`,
+and mints no code; it records the same assignment on its own Status line
+(`0006:10-13`). The two triggers differ and both survive. A8 is `Verified`; the
+atom-level finding field RDR 0006 owes is a consequent duty at its refine, not a
+gate on this RDR.
 
 ### Assumption Verification
 
@@ -1641,8 +1651,8 @@ Each record uses an allowed Method label, carries concrete Evidence or an
 Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
-half split out as A12. Verified: A1, A2, A3, A4, A5, A6 (labels), A7, A9, A11,
-and A13. Pending: A8, A10, A12, A14, A15 — each with a named plan. None is
+half split out as A12. Verified: A1, A2, A3, A4, A5, A6 (labels), A7, A8, A9,
+A11, and A13. Pending: A10, A12, A14, A15 — each with a named plan. None is
 `Unverified`. The repeatability pass closed A13 by stating the set-literal
 clause it owed and opened A15 on the cardinality bound the too-large clause now
 declares. The Stage 6 reconcile closed A1 by running the evaluation harness the
@@ -1698,26 +1708,25 @@ element universe the same model declares. The MVV's authorability gate is
 correspondingly closed: every required case is writable against declarations
 this document owns.
 
-**A8 is Pending and is the one record that still gates lock.** This RDR records
-the §JD-4 narrowing for its own proof, but §JD-4 is an open ledger entry naming
-RDR 0006's proof and leaving the recording document unassigned, and RDR 0006
-carries no `guard_unevaluable` narrowing. Closure needs a §JD-4 disposition, not
-an edit here. Recommended arm: record the narrowing here — RDR 0006's clause
-fires only on a non-finite dimension, while this case is a fully-finite product
-whose participating row can still refuse, and the clause must name the refusing
-atom, a vocabulary RDR 0006 does not have (`atom` occurs once there, delegating
-atoms to this RDR). RDR 0006 then cites it and reuses `graph-unprovable-coverage`,
-whose stated meaning — "Required finite-domain proof unavailable" — already
-covers a withheld claim.
+**A8 is `Verified` and no record now gates lock on a peer decision.** §JD-4 is
+closed (2026-08-22, `0003-0006-0007` cluster gate) and names this RDR the
+recording document: RDR 0006's clause fires only on a non-finite dimension,
+while this case is a fully-finite product whose participating row can still
+refuse, and the clause must name the refusing atom — a vocabulary RDR 0006 does
+not have (`atom` occurs once there, delegating atoms to this RDR). RDR 0006
+cites the clause and reuses `graph-unprovable-coverage`, whose stated meaning —
+"Required finite-domain proof unavailable" — already covers a withheld claim,
+so it mints no code and gains no non-blocking tier.
 
 **A14 is Pending against RDR 0002 and does not block lock.** It is the single
 surviving producer request: a normalization clause retaining each atom's
 authored block. Survivable because no peer asserts the opposite and the failure
 is caught by the first normalization test.
 
-**A10 and A12 are Pending.** Both join A8 at cluster reconcile — A10 (row-group
-division of labour) and A12 (predecessor reachability) are RDR 0006 agreements
-this RDR cannot make unilaterally. A13 (canonical set-literal spelling) was the
+**A10 and A12 are Pending.** Both are RDR 0006 agreements this RDR cannot make
+unilaterally — A10 (row-group division of labour) and A12 (predecessor
+reachability) — and both are carried by RDR 0006's refine Direction, so each has
+a scheduled producer rather than an open venue. A13 (canonical set-literal spelling) was the
 one record closable on this RDR's own initiative and is now `Verified`: the
 repeatability pass stated the clause RDR 0007 assigned here, which matters
 because it affects `in`, an operator inside the subset this RDR treats as
@@ -1785,8 +1794,8 @@ finite-domain proof semantics. The required large-profile lenses ran
 (`grounding`, `3amigo`, and `critique`); every finding they raised is either
 resolved in the live text above or carried as a named obligation in the Minimum
 Viable Validation and Testing Strategy. The re-entry re-runs that row against
-the revised text: `grounding` iteration 2 is complete, and its `authority`,
-`disposition`, and `trace` mini-check tables are carried above.
+the revised text: `grounding` is complete through iteration 3, and its
+`authority`, `disposition`, and `trace` mini-check tables are carried above.
 
 ## References
 
