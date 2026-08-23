@@ -19,7 +19,7 @@ provenance = "observed"
 kind = "string"
 accessor = "kata-owner"
 
-[tags.outcome]
+[tags.recognized]
 provenance = "recognized"
 kind = "enum"
 
@@ -44,7 +44,7 @@ id = "review-needs-work"
 use = ["review"]
 source = "kata:review"
 self = true
-[rule.match.outcome]
+[rule.match.recognized]
 eq = "needs-work"
 [rule.write]
 phase = "resolve"
@@ -54,7 +54,7 @@ status = "open"
 id = "review-accepted"
 use = ["review"]
 source = "kata:review"
-[rule.match.outcome]
+[rule.match.recognized]
 eq = "accepted"
 [rule.guard.all.owner]
 eq = "current-session"

@@ -22,7 +22,7 @@ kind = "enum"
 provenance = "owned"
 kind = "int"
 
-[tags.outcome]
+[tags.recognized]
 provenance = "recognized"
 kind = "enum"
 
@@ -56,7 +56,7 @@ in = ["large", "foundational"]
 id = "continue-prelock"
 use = ["large-prelock"]
 source = "rdr:prelock"
-[rule.match.outcome]
+[rule.match.recognized]
 eq = "round-clean"
 [rule.guard.all.iter]
 lt = 3
@@ -71,7 +71,7 @@ id = "reconcile-rewind"
 use = ["draft"]
 source = "rdr:reconcile"
 clear = ["prelock_lens"]
-[rule.match.outcome]
+[rule.match.recognized]
 eq = "reconcile-block"
 [rule.write]
 stage = "resolve"
@@ -83,7 +83,7 @@ id = "draft-no-match-escape"
 use = ["draft"]
 source = "rdr:escape"
 escape = ["no_match"]
-[rule.match.outcome]
+[rule.match.recognized]
 eq = "round-clean"
 
 [dump]
