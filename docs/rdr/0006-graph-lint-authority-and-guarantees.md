@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [demoted from Final 2026-08-21 — re-verify A2, A5]
+- **Status**: Draft
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
@@ -166,11 +166,18 @@ map to the existing CLI output contract.
   - **Evidence**: Validation scenario 7 must capture `make check` or
     `.github/workflows/ci.yml` invoking the production `intrastate lint`
     command over the checked-in transition model or fixture corpus. Source
-    search confirms the gate surfaces exist: `Makefile::check` is the local
-    aggregate gate, `Makefile::build` builds `./bin/intrastate` from
-    `cmd/intrastate`, `.github/workflows/ci.yml::jobs` already runs repository
-    gates on push and pull request, and `internal/cli/root.go::NewRootCmd`
+    search confirms the gate surfaces exist and names what the wiring costs:
+    `Makefile::check` is the local aggregate gate (`fmt-check vet lint test`)
+    but does **not** depend on `Makefile::build`, so a binary-invoking gate step
+    must add that edge; `Makefile::build` builds `./bin/intrastate` from
+    `cmd/intrastate`; `.github/workflows/ci.yml::jobs` runs repository gates on
+    push and pull request as the discrete jobs `test`, `lint`, and `vuln`, none
+    of which invokes `make check` — so the CI gate is a new step or job, not a
+    free ride on an existing invocation; and `internal/cli/root.go::NewRootCmd`
     registers root-level commands through the same `ExecuteAndEmit` path.
+    `clierr::ExitCodeFor` maps `GroupUserEnv` to exit 2 as scenario 2 asserts,
+    but shares that code with `GroupInternal`, so the gate asserts on `Code`
+    rather than the exit integer alone.
   - **If wrong**: The implementation cannot complete this RDR's MVV until the
     production gate runs the lint command. If that gate is bypassed after
     implementation, the graph may be lintable locally but not enforced at the
@@ -181,11 +188,28 @@ map to the existing CLI output contract.
   - **Method**: Peer RDR
   - **Evidence needed**: the reachability relation (`Load-Bearing Decisions`)
     is rooted at a declared initial owned state, and invariants 2 and 7 read
-    declared terminals. Neither `initial` nor a terminal declaration is
-    normative in RDR 0002 today (its only `terminal` occurrence is a fixture
-    rule name), and RDR 0001 declares none. Verification is RDR 0002's authoring
-    schema carrying both declarations, or an explicit decision that the lint
-    input supplies them from a sidecar this RDR names.
+    declared terminals. Verified absent at Stage 4: neither `initial` nor a
+    terminal declaration is normative in RDR 0002 (its only `terminal`
+    occurrences name the fixture rule id `terminal-archive` in its Validation
+    scenario 2), RDR 0001 and RDR 0003 declare neither, and both `[model]`
+    blocks in RDR 0002's spike fixtures carry only `id`, `version`, and
+    `description`. No peer declares a root because no peer needs one — RDR
+    0001's kernel is stateless and single-step, so multi-step reachability
+    exists nowhere in the cluster except this RDR's lint.
+  - **Producer (decided at Stage 4)**: **RDR 0002's authoring schema**, not a
+    sidecar. The declarations are model data about the legal graph, and RDR
+    0002's premise is that every legal edge lives in one reviewable artifact; a
+    sidecar would split model authoring across two files and give this RDR a
+    slice of the wire-format authority the cluster split assigns to RDR 0002.
+    RDR 0002 already carries this RDR as a Pending consumer for "determinism and
+    reachability checks" (`0002::Capability Dependencies`). The edit is additive
+    but touches two of RDR 0002's normative clauses together — the closed layout
+    enumeration (root `outcomes`, `[model]`, `[tags.<tag>]`, `[accessors.<id>]`,
+    `[context.<id>]`, `[[rule]]`, `[dump]`) and "`[model]` MUST contain `id` and
+    `version`". RDR 0002 is `Draft` with every assumption Verified, so this
+    reopens no locked document. This assumption flips to `Verified` by citation
+    once that clause lands; it does not gate this RDR's remaining pre-lock
+    lenses.
   - **If wrong**: reachability has no root, so invariant 6 is vacuous and
     invariant 2 cannot distinguish a designed stop from a dead end; lint would
     have to infer terminals from missing rows, which invariant 7 forbids.
@@ -318,8 +342,14 @@ The mandatory invariant set is:
    guard dimensions are all finitely declared claims closed coverage
    (default-on, never an opt-in annotation), and lint must prove
    `union(row_i accepted assignments) == scoped product` over RDR 0003's
-   derivation. Escape rows contribute their accepted assignments to the union
-   like any other row; there is no separate "an escape row exists" disjunct.
+   derivation. The scoped product includes the **presence dimension** RDR 0003's
+   projection clause contributes: an `exists` atom over a key declared optional
+   is a dimension of the product, and lint must not drop it — certifying a group
+   exhaustive while ignoring the `{absent}` assignment is the false green RDR
+   0003's narrowing forbids. A key declared always-present contributes no
+   presence dimension. Escape rows contribute their accepted assignments to the
+   union like any other row; there is no separate "an escape row exists"
+   disjunct.
    A group whose coverage is closed by a bare escape row (one carrying no guard
    atoms) passes, but the verdict must say so (`graph-coverage-closed-by-escape`).
 5. **Single-valued state** — the model must not produce a view in which a tag
@@ -417,7 +447,11 @@ and single-valuedness from that declaration — never inferred from a tag's name
 value spelling, or a fixture. If a participating dimension is not finite or not
 projectable, lint MUST emit `graph-unprovable-coverage` for that dimension.
 The claim is default-on for every scoped row group whose participating
-dimensions are all finitely declared.
+dimensions are all finitely declared. The scoped product MUST include the
+presence dimension an `exists` atom over an optional key contributes, as RDR
+0003's projection clause states (`0003::Normative Contracts`, "Lint MUST NOT
+drop `exists` atoms from the product"); lint MUST NOT certify a group
+exhaustive while ignoring that dimension's `{absent}` assignment.
 ```
 
 ```normative
@@ -560,7 +594,7 @@ Illustrative finding shapes only:
 | Owned/observed/recognized tag provenance | RDR 0002 / RDR 0003 | Verified peer RDR | Required for owned-set-before-match and coverage checks. |
 | Accessor write/read-back semantics | RDR 0004 | Verified peer RDR | Lint reasons about declared owned writes without executing accessors. |
 | Guard atom shape | RDR 0007 | Verified peer RDR | Atom-level finding field cites the four-field shape. |
-| Initial owned state and terminal declarations | RDR 0002 (requested) | Pending (A6) | Roots reachability; stop set for dead-end detection. |
+| Initial owned state and terminal declarations | RDR 0002 (requested; arm decided Stage 4) | Pending (A6) | Roots reachability; stop set for dead-end detection. Lint-only inputs — no peer needs them, since RDR 0001's kernel is single-step. |
 | CLI command exposure | RDR 0005 plus this RDR | Verified / introduced | RDR 0005 wires flow verbs; this RDR owns the lint acceptance contract and command authority. |
 | CLI failure/output gateway | Existing `respond` / `clierr` | Available | Lint results must use existing text/json and exit-code behavior. |
 | Graph lint invariant taxonomy and reachability relation | This RDR | Introduced | Defines blocking graph acceptance before resolver use; peers cite the relation. |
@@ -758,7 +792,10 @@ rule/context id or source span, and the atom or failure class when carried.
   GitHub workflow must invoke the built `intrastate lint` command over the
   checked-in transition model or fixture corpus.
 - [ ] A6: RDR 0002's schema declares the initial owned state and terminal
-  states, or this RDR names a sidecar for them.
+  states. Decided at Stage 4 in favour of the RDR 0002 arm over a sidecar; the
+  clause amends RDR 0002's layout enumeration and its `[model]` contents
+  clause. RDR 0002 is `Draft`, so this schedules an edit on an open peer rather
+  than reopening a locked one.
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
 - [x] RDR 0005 command placement is coherent enough to expose root
@@ -830,10 +867,22 @@ The verified assumptions imply a production-command test matrix: exercise
 for CI. Coverage must include success output, blocking failure output, stable
 finding codes, and source rule/context identity in JSON mode. A1 supplies the
 source identity and write/predicate graph data, A2 supplies finite-domain
-overlap and coverage proof obligations, A3 supplies owned-tag
-read-before-write checks, A4 supplies the `respond`/`clierr` output path, A5
-supplies the repository gate surface that must run the production command, and
-A6 supplies the reachability root and terminal set.
+overlap and coverage proof obligations including the presence dimension, A3
+supplies owned-tag read-before-write checks, A4 supplies the `respond`/`clierr`
+output path, A5 supplies the repository gate surface that must run the
+production command, and A6 supplies the reachability root and terminal set.
+
+The code paths these tests exercise were reviewed at Stage 4 and none exists
+yet: `internal/` and `cmd/` hold eight non-test Go files whose only registered
+verb is `internal/cli/version.go::newVersionCmd`, and no graph, lint verb,
+invariant engine, or reachability dataflow is present. The output path the
+matrix asserts against does ship — `internal/cli/clierr/clierr.go::CLIError`,
+`::ExitCodeFor`, `::GroupUserEnv`, `internal/cli/respond/respond.go::OK` and
+`::Fail`, and `internal/cli/root.go::ExecuteAndEmit` — and every optional
+`CLIError` field is `omitempty`, so the append-only typed `findings` field this
+RDR requires is wire-compatible with the shipped envelope.
+`internal/cli/respond/respond.go::Success` already carries `Data any`, a host
+for the success-side findings list.
 
 1. **Scenario**: legal fixture model with all mandatory declarations and
    finite-domain coverage.
@@ -889,6 +938,14 @@ A6 supplies the reachability root and terminal set.
     **Expected**: `graph-owned-before-write` naming the row; the fixture
     documents that the cure is an explicit write or clear on the model, not a
     guard-aware lint.
+11. **Scenario**: presence dimension — a scoped row group carrying an `exists`
+    atom over a key declared optional, whose rows cover every value assignment
+    but leave the `{absent}` assignment uncovered; plus a control group whose
+    `exists` atom is over a key declared always-present.
+    **Expected**: the optional-key group emits `graph-coverage-gap` rather than
+    passing, proving the presence dimension was not dropped from the product;
+    the always-present control passes, since such a key contributes no presence
+    dimension.
 
 ### Performance Expectations
 
@@ -927,10 +984,19 @@ input failures.
 
 A1-A4 are verified. None uses `Docs Only`, and none is stamped `Verified` on
 self-reference. A1-A3 are verified against peer RDR contracts, and A4 is
-verified by source search against the CLI failure gateway. A5 is deliberately
-Pending by `MVV Test`: implementation must prove that the command and fixture
-corpus are wired into the production gate through Validation scenario 7. A6 is
-Pending on RDR 0002 declaring the initial owned state and terminal states.
+verified by source search against the CLI failure gateway. A2 was re-verified
+at Stage 4 against RDR 0003's locked text clause by clause — the coverage and
+overlap derivation, the finite-domain requirement and its blocking
+inability-to-prove outcome, all five fields of the tag declaration model, the
+scoped row group, the escape-row participation clause, the narrowing clause and
+its syntactic "can refuse" test, and the default-on reading — each matching as
+quoted. A5 is deliberately Pending by `MVV Test`: implementation must prove that
+the command and fixture corpus are wired into the production gate through
+Validation scenario 7; Stage 4 re-verified that the gate surfaces exist and
+recorded what the wiring costs (CI runs discrete jobs, never `make check`, and
+`check` does not depend on `build`). A6 is Pending on RDR 0002 declaring the
+initial owned state and terminal states, with that arm decided at Stage 4 over
+the sidecar alternative.
 
 ### Scope Verification
 
