@@ -212,6 +212,15 @@ map to the existing CLI output contract.
     production gate runs the lint command. If that gate is bypassed after
     implementation, the graph may be lintable locally but not enforced at the
     design-time boundary maintainers actually rely on.
+  - **Stage 6 disposition — DOWNGRADED.** Not verifiable before lock: the gate
+    proves a command that does not exist yet, over a model that does not exist
+    yet (A8). Named plan that WILL run during implementation: **Validation
+    scenario 7**, whose oracle pre-lock made mechanical — the `graph-lint` job
+    asserting the JSON `code`. Survivable because the MVV is fixture-backed and
+    does not consume this gate: every blocking invariant class is proven against
+    authored fixtures through the production command path, so the contract this
+    RDR locks is provable without the CI wiring. What defers is *enforcement*,
+    not the proof. Not MVV-critical, so HARD RULE 2 does not fire.
 - **A6 The transition model declares an initial owned state and its terminal
   states, so reachability has a root and dead-end detection has a stop set.**
   - **Status**: Pending
@@ -257,6 +266,17 @@ map to the existing CLI output contract.
   - **If wrong**: reachability has no root, so invariant 6 is vacuous and
     invariant 2 cannot distinguish a designed stop from a dead end; lint would
     have to infer terminals from missing rows, which invariant 7 forbids.
+  - **Stage 6 disposition — DOWNGRADED.** Confirmed at source rather than
+    assumed: neither `initial` nor a terminal declaration is normative in RDR
+    0002, RDR 0001 and RDR 0003 declare neither, and both `[model]` blocks in
+    RDR 0002's spike fixtures carry only `id`, `version`, `description`. The
+    absence is real and this RDR states it inline. Named plan: the additive
+    clause on **RDR 0002's authoring schema**, which is `Draft` — a scheduled
+    edit on an open peer, not a route-back. Survivable because the window is
+    not silent: a model declaring no initial owned state takes a blocking
+    `graph-dangling-edge` (disposition table), so an unlanded schema cannot read
+    as a clean model. The MVV's fixtures declare their own roots and terminals,
+    so the invariants are provable before the peer clause lands.
 - **A7 Invariant 5 plus `graph-always-present-owned` discharge the owned half of
   RDR 0003 A18's conformance premise; the observed/recognized half stays
   unowned.**
@@ -289,6 +309,18 @@ map to the existing CLI output contract.
     the observed/recognized residue is claimed by no component, a non-conforming
     view can still reach the kernel — lint's green means the *model* conforms,
     never that every assembled view will.
+  - **Stage 6 disposition — DOWNGRADED.** The peer's own record settles the
+    routing: RDR 0003 A18 is `Status: Pending` and was itself **DOWNGRADED at
+    RDR 0003's Stage 6** as *not lock-blocking*, with its venue named as "RDR
+    0007's next touch ... and/or RDR 0006's refine — either discharges it, both
+    is better". RDR 0003's own `Status` line lists A18 among eight open records,
+    "none lock-blocking". This RDR has now supplied that second producer, so the
+    edit is a **scheduled peer confirmation**, not a defect either document must
+    resolve before locking. Survivable because this RDR never asserts the
+    view-level enforcement: invariant 5 states the discharge as *partial* and
+    names the observed/recognized residue as unowned, so no clause here claims
+    an enforcement it cannot cite. Route-back on a locked peer, tracked for RDR
+    0003's next touch alongside A10/A12/A17/A19/A20.
 - **A8 A transition model is checked into this repo for the CI gate to lint.**
   - **Status**: Pending
   - **Method**: Source Search
@@ -302,6 +334,15 @@ map to the existing CLI output contract.
   - **If wrong**: scenario 7 has no subject, so A5 cannot flip and the gate
     either ships pointing at a spike fixture (undoing A5's decided disjunction)
     or does not ship at all.
+  - **Stage 6 disposition — DOWNGRADED.** Re-verified at this stage against the
+    working tree: the repo's complete `.toml` set is `.roborev.toml`,
+    `.kata.toml`, and three RDR spike fixtures under
+    `docs/rdr/000{2,3}-*/evidence/spikes/`. No transition model is checked in,
+    exactly as recorded. Named plan: the model is authored and homed during
+    implementation, as **Prerequisites** now books, and scenario 7 instantiates
+    against it. Survivable because it gates only scenarios 7 and 23 — the CI
+    gate and the false-positive census — while the MVV proper is fixture-backed
+    and needs no shipped model. Not MVV-critical, so HARD RULE 2 does not fire.
 - **A9 `--flow <id>` can resolve a model through RDR 0005's config discovery.**
   - **Status**: Pending
   - **Method**: Peer RDR
@@ -312,6 +353,14 @@ map to the existing CLI output contract.
   - **If wrong**: the documented invocation does not work; the gate and the MVV
     must use `--model <path>` explicitly, which is sufficient but less
     ergonomic.
+  - **Stage 6 disposition — DOWNGRADED.** Confirmed at source: RDR 0005 is
+    `Final` and its own audit row reads "Parser placeholder; no transition-model
+    config yet. | Extend later". Named plan: `--flow` flips to instantiable when
+    RDR 0005's config discovery lands; until then `--model <path>` is the form
+    the gate and the MVV use, which **Prerequisites** now records. Survivable
+    because the RDR's own `If wrong` is the shipping behavior, not a failure —
+    `--model <path>` is sufficient for every scenario, and the two flags are
+    already pinned mutually exclusive. Ergonomics, not authority.
 - **A10 A write to a single-valued tag replaces its prior value, so no path
   accumulates a second value.**
   - **Status**: Pending
@@ -328,6 +377,20 @@ map to the existing CLI output contract.
     reach two values for a single-valued tag, invariant 5's per-row reading
     misses it, and the multi-value state reaches the kernel where
     `assemble` resolves it silently — lint reported green.
+  - **Stage 6 disposition — DOWNGRADED.** Confirmed at source rather than
+    assumed: RDR 0002's write/clear clause fixes only that "Absence from both
+    the write block and the clear list MUST NOT imply deletion" — no
+    replace-vs-accumulate rule is stated anywhere in it — and RDR 0003 owns the
+    single-valued *marker*, not the update rule. Named plan: RDR 0002 states
+    write-replaces for single-valued tags; RDR 0002 is `Draft`, so this is a
+    scheduled edit on an open peer, now booked in **Prerequisites**. Survivable
+    because the failure is bounded and named in invariant 5's own text: if a
+    peer lands accumulate or set-union semantics instead, the per-row reading is
+    unsound and the path-accumulation case returns — a re-widening of one
+    invariant, not a redesign of the contract. The MVV's
+    `graph-single-valued-state` fixture proves the per-row check regardless;
+    A10 governs whether that check is *complete*, not whether it runs, so it is
+    not MVV-critical and HARD RULE 2 does not fire.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -560,7 +623,8 @@ The mandatory invariant set is:
    **The read-set is computed by lint from the row's atoms, never read from
    `Row.RequiresOwned`.** RDR 0007 (`Final`) narrows `RequiresOwned` to
    post-guard *write* dependencies and explicitly excludes guard-read keys
-   ("guard-input decidability is not `RequiresOwned`'s job"), and RDR 0002 fixes
+   ("Guard decidability is not `RequiresOwned`'s job: guard-input coverage
+   is enforced by the domain rule above"), and RDR 0002 fixes
    it as "the sorted, duplicate-free set of tag keys named by the rule's write
    block and clear list". Reading that field here would check
    writes-before-writes instead of reads-before-writes and silently never fire
@@ -1336,20 +1400,30 @@ rule/context id or source span, and the atom or failure class when carried.
 ### Prerequisites
 
 - [x] A5 CI gate surface verified: `Makefile` and GitHub Actions can host the
-  production `intrastate lint` gate once the command and fixture corpus exist.
-- [ ] A5 production gate proof pending MVV scenario 7: `make check` or the
-  GitHub workflow must invoke the built `intrastate lint` command over the
-  checked-in transition model or fixture corpus.
+  production `intrastate lint` gate once the command and its subject exist.
+- [ ] A5 production gate proof pending MVV scenario 7: the new `graph-lint`
+  job in `.github/workflows/ci.yml` must invoke the built `intrastate lint`
+  command over the checked-in transition model, asserting the JSON `code`. The
+  shipped `lint` job key is the golangci-lint gate and is not reusable; local
+  `make check` parity is convenience and needs the `build` edge it lacks.
+- [ ] A8: a transition model is checked into this repo for that gate to lint.
+  No such model exists today, so scenario 7 has no subject until one is
+  authored and homed.
 - [ ] A6: RDR 0002's schema declares the initial owned state and terminal
   states. Decided at Stage 4 in favour of the RDR 0002 arm over a sidecar; the
   clause amends RDR 0002's layout enumeration and its `[model]` contents
   clause. RDR 0002 is `Draft`, so this schedules an edit on an open peer rather
   than reopening a locked one.
+- [ ] A10: RDR 0002 states write-replaces semantics for single-valued tags.
+  Invariant 5's per-row reading drops the path-accumulation case on that
+  semantics; RDR 0002 is `Draft`, so this too is a scheduled peer edit.
 - [ ] RDR 0002 normalized-row identity and RDR 0003 finite-domain predicate
   semantics are coherent enough to implement checks against.
 - [x] RDR 0005 command placement is coherent enough to expose root
   `intrastate lint`: RDR 0005 owns runtime `flow` verbs and leaves graph lint
-  authority to this RDR.
+  authority to this RDR. A9 narrows the entry point: RDR 0005 defers
+  transition-model config discovery, so `--model <path>` is the instantiable
+  form and `--flow <id>` waits on that discovery landing.
 
 ### Minimum Viable Validation
 
@@ -1391,9 +1465,10 @@ Expose root `intrastate lint` through the existing Cobra/respond/clierr gateway.
 If any `flow lint` alias or resolver-local validation flag is added later, it
 must reuse the same request builder and graph-lint engine. Extend
 `clierr.CLIError`/`respond` with the typed optional findings field used by JSON
-mode on both success and failure. Add the CI-shaped production command
-invocation to `make check` or the GitHub workflow once the checked-in
-transition model or fixture corpus exists.
+mode on both success and failure. Add the production command
+invocation as the new `graph-lint` job in `.github/workflows/ci.yml` once the
+checked-in transition model exists (A8), wiring `make check` to the same
+command for local parity.
 
 ### Phase 4: Fixture Corpus
 
@@ -1725,6 +1800,19 @@ which no peer states — RDR 0002 fixes only that absence does not imply deletio
 A8 and A9 gate the MVV rather than the design; A10 gates invariant 5's
 soundness.
 
+**Stage 6 dispositioned all six Pending records as DOWNGRADED** — each carries
+a named plan that runs during implementation or at a peer's next touch, and
+each is survivable, recorded per record above. None is MVV-critical: the
+Minimum Viable Validation is **fixture-backed**, so every blocking invariant
+class is proven against authored fixtures through the production command path
+without a shipped model (A8), the CI wiring (A5), `--flow` discovery (A9), or
+either peer clause (A6, A10). A7's route-back lands on RDR 0003 A18, which that
+document's own Stage 6 downgraded as not lock-blocking and whose venue names
+this RDR as a sufficient producer. No record was refuted at this stage: A5's
+gate surfaces, A6's absent declarations, A8's `.toml` census, A9's deferred
+discovery, and A10's silent write semantics were each re-verified against the
+working tree and found exactly as recorded.
+
 ### Scope Verification
 
 The Minimum Viable Validation is in scope: fixture-backed `intrastate lint`
@@ -1737,7 +1825,8 @@ invariant through the production command path.
   append-only under the existing CLI output envelope.
 - **Build tool compatibility**: the authoritative check is the same
   root `intrastate lint` command CI can run after `make build`; the Validation
-  scenarios must capture that gate once the command and fixture corpus exist.
+  scenarios must capture that gate once the command and the checked-in model
+  exist.
 - **Incremental adoption**: local hooks and resolver-local validation flags may
   call the lint engine later, but only the command/CI gate defines acceptance.
 - **Canonical-form / determinism**: deterministic claims are semantic finding
