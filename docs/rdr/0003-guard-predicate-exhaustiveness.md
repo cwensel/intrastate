@@ -15,7 +15,15 @@
   added the single-valued marker to the declaration model here; §JD-14's
   coverage half stands, while its overlap half is re-opened as A17 (the shipped
   kernel resolves ordinary candidates over non-escape rows only, so an
-  escape/guarded overlap is not a runtime ambiguity). This RDR owns the tag
+  escape/guarded overlap is not a runtime ambiguity). Repeatability iteration 3
+  (2026-08-22, lite) pinned five contract silences — the assignment-count table's
+  declaration defaults, a can-refuse row's coverage contribution, the cardinality
+  of a product carrying an unprovable dimension, the escape-row failure-class
+  partition, and the narrowing's population (escape rows included) — and the
+  first of those exposed that value-atom projection over a non-single-valued
+  dimension was never fixed; `eq`/`in`/comparisons are now stated as
+  single-value operators whose atoms are unprovable without the marker, opening
+  **A21** and making A16 blocking. This RDR owns the tag
   declaration model (value kind, finite domain, optionality, single-valuedness,
   element universe), rehomed from RDR 0002 on 2026-08-21; RDR 0002 owns
   authoring location and normalization carriage and cites this model. Remaining
@@ -537,7 +545,12 @@ parallel guard model.
     rather than a route-back.
   - **If wrong**: the single-valued marker is a declared-but-unwritable field,
     `graph-single-valued-state` keeps an unhomed producer, and MVV Scenario 4's
-    single-valued cases cannot be authored in a fixture.
+    single-valued cases cannot be authored in a fixture. **This request is now
+    blocking rather than completing**: since the operator/kind agreement clause
+    makes the marker a precondition for projecting an `eq`/`in` atom, an
+    unwritable marker means *no* guard using those operators can carry an
+    exhaustiveness claim — the whole proof surface, not one lint code. A21
+    books the authoring-coverage half.
 - **A17 Escape-row overlap is checked among escape rows for one failure class,
   not between an escape row and a guarded row.**
   - **Status**: Pending
@@ -554,7 +567,11 @@ parallel guard model.
     reporting it as blocking overlap would fail a fixture the runtime accepts —
     a false positive in the direction P5 does not require. What *is* a genuine
     ambiguity is two escape rows matching one failure class, since RDR 0002
-    admits a rescue only when exactly one matches.
+    admits a rescue only when exactly one matches. The class term itself is no
+    longer open: `Normative Contracts` now reads it from the row's declared
+    rescue list and partitions one population per class, a row declaring several
+    classes joining each (`resolve.go::Row.rescues`). What A17 still owes is the
+    cluster's confirmation of the two-population reading, not its mechanics.
   - **Plan**: carry to the RDR 0006 refine that already owes §JD-14's invariant
     3/4 repair, and record the correction against §JD-14 at the next JDR 0001
     touch — the same document set and edit session as the charted anchor repair.
@@ -615,6 +632,36 @@ parallel guard model.
   - **If wrong**: MVV Scenario 8 — this RDR's flagship false-green defense —
     cannot be written as specified, and is either deleted or weakened to assert
     only the row, which is the assertion the clause was strengthened to replace.
+
+- **A21 Requiring `single_valued` for a provable `eq`/`in` atom leaves the
+  target flows authorable.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence needed**: the operator/kind agreement clause now makes the
+    single-valued marker a **precondition for provability**, not merely a product-size
+    optimization: an `eq`/`in`/comparison atom over a tag not declared
+    single-valued has no projection and takes the blocking outcome. This is a
+    strictly stronger demand on the authoring surface than A16 was written
+    against — A16 asks that the marker be *writable*, this asks that every guard
+    dimension in the two target flows actually *carry* it. The desk trace shows
+    the cost of getting it wrong: the representative fixture declares the marker
+    nowhere, so all four of its rules become unprovable rather than merely
+    gapped. Unverified today because no fixture declares the marker at all
+    (A16 owns the authoring location, still `Pending` on RDR 0002).
+  - **Plan**: MVV Scenario 4 already covers single-valued cases — extend it to
+    assert the negative control (an unmarked tag under `eq` yields the blocking
+    inability-to-prove finding naming the dimension, not a coverage gap), and
+    have Phase 3's fixture declare `single_valued` on `profile`,
+    `prelock_iterations`, `cluster_eligible`, `stage`, `lens` and
+    `rewind_target`. If any target-flow dimension turns out to need co-occurring
+    values, it is a `set` tag under `contains`, not an unmarked enum — record
+    which, since that changes RDR 0002's authoring request.
+  - **If wrong**: the marker is required on essentially every guard tag, which
+    makes it a de-facto default rather than an opt-in, and the declaration model
+    should invert it — declare *multi-valued* explicitly and let the absent
+    marker mean single-valued. That inversion contradicts the conservative-default
+    reasoning the optionality clause is built on, so it is a real fork, not a
+    tweak: it would be decided here and carried to RDR 0002 and RDR 0006.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -953,6 +1000,27 @@ operators MUST be rejected during parse or lint before resolution.
 Each operator MUST declare which tag value kinds it accepts. A predicate whose
 literal cannot be parsed as the declared tag kind MUST be rejected before
 resolution.
+
+**`eq`, `in`, and the integer comparisons are single-value operators**, and how
+a value atom projects onto its dimension follows from that. Each is defined over
+a tag holding exactly one value — the matrix's "narrows the tag domain to one
+value" / "to the listed values" — so an atom denotes the assignments in which
+the tag's single held value is the literal (`eq`), is a member of the literal set
+(`in`), or satisfies the comparison. `contains` is the operator for a tag whose
+values co-occur, and it projects the other way: the assignments whose held set
+contains every listed element.
+
+Consequently a value atom over a dimension the model does **not** declare
+single-valued is not a differently-projecting atom — it is one lint **cannot
+project at all**, because the tag has no single held value for the operator to
+narrow. Such an atom MUST take the blocking inability-to-prove outcome for that
+dimension, exactly as a dimension with no finite declared domain does. Lint MUST
+NOT silently pick a reading — resolving it as "the literal is among the held
+values", "the held set equals the literal", or "the held set is contained in the
+literal" yields different union cardinalities and different overlap verdicts on
+the same model, which the published-bound clause forbids. An author who wants
+`eq`/`in` proven over a tag declares it single-valued; an author who means
+co-occurring membership declares the tag `set` and uses `contains`.
 ```
 
 ```normative
@@ -1017,9 +1085,14 @@ same cross-implementation divergence the published bound exists to prevent.
 An `exists` atom projects onto the scoped product as a **per-key presence
 dimension**: a two-valued dimension `{present, absent}` for that key, alongside
 the key's value dimension. An `exists` atom denotes `{present}` or `{absent}`
-on it; a value atom denotes a subset of the value dimension and, because a
-value atom over an absent key is unevaluable rather than false, implicitly
-`{present}`. A key declared always-present contributes no presence dimension —
+on it; a value atom denotes a subset of the key's value dimension **as the
+operator/kind agreement clause projects it** — one held value narrowed for
+`eq`/`in`/comparisons, which therefore requires the key be declared
+single-valued, or a containing subset for `contains` — and, because a value atom
+over an absent key is unevaluable rather than false, implicitly `{present}`.
+`exists` is unaffected by that requirement: it reads presence alone, so it
+projects over a key whose values co-occur exactly as it does over a
+single-valued one. A key declared always-present contributes no presence dimension —
 its `{absent}` assignment is not in the product — which is what makes the
 narrowing's negative control provable rather than vacuous. Lint MUST NOT drop
 `exists` atoms from the product: a group carrying one stays provable, and
@@ -1047,7 +1120,11 @@ group whose ordinary row can refuse `guard_unevaluable` still has its claim
 withheld, because at runtime that refusal is returned before the escape row is
 ever consulted. Counting the escape row's assignments toward the union while a
 peer can refuse would certify green a group the runtime refuses — the false-green
-P5 forbids, reached by citing a rescue path the kernel does not take.
+P5 forbids, reached by citing a rescue path the kernel does not take. This states
+that a bare escape row cannot *discharge* another row's withholding; it is not a
+narrower population for the narrowing itself, which quantifies over every
+participating row including escape rows (see the narrowing clause below) — a
+*guarded* escape row can refuse on its own path and withholds the group too.
 
 Overlap is checked in **two separate populations**, because the runtime never
 mixes them: RDR 0002 (`0002:328-334`) and the kernel both resolve ordinary
@@ -1061,6 +1138,20 @@ rows for the same failure class**, since RDR 0002 admits a rescue only when
 ambiguity that silently disables the rescue. Escape rows are therefore excluded
 from the ordinary-row overlap check and subjected to their own; excluding them
 from **coverage** is what MUST NOT happen.
+
+**The failure class is read from the row's declared rescue list, and the check
+runs once per class.** An escape row declares the classes it rescues as a list,
+not a single value — RDR 0002's `escape` field (`0002:328-334`) is plural and the
+kernel matches it membership-wise (`internal/resolve/resolve.go::Row.rescues`,
+`slices.Contains(r.Escape, kind)`). So lint MUST partition the escape rows into
+**one population per declared failure class**, place a row declaring several
+classes in **each** of those populations, and run the pairwise overlap check
+within each population independently. A single flat pairing over all escape rows
+over-reports — two rows that share no class never compete at runtime, because
+the kernel filters by `rescues(r.Kind)` before taking the exact-one count — and a
+per-row partition under-reports, missing two rows that collide on one shared
+class of several. A pair overlapping in more than one class is one finding per
+class, naming the class, so the author can see which rescue path is disabled.
 
 A bare escape row consequently closes coverage without generating an overlap
 finding against every guarded peer it subsumes — the two checks read the same
@@ -1086,6 +1177,20 @@ An exhaustiveness claim MUST NOT be stronger than the runtime it describes: lint
 MUST NOT certify a row group exhaustive when a participating row can refuse
 `guard_unevaluable` under RDR 0007's aggregation veto. Where the two disagree
 the lint promise narrows; the runtime veto MUST NOT be weakened.
+
+**"Participating row" here means every row in the group, escape rows included** —
+the participation clause's population, not the ordinary-row population the
+overlap check uses. A guarded escape row can refuse at runtime on its own path:
+`escapeOrRefuse` runs escape candidates through the same viability gate as
+ordinary ones and returns `refuse(in, *blocked)` when one carries an undecidable
+guard (`internal/resolve/resolve.go::escapeOrRefuse`, "an escape edge … carrying
+an undecidable guard raises that typed refusal"), so a group whose only
+possibly-refusing row is an escape row is still a group the runtime can refuse.
+Withholding is therefore decided over the whole group, while overlap remains
+split into the two populations above — the split exists because the runtime
+never *matches* the populations against each other, not because escape rows are
+exempt from the veto. The two-population reading applies to overlap only; reading
+it into the narrowing would certify green exactly the group the runtime refuses.
 ```
 
 ```normative
@@ -1103,6 +1208,19 @@ block whose atoms may be unevaluable — as if absence made the exclusion simply
 not apply — certifies green a group the runtime refuses. This is the same
 false-green the narrowing forbids, reached through the block the subtraction
 model does not cover.
+
+**A can-refuse row contributes no assignments to the coverage union**, and the
+group it sits in has no provable product. The subtraction model is defined over
+decided atoms; a row that can refuse has no decidable accepted-assignment set to
+contribute, so lint MUST NOT credit it with its `all`-intersection unsubtracted
+— that is the false-green above, reached by counting a row the runtime may
+refuse. Nor is the shortfall a coverage gap: the report-every-defect clause
+scopes the separate gap finding to a gap **over a provable product**, which this
+group does not have. So a withheld group emits the withholding finding for each
+refusing row, and MUST NOT additionally emit a `graph-coverage-gap` naming a
+witness assignment that a refusing row would in fact accept when its key is
+present. Overlap findings among the group's decidable rows are unaffected and
+still MUST be emitted.
 ```
 
 ```normative
@@ -1217,6 +1335,17 @@ difference is exponential, so it is fixed per kind here:
 | `set` | `2^\|element universe\|` — a set-valued tag holds any subset, so its assignment space is the powerset, **never** `\|universe\|` |
 | any optional key | multiplied by 2 for its `{present, absent}` presence dimension |
 
+**The table reads the declaration's defaults, not an author's intent.** Both
+markers this table branches on are optional in the declaration and both default
+against the smaller product: a declaration carrying no optionality marker is
+optional, so it takes the ×2 presence row; a declaration carrying no
+single-valued marker is not single-valued, so a finite kind takes the
+`2^|domain|` row rather than the `|domain|` one. An implementation MUST apply
+these defaults when computing the cardinality — reading an unmarked declaration
+as single-valued or always-present is the same exponential understatement the
+`set` row forbids, reached through a marker the model never carried. A model
+that wants the smaller product declares the markers that license it.
+
 Reading a `set` dimension as `|universe|` understates the product
 exponentially — a model with three 20-element set tags computes 8,000 and
 "proves" it, while the real assignment space is `2^60`. That is precisely the
@@ -1228,6 +1357,20 @@ diagnostic beside the computed cardinality; it is not per-model, per-group, or
 configurable per run, since either would make the verdict model-dependent. Two
 conforming implementations MAY publish different bounds, but each MUST return
 the same verdict for the same model and MUST report which bound it applied.
+
+**A dimension with no finite declared domain has no assignment count**, so a
+product containing one has no cardinality: the table above is total over the
+finite kinds and defines no value for a `scalar` dimension or for a finite kind
+declaring no domain. The too-large comparison is therefore defined **only over a
+fully-provable product** — lint MUST compute the cardinality and test the bound
+after every participating dimension is known finite, and MUST NOT report a
+computed size for a product carrying an unprovable dimension. The two input
+classes stay separately reported, as report-every-defect requires: each
+unprovable dimension draws its own blocking finding naming that dimension, and
+the over-large refusal — the one that carries `(computed size, bound)` — is
+simply not among the findings for such a group, since the figure it must report
+does not exist. This is not short-circuiting between the classes; it is the
+size-bearing diagnostic being unavailable when its quantity is undefined.
 ```
 
 ```normative
@@ -1310,25 +1453,37 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | --- | --- | --- | --- |
 | 1. Load the RDR/kata slice as normalized candidate rows | atoms-not-callbacks; closed typed operator vocabulary; operator declares accepted kinds | `profile-to-grounding` parses to `profile in [mid,large]` + `unless prelock_iterations gte 3`; operators all in the matrix | OK |
 | 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
-| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* **guard** dimension enters the product, including one only some rows constrain; match keys are the grouping context, not dimensions | `profile` = 4 enum values; `prelock_iterations` = `{0..3}` (inclusive, so 4); `cluster_eligible` = 2 values **plus** the `{present, absent}` presence dimension step 5 adds, since it declares no optionality marker and is therefore optional by default — 64 assignments in all. `status` does **not** enter the product: its `status eq "Draft"` atom is authored under `[rule.match.status]`, so it is the grouping key that forms this selection context, not a guard dimension within it. `prelock_iterations` is the participation witness — only `profile-to-grounding` carries an atom over it (`unless … gte 3`), and it enters the product for the whole group even though `foundational-to-cove` never mentions it | OK — and it is the participation clause that keeps `prelock_iterations` in the product; under a rows-must-differ reading a key only one row constrains would silently drop out |
-| 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
+| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* **guard** dimension enters the product, including one only some rows constrain; match keys are the grouping context, not dimensions | Computed with the assignment-count table's declaration defaults, which this fixture triggers throughout: it declares **no** `single_valued` and **no** optionality marker on any tag, so every dimension takes the unmarked `2^\|domain\|` row and every key takes the ×2 presence row. `profile` = `2^4 · 2` = 32; `prelock_iterations` = `{0..3}` inclusive so `2^4 · 2` = 32; `cluster_eligible` = `2^2 · 2` = 8 — **8,192 assignments in all**. `status` does **not** enter the product: its `status eq "Draft"` atom is authored under `[rule.match.status]`, so it is the grouping key that forms this selection context, not a guard dimension within it. `prelock_iterations` is the participation witness — only `profile-to-grounding` carries an atom over it (`unless … gte 3`), and it enters the product for the whole group even though `foundational-to-cove` never mentions it | OK — and it is the participation clause that keeps `prelock_iterations` in the product; under a rows-must-differ reading a key only one row constrains would silently drop out |
+| 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2); `eq`/`in`/comparisons are single-value operators and project only over a single-valued dimension | **Blocked, and this is the step that catches it.** Every guard atom in the group is a single-value operator — `profile in [mid,large]`, `profile eq "foundational"`, `unless prelock_iterations gte 3` — over a tag the fixture does **not** declare single-valued. Under the assignment-count defaults each of those dimensions is a power set (step 3), so the tag has no single held value for the operator to narrow and the atom has no projection. `cluster_eligible exists = true` is the one atom that *does* project: `exists` reads the presence dimension alone, which the defaults give it | **UNPROVABLE — one blocking finding per dimension** (`profile`, `prelock_iterations`), naming the dimension and the unprojectable atom. Not a gap: coverage is not computed for a group whose atoms do not project |
 | 5. Project the `exists` atom | A7 presence dimension — stated as a normative clause | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no *value* element selects presence — the atom lands on the separate `{present, absent}` presence dimension the projection clause adds | OK — witness: the presence-dimension clause in `Normative Contracts`, on the derivation in `evidence/research/iter-2-projection-derivation.md` |
-| 6. Compute coverage | `union(row_i accepted) == scoped product` | **Computed, not asserted.** The Draft group's product is `profile` (4) x `prelock_iterations` (4) x `cluster_eligible` value (2) x its presence dimension (2) = **64** assignments. `profile-to-grounding` accepts `{mid,large}` with `prelock_iterations < 3` = 24; `foundational-to-cove` accepts `{foundational}` with `cluster_eligible` present = 8; the union is **32**. **32 assignments are uncovered**, including every `profile = small` assignment, which no row in the group accepts | **GAP — the fixture's Draft group is not exhaustive.** This is the correct verdict for this fixture, not a defect in the clauses: `small` is genuinely unrouted and `prelock_iterations = 3` genuinely falls through. Witness assignment for the diagnostic step 9 requires: `(profile=small, prelock_iterations=0, cluster_eligible=true, present)` |
-| 7. Compute overlap | any non-empty pairwise intersection, computed **within** a population — ordinary rows against ordinary rows, escape rows against escape rows for one failure class; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → the two ordinary rows are disjoint on that dimension. The fixture declares no escape row, so the escape population is empty and contributes no finding | OK |
+| 6. Compute coverage | `union(row_i accepted) == scoped product`; a gap finding is scoped to a gap over a **provable** product | **Not reached for this fixture, and that is the correct outcome.** Step 4 left two dimensions unprojectable, so this group has no provable product and no union to compare — the report-every-defect clause scopes the separate gap finding to a provable product precisely so lint does not manufacture a witness assignment out of atoms it could not project. The blocking findings from step 4 stand alone | **No coverage verdict** — withheld, not green and not GAP. The earlier reading of this row (product 64, union 32, "GAP") computed at a single-valued, always-present reading the fixture never declared; at the declared defaults the product is 8,192 and the atoms do not project |
+| 7. Compute overlap | any non-empty pairwise intersection, computed **within** a population — ordinary rows against ordinary rows, escape rows against escape rows for one failure class; no source-order priority | Also not reached: an intersection is taken between projected assignment sets, and step 4 produced none for the two ordinary rows. The fixture declares no escape row, so the escape population is empty and contributes no finding either | **No overlap verdict.** The former cell asserted `profile in [mid,large]` ∩ `profile eq foundational` = ∅ — true only under the single-valued reading; with `profile` unmarked the two atoms have no projections to intersect, and whether they would overlap is exactly the question the projection clause refuses to answer by guess |
 | 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 8's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
 | 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
 | 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | §JD-4 (closed 2026-08-22) names this RDR the recording document; RDR 0006 records the same assignment on its Status line (`0006:10-13`) and reuses `graph-unprovable-coverage` | OK |
 
-No CONTRADICTION row. **Step 6 is a GAP row** — computing the union instead of
-asserting it showed the fixture's Draft group covers 32 of 64 assignments. The
-gap is in the *fixture*, which was authored to exercise operators rather than to
-close coverage; the clauses behave correctly on it. The fixture is therefore not
-usable as the MVV's "one complete partition" case without adding the rows that
-route `profile = small` and `prelock_iterations = 3` — recorded as a Phase 3
-prerequisite in `Testing Strategy`. Step 10 closed when §JD-4 assigned the
-recording document (A8); step 5's former gap closed when the presence-dimension
-projection was stated. A9 and A11 have no row here because the declaration model
-they record is an input to step 3, which the trace already exercises.
+No CONTRADICTION row. **Step 4 is the blocking row**: computing step 3 at the
+assignment-count table's declared defaults — rather than assuming the markers the
+fixture never wrote — puts every guard dimension at `2^|domain|`, and the group's
+`eq`/`in`/`gte` atoms then have no single held value to narrow. The group is
+**unprovable**, so steps 6 and 7 are not reached. The defect is in the *fixture*,
+which declares kinds and domains but neither marker, and was authored to exercise
+operators rather than to carry a proof; the clauses behave correctly on it.
+
+This supersedes the earlier reading of steps 4/6/7, which computed a 64-assignment
+product, a 32-assignment union and a disjointness verdict by silently applying
+single-valued, always-present semantics to a fixture declaring neither — the
+uncomputed-arithmetic defect this trace exists to catch, found in the trace itself
+(repeatability iteration 3). The fixture is therefore not usable as the MVV's "one
+complete partition" case without **declaring `single_valued` on `profile`,
+`prelock_iterations` and `cluster_eligible`** and then adding the rows that route
+`profile = small` and `prelock_iterations = 3` — both recorded as Phase 3
+prerequisites in `Testing Strategy`. Marker-declaring is the load-bearing half:
+without it the group never reaches a coverage verdict at all, so the added rows
+would close nothing. Step 10 closed when §JD-4 assigned the recording document
+(A8); step 5's former gap closed when the presence-dimension projection was
+stated. A9 and A11 have no row here because the declaration model they record is
+an input to step 3, which the trace already exercises.
 
 Two clauses are **unexercised by this fixture** rather than gapped, and each has
 a named test instead: the escape-row overlap population (the fixture declares no
@@ -1881,7 +2036,7 @@ assumptions that block it, so no phase is picked up on document order alone:
 | --- | --- | --- |
 | 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`) — A13's set-literal spelling and the tag declaration model are stated | Partially — the matrix, the declaration model, and the set-literal canonicalization, not the atom slice |
 | 2 Finite-Domain Lint Semantics | A10 (RDR 0006's row-group agreement) gates group *construction*, not just integration; A12 gates the owned-tag clause only; A17 and A19 gate the escape-row population and its observability — A11, A2, A7 and A8 are closed and the domain producer is this RDR | Partially — the product arithmetic (now including the per-kind assignment-count table), the withholding decision (a declaration-only test, extended to `unless` atoms), and the single-valued partition are startable; group construction, escape-row overlap, and bare-escape observability should wait on A10/A17/A19 rather than be built twice |
-| 3 Target-Flow Fixture | A14 (per-atom `block` retention, RDR 0002) — A1's harness has run and A7/A9 are closed | Yes — the gating predicates are authorable. Note the fixture's Draft group is **not** a complete partition (desk trace step 6: 32 of 64 covered), so Scenario 2's partition case needs rows added or a separate group authored |
+| 3 Target-Flow Fixture | A14 (per-atom `block` retention, RDR 0002) — A1's harness has run and A7/A9 are closed | Yes — the gating predicates are authorable. Note the fixture's Draft group does not reach a coverage verdict at all (desk trace step 4: no tag declares `single_valued`, so its `eq`/`in`/`gte` atoms do not project and the group is unprovable), so Scenario 2's partition case needs the markers declared **and** rows added, or a separate group authored |
 | 4 Integration With Peer RDRs | A10, A12 (tolerances on RDR 0006's refine) — A8 closed 2026-08-22 by §JD-4 | No |
 
 Building Phase 1 against the *current* `Row.Guard string` shape produces work
@@ -1947,14 +2102,18 @@ implementation MVV must still exercise `contains` over a **declared** set-valued
 tag with an element universe before the full closed operator vocabulary is
 accepted.
 
-**The fixture is not the MVV's complete-partition case.** The desk trace's step
-6 computed its Draft group at 32 of 64 assignments covered: no row routes
-`profile = small`, and `prelock_iterations = 3` falls through
-`profile-to-grounding`'s `unless` block. The fixture was authored to exercise the
-operator vocabulary, and it does that. Phase 3 must therefore either extend it
-with rows closing those assignments or author a separate group for Scenario 2's
-complete partition — reusing it unchanged makes Scenario 2 fail on first run
-against a correct lint, with no worked example in this RDR to arbitrate.
+**The fixture is not the MVV's complete-partition case, and misses by two
+independent margins.** The desk trace's step 4 blocks first: no tag declares
+`single_valued`, so at the assignment-count table's defaults every guard
+dimension is a power set, the group's `eq`/`in`/`gte` atoms have no single held
+value to narrow, and the group is unprovable before coverage is ever computed.
+Behind that, the rows do not partition either — nothing routes `profile = small`,
+and `prelock_iterations = 3` falls through `profile-to-grounding`'s `unless`
+block. The fixture was authored to exercise the operator vocabulary, and it does
+that. Phase 3 must therefore declare the markers **and** close the routing, or
+author a separate group for Scenario 2's complete partition — reusing it
+unchanged makes Scenario 2 fail on first run against a correct lint, and fail at
+the projection step rather than the coverage step it is written to test.
 
 1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
    membership, set containment, bounded integer comparison, existence, and mixed
