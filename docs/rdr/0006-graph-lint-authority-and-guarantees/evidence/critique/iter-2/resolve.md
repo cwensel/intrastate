@@ -25,8 +25,10 @@ divergences, matched by passage anchor). Every entry exits once below.
   concrete view's, so a real gap can be closed by a row that is not a candidate
   there. Widening the domain of a *universal* claim makes it easier to satisfy.
   The blanket "never a false green" was sound only for existential checks.
-  Coverage now certified only at match-key-exact nodes; withheld otherwise.
   **This is the highest-value finding of the pass** — B's framing beat A's.
+  (First fixed with a match-key-exactness gate on the node; the delta pass below
+  found that gate incoherent and replaced it with the correct rule — coverage
+  never reads a node at all. See the delta pass.)
 - **fixed** — origin: A/C-8 + B/C-12 (invariant 2 anti-monotone); section:
   invariant 2. Universal terminal satisfaction is anti-monotone in merging, so
   every converging flow was a structural `graph-dead-end`. Fixed by splitting
@@ -89,11 +91,12 @@ divergences, matched by passage anchor). Every entry exits once below.
   owning the vocabulary — and stating the trade explicitly: the type system does
   not enforce "MUST carry", so MVV scenario 8 does.
 - **fixed** — origin: A/C-14 (`graph-unprovable-coverage` overloaded); section:
-  finding codes. One code, now four triggers (the exactness gate added a
-  fourth), each with a different remedy. Added a closed `reason` discriminator
-  (`dimension-not-finite`, `tag-not-single-valued`, `row-can-refuse`,
-  `node-not-exact`) with the remedy per row, and required the message to state
-  that the last two are **not** model defects.
+  finding codes. One code, three triggers, each with a different remedy. Added
+  a closed `reason` discriminator (`dimension-not-finite`,
+  `tag-not-single-valued`, `row-can-refuse`) with the remedy per row, and
+  required the message to state that `row-can-refuse` is **not** a model defect.
+  (A fourth, `node-not-exact`, was added and then removed by the delta pass with
+  the gate that motivated it.)
 - **fixed** — origin: B/C-8 (vacuous `exists` report); sections: finding codes,
   advisory-tier clause (both sites), disposition table. RDR 0003 requires the
   report; the closed three-member tier had no code for it. Added
@@ -187,3 +190,50 @@ two fired tables (`disposition`, `desk trace`) persist in the draft. Both were
 **updated** by this pass rather than re-derived: the disposition table gained
 five rows and the desk trace's steps 2, 3, 6, and 8 were corrected. No fix
 introduced a new cue.
+
+---
+
+# Delta pass (iter-2 continued) — self-check + `claude-sonnet-5` review
+
+The 447-insertion rewrite is a substantial fix, so per the loop rule the lens
+was re-run **delta-scoped to the new clauses only** (not a fresh critique of the
+rewritten draft — that is the critique-on-critique drift the origin anchor
+guards against). Two defects found in my own new text; both fixed.
+
+- **fixed** — `node-not-exact` was incoherent. The new exactness clause said
+  coverage must be certified "only at a node that pins every **participating
+  match key** to a single declared value". Two errors: (1) participation is
+  defined over **guard** atoms (`0003::Normative Contracts`), and match keys are
+  explicitly **not** product dimensions there — the two categories are disjoint,
+  so "participating match key" names nothing; (2) the clause was written in the
+  vocabulary of the *retracted* node-keyed group model. Once membership is the
+  authored match pattern, coverage never consults a node at all, so the gate is
+  vestigial. Rewritten to state the real rule: the union is computed from the
+  group's authored rows and their guard domains alone, and lint MUST NOT widen a
+  group by pooling rows satisfiable at a shared node. The `node-not-exact`
+  reason, its disposition row, and its desk-trace mention were removed
+  (three triggers now, not four). Scenario 20 was rewritten to test the actual
+  false green — two rows with *different* match patterns whose union would close
+  if pooled — which is the worked example from the tie-break brief.
+- **fixed** — dead-end was misclassified as existential. Caught by the
+  `claude-sonnet-5` delta review, not by me. The soundness bullet listed dead
+  end alongside overlap and dangling edge as ∃-checks safe over merged nodes,
+  but invariant 2 is a ∀-value test the draft itself calls anti-monotone in
+  merging — structurally the same shape as coverage. The classification
+  undersold what invariant 2 had to do to stay sound. Rewritten so the split is
+  by quantifier, with **two** universal invariants each paying differently:
+  coverage never reads a node, dead end splits one. Contradiction Check updated
+  to match.
+- **fixed** — the node ceiling had a disposition row and a normative bound but
+  no numbered scenario (flagged as a completeness gap by the delta review).
+  Added scenario 22; the census scenario renumbered to 23 with its cross-
+  reference updated.
+
+Delta review verdict on the remaining eight changed items (source-state
+paragraph, node splitting, escape self-loops, root always-present, invariant 6
+read-set, A8/A9/A10, node ceiling, `ambiguous_match` scoping): **sound**, each
+grounded against locked peers and `resolve.go`. Notably it confirmed the
+invariant 6 fix is "directly required by RDR 0007 (Final, locked)".
+
+**Converged.** No open ledger entries; the two delta defects were introduced and
+closed within this pass. Iteration count: 2 of the cap of 3.
