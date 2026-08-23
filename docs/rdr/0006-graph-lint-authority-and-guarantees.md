@@ -128,6 +128,12 @@ map to the existing CLI output contract.
     derivation runs over. This RDR adopts both by citation (`Technical Design`,
     `Normative Contracts`) and supplies only the reachability of selection
     contexts (`Load-Bearing Decisions`), which closes RDR 0003 A10 and A12.
+    Four further RDR 0003 records routed here are discharged by this draft and
+    close by citation: **A17** by invariant 3's two-population overlap (which is
+    the cluster confirmation A17 awaits, its mechanics already settled),
+    **A18** by invariant 5 as the model-level producer (A7), **A19** by
+    `graph-coverage-closed-by-escape`, and **A20**'s lint half by the atom field
+    on the finding contract.
   - **If wrong**: The lint would either miss ambiguous/gap cases or block valid
     guarded edges with false positives.
 - **A3 Owned-tag read-before-write can be checked over the normalized graph
@@ -194,7 +200,9 @@ map to the existing CLI output contract.
     scenario 2), RDR 0001 and RDR 0003 declare neither, and both `[model]`
     blocks in RDR 0002's spike fixtures carry only `id`, `version`, and
     `description`. No peer declares a root because no peer needs one — RDR
-    0001's kernel is stateless and single-step, so multi-step reachability
+    0001's kernel is normatively stateless and returns one legal transition
+    plan per supplied snapshot — single-step is this RDR's gloss on that, not
+    an RDR 0001 clause — so multi-step reachability
     exists nowhere in the cluster except this RDR's lint.
   - **Producer (decided at Stage 4)**: **RDR 0002's authoring schema**, not a
     sidecar. The declarations are model data about the legal graph, and RDR
@@ -213,6 +221,25 @@ map to the existing CLI output contract.
   - **If wrong**: reachability has no root, so invariant 6 is vacuous and
     invariant 2 cannot distinguish a designed stop from a dead end; lint would
     have to infer terminals from missing rows, which invariant 7 forbids.
+- **A7 Invariant 5's model-level check is sufficient on its own, because no
+  component enforces single-valued conformance on the evaluation view.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: RDR 0003's conformance premise routes the view-level
+    check to "the kernel's view assembly", but its A18 (`Status: Pending`)
+    records the premise as "currently held by no component" — RDR 0007 owns the
+    kernel's view handling and states no conformance obligation, and
+    `internal/resolve/resolve.go::assemble` merges owned, observed, and
+    recognized tags into a `TagSet` while reading no declaration (`conform`
+    occurs nowhere in the non-test kernel). A18 names two sufficient producers
+    and requires only one: RDR 0007's assembly rejecting a non-conforming view,
+    **or** this RDR's lint reporting a model-level conformance violation.
+    Invariant 5 is that second producer, so this RDR discharges A18 without
+    waiting on RDR 0007. This assumption flips to `Verified` when RDR 0003 A18
+    records invariant 5 as its producer.
+  - **If wrong**: if RDR 0007 later adopts a view-level check with different
+    semantics, the two producers could disagree on which views are conforming;
+    the model-level finding stays correct, but the pair needs reconciling.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -307,8 +334,9 @@ input contract is:
   rows — row kind and the declared list of failure classes the row rescues
   (RDR 0002);
 - declared tags with provenance (RDR 0002) and RDR 0003's tag declaration
-  model — value kind, finite domain (enum value set, `{min..max}` bound,
-  set-element universe), optionality marker, and single-valued marker. Lint
+  model — value kind, finite domain (enum value set or `{min..max}` bound),
+  optionality marker, single-valued marker, and the set-element universe a
+  set-valued kind declares. Lint
   reads every one of these from the declaration and never infers one from a
   tag's name, value spelling, or a fixture;
 - recognized outcome alphabet, declared initial owned state, and declared
@@ -356,8 +384,11 @@ The mandatory invariant set is:
    declared single-valued (RDR 0003's single-valued clause) holds two values:
    no row's writes assign it two values, and no reachable path leaves a second
    value held beside one no write or clear on that path removes. This is the
-   model-level half of RDR 0003's conformance premise; the view-level check at
-   assembly is RDR 0007's.
+   model-level half of RDR 0003's conformance premise, and it discharges that
+   premise on its own: RDR 0003 A18 accepts a model-level lint finding as one
+   sufficient producer. The view-level check at assembly is unowned — RDR 0007
+   states no conformance obligation and `internal/resolve/resolve.go::assemble`
+   performs none — so this RDR must not assume one runs (A7).
 6. **Owned-set-before-match** — a row that reads an owned tag (match key or
    guard atom) must find it held in every reachable owned-state that satisfies
    the row's match pattern; the declared initial owned state counts as a write.
@@ -406,6 +437,18 @@ structured data. Text mode may summarize the same findings in `Detail`. On
 success the `respond.OK` payload carries the same typed `findings` list holding
 only non-blocking findings (possibly empty), so the bare-escape closure is
 observable without inspecting the model.
+
+Disposition of every model class lint can meet:
+
+| Input class | Exit | Envelope / error | Finding minted | Silent or loud |
+| --- | --- | --- | --- | --- |
+| Model with ≥1 blocking defect | 2 (`GroupUserEnv`) | `respond.Fail`, aggregate `CLIError.Code = graph-lint-failed` | every blocking finding, in the typed `findings` list | Loud |
+| Clean model, coverage proved over declared domains | 0 | `respond.OK` | `findings` present and empty | Loud (an empty list is the proof's receipt) |
+| Clean model, a group closed by a bare escape row | 0 | `respond.OK` | `graph-coverage-closed-by-escape` naming the row | Loud — a bare green MUST NOT satisfy this class |
+| Escape row overlapping an ordinary row | 0 | `respond.OK` | none | **Silent by design** — never a runtime ambiguity (RDR 0003's two-population clause); reporting it would fail a model the runtime accepts |
+| Redundant row / unreachable rule | 0 | `respond.OK` | informational entry | Loud, but never changes the success disposition |
+| Group whose participating row can refuse `guard_unevaluable` | 2 (`GroupUserEnv`) | same aggregate failure | `graph-unprovable-coverage` naming row + atom | Loud — no non-blocking tier for this class |
+| Model unreadable / not conforming to RDR 0002's schema | per RDR 0002 | refused before normalization; lint never runs | none of this RDR's codes | Loud, upstream |
 
 #### Normative Contracts
 
@@ -870,7 +913,8 @@ source identity and write/predicate graph data, A2 supplies finite-domain
 overlap and coverage proof obligations including the presence dimension, A3
 supplies owned-tag read-before-write checks, A4 supplies the `respond`/`clierr`
 output path, A5 supplies the repository gate surface that must run the
-production command, and A6 supplies the reachability root and terminal set.
+production command, A6 supplies the reachability root and terminal set, and A7
+records that invariant 5's model-level check stands alone.
 
 The code paths these tests exercise were reviewed at Stage 4 and none exists
 yet: `internal/` and `cmd/` hold eight non-test Go files whose only registered
@@ -883,6 +927,24 @@ matrix asserts against does ship — `internal/cli/clierr/clierr.go::CLIError`,
 RDR requires is wire-compatible with the shipped envelope.
 `internal/cli/respond/respond.go::Success` already carries `Data any`, a host
 for the success-side findings list.
+
+Desk trace — one lint invocation, with every normative clause in force at each
+step and a witness from the fixture corpus:
+
+| Step | Clauses in force | Witness / outcome |
+| --- | --- | --- |
+| 1. Load + normalize | RDR 0002 schema and `[model]` clause; "MUST NOT define a second sparse-source parser" | Non-conforming source is refused before normalization; lint never runs (upstream disposition row). |
+| 2. Derive graph view | reachability relation (`Load-Bearing Decisions`); A6 initial/terminal declarations | Root = declared initial owned state; over-approximating, so total — false positives possible, false greens not. |
+| 3. Scope row groups | row-group clause (RDR 0003's, cited not restated); "MUST NOT define a second grouping" | Groups keyed by source state × recognized outcome; invariants 3–4 run once per reachable group. |
+| 4. Overlap | invariant 3; RDR 0003's two-population clause | Ordinary×ordinary → `graph-overlap`. Escape×escape sharing a class → `graph-overlap`, once per shared class. Escape×ordinary → **no finding** (scenario 9a). |
+| 5. Withholding test | narrowing clause; "can refuse" as a syntactic test over the declared optionality field | Decided over **every** participating row, escape rows included; total because it reads declarations, never the graph. |
+| 6. Coverage | invariant 4; presence-dimension projection clause | `union(row_i accepted assignments) == scoped product`, product including the `{absent}` assignment of an `exists` atom over an optional key (scenario 11); an always-present key contributes no such dimension. |
+| 7. Precedence when 5 and 6 both bear | narrowing clause governs: "no non-blocking tier for this class"; the advisory tier "must not absorb a withheld claim" | A group both closable by a bare escape row **and** carrying a row that can refuse resolves to `graph-unprovable-coverage` (blocking, exit 2) — **not** a success with `graph-coverage-closed-by-escape`. Withholding dominates closure, since at runtime the refusal returns before the escape row is consulted (scenario 8). |
+| 8. Emit | aggregate-`CLIError` clause; deterministic-order clause; `respond`-only clause | Blocking → one `graph-lint-failed` / `GroupUserEnv` / exit 2, findings in the typed `findings` list. Clean → `respond.OK` with the non-blocking list. Order by finding identity, never source order. |
+
+No CONTRADICTION row. Step 7 is the one place two clauses bear on the same
+verdict; the narrowing clause's own text settles the precedence, and this trace
+records it so an implementer does not read the info code as an escape hatch.
 
 1. **Scenario**: legal fixture model with all mandatory declarations and
    finite-domain coverage.
@@ -996,7 +1058,10 @@ Validation scenario 7; Stage 4 re-verified that the gate surfaces exist and
 recorded what the wiring costs (CI runs discrete jobs, never `make check`, and
 `check` does not depend on `build`). A6 is Pending on RDR 0002 declaring the
 initial owned state and terminal states, with that arm decided at Stage 4 over
-the sidecar alternative.
+the sidecar alternative. A7 is Pending on RDR 0003 A18 recording invariant 5 as
+its model-level producer; the grounding sweep confirmed against source that no
+component enforces view-level conformance today, so invariant 5 claims no
+enforcement it cannot cite.
 
 ### Scope Verification
 
