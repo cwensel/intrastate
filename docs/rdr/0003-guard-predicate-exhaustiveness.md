@@ -22,7 +22,11 @@
   open: A10, A12 and A17 are on RDR 0006's refine, A14 and A16 are
   authoring/carriage requests on RDR 0002, and A15 is discharged by MVV
   Scenario 3 at implementation. 3amigo iteration 3 (2026-08-22) opened A16 and
-  A17.]
+  A17. Critique iteration 3 (2026-08-22, dual-model) corrected four computational
+  defects — the desk trace's uncomputed coverage verdict, `set` cardinality
+  understated by an exponent, `unless` modeled two-valued against the kernel's
+  Kleene semantics, and a bare escape row treated as rescuing refusals the kernel
+  never routes to it — and opened A18, A19 and A20.]
 
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
@@ -166,7 +170,15 @@ parallel guard model.
   - **Scope of this record**: it establishes vocabulary *sufficiency and
     decidability* over the target-flow slice — evaluation consumes tag values,
     not declared domains, so it is independent of the declaration model, which
-    governs exhaustiveness (A2) rather than evaluation. The `contains` cell is
+    governs exhaustiveness (A2) rather than evaluation. That independence is what
+    keeps the record standing after the declaration model was rehomed here, and
+    it is also this record's limit: the harness predates the model, uses its own
+    TOML-to-atom encoding rather than the shipped shape, and runs against a
+    fixture declaring none of the five fields. So `contains` is proven to
+    *evaluate* over a set-valued tag and is **not** proven to carry an
+    exhaustiveness claim over a *declared* element universe — Phase 3's gate, and
+    the one operator whose closed-vocabulary acceptance still rests on a
+    condition scheduled after lock (critique iteration 3). The `contains` cell is
     evaluated over a declared set **kind**; the element *universe* the
     exhaustiveness claim needs is a separate fact, declared by A11's model and
     recorded by A9.
@@ -493,7 +505,14 @@ parallel guard model.
     the coverage derivation. Named plan: MVV Scenario 3, which already lints an
     over-large product and now also compares two equal-cardinality products of
     differing shape (few wide dimensions vs. many narrow ones) for the same
-    verdict.
+    verdict. **That comparison alone cannot close this record** — reading the
+    bound `B` from the implementation makes the two verdicts comparable but takes
+    the oracle from the system under test, so it establishes consistency and
+    never adequacy. Scenario 3 therefore also measures whether the proof
+    representation actually completes for each shape and compares that against
+    the verdict the bound gave; A15 closes only when predicted and observed
+    provability agree, and is refuted by a divergence in either direction
+    (critique iteration 3).
   - **If wrong**: the published bound does not predict provability, so two
     conforming implementations disagree on the same model and the
     model-independence the clause promises is unmet.
@@ -544,6 +563,58 @@ parallel guard model.
     two-population overlap clause reverts to a single population and RDR 0006's
     invariant 3 exemption is removed as first decided; the coverage clause and
     the union identity are untouched either way.
+
+- **A18 A conforming-view check has a producer, so conformance is enforced
+  rather than assumed.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: every lint claim in this RDR is conditional on the
+    evaluation view conforming to the declared model, and the conformance clause
+    routes the check to "the kernel's view assembly". The shipped assembly
+    (`internal/resolve/resolve.go::assemble`) performs no such check — it merges
+    owned, observed, and recognized tags into a `TagSet` and reads no
+    declaration; `conform` occurs nowhere in the kernel. RDR 0007 owns the
+    kernel's view handling but states no conformance obligation this RDR can
+    cite, so the premise is currently held by no component.
+  - **Plan**: request at RDR 0007's next touch that view assembly either reject a
+    non-conforming view or expose the violation as a typed refusal, and at
+    RDR 0006's refine that a model-level conformance violation be a lint finding
+    over the declared model. Either producer discharges this; both is better.
+  - **If wrong**: a key declared always-present is absent at runtime, lint proved
+    coverage over a product carrying no `{absent}` assignment for it, and the
+    resolution refuses `guard_unevaluable` on a group certified green.
+- **A19 A bare escape row's coverage closure is observable in lint output.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: this RDR now requires a group whose coverage is closed
+    by a guard-atom-free escape row to say so in its verdict, so a catch-all
+    cannot silently stand in for a proof. RDR 0006 owns the finding contract and
+    the verdict shape, and today has neither a code nor a field for this
+    distinction.
+  - **Plan**: carry to RDR 0006's refine with the §JD-14 invariant repair and the
+    A17 population question — one escape-row agenda item, since all three touch
+    the same invariants.
+  - **If wrong**: a bare escape row remains a one-line blocking-free way to close
+    any coverage gap, and the exhaustiveness guarantee erodes silently as authors
+    reach for it.
+
+- **A20 The atom-naming half of the withheld-claim clause gets a carrier on both
+  surfaces.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: the withheld-claim clause requires the artifact to name
+    the participating row **and the atom that can refuse**. Neither surface can
+    carry the atom today: RDR 0006's finding contract has no atom-level field
+    (`0006:363-367`), and the shipped refusal carries one opaque `Guard string`
+    plus `Rows []RowRef` (`internal/resolve/resolve.go::Refusal`), so the atom is
+    not addressable at runtime either. The row half is satisfiable on both.
+  - **Plan**: the lint half is §JD-4's already-decided duty at RDR 0006's refine;
+    the runtime half is a request at RDR 0007's next touch, which owns the
+    refusal payload and is already reshaping it. Travels with A19 as one
+    diagnostics-payload agenda item.
+  - **If wrong**: MVV Scenario 8 — this RDR's flagship false-green defense —
+    cannot be written as specified, and is either deleted or weakened to assert
+    only the row, which is the assertion the clause was strengthened to replace.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -796,6 +867,18 @@ and that its claims presuppose it. Whether a non-conforming view is refused at
 assembly or reported as a lint finding over the declared model is RDR 0007's and
 RDR 0006's respectively; this RDR MUST NOT be read as promising anything about
 a view that violates the declarations.
+
+**Conformance currently has no enforcer, and that is a booked gap, not a
+silence.** The shipped kernel's view assembly
+(`internal/resolve/resolve.go::assemble`) merges owned, observed, and recognized
+tags into a `TagSet` without reading the declaration model: it checks no
+always-present key and no single-valuedness, and the string `conform` appears
+nowhere in the kernel. So the premise every lint claim here is conditional on is
+today asserted by no component. A key declared always-present that is absent at
+runtime yields `guard_unevaluable` over a product built with no `{absent}`
+assignment — green lint, refused resolution, with this RDR's answer being that
+the view was out of scope. Naming the owner is not the same as the check
+existing: **A18** books the producer.
 ```
 
 ```normative
@@ -917,6 +1000,17 @@ A key constrained identically by every row in a group *because it is the
 grouping key* contributes exactly one assignment and cannot produce a gap;
 folding it into the product would multiply every product by 1 and misreport the
 cardinality the too-large bound is measured against.
+
+**The match/guard split is per atom per group, not per key per model.** The same
+tag key MAY be a match key in one rule and a guard key in another — the fixture
+does exactly this with `status`, matched in `profile-to-grounding` and guarded
+in `reconcile-rewind-legality`. Participation is therefore decided by where each
+atom is authored **within the group being proved**: a key enters that group's
+product when some row in *that* group carries a guard atom over it, regardless of
+how the key is used in any other group. Reading the split as a per-key property
+of the model would make one key's role ambiguous the moment two groups use it
+differently, and two implementations would then build different products — the
+same cross-implementation divergence the published bound exists to prevent.
 ```
 
 ```normative
@@ -940,6 +1034,21 @@ peers'. An escape row carrying no guard atoms denotes the whole scoped product
 and therefore closes coverage by itself. Lint MUST NOT treat "an escape row
 exists" as a separate coverage-satisfying fact outside the union.
 
+**An escape row closes coverage only for the failure classes it can actually
+rescue.** The kernel consults escape rows solely from the zero-match and
+multiple-match arms: `internal/resolve/resolve.go::Resolve` calls `gate` first
+and returns `refuse(in, *blocked)` immediately when the gate raises a typed
+blocking condition, so `escapeOrRefuse` is **never reached** for
+`guard_unevaluable` or `owned_state_unavailable`. An escape row therefore cannot
+rescue either class, however bare its guard.
+
+Consequently a bare escape row MUST NOT be read as discharging the narrowing: a
+group whose ordinary row can refuse `guard_unevaluable` still has its claim
+withheld, because at runtime that refusal is returned before the escape row is
+ever consulted. Counting the escape row's assignments toward the union while a
+peer can refuse would certify green a group the runtime refuses — the false-green
+P5 forbids, reached by citing a rescue path the kernel does not take.
+
 Overlap is checked in **two separate populations**, because the runtime never
 mixes them: RDR 0002 (`0002:328-334`) and the kernel both resolve ordinary
 candidates over non-escape rows only, and consult escape rows solely to rescue a
@@ -956,6 +1065,20 @@ from **coverage** is what MUST NOT happen.
 A bare escape row consequently closes coverage without generating an overlap
 finding against every guarded peer it subsumes — the two checks read the same
 row under different populations, which is why they do not contradict.
+
+**A bare escape row is not a silent opt-out from the guarantee.** Because it
+closes coverage by itself and draws no overlap finding, it would otherwise be a
+one-line, always-available way to make any `graph-coverage-gap` disappear — the
+same opt-out this RDR forbids for declarations, arriving through the escape
+population. Lint MUST therefore report a bare escape row — one carrying no guard
+atoms — that closes a group's coverage as an **observable** result: the group's
+verdict names the escape row that closed it, so a reviewer reading the lint
+output can tell a group proved over its declared domains from one closed by a
+catch-all. Emitting a bare green for such a group MUST NOT satisfy this clause.
+Whether that observable result is a distinct RDR 0006 finding code or a field on
+the existing verdict is RDR 0006's to choose; what this RDR fixes is that the
+distinction MUST be visible and MUST NOT depend on the reader inspecting the
+model by hand.
 ```
 
 ```normative
@@ -963,6 +1086,23 @@ An exhaustiveness claim MUST NOT be stronger than the runtime it describes: lint
 MUST NOT certify a row group exhaustive when a participating row can refuse
 `guard_unevaluable` under RDR 0007's aggregation veto. Where the two disagree
 the lint promise narrows; the runtime veto MUST NOT be weakened.
+```
+
+```normative
+**`unless` is subtracted two-valued only when its atoms are decided.** The
+excluded-intersection subtraction this RDR states for lint is a set operation
+over decided atoms, while the runtime computes the row verdict in three-valued
+Kleene — RDR 0007 fixes the verdict as `all_result ∧ ¬(unless_conj)` with
+`¬U = U`, so an **unevaluable atom inside `unless` makes the whole row
+unevaluable**, not merely un-excluded.
+
+Lint MUST therefore treat a value atom in an `unless` block over a key declared
+optional exactly as it treats one in `all`: the row **can refuse**, and the
+group's claim is withheld under the narrowing above. Subtracting an `unless`
+block whose atoms may be unevaluable — as if absence made the exclusion simply
+not apply — certifies green a group the runtime refuses. This is the same
+false-green the narrowing forbids, reached through the block the subtraction
+model does not cover.
 ```
 
 ```normative
@@ -982,6 +1122,17 @@ exit code alone cannot distinguish a withheld claim from a proved one.
 > refine. Until that lands the atom-naming half of the clause above has no
 > producer; the row-naming half is satisfiable today. This does not gate this
 > RDR's lock — a missing producer field surfaces as an RDR 0006 refine item.
+>
+> **The runtime surface is short in the same way, and this is new.** The shipped
+> refusal carries `Guard string` — one opaque predicate string for the whole
+> refusal (`internal/resolve/resolve.go::Refusal`), populated from the
+> lexicographically-lowest undecidable row — while `Rows []RowRef` does carry
+> every implicated row. The runtime can therefore name *which rows* refused but
+> not *which atom* within them, and where several rows refuse it surfaces a
+> single guard string. MVV Scenario 8 asserts the finding names "that row and
+> atom": the row half is satisfiable on both surfaces today, the atom half on
+> neither. Booked as **A20** rather than left standing as a MUST no producer can
+> meet.
 
 ```normative
 Lint MUST report every defect it can decide in one pass over a row group, not
@@ -1010,8 +1161,10 @@ of the seam, and never a silent or advisory one.
 
 ```normative
 A row "can refuse" when the row carries a value atom over a key **declared
-optional** — the same one declared field the optionality clause defines, not a
-second presence property and not a graph query. Lint MUST decide this
+optional** **in either block** — `all` or `unless`, since an unevaluable atom
+inside `unless` makes the row unevaluable under `¬U = U` rather than dropping
+the exclusion — the same one declared field the optionality clause defines, not
+a second presence property and not a graph query. Lint MUST decide this
 syntactically over declarations so the test is total; it MUST NOT withhold a
 claim merely because some assignment in the product is unreached.
 
@@ -1052,7 +1205,24 @@ from an undeclared dimension.
 
 The quantity both figures report is the **cardinality of the scoped product** —
 the number of assignments in it, the product of every participating dimension's
-declared domain size — not a bitset width, byte size, or row count. The bound is
+**assignment count** — not a bitset width, byte size, or row count. A
+dimension's assignment count is not always its declared domain size, and the
+difference is exponential, so it is fixed per kind here:
+
+| Kind | Assignment count for one participating dimension |
+| --- | --- |
+| `enum`, `int` (single-valued) | `\|domain\|` |
+| `bool` (single-valued) | 2 |
+| `enum`, `bool`, `int` **without** the single-valued marker | `2^\|domain\|` — one independent boolean dimension per value |
+| `set` | `2^\|element universe\|` — a set-valued tag holds any subset, so its assignment space is the powerset, **never** `\|universe\|` |
+| any optional key | multiplied by 2 for its `{present, absent}` presence dimension |
+
+Reading a `set` dimension as `|universe|` understates the product
+exponentially — a model with three 20-element set tags computes 8,000 and
+"proves" it, while the real assignment space is `2^60`. That is precisely the
+memory-exhaustion the "a bound discovered by exhausting memory is not a
+conforming bound" sentence forbids, so the arithmetic above is what makes that
+sentence enforceable rather than aspirational. The bound is
 a single integer constant published by the implementation and reported in the
 diagnostic beside the computed cardinality; it is not per-model, per-group, or
 configurable per run, since either would make the verdict model-dependent. Two
@@ -1101,6 +1271,10 @@ and this RDR's evaluator.
 | Scoped-product membership (which keys are dimensions) | **This RDR** (participation clause) | RDR 0006 lint; the too-large cardinality bound | Match keys — **explicitly not an arm**: they form the selection context the group is defined by, and are a separate field in RDR 0002's authored shape and in `resolve.go::Row` | This RDR — guard keys only |
 | Tag provenance (`owned`/`observed`/`recognized`) | RDR 0002 (its one normative tag clause) | This RDR's owned-tag clause (A6); RDR 0004; RDR 0006 | None | RDR 0002 — unchanged by the declaration-model rehoming |
 | Withheld-claim lint artifact | **This RDR** (states the blocking form) | RDR 0006 emits it; RDR 0005 envelopes it | RDR 0006's `graph-unprovable-coverage`, previously scoped to non-finite dimensions | **This RDR** — JDR 0001 §JD-4 (closed 2026-08-22) names it the recording document; RDR 0006 widens `graph-unprovable-coverage`'s trigger and mints no code |
+| `unless` block semantics under an unevaluable atom | Kernel (RDR 0007 — `all_result ∧ ¬(unless_conj)`, `¬U = U`) | This RDR's withholding decision and lint subtraction | This RDR's excluded-intersection subtraction — a **two-valued** model, valid only over decided atoms | Kernel — the subtraction is the lint projection of the kernel's verdict, never a second semantics (critique iteration 3) |
+| Which failure classes an escape row can rescue | Kernel (`resolve.go::Resolve` — gate refusal returns before `escapeOrRefuse`) | This RDR's coverage-union clause; RDR 0006's escape handling | This RDR's former reading, in which a bare escape row closed coverage unconditionally | Kernel — escape rows rescue `no_match` and `ambiguous_match` only, never `guard_unevaluable` or `owned_state_unavailable` (critique iteration 3) |
+| Per-dimension assignment count for the cardinality bound | **This RDR** (the per-kind table in the bound clause) | The too-large refusal; RDR 0006's finding | The former "declared domain size" phrasing, which understated `set` and unmarked kinds exponentially | **This RDR** — a `set` dimension is `2^\|universe\|`, an unmarked finite kind `2^\|domain\|`, an optional key ×2 (critique iteration 3) |
+| Conforming-view enforcement | **Unhomed — A18** | Every lint claim in this RDR is conditional on it | RDR 0007's view assembly (states no obligation); RDR 0006's model lint (no such finding); shipped `resolve.go::assemble` (performs no check) | **No current owner** — the clause names view assembly, which does not implement it; A18 books the producer |
 
 #### `disposition` — input class × outcome
 
@@ -1112,6 +1286,7 @@ unevaluable).
 | Every `all` atom decides true; `unless` block not fully true | Row qualifies | Row contributes its accepted assignments | none | — |
 | `all` atom decides false | Row pruned | Row contributes nothing | none | Silent by design — a decided false is not a defect |
 | Full `unless` block decides true | Row disabled | Excluded intersection subtracted | none | Silent by design |
+| Value atom **inside `unless`** over an absent key | `guard_unevaluable` refusal — `¬U = U`, so the row is unevaluable, not merely un-excluded (RDR 0007 `:1412-1414`, `:1435-1436`) | Exhaustiveness claim **withheld** for that group; the block is **not** subtracted as if decided | Runtime: RDR 0007's per-row/per-atom payload. Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
 | Value atom over an absent key | `guard_unevaluable` refusal (RDR 0007 veto) | Exhaustiveness claim **withheld** for that group | Runtime: RDR 0007's per-row/per-atom payload (key, block, reason `absent`). Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
 | Existence atom over an absent key | Decided (`presence == literal`) — never unevaluable | Selects `{absent}` on the presence dimension (A7) | none | — |
 | Zero rows qualify | RDR 0001 refuses | Coverage gap if the product is provable | `graph-coverage-gap` (RDR 0006), naming the selection context, every rule id in the group, and one uncovered assignment | Loud |
@@ -1135,16 +1310,22 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | --- | --- | --- | --- |
 | 1. Load the RDR/kata slice as normalized candidate rows | atoms-not-callbacks; closed typed operator vocabulary; operator declares accepted kinds | `profile-to-grounding` parses to `profile in [mid,large]` + `unless prelock_iterations gte 3`; operators all in the matrix | OK |
 | 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
-| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* **guard** dimension enters the product, including one only some rows constrain; match keys are the grouping context, not dimensions | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`. `status` does **not** enter the product: its `status eq "Draft"` atom is authored under `[rule.match.status]`, so it is the grouping key that forms this selection context, not a guard dimension within it. `prelock_iterations` is the participation witness — only `profile-to-grounding` carries an atom over it (`unless … gte 3`), and it enters the product for the whole group even though `foundational-to-cove` never mentions it | OK — and it is the participation clause that keeps `prelock_iterations` in the product; under a rows-must-differ reading a key only one row constrains would silently drop out |
+| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* **guard** dimension enters the product, including one only some rows constrain; match keys are the grouping context, not dimensions | `profile` = 4 enum values; `prelock_iterations` = `{0..3}` (inclusive, so 4); `cluster_eligible` = 2 values **plus** the `{present, absent}` presence dimension step 5 adds, since it declares no optionality marker and is therefore optional by default — 64 assignments in all. `status` does **not** enter the product: its `status eq "Draft"` atom is authored under `[rule.match.status]`, so it is the grouping key that forms this selection context, not a guard dimension within it. `prelock_iterations` is the participation witness — only `profile-to-grounding` carries an atom over it (`unless … gte 3`), and it enters the product for the whole group even though `foundational-to-cove` never mentions it | OK — and it is the participation clause that keeps `prelock_iterations` in the product; under a rows-must-differ reading a key only one row constrains would silently drop out |
 | 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
 | 5. Project the `exists` atom | A7 presence dimension — stated as a normative clause | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no *value* element selects presence — the atom lands on the separate `{present, absent}` presence dimension the projection clause adds | OK — witness: the presence-dimension clause in `Normative Contracts`, on the derivation in `evidence/research/iter-2-projection-derivation.md` |
-| 6. Compute coverage | `union(row_i accepted) == scoped product` | Both kinds of group compute: `exists`-bearing groups over the product including the presence dimension (step 5), `exists`-free groups over the value dimensions alone (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK |
+| 6. Compute coverage | `union(row_i accepted) == scoped product` | **Computed, not asserted.** The Draft group's product is `profile` (4) x `prelock_iterations` (4) x `cluster_eligible` value (2) x its presence dimension (2) = **64** assignments. `profile-to-grounding` accepts `{mid,large}` with `prelock_iterations < 3` = 24; `foundational-to-cove` accepts `{foundational}` with `cluster_eligible` present = 8; the union is **32**. **32 assignments are uncovered**, including every `profile = small` assignment, which no row in the group accepts | **GAP — the fixture's Draft group is not exhaustive.** This is the correct verdict for this fixture, not a defect in the clauses: `small` is genuinely unrouted and `prelock_iterations = 3` genuinely falls through. Witness assignment for the diagnostic step 9 requires: `(profile=small, prelock_iterations=0, cluster_eligible=true, present)` |
 | 7. Compute overlap | any non-empty pairwise intersection, computed **within** a population — ordinary rows against ordinary rows, escape rows against escape rows for one failure class; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → the two ordinary rows are disjoint on that dimension. The fixture declares no escape row, so the escape population is empty and contributes no finding | OK |
 | 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 8's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
 | 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
 | 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | §JD-4 (closed 2026-08-22) names this RDR the recording document; RDR 0006 records the same assignment on its Status line (`0006:10-13`) and reuses `graph-unprovable-coverage` | OK |
 
-No CONTRADICTION row and no GAP row. Step 10 closed when §JD-4 assigned the
+No CONTRADICTION row. **Step 6 is a GAP row** — computing the union instead of
+asserting it showed the fixture's Draft group covers 32 of 64 assignments. The
+gap is in the *fixture*, which was authored to exercise operators rather than to
+close coverage; the clauses behave correctly on it. The fixture is therefore not
+usable as the MVV's "one complete partition" case without adding the rows that
+route `profile = small` and `prelock_iterations = 3` — recorded as a Phase 3
+prerequisite in `Testing Strategy`. Step 10 closed when §JD-4 assigned the
 recording document (A8); step 5's former gap closed when the presence-dimension
 projection was stated. A9 and A11 have no row here because the declaration model
 they record is an input to step 3, which the trace already exercises.
@@ -1699,8 +1880,8 @@ assumptions that block it, so no phase is picked up on document order alone:
 | Phase | Blocked on | Startable today |
 | --- | --- | --- |
 | 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`) — A13's set-literal spelling and the tag declaration model are stated | Partially — the matrix, the declaration model, and the set-literal canonicalization, not the atom slice |
-| 2 Finite-Domain Lint Semantics | A10 (RDR 0006's row-group agreement) gates group *construction*, not just integration; A12 gates the owned-tag clause only; A17 gates the escape-row overlap population — A11, A2, A7 and A8 are closed and the domain producer is this RDR | Partially — the product arithmetic, the withholding decision (now a declaration-only test), and the single-valued partition are startable; group construction and escape-row overlap should wait on A10/A17 rather than be built twice |
-| 3 Target-Flow Fixture | A14 (per-atom `block` retention, RDR 0002) — A1's harness has run and A7/A9 are closed | Yes — the gating predicates are now authorable |
+| 2 Finite-Domain Lint Semantics | A10 (RDR 0006's row-group agreement) gates group *construction*, not just integration; A12 gates the owned-tag clause only; A17 and A19 gate the escape-row population and its observability — A11, A2, A7 and A8 are closed and the domain producer is this RDR | Partially — the product arithmetic (now including the per-kind assignment-count table), the withholding decision (a declaration-only test, extended to `unless` atoms), and the single-valued partition are startable; group construction, escape-row overlap, and bare-escape observability should wait on A10/A17/A19 rather than be built twice |
+| 3 Target-Flow Fixture | A14 (per-atom `block` retention, RDR 0002) — A1's harness has run and A7/A9 are closed | Yes — the gating predicates are authorable. Note the fixture's Draft group is **not** a complete partition (desk trace step 6: 32 of 64 covered), so Scenario 2's partition case needs rows added or a separate group authored |
 | 4 Integration With Peer RDRs | A10, A12 (tolerances on RDR 0006's refine) — A8 closed 2026-08-22 by §JD-4 | No |
 
 Building Phase 1 against the *current* `Row.Guard string` shape produces work
@@ -1766,6 +1947,15 @@ implementation MVV must still exercise `contains` over a **declared** set-valued
 tag with an element universe before the full closed operator vocabulary is
 accepted.
 
+**The fixture is not the MVV's complete-partition case.** The desk trace's step
+6 computed its Draft group at 32 of 64 assignments covered: no row routes
+`profile = small`, and `prelock_iterations = 3` falls through
+`profile-to-grounding`'s `unless` block. The fixture was authored to exercise the
+operator vocabulary, and it does that. Phase 3 must therefore either extend it
+with rows closing those assignments or author a separate group for Scenario 2's
+complete partition — reusing it unchanged makes Scenario 2 fail on first run
+against a correct lint, with no worked example in this RDR to arbitrate.
+
 1. **Scenario**: Evaluate representative RDR and kata rows that use equality,
    membership, set containment, bounded integer comparison, existence, and mixed
    `all`/`unless` guards.
@@ -1798,6 +1988,16 @@ accepted.
    reports both the computed product cardinality and the published bound. The
    two equal-cardinality products receive the same verdict — a divergence
    refutes A15 and the bound clause is restated before lock.
+   **This scenario tests the bound's consistency, not its adequacy.** Reading `B`
+   from the implementation makes the verdicts comparable, but it also means the
+   test derives its oracle from the system under test and so cannot falsify the
+   claim A15 actually makes — that cardinality *predicts provability*. Add the
+   measurement that can: for each shape, record whether the proof representation
+   actually completes within the implementation's own resource budget, and
+   compare that to the verdict the bound gave. A15 is refuted when the bound says
+   provable and the representation does not complete, or vice versa — a
+   divergence between predicted and observed provability, which is a fact about
+   the implementation and not about `B`.
 4. **Scenario**: Parse malformed guard atoms: unknown tag, unknown operator,
    unsupported operator/tag-kind pair, literal parse mismatch, and a **literal
    outside its tag's declared domain** (a well-typed value the domain does not
@@ -1846,6 +2046,15 @@ accepted.
    group over always-present keys certifies green. An existence atom over the
    same absent key decides instead of refusing, and this RDR's evaluator is
    never consulted for either.
+   **Both blocks, and the escape path.** Run the same group a second time with
+   the optional-key value atom moved from `all` into `unless`: the verdict must be
+   identical — claim withheld — because `¬U = U` makes the row unevaluable rather
+   than un-excluded. A run that certifies the `unless` variant green while
+   withholding the `all` variant is the two-valued-subtraction defect. Then add a
+   bare escape row to the group: the claim must **still** be withheld, since
+   `resolve.go::Resolve` returns the gate's refusal before `escapeOrRefuse` is
+   reachable, so the escape row cannot rescue `guard_unevaluable`. A run that
+   goes green once the escape row is present is the false-green A19 guards.
 
 ### Performance Expectations
 
@@ -1906,6 +2115,21 @@ models the runtime accepts. This RDR now checks overlap in two populations and
 books the cross-document confirmation as **A17**; it does not re-decide §JD-14
 unilaterally.
 
+**Two clauses were reconciled against the kernel at critique iteration 3, and
+neither is a contradiction with a peer — both were this RDR reading its own
+authority too loosely.** First, `unless` was stated as a two-valued excluded
+intersection while RDR 0007 computes the row verdict in three-valued Kleene
+(`all_result ∧ ¬(unless_conj)`, `¬U = U`), so an unevaluable atom inside `unless`
+makes the row unevaluable rather than un-excluded; the "can refuse" test now
+reads both blocks and the disposition table carries the case. Second, the
+coverage clause let a bare escape row close a group whose peer can refuse
+`guard_unevaluable`, but `resolve.go::Resolve` returns `refuse(in, *blocked)`
+from the gate before `escapeOrRefuse` is reachable, so no escape row rescues that
+class; the clause now says an escape row closes coverage only for the classes it
+can actually rescue. Both were false-greens of exactly the kind the narrowing
+exists to forbid, reached by citing the kernel one function short of where the
+control flow decides.
+
 The strength of the exhaustiveness claim is decided and agreed across documents.
 §JD-4 settles that the lint promise narrows and the runtime veto stands, and —
 closed 2026-08-22 by the `0003-0006-0007` cluster gate — names this RDR the
@@ -1922,15 +2146,40 @@ Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
 half split out as A12. Verified: A1, A2, A3, A4, A5, A6 (labels), A7, A8, A9,
-A11, and A13. Pending: A10, A12, A14, A15, A16, A17 — each with a named plan.
+A11, and A13. Pending: A10, A12, A14, A15, A16, A17, A18, A19, A20 — each with a
+named plan.
 The 3amigo iteration-3 pass opened A16 (the single-valued marker's authoring
 location in RDR 0002) and A17 (escape-row overlap population, re-opening
 §JD-14's overlap half against the shipped kernel), and narrowed A12 to the
-owned-tag clause alone. None is
+owned-tag clause alone. The critique iteration-3 pass opened A18 (conformance has
+no enforcer), A19 (a bare escape row's coverage closure must be observable), and
+A20 (the atom-naming half of the withheld-claim clause has no carrier on either
+surface). None is
 `Unverified`. The repeatability pass closed A13 by stating the set-literal
 clause it owed and opened A15 on the cardinality bound the too-large clause now
 declares. The Stage 6 reconcile closed A1 by running the evaluation harness the
 critique pass's demotion demanded.
+
+**Aggregate open-assumption assessment (critique iteration 3).** Nine of twenty
+records are `Pending`, and each is individually argued survivable. Both critique
+passes independently flagged that nobody assesses the *aggregate*, so it is
+assessed here. The nine fall into three groups by who can close them:
+
+| Group | Records | Venue | Blocks implementation? |
+| --- | --- | --- | --- |
+| Peer agreement on this RDR's own definitions | A10, A17, A19 | RDR 0006 refine — one escape-row/row-group agenda item | **Yes for Phase 2 group construction and escape handling.** Building these before RDR 0006 answers means building them twice |
+| Producer fields this RDR needs written elsewhere | A14, A16, A18, A20 | RDR 0002 refine (A14, A16); RDR 0007 + RDR 0006 (A18, A20) | Partially — the model is authorable without them, but MVV Scenarios 5, 7 and 8 cannot be written as specified until they land |
+| Closable by this RDR's own implementation | A12, A15 | A12 at RDR 0006's refine; A15 at MVV Scenario 3 | No — both are measurements, not agreements |
+
+The honest aggregate: **this RDR's contract is complete and internally computable,
+but four of its eight MVV scenarios cannot be written exactly as specified until
+peers supply fields, and Phase 2's group construction should not start before
+RDR 0006's refine answers A10 and A17.** That is a sequencing constraint on
+implementation, not an unstated risk — the phase-gating table records it per
+phase, and this is the whole-set reading of the same fact. What would change the
+verdict from "sequence carefully" to "do not lock" is any of the nine turning out
+to require a *different contract here* rather than a field elsewhere; none does
+today, since each names the specific single field or confirmation it wants.
 
 **The declaration-model rehoming closed four records at once (A11, A7, A9, and
 A2 behind them).** Stage 6 had them as BLOCKERs: the MVV was unauthorable
