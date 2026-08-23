@@ -10,7 +10,7 @@ engine README — this file is only the per-project index.
 | ID | Title | Status | Priority |
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Implemented | — |
-| 0002 | Transition table as reviewable data | Draft [revised from Final 2026-08-12; re-verify A2, A7] | High |
+| [0002](0002-transition-table-as-reviewable-data.md) | Transition table as reviewable data | Final | High |
 | [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final | High |
 | 0004 | Accessor execution safety model | Final | High |
 | 0005 | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9] | High |
