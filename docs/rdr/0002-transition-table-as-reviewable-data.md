@@ -236,13 +236,78 @@ factor common context instead of enumerating every Cartesian row.
   single-document loader can or should report it.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: Owed. `[model]` is a singular TOML table, so one document
-    carries one model; the category is now scoped to a multi-document dump/lint
-    invocation. Verification: the scenario 3 fixture for this category is a
+  - **Evidence**: The decidability half is verified at source: the Resolve
+    spike's `evidence/spikes/main.go::Model` declares `Model` as a **singular
+    struct field**, not a slice, mirroring `[model]` as a singular TOML table
+    (`evidence/spikes/rdr-fixture.toml` authors one `id = "rdr"` per document),
+    so a single-document load structurally cannot observe two model ids. The
+    category is therefore scoped to a multi-document dump/lint invocation. The
+    behavioral half is owed: the scenario 3 fixture for this category is a
     **pair** of documents sharing a `model id`, and a single-document load of
     either one must not report it.
   - **If wrong**: The category is unreachable as specified, or a multi-document
     surface exists that this RDR has not named.
+- **A11 An escape rule binding its outcome with an `in` atom expands into one
+  rescuing row per member, each rescuing only its own outcome.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Owed. The critique lens introduced the clause and booked it
+    unwitnessed; the spike fixture's escape rule
+    (`evidence/spikes/rdr-fixture.toml` `draft-no-match-escape`) binds with
+    `eq = "round-clean"`, so no captured run exercises escape expansion. The
+    kernel half is verified — `internal/resolve/resolve.go::escapeOrRefuse`
+    filters escape candidates on `row.Outcome != in.Recognized` exactly as
+    `::Resolve` does, so a per-outcome escape row is what the kernel admits.
+    Verification: extend the scenario 2 fixture with an escape rule binding
+    `in` over two alphabet members and assert it expands to two escape rows
+    carrying distinct expansion suffixes, each with an empty write set.
+  - **If wrong**: One authored escape rule cannot cover several outcomes, so
+    covering an alphabet of N outcomes requires N hand-authored escape rules
+    and the "expand like any other rule" clause overstates the format.
+- **A12 The kernel handoff routes every atom to exactly one of `Match` /
+  `Guard`, exhaustively and disjointly.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Owed. A9 asserts the unified atom set *can* produce a
+    conforming `resolve.Row`; it does not assert the routing is total. The
+    critique lens booked this separately and it landed in no assertion.
+    Verification: a scenario 2 assertion that for the RDR fixture the union of
+    the constructed row's `Match` and guard atoms equals the normalized atom
+    set and the intersection is empty — including the `unless`-block equality
+    atom (`status.eq=closed@unless` in the kata fixture), which routes to the
+    guard despite being an equality operator. Blocked on RDR 0007's kernel
+    reshape (Prerequisites), like A9.
+  - **If wrong**: An atom is silently dropped at the handoff or double-counted,
+    which changes which rows match without any dump or normalization test
+    observing it.
+- **A13 Merging is idempotent on identical atoms: one atom contributed by a
+  rule and by one or more inherited contexts collapses to exactly one.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Owed. Testing Strategy scenario 2 asserts the *differing*-
+    literal half (two atoms, both `use` orders); the mirror half landed in no
+    assertion, so a normalizer emitting duplicates passes every stated control.
+    Verification: a scenario 2 assertion that a rule and an inherited context
+    contributing a byte-identical `(block, key, operator, literal)` atom yield
+    an atom set of count one for that key.
+  - **If wrong**: The normalized atom set carries duplicates, inflating the
+    dump and the Round-Trip field list without changing match semantics — or
+    a de-duplication keyed too widely drops the A13-adjacent distinct-literal
+    atoms that scenario 2 requires to survive.
+- **A14 The version gate precedes strict field decoding, so a v2 document
+  refuses as an unsupported version rather than an unknown schema field.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: Owed. The clause is normative and the only ordering this RDR
+    fixes, but scenario 3's `unsupported version` fixture is a v1-shaped
+    document with a bad version value, which trips the category on either
+    ordering and therefore cannot witness the precedence. Verification: a
+    scenario 3 fixture that is **v2-shaped** — `version = 2` plus a v2-only key
+    the strict decoder would reject — asserted to refuse `unsupported version`
+    and not `unknown schema field`.
+  - **If wrong**: A future v2 file fails with a diagnostic naming an arbitrary
+    field and never mentioning the version, which is the confusion the two-pass
+    gate exists to prevent.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -816,7 +881,13 @@ escape-side shapes), malformed rule id (containing the expansion-suffix
 separator), duplicate rule id, duplicate model id, and `reserved_tag_key`
 (RDR 0008).
 
-These are the single-rule checks the load/lint arity split assigns to this RDR.
+These are the checks the load/lint arity split assigns to this RDR. All but one
+are single-rule — decidable from one rule plus the model's declarations.
+`duplicate model id` is the sole exception and is **not** single-rule: it is
+decidable only over the set of models a caller loads into one invocation (the
+clause above), so a loader handed one document MUST NOT report it. It is listed
+here because it is a load-time refusal this RDR owns, not because the arity
+split makes it single-rule.
 Cross-row findings — overlap, gap, dead row, read-before-write — carry RDR
 0006's lint categories, not these.
 
@@ -930,6 +1001,8 @@ rendered form is lossy at three named sites and carries no inverse.
 
 **`disposition`** — routing is by arity: single-rule → load (this RDR),
 cross-row → lint (RDR 0006), evaluation-time → kernel refusal (RDR 0001).
+`duplicate model id` is the one load-time check that is cross-**document**
+rather than single-rule (Normative Contracts); it stays this RDR's.
 
 | Input class | Bucket | Owner | Silent vs loud |
 | --- | --- | --- | --- |
@@ -1234,6 +1307,21 @@ TOML can carry the same semantics.
   permutes rule declaration order and asserts the normalized value is
   unchanged, so a later identity change cannot reintroduce a positional
   tiebreak unnoticed.
+- **Risk**: This RDR is the cluster's only unlocked document — 0001 is
+  `Implemented` and 0003, 0004, 0005, 0006, 0007, 0008, 0009 are `Final` — so
+  the producer locks *after* its consumers, inverting the dependency order.
+  RDR 0009 twice cites "RDR 0002's **Final** escape-rule prohibition" and rests
+  its enforcement argument on it, and RDR 0008's normative block still asserts
+  "nothing in this RDR or RDR 0002 forbids that alphabet entry" about the
+  empty-string outcome, which this RDR now **does** forbid and which A8 leans on
+  as its sole barrier. The decisions are compatible — 0008 explicitly scoped
+  itself out ("not this RDR's to rule on") — so this is stale peer *fact*, not
+  a contract conflict, and RDRs are never amended.
+  **Mitigation**: Every contract this pass changed is checked against the Final
+  peers' verified assumptions before implementation via
+  `/rdr-cluster-reconcile`, which is the mechanism that owns cross-RDR drift.
+  Routed there by the cove lens (CV-020, CV-021) and carried here so the
+  obligation survives lock.
 
 ### Failure Modes
 
@@ -1255,9 +1343,16 @@ surviving escape row, and the gate refusals are never modeled.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A2, A7 re-verified; A8 resolved). A9
-  and A10 were booked `Pending` by the repeatability lens and are owed at
-  Stage 6.
+- [ ] All Critical Assumptions verified (A2, A7 re-verified; A8 resolved).
+  A1–A8 are terminal. **A9–A14 are `Pending` by deliberate Stage 6 disposition,
+  every one of them a DOWNGRADE with a named MVV assertion**, not an unexamined
+  gap: A9/A12 are blocked on RDR 0007's kernel reshape (below) and are
+  unverifiable before it lands; A10's decidability half is source-verified and
+  only its paired-document behavior is owed; A11/A13/A14 are contract clauses
+  the review rounds introduced whose oracles now exist in Testing Strategy
+  scenarios 2 and 3 but whose fixtures are owed at implementation. None is
+  load-bearing for a *pre-lock* MVV assertion; each is survivable per its
+  "If wrong".
 - [ ] RDR 0007 is the normative home of the atom shape and the existence
   constants this RDR's normalizer emits. RDR 0007 is `Final`, so the
   *specification* is settled — but its kernel reshape is unimplemented, and the
@@ -1413,8 +1508,12 @@ Implementation tests must promote the Resolve spike into production fixtures:
    **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `in` atom expands to two rows carrying the outcome literal as their expansion suffix. The normative fixture for this scenario is `evidence/spikes/output.txt`.
    **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array and a later mutation of one would silently move the other. Enforcement is by review of the normalizer, or by a test that mutates one field and asserts the other is unchanged.
    **Additionally**, atom-set semantics are asserted positively, since these shapes must *survive* load rather than be refused: two inherited contexts contributing the same key and operator with **different literals** yield **two** atoms in the normalized set, not one — asserted by count and by value, with the contexts listed in both `use` orders to prove the result is order-independent (a merge keyed on `(block, key, operator)` drops one and passes a count-only check on a single ordering); a set-valued literal whose member contains a space normalizes to a member sequence, so `["needs work"]` and `["needs", "work"]` are **distinct** atoms; and a rule authoring one atom in both `all` and `unless` loads successfully as two atoms and is reported by lint as a dead rule, not refused at load.
+   **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case.
+   **Escape expansion under `in` is asserted here (A11)**: the extended fixture carries an escape rule binding its outcome with `in` over two alphabet members, and normalization must yield **two** escape rows carrying distinct expansion suffixes, each with an empty write set and each retaining the modeled failure-class list. The current spike fixture's `draft-no-match-escape` binds with `eq`, so this shape has no captured witness and is owed at implementation.
+   **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty. The kata fixture's `status.eq=closed@unless` atom is the discriminating case — an equality operator that must route to the guard because its block is `unless`. Like the rest of Phase 2 this assertion is unsatisfiable until RDR 0007's reshape lands (Prerequisites).
 3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, and a missing root outcome alphabet.
    **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. Nine categories are already witnessed by the spike, one refusal per mutated fixture, in `evidence/spikes/negative-cases.txt`: unsupported version, empty-string alphabet member, duplicate rule id, unknown written tag, write to an observed tag, escape rule carrying a write block, `exists` with a non-boolean literal, an outcome literal outside the alphabet, and a recognized declaration misnamed `outcome`. The remainder are owed at implementation.
+   **The version gate's precedence needs its own fixture (A14), separate from the `unsupported version` category fixture above.** That fixture is a v1-shaped document with a bad version value, which trips the category under *either* check ordering and therefore witnesses nothing about precedence. The precedence control is a **v2-shaped** document — `version = 2` plus a v2-only key the strict decoder would reject as an unknown schema field — asserted to refuse `unsupported version` and **not** `unknown schema field`. This is the only ordering this RDR fixes normatively, so it is the only ordering that gets an oracle.
 4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order. The overlapping variant is reported by lint as an ambiguous overlap before the model is accepted, naming both rows.
 5. **Scenario**: Normalize and dump semantically identical variants of the **RDR** fixture — one with its TOML keys authored in a different order, one with its `[[rule]]` blocks declared in a different order, and one spelling a single-outcome binding `in = ["x"]` where the original spells `eq = "x"` — and dump the same fixture repeatedly in one process and across processes.
