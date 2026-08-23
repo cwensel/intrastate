@@ -23,13 +23,21 @@
   first of those exposed that value-atom projection over a non-single-valued
   dimension was never fixed; `eq`/`in`/comparisons are now stated as
   single-value operators whose atoms are unprovable without the marker, opening
-  **A21** and making A16 blocking. This RDR owns the tag
+  **A21** and making A16 blocking. **Stage 6 (iteration 5) verdict: NOT
+  RECONCILED — lock blocked on A16**, the one record that trips the MVV hard
+  rule: with the marker unwritable in RDR 0002's authoring schema, no `eq`/`in`
+  atom projects, so MVV Scenario 2's passing partition and Scenario 8's green
+  negative control are unauthorable and the MVV keeps no positive proof
+  outcome. Route: `/rdr-refine 0002` to land the marker (with A14), then
+  re-enter `/rdr-reconcile 0003`. The other nine open records took terminal
+  DOWNGRADED dispositions. This RDR owns the tag
   declaration model (value kind, finite domain, optionality, single-valuedness,
   element universe), rehomed from RDR 0002 on 2026-08-21; RDR 0002 owns
   authoring location and normalization carriage and cites this model. Remaining
-  open: A10, A12 and A17 are on RDR 0006's refine, A14 and A16 are
-  authoring/carriage requests on RDR 0002, and A15 is discharged by MVV
-  Scenario 3 at implementation. 3amigo iteration 3 (2026-08-22) opened A16 and
+  open (ten records): A10, A12, A17 and A19 are on RDR 0006's refine, A18 and
+  A20 span RDR 0006's refine and RDR 0007's next touch, A14 and A16 are
+  authoring/carriage requests on RDR 0002, and A15 and A21 are discharged by MVV
+  Scenarios 3 and 4 at implementation. 3amigo iteration 3 (2026-08-22) opened A16 and
   A17. Critique iteration 3 (2026-08-22, dual-model) corrected four computational
   defects — the desk trace's uncomputed coverage verdict, `set` cardinality
   understated by an exponent, `unless` modeled two-valued against the kernel's
@@ -551,6 +559,29 @@ parallel guard model.
     unwritable marker means *no* guard using those operators can carry an
     exhaustiveness claim — the whole proof surface, not one lint code. A21
     books the authoring-coverage half.
+  - **Stage 6 disposition — BLOCKER (iteration 5). Lock is blocked on this
+    record.** It trips the second hard rule: an assumption may not be deferred
+    past lock when the MVV depends on it. The dependency is not the scheduling
+    one the Authorability paragraph recorded before the projection clause
+    existed. Since `eq`/`in`/comparisons became **single-value operators** whose
+    atoms over an unmarked dimension "cannot be projected at all" and take the
+    blocking outcome, the marker is a precondition for reaching *any* green
+    exhaustiveness verdict. MVV Scenario 2 requires **one complete partition
+    that passes** over enum/bool/int domains — the single positive proof outcome
+    the MVV exists to produce — and Scenario 8's paired negative control
+    requires a group that "certifies green". Neither is authorable while the
+    marker cannot be written, so the MVV degrades to refusals only and can no
+    longer distinguish a tight narrowing from a blanket one, which is the
+    failure mode it was written to catch. That is the assumption pinning the
+    property under proof, not a fixture convenience.
+    **Not survivable by downgrade**, and cheapness argues for running it rather
+    than deferring: RDR 0002 is `Draft`, the request is one additive field
+    against which no peer asserts the opposite, and its carriage clause already
+    covers the field generically. Confirmed by a fresh-context strong consult
+    (rdr-common §strong-consult), which reached BLOCK independently.
+    **Route: `/rdr-refine 0002`** — land the marker in the `[tags.<tag>]`
+    schema enumeration and the type-model field list, travelling with A14 as one
+    authoring/carriage request, then re-enter `/rdr-reconcile 0003`.
 - **A17 Escape-row overlap is checked among escape rows for one failure class,
   not between an escape row and a guarded row.**
   - **Status**: Pending
@@ -580,6 +611,19 @@ parallel guard model.
     two-population overlap clause reverts to a single population and RDR 0006's
     invariant 3 exemption is removed as first decided; the coverage clause and
     the union identity are untouched either way.
+  - **Stage 6 disposition — DOWNGRADED (iteration 5).** The mechanics are
+    settled on shipped code, not argument: the class is read from the row's
+    declared rescue list and matched membership-wise
+    (`internal/resolve/resolve.go::Row.rescues`), so what remains is a peer's
+    confirmation of the two-population reading — which a peer cannot give from
+    inside this document. Survivable: the two readings differ only in whether an
+    escape/guarded pair is reported, and this RDR's reading is the one that
+    matches the kernel, so the risk is a false positive that a fixture would
+    catch rather than a false green. The coverage half of §JD-14 is unaffected
+    and the union identity is untouched under either. Venue: RDR 0006's refine,
+    which already owes the §JD-14 invariant 3/4 repair, with the §JD-14
+    correction at the next JDR 0001 touch. Travels with A19 as one escape-row
+    agenda item.
 
 - **A18 A conforming-view check has a producer, so conformance is enforced
   rather than assumed.**
@@ -600,6 +644,20 @@ parallel guard model.
   - **If wrong**: a key declared always-present is absent at runtime, lint proved
     coverage over a product carrying no `{absent}` assignment for it, and the
     resolution refuses `guard_unevaluable` on a group certified green.
+  - **Stage 6 disposition — DOWNGRADED (iteration 5).** Confirmed against source
+    rather than assumed: `internal/resolve/resolve.go::assemble` merges owned,
+    observed and recognized tags into a `TagSet` and reads no declaration, and
+    `conform` occurs nowhere in the non-test kernel. The gap is real and this
+    document already states it inline rather than papering over it. Survivable
+    to a peer venue because the premise is *stated* as a conditional — every
+    lint claim here is explicitly conditional on a conforming view — so no
+    clause in this RDR asserts an enforcement it cannot cite, and two
+    independent producers can each discharge it. Not lock-blocking: the MVV's
+    green cases declare their own conforming fixtures, so the property under
+    proof is reachable without the runtime enforcer. Venue: RDR 0007's next
+    touch (reject a non-conforming view or expose it as a typed refusal) and/or
+    RDR 0006's refine (a model-level conformance finding) — either discharges
+    it, both is better.
 - **A19 A bare escape row's coverage closure is observable in lint output.**
   - **Status**: Pending
   - **Method**: Peer RDR
@@ -614,6 +672,16 @@ parallel guard model.
   - **If wrong**: a bare escape row remains a one-line blocking-free way to close
     any coverage gap, and the exhaustiveness guarantee erodes silently as authors
     reach for it.
+  - **Stage 6 disposition — DOWNGRADED (iteration 5).** This RDR states the
+    requirement it owns — a group whose coverage is closed by a guard-atom-free
+    escape row must say so in its verdict — and what is missing is the carrier
+    on RDR 0006's finding contract, which this document cannot mint without
+    re-deciding a peer's verdict shape. Survivable because the failure is an
+    observability erosion rather than a false green: coverage is still closed
+    correctly, and the distinction the field would surface is one a reviewer can
+    also read off the fixture. Not lock-blocking: no MVV scenario's verdict
+    changes on it. Venue: RDR 0006's refine, travelling with A17's population
+    question as one escape-row agenda item.
 
 - **A20 The atom-naming half of the withheld-claim clause gets a carrier on both
   surfaces.**
@@ -632,6 +700,17 @@ parallel guard model.
   - **If wrong**: MVV Scenario 8 — this RDR's flagship false-green defense —
     cannot be written as specified, and is either deleted or weakened to assert
     only the row, which is the assertion the clause was strengthened to replace.
+  - **Stage 6 disposition — DOWNGRADED (iteration 5).** Confirmed against source:
+    `internal/resolve/resolve.go::Refusal` carries one opaque `Guard string`
+    beside `Rows []RowRef`, so the row half is satisfiable on both surfaces
+    today and only the atom half is unhomed. Survivable because the lint half is
+    already §JD-4's decided duty at RDR 0006's refine — a payload extension with
+    no design disagreement — and the runtime half lands in a refusal payload
+    RDR 0007 is reshaping anyway. Not lock-blocking: Scenario 8's other
+    assertions (the withheld claim, the `unless` variant, the escape-row
+    non-rescue) all stand without the atom field, so the scenario weakens rather
+    than disappears if it slips. Venue: RDR 0006's refine plus RDR 0007's next
+    touch, travelling with A19 as one diagnostics-payload item.
 
 - **A21 Requiring `single_valued` for a provable `eq`/`in` atom leaves the
   target flows authorable.**
@@ -662,6 +741,25 @@ parallel guard model.
     marker mean single-valued. That inversion contradicts the conservative-default
     reasoning the optionality clause is built on, so it is a real fork, not a
     tweak: it would be decided here and carried to RDR 0002 and RDR 0006.
+  - **Stage 6 disposition — DOWNGRADED to the named MVV test (iteration 5).**
+    Not runnable at draft time: it asks whether the two target flows' guard
+    dimensions can all carry the marker, which is a fact about fixtures built
+    against a declaration surface that does not exist yet (A16). Deferring it is
+    what the MVV is for — COMPUTE-DON'T-ARGUE, once there is something to
+    compute against. Survivable because the "If wrong" is bounded and its
+    consequence is a *default inversion*, not a defect in the proof: the
+    projection clause, the assignment-count table, and the coverage derivation
+    all stand under either polarity — only which declaration an author must
+    write changes. Named plan: MVV Scenario 4's negative control (an unmarked
+    tag under `eq` yields the blocking inability-to-prove finding naming the
+    dimension, not a coverage gap) plus Phase 3's fixture declaring
+    `single_valued` on `profile`, `prelock_iterations`, `cluster_eligible`,
+    `stage`, `lens` and `rewind_target`.
+    **Sequencing note:** A21 is measured only after A16 lands, since no fixture
+    can declare the marker until it is writable. It does not itself block lock —
+    A16 does — but a Phase 3 result that forces the inversion is a fork decided
+    here and carried to RDR 0002 and RDR 0006, so it is worth measuring early in
+    Phase 3 rather than late.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -1971,8 +2069,11 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   single-valued marker to its `[tags.<tag>]` schema enumeration and type-model
   clause. Done-condition: `single-valued` occurs in RDR 0002's authoring schema,
   citing this RDR for meaning. Venue: RDR 0002's refine, travelling with A14 as
-  one authoring/carriage request. Not lock-blocking — it gates MVV Scenario 5's
-  authoring, not this RDR's contract.
+  one authoring/carriage request. **Lock-blocking as of the repeatability
+  iteration-3 projection clause** — the earlier "gates Scenario 5 only" reading
+  predates it. An unwritable marker leaves no `eq`/`in` atom projectable, so
+  Scenario 2's passing partition and Scenario 8's green negative control are
+  both unauthorable and the MVV keeps no positive proof outcome.
 - [ ] **A17 closed.** Route: the cluster confirms escape-row overlap is checked
   among escape rows for one failure class rather than between an escape row and
   a guarded row. Done-condition: RDR 0006's invariant 3 repair matches this
@@ -1984,6 +2085,33 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   normalization clause retaining each atom's authored block. RDR 0002 is
   `Draft`; this is the one field that stays a peer request, because per-atom
   retention is normalization carriage rather than declaration semantics.
+- [ ] **A18 closed.** Route: a producer enforces the conforming-view premise —
+  either RDR 0007's view assembly rejects a non-conforming view or exposes it as
+  a typed refusal, or RDR 0006's lint reports a model-level conformance
+  violation. Done-condition: one named component owns the check that
+  `internal/resolve/resolve.go::assemble` does not perform today. Venue: RDR
+  0007's next touch and/or RDR 0006's refine — either discharges it, both is
+  better.
+- [ ] **A19 closed.** Route: RDR 0006's finding contract gains a way to say a
+  group's coverage was closed by a guard-atom-free escape row. Done-condition:
+  a code or field distinguishes that verdict from a proved partition. Venue:
+  RDR 0006's refine, with A17's population question as one escape-row agenda
+  item.
+- [ ] **A20 closed.** Route: the atom-naming half of the withheld-claim clause
+  gains a carrier on both surfaces — RDR 0006's finding contract (already
+  §JD-4's decided duty) and RDR 0007's refusal payload, which today carries one
+  opaque `Guard string` beside `Rows []RowRef`
+  (`internal/resolve/resolve.go::Refusal`). Done-condition: the refusing atom is
+  addressable on each surface. Venue: RDR 0006's refine plus RDR 0007's next
+  touch, travelling with A19 as one diagnostics-payload item.
+- [ ] **A21 closed.** Route: MVV Scenario 4 asserts the negative control (an
+  unmarked tag under `eq` yields the blocking inability-to-prove finding naming
+  the dimension, not a coverage gap) and Phase 3's fixture declares
+  `single_valued` on every guard dimension the two target flows use.
+  Done-condition: the target flows are authorable under the projection clause,
+  or the dimension that is not is recorded as a `set` tag under `contains`.
+  Owned here; discharged by the MVV rather than a peer. Gates nothing before
+  lock, but a failure here opens the marker-inversion fork the record names.
 - [x] RDR 0002's sparse table/container contract is stable enough to host guard
   atoms.
 - [ ] RDR 0007 is the normative home of the guard seam, the domain rule, and
@@ -2017,11 +2145,17 @@ always-present negative control declares the same key always-present, the
 finite-domain cases declare enum sets and `{min..max}` bounds, and a
 single-valued enum tag declares the marker §JD-13 homed here — the field RDR
 0006's `graph-single-valued-state` reads, defined here and rejected on a `set`
-kind. **One exception, booked as A16**: the marker's *authoring location* is
-RDR 0002's `[tags.<tag>]` schema, which still enumerates four fields, so the
-single-valued cases (MVV Scenario 5, and Scenario 4's set-kind rejection) are
-authorable only once that one-field request lands. Every other case is
-authorable today. This closes the
+kind. **One exception, booked as A16 — and it is load-bearing, not narrow.**
+The marker's *authoring location* is RDR 0002's `[tags.<tag>]` schema, which
+still enumerates four fields, so it cannot be written today. The earlier reading
+scoped this to the single-valued cases (MVV Scenario 5, and Scenario 4's
+set-kind rejection); the repeatability iteration-3 projection clause widened it.
+Because `eq`/`in`/comparisons are single-value operators whose atoms over an
+unmarked dimension do not project at all, **every case whose expected verdict is
+green** also waits on that one field: Scenario 2's complete partition (the MVV's
+only passing exhaustiveness verdict) and Scenario 8's always-present negative
+control. The cases that expect a refusal remain authorable today. A16 carries
+the Stage 6 BLOCKER disposition accordingly. This closes the
 gate that previously bound the MVV's schedule to a peer's producer request — the
 fields are no longer fixture-invented keys read back as evidence but normative
 declarations this document owns, which is what removes the circularity A2's
@@ -2305,8 +2439,8 @@ Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
 half split out as A12. Verified: A1, A2, A3, A4, A5, A6 (labels), A7, A8, A9,
-A11, and A13. Pending: A10, A12, A14, A15, A16, A17, A18, A19, A20 — each with a
-named plan.
+A11, and A13. Pending: A10, A12, A14, A15, A16, A17, A18, A19, A20, A21 — each
+with a named plan. The census is **21 records, 11 `Verified`, 10 `Pending`**.
 The 3amigo iteration-3 pass opened A16 (the single-valued marker's authoring
 location in RDR 0002) and A17 (escape-row overlap population, re-opening
 §JD-14's overlap half against the shipped kernel), and narrowed A12 to the
@@ -2319,26 +2453,32 @@ clause it owed and opened A15 on the cardinality bound the too-large clause now
 declares. The Stage 6 reconcile closed A1 by running the evaluation harness the
 critique pass's demotion demanded.
 
-**Aggregate open-assumption assessment (critique iteration 3).** Nine of twenty
-records are `Pending`, and each is individually argued survivable. Both critique
-passes independently flagged that nobody assesses the *aggregate*, so it is
-assessed here. The nine fall into three groups by who can close them:
+**Aggregate open-assumption assessment (updated, Stage 6 iteration 5).** **Ten
+of twenty-one** records are `Pending` (11 `Verified`), and all but one are
+individually argued survivable. Both critique passes independently flagged that
+nobody assesses the *aggregate*, so it is assessed here. The ten fall into three
+groups by who can close them:
 
 | Group | Records | Venue | Blocks implementation? |
 | --- | --- | --- | --- |
 | Peer agreement on this RDR's own definitions | A10, A17, A19 | RDR 0006 refine — one escape-row/row-group agenda item | **Yes for Phase 2 group construction and escape handling.** Building these before RDR 0006 answers means building them twice |
-| Producer fields this RDR needs written elsewhere | A14, A16, A18, A20 | RDR 0002 refine (A14, A16); RDR 0007 + RDR 0006 (A18, A20) | Partially — the model is authorable without them, but MVV Scenarios 5, 7 and 8 cannot be written as specified until they land |
-| Closable by this RDR's own implementation | A12, A15 | A12 at RDR 0006's refine; A15 at MVV Scenario 3 | No — both are measurements, not agreements |
+| Producer fields this RDR needs written elsewhere | A14, **A16**, A18, A20 | RDR 0002 refine (A14, A16); RDR 0007 + RDR 0006 (A18, A20) | **A16 blocks lock, not merely implementation** — see below. The others partially: the model is authorable without them, but MVV Scenarios 7 and 8 cannot be written as specified until they land |
+| Closable by this RDR's own implementation | A12, A15, A21 | A12 at RDR 0006's refine; A15 at MVV Scenario 3; A21 at MVV Scenario 4 | No — all three are measurements, not agreements |
 
-The honest aggregate: **this RDR's contract is complete and internally computable,
-but four of its eight MVV scenarios cannot be written exactly as specified until
-peers supply fields, and Phase 2's group construction should not start before
-RDR 0006's refine answers A10 and A17.** That is a sequencing constraint on
-implementation, not an unstated risk — the phase-gating table records it per
-phase, and this is the whole-set reading of the same fact. What would change the
-verdict from "sequence carefully" to "do not lock" is any of the nine turning out
-to require a *different contract here* rather than a field elsewhere; none does
-today, since each names the specific single field or confirmation it wants.
+The honest aggregate: **this RDR's contract is complete and internally
+computable, but one open record now blocks lock rather than sequencing.** The
+test this section previously named for that distinction — "what would change the
+verdict from *sequence carefully* to *do not lock* is any of them turning out to
+require a *different contract here* rather than a field elsewhere" — was the
+wrong test, and A16 is the case that shows why. A16 still wants only a field
+elsewhere, yet the projection clause makes that field a precondition for
+reaching *any* green exhaustiveness verdict, so its absence empties the MVV of
+its positive proof outcome. The corrected test is whether the missing input
+pins the property the MVV proves, which is the Stage 6 hard rule. On that test
+A16 blocks and the remaining nine do not: each of those leaves a provable case
+standing. Phase 2's group construction should still not start before RDR 0006's
+refine answers A10 and A17 — that part remains a sequencing constraint the
+phase-gating table records per phase.
 
 **The declaration-model rehoming closed four records at once (A11, A7, A9, and
 A2 behind them).** Stage 6 had them as BLOCKERs: the MVV was unauthorable
@@ -2390,7 +2530,8 @@ element universe the same model declares. The MVV's authorability gate is
 correspondingly closed: every required case is writable against declarations
 this document owns.
 
-**A8 is `Verified` and no record now gates lock on a peer decision.** §JD-4 is
+**A8 is `Verified`.** (A16 does now gate lock on a peer edit — see its Stage 6
+BLOCKER disposition; this paragraph speaks only to §JD-4's decision.) §JD-4 is
 closed (2026-08-22, `0003-0006-0007` cluster gate) and names this RDR the
 recording document: RDR 0006's clause fires only on a non-finite dimension,
 while this case is a fully-finite product whose participating row can still
