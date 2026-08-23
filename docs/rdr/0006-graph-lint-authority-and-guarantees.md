@@ -640,7 +640,7 @@ Finding codes:
 | Dead end | `graph-dead-end` | blocking |
 | Determinism / overlap (either population) | `graph-overlap` | blocking |
 | Guard exhaustiveness / gap over a provable product | `graph-coverage-gap` | blocking |
-| Coverage claim withheld (four triggers — see `reason` below) | `graph-unprovable-coverage` | blocking |
+| Coverage claim withheld (three triggers — see `reason` below) | `graph-unprovable-coverage` | blocking |
 | Single-valued state violation | `graph-single-valued-state` | blocking |
 | Always-present owned key absent from a reachable owned-state | `graph-always-present-owned` | blocking |
 | Owned-set-before-match | `graph-owned-before-write` | blocking |
@@ -651,7 +651,7 @@ Finding codes:
 | Rule whose selection context no reachable owned-state satisfies | `graph-unreachable-rule` | info |
 | Vacuous `exists` atom over an always-present key | `graph-vacuous-atom` | info |
 
-**`graph-unprovable-coverage` carries a `reason` discriminator.** One code, four
+**`graph-unprovable-coverage` carries a `reason` discriminator.** One code, three
 triggers, and each has a *different* remedy, so a machine consumer branching on
 `code` alone cannot tell the author what to do. The finding MUST carry a stable
 `reason` from this closed, append-only set, naming the key, dimension, or row at
@@ -662,10 +662,8 @@ fault:
 | `dimension-not-finite` | a participating dimension has no finite declared domain or is not projectable | declare the domain |
 | `tag-not-single-valued` | an `eq`/`in`/comparison atom over a tag lacking the single-valued marker (`0003::A21`) | add the marker |
 | `row-can-refuse` | a participating row can refuse `guard_unevaluable` (RDR 0003's narrowing) | nothing — the model is fine and lint declines to promise |
-| `node-not-exact` | the node does not pin a participating match key to one value | nothing — split-exactness is unavailable here |
 
-`row-can-refuse` and `node-not-exact` are *not* model defects — they are honest
-withholdings — and the message MUST say so rather than reading as an authoring
+`row-can-refuse` is *not* a model defect — it is an honest withholding — and the message MUST say so rather than reading as an authoring
 error.
 
 **`graph-vacuous-atom` discharges a locked-peer obligation.** RDR 0003 requires
@@ -747,7 +745,6 @@ Disposition of every model class lint can meet:
 | Escape row overlapping an ordinary row | 0 | `respond.OK` | none | **Silent by design** — never a runtime ambiguity (RDR 0003's two-population clause); reporting it would fail a model the runtime accepts |
 | Redundant row / unreachable rule | 0 | `respond.OK` | informational entry | Loud, but never changes the success disposition |
 | Group whose participating row can refuse `guard_unevaluable` | 2 (`GroupUserEnv`) | same aggregate failure | `graph-unprovable-coverage`, `reason: row-can-refuse`, naming row + atom | Loud — no non-blocking tier for this class |
-| Group at a node not exact on a participating match key | 2 (`GroupUserEnv`) | same aggregate failure | `graph-unprovable-coverage`, `reason: node-not-exact`, naming the key | Loud — **never green**; the merged-node union would be a false green |
 | Vacuous `exists` atom over an always-present key | 0 | `respond.OK` | `graph-vacuous-atom` naming the atom | Loud, advisory — RDR 0003 requires the report, not a rejection |
 | Overlap-free group with no `ambiguous_match` escape row | 0 | `respond.OK` | none | **Silent by design** — that arm is unreachable when the group cannot overlap; demanding a row would mint one `graph-unreachable-rule` flags |
 | Reachable node set over the published node ceiling | 2 (`GroupUserEnv`) | same aggregate failure | `graph-product-too-large` naming the traversal + ceiling | Loud — never an unbounded run |
@@ -807,13 +804,17 @@ exhaustive while ignoring that dimension's `{absent}` assignment.
 ```
 
 ```normative
-Coverage is a universal claim, so it MUST be certified only where the
-abstraction is exact. Lint MUST certify a group exhaustive only at a reachable
-node that pins every participating match key to a single declared value; where
-a node's value set for such a key holds more than one value, lint MUST withhold
-the claim as `graph-unprovable-coverage` naming that key, and MUST NOT report
-the group green. Overlap, an existential claim, MAY be decided against merged
-nodes. See `Load-Bearing Decisions`, *Soundness direction is per invariant*.
+Coverage is a universal claim, so it MUST be computed from the group's authored
+rows and their declared guard domains alone — never from a reachability node.
+The union `union(row_i accepted assignments)` and the scoped product both range
+over the group's *participating guard dimensions* as RDR 0003 defines
+participation; match keys are not product dimensions
+(`0003::Normative Contracts`) and contribute no assignment to either side. Lint
+MUST NOT widen a group's row set by pooling rows satisfiable at a shared
+abstract node: doing so makes the union a superset of any concrete view's and
+certifies coverage a real state lacks. Reachability decides only whether a group
+is proven at all; it never enters the coverage computation. See
+`Load-Bearing Decisions`, *Soundness direction is per invariant*.
 ```
 
 ```normative
@@ -1004,27 +1005,37 @@ or stderr.
   value some path brings, so a check against it can accuse a path the runtime
   never walks. A path-sensitive reading would be exponential and is rejected.
 - **Soundness direction is per invariant, not global** — merging widens the set
-  of concrete views a node stands for, and widening is safe in opposite
-  directions for the two kinds of check this lint makes.
-  - **Existential checks are sound over merged nodes.** Overlap ("do two rows
-    match together?"), dangling edge, dead end, and owned-set-before-match ask
-    whether *some* witness exists. A merged node admits a superset of concrete
-    views, so a witness real at a concrete view is still visible at the node:
-    false positives possible, missed defects not.
-  - **Universal checks are NOT.** Coverage (`union(row accepted assignments) ==
-    scoped product`, `0003::Technical Design`) asks whether *every* assignment
-    is matched. At a merged node the union is a superset of the union at each
-    concrete view it abstracts, because rows that are candidates only in some
-    abstracted views still contribute assignments. A gap real at one concrete
-    view can be closed by a row that is not a candidate there — lint would
-    certify green and `Resolve` would return `no_match`. Widening the domain of
-    a universal claim makes it easier to satisfy, which is a **false green**.
+  of concrete views a node stands for. Whether that is safe depends on the
+  *quantifier* of the check, and this lint makes both kinds. The classification
+  is what decides where a merged node may be read directly and where it may not:
+  - **Existential checks read merged nodes directly.** Overlap ("do two rows
+    match together?"), dangling edge, and owned-set-before-match ask whether
+    *some* witness exists. A merged node admits a superset of concrete views, so
+    a witness real at a concrete view is still visible at the node: false
+    positives possible, missed defects not.
+  - **Universal checks must not.** A ∀-claim evaluated against a widened domain
+    gets *easier* to satisfy, which is the false-green direction. Two invariants
+    are universal, and each needs its own remedy:
+    - **Coverage** (`union(row accepted assignments) == scoped product`,
+      `0003::Technical Design`) asks whether *every* assignment is matched. The
+      remedy is that it never reads a node at all: membership is the authored
+      match pattern, so the union is computed from the group's own rows and
+      reachability only decides whether the group is proven. Pooling rows
+      satisfiable at a shared node would make the union a superset of any
+      concrete view's — a gap real at one view closed by a row that is not a
+      candidate there, green from lint and `no_match` from `Resolve`.
+    - **Dead end** (invariant 2) asks whether *every* value in a node's per-tag
+      set meets a declared terminal. It is anti-monotone in merging for the same
+      reason: the more paths converge, the less likely one terminal covers the
+      whole set — so an unsplit merged-node test accuses ordinary converging
+      flows. The remedy here cannot be "don't read the node", since the check is
+      *about* nodes; it is to **split** the node on terminal-participating keys
+      first, recovering exactness. See invariant 2.
 
-  Therefore lint MUST certify coverage only at a node that pins every
-  participating match key to a single declared value. At any node whose value
-  set for a participating match key holds more than one value, the claim is
-  withheld as `graph-unprovable-coverage` naming that key — never reported
-  green. Overlap keeps the merged-node reading.
+  Merging is therefore load-bearing only for the existential checks. The two
+  universal ones each pay for their soundness — coverage by never consulting a
+  node, dead end by splitting one — and neither is left resting on the
+  over-approximation.
 - **Owned-set-before-match is decided over nodes, not paths** — invariant 6's
   "every reachable owned-state that satisfies the row's match pattern" is the
   normative form, evaluated against merged fixpoint nodes. "Reachable
@@ -1272,15 +1283,14 @@ actually consumes.
   Three structural false-positive generators were identified at pre-lock and
   each is closed rather than tolerated: dead-end is tested on *split* nodes, not
   merged ones (invariant 2), so converging flows are not accused; coverage is
-  certified only at nodes exact on participating match keys and otherwise
-  *withheld* rather than failed (`graph-unprovable-coverage`,
-  `reason: node-not-exact`); and always-present is reported against the
-  `initial` declaration, whose fix is one authoring edit. What remains is the
+  computed from the group's authored rows alone, so no node's imprecision can
+  produce a spurious gap; and always-present is reported against the `initial`
+  declaration, whose fix is one authoring edit. What remains is the
   guard-infeasible path, which is inherent to a guard-blind traversal.
   Withholding rather than failing is the general shape: where the abstraction is
   imprecise, lint declines to promise instead of accusing.
 
-  The residual rate is an MVV measurement, not a prediction — scenario 20 lints
+  The residual rate is an MVV measurement, not a prediction — scenario 23 lints
   the checked-in model (A8) and records the count of blocking findings a model
   its authors consider correct receives. **The trigger is mechanical: if that
   count is non-zero on a model the maintainers accept, the response is a
@@ -1442,7 +1452,7 @@ step and a witness from the fixture corpus:
 | 3. Scope row groups | row-group clause (RDR 0003's, cited not restated); "MUST NOT define a second grouping"; source-state clause | Membership is the **authored match pattern** + recognized outcome, per RDR 0003 and matching `Resolve`'s `view.matches(row.Match)`. Reachability decides only *which* groups are proven, never which rows are in one — so the group count is bounded by the authored rule count, not the lattice. |
 | 4. Overlap | invariant 3; RDR 0003's two-population clause | Ordinary×ordinary → `graph-overlap`. Escape×escape sharing a class → `graph-overlap`, once per shared class. Escape×ordinary → **no finding** (scenario 9a). |
 | 5. Withholding test | narrowing clause; "can refuse" as a syntactic test over the declared optionality field | Decided over **every** participating row, escape rows included; total because it reads declarations, never the graph. |
-| 6. Coverage | invariant 4; presence-dimension projection clause; escape class-scoping clause; **exactness clause** | `union(row_i accepted assignments) == scoped product`, per (group × declared rescuable class), product including the `{absent}` assignment of an `exists` atom over an optional key (scenario 11). **Certified only at a node exact on every participating match key** — otherwise withheld as `graph-unprovable-coverage` / `reason: node-not-exact`, because a merged node's union is a superset of each concrete view's and certifying there would be a false green (scenario 20). The `ambiguous_match` arm is checked only for a group that overlaps; vacuously closed otherwise. |
+| 6. Coverage | invariant 4; presence-dimension projection clause; escape class-scoping clause; **authored-rows-only clause** | `union(row_i accepted assignments) == scoped product`, per (group × declared rescuable class), over the group's **participating guard dimensions** — match keys are not product dimensions (`0003`) — product including the `{absent}` assignment of an `exists` atom over an optional key (scenario 11). Computed from the group's authored rows alone; no node enters the computation, so pooling rows at a shared abstract node (the false green of scenario 20) cannot arise. The `ambiguous_match` arm is checked only for a group that overlaps; vacuously closed otherwise. |
 | 7. Precedence when 5 and 6 both bear | narrowing clause governs: "no non-blocking tier for this class"; the advisory tier "must not absorb a withheld claim" | A group both closable by a bare escape row **and** carrying a row that can refuse resolves to `graph-unprovable-coverage` (blocking, exit 2) — **not** a success with `graph-coverage-closed-by-escape`. Withholding dominates closure, since at runtime the refusal returns before the escape row is consulted (scenario 8). |
 | 8. Emit | aggregate-`CLIError` clause; deterministic-order clause; `respond`-only clause; complete-emission clause | Every decidable defect in the group is emitted, not the first. Blocking → one `graph-lint-failed` / `GroupUserEnv` / exit 2, findings at top-level `.findings` on the marshalled `CLIError` (no `error` wrapper exists — `EmitJSON` marshals the error itself). Clean → `respond.OK` with the advisory list at `data.findings`, which needs `Data` assigned a non-nil struct since `Data` is itself `omitempty`. Both emit the key even when empty. Order by finding identity, never source order. |
 
@@ -1576,25 +1586,33 @@ records it so an implementer does not read the info code as an escape hatch.
     cannot produce `ambiguous_match`, and demanding an escape row for it would
     require a row `graph-unreachable-rule` then flags. Both variants emit
     `graph-coverage-closed-by-escape` for the `no_match` arm.
-20. **Scenario**: soundness direction — a model where two paths write different
-    values to one match key, converging on a node whose value set for that key
-    is `{a, b}`, with a group whose rows are individually non-exhaustive over a
-    guard dimension.
-    **Expected**: coverage is **not** certified green. Lint emits
-    `graph-unprovable-coverage` with `reason: node-not-exact` naming that match
-    key, or — where the node splits exactly — the real
-    `graph-coverage-gap` each concrete branch has. The negative control is
-    explicit: **no run of this fixture may exit 0 with an empty blocking list**,
-    since a green here is the false green the merged-node union would have
-    produced. Paired positive control: the same model with the two writes
-    assigning the same value lints clean.
+20. **Scenario**: grouping soundness — two rows with **different** match
+    patterns (`status=a` and `status=b`), each individually non-exhaustive over
+    a shared guard dimension, whose accepted assignments are complementary so
+    their union would cover the product. Two paths write `a` and `b`, converging
+    on a node whose value set for `status` is `{a, b}`, so both rows are
+    satisfiable there.
+    **Expected**: **two groups, and `graph-coverage-gap` on each** — membership
+    is the authored match pattern, so the rows never pool. The negative control
+    is the point of the fixture: **no run may exit 0 with an empty blocking
+    list**, since a green here is exactly the false green a merged-node union
+    would produce (the union closes, but at the concrete view `status=a` only
+    the first row is a candidate and the dimension is uncovered). Paired
+    positive control: give both rows the *same* match pattern and they are one
+    group whose union genuinely closes — lints clean.
 21. **Scenario**: converging terminal — two paths reaching one node, one having
     written a terminal-satisfying value and the other a live value.
     **Expected**: `graph-dead-end` is **not** emitted for the terminated branch
     (invariant 2 splits before testing); it *is* emitted if the live branch has
     no outgoing row. A single merged-node test would fail both, so this fixture
     is the regression guard on the split rule.
-22. **Scenario**: false-positive census — lint the checked-in transition model
+22. **Scenario**: node ceiling — a model whose declared owned tags and domains
+    make the reachable owned-state set exceed the published ceiling.
+    **Expected**: `graph-product-too-large` naming the traversal and the
+    ceiling, at `GroupUserEnv` / exit 2 — never an unbounded run and never a
+    partial green. The ceiling is asserted to be the published constant from
+    the command's help output, not a test-local value.
+23. **Scenario**: false-positive census — lint the checked-in transition model
     (A8) in its accepted state.
     **Expected**: the blocking finding count is recorded. Zero is the pass
     condition; a non-zero count on a model its maintainers accept is the
@@ -1656,10 +1674,12 @@ it agrees with `internal/resolve/resolve.go::Resolve`, which filters
 That resolution exposed a soundness defect in the same neighbourhood: the
 over-approximation guarantee was stated globally ("can only produce a false
 positive, never a false green") when it holds only for *existential* checks.
-Coverage is universal, and a merged node's union is a superset of each concrete
-view's, so certifying coverage there is a false green. Now scoped per invariant
-in `Load-Bearing Decisions`, with coverage certified only at match-key-exact
-nodes and withheld otherwise. No CONTRADICTION row remains.
+Coverage and dead-end are universal, and a ∀-claim evaluated against a widened
+domain gets easier to satisfy — the false-green direction. Now scoped per
+invariant in `Load-Bearing Decisions`: the existential checks read merged nodes
+directly, coverage never reads a node (membership is the authored match pattern,
+so the union comes from the group's own rows), and dead-end splits nodes on
+terminal-participating keys before testing. No CONTRADICTION row remains.
 
 ### Assumption Verification
 
