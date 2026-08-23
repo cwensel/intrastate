@@ -1,0 +1,34 @@
+# Negative validation cases — RDR 0002 normalizer spike
+
+Each case is the RDR fixture with one mutation; the spike must refuse it
+with a stable data-level category before normalization.
+
+```
+neg-bad-exists.toml              refused: malformed predicate atom: finalized_at.exists has literal "nope"
+neg-duplicate-rule-id.toml       refused: duplicate rule id "continue-prelock"
+neg-empty-alphabet-member.toml   refused: outcome alphabet contains the empty string
+neg-escape-with-write.toml       refused: escape rule "draft-no-match-escape" carries a write block or clear list
+neg-outcome-outside.toml         refused: rule "reconcile-rewind" binds outcome "not-in-alphabet" outside the alphabet
+neg-recognized-misnamed.toml     refused: reserved_tag_key: recognized declaration named "outcome"
+neg-undeclared-write.toml        refused: unknown tag "undeclared_tag" written by rule "reconcile-rewind"
+neg-version.toml                 refused: unsupported version 2
+neg-write-observed.toml          refused: rule "reconcile-rewind" writes non-owned tag "finalized_at" (observed)
+```
+
+## Key-order independence (Testing Strategy scenario 5)
+
+```
+kata-fixture.toml             484ab72c3180e7b0deb3cd8203e6d662c3af6c10860095d51a555a3c595a20d9  -
+kata-reordered.toml           484ab72c3180e7b0deb3cd8203e6d662c3af6c10860095d51a555a3c595a20d9  -
+```
+
+Semantically identical fixtures whose TOML keys are authored in different
+orders dump byte-identically.
+
+## Repeat-run determinism
+
+```
+run-1  c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b  -
+run-2  c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b  -
+run-3  c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b  -
+```

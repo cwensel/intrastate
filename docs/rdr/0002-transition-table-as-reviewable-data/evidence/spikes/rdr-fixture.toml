@@ -22,6 +22,14 @@ kind = "enum"
 provenance = "owned"
 kind = "int"
 
+[tags.rewind_scope]
+provenance = "owned"
+kind = "enum"
+
+[tags.prelock_lens]
+provenance = "owned"
+kind = "enum"
+
 [tags.recognized]
 provenance = "recognized"
 kind = "enum"
@@ -62,6 +70,8 @@ eq = "round-clean"
 lt = 3
 [rule.guard.unless.profile]
 eq = "small"
+[rule.guard.all.finalized_at]
+exists = false
 [rule.write]
 stage = "prelock"
 iter = 2
@@ -86,5 +96,17 @@ escape = ["no_match"]
 [rule.match.recognized]
 eq = "round-clean"
 
+[[rule]]
+id = "terminal-archive"
+use = ["draft"]
+source = "rdr:terminal"
+[rule.match.recognized]
+in = ["finalized", "verdict-flapping"]
+[rule.write]
+stage = "archive"
+
 [dump]
-order = ["model", "rule", "match", "write"]
+order = [
+  "identity", "source", "kind", "outcome",
+  "atoms", "next", "writes", "requires_owned", "escape",
+]

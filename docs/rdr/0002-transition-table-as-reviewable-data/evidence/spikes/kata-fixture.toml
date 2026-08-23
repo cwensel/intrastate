@@ -65,4 +65,7 @@ phase = "ship"
 status = "accepted"
 
 [dump]
-order = ["model", "rule", "match", "write"]
+order = [
+  "identity", "source", "kind", "outcome",
+  "atoms", "next", "writes", "requires_owned", "escape",
+]

@@ -1,7 +1,9 @@
-MODEL rdr rows=3 outcomes=round-clean,verdict-flapping,reconcile-block,finalized
-rdr.continue-prelock kind=transition source=rdr:prelock match=[all:iter.lt=3; profile.in=[large foundational]; recognized.eq=round-clean; stage.eq=prelock; status.eq=Draft; unless:profile.eq=small] write=[iter=2; stage=prelock]
-rdr.draft-no-match-escape kind=escape source=rdr:escape match=[recognized.eq=round-clean; status.eq=Draft] write=[escape=no_match]
-rdr.reconcile-rewind kind=transition source=rdr:reconcile match=[recognized.eq=reconcile-block; status.eq=Draft] write=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft]
+MODEL rdr rows=5 outcomes=round-clean,verdict-flapping,reconcile-block,finalized
+rdr.continue-prelock kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.in=foundational large@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] escape=[]
+rdr.draft-no-match-escape kind=escape source=rdr:escape outcome=round-clean atoms=[status.eq=Draft@match] next=[] write=[] requires_owned=[] escape=[no_match]
+rdr.reconcile-rewind kind=transition source=rdr:reconcile outcome=reconcile-block atoms=[status.eq=Draft@match] next=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] write=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] requires_owned=[prelock_lens,rewind_scope,stage,status] escape=[]
+rdr.terminal-archive#finalized kind=transition source=rdr:terminal outcome=finalized atoms=[status.eq=Draft@match] next=[stage=archive] write=[stage=archive] requires_owned=[stage] escape=[]
+rdr.terminal-archive#verdict-flapping kind=transition source=rdr:terminal outcome=verdict-flapping atoms=[status.eq=Draft@match] next=[stage=archive] write=[stage=archive] requires_owned=[stage] escape=[]
 MODEL kata rows=2 outcomes=accepted,needs-work,closed
-kata.review-accepted kind=transition source=kata:review match=[all:owner.eq=current-session; phase.eq=review; recognized.eq=accepted; status.eq=open; unless:status.eq=closed] write=[phase=ship; status=accepted]
-kata.review-needs-work kind=transition source=kata:review match=[phase.eq=review; recognized.eq=needs-work; status.eq=open] write=[phase=resolve; status=open]
+kata.review-accepted kind=transition source=kata:review outcome=accepted atoms=[owner.eq=current-session@all; phase.eq=review@match; status.eq=open@match; status.eq=closed@unless] next=[phase=ship; status=accepted] write=[phase=ship; status=accepted] requires_owned=[phase,status] escape=[]
+kata.review-needs-work kind=transition source=kata:review outcome=needs-work atoms=[phase.eq=review@match; status.eq=open@match] next=[phase=resolve; status=open] write=[phase=resolve; status=open] requires_owned=[phase,status] escape=[]
