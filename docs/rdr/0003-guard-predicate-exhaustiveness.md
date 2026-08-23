@@ -12,14 +12,17 @@
   all four anchors hold. The `0003-0006-0007` cluster gate (2026-08-22) closed
   JDR 0001 §JD-4 naming this RDR the recording document and settling that lint
   mints no code and gains no non-blocking tier — **A8 is Verified**. §JD-13
-  added the single-valued marker to the declaration model here; §JD-14 confirmed
-  this RDR's escape-row reading governs, no edit owed. This RDR owns the tag
+  added the single-valued marker to the declaration model here; §JD-14's
+  coverage half stands, while its overlap half is re-opened as A17 (the shipped
+  kernel resolves ordinary candidates over non-escape rows only, so an
+  escape/guarded overlap is not a runtime ambiguity). This RDR owns the tag
   declaration model (value kind, finite domain, optionality, single-valuedness,
   element universe), rehomed from RDR 0002 on 2026-08-21; RDR 0002 owns
   authoring location and normalization carriage and cites this model. Remaining
-  open: A10 and A12 are tolerances on RDR 0006's refine, and A14 is a
-  normalization-carriage request on RDR 0002; A15 is discharged by MVV
-  Scenario 3 at implementation.]
+  open: A10, A12 and A17 are on RDR 0006's refine, A14 and A16 are
+  authoring/carriage requests on RDR 0002, and A15 is discharged by MVV
+  Scenario 3 at implementation. 3amigo iteration 3 (2026-08-22) opened A16 and
+  A17.]
 
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
@@ -196,7 +199,7 @@ parallel guard model.
   gateway.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, and unsupported operator/tag-kind pairing; the per-row/per-atom `guard_unevaluable` payload is RDR 0007's under JDR 0001 §D4; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
+  - **Evidence**: `internal/cli/clierr/clierr.go::CLIError` carries stable `Code`, human `Message`, optional `Param`, `Detail`, `Hint`, and exit-code `Group`; `internal/cli/respond/respond.go::Fail` emits the envelope in text/json modes; `internal/cli/config/config.go::Load` already demonstrates stable parse/read error codes. This RDR owns predicate semantic kinds such as unknown operator, type mismatch, literal parse failure, literal-outside-declared-domain, declaration/kind disagreement, and unsupported operator/tag-kind pairing; the per-row/per-atom `guard_unevaluable` payload is RDR 0007's under JDR 0001 §D4; RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups; RDR 0005 owns the CLI command/envelope mapping onto the existing gateway.
   - **If wrong**: This RDR or RDR 0005 must add a separate user-facing error
     contract before implementation.
 - **A5 The normalized predicate representation can retain source identity for
@@ -234,10 +237,12 @@ parallel guard model.
   - **Evidence**: RDR 0002 `Normative Contracts` require the model to declare every matched or written tag, including `owned`, `observed`, or `recognized` provenance. RDR 0006 `Technical Design` consumes tag provenance and owned-tag write effects from normalized rows for owned-set-before-match and coverage checks. **Scope of this record**: it establishes that provenance *labels* reach lint, and nothing more.
   - **If wrong**: Predicate lint cannot tell an owned tag from an observed one,
     and the owned-tag clause below has no input to test.
-  - **Note**: This RDR's owned-tag clause and its "can refuse" clause both quantify
-    over *every reachable predecessor*, which needs a predecessor relation, not a
-    label. That half is **A12**, not this record — A6 was previously stamped
-    `Verified` on evidence that does not reach it.
+  - **Note**: This RDR's owned-tag clause quantifies over *every reachable
+    predecessor*, which needs a predecessor relation, not a label. That half is
+    **A12**, not this record — A6 was previously stamped `Verified` on evidence
+    that does not reach it. The "can refuse" clause no longer quantifies that
+    way: it reads the declared optionality field alone (3amigo iteration 3), so
+    A12 now carries one clause, not two.
 - **A7 An existence atom projects onto the declared-domain product as a
   per-key presence dimension, so a row group carrying `exists` atoms stays
   provable.**
@@ -380,9 +385,12 @@ parallel guard model.
   "every reachable predecessor" is a total test.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence needed**: Two clauses quantify over every reachable predecessor —
-    the owned-tag clause and the "can refuse" decision procedure. A6 establishes
-    only that provenance *labels* reach lint. The predecessor relation itself is
+  - **Evidence needed**: The owned-tag clause quantifies over every reachable
+    predecessor. (The "can refuse" decision procedure did too until 3amigo
+    iteration 3 restated it over the declared optionality field, which is what
+    makes it total; A12 is correspondingly narrower and no longer gates the
+    withholding decision.) A6 establishes only that provenance *labels* reach
+    lint. The predecessor relation itself is
     a graph property; RDR 0006 owns graph traversal but states no reachability
     contract this RDR can cite, and `reachable predecessor` appears once there and
     not at all in RDR 0002.
@@ -419,7 +427,7 @@ parallel guard model.
     identity tuple, with repeated elements rejected at parse. The rejected
     alternative is an ordered slice preserving authored order, which would make
     `["mid","large"]` and `["large","mid"]` distinct atoms and break MVV
-    Scenario 5's reorder invariant.
+    Scenario 6's reorder invariant.
   - **If wrong**: two implementations spell the same set literal differently, so
     a fixture that parses under one build fails under another, and the identity
     tuple's `literal` component is not stable across producers.
@@ -446,7 +454,9 @@ parallel guard model.
     (`evidence/spikes/iter-2/a1-eval-harness/`) — this RDR's encoding, not RDR
     0002's, so it corroborates rather than discharges.
   - **Stage 6 disposition — DOWNGRADED.** Survivable: no peer asserts the
-    opposite, the failure is detectable at the first normalization test, and the
+    opposite, the failure is detectable at the first normalization test — now
+    named, MVV Scenario 7, which asserts each atom still reports its authored
+    block after normalization (3amigo iteration 3) — and the
     MVV's authorability does not turn on it (the MVV authors `all`/`unless`
     directly). Not lock-blocking.
   - **If wrong**: `unless` collapses into `all` after normalization, the identity
@@ -487,6 +497,53 @@ parallel guard model.
   - **If wrong**: the published bound does not predict provability, so two
     conforming implementations disagree on the same model and the
     model-independence the clause promises is unmet.
+- **A16 RDR 0002's authoring surface carries the single-valued marker, so the
+  field §JD-13 homed here is writable by an author.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: this RDR states what the marker *means*, but RDR 0002
+    owns where a declaration is authored. `single-valued` occurs **zero** times
+    in RDR 0002: its type-model clause (`0002:342-350`) and its schema list
+    (`0002:217-220`) each enumerate the same four fields — value kind, finite
+    domain, optionality, set-element universe — and predate §JD-13. Its
+    carriage requirement is already general ("carry every declared field through
+    to the normalized model without loss"), so carriage is satisfied and only
+    the authoring enumeration is short. Until it is extended, the field cannot
+    be written under `[tags.<tag>]` and cannot reach RDR 0006's lint input,
+    which gates a mandatory blocking code (`graph-single-valued-state`) on it.
+  - **Plan**: single-field request to RDR 0002 at its refine pass, travelling
+    with A14 as one authoring/carriage request — add the marker to the
+    `[tags.<tag>]` schema enumeration and to the type-model clause's field list,
+    citing this RDR for meaning. RDR 0002 is `Draft`, so this is a live request
+    rather than a route-back.
+  - **If wrong**: the single-valued marker is a declared-but-unwritable field,
+    `graph-single-valued-state` keeps an unhomed producer, and MVV Scenario 4's
+    single-valued cases cannot be authored in a fixture.
+- **A17 Escape-row overlap is checked among escape rows for one failure class,
+  not between an escape row and a guarded row.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence needed**: JDR 0001 §JD-14 (2026-08-22) decided this RDR's reading
+    governs for *both* the coverage union and the overlap check, reasoning from
+    "RDR 0001's runtime refusal of ambiguity". That premise does not hold for
+    the overlap half: RDR 0002's resolution clause (`0002:328-334`) admits a
+    modeled escape disposition only after ordinary resolution has already failed,
+    and the shipped kernel implements exactly that — `internal/resolve/resolve.go::Resolve`
+    step 2 builds candidates from **non-escape** rows for the outcome, and escape
+    rows are consulted only to rescue `no_match` or `ambiguous_match`. An escape
+    row overlapping a guarded row is therefore never an ambiguity at runtime, so
+    reporting it as blocking overlap would fail a fixture the runtime accepts —
+    a false positive in the direction P5 does not require. What *is* a genuine
+    ambiguity is two escape rows matching one failure class, since RDR 0002
+    admits a rescue only when exactly one matches.
+  - **Plan**: carry to the RDR 0006 refine that already owes §JD-14's invariant
+    3/4 repair, and record the correction against §JD-14 at the next JDR 0001
+    touch — the same document set and edit session as the charted anchor repair.
+    The coverage half of §JD-14 is unaffected and needs no re-decision.
+  - **If wrong**: if the cluster confirms §JD-14's original reading, this RDR's
+    two-population overlap clause reverts to a single population and RDR 0006's
+    invariant 3 exemption is removed as first decided; the coverage clause and
+    the union identity are untouched either way.
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -570,11 +627,11 @@ The initial operator/kind matrix is:
 
 | Operator | Accepted tag value kinds | Literal shape | Lint proof role |
 | --- | --- | --- | --- |
-| `eq` | enum, boolean, integer, string-like scalar | one typed scalar | Narrows the tag domain to one value. |
-| `in` | enum, boolean, integer, string-like scalar | non-empty typed scalar set | Narrows the tag domain to the listed values. |
-| `lt`, `lte`, `gt`, `gte` | integer | one typed integer | Narrows a bounded integer domain by comparison; remains runtime-only for an unbounded integer. |
-| `exists` | optional scalar or optional set-valued tag | boolean | Tests presence or absence, not value equality. Decided by the kernel from presence alone (JDR 0001 §D4); it never reaches this RDR's evaluator. |
-| `contains` | set-valued tag with a declared element universe | non-empty typed element set | Narrows the set-valued domain to assignments containing every listed element. |
+| `eq` | `enum`, `bool`, `int`, `scalar` | one typed scalar | Narrows the tag domain to one value. |
+| `in` | `enum`, `bool`, `int`, `scalar` | non-empty typed scalar set | Narrows the tag domain to the listed values. |
+| `lt`, `lte`, `gt`, `gte` | `int` | one typed integer | Narrows a bounded integer domain by comparison; remains runtime-only for an unbounded integer. |
+| `exists` | any kind, provided the tag is declared optional (a key declared always-present contributes no `{absent}` assignment, so an `exists` atom over it is well-formed but vacuous — lint reports it as such rather than rejecting it) | boolean | Tests presence or absence, not value equality. Decided by the kernel from presence alone (JDR 0001 §D4); it never reaches this RDR's evaluator. |
+| `contains` | `set` with a declared element universe | non-empty typed element set | Narrows the set-valued domain to assignments containing every listed element. |
 
 This intentionally aligns with prior art that separates positive and negative
 guard lists, and deliberately diverges from callback-driven FSM libraries.
@@ -683,18 +740,31 @@ language callback and not a free-form expression string.
 
 ```normative
 This RDR owns the **tag declaration model** — the typed alphabet every guard
-atom is written against. A tag declaration MUST carry a value kind, and MAY
-carry a finite domain, an optionality marker, a single-valued marker, and (for
-set-valued kinds) an element universe. The value kinds are `enum`, `bool`,
-`int`, `set`, and opaque scalar. RDR 0002 owns where a declaration is authored and how it is
-carried through normalization; this RDR owns what a declaration means. Neither
-document restates the other (JDR 0001 P6).
+atom is written against. A tag declaration MUST carry a value kind, and — as its
+kind admits, per the agreement clause below — MAY carry a finite domain, an
+optionality marker, a single-valued marker, and (for set-valued kinds) an
+element universe.
+
+The value kinds are exactly five, spelled with these tokens wherever a kind is
+named: in a declaration, in the operator/kind matrix, and in a diagnostic —
+`enum`, `bool`, `int`, `set`, and `scalar`. The `scalar` kind is the opaque
+scalar: a typed value compared only by equality and membership. It carries **no**
+finite domain and can never bear an exhaustiveness claim, so a guard dimension
+over a `scalar` takes the blocking inability-to-prove outcome, and a `scalar`
+declaration carrying a finite domain, an element universe, or a single-valued
+marker is a declaration error.
+
+RDR 0002 owns where a declaration is authored and how it is carried through
+normalization; this RDR owns what a declaration means. Neither document restates
+the other (JDR 0001 P6).
 ```
 
 ```normative
 A finite domain MUST be declarable for any kind an exhaustiveness claim can
 range over: an `enum` declares its value set, a `bool` is finite by
-construction, an `int` declares a `{min..max}` bound, and a `set` declares the
+construction, an `int` declares a `{min..max}` bound — notation, not wire spelling: the
+authored form is two fields, `min` and `max`, and both endpoints are
+**inclusive**, so `{0..3}` has cardinality 4 — and a `set` declares the
 element universe its members are drawn from. A declaration carrying no finite
 domain is well-formed — the tag remains runtime-evaluable — but a guard
 dimension over it cannot carry an exhaustiveness claim, and lint MUST take the
@@ -702,13 +772,30 @@ blocking inability-to-prove outcome for that dimension.
 ```
 
 ```normative
-A tag declaration MUST be able to state whether the key may be absent. A key
-declared always-present MUST NOT be absent from a conforming evaluation view;
-a key declared optional MAY be. Presence is a declared property of the tag, not
+A tag declaration MUST be able to state whether the key may be absent. A
+declaration carrying **no optionality marker declares the key optional** — the
+conservative default, since assuming always-present would let lint certify a
+group green on an undeclared property. (Symmetric with the domain rule above:
+leaving presence undeclared is not an opt-out from the withholding it implies.)
+A key declared always-present MUST NOT be absent from a conforming evaluation
+view; a key declared optional MAY be. Presence is a declared property of the tag, not
 an observation of one view: lint decides `exists` projection and the
 "can refuse" narrowing from this declaration, never from a runtime trace. The
 kernel's runtime presence decision (JDR 0001 §D4, normative in RDR 0007) is a
 separate question over a single view and is unaffected by this clause.
+
+An evaluation view **conforms** to the declared model when every always-present
+key is present in it and every single-valued tag holds at most one of its
+declared domain values. Conformance is the premise every lint claim in this RDR
+is conditional on: a green exhaustiveness result asserts coverage over
+conforming views only. A non-conforming view is a defect in the model or its
+producer, not an input this RDR's evaluator interprets — the evaluator never
+reads the tag view (see the evaluator-scope clause above), so the check belongs
+to the kernel's view assembly, and this RDR states only what conformance means
+and that its claims presuppose it. Whether a non-conforming view is refused at
+assembly or reported as a lint finding over the declared model is RDR 0007's and
+RDR 0006's respectively; this RDR MUST NOT be read as promising anything about
+a view that violates the declarations.
 ```
 
 ```normative
@@ -718,20 +805,59 @@ The marker is meaningful only for a kind carrying a finite domain, and a
 `set`-valued kind MUST NOT carry it. Single-valuedness is a declared property of
 the tag, not an observation of one view. It is what licenses a consumer to treat
 the tag's domain as a partition — mutually exclusive values whose coverage the
-scoped product can be grouped over — rather than as independent dimensions. RDR
-0006's grouping-dependent lint findings read this field from the declaration and
-MUST NOT infer it from a tag's name, its value spelling, or a fixture (JDR 0001
-§JD-13).
+scoped product can be grouped over — rather than as independent dimensions.
+
+**Effect on the scoped product, stated so the verdict is computable**: a
+single-valued tag contributes **one dimension of `|domain|` assignments** (for
+enum `{a,b,c}`: three), because exactly one value holds per view. Absent the
+marker, a tag whose values could co-occur contributes one **independent boolean
+dimension per value** (`2^|domain|`, minus nothing — the model does not assume
+at least one holds). This is the whole operational content of the marker: it is
+the difference between a product a lint can partition and one it must treat as a
+power set, and it is why the domain/kind agreement clause rejects it on a `set`
+kind, whose values co-occur by construction.
+
+RDR 0006's grouping-dependent lint findings read this field from the declaration
+and MUST NOT infer it from a tag's name, its value spelling, or a fixture (JDR
+0001 §JD-13). **Shape note (A16's consumer half)**: RDR 0006's invariant 5
+constrains *writes* — "writes must not produce two values for a tag class the
+model declares single-valued" (`0006:295-296`) — over a *tag class*, while this
+marker is a per-*tag* property of the *evaluation view*. The two are compatible
+(a write producing two values is one way a view stops conforming) but not the
+same predicate; RDR 0006's refine reconciles its invariant against this clause
+when it takes up §JD-13's citation duty.
 ```
 
 ```normative
-A declared domain MUST agree with its value kind — an `{min..max}` bound on an
-`enum`, an element universe on a scalar kind, or a single-valued marker on a
-`set` kind or on a kind carrying no finite domain, is a declaration error and
-MUST be rejected before normalization completes. A value appearing in a guard
-literal that lies outside its tag's declared domain MUST likewise be rejected
-before resolution, so an unsatisfiable atom is a load-time error rather than a
+A declared domain MUST agree with its value kind. Each kind admits exactly
+these fields, and any other combination is a declaration error that MUST be
+rejected before normalization completes:
+
+| Kind | Finite domain | Element universe | Single-valued marker |
+| --- | --- | --- | --- |
+| `enum` | its value set (required to claim exhaustiveness) | no | yes |
+| `bool` | finite by construction | no | yes |
+| `int` | `{min..max}` bound (required to claim exhaustiveness) | no | yes |
+| `set` | its element universe | yes (required to claim exhaustiveness) | **no** — values co-occur by construction |
+| `scalar` | **no** | no | **no** — it carries no finite domain to partition |
+
+So an `{min..max}` bound on an `enum`, an element universe on any kind but
+`set`, or a single-valued marker on a `set` or a `scalar`, is each a declaration
+error. A value appearing in a guard
+literal that lies outside its tag's declared domain MUST likewise be rejected —
+this is the predicate semantic kind **literal-outside-declared-domain**, distinct
+from a literal parse failure (the literal parses fine; it is simply not in the
+domain) — so an unsatisfiable atom is a load-time error rather than a
 silently-never-matching row.
+
+The two rejections in this clause sit at **different phase boundaries, and each
+names its owner**: a malformed *declaration* (domain disagreeing with its kind)
+is rejected by the declaration loader before normalization completes, since
+normalization carries declarations it must first be able to trust; a
+*literal-outside-domain* is rejected by guard parsing after normalization has
+supplied the declaration to check against, and before resolution. Both surface
+through the predicate semantic kinds this RDR owns (A4) onto RDR 0006 findings
+and the RDR 0005 envelope.
 ```
 
 ```normative
@@ -776,10 +902,21 @@ the transition/lint model, and MUST evaluate the participating guard dimensions
 as one product rather than as independent one-dimensional checks.
 
 A dimension **participates** in a row group when any row in that group carries
-an atom over that key, in either `all` or `unless` — not only when the rows
-constrain it differently. A key every row constrains identically still bounds
-the product and still requires a finite declared domain; it MUST NOT be dropped
-from the product because it does not discriminate.
+a **guard** atom over that key, in either `all` or `unless` — not only when the
+rows constrain it differently. A key every row constrains identically still
+bounds the product and still requires a finite declared domain; it MUST NOT be
+dropped from the product because it does not discriminate.
+
+**Match keys are not product dimensions.** A row's match pattern selects which
+group the row belongs to — the selection context this RDR groups by — and is a
+separate field from its guard both in RDR 0002's authored shape
+(`[rule.match.*]` vs. `[rule.guard.*]`) and in the normalized row the kernel
+consumes (`internal/resolve/resolve.go::Row` carries `Match` and `Guard`
+distinctly, and `Resolve` filters candidates on match before the guard gate).
+A key constrained identically by every row in a group *because it is the
+grouping key* contributes exactly one assignment and cannot produce a gap;
+folding it into the product would multiply every product by 1 and misreport the
+cardinality the too-large bound is measured against.
 ```
 
 ```normative
@@ -801,9 +938,24 @@ A declared escape row participates in the coverage identity like any other row:
 its accepted assignments are computed from its guard atoms and unioned with its
 peers'. An escape row carrying no guard atoms denotes the whole scoped product
 and therefore closes coverage by itself. Lint MUST NOT treat "an escape row
-exists" as a separate coverage-satisfying fact outside the union, and MUST NOT
-exclude escape rows from overlap checks — an escape row that overlaps a guarded
-row is the ambiguity RDR 0001 refuses at runtime.
+exists" as a separate coverage-satisfying fact outside the union.
+
+Overlap is checked in **two separate populations**, because the runtime never
+mixes them: RDR 0002 (`0002:328-334`) and the kernel both resolve ordinary
+candidates over non-escape rows only, and consult escape rows solely to rescue a
+`no_match` or `ambiguous_match` refusal (`internal/resolve/resolve.go::Resolve`
+step 2 — "candidate rows are the non-escape rows for that outcome"). So an
+escape row overlapping a *guarded* row is **not** a runtime ambiguity and MUST
+NOT be reported as one. What lint MUST still check is overlap **among escape
+rows for the same failure class**, since RDR 0002 admits a rescue only when
+*exactly one* escape row matches — two overlapping escape rows are a real
+ambiguity that silently disables the rescue. Escape rows are therefore excluded
+from the ordinary-row overlap check and subjected to their own; excluding them
+from **coverage** is what MUST NOT happen.
+
+A bare escape row consequently closes coverage without generating an overlap
+finding against every guarded peer it subsumes — the two checks read the same
+row under different populations, which is why they do not contradict.
 ```
 
 ```normative
@@ -857,11 +1009,18 @@ of the seam, and never a silent or advisory one.
 ```
 
 ```normative
-A row "can refuse" when the row carries a value atom whose key is not declared
-present-for-every-reachable-predecessor — a property decided from the declared
-model, not from a runtime trace or a witness input. Lint MUST decide this
+A row "can refuse" when the row carries a value atom over a key **declared
+optional** — the same one declared field the optionality clause defines, not a
+second presence property and not a graph query. Lint MUST decide this
 syntactically over declarations so the test is total; it MUST NOT withhold a
 claim merely because some assignment in the product is unreached.
+
+An **owned** tag carries a second, graph-level presence condition — the owned-tag
+clause below requires a reachable predecessor write — but that condition governs
+whether a row may *match*, not whether its guard can refuse, and it is A12's
+subject. Presence for the withholding decision reads exactly one field, so this
+clause is decidable today and does not wait on A12: a declaration-only test is
+what makes it total.
 ```
 
 ```normative
@@ -872,7 +1031,7 @@ repeated elements MUST parse to the same literal and therefore to the same atom
 under the identity tuple; a repeated element MUST be rejected at parse rather
 than silently collapsed. Implementations MUST canonicalize before the literal
 enters the identity tuple, so reordering a set literal cannot change a
-diagnostic — the source-order independence MVV Scenario 5 requires.
+diagnostic — the source-order independence MVV Scenario 6 requires.
 ```
 
 ```normative
@@ -938,6 +1097,8 @@ and this RDR's evaluator.
 | Per-tag optionality (which keys may be absent) | **This RDR** (declaration model) | A7's presence dimension; the "can refuse" narrowing | Kernel runtime presence (JDR 0001 §D4) — a different question over one view, not an arm | This RDR |
 | Set-element universe for `contains` | **This RDR** (declaration model) | This RDR's finite-domain proof; Phase 3 acceptance gate | None | This RDR |
 | Single-valued marker (domain is a partition) | **This RDR** (declaration model) | RDR 0006's `graph-single-valued-state` and its MVV assertion | RDR 0006's lint input contract, which attributed the field to this model before it declared one | **This RDR** — JDR 0001 §JD-13 (2026-08-22); RDR 0006 cites it like the rest of the model |
+| Escape-row overlap population | **This RDR** (two-population overlap clause) | RDR 0006's overlap findings | JDR 0001 §JD-14's overlap half, which put escape rows in the ordinary population; RDR 0006's invariant 3 exemption | **Contested — A17.** §JD-14 decided for one population reasoning from RDR 0001's runtime ambiguity refusal, but the shipped kernel resolves ordinary candidates over non-escape rows only (`resolve.go::Resolve` step 2) and RDR 0002 (`0002:328-334`) admits a rescue only after ordinary resolution fails. The coverage half of §JD-14 is uncontested. |
+| Scoped-product membership (which keys are dimensions) | **This RDR** (participation clause) | RDR 0006 lint; the too-large cardinality bound | Match keys — **explicitly not an arm**: they form the selection context the group is defined by, and are a separate field in RDR 0002's authored shape and in `resolve.go::Row` | This RDR — guard keys only |
 | Tag provenance (`owned`/`observed`/`recognized`) | RDR 0002 (its one normative tag clause) | This RDR's owned-tag clause (A6); RDR 0004; RDR 0006 | None | RDR 0002 — unchanged by the declaration-model rehoming |
 | Withheld-claim lint artifact | **This RDR** (states the blocking form) | RDR 0006 emits it; RDR 0005 envelopes it | RDR 0006's `graph-unprovable-coverage`, previously scoped to non-finite dimensions | **This RDR** — JDR 0001 §JD-4 (closed 2026-08-22) names it the recording document; RDR 0006 widens `graph-unprovable-coverage`'s trigger and mints no code |
 
@@ -958,6 +1119,10 @@ unevaluable).
 | Guard dimension lacks a finite declared domain | Evaluable at runtime | **Refuse or downgrade** the group's claim, one finding per unprovable dimension — never treat examples as complete, never stop at the first | Inability-to-prove finding naming the dimension | Loud |
 | Finite product too large to prove deterministically | Evaluable at runtime | **Refuse or downgrade** — never silently cap enumeration | Inability-to-prove finding reporting the computed product cardinality and the published bound | Loud |
 | Unknown operator / unknown tag / operator–kind mismatch / literal parse failure | Rejected before resolution | Rejected at load | Predicate semantic kind (this RDR) → RDR 0006 finding → RDR 0005 envelope | Loud |
+| Guard literal outside its tag's declared domain | Rejected before resolution | Rejected at guard parse, after normalization supplies the declaration | `literal-outside-declared-domain` (this RDR) → RDR 0006 finding → RDR 0005 envelope | Loud — an unsatisfiable atom is never a silently-never-matching row |
+| Declaration whose domain disagrees with its kind (incl. `single_valued` on a `set` or on a kind with no finite domain) | n/a — never reaches runtime | Rejected by the declaration loader before normalization completes | Declaration/kind disagreement (this RDR) | Loud |
+| Two escape rows matching one failure class | RDR 0002 admits a rescue only when exactly one matches — the rescue silently does not fire | Overlap finding within the escape population | Overlap code (RDR 0006), naming both escape rule ids | Loud |
+| Escape row overlapping a guarded row | Not an ambiguity — the kernel resolves ordinary candidates over non-escape rows only | **No overlap finding**; the escape row still contributes its assignments to the coverage union | none | Silent by design — reporting it would fail a model the runtime accepts (A17) |
 | Row group is domain-exhaustive but a participating row can refuse | Refusal stands | Claim withheld — the narrowing; one finding per refusing row, never just the first | RDR 0007 payload at runtime **and** a blocking lint finding naming the refusing atom — absence of a green result is not the artifact | Loud |
 
 #### `trace` — desk trace over the MVV
@@ -970,12 +1135,12 @@ verdict for a row group. Walked stepwise against the MVV, with witnesses from
 | --- | --- | --- | --- |
 | 1. Load the RDR/kata slice as normalized candidate rows | atoms-not-callbacks; closed typed operator vocabulary; operator declares accepted kinds | `profile-to-grounding` parses to `profile in [mid,large]` + `unless prelock_iterations gte 3`; operators all in the matrix | OK |
 | 2. Group rows by selection context | coverage/overlap scoped to a normalized row group, evaluated as one product | `profile-to-grounding` and `foundational-to-cove` share `match status eq Draft` → one group | OK |
-| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* dimension enters the product, including one every row constrains identically | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`; `status` participates too — the group's shared `status eq "Draft"` atom does not discriminate but still requires a declared domain | OK, and it is the participation clause that puts `status` in the product — under a discriminates-only reading it would silently drop out |
+| 3. Build the scoped product from declared domains | exhaustiveness only over finite declared domains; every *participating* **guard** dimension enters the product, including one only some rows constrain; match keys are the grouping context, not dimensions | `profile` = 4 enum values; `prelock_iterations` = `{0..3}`. `status` does **not** enter the product: its `status eq "Draft"` atom is authored under `[rule.match.status]`, so it is the grouping key that forms this selection context, not a guard dimension within it. `prelock_iterations` is the participation witness — only `profile-to-grounding` carries an atom over it (`unless … gte 3`), and it enters the product for the whole group even though `foundational-to-cove` never mentions it | OK — and it is the participation clause that keeps `prelock_iterations` in the product; under a rows-must-differ reading a key only one row constrains would silently drop out |
 | 4. Project each atom onto the product | every atom denotes a subset of the scoped product (A2) | `profile eq "foundational"` → `{foundational}`; `profile in [mid,large]` → `{mid,large}` | OK |
 | 5. Project the `exists` atom | A7 presence dimension — stated as a normative clause | `foundational-to-cove` carries `cluster_eligible exists = true`; `cluster_eligible`'s declared domain `{true,false}` is complete, so no *value* element selects presence — the atom lands on the separate `{present, absent}` presence dimension the projection clause adds | OK — witness: the presence-dimension clause in `Normative Contracts`, on the derivation in `evidence/research/iter-2-projection-derivation.md` |
 | 6. Compute coverage | `union(row_i accepted) == scoped product` | Both kinds of group compute: `exists`-bearing groups over the product including the presence dimension (step 5), `exists`-free groups over the value dimensions alone (`continue-prelock-lenses`, `reconcile-rewind-legality`) | OK |
-| 7. Compute overlap | any non-empty pairwise intersection; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → rows disjoint on that dimension | OK |
-| 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 6's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
+| 7. Compute overlap | any non-empty pairwise intersection, computed **within** a population — ordinary rows against ordinary rows, escape rows against escape rows for one failure class; no source-order priority | `profile in [mid,large]` ∩ `profile eq foundational` = ∅ → the two ordinary rows are disjoint on that dimension. The fixture declares no escape row, so the escape population is empty and contributes no finding | OK |
+| 8. Apply the runtime-veto narrowing | claim MUST NOT be stronger than the runtime; withhold if a participating row can refuse | MVV Scenario 8's row group: domain-exhaustive, one value atom over a possibly-absent key → claim withheld | OK — and the reason A7's presence dimension must not silently drop `exists` atoms |
 | 9. Emit the verdict | diagnostics name the contributing source rule/context id; every decidable defect is reported, not the first; a gap additionally names the context, all group rule ids, and one uncovered assignment | `RuleID` + `SourceLocator` ship on `internal/resolve/resolve.go::Row`; the uncovered assignment is computed from the scoped product built at step 3 | OK |
 | 10. Cross-document agreement | exactly one document records the narrowing; the other cites it | §JD-4 (closed 2026-08-22) names this RDR the recording document; RDR 0006 records the same assignment on its Status line (`0006:10-13`) and reuses `graph-unprovable-coverage` | OK |
 
@@ -984,6 +1149,14 @@ recording document (A8); step 5's former gap closed when the presence-dimension
 projection was stated. A9 and A11 have no row here because the declaration model
 they record is an input to step 3, which the trace already exercises.
 
+Two clauses are **unexercised by this fixture** rather than gapped, and each has
+a named test instead: the escape-row overlap population (the fixture declares no
+escape row — A17, and MVV Scenario 2's group construction), and the single-valued
+marker's effect on product shape (the fixture declares no marker, since its
+authoring location is A16 — MVV Scenario 5). Step 3's product is built from
+guard keys only, so `status` is the grouping context here rather than a
+dimension.
+
 #### Load-Bearing Decisions
 
 - **Identity** — a guard atom is identified by the total tuple
@@ -991,7 +1164,7 @@ they record is an input to step 3, which the trace already exercises.
   within `all` or `unless`. Position is not a field of the kernel-fixed atom
   shape (JDR 0001 §D1: key, operator token, literal, block), and an index-based
   handle would contradict this RDR's own source-order independence: the same
-  tuple must identify the same atom under the reordering MVV Scenario 5
+  tuple must identify the same atom under the reordering MVV Scenario 6
   requires. The tuple is total precisely because one row may carry two atoms
   over one key (RDR 0007 A5's conjoined value row), which `(key, block)` alone
   cannot separate. Semantic equality is `(tag, operator, literal)`.
@@ -1014,6 +1187,10 @@ they record is an input to step 3, which the trace already exercises.
   comparison uses `lt`, `lte`, `gt`, and `gte`; existence checks presence of an
   optional tag value; set containment checks declared set-valued tags against a
   typed element set.
+- **Declaration model** — a tag declaration carries five fields: value kind,
+  finite domain, optionality, single-valuedness, and (for set kinds) an element
+  universe. Single-valuedness is the fifth, homed here by JDR 0001 §JD-13; any
+  enumeration of this model in this document states all five.
 - **Finite-domain proof** — exhaustive coverage is a lint claim over the
   declared tag-domain product for a normalized row group, not over examples
   observed in fixtures. Unbounded dimensions and finite products that cannot be
@@ -1034,16 +1211,38 @@ TOML source belongs to RDR 0002.
 
 #### Illustrative Code
 
-Illustrative predicate shape only:
+Illustrative only — RDR 0002 owns the authored container in both cases; this
+RDR owns what the declaration fields mean and what the guard atoms denote.
+
+A tag declaration carrying the five fields this RDR defines:
+
+```toml
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "mid", "large", "foundational"]
+single_valued = true     # at most one value holds per view — the partition licence
+optional = false         # always-present; contributes no {absent} assignment
+
+[tags.labels]
+provenance = "observed"
+kind = "set"
+elements = ["urgent", "blocked", "external"]   # element universe; no single_valued
+```
+
+The guard atoms written against that alphabet:
 
 ```toml
 [rule.guard.all]
-status.eq = "Draft"
 profile.in = ["mid", "large", "foundational"]
 
 [rule.guard.unless]
 prelock_iterations.gte = 3
 ```
+
+The `single_valued` spelling above is illustrative: the field's authoring
+location is RDR 0002's to fix (**A16**), which is why this block shows a shape
+rather than asserting one.
 
 ### Capability Dependencies
 
@@ -1052,11 +1251,12 @@ prelock_iterations.gte = 3
 | Sparse transition-table container | RDR 0002 | Pending | This RDR assumes guards live inside RDR 0002's `all`/`unless` blocks. |
 | Deterministic exact-one resolver | RDR 0001 | Pending | Runtime selection refuses zero or multiple matching rows. |
 | Guard predicate grammar and finite-domain semantics | This RDR | Introduced | Lint and runtime share one symbolic predicate model. |
-| **Tag declaration model** (value kind, finite domain, optionality, set-element universe) | **This RDR** | **Introduced** | The typed alphabet guard atoms are written against. Previously booked as a producer request to RDR 0002 (A11/A7/A9); rehomed here because RDR 0002's only normative tag clause requires provenance alone, `value kind` is normative nowhere, RDR 0002's validation vocabulary has no type axis, and RDR 0007 (`Final`) states that value kinds and set universes "are RDR 0003's declarations". RDR 0002 owns authoring location and normalization carriage and cites this model. |
+| **Tag declaration model** (value kind, finite domain, optionality, single-valuedness, set-element universe) | **This RDR** | **Introduced** | The typed alphabet guard atoms are written against. Previously booked as a producer request to RDR 0002 (A11/A7/A9); rehomed here because RDR 0002's only normative tag clause requires provenance alone, `value kind` is normative nowhere, RDR 0002's validation vocabulary has no type axis, and RDR 0007 (`Final`) states that value kinds and set universes "are RDR 0003's declarations". RDR 0002 owns authoring location and normalization carriage and cites this model. |
 | Accessor read/write safety | RDR 0004 | Pending | Guard evaluation consumes tag values after accessor binding; it does not execute accessors. |
 | Graph lint authority | RDR 0006 | Pending | Exhaustiveness and overlap findings become blocking lint there. |
 | Kernel guard-domain enforcement and `guard_unevaluable` payload | RDR 0007 | Pending | The kernel decides presence and existence atoms; this RDR's evaluator narrows to value semantics over a present value. |
 | Atom `block` retention through normalization | RDR 0002 | Requested — **A14** | The one field that stays a request: per-atom `block` retention is normalization *carriage*, RDR 0002's charter proper, not declaration *semantics*. RDR 0007 requires `Block` on every atom and this RDR's identity tuple uses it, but RDR 0002's normalization contract promises only that a candidate row retains rule id and locator. Not a contradiction; a retention guarantee this RDR needs stated. |
+| Authoring location for the **single-valued marker** | RDR 0002 | Requested — **A16** | §JD-13 homed the field's meaning here; RDR 0002's `[tags.<tag>]` schema enumeration predates it and lists four fields. Carriage is already general ("every declared field through without loss"); only the authoring enumeration is short. Travels with A14. |
 | Authoring location + normalization carriage for tag declarations | RDR 0002 | Pending | RDR 0002 owns `[tags.<tag>]` placement and carrying declarations through to candidate rows; it cites this RDR's declaration model for what the fields mean. |
 
 ### Existing Infrastructure Audit
@@ -1066,7 +1266,7 @@ prelock_iterations.gte = 3
 | User-facing failures | `internal/cli/clierr`, `internal/cli/respond` | Must verify error-code coverage | Reuse | Predicate parse/lint failures should use existing CLI envelopes. |
 | Guard evaluator | None found under `internal/` | New semantic surface | Introduce | This RDR owns the evaluator semantics, not command I/O. |
 | Transition model source | Pending RDR 0002 | Not implemented | Extend peer | Guard atoms are embedded in table rows/contexts. |
-| Tag declaration model | RDR 0002 declares provenance normatively; `value kind` is normative nowhere; no domain, optionality, or element-universe field exists in any RDR | The typed alphabet the guard grammar quantifies over had no normative home | Introduce here | This RDR states the model; RDR 0002 cites it and owns authoring location plus normalization carriage. |
+| Tag declaration model | RDR 0002 declares provenance normatively; before the 2026-08-21 rehoming, `value kind` was normative nowhere and no domain, optionality, single-valued, or element-universe field existed in any RDR | The typed alphabet the guard grammar quantifies over had no normative home | Introduce here | This RDR states the model (all five fields); RDR 0002 cites it and owns authoring location plus normalization carriage — its schema enumeration still owes the single-valued marker (A16). |
 
 ### Decision Rationale
 
@@ -1407,16 +1607,43 @@ every exactness claim tied to A2 and the MVV fixture before Final.
   occurs zero times here and zero times in RDR 0002 — while a mandatory blocking
   code (`graph-single-valued-state`) and an MVV assertion depend on it. JDR 0001
   §JD-13 decides that **this RDR's declaration model gains the field**, beside
-  value kind, finite domain, optionality, and set-element universe. **Done** —
-  the declaration model now carries a single-valued marker and a normative
-  clause states what it licenses; the domain/kind agreement clause rejects it on
-  a `set` kind or a kind with no finite domain. RDR 0006 cites it at its refine.
-- [x] **§JD-14 noted (2026-08-22).** The same gate found RDR 0006's
-  invariant 3 granting an escape-row overlap exemption this RDR normatively
-  forbids. §JD-14 decides **this RDR's reading governs** — escape rows
-  participate in the coverage union and are never excluded from overlap checks —
-  and that "claims closed coverage" is **default-on**, as this RDR reads it. The
-  repair is RDR 0006's; no edit is owed here, and the clauses stand as written.
+  value kind, finite domain, optionality, and set-element universe. **Done for
+  meaning** — the declaration model now carries a single-valued marker and a
+  normative clause states what it licenses; the domain/kind agreement clause
+  rejects it on a `set` kind or a kind with no finite domain. Two consequent
+  halves are open and neither gates this RDR's lock: the **authoring** half is
+  **A16** (RDR 0002's `[tags.<tag>]` schema still enumerates four fields, so the
+  marker is not yet writable), and the **consumer** half is RDR 0006's citation
+  duty, already on its Status line — its invariant 5 constrains *writes* over a
+  *tag class* while this marker constrains the *evaluation view* per *tag*, a
+  shape difference its refine must reconcile against this clause.
+- [ ] **§JD-14 partially re-opened — A17.** The gate found RDR 0006's
+  invariant 3 granting an escape-row overlap exemption this RDR forbade, and
+  decided **this RDR's reading governs** on both halves, with default-on for
+  "claims closed coverage". The **coverage** half stands unchanged: escape rows
+  are ordinary participants in the union, and RDR 0006's invariant 4 still owes
+  its repair. The **overlap** half rested on a premise the shipped kernel
+  refutes — §JD-14 reasoned from "RDR 0001's runtime refusal of ambiguity", but
+  RDR 0002 (`0002:328-334`) and `internal/resolve/resolve.go::Resolve` step 2
+  both resolve ordinary candidates over non-escape rows only, consulting escape
+  rows solely to rescue a refusal. An escape/guarded overlap is therefore not a
+  runtime ambiguity, and RDR 0006's exemption was closer to right than the gate
+  credited. This RDR's clause now checks overlap in two populations (ordinary
+  rows; escape rows against each other for one failure class). **A17** books the
+  cross-document confirmation.
+- [ ] **A16 closed.** Route: single-field request to RDR 0002 adding the
+  single-valued marker to its `[tags.<tag>]` schema enumeration and type-model
+  clause. Done-condition: `single-valued` occurs in RDR 0002's authoring schema,
+  citing this RDR for meaning. Venue: RDR 0002's refine, travelling with A14 as
+  one authoring/carriage request. Not lock-blocking — it gates MVV Scenario 5's
+  authoring, not this RDR's contract.
+- [ ] **A17 closed.** Route: the cluster confirms escape-row overlap is checked
+  among escape rows for one failure class rather than between an escape row and
+  a guarded row. Done-condition: RDR 0006's invariant 3 repair matches this
+  RDR's two-population clause, and §JD-14's overlap half records the corrected
+  premise. Venue: RDR 0006's refine (which already owes the §JD-14 repair), with
+  the §JD-14 correction at the next JDR 0001 touch. Not lock-blocking — the
+  coverage half of §JD-14 is unaffected.
 - [ ] **A14 closed.** Route: single-field request to RDR 0002 for a
   normalization clause retaining each atom's authored block. RDR 0002 is
   `Draft`; this is the one field that stays a peer request, because per-atom
@@ -1453,8 +1680,12 @@ universe, the possibly-absent-key case declares an optional key, its
 always-present negative control declares the same key always-present, the
 finite-domain cases declare enum sets and `{min..max}` bounds, and a
 single-valued enum tag declares the marker §JD-13 homed here — the field RDR
-0006's `graph-single-valued-state` reads, asserted here as declarable and
-rejected on a `set` kind. This closes the
+0006's `graph-single-valued-state` reads, defined here and rejected on a `set`
+kind. **One exception, booked as A16**: the marker's *authoring location* is
+RDR 0002's `[tags.<tag>]` schema, which still enumerates four fields, so the
+single-valued cases (MVV Scenario 5, and Scenario 4's set-kind rejection) are
+authorable only once that one-field request lands. Every other case is
+authorable today. This closes the
 gate that previously bound the MVV's schedule to a peer's producer request — the
 fields are no longer fixture-invented keys read back as evidence but normative
 declarations this document owns, which is what removes the circularity A2's
@@ -1468,7 +1699,7 @@ assumptions that block it, so no phase is picked up on document order alone:
 | Phase | Blocked on | Startable today |
 | --- | --- | --- |
 | 1 Predicate Model | RDR 0007's kernel reshape (shipped kernel still has `Row.Guard string`) — A13's set-literal spelling and the tag declaration model are stated | Partially — the matrix, the declaration model, and the set-literal canonicalization, not the atom slice |
-| 2 Finite-Domain Lint Semantics | A10, A12 (RDR 0006 agreements) — A11, A2 and A8 are closed, the domain producer is this RDR | Yes for the product/proof core; the peer agreements gate integration, not construction |
+| 2 Finite-Domain Lint Semantics | A10 (RDR 0006's row-group agreement) gates group *construction*, not just integration; A12 gates the owned-tag clause only; A17 gates the escape-row overlap population — A11, A2, A7 and A8 are closed and the domain producer is this RDR | Partially — the product arithmetic, the withholding decision (now a declaration-only test), and the single-valued partition are startable; group construction and escape-row overlap should wait on A10/A17 rather than be built twice |
 | 3 Target-Flow Fixture | A14 (per-atom `block` retention, RDR 0002) — A1's harness has run and A7/A9 are closed | Yes — the gating predicates are now authorable |
 | 4 Integration With Peer RDRs | A10, A12 (tolerances on RDR 0006's refine) — A8 closed 2026-08-22 by §JD-4 | No |
 
@@ -1553,8 +1784,14 @@ accepted.
 3. **Scenario**: Lint an otherwise valid guard over an unbounded integer or
    undeclared finite domain, and lint a declared finite product too large for
    the deterministic proof representation. Include a group with two separately
-   unprovable dimensions, and two equal-cardinality products of differing shape
-   (few wide dimensions vs. many narrow ones).
+   unprovable dimensions, and two equal-cardinality products of differing shape.
+   **The shape pair is constructed relative to the implementation's published
+   bound B, not to an absolute size**: build two products of equal cardinality
+   C with C > B — one from few wide dimensions (e.g. two dimensions of
+   ~sqrt(C) values each), one from many narrow ones (e.g. log2(C) boolean
+   dimensions) — so both must refuse if cardinality alone gates the verdict.
+   Repeat the pair just under B, where both must prove. Reading B at fixture
+   setup is what makes the case runnable at implementation time.
    **Expected**: Runtime evaluation remains available, but lint refuses or
    downgrades the exhaustiveness claim for that dimension/product. The
    two-dimension group emits two findings, not one. The over-large refusal
@@ -1562,22 +1799,43 @@ accepted.
    two equal-cardinality products receive the same verdict — a divergence
    refutes A15 and the bound clause is restated before lock.
 4. **Scenario**: Parse malformed guard atoms: unknown tag, unknown operator,
-   unsupported operator/tag-kind pair, and literal parse mismatch. Include the
-   malformed *declarations* the domain/kind agreement clause rejects: a
-   `{min..max}` bound on an `enum`, an element universe on a scalar kind, and a
-   single-valued marker on a `set` kind or on a kind carrying no finite domain.
+   unsupported operator/tag-kind pair, literal parse mismatch, and a **literal
+   outside its tag's declared domain** (a well-typed value the domain does not
+   contain — distinct from a parse failure, and rejected before resolution).
+   Include the malformed *declarations* the domain/kind agreement clause
+   rejects: a `{min..max}` bound on an `enum`, an element universe on a scalar
+   kind, and a single-valued marker on a `set` kind or on a kind carrying no
+   finite domain.
    **Expected**: Each failure is rejected before resolution with a predicate
    semantic kind that RDR 0006 can map to a lint finding and RDR 0005 can map to
    the structured CLI gateway. The declaration errors are rejected before
    normalization completes, so a consumer reading the model — including RDR
    0006's `graph-single-valued-state` — never sees a marker its kind cannot
    carry.
-5. **Scenario**: Reorder authored rows and guard atoms without changing their
+5. **Scenario (single-valued acceptance)**: Lint one row group over a
+   finite-domain tag **with** and **without** the single-valued marker, holding every other input fixed.
+   **Expected**: the scoped product differs by construction — with the marker the
+   tag contributes one dimension of `|domain|` assignments; without it, one
+   boolean dimension per value (`2^|domain|`) — so a row set that closes coverage
+   under the marker leaves an uncovered assignment without it. The two runs must
+   therefore return different verdicts on the same rows; identical verdicts mean
+   the marker is not reaching the product and `graph-single-valued-state` has no
+   effective producer. Assert the marker is read from the declaration and never
+   inferred from the tag's name or value spelling.
+6. **Scenario**: Reorder authored rows and guard atoms without changing their
    semantics, including reordering the elements inside an `in` set literal.
    **Expected**: Successful matching and lint findings are unchanged because
    source order is not a selection mechanism; an ambiguous pair remains a
    multiple-match refusal instead of becoming a first-match success.
-6. **Scenario**: Evaluate a row group whose guards are exhaustive over their
+7. **Scenario (block retention)**: Normalize a row carrying atoms over the
+   **same key in both blocks** — one in `all`, one in `unless` — and inspect the normalized atoms.
+   **Expected**: each atom still reports the block it was authored in
+   (`Block == all` / `Block == unless`), and the two remain distinguishable and
+   separately identifiable under the identity tuple. This is the "first
+   normalization test" A14's survivable-if-wrong disposition names: if carriage
+   drops `block`, this scenario fails immediately rather than surfacing as a
+   wrong `unless` verdict later.
+8. **Scenario**: Evaluate a row group whose guards are exhaustive over their
    declared domains but where one participating row carries a value atom over a
    key that can be absent.
    **Expected**: The value atom is unevaluable rather than false, resolution
@@ -1636,6 +1894,18 @@ Guard-domain enforcement is resolved rather than open: the kernel decides
 presence and existence atoms, so this RDR's evaluator is scoped to value
 semantics over a present value (JDR 0001 §D4, a Closed entry).
 
+**One gate decision is partially re-opened, deliberately and on evidence.**
+JDR 0001 §JD-14 decided this RDR's escape-row reading governs on both the
+coverage union and the overlap check. The coverage half stands. The overlap half
+reasoned from "RDR 0001's runtime refusal of ambiguity", and the shipped kernel
+refutes that premise: `internal/resolve/resolve.go::Resolve` builds ordinary
+candidates from non-escape rows only, consulting escape rows solely to rescue a
+refusal, exactly as RDR 0002 (`0002:328-334`) specifies. An escape/guarded
+overlap is therefore not a runtime ambiguity, and blocking on it would fail
+models the runtime accepts. This RDR now checks overlap in two populations and
+books the cross-document confirmation as **A17**; it does not re-decide §JD-14
+unilaterally.
+
 The strength of the exhaustiveness claim is decided and agreed across documents.
 §JD-4 settles that the lint promise narrows and the runtime veto stands, and —
 closed 2026-08-22 by the `0003-0006-0007` cluster gate — names this RDR the
@@ -1652,7 +1922,11 @@ Evidence-needed line, and has a non-empty "If wrong" consequence. No record uses
 `Docs Only`. **Three records were demoted by the critique pass**: A1 and A2 from
 `Verified` to `Pending`, and A6 narrowed to labels-only with its reachability
 half split out as A12. Verified: A1, A2, A3, A4, A5, A6 (labels), A7, A8, A9,
-A11, and A13. Pending: A10, A12, A14, A15 — each with a named plan. None is
+A11, and A13. Pending: A10, A12, A14, A15, A16, A17 — each with a named plan.
+The 3amigo iteration-3 pass opened A16 (the single-valued marker's authoring
+location in RDR 0002) and A17 (escape-row overlap population, re-opening
+§JD-14's overlap half against the shipped kernel), and narrowed A12 to the
+owned-tag clause alone. None is
 `Unverified`. The repeatability pass closed A13 by stating the set-literal
 clause it owed and opened A15 on the cardinality bound the too-large clause now
 declares. The Stage 6 reconcile closed A1 by running the evaluation harness the
@@ -1738,8 +2012,8 @@ is discharged by the MVV rather than a peer.
 The Minimum Viable Validation is in scope for implementation, not deferred, and
 every required case is now authorable against this RDR's own tag declaration
 model. **Scope grew deliberately at Stage 6**: this RDR now owns the tag
-declaration model (value kind, finite domain, optionality, element universe) in
-addition to the guard grammar and exhaustiveness semantics. That is one contract,
+declaration model (value kind, finite domain, optionality, single-valuedness, element
+universe) in addition to the guard grammar and exhaustiveness semantics. That is one contract,
 not two — the declaration model is the alphabet the grammar is written against,
 and it was previously homeless rather than owned elsewhere. The Proportionality
 note below records why this does not overreach. The
