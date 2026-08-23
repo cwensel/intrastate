@@ -6,7 +6,13 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final [locked 2026-08-23 — Gate PASS. Owns blocking graph-lint
+  authority, the mandatory invariant taxonomy, and the owned-state reachability
+  relation peers quantify over. Six records remain open, none lock-blocking, all
+  DOWNGRADED at Stage 6: A5 and A8 discharge at implementation (CI `graph-lint`
+  job and the checked-in transition model), A6 and A10 are scheduled edits on
+  RDR 0002 (`Draft`), A7 is a route-back on RDR 0003 A18, and A9 flips when RDR
+  0005 lands transition-model config discovery.]
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
@@ -1717,131 +1723,7 @@ count regardless of the lattice; only the reachability filter scales with nodes.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
-### Contradiction Check
-
-Refine resolved the escape-row contradiction (invariants 3 and 4 versus the
-Load-Bearing Decision and RDR 0003) in favor of RDR 0003's two-population
-reading, and aligned invariant 5 with RDR 0003's per-tag single-valued marker.
-
-Pre-lock critique resolved a second contradiction, against **locked** RDR 0003.
-`Technical Design` had asserted group identity as `(owned-state node, recognized
-outcome)` and forbidden keying on the match pattern, while this RDR's own
-`Normative Contracts` forbid defining a second grouping predicate and RDR 0003
-(`Final [locked 2026-08-22]`) fixes that "a row's match pattern selects which
-group the row belongs to". Resolved in favor of RDR 0003: **group membership is
-the authored match pattern**, and the reachability relation decides only which
-groups are proven. That is the division of labour the `0003-0006-0007` cluster
-gate scoped A10's discharge to ("a one-line citation … not a redefinition"), and
-it agrees with `internal/resolve/resolve.go::Resolve`, which filters
-`view.matches(row.Match)` against one concrete view.
-
-That resolution exposed a soundness defect in the same neighbourhood: the
-over-approximation guarantee was stated globally ("can only produce a false
-positive, never a false green") when it holds only for *existential* checks.
-Coverage and dead-end are universal, and a ∀-claim evaluated against a widened
-domain gets easier to satisfy — the false-green direction. Now scoped per
-invariant in `Load-Bearing Decisions`: the existential checks read merged nodes
-directly, coverage never reads a node (membership is the authored match pattern,
-so the union comes from the group's own rows), and dead-end splits nodes on
-terminal-participating keys before testing. No CONTRADICTION row remains.
-
-### Assumption Verification
-
-A1-A4 are verified. None uses `Docs Only`, and none is stamped `Verified` on
-self-reference. A1-A3 are verified against peer RDR contracts, and A4 is
-verified by source search against the CLI failure gateway. A2 was re-verified
-at Stage 4 against RDR 0003's locked text clause by clause — the coverage and
-overlap derivation, the finite-domain requirement and its blocking
-inability-to-prove outcome, all five fields of the tag declaration model, the
-scoped row group, the escape-row participation clause, the narrowing clause and
-its syntactic "can refuse" test, and the default-on reading — each matching as
-quoted. A2's Evidence was corrected at pre-lock: its claim to close `0003::A10`
-now rests on the citation paragraph (membership is the authored match pattern),
-which is what A10 asks for, and its claim that four further RDR 0003 records
-"close by citation" was withdrawn — RDR 0003 is locked, so this draft supplies
-their *producer* and each closes on the peer, tracked as route-backs.
-
-A5 is deliberately Pending by `MVV Test`: implementation must prove the
-production gate runs the command through Validation scenario 7. Pre-lock pinned
-that gate to one target — a new **`graph-lint`** job in
-`.github/workflows/ci.yml` (the key `lint` is the shipped golangci-lint job and
-is not reusable) running the built binary over the checked-in model, asserting
-on the JSON `code` — so the scenario has a mechanical oracle rather than a
-disjunction. A6 is Pending on
-RDR 0002 declaring the initial owned state and terminal states, with that arm
-decided at Stage 4 over the sidecar alternative and the required *shape* (tag
-predicates, not state names) now stated; a model missing the root is rejected
-with a blocking finding, so the unlanded schema cannot read as a clean model. A7
-is Pending on RDR 0003 A18 recording this RDR's two model-level codes as its
-producer; pre-lock narrowed the claim to a **partial** discharge — the owned half
-of RDR 0003's two-conjunct conformance definition — because an always-present
-observed or recognized key is not model-decidable. That edit lands on a peer that
-is `Final`, so it is a route-back, not a Draft amendment.
-
-Three assumptions were **added at pre-lock**, each booking a claim the draft had
-been asserting without a producer. **A8** (`Source Search`, Pending): no
-transition model is checked into this repo, so A5's named subject does not exist
-and nobody books authoring it. **A9** (`Peer RDR`, Pending): `--flow` depends on
-RDR 0005 config discovery its own audit defers, so only `--model <path>` is
-instantiable today. **A10** (`Peer RDR`, Pending): invariant 5 drops the
-path-accumulation check on write-replaces semantics for single-valued tags,
-which no peer states — RDR 0002 fixes only that absence does not imply deletion.
-A8 and A9 gate the MVV rather than the design; A10 gates invariant 5's
-soundness.
-
-**Stage 6 dispositioned all six Pending records as DOWNGRADED** — each carries
-a named plan that runs during implementation or at a peer's next touch, and
-each is survivable, recorded per record above. None is MVV-critical: the
-Minimum Viable Validation is **fixture-backed**, so every blocking invariant
-class is proven against authored fixtures through the production command path
-without a shipped model (A8), the CI wiring (A5), `--flow` discovery (A9), or
-either peer clause (A6, A10). A7's route-back lands on RDR 0003 A18, which that
-document's own Stage 6 downgraded as not lock-blocking and whose venue names
-this RDR as a sufficient producer. No record was refuted at this stage: A5's
-gate surfaces, A6's absent declarations, A8's `.toml` census, A9's deferred
-discovery, and A10's silent write semantics were each re-verified against the
-working tree and found exactly as recorded.
-
-### Scope Verification
-
-The Minimum Viable Validation is in scope: fixture-backed `intrastate lint`
-invocations must prove one legal model and one illegal model per blocking
-invariant through the production command path.
-
-### Cross-Cutting Concerns
-
-- **Versioning**: lint finding codes and JSON payload fields must be stable and
-  append-only under the existing CLI output envelope.
-- **Build tool compatibility**: the authoritative check is the same
-  root `intrastate lint` command CI can run after `make build`; the Validation
-  scenarios must capture that gate once the command and the checked-in model
-  exist.
-- **Incremental adoption**: local hooks and resolver-local validation flags may
-  call the lint engine later, but only the command/CI gate defines acceptance.
-- **Canonical-form / determinism**: deterministic claims are semantic finding
-  identity and invariant results for the same normalized model, not
-  byte-identical output or content-addressed hashes.
-
-### Proportionality
-
-This RDR owns one load-bearing contract: blocking static graph-lint authority
-and its mandatory invariant set over the normalized model, including the
-reachability relation those invariants quantify over. It does not own the
-source table format, predicate grammar, row-group definition, runtime resolver,
-accessor execution, or CLI output envelope. The `large` profile remains
-appropriate because the contract locks graph-acceptance invariants and CI
-authority with no prior accretion in Seam Lineage.
+Responses: 0006-graph-lint-authority-and-guarantees/artifacts/gate.md (Gate PASS 2026-08-23)
 
 ## References
 

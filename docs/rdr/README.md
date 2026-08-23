@@ -14,7 +14,7 @@ engine README — this file is only the per-project index.
 | [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final | High |
 | 0004 | Accessor execution safety model | Final | High |
 | 0005 | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9] | High |
-| 0006 | Graph lint authority and guarantees | Draft [A2 re-verified, A5 gate surface re-verified; A6 pending RDR 0002's initial/terminal declarations] | High |
+| 0006 | Graph lint authority and guarantees | Final | High |
 | [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Final | Medium |
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Final [joint decision → JDR 0001 §JD-5] | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Final [joint decision → JDR 0001 §JD-5] | Medium |
