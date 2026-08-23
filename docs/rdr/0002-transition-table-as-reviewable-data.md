@@ -6,11 +6,14 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-12; re-verify A2, A7 —
-  JDR 0001 §D2 restates the resolver flow as gate-then-count; JD-11 reconciles
-  the dump contract with this RDR's own round-trip invariant]
+- **Status**: Draft
 - **Type**: Architecture
-- **Profile**: large — locks the sparse transition-model data format.
+- **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
+  the normalization semantics that mint kernel rows (outcome binding,
+  `RequiresOwned`, next-state tags and writes, existence constants, per-atom
+  block), the expanded-table dump format and its total ordering, and the
+  validation category taxonomy — consumed by RDRs 0003, 0006, 0007, 0008,
+  and 0009.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel; JDR 0001
@@ -100,8 +103,22 @@ factor common context instead of enumerating every Cartesian row.
     custom parser earlier than intended.
 - **A2 Row order is not part of successful edge selection.**
   - **Status**: Verified
-  - **Method**: Design Decision
-  - **Evidence**: Normative Contracts state that source order and rendered-row order MUST NOT decide transition success. Selection is gate-then-count (JDR 0001 §D2; kernel ordering in RDR 0007): guards evaluate over every candidate first, an unevaluable survivor vetoes the resolution, and only then does the exact-one count run; an explicit escape row may model the resulting `no_match` or `ambiguous_match` only when exactly one escape row survives the same gate and declares that failure class. This explicitly rejects first-match semantics and count-first pruning.
+  - **Method**: Source Search
+  - **Evidence**: The shipped kernel already implements gate-then-count, so
+    the ordering is verified against code rather than merely decided.
+    `internal/resolve/resolve.go::Resolve` runs
+    `selected, blocked := gate(candidates, in.Guards, view)` and returns on
+    `blocked != nil` **before** `switch len(selected)`;
+    `::gate` prunes `GuardFalse`, then reports `missingOwned`, then vetoes on
+    an undecidable survivor; `::escapeOrRefuse` delegates to the same `gate`
+    before counting `viable`. `::missingOwned` sorts with `slices.Sort` and
+    documents that "Row order is a normalization detail RDR 0002 owns and
+    must not reach the reported diagnosis";
+    `adversarial_test.go::TestAdv3_GuardUnevaluableRefusalMustNotDependOnTableRowOrder`
+    freezes the property. The Normative Contracts below restate this flow and
+    explicitly reject first-match semantics and count-first pruning
+    (JDR 0001 §D2, whose "Lands in 0002" clause this discharges; RDR 0007
+    states the same ordering as the kernel's and verifies it at its A20).
   - **If wrong**: Reviewers would have to reason about hidden priority, and
     reordering rows could silently change resolver behavior.
 - **A3 RDR and kata flow edges can be encoded sparsely with fixed predicate
@@ -109,7 +126,7 @@ factor common context instead of enumerating every Cartesian row.
   enumeration.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GONOSUMDB='*' GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` parsed and normalized the RDR and kata fixtures. The fixtures cover status, profile, prelock iteration, equality, set membership, integer comparison, self-loop, rewind, positive/negative guards, multi-tag writes, and an explicit RDR `escape = ["no_match"]` row without host-code callbacks; `output.txt` captures the expanded candidate rows.
+  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GONOSUMDB='*' GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` parsed and normalized the RDR and kata fixtures. The fixtures cover status, profile, prelock iteration, equality, set membership, integer comparison, existence, self-loop, rewind, positive/negative guards, multi-tag writes, an `in` atom on `recognized` that expands into two candidate rows, and an explicit RDR `escape = ["no_match"]` row without host-code callbacks; `output.txt` captures the expanded candidate rows.
   - **If wrong**: RDR 0003 must expand the predicate grammar or this table format
     becomes too weak for the target flows.
 - **A4 The model data can carry enough provenance to separate owned, observed,
@@ -136,27 +153,55 @@ factor common context instead of enumerating every Cartesian row.
 - **A7 Deterministic expanded-table ordering is a format contract, not an
   implementation accident.**
   - **Status**: Verified
-  - **Method**: Design Decision
+  - **Method**: Spike
   - **Evidence**: Normative Contracts define the expanded table as the
-    normalized candidate-row value — model id, row identity, source locator,
-    row kind, outcome, predicate atoms, writes, required-owned keys, and escape
-    failure classes — and require dump ordering to sort rows by row identity
-    and then sort atoms, writes, and escape classes within each row. The same
-    field list is what the Round-Trip invariant preserves. This explicitly
-    rejects source-order, map-iteration, and renderer-specific ordering.
+    normalized candidate-row value and fix the row order as the identity
+    tuple `(model id, rule id, expansion suffix)` compared field by field,
+    byte-lexicographically, with the source locator excluded; the same field
+    list is what the Round-Trip invariant preserves. The normalizer spike
+    witnesses it:
+    `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes &&
+    GOFLAGS=-mod=mod GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml`
+    emits every field of the row value — identity with `#suffix` on expanded
+    rows, locator, kind, lifted outcome, per-atom `@block`, next tags, writes
+    including `<clear>`, derived `requires_owned`, escape classes — with
+    atoms sorted by (key, block, operator, literal). Three consecutive runs
+    produced byte-identical output despite Go's randomized map iteration
+    (SHA-256 `c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b`,
+    `evidence/spikes/output.txt`), and two semantically identical fixtures
+    whose TOML keys are authored in different orders dumped byte-identically
+    (`evidence/spikes/negative-cases.txt`). Byte-lexicographic comparison is
+    a Go spec guarantee ("Two string values are compared lexically
+    byte-wise"), so the ordering is locale- and platform-independent. This
+    explicitly rejects source-order, map-iteration, and renderer-specific
+    ordering, and rejects ordering on the source locator, which may carry
+    line/column detail that changes when unrelated source text is edited.
   - **If wrong**: Golden tests and review dumps could churn across machines or
     refactors even when the transition semantics are unchanged.
 - **A8 Every normalized row can bind exactly one outcome from the alphabet, so
   the kernel's `Row.Outcome` filter admits the row.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence needed**: `internal/resolve/resolve.go::Resolve` skips any row
-    whose `Outcome` differs from `Input.Recognized`, and `::escapeOrRefuse`
-    applies the same filter to escape rows; `::assemble` binds the outcome under
-    the reserved key `recognized` only when `Input.Recognized` is non-empty.
-    Confirm against those symbols that lifting the rule's single `recognized`
-    atom into `Row.Outcome` (Normative Contracts, outcome binding) yields rows
-    the kernel matches, and that no kernel path admits an outcome-less row.
+  - **Evidence**: `internal/resolve/resolve.go::Resolve` skips any row whose
+    `Outcome` differs from `Input.Recognized` (`if row.Outcome !=
+    in.Recognized { continue }`), before the match check;
+    `::escapeOrRefuse` applies the same filter to escape rows; `::assemble`
+    binds the outcome under `const recognizedTagKey = "recognized"` only when
+    `in.Recognized != ""`; and `::Resolve` refuses `unmodeled_outcome` via
+    `!in.Table.models(in.Recognized)` before any row is consulted. So a row
+    carrying the lifted outcome is admitted, and with a non-empty
+    `Input.Recognized` an outcome-less row never matches on either path.
+    **Residual, and the reason this RDR is load-bearing for it:** the kernel
+    validates no alphabet well-formedness — `::Table.models` is a plain
+    `slices.Contains` — so with `Input.Recognized == ""` *and* the empty
+    string in the alphabet, a row with an empty `Outcome` matches and emits a
+    plan against a view carrying no `recognized` key. The recognized-totality
+    clause below is the sole barrier; RDR 0008 observed the same path and
+    left it "unforbidden rather than silently assumed away," and its
+    accompanying "nothing in this RDR or RDR 0002 forbids that alphabet
+    entry" predates that clause. JDR 0001 §JD-10 (whether a declared
+    `recognized` tag is total when no outcome is in flight) is a different
+    question and remains open.
   - **If wrong**: Normalized rows never match (every resolve refuses
     `no_match`), or the kernel needs an eventless-row concept this RDR does not
     model.
@@ -296,9 +341,12 @@ diagnostics back to the authored sparse rule.
 The normalized candidate row is the kernel row: it carries the source identity
 (`(model id, rule id)` plus any expansion suffix, and the source locator), the
 row kind (`transition` or `escape`), the single outcome the row responds to, the
-predicate atoms (key, operator token, literal, block), the writes including
-rendered `<clear>` entries, the required-owned key set derived from those
-writes, and the escape failure-class list. The internal representation may be
+predicate atoms (key, operator token, literal, block), the next-state tags and
+the writes, both including rendered `<clear>` entries, the required-owned key
+set derived from those writes, and the escape failure-class list. The
+identity tuple `(model id, rule id, expansion suffix)` is what the dump sorts
+on; the source locator is diagnostic and does not participate in that order.
+The internal representation may be
 indexed as a decision tree, trie, or decision DAG for efficient lookup, but that
 is an implementation detail; the normative semantic object is the normalized
 candidate-row set plus its source locator back to the sparse TOML rule. The
@@ -328,6 +376,10 @@ RDR accepts; any other version MUST be refused before normalization.
 ```
 
 ```normative
+Rule ids MUST be unique within a model, compared by exact byte equality; a
+duplicate rule id is a load failure. Row identity, and therefore the dump's
+total row ordering, rests on this.
+
 Each transition rule MUST contain a stable rule id, zero or more shared-context
 references, and a local match block. An ordinary transition rule MUST contain a
 write block and MAY contain a rule-level explicit clear list. A write block MAY
@@ -416,6 +468,17 @@ does not add guard-read keys to it.
 ```
 
 ```normative
+The kernel row carries the next state and the accessor-facing writes as two
+distinct fields, and both have this RDR as their producer. Normalization MUST
+populate the next-state tags with the tag values the rule's write block and
+clear list produce, and the writes with the owned-tag writes the accessor
+layer applies — the same rendered set, including `<clear>` entries. RDR 0009
+A4 fixes that these are distinct fields and that only the writes reach the
+accessor layer, so an escape row, which carries neither a write block nor a
+clear list, normalizes to a row with both empty.
+```
+
+```normative
 The tool MUST normalize the sparse source into deterministic candidate rows for
 lint, resolver lookup, diagnostics, and table dumps. Each candidate row MUST
 retain its source rule id and source locator.
@@ -423,12 +486,36 @@ retain its source rule id and source locator.
 
 ```normative
 The expanded table dump MUST be derived from the normalized candidate-row value
-and MUST carry every field of it: model id, row identity, source locator, row
-kind, outcome, predicate atoms (with block), writes including `<clear>`
-entries, required-owned keys, and escape failure classes. Dump ordering MUST be
-deterministic across source key order by sorting rows by row identity, then
-sorting atoms (by key, block, operator token, literal), writes, required-owned
-keys, and escape classes within each row.
+and MUST carry every field of it: row identity, source locator, row kind,
+outcome, predicate atoms (with block), next-state tags, writes including
+`<clear>` entries, required-owned keys, and escape failure classes.
+
+Dump ordering MUST be deterministic across source key order. Rows sort by row
+identity, compared field by field as the tuple `(model id, rule id, expansion
+suffix)`, each field compared byte-lexicographically on the post-parse string;
+an absent expansion suffix sorts before any present one. Within each row,
+atoms sort by (key, block, operator token, literal), and next-state tags,
+writes, required-owned keys, and escape classes sort by key.
+
+The ordering is total: rule ids are unique within a model, and an expansion
+suffix is a member of the `outcomes` alphabet, which is non-empty and
+duplicate-free — so no two distinct rows compare equal and no positional
+tiebreak is needed (RDR 0009 A8 establishes that a tiebreak on table position
+is forbidden; RDR 0001's identity rule makes two orderings of one row set the
+same input).
+
+The **source locator MUST NOT participate in row ordering**. It may carry
+optional line/column detail, so ordering on it would make the dump reorder
+when unrelated source text is edited — the churn this contract exists to
+prevent. This is a deliberate divergence from RDR 0007's refusal-payload
+tuple, which orders on `(RuleID, SourceLocator, …)` because a refusal payload
+is not a stable artifact under review.
+
+The dump MUST be emitted from a pre-sorted sequence of normalized rows, never
+by iterating a map and never by delegating key order to an encoder. Go's map
+iteration order is deliberately randomized, and encoder guarantees vary:
+`encoding/json` v1 sorts map keys but `encoding/json/v2` does not without an
+explicit option, and TOML encoders may sort only within key groups.
 ```
 
 ```normative
@@ -474,7 +561,8 @@ Validation failures MUST retain stable data-level categories before CLI mapping,
 including at minimum malformed TOML, unknown schema field, missing or malformed
 recognized outcome alphabet, unknown tag, unknown context, write to non-owned
 tag, unknown accessor, unsupported version, malformed predicate atom,
-malformed escape declaration, malformed outcome binding, `reserved_tag_key`
+malformed escape declaration, malformed outcome binding, duplicate rule id,
+`reserved_tag_key`
 (RDR 0008), and ambiguous overlap.
 ```
 
@@ -484,7 +572,9 @@ malformed escape declaration, malformed outcome binding, `reserved_tag_key`
   Normalized candidate rows inherit that identity plus a deterministic expansion
   suffix — the outcome literal when an `in` atom on `recognized` expands the
   rule. Rule ids are stable review anchors and must not be reused for a
-  different edge.
+  different edge. The identity tuple `(model id, rule id, expansion suffix)`
+  is also the dump's row-sort key, and it is total; the source locator is
+  diagnostic and deliberately excluded from it.
 - **Wire / byte format** — TOML is the on-disk carrier. The exact field names
   are the Resolve spike layout: root `outcomes`, `[model]`, `[tags.<tag>]`,
   `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`, `[rule.write]`,
@@ -518,7 +608,8 @@ malformed escape declaration, malformed outcome binding, `reserved_tag_key`
 model fixtures: dumping the normalized model and reading the dump as a table
 view must preserve the candidate-row set — the same field list the dump
 contract carries: row identity, source locator, row kind, outcome, predicate
-atoms with block, writes, required-owned keys, and escape failure classes.
+atoms with block, next-state tags, writes, required-owned keys, and escape
+failure classes.
 Source rewrite is out of scope for this RDR; a later rewrite-capability RDR
 must define its own source-preservation invariant before mutating authored TOML.
 
@@ -568,7 +659,7 @@ recognized.eq = "round-clean"
 | Accessor references and safe read-back | RDR 0004 | Pending | This RDR may reference accessors but does not execute them. |
 | CLI parse/lint output | RDR 0005 plus existing respond gateway | Pending | Failures must map to the CLI output contract. |
 | Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks. |
-| Guard seam, atom shape, existence constants, gate ordering | RDR 0007 | Final | Normalizer emits per-atom block and the kernel's `OpExists`/`LiteralTrue`/`LiteralFalse`; derives `RequiresOwned`. |
+| Guard seam, atom shape, existence constants, gate ordering | RDR 0007 | Final, kernel reshape unimplemented | Normalizer emits per-atom block and the kernel's `OpExists`/`LiteralTrue`/`LiteralFalse`; derives `RequiresOwned`. The constants and the atom-shaped row do not exist in `internal/resolve` yet, so Phases 2–3 sequence behind that reshape (Prerequisites). |
 | Reserved recognized tag key | RDR 0008 | Final | Declaration named `recognized`; `reserved_tag_key` joins this RDR's category set. |
 | Escape-row shape conformance | RDR 0009 | Final | Escape rules carry no write block or clear list; normalized escape rows render write-free. |
 | Expanded table dump | This RDR | Introduced | Reviewers can inspect the full table without maintaining it by hand. |
@@ -785,6 +876,12 @@ TOML can carry the same semantics.
   **Mitigation**: The MVV asserts emitted existence atoms byte-for-byte against
   `resolve.OpExists`/`LiteralTrue`/`LiteralFalse` and asserts row keys equal
   declaration keys.
+- **Risk**: Dump order tracks byte positions in the authored source, so adding
+  a comment or reordering unrelated rules churns every downstream golden test.
+  **Mitigation**: The source locator is excluded from the row-sort key, and
+  the identity tuple that replaces it carries no positional component. The MVV
+  asserts the comparator is total, so a later identity change cannot
+  reintroduce a positional tiebreak unnoticed.
 
 ### Failure Modes
 
@@ -803,7 +900,17 @@ surviving escape row, and the gate refusals are never modeled.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A2, A7 re-verify; A8 pending)
+- [x] All Critical Assumptions verified (A2, A7 re-verified; A8 resolved).
+- [ ] RDR 0007 is the normative home of the atom shape and the existence
+  constants this RDR's normalizer emits. RDR 0007 is `Final`, so the
+  *specification* is settled — but its kernel reshape is unimplemented: the
+  shipped kernel still carries `internal/resolve/resolve.go::Row.Guard` as a
+  string and exports no `OpExists` / `LiteralTrue` / `LiteralFalse`. Phases 2
+  and 3 cannot emit atom-shaped rows against that surface until the reshape
+  lands, so this item gates implementation sequencing, not lock. It does not
+  invert the cluster's ordering: RDR 0008 and RDR 0009 both name this RDR's
+  normalizer as the enforcement point their own checks land inside, and this
+  RDR's normalized rows target RDR 0001's shipped kernel row.
 - [x] RDR 0001 remains aligned on exact-one stateless resolution.
 - [x] RDR 0003 is coherent enough for this RDR to defer the fixed predicate
   operator set and tag type model without importing that grammar.
@@ -823,7 +930,15 @@ tag-set resolves to exactly one modeled escape row when the table declares one,
 one unsupported-version variant is refused before normalization, and one
 deliberately overlapping malformed variant is refused as ambiguous. The RDR
 fixture must cover at least `Status`, `Profile`, prelock iteration, one rewind
-or cluster guard, one existence atom, and one explicit `no_match` escape row.
+or cluster guard, one existence atom, one `in` atom on `recognized` that
+expands into more than one row, and one explicit `no_match` escape row.
+
+The dump ordering is MVV-covered, not left to implementation: assert that the
+expanded-table value is unchanged when the same model is authored with its
+TOML keys in a different order, that repeated dumps of one model are
+byte-identical, and that the row-sort comparator is total — sort, then assert
+no adjacent row pair compares equal, so a future identity change cannot
+silently reintroduce a positional tiebreak.
 
 ### Phase 1: Fixture and Schema Spike
 
@@ -880,30 +995,41 @@ Implementation tests must promote the Resolve spike into production fixtures:
 
 1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
    **Expected**: Tag declarations (including `[tags.recognized]`), root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement.
-2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `reconcile-rewind`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), escape rows retain row kind plus modeled failure class list, and writes are deterministic.
-3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, unsupported versions, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (including an empty write block on an escape rule), a rule with zero or two `recognized` atoms, an outcome literal outside the alphabet, an alphabet containing the empty string, an owned declaration named `recognized` and a recognized declaration named `outcome`, ambiguous overlaps, and missing root outcome alphabets.
-   **Expected**: Each failure retains a stable data-level category and becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands.
+2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `reconcile-rewind`, `terminal-archive`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), escape rows retain row kind plus modeled failure class list and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `in` atom expands to two rows carrying the outcome literal as their expansion suffix. The normative fixture for this scenario is `evidence/spikes/output.txt`.
+3. **Scenario**: Validate malformed variants for unknown tags, unknown contexts, writes to non-owned tags, unknown accessors, unsupported versions, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (including an empty write block on an escape rule), a rule with zero or two `recognized` atoms, an outcome literal outside the alphabet, an alphabet containing the empty string, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, ambiguous overlaps, and missing root outcome alphabets.
+   **Expected**: Each failure retains a stable data-level category and becomes a stable `CLIError` through the existing respond gateway when surfaced by CLI commands. Nine of these are already witnessed by the spike, one refusal per mutated fixture, in `evidence/spikes/negative-cases.txt`: unsupported version, empty-string alphabet member, duplicate rule id, unknown written tag, write to an observed tag, escape rule carrying a write block, `exists` with a non-boolean literal, an outcome literal outside the alphabet, and a recognized declaration misnamed `outcome`.
 4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, one tag-set in which a sibling candidate's guard is unevaluable, and one deliberately overlapping/ambiguous negative fixture variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order.
-5. **Scenario**: Normalize and dump two semantically identical fixtures whose TOML keys are authored in different orders.
-   **Expected**: The expanded-table value is identical because rows sort by row identity and atoms/writes/required-owned keys/escape classes sort by key.
-6. **Scenario**: Normalize a rule carrying `exists = true` and one carrying `exists = false`, and a variant spelling a declared tag `Status` where the declaration is `status`.
-   **Expected**: Emitted atoms carry `resolve.OpExists` and `resolve.LiteralTrue`/`LiteralFalse` byte-for-byte; the mis-cased reference fails `unknown tag` rather than folding.
+5. **Scenario**: Normalize and dump two semantically identical fixtures whose TOML keys are authored in different orders, and dump the same fixture repeatedly in one process and across processes.
+   **Expected**: The expanded-table value is identical because rows sort by the total identity tuple and atoms/next tags/writes/required-owned keys/escape classes sort by key; repeated dumps are byte-identical despite Go's randomized map iteration. Witnessed in `evidence/spikes/negative-cases.txt` (reordered kata fixture, matching SHA-256) and by three consecutive byte-identical runs recorded under Performance Expectations.
+6. **Scenario**: Normalize a rule carrying `exists = true` and one carrying `exists = false`, one carrying a non-boolean existence literal, and a variant spelling a declared tag `Status` where the declaration is `status`.
+   **Expected**: Emitted atoms carry `resolve.OpExists` and `resolve.LiteralTrue`/`LiteralFalse` byte-for-byte; the non-boolean literal is refused at load as a malformed predicate atom; the mis-cased reference fails `unknown tag` rather than folding. The RDR fixture's `continue-prelock` guard carries the `finalized_at.exists=false@all` atom the spike emits.
 
 ### Performance Expectations
 
 Resolve evidence is functional rather than throughput-oriented. The spike
-normalizes representative RDR and kata sparse fixtures into five deterministic
-rows, including one explicit escape row, and a repeated run produced
-byte-identical output with SHA-256
-`ca86b115f8f97969f143d72a36df7c4a4ad0987c36fb71054073a24cf8531800`.
-Production code should preserve deterministic dump ordering by sorting stable
-model/rule/atom/write keys rather than relying on map iteration or source
-order. The SHA is evidence for the spike output only; production golden tests
-must assert the normalized expanded-table value defined by the normative
-contract. Runtime lookup may index rows later, but that optimization must
-preserve the normalized candidate-row semantics.
+normalizes representative RDR and kata sparse fixtures into seven deterministic
+rows — one explicit escape row and one rule that expands into two rows through
+an `in` atom on `recognized`. Three consecutive runs produced byte-identical
+output with SHA-256
+`c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b`, and a
+fixture with the same semantics authored in a different key order produced a
+matching digest.
+
+Determinism checklist, as run: source key order is neutralized by sorting every
+emitted sequence; Go's map iteration is never the emission order (rows, atoms,
+next tags, writes, required-owned keys, and escape classes are all sorted
+slices before rendering); string comparison is byte-lexicographic per the Go
+spec, so ordering is locale- and platform-independent; set-valued literals are
+rendered with their members sorted so two authored orderings of one set are one
+literal; no case folding, trimming, or namespace rewriting is applied at any
+stage; the expansion suffix is absent or an alphabet member, never the empty
+string, so the identity tuple is total. No hash is part of the contract: the
+SHA is evidence for this spike output only, and production golden tests must
+assert the normalized expanded-table value the normative contract defines.
+Runtime lookup may index rows later, but that optimization must preserve the
+normalized candidate-row semantics.
 
 ## Finalization Gate
 
