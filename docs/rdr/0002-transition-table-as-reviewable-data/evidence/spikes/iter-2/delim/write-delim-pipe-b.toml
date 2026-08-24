@@ -1,0 +1,103 @@
+# Kata flow slice, authored to the JDR 0001 §D7 closed layout.
+outcomes = ["accepted", "needs-work", "closed"]
+terminal = ["shipped"]
+
+[model]
+id = "kata"
+version = 1
+description = "Representative kata lifecycle slice."
+
+[model.metadata]
+owner = "kata-team"
+
+[initial]
+status = "open"
+phase = "review"
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["open", "accepted", "closed"]
+single_valued = true
+required = true
+
+[tags.phase]
+provenance = "owned"
+kind = "enum"
+domain = ["review", "resolve", "ship"]
+single_valued = true
+required = true
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+elements = ["bug", "chore", "needs work", "x|y", "z", "x", "y|z"]
+
+# Observed key served by NO reader — legal, JDR 0001 §JD-9: an observed key
+# may arrive from the caller via --tag.
+[tags.owner]
+provenance = "observed"
+kind = "string"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[read.kata-frontmatter]
+role = "kata"
+path = "kata.frontmatter"
+keys = ["status", "phase", "labels"]
+timeout = "2s"
+
+[write.kata-frontmatter]
+role = "kata"
+path = "kata.frontmatter"
+keys = ["status", "phase", "labels"]
+timeout = "2s"
+read_back = true
+
+[context.open.match.status]
+eq = "open"
+
+[context.review]
+inherits = "open"
+[context.review.match.phase]
+eq = "review"
+
+[context.shipped.match.phase]
+eq = "ship"
+
+[[rule]]
+id = "review-needs-work"
+use = ["review"]
+source = "kata:review"
+[rule.match.recognized]
+eq = "needs-work"
+[rule.write]
+phase = "resolve"
+status = "open"
+labels = ["x", "y|z"]
+
+# `status.eq=closed@unless` — an equality operator that routes to the GUARD
+# because of its block, not its operator (A12's second discriminating case).
+[[rule]]
+id = "review-accepted"
+use = ["review"]
+source = "kata:review"
+[rule.match.recognized]
+eq = "accepted"
+[rule.guard.all.owner]
+eq = "current-session"
+[rule.guard.unless.status]
+eq = "closed"
+[rule.write]
+phase = "ship"
+status = "accepted"
+
+[dump]
+order = [
+  "identity", "source", "kind", "outcome",
+  "atoms", "next", "writes", "requires_owned", "gate", "escape",
+]

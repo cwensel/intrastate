@@ -59,9 +59,9 @@ type Model struct {
 	Read    map[string]Accessor `toml:"read"`
 	Write   map[string]Accessor `toml:"write"`
 	Gate    map[string]Accessor `toml:"gate"`
-	Context map[string]Context   `toml:"context"`
-	Rule    []Rule               `toml:"rule"`
-	Dump    Dump                 `toml:"dump"`
+	Context map[string]Context  `toml:"context"`
+	Rule    []Rule              `toml:"rule"`
+	Dump    Dump                `toml:"dump"`
 }
 
 type ModelMeta struct {
@@ -144,25 +144,78 @@ type Atom struct {
 	Block    string
 }
 
+// literalString renders a literal for DISPLAY only. It joins members, so it
+// MUST NOT reach any identity, merge key, dedup, or sort — see identity().
 func (a Atom) literalString() string { return strings.Join(a.Literal, ",") }
 
 // identity is the full atom identity tuple the merge is a set over and the
-// dump sorts on: (key, block, operator token, literal).
+// dump sorts on: (key, block, operator token, literal). The literal enters as
+// its member SEQUENCE, length-prefixed per member, never as a joined string:
+// any delimiter is authorable inside a tag value, so a joined rendering would
+// collapse ["a,b","c"] and ["a","b,c"] into one atom and turn a dead rule into
+// a live one. Length prefixing makes the encoding injective for any member.
 func (a Atom) identity() string {
-	return a.Key + "\x00" + a.Block + "\x00" + a.Operator + "\x00" + a.literalString()
+	var b strings.Builder
+	b.WriteString(a.Key)
+	b.WriteString("\x00")
+	b.WriteString(a.Block)
+	b.WriteString("\x00")
+	b.WriteString(a.Operator)
+	b.WriteString("\x00")
+	b.WriteString(memberKey(a.Literal))
+	return b.String()
+}
+
+// memberKey encodes a member sequence injectively: each member is prefixed by
+// its byte length, so no member content can forge a boundary.
+func memberKey(members []string) string {
+	var b strings.Builder
+	for _, m := range members {
+		fmt.Fprintf(&b, "%d:%s", len(m), m)
+	}
+	return b.String()
 }
 
 type Write struct {
 	Key   string
-	Value string
+	Value []string
 	Clear bool
+}
+
+// identity compares a write by its member SEQUENCE, for the same reason
+// Atom.identity does: RDR 0004 reads a held value back by equality, so a
+// joined rendering would decide whether a write reports as applied.
+func (w Write) identity() string {
+	if w.Clear {
+		return w.Key + "\x00" + clearSentinel
+	}
+	return w.Key + "\x00" + memberKey(w.Value)
 }
 
 func (w Write) render() string {
 	if w.Clear {
 		return w.Key + "=" + clearSentinel
 	}
-	return w.Key + "=" + w.Value
+	// Display only -- never an identity (see Write.identity). A set is spelled
+	// visibly as a set, and each member is QUOTED: an unquoted separator is
+	// forgeable by a member that contains it, so ["x|y","z"] and ["x","y|z"]
+	// would render alike and a test asserting on the rendered value would pass
+	// the very collision this RDR forbids. The delimiter-parameterized control
+	// caught exactly that.
+	if len(w.Value) == 1 {
+		return w.Key + "=" + w.Value[0]
+	}
+	return w.Key + "=" + renderMembers(w.Value)
+}
+
+// renderMembers spells a member sequence unambiguously for display: each
+// member quoted with %q, so no member content can forge a boundary.
+func renderMembers(members []string) string {
+	parts := make([]string, 0, len(members))
+	for _, m := range members {
+		parts = append(parts, fmt.Sprintf("%q", m))
+	}
+	return "[" + strings.Join(parts, " ") + "]"
 }
 
 // Row is the normalized candidate row. Identity is (ModelID, RuleID, Suffix),
@@ -526,14 +579,19 @@ func validateRules(m Model) error {
 		if err := checkMatchBlock(m, rule.ID, rule.Match); err != nil {
 			return err
 		}
-		for _, block := range []map[string]map[string]any{rule.Guard.All, rule.Guard.Unless} {
-			for key := range block {
+		guardBlocks := []struct {
+			name  string
+			block map[string]map[string]any
+		}{{"guard.all", rule.Guard.All}, {"guard.unless", rule.Guard.Unless}}
+		for _, gb := range guardBlocks {
+			for key := range gb.block {
 				if key == recognizedKey {
 					return fmt.Errorf("malformed outcome binding: rule %q authors a %q atom in a guard block", rule.ID, recognizedKey)
 				}
-				if _, ok := m.Tags[key]; !ok {
-					return fmt.Errorf("unknown tag %q matched by rule %q", key, rule.ID)
-				}
+			}
+			// A15: every atom rule applies here exactly as in a match block.
+			if err := checkAtomBlock(m, "rule "+rule.ID, gb.name, gb.block); err != nil {
+				return err
 			}
 		}
 		for _, id := range rule.Use {
@@ -551,26 +609,68 @@ func validateRules(m Model) error {
 }
 
 func checkMatchBlock(m Model, owner string, block map[string]map[string]any) error {
+	return checkAtomBlock(m, owner, "match", block)
+}
+
+// guardOperators is RDR 0003's closed set. This RDR does not mint or widen it;
+// it cites it by member list so `unknown operator` is decidable at load.
+var guardOperators = []string{"eq", "in", "lt", "lte", "gt", "gte", "exists", "contains"}
+
+// checkAtomBlock enforces every atom-level rule this RDR states, in EVERY atom
+// block — `match`, `guard.all`, and `guard.unless` (A15, the block-agnostic
+// clause). Only two rules are genuinely match-only and stay gated on isMatch:
+// the eq/in operator restriction (§D6 routing) and the `#` reservation in `in`
+// members (the expansion suffix separator, and only match blocks expand).
+func checkAtomBlock(m Model, owner, blockName string, block map[string]map[string]any) error {
+	isMatch := blockName == "match"
 	for _, key := range sortedKeys(block) {
 		if _, ok := m.Tags[key]; !ok {
 			return fmt.Errorf("unknown tag %q matched by %s", key, owner)
 		}
 		for _, op := range sortedKeys(block[key]) {
-			if op != "eq" && op != "in" {
-				return fmt.Errorf("malformed predicate atom: %s matches %s with operator %q under a match block", owner, key, op)
+			if isMatch {
+				if op != "eq" && op != "in" {
+					return fmt.Errorf("malformed predicate atom: %s matches %s with operator %q under a match block", owner, key, op)
+				}
+			} else if !slices.Contains(guardOperators, op) {
+				return fmt.Errorf("malformed predicate atom: %s constrains %s with unknown operator %q under a %s block", owner, key, op, blockName)
 			}
 			tag := m.Tags[key]
-			for _, lit := range literalMembers(block[key][op]) {
+			raw := block[key][op]
+			// The <clear> and `#` rules bind every member regardless of
+			// operator; the domain/kind rule is operator-scoped (below).
+			for _, lit := range literalMembers(raw) {
 				if lit == clearSentinel {
 					return fmt.Errorf("reserved tag value: %s matches %s against %s", owner, key, clearSentinel)
 				}
-				if op == "in" && strings.Contains(lit, suffixSep) {
+				if isMatch && op == "in" && strings.Contains(lit, suffixSep) {
 					return fmt.Errorf("malformed predicate atom: %s has match-block `in` member %q containing %q", owner, lit, suffixSep)
 				}
-				// A literal outside the tag's declared domain is a malformed
-				// predicate atom, decided after declarations load.
-				if err := wellFormed(tag, lit); err != nil {
-					return fmt.Errorf("malformed predicate atom: %s matches %s: %w", owner, key, err)
+			}
+			// Domain/kind conformance is per-operator, because operators do
+			// not all take a domain MEMBER as their right-hand side:
+			//   eq / in / contains -> a member (or set of members)
+			//   exists             -> a bool literal, never a member
+			//   lt/lte/gt/gte      -> an ordered BOUND, kind-checked but not
+			//                         domain-checked (a bound need not itself
+			//                         be an authorable value)
+			switch op {
+			case "exists":
+				lit := renderValue(raw)
+				if lit != literalTrue && lit != literalFalse {
+					return fmt.Errorf("malformed predicate atom: %s.exists has literal %q", key, lit)
+				}
+			case "lt", "lte", "gt", "gte":
+				if tag.Kind == "int" {
+					if _, ok := raw.(int64); !ok {
+						return fmt.Errorf("malformed predicate atom: %s constrains %s with non-int bound %q", owner, key, renderValue(raw))
+					}
+				}
+			default:
+				for _, member := range literalValues(raw) {
+					if err := wellFormed(tag, member); err != nil {
+						return fmt.Errorf("malformed predicate atom: %s matches %s: %w", owner, key, err)
+					}
 				}
 			}
 		}
@@ -803,7 +903,7 @@ func renderWrites(rule Rule) (writes, next []Write) {
 		return nil, nil
 	}
 	for _, key := range sortedKeys(rule.Write) {
-		writes = append(writes, Write{Key: key, Value: renderValue(rule.Write[key])})
+		writes = append(writes, Write{Key: key, Value: literalMembers(rule.Write[key])})
 	}
 	for _, key := range rule.Clear {
 		writes = append(writes, Write{Key: key, Clear: true})
@@ -880,6 +980,15 @@ func literalMembers(value any) []string {
 		return parts
 	}
 	return []string{renderValue(value)}
+}
+
+// literalValues gives the raw member values of a literal (never rendered), so
+// kind-sensitive checks see the authored type rather than its rendering.
+func literalValues(value any) []any {
+	if list, ok := value.([]any); ok {
+		return list
+	}
+	return []any{value}
 }
 
 func renderValue(value any) string {

@@ -121,6 +121,27 @@ neg('neg-bad-exists', sub('exists = false', 'exists = "nope"'))
 # every positive test, so the control must be a mis-cased REFERENCE.
 neg('neg-case-folded-tag', sub('[context.draft.match.status]', '[context.draft.match.Status]'))
 
+# --- A15: guard-block controls (block-agnostic atom validation) ------------
+# gen-cases.py used to mutate MATCH blocks only, so no control witnessed the
+# block-agnostic clause and three defects loaded clean. One negative per atom
+# rule per guard block; the guard.all variants use `cluster_ready` (bool),
+# the guard.unless variants use `profile` (enum with a declared domain).
+GUARD_UNLESS = '[rule.guard.unless.profile]\neq = "small"'
+GUARD_ALL = '[rule.guard.all.cluster_ready]\neq = true'
+
+neg('neg-guard-unless-bad-operator', sub(
+    GUARD_UNLESS, '[rule.guard.unless.profile]\nfrobnicate = "small"'))
+neg('neg-guard-unless-clear', sub(
+    GUARD_UNLESS, '[rule.guard.unless.profile]\neq = "<clear>"'))
+neg('neg-guard-unless-out-of-domain', sub(
+    GUARD_UNLESS, '[rule.guard.unless.profile]\neq = "NOT_A_PROFILE"'))
+neg('neg-guard-unless-unknown-tag', sub(
+    GUARD_UNLESS, '[rule.guard.unless.frobnitz]\neq = "small"'))
+neg('neg-guard-all-bad-operator', sub(
+    GUARD_ALL, '[rule.guard.all.cluster_ready]\nfrobnicate = true'))
+neg('neg-guard-all-clear', sub(
+    GUARD_ALL, '[rule.guard.all.cluster_ready]\neq = "<clear>"'))
+
 # --- positive controls (MUST load) ----------------------------------------
 open('pos-no-initial.toml', 'w').write(re.sub(r'\[initial\]\n(?:[a-z_]+ = .*\n)+\n', '', SRC))
 open('pos-no-terminal.toml', 'w').write(SRC.replace('terminal = ["archived"]\n', '', 1))
@@ -162,5 +183,66 @@ open('merge-distinct.toml', 'w').write(distinct)
 open('merge-distinct-rev.toml', 'w').write(
     distinct.replace('use = ["draft", "draft-final"]', 'use = ["draft-final", "draft"]', 1))
 
+# --- A13: delimiter-bearing controls (member sequence, never a join) -------
+# THE discriminating witnesses. Every other merge control uses single-member
+# literals, under which a joined rendering and a member sequence are the same
+# string -- so they cannot tell a correct merge key from a joined one. These
+# can: the members contain the joining delimiter.
+#
+# Atom arm: two contexts contribute `in = ["a,b","c"]` and `in = ["a","b,c"]`
+# on ONE key and ONE block. Joined they both read "a,b,c" and collapse to one
+# atom, and the rule -- which the author wrote as self-contradictory (dead) --
+# normalizes to a LIVE expanding row. Keyed on the member sequence, both
+# survive and the rule stays dead. `finalized_at` is kind=string with no
+# declared domain, so the members are authorable.
+# PARAMETERIZED over plausible join delimiters, per Testing Strategy 2: a
+# black-box test cannot read the delimiter a wrong implementation chose, so
+# asserting on one delimiter is not enough. The pre-fix spike joined on ","
+# and collapsed ONLY the comma case -- every other delimiter yielded two atoms
+# even while the defect was live, which is exactly why one control is not a
+# control. Each of these MUST yield two atoms.
+os.makedirs('delim', exist_ok=True)
+DELIMS = [('comma', ','), ('semi', ';'), ('pipe', '|'),
+          ('space', ' '), ('empty', '')]
+for tag, d in DELIMS:
+    doc = SRC.replace(
+        '[context.archived.match.stage]\neq = "archive"',
+        '[context.delim-a.match.finalized_at]\nin = ["a%sb", "c"]\n\n'
+        '[context.delim-b.match.finalized_at]\nin = ["a", "b%sc"]\n\n'
+        '[context.archived.match.stage]\neq = "archive"' % (d, d), 1).replace(
+        'id = "reconcile-rewind"\nuse = ["draft"]',
+        'id = "reconcile-rewind"\nuse = ["draft", "delim-a", "delim-b"]', 1)
+    assert doc != SRC, 'delim-%s: mutation was a no-op' % tag
+    open(os.path.join('delim', 'merge-delim-%s.toml' % tag), 'w').write(doc)
+# The comma case is also kept at top level as the canonical named fixture.
+open('merge-delim-atom.toml', 'w').write(
+    open(os.path.join('delim', 'merge-delim-comma.toml')).read())
+
+# Write arm: the same collision through a set-valued WRITE. RDR 0004 reads a
+# held value back by equality, so a joined rendering decides whether the write
+# reports as applied. Built off the kata fixture, which carries the one
+# kind=set owned tag. The two spellings MUST normalize to different values.
+KATA = open('kata-fixture.toml').read()
+ELEMENTS = 'elements = ["bug", "chore", "needs work"]'
+WIDE = 'elements = ["bug", "chore", "needs work", "x,y", "z", "x", "y,z"]'
+for name, spelling in (('write-delim-a.toml', '["x,y", "z"]'),
+                       ('write-delim-b.toml', '["x", "y,z"]')):
+    doc = KATA.replace(ELEMENTS, WIDE, 1).replace(
+        'labels = ["needs work"]', 'labels = ' + spelling, 1)
+    assert doc != KATA
+    open(name, 'w').write(doc)
+# Write arm, parameterized over the same delimiter set.
+for tag, d in DELIMS:
+    wide = ('elements = ["bug", "chore", "needs work", '
+            '"x%sy", "z", "x", "y%sz"]' % (d, d))
+    for side, spelling in (('a', '["x%sy", "z"]' % d),
+                           ('b', '["x", "y%sz"]' % d)):
+        doc = KATA.replace(ELEMENTS, wide, 1).replace(
+            'labels = ["needs work"]', 'labels = ' + spelling, 1)
+        assert doc != KATA
+        open(os.path.join('delim', 'write-delim-%s-%s.toml' % (tag, side)),
+             'w').write(doc)
+
 print('regenerated:', len(os.listdir('neg')), 'negative,',
-      len(os.listdir('perm')), 'permutation, 2 positive, 3 merge')
+      len(os.listdir('perm')), 'permutation, 2 positive, 3 merge,',
+      len(os.listdir('delim')), 'delimiter-parameterized (A13)')

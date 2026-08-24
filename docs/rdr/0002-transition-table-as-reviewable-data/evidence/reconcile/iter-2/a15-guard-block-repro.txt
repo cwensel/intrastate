@@ -1,0 +1,42 @@
+Model: claude-opus-5[1m]
+
+# A15 reproduction — guard-block atom validation gap (Stage 6, RDR 0002)
+
+Claim under test (A15): atom-level validation is enforced identically in
+`match`, `guard.all`, and `guard.unless`.
+
+Method: three single-mutation variants of `spikes/iter-2/rdr-fixture.toml`,
+each replacing the body of `[rule.guard.unless.profile]` (authored `eq = "small"`).
+Each MUST refuse per the block-agnostic clause. Each in fact loads clean.
+
+Command (run from `evidence/spikes/iter-2/`):
+  GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off \
+  go run . <variant>.toml
+
+## bad-operator
+mutation: frobnicate = "small"  → MUST refuse: unknown operator
+result:   LOADS CLEAN (defect confirmed)
+normalized atom emitted, first expanded row:
+  rdr.continue-prelock#foundational kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.frobnicate=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+
+## clear-sentinel
+mutation: eq = "<clear>"        → MUST refuse: reserved tag value
+result:   LOADS CLEAN (defect confirmed)
+normalized atom emitted, first expanded row:
+  rdr.continue-prelock#foundational kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.eq=<clear>@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+
+## out-of-domain
+mutation: eq = "NOT_A_PROFILE"  → MUST refuse: malformed predicate atom
+result:   LOADS CLEAN (defect confirmed)
+normalized atom emitted, first expanded row:
+  rdr.continue-prelock#foundational kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.eq=NOT_A_PROFILE@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+
+## Verdict
+
+All three load clean and emit a normalized atom. The block-agnostic clause
+(Normative Contracts) and A15 both record this accurately: the clause is
+normative, the spike violates it, and the owed control is a gen-cases.py
+guard-block mutation set (Testing Strategy scenario 3), not a design change.
+Source of the gap: main.go:529-537 checks only tag-declaration and the
+recognized-key ban for guard blocks, while checkMatchBlock validates
+operator membership and domain conformance for match blocks only.

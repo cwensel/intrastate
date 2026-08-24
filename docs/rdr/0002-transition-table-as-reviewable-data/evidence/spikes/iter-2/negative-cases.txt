@@ -7,6 +7,10 @@ case is the §D7 RDR fixture with ONE mutation, so the category it trips is
 the category it names (Testing Strategy scenario 3's one-defect-per-fixture
 rule). Run one with `go run . neg/<case>.toml`.
 
+**Regenerated at Stage 6 (reconcile).** The spike was corrected this pass to
+close A13 and A15; six guard-block controls were added (37 negatives -> 43)
+along with the three delimiter-bearing controls A13 was owed.
+
 ## Load-time refusals — one category per fixture
 
 ```
@@ -23,6 +27,12 @@ neg-escape-with-clear                      refused: malformed escape declaration
 neg-escape-with-gate                       refused: malformed escape declaration: escape rule "draft-no-match-escape" carries a write block, clear list, or gate list
 neg-escape-with-write                      refused: malformed escape declaration: escape rule "draft-no-match-escape" carries a write block, clear list, or gate list
 neg-gate-is-reader                         refused: unknown accessor: rule "continue-prelock" gates on "rdr-status"
+neg-guard-all-bad-operator                 refused: malformed predicate atom: rule continue-prelock-cluster constrains cluster_ready with unknown operator "frobnicate" under a guard.all block
+neg-guard-all-clear                        refused: reserved tag value: rule continue-prelock-cluster matches cluster_ready against <clear>
+neg-guard-unless-bad-operator              refused: malformed predicate atom: rule continue-prelock constrains profile with unknown operator "frobnicate" under a guard.unless block
+neg-guard-unless-clear                     refused: reserved tag value: rule continue-prelock matches profile against <clear>
+neg-guard-unless-out-of-domain             refused: malformed predicate atom: rule continue-prelock matches profile: value "NOT_A_PROFILE" is outside declared domain [small,mid,large,foundational]
+neg-guard-unless-unknown-tag               refused: unknown tag "frobnitz" matched by rule continue-prelock
 neg-in-member-hash                         refused: malformed predicate atom: context large-prelock has match-block `in` member "found#ational" containing "#"
 neg-initial-bad-value                      refused: malformed initial declaration: "stage" value "nosuchstage" is outside declared domain [propose,prelock,resolve,archive]
 neg-initial-int-out-of-range               refused: malformed initial declaration: "iter" value 99 is above max 9
@@ -49,54 +59,59 @@ probe-a-initial-observed-no-writer         refused: malformed accessor binding: 
 probe-b-initial-observed-with-writer       refused: write to non-owned tag: writer "rdr-status" serves "finalized_at" (observed)
 ```
 
-The two `probe-*` entries are the **enumeration witnesses** for the
-unauthorable provenance arm of `malformed initial declaration`: an observed
-key in `[initial]` has exactly two authorings — no writer serves it, or one
-does — and both refuse under a writer-binding category before the owned-tag
-predicate is reached. That is why scenario 3 carries no observed-key control
-for that category and controls it by its value arm instead
-(`neg-initial-bad-value`, `neg-initial-int-out-of-range`).
-
-## Positive controls (MUST load, not refuse)
+## Positive controls (MUST load)
 
 ```
-pos-no-initial.toml                        loads — accepted, left to RDR 0006 lint
-pos-no-terminal.toml                       loads — accepted, left to RDR 0006 lint
-kata-fixture.toml                          loads — observed tag 'owner' served by zero readers (JDR 0001 §JD-9)
-rdr-fixture.toml -strict-only              STRICT-OK rdr-fixture.toml model=rdr metadata=2
-kata-fixture.toml -strict-only             STRICT-OK kata-fixture.toml model=kata metadata=1
+pos-no-initial                             loaded — absence is RDR 0006 lint, not a load failure
+pos-no-terminal                            loaded — absence is RDR 0006 lint, not a load failure
+strict-only rdr-fixture                    STRICT-OK rdr-fixture.toml model=rdr metadata=2
+strict-only kata-fixture                   STRICT-OK kata-fixture.toml model=kata metadata=1
 ```
 
-Strict decoding accepts `[model.metadata]`'s free-form keys while refusing
-an unknown key anywhere else (`neg-unknown-field` above): the strict check
-descends only into struct branches, leaving a `map[string]any` untouched.
-
-## Permutation / equivalence (Testing Strategy scenario 5)
+## Permutations (semantics-preserving — MUST digest identically)
 
 ```
-rdr-fixture.toml (baseline)                2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
-rdr-keyorder.toml                          2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
-rdr-ruleorder.toml                         2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
-rdr-eq-as-in.toml                          2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
+rdr-fixture (baseline)                     2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
+rdr-eq-as-in                               2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
+rdr-keyorder                               2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
+rdr-ruleorder                              2ff26b0add370a038161ce1c31b668d83b495a065b404d05acc51ac65dc6b5d2
 ```
 
-TOML key order, `[[rule]]` declaration order, and `eq = "x"` versus
-`in = ["x"]` all normalize to one byte-identical value. Rule-order
-permutation is the control that actually excludes a positional tiebreak.
+Key order, `[[rule]]` declaration order, and `eq = "x"` vs `in = ["x"]` all
+dump byte-identically. Rule-order permutation is the control that excludes a
+positional tiebreak.
 
 ## Merge semantics (contexts clause; A13)
 
 ```
-merge-idempotent         atoms=[status.eq=Draft@match]
-merge-distinct           atoms=[status.eq=Draft@match; status.eq=Final@match]
-merge-distinct           38134729153711d93d99d66ec376fd7f371087d03945c930eccfed72b50fa3b5
-merge-distinct-rev       38134729153711d93d99d66ec376fd7f371087d03945c930eccfed72b50fa3b5
+merge-idempotent                           status.eq=Draft@match 
+merge-distinct                             status.eq=Draft@match status.eq=Final@match 
+merge-distinct     digest                  38134729153711d93d99d66ec376fd7f371087d03945c930eccfed72b50fa3b5
+merge-distinct-rev digest                  38134729153711d93d99d66ec376fd7f371087d03945c930eccfed72b50fa3b5
 ```
 
-A rule and an inherited context contributing a byte-identical
-`(block, key, operator, literal)` atom collapse to ONE (the idempotence half
-A13 names); two contexts contributing the same `(key, block, operator)` with
-DIFFERENT literals both survive, and the two `use` orders digest identically.
+Idempotence: a byte-identical atom from rule + inherited context collapses to
+ONE. Distinct literals on the same (key, block, operator) BOTH survive, and
+the reversed `use` order digests identically, so the result does not depend
+on `use` iteration order.
+
+### Delimiter-bearing controls — THE discriminating witnesses (A13)
+
+Every control above uses single-member literals, under which a joined
+rendering and a member sequence are the same string. These carry the joining
+delimiter inside a member, so they distinguish the two candidate keys.
+
+```
+merge-delim-atom  rows                     4
+merge-delim-atom  atoms (row 1)            finalized_at.eq=a@match finalized_at.eq=a,b@match 
+write-delim-a     labels                   labels=[x,y|z]
+write-delim-b     labels                   labels=[x|y,z]
+```
+
+Two contexts contributing `in = ["a,b", "c"]` and `in = ["a", "b,c"]` on one
+key and block yield TWO atoms, so the rule stays the dead rule the author
+wrote. The two set-write spellings yield DIFFERENT values. Against the
+pre-fix spike both collapsed — one atom, and `labels=x,y,z` for both writes.
 
 ## Repeat-run determinism
 
@@ -107,3 +122,42 @@ run-3  6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd
 ```
 
 Byte-identical across three runs despite Go's randomized map iteration.
+
+## Delimiter-parameterized controls — THE discriminating witnesses (A13)
+
+Every other control uses single-member literals, under which a joined rendering
+and a member sequence are the SAME string — so none of them can tell a correct
+merge key from a joined one. These carry the joining delimiter inside a member.
+
+Parameterized over five plausible join delimiters, per Testing Strategy 2: a
+black-box test cannot read the delimiter a wrong implementation chose. This is
+not hypothetical — the pre-fix spike joined on `,` and collapsed ONLY the comma
+case; all four other delimiters yielded two atoms while the defect was live.
+A single-delimiter control would have passed it.
+
+### Atom arm — MUST yield two atoms for every delimiter
+
+```
+merge-delim-comma finalized_at atoms in row 1: 2
+merge-delim-semi finalized_at atoms in row 1: 2
+merge-delim-pipe finalized_at atoms in row 1: 2
+merge-delim-space finalized_at atoms in row 1: 2
+merge-delim-empty finalized_at atoms in row 1: 2
+```
+
+### Write arm — the two spellings MUST normalize to different values
+
+```
+comma    a: labels=["x,y" "z"]       b: labels=["x" "y,z"]       distinct
+semi     a: labels=["x;y" "z"]       b: labels=["x" "y;z"]       distinct
+pipe     a: labels=["x|y" "z"]       b: labels=["x" "y|z"]       distinct
+space    a: labels=["x y" "z"]       b: labels=["x" "y z"]       distinct
+empty    a: labels=["xy" "z"]        b: labels=["x" "yz"]        distinct
+```
+
+The write RENDER quotes each member for the same reason the identity is
+length-prefixed: an unquoted separator is forgeable. The `pipe` row caught this
+during Stage 6 — an unquoted `|` separator rendered `["x|y","z"]` and
+`["x","y|z"]` alike, so a test asserting on the rendered value would have passed
+the collision even though the identity was already correct.
+

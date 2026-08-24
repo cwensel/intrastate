@@ -26,3 +26,6 @@ _*/
 /.envrc
 /.kata.toml
 .kata.local.toml
+
+# Spike build artifacts — rebuildable from main.go, not evidence.
+docs/rdr/*/evidence/spikes/*/rdr[0-9]*spike*

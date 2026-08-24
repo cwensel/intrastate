@@ -1,14 +1,3 @@
-Model: claude-opus-5[1m]
-# RDR 0002 expanded-table dump — iteration 2 (JDR 0001 §D7 closed layout)
-#
-# Command: cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 && \
-#          GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off \
-#          go run . rdr-fixture.toml kata-fixture.toml
-#
-# SHA-256 of the row block below:
-#   6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd
-# Byte-identical across three consecutive runs (negative-cases.txt).
-
 MODEL rdr rows=9 outcomes=round-clean,verdict-flapping,reconcile-block,finalized terminal=archived metadata_keys=owner,review_cadence
 rdr.continue-prelock#foundational kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
 rdr.continue-prelock#large kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=large@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
