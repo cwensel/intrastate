@@ -389,6 +389,31 @@ factor common context instead of enumerating every Cartesian row.
     field and never mentioning the version, which is the confusion the two-pass
     gate exists to prevent.
 
+- **A15 Atom-level validation is enforced identically in `match`, `guard.all`,
+  and `guard.unless` — operator membership, `<clear>`, domain/kind conformance,
+  `#` reservation, and tag-key declaration.**
+  - **Status**: Pending
+  - **Method**: Spike + MVV test
+  - **Evidence**: **The current evidence contradicts the claim.** The §D7 spike
+    enforces these in match blocks only; its guard walk (`main.go:529-537`)
+    checks solely that the key is declared and is not `recognized`. Reproduced
+    by running the spike against hand-mutated guard blocks: `frobnicate =
+    "small"`, `eq = "<clear>"`, and `eq = "NOT_A_PROFILE"` each load clean
+    under `[rule.guard.unless.profile]` and emit a normalized atom. No
+    transcript line witnesses this because `gen-cases.py` never mutates a
+    guard block — the gap is invisible to `negative-cases.txt` by construction,
+    which is why two prior lenses passed over it. Discharging this assumption
+    requires `gen-cases.py` to mutate guard blocks and one negative control per
+    rule per block.
+  - **If wrong**: The narrower reading ships. A misspelled operator or an
+    out-of-domain literal in an `unless` block silently disables the negation,
+    so a rule the author explicitly carved out applies — the artifact answers
+    "this edge is legal" for an edge the author forbade, with no load refusal
+    and no lint finding. The `<clear>` arm is worse: it is an unsatisfiable
+    guard atom, and RDR 0007's veto on selecting a decided sibling while an
+    unevaluable candidate exists turns it into a non-escapable deadlock on
+    every resolve touching that outcome.
+
 ## Proposed Solution
 
 ### Approach
@@ -533,7 +558,8 @@ root `terminal`, `[model]` (with the free-form sub-table `[model.metadata]`),
 accessor references live in a rule-level `gate` list of `[gate.<id>]` ids;
 modeled escape rows live in a rule-level `escape` list. `[model]` additionally
 carries an optional human `description`, and each `[[rule]]` an optional
-`source` — the authored provenance string the locator derives from (below).
+`source` — a provenance *annotation* carried alongside the locator, which is
+derived from `(model id, rule id)` and never from `source` (below).
 Both are admitted keys; the enumeration is exhaustive over what the normative
 fixtures author, because a layout that refuses its own fixtures is not the
 layout. No other root key or table is admitted (strict decoding, below).
@@ -564,6 +590,18 @@ survive — a loader discarding every value passes a key-name oracle. Because th
 table is outside the dump field list and outside the Round-Trip invariant, this
 assertion is the only comparison that observes it.
 
+The cost of an unconstrained namespace is drift: it is the one place in a strict
+schema where anything loads, so it attracts content that should have been
+modeled — ownership, feature flags, a homegrown status field — and no load
+refusal or lint finding will ever object. That is accepted rather than solved
+(constraining it would make it a schema), so the control is scope, stated here
+for the reviewer rather than the loader: **`[model.metadata]` is for data no
+consumer in this cluster reads.** Anything a rule, lint, or the resolver must
+act on is a tag, not metadata. A reviewer seeing a metadata key that some tool
+has begun to branch on should read that as the signal to model it properly — and
+the first such consumer is the trigger to revisit this clause, since a read key
+is no longer an extension namespace.
+
 **Accessor tables.** Each capability table decodes to its own shape, so
 "exactly one capability per accessor" (RDR 0004) holds structurally rather than
 by validation. Every entry carries `role`, `path`, `keys` (a non-empty list of
@@ -587,7 +625,15 @@ provenance-scoped:
 - every **owned** tag MUST be served by exactly one reader; an **observed** tag
   MAY be served by at most one reader, and zero is legal because an observed
   key may arrive from the caller (JDR 0001 §JD-9) — refusing it would make
-  every `--tag`-supplied key unauthorable;
+  every `--tag`-supplied key unauthorable. The asymmetry is deliberate and the
+  owned arm admits no write-only tag: `RequiresOwned` carries every key a row
+  writes or clears, and the kernel evaluates it against the view
+  (`resolve.go::missingOwned`), so an owned tag written on one transition must
+  be readable on the next or that resolve refuses `owned_state_unavailable`. A
+  write-only owned tag — an audit stamp, a one-way flag — is therefore not
+  merely unbound but unusable, and the load refusal is the early, diagnosable
+  form of a failure that would otherwise surface as a refusal at resolve time.
+  Genuinely write-only state does not belong in the owned tag set;
 - every key named by any rule's write block or clear list, and every key
   assigned in `[initial]`, MUST be served by exactly one writer
   (`malformed accessor binding`);
@@ -631,7 +677,16 @@ the same drafting applies as to the absent-`recognized` rule below, which is
 likewise unauthorable. Root
 `terminal` is a list of context ids, each of which MUST resolve (`unknown
 context`); a rule MAY `use` a terminal context, which is how an escape
-self-loop on a stop state is authored. Whether a model *omits* `[initial]` or
+self-loop on a stop state is authored. **A terminal context id is a reference,
+not a state name: normalization MUST dereference each to the context's explicit
+predicate set over owned tags**, in the same atom shape rules use, and the
+normalized value carries the predicate sets — never the bare ids. This is what
+satisfies RDR 0006 A6's shape requirement ("neither is a bare identifier a row
+references by name"), which leaves the spelling to this RDR but fixes that lint
+receives tag predicates: its invariant 1 checks terminals as tag keys and
+values, and invariant 2 evaluates a terminal as a predicate over a node.
+Naming a context is the authoring convenience; the predicate set is the
+contract. Whether a model *omits* `[initial]` or
 `terminal`, and whether a terminal context matches a non-owned tag, are RDR
 0006's blocking findings, not load failures: the loader accepts the absence and
 lint refuses to certify the graph without a root or stop set.
@@ -680,6 +735,11 @@ mode is explicitly permitted as a **lint-side** surface (RDR 0006) or a distinct
 RDR 0005 verb built over repeated loads, and adding one later is not a change to
 this contract. What is forbidden is the single `load` entry point returning a
 list instead of a refusal — that, and only that, is the different contract.
+Neither reserved surface is scheduled today, so the authoring cost is real and
+unmitigated on arrival: the first author of a large model pays it in full. That
+is survivable because the fixtures are small and the categories are precise, but
+it is the strongest candidate for the first follow-up this format earns, and it
+should be read as a known debt rather than a solved problem.
 
 That argument is scoped to defects that **reach a check**. A defect consumed
 earlier in the pipeline — merged away, de-duplicated, or otherwise absorbed
@@ -786,6 +846,22 @@ overrides — it only accumulates. A narrowing "override" of an inherited
 constraint is not expressible, and is not silently approximated: authoring two
 atoms on one key that no view can satisfy together yields a dead rule, which is
 RDR 0006's unreachable-rule finding, not a load failure here.
+
+**The accepted cost is context forking.** With no override, a rule needing a
+different value on an inherited key cannot narrow the parent — it must not
+inherit it, so the chain forks and the shared atoms are restated in each fork.
+At the fixture's scale (three contexts, five rules) this is invisible; it grows
+with the number of dimensions that vary independently, and the Decision
+Rationale names seven. This is the repetition Alternative 2 was rejected for,
+relocated from rows to contexts, and it is worse there in one respect: the dump
+shows expanded rows, so row-level repetition is visible to a reviewer, while
+context-level repetition is only visible in the source. Accepted because the
+alternative — an override rule — reintroduces order dependence into the merge,
+which is the defect the full-atom-identity key above exists to prevent; a
+narrowing override would make the survivor depend on inheritance order exactly
+as prefix-keying did. If forking becomes the dominant authoring pattern, the
+answer is a successor RDR on context composition, not an override bolted onto
+this merge.
 ```
 
 ```normative
@@ -793,8 +869,13 @@ Guard predicates MUST be represented as positive `all` predicates and negative
 `unless` predicates. Normalization MUST combine the match atoms and both guard
 blocks into one candidate-row predicate set before ambiguity checks, and each
 atom in that set MUST retain the key, operator token, literal, and the block
-it was authored in — a three-valued domain, `match`, `all`, or `unless` — the
-atom shape JDR 0001 §D1 fixes and RDR 0007 spells. The block is load-bearing,
+it was authored in — a three-valued domain, `match`, `all`, or `unless`. The
+two-valued atom shape (`block ∈ {all, unless}`) is what JDR 0001 §D1 fixes and
+what RDR 0007 and RDR 0003 spell; the widening to a third `match` member is
+**this RDR's**, on JDR 0001 §D6's authority, because §D6 routes the kernel
+handoff on the authored block and so needs match atoms distinguishable from
+guard atoms. An implementer building the atom type from RDR 0007 alone gets two
+members and MUST widen to three here. The block is load-bearing,
 not merely carried: it is the key the handoff routes on (JDR 0001 §D6, below),
 RDR 0003's atom identity tuple and `unless` semantics read it downstream, and
 RDR 0006 serializes it. Normalization MUST NOT fold `unless` atoms into `all`
@@ -853,7 +934,19 @@ Wherever atoms are compared, keyed, deduplicated, or sorted — in particular th
 **merge key** the contexts clause makes a set over `(key, block, operator token,
 literal)` — the literal field MUST be compared as the member sequence,
 element by element. An implementation MUST NOT derive that key, or any other
-identity, by joining members into a string. Keeping `Literal` a sequence in the
+identity, by joining members into a string.
+
+**Display is not identity.** RDR 0006's `clierr.Finding` deliberately carries
+`Key`, `Operator`, `Literal`, and `Block` as flat `string` fields so `clierr`
+takes no dependency on this RDR's vocabulary; that is a **transport and
+serialization** boundary, and rendering a set literal into it is permitted. What
+this clause forbids is deriving *identity* — merge keys, dedup, sort order,
+round-trip comparison — from such a rendering. A finding string that reads
+`needs work` is acceptable diagnostic text; a merge that treats it as one atom
+is the defect. Producers rendering into that field SHOULD spell a set visibly as
+a set so the diagnostic is not ambiguous to the reader.
+
+Keeping `Literal` a sequence in the
 normalized value while keying the merge on a joined rendering satisfies the
 letter of the paragraph above and still collapses two distinct atoms: the loss
 happens in the merge, before the sort the paragraph above relies on can observe
@@ -880,9 +973,14 @@ respectively.
 **The `<clear>` sentinel is reserved (JDR 0001 §D5).** The string `<clear>`
 MUST be refused at load wherever a tag value is authored — a write-block value,
 an `[initial]` assignment, or a predicate literal — as a `reserved tag value`.
-Rendering an authored clear as a `<clear>` write is therefore unambiguous:
-RDR 0004 removes the key on that write and asserts absence on read-back, and
-RDR 0006 reads it as removal. A predicate literal of `<clear>` is refused
+Rendering an authored clear as a `<clear>` write is therefore unambiguous, and
+RDR 0006 reads it as removal. The accessor-side half is **owed, not settled**:
+JDR 0001 §D5 (§JD-15) makes read-back assert *absence* for a `<clear>` write,
+but RDR 0004 does not yet carry that clause — its read-back prose asserts
+presence with "lossy exemptions: none", and its own Status line records the
+gap. This RDR therefore states the sentinel's authoring and rendering contract
+only; a clearing rule is not end-to-end until RDR 0004 lands §D5. Do not read
+this clause as a claim that it already has. A predicate literal of `<clear>` is refused
 rather than admitted as a dead atom because no view can ever hold it and a
 silent dead rule is the more dangerous failure.
 ```
@@ -974,15 +1072,18 @@ distinct fields, and both have this RDR as their producer. Normalization MUST
 populate the next-state tags with the tag values the rule's write block and
 clear list produce, and the writes with the owned-tag writes the accessor
 layer applies — the same rendered set, including `<clear>` entries. RDR 0009
-A4 fixes that these are distinct fields and that only the writes reach the
-accessor layer, so an escape row, which carries neither a write block nor a
-clear list, normalizes to a row with both empty.
+A4 settles that its escape-conformance predicate stays `Writes`-only and does
+**not** widen to `NextTags`; it therefore fixes no rule about these two fields'
+distinctness, and this RDR does not rest on it for one. An escape row carries
+neither a write block nor a clear list, so it normalizes to a row with both
+empty — which is this RDR's own authoring-surface consequence, stricter than
+A4's kernel-side predicate requires.
 
 The two fields hold **equal sets under this RDR's authoring surface**, because
 every write a rule can author targets an owned tag and therefore reaches the
 accessor layer. They stay distinct fields rather than collapsing to one because
-RDR 0009 A4 fixes them as distinct and only the writes cross the accessor
-boundary; a later RDR that admits a next-state tag which is *not* an owned write
+the kernel declares them as two fields (JDR 0001 §D2) and only the writes cross
+the accessor boundary; a later RDR that admits a next-state tag which is *not* an owned write
 would separate them by value. Normalization MUST populate both explicitly from
 the rule and MUST NOT populate one by aliasing the other — an alias would make
 that future divergence a silent behavior change rather than a compile-time one.
@@ -1012,7 +1113,23 @@ The block is the author's declared intent about masking — "select on" versus
 "gate on". A guard `eq` over an optional key that is absent reaches the seam
 and refuses `guard_unevaluable` instead of silently dropping the row as a
 non-candidate, which is the masking the kernel forbids; that is the wanted
-behavior, not a deferral to avoid. For the same reason a **match block admits
+behavior, not a deferral to avoid.
+
+**Authoring rule for owned tags: gate on them, do not select on them.** An owned
+tag placed in a match block is the format's most consequential authoring
+mistake, and this RDR owns the surface where it is made. When the accessor
+serving that key fails, a match atom makes every candidate drop out as a
+non-candidate; `escapeOrRefuse` then runs and a `no-match` escape row returns a
+**plan**. Missing owned state is laundered into a successful transition — the
+outcome JDR 0001 §D2 exists to forbid. The same atom in `guard.all` reaches the
+seam and refuses `guard_unevaluable`, which is loud and correct. RDR 0007 states
+that "predicate PLACEMENT decides whether an absent key refuses non-escapably or
+escapes" and routes the authoring guidance to RDR 0003; the guidance is repeated
+here because this is the document an author has open while typing the block, and
+a rule stated only where the author is not looking is not a control. Observed
+tags carry no such hazard and may be selected on freely.
+
+For the same reason a **match block admits
 only `eq` and `in`** (`in` by expansion into per-member `eq` rows): a
 comparison, existence, `contains`, or any other operator under `[rule.match]`
 or `[context.<id>.match]` is refused at load as a malformed predicate atom,
@@ -1036,6 +1153,36 @@ RDR 0003 re-lock with a different set, this list is the amendment site.
 ```
 
 ```normative
+**Atom-level validation is block-agnostic.** Every rule this RDR states about an
+authored atom — operator membership (above), the `<clear>` reserved value,
+domain and kind conformance of a literal, `#` reservation in members, and tag-key
+declaration — MUST be enforced identically in all three atom blocks: `match`,
+`guard.all`, and `guard.unless`. A validation implemented for match blocks only
+is a defect against this clause, not a permitted reading of it.
+
+This is stated because the §D7 spike enforces exactly that narrower reading, and
+it was reached by running the spike rather than by reading its transcript
+(`gen-cases.py` derives every negative case from the RDR fixture by one
+mutation, and it never mutates a guard block, so no transcript line witnesses
+the gap). Verified against `evidence/spikes/iter-2/main.go`: the guard walk
+(`main.go:529-537`) checks only that the key is declared and is not
+`recognized`, so all three of the following load clean and MUST refuse —
+`[rule.guard.unless.profile] frobnicate = "small"` (`unknown operator`),
+`eq = "<clear>"` (`reserved tag value`), and `eq = "NOT_A_PROFILE"` against
+`domain = ["small","mid","large","foundational"]` (`malformed predicate atom`).
+The `<clear>` case is the dangerous one: an unsatisfiable `unless` atom is a
+silent dead rule, which is the failure the reserved-value clause exists to
+prevent, and an unsatisfiable *guard* atom triggers RDR 0007's veto on selecting
+a decided sibling while an unevaluable candidate exists — so the flow deadlocks
+rather than refusing loudly.
+
+Testing Strategy scenario 3 therefore owes one negative control per rule **per
+block**, and `gen-cases.py` MUST mutate guard blocks, not only match blocks.
+Until those fixtures exist, the block-agnostic claim is asserted by this clause
+and unwitnessed by evidence (A15).
+```
+
+```normative
 The tool MUST normalize the sparse source into deterministic candidate rows for
 lint, resolver lookup, diagnostics, and table dumps. Each candidate row MUST
 retain its source rule id and source locator.
@@ -1048,10 +1195,20 @@ predicate atoms (with block), gate ids, next-state tags, writes including
 `<clear>` entries, required-owned keys, and escape failure classes — plus the
 derived row kind column. `[dump]` carries exactly one key, `order`: a list of
 column identifiers. The identifiers are the **field names enumerated in the
-sentence above**, snake_cased on the same rule as the category identifiers
-(`row_identity`, `source_locator`, `outcome`, `atoms`, `gate`, `next`, `write`,
-`requires_owned`, `escape`, `kind`) — that closed list is the column
-vocabulary, so an implementer need not invent one. `[dump]` settings MAY
+sentence above**, snake_cased on the same rule as the category identifiers.
+That closed list is the column vocabulary, so an implementer need not invent
+one; it is fixed here **verbatim as the normative fixtures author it**, because
+those fixtures are what implementation tests promote:
+
+    identity, source, kind, outcome, atoms, next, writes, requires_owned,
+    gate, escape
+
+The vocabulary is the fixtures' spelling, not a re-derivation from the field
+names in the sentence above: `identity` (not `row_identity`), `source` (not
+`source_locator`), and `writes` (not `write`). A clause that snake_cases the
+prose field names instead would refuse both normative fixtures at load under
+the very rule below — the check that catches this is fixture conformance, run
+as part of scenario 1, not review. `[dump]` settings MAY
 reorder the rendered columns; they MUST NOT omit a field. An `order` naming an
 unknown identifier, repeating one, or omitting one is a `malformed dump
 declaration` refused at load — not a silently truncated dump. A dump missing any
@@ -1310,6 +1467,19 @@ review surface here, and the normalized value is the contract — which is why t
 literals clause forbids a joined rendering from becoming an identity anywhere
 upstream of the dump.
 
+This is a real narrowing of the Problem Statement's promise, and it is stated
+rather than left for a reviewer to discover. "Every legal edge lives in one
+reviewable artifact, so 'is this transition legal' has one answer" holds at the
+level the artifact answers: **which rows exist, what each binds, and in what
+order** — the questions a table review is actually for, all of them recoverable
+from the dump. What is not recoverable from the *rendered text alone* is the
+exact member decomposition of a set-valued literal, a strictly narrower question,
+and the reviewer who needs it reads the source rule the locator names. The
+alternative readings were to define a grammar (which claims an inverse this RDR
+declines) or to ban delimiters from literals (which constrains authored data to
+serve a render). Both cost more than the residue is worth; the visible-set
+requirement below keeps the ambiguity honest at the point of reading.
+
 **Phase 2's dump is not required to carry an escaping grammar, and that is a
 decision, not an omission.** Defining one would make the dump a re-readable
 format — an inverse this RDR explicitly does not claim — and every consumer that
@@ -1349,7 +1519,7 @@ rather than single-rule (Normative Contracts); it stays this RDR's.
 | malformed tag declaration, malformed predicate atom (incl. literal outside domain, non-`eq`/`in` under a match block), reserved tag value, escape declaration, outcome binding, alphabet; `reserved_tag_key` | load | this RDR (0003 supplies the declaration/domain rules; 0008 the reserved key) | loud, stable category |
 | missing `[initial]` / `terminal`, terminal context on a non-owned tag | lint | RDR 0006 | loud, blocking |
 | overlap, gap, dead row, read-before-write, ambiguous expansion | lint | RDR 0006 | loud, blocking |
-| expansion counts per rule | lint | RDR 0006 | reported, non-blocking; no threshold here |
+| expansion counts per rule | dump (derived: rows per source rule id) | this RDR | reviewer-visible, non-blocking; no threshold here. Not an RDR 0006 finding — its advisory tier is closed at four members |
 | `unmodeled_outcome`, `owned_state_unavailable`, `guard_unevaluable` | kernel refusal | RDR 0001 | loud; the last two are never escapable |
 | zero/multiple survivors | kernel refusal, or modeled escape when exactly one escape row survives the gate | RDR 0001 | loud |
 
@@ -1708,7 +1878,13 @@ TOML can carry the same semantics.
   reject the shape if reviewers cannot scan the source or explain the dump.
 - **Risk**: Sparse contexts hide an accidental Cartesian product.
   **Mitigation**: The dump must show normalized candidate rows with source rule
-  ids, and lint must report expansion counts per rule.
+  ids. Expansion count per rule is then **derivable from the dump itself** —
+  rows sharing a source rule id, which the `identity` and `source` columns
+  already carry — so this mitigation rests on this RDR's own deliverable and
+  needs no lint output. It is deliberately *not* routed to RDR 0006: that RDR's
+  advisory tier is normatively closed at `graph-coverage-closed-by-escape`,
+  `graph-redundant-row`, `graph-unreachable-rule`, and `graph-vacuous-atom`, so
+  an expansion-count report is not a finding it can mint.
 - **Risk**: Future contributors treat row order as priority.
   **Mitigation**: Normative exact-one semantics require explicit escape rows for
   modeled no-match or ambiguous-match behavior; graph lint rejects overlapping
@@ -1755,8 +1931,9 @@ errors — each is decidable from one rule plus the declarations. A missing root
 or stop set is RDR 0006's blocking finding. A row gap, overlap, dead row,
 read-before-write condition, or ambiguous expansion requires comparing
 normalized rows and is therefore an RDR 0006 lint failure before the model is
-accepted. Expansion counts are a lint diagnostic reported per rule, not a
-refusal: this RDR sets no expansion threshold. At runtime, unknown outcomes,
+accepted. Expansion count per rule is derived from the dump — rows sharing a source rule
+id — not a lint diagnostic and not a refusal: this RDR sets no expansion
+threshold, and RDR 0006's advisory tier is closed against adding one. At runtime, unknown outcomes,
 unavailable accessor inputs, absent owned state, undecidable guards, and
 unmodeled zero/multiple survivors are typed resolver refusals rather than
 guessed edges; modeled zero/multiple-match behavior must come from exactly one
@@ -1803,7 +1980,15 @@ surviving escape row, and the gate refusals are never modeled.
   until it lands. This item gates implementation sequencing, not lock. It does not
   invert the cluster's ordering: RDR 0008 and RDR 0009 both name this RDR's
   normalizer as the enforcement point their own checks land inside, and this
-  RDR's normalized rows target RDR 0001's shipped kernel row.
+  RDR's normalized rows target RDR 0001's shipped kernel row. **The reshape has
+no owner**, and that is the open item this bullet leaves behind: RDR 0007 is
+`Final` and therefore will not itself schedule the work, no kata tracks it, and
+no phase in this RDR's plan claims it. Sequencing behind an unowned prerequisite
+is indefinite, not merely ordered. Implementation MUST NOT open Phase 2 by
+mirroring the constants locally to get moving — the Risks section names that
+drift and its only mitigation is that the real constants compile once exported.
+Landing the reshape, or explicitly assigning it, is the first implementation
+action and belongs to whoever opens Stage 8 on this cluster.
 - [x] RDR 0001 remains aligned on exact-one stateless resolution.
 - [x] RDR 0003 is coherent enough for this RDR to defer the fixed predicate
   operator set and tag type model without importing that grammar.
@@ -1973,8 +2158,8 @@ Implementation tests must promote the Resolve spike into production fixtures:
 1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2/` into typed source structs.
    **Expected**: Tag declarations (including `[tags.recognized]` and the seven type-model keys), root recognized-outcome alphabets, `[initial]` and root `terminal`, `[read.*]`/`[write.*]`/`[gate.*]` tables with `keys`, rule-level `gate` lists, shared-context inheritance, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement under strict decoding. **`[model.metadata]` is asserted by deep equality against the authored table** — every value and every nesting level, not its top-level key names: a loader that decodes the table and discards its values passes a key-name oracle, and since metadata sits outside the dump field list and the Round-Trip invariant, this is the only assertion that observes it. The `source` and `description` keys decode onto the rule and model structs rather than refusing as unknown schema fields.
 2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `continue-prelock-cluster`, `reconcile-rewind`, `terminal-archive`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is `evidence/spikes/iter-2/output.txt` (approved Stage 4, A1; SHA-256 `6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`), whose nine RDR rows and two kata rows are the expected value. Note the RDR fixture yields **nine** rows, not seven: `continue-prelock` and `continue-prelock-cluster` each expand on the inherited `profile.in`, and `draft-no-match-escape` expands on its `recognized.in`.
-   **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array and a later mutation of one would silently move the other. Enforcement is by review of the normalizer, or by a test that mutates one field and asserts the other is unchanged.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is `evidence/spikes/iter-2/output.txt` (approved Stage 4, A1; SHA-256 `6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`), whose nine RDR rows and two kata rows are the expected **row set and row identities** — not the expected bytes. **This SHA MUST NOT be asserted as a golden hash by any implementation test.** The pinned text was produced by a renderer that joins set-valued literals and write values (`main.go::renderValue`, `strings.Join(parts, ",")`), which the literals and write-replaces clauses forbid, so a *correct* implementation necessarily changes these bytes and would fail the pin. A hash whose only stable property is that the correct answer breaks it is an anti-oracle: it teaches the implementer to revert the fix. The SHA is retained solely as provenance for what Stage 4 reviewed, and this scenario asserts over the normalized value, per the dump clause's own "assert over the normalized value … reserve rendered-text goldens for tests of rendering itself." The re-rendered fixture is owed at implementation and its hash is not fixed here. Note the RDR fixture yields **nine** rows, not seven: `continue-prelock` and `continue-prelock-cluster` each expand on the inherited `profile.in`, and `draft-no-match-escape` expands on its `recognized.in`.
+   **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array — which is exactly what makes the obligation assertable after all. **The control is a mutation test**: normalize a row, mutate one field in place, and assert the other is unchanged. An aliased pair fails it; an independently built pair passes. Enforcement is therefore by this test, not by review of the normalizer — this RDR's own `oracle` rule refuses to accept an assertion until a wrong implementation that fails it is named, and "review the normalizer" names none. Value comparison alone remains insufficient, which is why the control mutates rather than compares.
    **Additionally**, atom-set semantics are asserted positively, since these shapes must *survive* load rather than be refused: two inherited contexts contributing the same key and operator with **different literals** yield **two** atoms in the normalized set, not one — asserted by count and by value, with the contexts listed in both `use` orders to prove the result is order-independent (a merge keyed on `(block, key, operator)` drops one and passes a count-only check on a single ordering); a set-valued literal whose member contains a space normalizes to a member sequence, so `["needs work"]` and `["needs", "work"]` are **distinct** atoms; and a rule authoring one atom in both `all` and `unless` loads successfully as two atoms and is reported by lint as a dead rule, not refused at load.
    **The distinct-literal control asserts on the atom count, and covers the delimiter space rather than guessing one.** Two contexts contributing `in = ["a,b", "c"]` and `in = ["a", "b,c"]` on one key and block MUST yield **two** atoms in the normalized set. That count is the whole oracle: it is a property of this RDR's own normalized value, readable without RDR 0006, and it fails against any joined-rendering key. The earlier phrasing — "members containing the implementation's own joining delimiter" — was not assertable, because a black-box test cannot read the delimiter a wrong implementation chose; the control instead **parameterizes over the plausible delimiters** (`,` `;` `|` space, and the empty string) and asserts two atoms for each, so no single choice of join survives. Do **not** state the assertion as "the rule is a dead rule for lint": that is an RDR 0006 verdict, and the MVV explicitly refuses to count assertions against an unimplemented lint (the overlap item, above). Deadness is the *consequence* that makes the defect matter; the atom count is the test. A control using only scalar or space-bearing members does not discriminate: it passes against a merge keyed on a comma-joined rendering, which is what the spike does today (`main.go::Atom.identity` → `literalString`), collapsing the pair to one atom and normalizing the rule to a live expanding row. This is the assertion A13 needs and currently lacks.
 
@@ -1985,7 +2170,11 @@ Implementation tests must promote the Resolve spike into production fixtures:
 3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, an escape rule carrying a `clear` list, and one carrying a `gate` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own **fixture**; note the three share one category, so the category oracle alone cannot tell them apart. Each fixture's discriminating assertion is therefore that it refuses **and** that the other two shapes are absent from it — the one-mutation rule (`gen-cases.py`) supplies that by construction. A finer split into three categories is deliberately not minted: the shapes are one authoring error — a plan-bearing field on a plan-free rule — and RDR 0009 binds the write-free obligation as a single kernel-boundary obligation), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, a missing root outcome alphabet, a `lt` atom and separately an `exists` atom under `[rule.match]` (match-block operator restriction), a `#` inside a match-block `in` member, a predicate literal outside the tag's declared `domain`, a tag declaration RDR 0003's rules reject (`domain` on a `kind` that admits none), `<clear>` authored as a write value, as an `[initial]` value, and as a predicate literal, an `[initial]` key that is undeclared, an owned key served by zero readers and separately by two, a written key with no writer, a writer whose `keys` names an observed tag, `recognized` in a reader's `keys`, an accessor entry missing `timeout`, a rule whose `gate` names an id declared only under `[read.*]`, an escape rule carrying a `gate` list, and a `terminal` entry naming no context. Positive controls in the same fixture set: an observed key served by no reader loads (JD-9), and a model with no `[initial]` loads and is left to lint.
    **No control is listed for an `[initial]` key that is *observed*, because that document has no authorable form** (Normative Contracts, Root and stop set): the writer-binding bullets refuse it as `malformed accessor binding` or `write to non-owned tag` before the owned-tag predicate is reached, so a fixture for it would witness a different category than the one it names. `malformed initial declaration` is controlled by its **value arm only** — a literal ill-formed for the declared kind or domain (`neg-initial-bad-value`, `neg-initial-int-out-of-range`). The undeclared-key variant is *not* one of its controls: an `[initial]` key naming no declared tag refuses as `unknown tag` (`neg-initial-unknown` — "unknown tag \"nosuchtag\" written"), which is the correct category, since the defect is the undeclared tag rather than the `[initial]` declaration's shape. Scenario 3 lists that variant under `unknown tag`, not here; assigning it to `malformed initial declaration` would fail the category-not-message oracle against the fixture that exists. Verified by enumeration this stage: both authorings were built and each refused under the writer-binding category (`evidence/spikes/iter-2/neg/probe-a-initial-observed-no-writer.toml`,
    `neg/probe-b-initial-observed-with-writer.toml`).
-   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. **Thirty-five of these controls are witnessed by the §D7 spike**, one refusal per mutated fixture, in `evidence/spikes/iter-2/negative-cases.txt`, covering **18 of the 25 categories** named above. The seven still owed at implementation are `malformed TOML`, `missing recognized outcome alphabet`, `cyclic context inheritance`, `malformed tag declaration` (RDR 0003 supplies its rejection rules), `duplicate model id` (cross-document, so it needs the paired-document surface no single-file fixture can provide), and the two categories this pre-lock pass added — `malformed model declaration` (absent `[model]`, `id`, `version`, or `[tags.recognized]`; the spike today refuses the first three off-contract and folds an absent `version` into `unsupported version 0`) and `malformed dump declaration` (an `order` naming an unknown, repeated, or omitted column; the spike decodes `[dump]` and never reads it). Both are owed a fixture **and** an implementation. Two of those five are owed only a **fixture**, not an implementation: `cyclic context inheritance` and `malformed tag declaration` are both already decided by the spike and were confirmed to fire this stage against mutated fixtures (`cyclic context inheritance at "prelock"`; `malformed tag declaration: "cluster_ready" has no kind`), so `gen-cases.py` should mint their single-mutation cases rather than leaving them to implementation discovery. Regenerate the whole set with `python3 evidence/spikes/iter-2/gen-cases.py`, which derives each fixture from the RDR fixture by a single mutation so the one-defect-per-fixture rule holds by construction. Implementation promotes these fixtures; it may extend the set but must not narrow it.
+   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. **Thirty-five of these controls are witnessed by the §D7 spike**, one refusal per mutated fixture, in `evidence/spikes/iter-2/negative-cases.txt`, covering **18 of the 25 categories** named above. The **seven** still owed at implementation are `malformed TOML`, `missing recognized outcome alphabet`, `cyclic context inheritance`, `malformed tag declaration` (RDR 0003 supplies its rejection rules), `duplicate model id` (cross-document, so it needs the paired-document surface no single-file fixture can provide), and the two categories the 3amigo pre-lock pass added — `malformed model declaration` (absent `[model]`, `id`, `version`, or `[tags.recognized]`; the spike today refuses the first three off-contract and folds an absent `version` into `unsupported version 0`) and `malformed dump declaration` (an `order` naming an unknown, repeated, or omitted column; the spike decodes `[dump]` and never reads it). Both are owed a fixture **and** an implementation. That is seven: five pre-existing plus the two added. Two of the seven are owed only a **fixture**, not an implementation: `cyclic context inheritance` and `malformed tag declaration` are both already decided by the spike and were confirmed to fire this stage against mutated fixtures (`cyclic context inheritance at "prelock"`; `malformed tag declaration: "cluster_ready" has no kind`), so `gen-cases.py` should mint their single-mutation cases rather than leaving them to implementation discovery. Regenerate the whole set with `python3 evidence/spikes/iter-2/gen-cases.py`, which derives each fixture from the RDR fixture by a single mutation so the one-defect-per-fixture rule holds by construction. Implementation promotes these fixtures; it may extend the set but must not narrow it.
+
+   **Guard-block controls are owed for every atom-level rule (A15).** `gen-cases.py` mutates match blocks only, so no existing control witnesses the block-agnostic clause and the coverage figures above overstate what is proven: an atom rule counted "witnessed" is witnessed in one of three blocks. Each of operator membership, `<clear>`, domain/kind conformance, `#` reservation, and tag-key declaration owes a `guard.all` and a `guard.unless` variant. The three reproduced today — `frobnicate = "small"`, `eq = "<clear>"`, `eq = "NOT_A_PROFILE"` under `[rule.guard.unless.profile]` — are the minimum starting set and all three currently load clean.
+
+   **Fixture conformance is a control, not a review step.** Both normative fixtures MUST load clean under the finished loader, asserted as part of scenario 1. This is the check that would have caught the `[dump]` column vocabulary being fixed to spellings the fixtures do not use, and it is cheap: the fixtures are already parsed by every other scenario.
    **The version gate's precedence needs its own fixture (A14), separate from the `unsupported version` category fixture above.** That fixture is a v1-shaped document with a bad version value, which trips the category under *either* check ordering and therefore witnesses nothing about precedence. The precedence control is a **v2-shaped** document — `version = 2` plus a v2-only key the strict decoder would reject as an unknown schema field — asserted to refuse `unsupported version` and **not** `unknown schema field`. This is the only ordering this RDR fixes normatively, so it is the only ordering that gets an oracle.
 4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable because its `guard.all` carries an `eq` atom over an optional owned key the view does not hold — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order. The overlapping variant is reported by lint as an ambiguous overlap before the model is accepted, naming both rows.
