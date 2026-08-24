@@ -8,7 +8,7 @@
 - **Date**: 2026-06-19
 - **Status**: Draft [revised from Final 2026-08-24; re-verify none — JDR 0001 §D5 (§JD-15) makes read-back assert absence for a `<clear>` write; 0004's read-back prose (0004:215, 511) asserts presence and none of §D5's clauses exist; §D7 (§JD-17) retires the "cannot be rebound" sentence (0004:371)]
 - **Type**: Architecture
-- **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, and write read-back) governing authoritative artifact mutation.
+- **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, write read-back, and clear-as-removal) governing authoritative artifact mutation.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel, 0002-transition-table-as-reviewable-data, 0003-guard-predicate-exhaustiveness
@@ -199,6 +199,21 @@ accessor safety contract and reuses existing CLI failure plumbing later.
     caller must treat every write refusal as possibly-applied (widening the
     recovery burden) or the RDR must claim transactional semantics it has
     explicitly declined in Alternative 4.
+- **A11 A write of the reserved `<clear>` sentinel can be verified as removal:
+  the read-back asserts the key is absent, a clear of an absent key succeeds,
+  and a read that yields the literal `<clear>` is refused as unreadable.**
+  - **Status**: Pending — on the same basis as A9 and A10: each is a property
+    MVV Scenario 9 *proves*, not a fixture it consumes, and none can run before
+    the accessor executor exists. A2 and A7 (read-back verifies the intended
+    owned effect and non-owned identity) hold unchanged; this extends the
+    expected-value predicate to absence rather than re-opening it.
+  - **Method**: MVV Test
+  - **Evidence**: To be verified by the MVV — Scenario 9. The Resolve spike does
+    not witness it: its `write` assigns values only and no fixture carries the
+    sentinel.
+  - **If wrong**: A binding cannot express removal at its boundary, and a clear
+    must fall back to a typed absent value on the seam (JDR 0001 §D5 option
+    (c)), re-opening RDR 0001's `Tag` shape.
 
 ## Proposed Solution
 
@@ -211,8 +226,9 @@ keys it was asked for from a caller-supplied artifact role, or refuses; a
 partial read is a refusal, never a thinned value set, and a key the artifact
 genuinely lacks crosses the seam as an omission rather than a placeholder. A gate accessor returns allow, deny, or indeterminate with a
 reason. A write accessor applies a planned owned-tag mutation to a
-caller-supplied artifact role, then re-reads the same role and verifies that the
-expected owned-tag values are present.
+caller-supplied artifact role, then re-reads the same role and verifies each
+planned owned tag for equality: an assigned value must be held exactly, and a
+key written as the reserved `<clear>` sentinel must be absent.
 
 The executor is not a shell runner and not a state-machine action callback
 surface. It invokes typed bindings selected by accessor name and capability,
@@ -224,10 +240,15 @@ those results to the user-facing CLI.
 ### Technical Design
 
 Accessor definitions live beside the transition model as data consumed by the
-loader/validator. Each definition declares a stable name, capability, artifact
-role, expected tag keys, timeout policy, and whether read-back verification is
-required. RDR 0002 owns the table carrier and accessor references; this RDR owns
-what it means to execute a referenced accessor safely.
+loader/validator. A definition is the capability-table entry in RDR 0002's
+layout — `[read.<id>]`, `[write.<id>]`, or `[gate.<id>]` (JDR 0001 §D7(ii)) —
+declaring artifact role, path, `keys`, and a timeout; writers additionally carry
+`read_back = true`, since read-back is mandatory, not optional. `keys` is the
+binding on readers and writers alike: a reader's `keys` is its requested key
+set, a writer's `keys` is the owned keys it may write or clear. RDR 0002 owns
+the carrier and the binding validations (a key served by zero or two readers, a
+written or cleared key not in exactly one writer); this RDR owns what it means to
+execute a referenced accessor safely.
 
 Execution has three phases. First, validation rejects unknown accessor names,
 missing or multiply-bound accessor identities, capability mismatches, writes to
@@ -244,9 +265,10 @@ come from the definition's validated metadata, never from the keys a read
 happened to resolve. Third, write accessors execute only from a successful transition plan.
 Before the write, the executor records the same caller-supplied artifact role's
 observed and recognized tag values. After command-level success, it immediately
-re-reads that same role from the write binding, compares expected owned-tag
-values, and verifies the pre-write observed and recognized tag values are
-unchanged. A read-back mismatch is a failure even if the write command exited
+re-reads that same role from the write binding, compares each planned owned tag
+for equality — a write replaces the tag's whole held value (JDR 0001 §D7(iv)),
+and a `<clear>` write removes the key, so its read-back asserts absence — and
+verifies the pre-write observed and recognized tag values are unchanged. A read-back mismatch is a failure even if the write command exited
 successfully.
 
 Large-profile Q-O-C matrix:
@@ -326,10 +348,20 @@ successful transition. It MUST NOT write observed or recognized tags.
 ```
 
 ```normative
+`<clear>` is a reserved tag value (JDR 0001 §D5). A planned write of `<clear>`
+MUST remove the key from the artifact, and its read-back MUST assert the key is
+absent — a re-read that still holds the key, including as the literal string
+`<clear>`, is `read_back_mismatch`. Clearing a key the artifact does not hold
+MUST succeed. A read that yields `<clear>` as a value MUST treat that key as
+unreadable and refuse `incomplete_read`.
+```
+
+```normative
 After a write accessor reports command-level success, the executor MUST re-read
-the same caller-supplied artifact role named by the write binding and verify the
-expected owned-tag values and that observed and recognized tag values present
-before the write are unchanged. It MUST NOT satisfy read-back verification by
+the same caller-supplied artifact role named by the write binding and verify
+each planned owned tag for equality against the held value — a write replaces
+the whole value, so containment is not equality — and that observed and
+recognized tag values present before the write are unchanged. It MUST NOT satisfy read-back verification by
 discovering an ambient artifact or by reading an unrelated role. A read-back
 mismatch MUST be reported as a write failure.
 ```
@@ -368,16 +400,27 @@ write to stdout or stderr directly.
 #### Load-Bearing Decisions
 
 - **Identity** — an accessor is identified by `(flow id, accessor name,
-  capability)`. The same name cannot be rebound to a different capability within
-  one flow.
+  capability)`. Capability is part of the identity, so the same id may appear in
+  both `[read.x]` and `[write.x]` — two identities, not a rebinding (JDR 0001
+  §D7(ii)); only a second binding of the *same* triple is multiply-bound.
 - **Wire / byte format** — RDR 0002 owns the TOML carrier. This RDR owns the
   accessor execution semantics embedded behind accessor references.
+- **Definition shape** — by citation to JDR 0001 §D7(ii): the definition is the
+  capability-table entry (`[read.<id>]`/`[write.<id>]`/`[gate.<id>]`), `keys` is
+  the binding on readers and writers alike, and `read_back = true` is fixed on
+  writers. This RDR does not spell the layout; it consumes it.
+- **Clear semantics** — by citation to JDR 0001 §D5: `<clear>` is reserved, a
+  clear is a removal, and read-back asserts absence. The alternative — a clear
+  that stores the literal — is the one write whose read-back passes green over a
+  tag that was never removed, a success-shaped result over unverified state;
+  that is why removal, not assignment, is the load-bearing reading.
 - **Naming** — the canonical names are "read accessor", "gate accessor", and
   "write accessor". Rejected names: "hook" and "action" because they imply
   arbitrary transition callbacks.
-- **Selection / predicate** — when an accessor reference names a capability, the
-  executor selects only a binding with the same accessor identity and capability.
-  Missing or multiply-bound accessors are validation failures.
+- **Selection / predicate** — the executor selects a binding by capability
+  table and id: an invocation that needs capability X selects only from
+  `[X.<id>]`, never from a same-id entry under another table. Missing or
+  multiply-bound accessors are validation failures.
 - **Read completeness** — the success predicate for a read accessor is "every
   requested key resolved", not "at least one key resolved". A key the artifact
   genuinely does not carry resolves as an absent value; a key the accessor could
@@ -412,8 +455,8 @@ write to stdout or stderr directly.
 - **Absent vs unreadable is the binding's call, defaulting to unreadable** — a
   key is *absent* only when the binding read the artifact successfully and the
   key was not there. Every other outcome — the artifact did not parse, the
-  transport truncated, the key's value failed type coercion, permission was
-  denied — is *unreadable*, because in each the binding did not establish that
+  transport truncated, the key's value failed type coercion, the value read is
+  the reserved `<clear>` literal, permission was denied — is *unreadable*, because in each the binding did not establish that
   the key is missing. A binding that cannot tell the two apart at its own
   boundary MUST report `incomplete_read`; guessing absence is the failure this
   contract exists to prevent. The Resolve spike declares unreadability as a
@@ -424,8 +467,9 @@ write to stdout or stderr directly.
 
 `write -> read = expected owned-tag value identity + protected non-owned tag
 identity`: after a write accessor reports command-level success, reading the
-same caller-supplied artifact role named by the write binding must return the
-expected owned-tag values, and any observed or recognized tag values present
+same caller-supplied artifact role named by the write binding must hold each
+planned owned-tag value exactly (and must not hold a key the plan cleared), and
+any observed or recognized tag values present
 before the write must remain unchanged. This is not an undo or byte-for-byte
 artifact invariant; it is the minimum safety invariant for the authoritative tag
 values and protected non-owned tag values this RDR can observe at the accessor
@@ -452,6 +496,10 @@ Witness column cites the Resolve spike transcript
 | Write succeeds, owned tag matches | success | — | loud | `output.txt:8` |
 | Write succeeds, owned tag differs | refusal | `read_back_mismatch` | loud | `output.txt:9` |
 | Write succeeds, non-owned tag changed | refusal | `read_back_mismatch` | loud | `output.txt:10` |
+| Write clears an owned key, read-back shows it absent | success | — | loud | not witnessed — see A11 |
+| Write clears an owned key, read-back still holds it (any value, including the literal `<clear>`) | refusal | `read_back_mismatch` | loud | not witnessed — see A11 |
+| Write clears a key the artifact does not hold | success | — (idempotent clear) | loud | not witnessed — see A11 |
+| Read yields the literal `<clear>` as a value | refusal | `incomplete_read` | loud | not witnessed — see A11 |
 | Write succeeds, read-back cannot read a compared key | refusal | `read_back_incomplete` | loud | not witnessed — see A9 |
 | Write command runs, then the invocation exceeds its timeout | refusal | `timeout`, carrying the applied-but-unverified sense | loud | not witnessed — see A10 |
 | Definition invalid (8 shapes) | validation failure | pre-runtime, per shape | loud | `output.txt:17-23`; the missing/empty requested-key-set arm is not witnessed — see A9 |
@@ -496,6 +544,7 @@ negative control that makes the pass meaningful.
 | 6 — absence reaches the resolver (A9) | Fails if the accessor emits an absent key as a present tag, because the assertion is on the *resolver's* disposition (`owned_state_unavailable` naming the key), not on the accessor's branch — a placeholder value makes `TagSet.has` true and the refusal never fires | A key the artifact *does* carry must resolve normally through the same path — an implementation that omits every key passes the refusal assertion vacuously |
 | 7 — timeout precedence (A9) | Fails if the executor classifies on first-unreadable-key rather than on deadline, because the fixture makes both classes true at once and asserts the name `timeout` | The truncation fixture from scenario 2, which must still return `incomplete_read` — an implementation that always reports `timeout` fails it |
 | 8 — post-mutation reporting (A10) | Fails if the boundary reports a post-mutation refusal as a write that did not occur, because the assertion is on the refusal carrying the applied-but-unverified sense *and* on the invocation count — a layer that retries or undoes shows a second write | The `read_back_mismatch` fixture, which must still assert the artifact is wrong rather than unverified — an implementation that collapses both into one "write failed" shape fails that row |
+| 9 — clearing write (A11) | Fails if a clear is implemented as assignment of the literal, because the assertion is on the key's *absence* in the re-read — a stored `<clear>` string makes the key present and the row fails; the read arm asserts `incomplete_read` when a fixture holds the literal | The assignment fixture from scenario 3 (`output.txt:8`), which must still assert presence and equality — a read-back that asserts absence for every write fails it |
 | 5 — no package prints | Fails only by absence-of-output, which is weak. Strengthened at implementation: the accessor package test asserts the returned structured value carries the refusal class, and the no-print property is asserted by capturing stdout/stderr around the call and requiring both empty | A test that deliberately prints must fail the capture assertion; without that control this scenario passes vacuously |
 
 Scenario 5 is the one absence-of-error oracle; the named capture control is what
@@ -508,7 +557,7 @@ operation owes and the exemptions that are deliberate.
 
 | Operation | Invariant | Strength | Lossy exemptions |
 | --- | --- | --- | --- |
-| `write -> read`, owned tags | Every planned owned-tag key/value present in the re-read equals the transition plan's expected value | value equality over the planned key set | none |
+| `write -> read`, owned tags | For every planned owned key, the re-read holds exactly the plan's expected value; for a planned `<clear>`, the re-read does not hold the key at all | value equality (assignment) or absence (clear) over the planned key set | none |
 | `write -> read`, non-owned tags | Every observed/recognized tag value present before the write is present and unchanged after | value equality over the pre-write snapshot | tags absent before the write are unconstrained; the write binding's own planned owned tags are excluded from this comparison by construction |
 | `write -> read`, artifact as a whole | **Not** claimed | — | byte-for-byte artifact identity, formatting, key order, and comments are explicitly out of scope; the accessor observes tag values, not the artifact encoding |
 | `read` over a requested key set | The returned set is exactly the requested keys — none missing, none added | branch equality plus key-set equality | how an absent value is represented *inside* the accessor layer is not pinned — the spike's `<absent>` is fixture shorthand; what crosses the seam is pinned: the key is omitted from the owned snapshot |
@@ -530,7 +579,7 @@ above.
 | 2. Invoke read accessor | read returns typed values or a typed refusal; completeness — exactly the requested keys or refuse; requested set is validated definition metadata, never derived from what resolved; one unreadable key refuses the whole read; absence crosses the seam as omission, not a placeholder value; timeout outranks incomplete read; no mutation of authoritative artifacts; bounded timeout; no direct stdout/stderr | `tags={profile=large,status=Draft}` (`output.txt:11`); `refusal=incomplete_read` (`output.txt:12`); `tags={profile=<absent>,status=Draft}` (`output.txt:13`) |
 | 3. Invoke gate accessor | gate returns allow, deny, or indeterminate; indeterminate is refusal-class, never a false allow or deny; bounded timeout | `gate=allow` (`output.txt:2`); `refusal=gate_indeterminate` (`output.txt:3`) |
 | 4. Execute planned write | write applies only planned owned-tag writes from a successful transition; never observed or recognized tags | `tags={status=Final}` (`output.txt:8`) |
-| 5. Read back the same role | re-read the *same* caller-supplied role named by the write binding; the re-read is itself subject to read completeness — an unreadable compared key is `read_back_incomplete`, not mismatch and not success; a post-mutation refusal reads as applied-but-unverified, never as a write that did not occur, and the accessor performs no retry, undo, or re-derivation; verify expected owned-tag values; verify pre-write observed/recognized values unchanged; no ambient or unrelated-role read; mismatch is a write failure | owned mismatch `expected={status=Final} observed={profile=large,status=corrupt}` (`output.txt:9`); non-owned mismatch `expected={profile=large,status=Draft} observed={profile=small,status=Final}` (`output.txt:10`) |
+| 5. Read back the same role | re-read the *same* caller-supplied role named by the write binding; the re-read is itself subject to read completeness — an unreadable compared key is `read_back_incomplete`, not mismatch and not success; a post-mutation refusal reads as applied-but-unverified, never as a write that did not occur, and the accessor performs no retry, undo, or re-derivation; verify each planned owned tag for equality and a cleared key for absence (a stored literal `<clear>` is a mismatch); verify pre-write observed/recognized values unchanged; no ambient or unrelated-role read; mismatch is a write failure | owned mismatch `expected={status=Final} observed={profile=large,status=corrupt}` (`output.txt:9`); non-owned mismatch `expected={profile=large,status=Draft} observed={profile=small,status=Final}` (`output.txt:10`) |
 | 6. Return to caller | structured success/refusal values only; timeout is its own class, distinct from execution failure and read-back mismatch | distinct lines for `timeout` (`output.txt:5`), `execution_failure` (`output.txt:4`), `read_back_mismatch` (`output.txt:9`) |
 
 No CONTRADICTION row, on two pairs. The first — "a read accessor MUST return
@@ -553,14 +602,15 @@ Illustrative execution shape only:
 2. Read owned tags from the caller's `state` artifact role.
 3. Resolve the transition using RDR 0001 and RDR 0003.
 4. Apply the planned owned-tag write through `state.persist`.
-5. Re-read `state` and compare the expected owned-tag values.
+5. Re-read `state` and compare each planned owned tag for equality (absence
+   for a cleared key).
 6. Return success or a typed refusal without printing.
 
 ### Capability Dependencies
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| Transition model accessor references | RDR 0002 | Pending | This RDR assumes the model can name accessors and tag provenance. |
+| Capability tables with `keys` binding | RDR 0002 / JDR 0001 §D7(ii) | Decided, unimplemented | Definitions arrive as `[read/write/gate.<id>]` entries; `keys` binds an accessor to its tags, and 0002's loader performs the binding validations. |
 | Guard evaluation after binding | RDR 0003 | Pending | Accessors provide tag values; guards consume them symbolically. |
 | Stateless transition plan | RDR 0001 | Pending | Write accessors execute only a successful planned transition. |
 | Accessor capability taxonomy | This RDR | Introduced | Defines read, gate, write, and refusal classes. |
@@ -727,6 +777,10 @@ their runtime ownership model, and it breaks the reviewable-data premise.
   not verified", forbids accessor-level compensation, and puts recovery on the
   caller via re-read. No undo is claimed — see Alternative 4 and Day 2
   Operations.
+- **Risk**: A clearing write stores the literal `<clear>` and read-back passes
+  green over a key that was never removed.
+  **Mitigation**: `<clear>` is reserved (JDR 0001 §D5); a clear is a removal,
+  read-back asserts absence, and MVV Scenario 9 asserts a stored literal fails.
 - **Risk**: Timeout and gate-indeterminate failures are collapsed into generic
   execution errors.
   **Mitigation**: Make them separate refusal classes and verify CLI mapping.
@@ -755,7 +809,10 @@ as genuine absence — the completeness requirement turns that into an
 `incomplete_read` refusal. A genuinely-absent key reaches the resolver as a
 *present* tag carrying a placeholder, so a key the artifact never carried reads
 as answered state and `owned_state_unavailable` never fires — the seam clause
-requiring absence to cross as omission is that guard.
+requiring absence to cross as omission is that guard. A clearing write stores
+the literal and its read-back passes green over a tag still held — the
+reserved-sentinel clause (a clear is a removal; read-back asserts absence) is
+that guard.
 
 One shape is guarded but **not** fully closed by this RDR: a key omitted at the
 seam is loud only where a surviving row declares it in `Row.RequiresOwned` (see
@@ -768,11 +825,9 @@ timeout, and expected versus observed tag values.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9 and A10 Pending,
-  DOWNGRADED at Stage 6** — the seam/boundary rules the 3amigo pass added and the
-  post-mutation reporting rule the critique pass added, both carried to lock with
-  the MVV as the named implementation-time plan; see Assumption
-  Verification)
+- [ ] All Critical Assumptions verified (A1-A8 Verified; **A9, A10, and A11
+  Pending** — MVV-proven properties carried to lock with the MVV as the named
+  implementation-time plan; see Critical Assumptions)
 - [ ] RDR 0001 keeps the resolver stateless and returns planned owned-tag
   writes instead of executing persistence.
 - [ ] RDR 0002 carries accessor references, tag provenance, and artifact roles
@@ -790,7 +845,11 @@ mismatch, unsafe definition validation, write read-back-mismatch, and
 required key refused as `owned_state_unavailable` at the resolver, and a
 timed-out partial read classified as `timeout`; plus A10's case: a write whose
 re-read cannot read a compared key surfaces the applied-but-unverified sense and
-the test asserts no second write and no compensating action occurred. The write success test must assert the re-read owned-tag value
+the test asserts no second write and no compensating action occurred; plus
+A11's cases: a clearing write whose re-read shows the key absent, a clear of a
+key the artifact does not hold succeeding, a clear whose re-read still holds the
+key (including as the literal) refused as `read_back_mismatch`, and a read
+holding the literal `<clear>` refused as `incomplete_read`. The write success test must assert the re-read owned-tag value
 equals the transition plan's expected value. The read test must assert that an
 accessor which can resolve only some of the requested keys takes the refusal
 branch and is distinguishable from one whose artifact genuinely lacks those
@@ -810,8 +869,9 @@ returns structured success/refusal values and performs no direct output.
 ### Phase 3: Write Read-Back Verification
 
 Apply planned owned-tag writes through write accessors, then re-read the same
-artifact role and compare the expected owned-tag values plus the pre-write
-observed and recognized tag values. Treat mismatch as a write failure.
+artifact role and compare each planned owned tag for equality — absence for a
+`<clear>` — plus the pre-write observed and recognized tag values. Treat
+mismatch as a write failure.
 
 ### Phase 4: CLI Integration Hook
 
@@ -873,7 +933,7 @@ unchanged.
    set, and the empty-value assertion are new and unwitnessed — they are A9's.
 3. **Scenario**: Execute a successful transition plan through a write accessor,
    then re-read the same artifact role.
-   **Expected**: Matching expected owned-tag values report success; mismatched
+   **Expected**: Owned-tag values equal to the plan report success; mismatched
    owned-tag values or mutated non-owned observed/recognized tag values report
    read-back mismatch even when command-level write invocation succeeded. A
    read-back whose re-read cannot read a key it must compare reports
@@ -907,6 +967,14 @@ unchanged.
    occur. The test asserts the accessor issued exactly one write invocation and
    performed no undo, retry, or re-derivation — compensation is forbidden, and
    recovery is the caller's.
+9. **Scenario**: Execute a transition plan whose owned-tag write is `<clear>`,
+   against an artifact that holds the key, one that does not, and one whose
+   binding stores the literal instead of removing (A11); then read an artifact
+   holding the literal `<clear>`.
+   **Expected**: The first two report success and the re-read does not hold the
+   key; the third reports `read_back_mismatch`; the read refuses
+   `incomplete_read` naming the key. The scenario-3 assignment fixture remains
+   the control — it must still assert presence and equality.
 
 ### Performance Expectations
 
@@ -926,6 +994,9 @@ Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 202
 
 - `docs/cli-output-contract.md`
 - JDR 0001 §D3: read-accessor completeness (`docs/jdr/0001-resolve-kernel-seam.md`)
+- JDR 0001 §D5: `<clear>` reserved — clear is removal, read-back asserts absence
+- JDR 0001 §D7(ii)/(iv): capability-table definition shape, `keys` binding,
+  read-back equality
 - RDR 0007: Guard Predicate Totality — its A6b (Pending, downgraded at Stage 6)
   routed the read-completeness obligation to this RDR; the read-completeness
   clause and the seam-omission clause are what discharge it
@@ -937,36 +1008,3 @@ Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 202
 - OpenTofu state-write prior art: `TaintCommand::Run`,
   `stateMgr.WriteState`, `stateMgr.PersistState`
 - Local ADO transition helper prior art: `Client::transitionWorkItem`
-
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-- **Cluster / date**: `0002-0009`, iteration 3, 2026-08-24 — report at
-  `docs/rdr/cluster-reconcile/0002-0009/iter-3/reconcile-report.md`; check at
-  `…/iter-3/answer-check-0004.md`.
-- **Peer pair**: 0004 × home (JDR 0001 §D5 answered §JD-15, §D7 answered
-  §JD-17, both 2026-08-24); raised by 0009×0004, 0002×0004.
-- **Defect** (answer-vs-fences check): every fenced clause is CONSISTENT or
-  silent. The contradiction is in meaning, unfenced: "expected owned-tag
-  values are present" (`0004:215`) and "present in the re-read … none"
-  (`0004:511`) assert presence on read-back, while §D5(a) states a `<clear>`
-  write removes the key and read-back asserts the key is **absent**; the word
-  "clear" occurs nowhere in 0004's body. §D7(ii) also names `0004:371`
-  "cannot be rebound" for repair (the same id in `[read.x]` and `[write.x]`
-  is legal; the fenced identity `(flow, name, capability)` at `0004:270-274`
-  already says so).
-- **Target re-entry stage**: 3 (Refine) — add the §D5 landing clauses
-  (remove-key; read-back-absent; clearing an absent key succeeds; a read
-  yielding `<clear>` as a value is unreadable) plus an MVV scenario for a
-  clearing rule; state read-back as equality (§D7(iv), already unfenced at
-  `0004:511`, `793`, `846`); writers carry `keys` and the accessor definition
-  is the capability-table entry (§D7(ii)) — by citation; repair `0004:371`.
-  Stage 7 then re-locks.
-- **Re-entry scope**: RE-LOCK-ONLY — `re-verify none`: additive clauses and a
-  wording repair; A2/A7 (write read-back can verify the intended effect) hold
-  unchanged for the clear case.
-- **Direction**: the home is the authority; cite §D5/§D7, do not restate
-  derivation. The Prerequisites checklist (`0004:771-780`) is still all
-  unchecked under a lock — the re-lock gate must resolve it (iter-1/2
-  observation; home "What this does not decide"). No joint-decision
-  qualifier carries forward (§JD-15 and §JD-17 both answered).
