@@ -16,7 +16,7 @@ engine README — this file is only the per-project index.
 | 0005 | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9] | High |
 | 0006 | Graph lint authority and guarantees | Final [joint decision → JDR 0001 §JD-17] | High |
 | [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Final [joint decision → JDR 0001 §JD-8, §JD-18] | Medium |
-| [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Draft [revised from Final 2026-08-23; re-verify A9, A4 — cluster 0002-0009 iter-2] | Medium |
+| [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Final | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Final [joint decision → JDR 0001 §JD-5, §JD-8, §JD-15] | Medium |
 
 ## Status legend
