@@ -207,7 +207,9 @@ value comparisons over present keys and never sees the view. The
 `guard_unevaluable` refusal names what blocked the verdict per row and per
 atom — key, block, reason `absent` | `uncomparable` — replacing the
 single-valued `Refusal.Guard` text, which has no referent once guards are
-atoms; it reaches the CLI through §JD-8's `Detail`. P1 and P4 decide: the
+atoms; it reaches the CLI through §JD-8's carrier — originally `Detail` text,
+**superseded 2026-08-24 by §D10**, which grants one structured `findings` field
+(0007's A19 reopening, accepted). P1 and P4 decide: the
 masking path closes by structure rather than by a harness nobody runs, and the
 refusal names the missing key.
 
@@ -372,12 +374,300 @@ definition is the capability-table entry; read-back is equality; writers carry
 citation; the terminal-non-owned finding.*
 
 **Blank, not decided here:** where a *rule* references a gate accessor — 0002's
-layout has no site for it; owner 0002 with 0004's semantics.
+layout has no site for it; owner 0002 with 0004's semantics. *Filled by 0002 at
+its re-entry (`0002:709-714`, row-level `gate` list); when it runs and what
+`deny` means are §D9.*
 
 **Observation for 0003's next touch (not this decision):** an unmarked
 `kind = "enum"` is a `2^|domain|` dimension under 0003's conservative default;
 every author will read `enum` as single-valued. The wire key is right either
 way.
+
+## D8 — Which verb assembles owned state and calls `Resolve`?
+
+0005 fences `flow resolve` as taking no read accessors; §JD-9 wires `--tag` to
+`Observed`; re-locked 0002 makes every ordinary row write-bearing, so every
+ordinary row carries a non-empty `RequiresOwned` that `missingOwned` checks
+against **owned** provenance. As fenced, the only verb that returns a plan
+refuses `owned_state_unavailable` on every model 0002 can load (critique Q-3).
+
+What 0005 was guarding against was *ambient discovery* ("location comes only
+from explicit artifact bindings"), not reading; `resolve` already accepts
+`--artifact role=path` for gates. Prior art: the command handler owns
+load→decide and only *decide* is pure (Vernon, DDD Distilled p73, p98;
+stateless `CanFire` — same selection, no effects). The designs that expose load
+and decide to the client separately (HTTP `If-Match`, PoEAA Optimistic Offline
+Lock p442, DDIA compare-and-set p267) all pass back an opaque version token and
+**re-validate at commit**; `set-state` has no precondition check (0004's
+read-back is post-write equality), so caller-carried owned state would let a
+stale snapshot mint a plan that `set-state` applies blindly — DDIA's write-skew
+shape, and a P2 violation.
+
+- **(a) `resolve` and `next` run the declared read accessors — recommended.**
+  Over the caller's `--artifact` bindings, assemble `Input.Owned` from the read,
+  call `Resolve` in the same invocation. `--tag` stays `Observed`. `read-state`
+  remains a diagnostic verb. The purity fence moves to where it belongs:
+  `internal/resolve`, not the verb.
+- **(b) Caller passes owned state back in** (`--owned k=v`, or `read-state`
+  output piped to `resolve`). Sound only with an `If-Match`-style precondition
+  on `set-state` — a larger design than the one avoided. Rejected.
+- **(c) A single `flow step` that also writes.** helm's one-shot `--dry-run`
+  shape; collapses 0005's deliberate plan/apply split (skill judgment sits
+  between). Rejected now; addable later as sugar over `resolve` + `set-state`.
+
+**Resolved: (a).** `flow resolve` and `flow next` MAY run declared read
+accessors over explicit `--artifact` bindings and MUST assemble `Input.Owned`
+from them; they still MUST NOT discover artifacts and MUST NOT run write
+accessors. A `--tag` naming an **owned** key or `recognized` is refused at the
+CLI before any accessor runs (P2 — refuse rather than silently shadow under
+owned-over-observed precedence); both are `GroupUserEnv` with their own codes
+(§D11). 0008's "programmer mistake" is the CLI caller's, which from the CLI's
+seat is the user; `GroupInternal` is for the CLI's own invariants.
+
+*Lands in **0005** — the `resolve`/`next` fence loses "MUST NOT run read
+accessors", keeps the discovery and write prohibitions; `resolve` data gains the
+read accessor identities and the assembled owned snapshot; two input refusals.
+**0002** — the observed-key-may-have-zero-readers rationale already cites this
+entry; unchanged. **0008** — its classification remainder closes by citation.
+Closes the verb half and the classification half of JD-9.*
+
+*Non-normative:*
+```
+intrastate flow resolve --model ./flows/rdr.toml --artifact rdr=docs/rdr/0005-….md \
+  --tag profile=small --outcome round-clean --as=json
+{"type":"ok","data":{"model":"rdr","revision":"9306595",
+  "owned":{"status":"Draft","stage":"prelock","iter":"2"},
+  "observed":{"profile":"small"},"rule":"continue-prelock",
+  "gates":[{"id":"rdr-lock","result":"allow"}],
+  "next":{"stage":"prelock","iter":"3"},"writes":{"iter":"3"},"escaped":false}}
+```
+
+## D9 — Where does a gate run, and what does `deny` mean?
+
+0002 carries a rule-level `gate` list on the normalized row and defers *when*
+and *what deny means* to 0004; 0004 never states the site; 0005 says "before
+the pure kernel call" — before a matched candidate exists (critique Q-2).
+
+A guard is pure and belongs to selection; a gate is an accessor — an external
+process with a timeout and an artifact binding. Every engine examined keeps
+guards side-effect-free at selection and runs effects after it (stateless
+README:150-152; XState `actions` only inside `microstep`; Cedar policies "have
+no side effects"). The systems with a second, side-effecting check run it
+*after* selection and report it on a distinct channel: Kubernetes authorization
+then admission (deny-overrides); Temporal validator-rejection vs handler-failure;
+sismic `PreconditionError` (entry gate) vs `PostconditionError` (read-back).
+
+- **(a) Before the kernel (0005 today).** Runs every candidate's gates before
+  knowing which matched — wasted accessor calls, and gate noise from rows that
+  never fire.
+- **(b) During selection (deny = not a candidate).** Prunes a deny into
+  `no_match`, which is escapable — the P1 masking §D2 and §D6 each closed once.
+- **(c) After exact-one selection, before the plan is emitted — recommended.**
+  Only the selected row's `gate` list runs. Nothing is wasted; nothing is
+  laundered.
+
+**Resolved: (c).** The flow is `unmodeled_outcome` → owned-state / guard
+viability → count (`no_match` / `ambiguous_match`, rescuable by escape rows) →
+**gates on the one survivor** → plan. Semantics:
+
+- **Deny is a refusal at the CLI and a typed result at the accessor.** The two
+  fences agree: 0004's table says the accessor *answered*; 0005 says `resolve`
+  returns exactly one plan or exactly one refusal, and a denied resolution has
+  no plan. A success-shaped "no plan" would give `resolve` a third disposition
+  and break every `type=="ok" → plan` branch.
+- **Deny is not an escape class.** Escape classes are `no_match` and
+  `ambiguous_match` (0002); a deny happens after a row was found, so there is
+  nothing to rescue. Escape rows carry no `gate` list (0002), so an escaped
+  plan is never gated.
+- **All gates on the selected row run; deny-overrides; every result reported.**
+  Indeterminate does not override deny (Kubernetes admission; PAM
+  `required` + `pam_deny`; Cedar forbid-overrides). The caller sees the whole
+  picture in one call. A gate's timeout or execution failure is an *accessor*
+  refusal (§D11, exit 3), not a gate result.
+- **`set-state` never runs gates.** Its fence admits only writers and nothing
+  carries rule identity to it. The window between `resolve` and `set-state` is
+  the same one the two-verb design accepts for owned state; the read-back is
+  the commit-time check. This is a stated non-guarantee, not an oversight.
+- **`flow next` runs gates only on opt-in** (non-normative: `--evaluate-gates`)
+  so it stays cheap and effect-free by default; without it, gate ids are listed
+  as unresolved facts, as 0005 already allows.
+
+*Lands in **0005** — the `resolve` fence's "before the pure kernel call" becomes
+after-selection; `flow-gate-denied` / `flow-gate-indeterminate` carry one
+finding per gate; `next`'s MAY becomes opt-in. **0004** — one clause stating
+the site by citation and that deny is reported, never applied. **0002** —
+consistent as fenced (`0002:709-714`). Closes JD-19.*
+
+*Non-normative:*
+```
+{"code":"flow-gate-denied","message":"rule continue-prelock is gated and rdr-lock denied",
+ "hint":"clear the gate, then re-run the same request",
+ "findings":[{"code":"gate_denied","param":"rdr-lock","message":"RDR is locked Final"},
+             {"code":"gate_allowed","param":"reviewer-ack"}]}      # exit 2
+```
+
+## D10 — What may the error envelope carry, and which exit code means what?
+
+0005's June table has no rows for 0004's refusal family, 0002's ~20 load
+categories, 0003's two, 0008's `reserved_tag_key` and per-key payload, or an
+escape marker on a plan; 0007 asks for one `omitempty` structured `CLIError`
+field instead of `Detail` text; 0006 mandates a `Finding` record in `clierr`.
+The only remedy distinction an exit code can carry is exit 3 (JD-8).
+
+Peers: exit tables reserve distinct codes only for *repair-the-environment-and-
+retry* classes (gh: auth=4, pending=8); "answered no" is the ordinary failure
+exit everywhere (roborev verdict F, goreleaser, golangci `IssuesFound`), and a
+terraform-style detailed exit code for it is opt-in even there. Error envelopes
+are flat (`code`/`message`/`hint`: beads, gh, roborev) except opentofu's typed
+per-diagnostic `range`/`snippet` — exactly the shape 0002/0007/0008 ask for.
+
+**Resolved:**
+
+1. **Exit 3 = the environment could not be consulted; repair it and re-run the
+   same request unchanged.** Accessor timeout, execution failure, incomplete
+   read, read-back incomplete, post-mutation timeout. **Exit 2 = the request or
+   the model is wrong, or the model said no.** Gate denied and indeterminate,
+   every kernel refusal, every load category, every input refusal. No new exit
+   group (0005's A-block).
+2. **One CLI code per caller-branchable failure; inner discriminators ride one
+   structured field.** No `flow-*` code per load category — the remedy for all
+   of them is "fix the model at this locator", one branch.
+3. **0007's reopening is accepted: `CLIError` gains exactly one `omitempty`
+   structured field, and it is the `Finding` record 0006 already mandates** —
+   non-normative `Findings []clierr.Finding` (`json:"findings,omitempty"`),
+   `Finding{Code, Message, Param, Locator, Hint}`, subsystem-agnostic. One
+   field serves all four carriers: 0006's blocking findings; 0007's per-atom
+   payload (`param` = atom path, `code` = `absent` | `uncomparable`); 0008's
+   per-key `reserved_tag_key` with the near-miss advisory in `hint`; 0002's
+   load categories (`code` = category slug, `locator` = file:line). **This
+   reverses §D4's `Detail` routing.** The `omitempty` tension with 0006 is
+   apparent only: a lint *failure* always carries at least one blocking
+   finding, so the field is never empty on `CLIError`; 0006's "empty list is
+   the receipt" binds the *success* payload's own non-omitempty `data.findings`.
+   Recorded as a 0006 citation repair, not a reopening.
+4. **Kernel-mapped codes mirror the kernel kinds one-to-one** (P7; 0005
+   re-locks anyway): `flow-no-match`, `flow-ambiguous-match`,
+   `flow-owned-state-unavailable`, `flow-guard-unevaluable`,
+   `flow-unmodeled-outcome` replace June's ad-hoc names.
+5. **An escaped plan is a success**, marked on the payload (`escaped`,
+   `escape_class`), exit 0.
+6. **Model entry: an explicit file path** (non-normative `--model <path>`;
+   0002's loader takes bytes) beside the config-resolved `--flow <id>`;
+   mutually exclusive; `flow-model-not-found` either way.
+7. **Read-back mismatch is exit 2** — the artifact disagrees with the plan and
+   someone must look; `read_back_incomplete` and post-mutation timeout are
+   distinct exit-3 codes whose message says the mutation may have been applied
+   and was not verified (0004's MUST).
+
+*Non-normative table — the shape, not the spellings:*
+
+| Family | Code | Group / exit | Carrier |
+| --- | --- | --- | --- |
+| input | `flow-tag-invalid`, `flow-tag-duplicate`, `flow-tag-reserved`, `flow-tag-owned` | UserEnv / 2 | `param` |
+| input | `flow-write-invalid`, `flow-write-unbound`, `flow-clear-unbound` | UserEnv / 2 | `param` |
+| input | `flow-artifact-invalid`, `flow-artifact-missing` (a role an accessor needs, caught before its `execution_failure`) | UserEnv / 2 | `param` = role |
+| model | `flow-model-not-found`; `flow-model-invalid` (every 0002 load category, 0003's two, 0008's `reserved_tag_key`) | UserEnv / 2 | `findings[]` |
+| kernel | `flow-unmodeled-outcome`, `flow-no-match`, `flow-ambiguous-match`, `flow-owned-state-unavailable`, `flow-guard-unevaluable` | UserEnv / 2 | `findings[]` (rows, keys, atoms) |
+| gate | `flow-gate-denied`, `flow-gate-indeterminate` | UserEnv / 2 | `findings[]` one per gate |
+| accessor | `flow-accessor-timeout`, `flow-accessor-failed`, `flow-read-incomplete` | EnvUnavailable / 3 | `param` = accessor id |
+| accessor | `flow-accessor-unknown`, `flow-accessor-capability-mismatch`, `flow-write-non-owned` (unreachable past load + CLI checks) | Internal / 2 | — |
+| write | `flow-write-readback-mismatch` | UserEnv / 2 | `findings[]` per key |
+| write | `flow-write-readback-incomplete`, `flow-write-readback-timeout` | EnvUnavailable / 3 | `detail`: may have been applied |
+| plan | `escaped: true`, `escape_class` on the success payload | 0 | `data` |
+
+*Lands in **0005** — the whole code table, the field, the exit mapping, the
+path form, the escape marker. **0007** — its A19 Prerequisite closes; the
+per-atom payload cites the field. **0008** — payload and advisory carrier
+close. **0006** — the citation repair above. **0004** — its refusal classes map
+by citation. **0002** — load categories map by citation. Closes JD-8.*
+
+## D11 — How does the CLI carry a clear, a set value, and an unbound write?
+
+0005's `--write name=value` cannot carry the reserved `<clear>` (§D5) or a
+`set`-kind member sequence (§D7(iv), 0002's no-join fence), and no boundary
+refuses a `--write` key outside any writer's `keys`.
+
+Peers spell "clear" as a separate key-only flag (beads `--unset-metadata <k>`,
+gh `--remove-label`) or as `key=null` in the value (helm); none on disk uses
+kubectl's trailing `key-`, which is one keystroke from a wrong write. Set values
+use an explicit container (helm `{a,b}` with `\,` escapes; gh `-F key[]=v`
+accumulating, with no spelling for the empty set).
+
+**Resolved: mirror the TOML.**
+
+- **`--write k=v` ↔ the write block; a repeatable `--clear <key>` ↔ the
+  rule-level `clear` list.** `--write k=<clear>` is refused with the hint "use
+  `--clear`", so the sentinel is unauthorable on both surfaces (§D5). The same
+  key under `--write` and `--clear`, or twice under either, is a duplicate
+  refusal.
+- **A `set`-kind key's `--write` value is a JSON array literal**
+  (`'labels=["a","b"]'`, `'labels=[]'`); a bare scalar for a set key, or an
+  array for a scalar key, is `flow-write-invalid`. The model declares the kind,
+  so parsing is unambiguous; `[]` (empty set) and `--clear` (absent) stay
+  distinct, which 0004's read-back must tell apart; `["a,b"]` vs `["a","b"]`
+  cannot collide (0002's member-sequence fence); and `resolve` renders a set
+  write as the same JSON array, so copy-through from plan to `set-state` is
+  byte-identical. This is the "first-class structured literal" 0005 deferred
+  duplicates until.
+- **The CLI refuses an unbound write before any accessor runs.** A `--write` or
+  `--clear` key MUST be a declared owned tag served by exactly one
+  `[write.<id>]` whose `keys` list names it, and a `--write` value MUST be
+  well-formed for its kind; otherwise `flow-write-unbound` / `flow-clear-unbound`
+  / `flow-write-invalid` (`GroupUserEnv`) and no mutation is attempted.
+  0004's accessor-level `write to non-owned tag` stays as defense in depth and
+  is `GroupInternal`. Each writer applies its own keys and reads back; no
+  cross-writer atomicity is promised.
+- **`--plan <file|->` on `set-state`** (opentofu `plan -out` / `apply <file>`)
+  is deferred: copy-through is already mechanical, and a carried plan reopens
+  whether `set-state` re-checks anything from it (§D9's non-guarantee). A seed,
+  not part of this lock.
+
+*Lands in **0005** — the `set-state` grammar (`--clear`, the array literal,
+duplicate rule), three input refusals, the pre-accessor binding check. **0004**
+— unchanged; its `<clear>` clauses are reached through the CLI's rendering.
+**0002** — unchanged; the CLI reads its `[write.<id>].keys` binding. Closes
+JD-20.*
+
+*Non-normative:*
+```
+intrastate flow set-state --model ./flows/rdr.toml --artifact rdr=docs/rdr/0005-….md \
+  --write status=Final --write 'labels=["cli","final"]' --clear prelock_lens
+intrastate flow set-state … --write finalized_at=2026-08-24
+{"code":"flow-write-unbound","message":"finalized_at is not served by any write accessor",
+ "param":"finalized_at","hint":"declare it under a [write.<id>].keys list, or drop the flag"}
+```
+
+## D12 — `Block` cardinality
+
+0007 fences `Block` as exactly two constants; 0002 fences a third `match`
+member on §D6's authority (critique Q-4). Two types with a `blockOf` mapping is
+the reconstruction step §D1 exists to remove, and 0002 forbids local mirrors of
+kernel constants.
+
+**Resolved: one exported type, three constants.** `resolve.Block` gains
+`BlockMatch` in 0007 Phase 1; 0007's "exactly two" is the fence that gives.
+0007's per-atom payload may therefore carry `match`, which no refusal names —
+harmless, since match atoms are never unevaluable (§D6: match admits only `eq`
+and expanded `in` over declared tags). *Lands in **0007** at Stage 8 (its Phase
+1 owns the type); **0002** and **0003** consistent as fenced. Closes JD-21.*
+
+## D13 — Set-valued tag *value* encoding at the kernel seam
+
+`Tag.Value` is a `string`; 0002 stores a set write as a member sequence; 0004
+compares read-back for equality over an unspecified form; 0007 assigns the
+element encoding to 0003, which declares spelling and universe only (critique
+Q-5).
+
+**Resolved: `Tag.Value` stays `string`; a set crosses as its canonical JSON
+array — members sorted, duplicate-free, compact encoding — and 0002 declares
+it.** Encoding is carriage, not declaration semantics (the Ownership
+correction below already draws that line for `block` retention); 0003 cites it.
+It is the same byte form the CLI accepts in `--write` (§D11) and emits in
+`writes`, so 0004's read-back equality is byte equality and no third encoding
+exists. The member-sequence fence is satisfied: a JSON array is a sequence, not
+a joined string. *Lands in **0002** — one normative clause; **0003**, **0004**,
+**0007** by citation; 0007's `contains` contract-test leg unblocks. Closes
+JD-22.*
 
 ---
 
@@ -477,6 +767,7 @@ not a negotiation.
   before any member starts Stage 8 against the code table. 0004's fenced
   "MUST NOT collapse `read_back_incomplete` into a mismatch" (`0004:376-390`)
   is the sharpest instance.
+  **DECIDED 2026-08-24 by §D10** — exit 3 = environment could not be consulted; one code per caller-branchable failure; one `omitempty` `findings` field (0007 A19 accepted, §D4 routing reversed); kernel-aligned code names; escaped plan is a success; explicit model path. Siblings 0005 (re-entry), 0007, 0008, 0006 (citation repair), 0004, 0002 (by citation).
 - **JD-9 `--tag` provenance.** Caller-supplied tags enter as
   `ProvenanceObserved` and never satisfy an owned-state dependency. `assemble`
   already pins owned-over-observed precedence so the accessor snapshot is "never
@@ -494,6 +785,7 @@ not a negotiation.
   therefore *which verb assembles owned state and calls `Resolve` in one
   invocation* — not whether `--tag` is Observed. 0002 joins as a sibling.
   Siblings: 0002, 0005, 0008. *(0002×0005 F8, critique Q-3)*
+  **DECIDED 2026-08-24 by §D8** — `resolve`/`next` run declared read accessors over explicit `--artifact` bindings and assemble `Input.Owned`; `--tag` stays `Observed`; `--tag` on an owned key or `recognized` is a `GroupUserEnv` refusal at the CLI. Siblings 0005 (re-entry), 0002 and 0008 consistent by citation.
 - **JD-10 Recognized-tag totality.** 0008's name constraint invalidates all
   three of 0002's canonical fixtures, which 0002 declares normative — rename
   them; there are no users to migrate. Still open: whether a declared
@@ -615,6 +907,7 @@ not a negotiation.
   stake: a gated row either never fires silently or surfaces as an error.
   Siblings: 0002, 0004, 0005. *(0002×0004 F-B, 0004×0005 F8, critique Q-2,
   iteration 4)*
+  **DECIDED 2026-08-24 by §D9** — after exact-one selection, before the plan, only the selected row's gates; deny is a refusal, not an escape class; deny-overrides with every gate reported; `set-state` never gates. Siblings 0005 (re-entry), 0004 (one citing clause), 0002 consistent.
 - **JD-20 CLI carriage of §D5/§D7 write semantics.** 0005's `--write
   name=value` grammar (`0005:393-395`) cannot carry a reserved `<clear>` or
   a set-kind member sequence, and no boundary refuses a `--write` key outside
@@ -623,6 +916,7 @@ not a negotiation.
   the CLI or the accessor refuses an unbound write key. User-visible stake: a
   skill cannot clear a tag or write a set through the CLI at all. Siblings:
   0002, 0004, 0005. *(0004×0005 F7/F8, 0002×0005 F7, iteration 4)*
+  **DECIDED 2026-08-24 by §D11** — `--clear <key>` mirrors the clear list; set values are JSON array literals; `--write k=<clear>` refused; the CLI refuses unbound keys before any accessor runs. Siblings 0005 (re-entry), 0002 and 0004 unchanged.
 - **JD-21 `Block` cardinality.** 0007 fences the atom's `Block` as "an
   exported named STRING type carrying exactly two constants" (`0007:1264-1266`,
   per §D1); 0002 fences a third `match` member on §D6's authority and tells an
@@ -632,6 +926,7 @@ not a negotiation.
   User-visible stake: none directly; it is the type 0006 serializes and
   0003's identity tuple reads. Siblings: 0002, 0003, 0007. *(critique Q-4,
   iteration 4)*
+  **DECIDED 2026-08-24 by §D12** — one type, `BlockMatch` added in 0007 Phase 1.
 - **JD-22 Set-valued tag *value* encoding at the kernel seam.** The kernel's
   `Tag.Value` is a `string`; 0002 stores a set-kind write as a member
   sequence (`0002:843-853`, `1146-1150`), 0004 asserts read-back equality
@@ -641,6 +936,8 @@ not a negotiation.
   byte form of a set value crossing `Tag.Value`, and who declares it
   (0007 assigns 0003). Siblings: 0002, 0003, 0004, 0007. *(0007×0003 F5,
   0002×0004 F-A, critique Q-5, iteration 4)*
+
+  **DECIDED 2026-08-24 by §D13** — canonical sorted, deduplicated JSON array in `Tag.Value`, declared by 0002.
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve
