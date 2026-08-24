@@ -629,3 +629,157 @@ contracts are not separable seams but one data format and the normalizer that
 realizes it — splitting them would put the wire format and its only producer
 in different documents, which is the coupling JDR 0001 §JD-3 and the
 declaration-model rehoming were both written to repair.
+
+---
+
+# Round 3 — scoped re-entry (2026-08-24): re-verify A1, A9, A12
+
+Model: claude-opus-5[1m]
+
+Scope from the `Status:` line — `Draft [revised from Final 2026-08-24; re-verify
+A1, A9, A12 …]`. A2–A8, A10, A11, A13, A14 carried forward at their recorded
+status; only anchors the §D5–§D7 restatement touched were re-checked.
+
+## Domain routing
+
+A9 and A12 are claims about **this project's own code** (`internal/resolve`).
+A1 is half own-format, half **external dependency behavior**
+(`github.com/pelletier/go-toml/v2` strict decoding) — the one external claim in
+scope, verified against the module cache, not the corpora.
+
+negative: A1/A9/A12 — no `arc` corpus search run. The corpora in
+`.rdr/resources.md` (DevRef, StateMachineLit, StateMachineRes, PapersFast) own
+no behavior these three assert; the owning sources are project code, the
+JDR, and the TOML library's source.
+
+## Reuse audit (`.rdr/env.md` reuse-audit paths)
+
+Re-run, unchanged from Round 1: no normalizer, loader, or TOML package exists
+under `internal/`. `internal/resolve` is the consumer; `internal/cli/config`
+still does discovery + file read only. No reuse finding refutes the approach.
+The Round-1 finding stands — `internal/cli/config` and this RDR should share
+one TOML library when the dependency lands.
+
+## A9 / A12 — the blocking premise re-verified at source
+
+Both are `Pending`/`MVV Test` and blocked on RDR 0007's kernel reshape. What
+this stage can verify is the **premise of that block**, and it holds exactly:
+
+- `internal/resolve/resolve.go::Row` still carries `Match []Tag` and
+  `Guard string`. No `Atom` type, no operator-token type, no per-atom block
+  field, and no `OpExists` / `LiteralTrue` / `LiteralFalse` anywhere in
+  non-evidence Go source (the only hits repo-wide are RDR 0003's spike
+  harness).
+- `::TagSet.matches` tests `Match` as raw-map value equality with no folding;
+  `::evaluateGuard` returns `GuardTrue` on an empty guard, `GuardUnevaluable`
+  on a nil seam, and otherwise delegates to the seam.
+- `::escapeOrRefuse` filters escape candidates on
+  `row.Outcome != in.Recognized || !view.matches(row.Match)` — the same filter
+  `::Resolve` applies to ordinary rows, so a per-outcome escape row is what the
+  kernel admits (A11's kernel half, re-confirmed in passing).
+
+So `Guard string` genuinely cannot carry a per-atom block, and the handoff has
+no field to route into. A9 and A12 stay `Pending` on the same named MVV
+assertions; nothing about them changed, and neither is load-bearing for a
+pre-lock MVV item.
+
+**A12's discriminating witnesses now exist in the fixture**, which they did not
+before: `iter-2/rdr-fixture.toml` adds `continue-prelock-cluster` with
+`[rule.guard.all.cluster_ready] eq = true` — an `eq` atom under `guard.all`
+over an optional (`required` unset) owned key — and the kata fixture keeps
+`status.eq=closed@unless`. Both route to the guard by block, not operator. The
+assertion remains unsatisfiable until the reshape lands, but its inputs are no
+longer owed.
+
+## A1 — re-verified by spike against the §D7 layout
+
+The pre-§D7 fixtures authored `[accessors.<id>]` with `mode` and a tag-side
+`accessor` reference, which the Normative Contracts no longer admit. Both
+fixtures were re-authored to the closed layout and the normalizer rebuilt for
+§D6 routing; artifacts under `evidence/spikes/iter-2/`.
+
+Command:
+
+```sh
+cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 && \
+  GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off \
+  go run . rdr-fixture.toml kata-fixture.toml
+```
+
+Every element A1 names decodes unambiguously under strict decoding:
+
+| A1 element | Witness |
+| --- | --- |
+| sparse rules, nested match predicates | `continue-prelock` inheriting `large-prelock` → `prelock` → `draft` |
+| multi-tag writes | `reconcile-rewind` writes `stage`/`status`/`rewind_scope` + clears `prelock_lens` |
+| per-capability accessor tables with `keys` | `[read.*]` / `[write.*]` / `[gate.*]`; `rdr-status` appears under both read and write (legal — identity is `(flow, name, capability)`) |
+| root `[initial]` / `terminal` | `[initial]` 3 owned assignments; `terminal = ["archived"]` resolving to a context |
+| the seven type-model keys | `kind`, `domain`, `min`, `max`, `elements`, `single_valued`, `required` all exercised across the two fixtures |
+| `[model.metadata]` | free-form `owner` / `review_cadence`; carried through, uninterpreted, and NOT rejected by strict decoding |
+| strict decoding | `-strict-only` pass: `STRICT-OK` on both; `neg-unknown-field.toml` → `unknown schema field: model.flavor` |
+| no ambiguous decoding | 32 negative fixtures, one category each; 9 rows + 2 rows normalize deterministically |
+
+**Strict-decode API, verified in the module cache** (not from memory):
+`(*toml.Decoder).DisallowUnknownFields()` → `*toml.StrictMissingError` with
+`Errors []DecodeError`, each exposing `Key() Key` (`Key` is `[]string`) and
+`Position()`, at
+`$(go env GOMODCACHE)/github.com/pelletier/go-toml/v2@v2.3.1/unmarshaler.go:52`
+and `errors.go:69`. `toml.Unmarshal` is permissive by default
+(`unmarshaler.go:21`), which is exactly why the RDR states strictness as an
+obligation on the format rather than a library property. Two-pass over the same
+`[]byte` is re-runnable, so the version gate can precede strict decoding. The
+strict check flags only struct branches (`skipUntilTable`), so a
+`map[string]any` field passes untouched — which is what makes `[model.metadata]`
+free-form while the rest of the document stays strict. All five points confirmed
+by a delegated read of the library source plus an empirical harness.
+
+### Contract behaviors witnessed beyond A1's own list
+
+- **General match-block expansion (§D6)** — `continue-prelock` now expands on
+  the *inherited* `profile.in = ["large","foundational"]`, not just on
+  `recognized`. Two rules × two members = the `#large` / `#foundational` rows.
+- **Sequence-valued suffix** — rendered by joining elements with `#`; ordering
+  compares element-by-element via `slices.Compare`, so the empty suffix sorts
+  first.
+- **`eq` / single-member `in` equivalence** — `perm/rdr-eq-as-in.toml` digests
+  identically to the baseline; a single-member `in` contributes no suffix.
+- **Rule-order permutation** — `perm/rdr-ruleorder.toml` digests identically.
+  This is the control that actually excludes a positional tiebreak.
+- **A11's escape-expansion shape** — `draft-no-match-escape` now binds `in`
+  over two alphabet members and yields two escape rows with distinct suffixes,
+  each write-free with an empty `requires_owned`. A11 stays `Pending`/MVV (its
+  assertion is owed at implementation), but the shape is no longer unwitnessed.
+- **A13's merge halves** — `merge-idempotent.toml`: a rule and an inherited
+  context contributing a byte-identical atom collapse to one.
+  `merge-distinct.toml` / `-rev.toml`: differing literals both survive, and the
+  two `use` orders digest identically.
+- **Provenance-scoped bindings** — owned-with-0-readers and owned-with-2-readers
+  both refuse; the kata fixture's observed `owner` with zero readers loads
+  (JDR 0001 §JD-9 arm).
+- **Positive controls** — a model with no `[initial]` and one with no `terminal`
+  both LOAD and are left to RDR 0006 lint, as the contract requires.
+
+### Defect found while re-authoring: an unreachable category arm
+
+`[initial]`'s `malformed initial declaration` category has an **owned-tag arm
+that no document can reach**. Two Normative Contracts clauses overlap:
+
+- line 474–476: "every key … assigned in `[initial]`, MUST be served by exactly
+  one writer, and **every writer key MUST be owned** (`write to non-owned
+  tag`)";
+- line 491–492: "every key MUST be a declared owned tag … (`malformed initial
+  declaration` otherwise)".
+
+An observed key in `[initial]` needs a writer to satisfy the first clause, but a
+writer's keys must be owned — so the document fails `write to non-owned tag`
+before the provenance arm of `malformed initial declaration` can fire.
+Empirically: `neg-initial-observed.toml` refused `write to non-owned tag:
+writer "rdr-status" serves "finalized_at" (observed)` on both attempted
+spellings, and the fixture was withdrawn as unreachable.
+
+This does **not** retire the category — its *value* arm (a value ill-formed for
+the tag's kind/domain) and its *undeclared-key* arm remain reachable
+(`neg-initial-unknown.toml` → `unknown tag "nosuchtag" written`, itself a
+different category). It means the Testing Strategy's promised "an `[initial]`
+key that is observed" control **cannot be written as a single-defect fixture**.
+Taken to the author's round.

@@ -1,0 +1,24 @@
+Model: claude-opus-5[1m]
+# RDR 0002 expanded-table dump — iteration 2 (JDR 0001 §D7 closed layout)
+#
+# Command: cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 && \
+#          GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off \
+#          go run . rdr-fixture.toml kata-fixture.toml
+#
+# SHA-256 of the row block below:
+#   6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd
+# Byte-identical across three consecutive runs (negative-cases.txt).
+
+MODEL rdr rows=9 outcomes=round-clean,verdict-flapping,reconcile-block,finalized terminal=archived metadata_keys=owner,review_cadence
+rdr.continue-prelock#foundational kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+rdr.continue-prelock#large kind=transition source=rdr:prelock outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=large@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] write=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+rdr.continue-prelock-cluster#foundational kind=transition source=rdr:prelock-cluster outcome=round-clean atoms=[cluster_ready.eq=true@all; profile.eq=foundational@match; stage.eq=prelock@match; status.eq=Draft@match] next=[prelock_lens=critique; stage=prelock] write=[prelock_lens=critique; stage=prelock] requires_owned=[prelock_lens,stage] gate=[] escape=[]
+rdr.continue-prelock-cluster#large kind=transition source=rdr:prelock-cluster outcome=round-clean atoms=[cluster_ready.eq=true@all; profile.eq=large@match; stage.eq=prelock@match; status.eq=Draft@match] next=[prelock_lens=critique; stage=prelock] write=[prelock_lens=critique; stage=prelock] requires_owned=[prelock_lens,stage] gate=[] escape=[]
+rdr.draft-no-match-escape#reconcile-block kind=escape source=rdr:escape outcome=reconcile-block atoms=[status.eq=Draft@match] next=[] write=[] requires_owned=[] gate=[] escape=[no_match]
+rdr.draft-no-match-escape#round-clean kind=escape source=rdr:escape outcome=round-clean atoms=[status.eq=Draft@match] next=[] write=[] requires_owned=[] gate=[] escape=[no_match]
+rdr.reconcile-rewind kind=transition source=rdr:reconcile outcome=reconcile-block atoms=[status.eq=Draft@match] next=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] write=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] requires_owned=[prelock_lens,rewind_scope,stage,status] gate=[] escape=[]
+rdr.terminal-archive#finalized kind=transition source=rdr:terminal outcome=finalized atoms=[stage.eq=archive@match] next=[stage=archive] write=[stage=archive] requires_owned=[stage] gate=[] escape=[]
+rdr.terminal-archive#verdict-flapping kind=transition source=rdr:terminal outcome=verdict-flapping atoms=[stage.eq=archive@match] next=[stage=archive] write=[stage=archive] requires_owned=[stage] gate=[] escape=[]
+MODEL kata rows=2 outcomes=accepted,needs-work,closed terminal=shipped metadata_keys=owner
+kata.review-accepted kind=transition source=kata:review outcome=accepted atoms=[owner.eq=current-session@all; phase.eq=review@match; status.eq=open@match; status.eq=closed@unless] next=[phase=ship; status=accepted] write=[phase=ship; status=accepted] requires_owned=[phase,status] gate=[] escape=[]
+kata.review-needs-work kind=transition source=kata:review outcome=needs-work atoms=[phase.eq=review@match; status.eq=open@match] next=[labels=needs work; phase=resolve; status=open] write=[labels=needs work; phase=resolve; status=open] requires_owned=[labels,phase,status] gate=[] escape=[]
