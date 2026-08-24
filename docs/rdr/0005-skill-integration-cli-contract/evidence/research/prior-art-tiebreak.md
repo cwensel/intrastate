@@ -149,3 +149,37 @@ are three of the four axes, and the escaping buys nothing here.
 Note the cost is not free: adopting the unescaped form means both shipped output
 paths (`internal/cli/clierr/clierr.go:135`, `internal/cli/respond/respond.go:183`)
 change, and that touches RDR 0006's envelope, which is Final.
+
+---
+
+## Dispositions — author's round, 2026-08-24
+
+Both items approved on the recommendations above.
+
+**OPEN-1 → `Finding` is one flat record with `omitempty` fields.** Fields:
+`Code`, `Message` (both always present), plus `omitempty` `Param`, `Locator`,
+`Hint`, `Severity`, `Model`, `Rule`, `Key`, `Operator`, `Literal`, `Block`,
+`Class`. Each producer populates the subset it owns; the guard atom's four
+fields sit flat, not in a nested `atom` object. Carried obligation from the
+prior art: `Finding.message` MUST be self-sufficient — readable with no
+structured field consulted (k8s `NewInvalid` precedent).
+
+*Consequence for RDR 0006:* its `Technical Design` ("`Key`, `Operator`,
+`Literal`, `Block`, and `Class` are `string`") **agrees** with this shape. Its
+illustrative JSON showing a nested `"atom": {…}` does not, and is the side
+needing a citation repair — illustrative, not normative, so no reopening of a
+Final RDR is required.
+
+**OPEN-2 → HTML escaping disabled on the canonical set literal.** `<`, `>`, `&`
+serialize as themselves. Normative fixtures approved: `["cli","final"]` (common
+case, identical under either encoder) and `["a<b","p>q","x&y"]` (divergent
+case). Recorded deviation: not strictly JCS-conformant, since U+2028/U+2029
+escape under both encoders — acceptable because JCS conformance is not claimed.
+
+*Consequence for implementation:* `internal/cli/clierr::EmitJSON` and
+`internal/cli/respond::writeJSONLine` both move off bare `json.Marshal` onto one
+shared helper. Bare `json.Marshal` must not remain on any path a set value
+crosses. Booked as a Prerequisite. MVV scenario 5 now asserts a set member
+containing `<` and one containing `&` round-tripping byte-identically, so the
+rule is covered by validation rather than review; new scenario 7 covers the
+`Finding` record's `omitempty` and self-sufficient-message rules.
