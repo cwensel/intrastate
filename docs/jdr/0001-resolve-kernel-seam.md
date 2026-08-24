@@ -58,6 +58,9 @@ already lock.
 7. **Pre-release, prefer the clean shape** — no shims for callers that do not
    exist. *(Rests on a project convention, not repo text — confirm before
    leaning on it.)*
+8. **The layout makes illegal states unrepresentable** — a shape the strict
+   decoder can refuse is never left to a validator (0002's strict-decoding
+   clause; resolved by §D7).
 
 ---
 
@@ -216,6 +219,163 @@ existence constants and canonicalizes key spellings before a row exists.
 **0009** (Final) cites `Refusal.Guard` as a refusal property; that citation is
 stale under this decision and rides to 0009's re-lock — see JD-12.*
 
+## D5 — Does `<clear>` cross to the write accessor as a value, and what does read-back assert?
+
+0002 renders an authored rule-level `clear` as a `<clear>` entry in both
+`Writes` and the next-state tags, and states the sentinel is **unreserved** in
+the tag-value space. 0009's fenced Writes-only predicate relies on that
+reduction. 0004 contains the word "clear" zero times: a literal-minded write
+accessor stores the string `<clear>`, and its read-back ("expected owned-tag
+values") passes green on a tag that was never removed — a success-shaped result
+over unverified state. 0006 cannot re-pair a clear from the normalized value
+while an author may also write the literal.
+
+Prior art: a delete is a write of a marker (Cassandra tombstones; JSON Merge
+Patch's `null`; `kubectl label k-`) — sound exactly when the marker is
+**reserved**.
+
+- **(a) Reserve the sentinel; define it at 0004 — recommended.** 0002 refuses
+  an authored tag value of `<clear>` at load; 0004 states that a `<clear>` write
+  removes the key, that read-back asserts the key is **absent** (already a value
+  on its success branch), that clearing an absent key succeeds, and that a read
+  yielding `<clear>` as a value is unreadable. Kernel `Row` and 0009 untouched.
+- **(b) Separate `Clears []string` on the row.** The clean shape (P7), but it
+  reopens 0001's `Row` and 0009's fenced Writes-only predicate — a second
+  re-lock for one field.
+- **(c) Typed absent value on `Tag`.** (b)'s cost with a weaker type.
+
+**Resolved: (a).** Three Final documents and the kernel already carry the
+sentinel; reserving it closes the ambiguity and the "lossy dump site" 0002
+lists. Closes JD-15.
+
+*Lands in **0002** — one load category refusing `<clear>` as an authored tag
+value, and the Round-Trip lossy-site note drops its `<clear>` item; and in
+**0004** — remove-key / read-back-absent / idempotent-clear / unreadable-on-read
+clauses plus an MVV scenario for a clearing rule. **0009** is unchanged;
+**0006** reads a `<clear>` write as removal by citation.*
+
+## D6 — Which key routes an atom to `Match` or the guard?
+
+0002 routes by **operator** (`eq` on a declared tag → `Match`; every other
+operator and every `unless` atom → guard). 0003 proves coverage by **authored
+block** (`[rule.match]` is the grouping context; guard blocks are product
+dimensions). The partitions disagree on two input classes: a non-`eq` atom
+under `[rule.match]` is green under lint and `guard_unevaluable` at runtime (a
+P5 failure); an `eq` atom under `[rule.guard.all]` over an optional key — 0003's
+own fixture `foundational-to-cove` — is withheld by lint but becomes a silent
+non-candidate in the kernel (escapable `no_match`, the masking P1 forbids).
+
+Prior art: statecharts/SCXML separate trigger match (candidate selection) from
+`cond` (gate on candidates), and the author declares which is which; rules
+engines and SQL (join key vs `WHERE`) are the same split.
+
+- **(a) Operator-keyed (0002 today).** The author's block is advisory; 0003 must
+  re-derive routing from operators; `eq` under a guard silently becomes
+  selection.
+- **(b) Block-keyed, match restricted to what the equality pattern carries —
+  recommended.** Match blocks (`[rule.match.*]`, `[context.*.match.*]`) admit
+  `eq`, and `in` only via expansion into one candidate row per member — the
+  expansion 0002 already defines for `recognized`, generalized. Comparison,
+  existence, and `contains` under a match block are a load refusal. Every atom
+  under `guard.all` / `guard.unless` is a guard atom regardless of operator,
+  `eq` included. A12's exhaustive/disjoint routing becomes structural.
+- **(c) Block-keyed, `in` under match refused.** Forces `profile in […]` into
+  the guard, where lint reads it as a dimension the group must *cover* —
+  gap findings for values the author meant to exclude. Rejected.
+
+**Resolved: (b).** The block is the author's declared intent about masking:
+"select on" versus "gate on" (P1, P2). 0002's worry that an `eq` guard atom
+"defers a decidable check to a seam that can report `guard_unevaluable`" names
+the wanted behavior for a guard over an optional key, and 0002 already does it
+for `unless`. Closes JD-16.
+
+*Lands in **0002** — the routing clause restated as block-keyed; the match-block
+operator restriction as a load category; the `in`-expansion generalized to every
+match block; match atoms carry block `match` (closing the two-valued/three-valued
+block vocabulary finding); A12's MVV; Scenario 4's unevaluable-sibling witness
+becomes an `eq` guard atom over an absent optional key. **0003** cites: its
+participation and can-refuse clauses already read the block. **0006** reads the
+three-valued `Block` it already serializes.*
+
+## D7 — What must the closed TOML layout additionally spell?
+
+0002 locks a strict-decoded layout that never received the declarations its
+consumers locked against: 0006's root and stop set (A6) and write-replaces
+(A10); 0004's per-accessor capability, role, keys, timeout, read-back; 0003's
+five type-model fields; and the rejection sites for a bad declaration or a
+literal outside its domain. Pre-release, the layout may take any shape (P7), so
+the tiebreaker is readability and maintenance.
+
+Two rules decide every sub-question. **Illegal states are unrepresentable in
+the layout** — a shape the strict decoder can refuse is never left to a
+validator, so the error names a key and a line. **One home per fact** (P6) — a
+binding both 0002 and 0004 need is declared once. Prior art: SCXML/XState/ASL
+put start and end in the same document as the transitions; NuSMV declares
+typed variables (`{a,b,c}`, `0..3`, boolean), roots as assignments
+(`init(x) := a`) and goals as predicates; Kubernetes probes model one-of by
+sub-object; Go tool configs spell timeouts as duration strings; Cargo keeps a
+strict manifest with a sanctioned `[package.metadata]` extension table;
+Cassandra replaces scalars and adds collection `+`/`-` forms later without
+breaking replace.
+
+- **(i) Initial / terminal.** Root `[initial]` is a table of owned
+  `tag = value` assignments (the root must be a node); root `terminal` is a
+  list of **context ids** (the stop set is a predicate, and contexts are already
+  the model's named predicates — no new grammar; a rule may `use` a terminal
+  context for an escape self-loop). Rejected: `terminal = true` inside a
+  context (the first non-predicate field in a context; terminals found only by
+  scanning); `[[terminal]]` tables (duplicate the context grammar). A terminal
+  context matching a non-owned tag is a 0006 blocking finding.
+- **(ii) Accessors.** One table per capability — `[read.<id>]`, `[write.<id>]`,
+  `[gate.<id>]` — replacing `[accessors.<id>]` and its `mode`. Each decodes to
+  its own shape, so `keys` exists only on readers and `read_back` only on
+  writers; 0004's "exactly one capability" holds structurally. **`keys` is the
+  binding**: 0004 already mandates the requested key set as validated metadata,
+  so the tag-side `accessor` reference is a second copy and is removed. Readers
+  and writers both declare `keys`; the loader refuses a key served by zero or
+  two readers, a written or cleared key not in exactly one writer, and a
+  writer key that is not owned. Fields: `role`, `path`, `keys`, `timeout` (Go
+  duration string; missing or non-positive refused), and `read_back = true` on
+  writers. The same id in `[read.x]` and `[write.x]` is legal — 0004's fenced
+  identity is `(flow, name, capability)`; its unfenced "cannot be rebound"
+  sentence is a citation repair.
+- **(iii) Type-model keys.** `kind`, `domain`, `min`, `max`, `elements`,
+  `single_valued`, `required` — 0003's own illustrative spellings, with
+  `required` for the optionality marker (defaults optional, as 0003 mandates).
+  Rejected: JSON-Schema alignment (`type`/`enum`/`minimum`) — `kind` is in
+  every fixture and in 0003's tokens, and `enum` would name a kind in one place
+  and a value list in another. Two load categories in 0002, rules supplied by
+  0003: `malformed tag declaration` (kind/domain disagreement; before
+  normalization completes) and `malformed predicate atom` (literal outside
+  domain; after declarations load, before rows are yielded). 0006 mints nothing
+  for either; 0005 maps them under §JD-8.
+- **(iv) Write-replaces.** A clause, not a key: a write assigns a tag's whole
+  value and supplants what was held; for `set` kind the array literal is the
+  whole new set; no accumulate form. 0004's read-back compares the held value
+  for **equality**. Closes 0006 A10 and G7 (one value per tag per write).
+- **(v) Extension table.** `[model.metadata]` is a free-form table the loader
+  carries untouched and never interprets — strictness everywhere else, one
+  sanctioned namespace for tooling.
+
+**Resolved: (i)–(v) as stated.** Closes JD-17.
+
+*Lands in **0002** — root `terminal` and `[initial]`; the three capability
+tables; `[tags.<tag>].accessor` removed; the seven type-model keys enumerated;
+`[model.metadata]`; the write-replaces clause; the two load categories; the
+binding validations; fixtures re-authored. **0003** — `min`/`max` spelling
+becomes a citation to 0002; supplies the two rejection rules. **0004** — its
+definition is the capability-table entry; read-back is equality; writers carry
+`keys`; the "cannot be rebound" prose repaired. **0006** — A6/A10 flip by
+citation; the terminal-non-owned finding.*
+
+**Blank, not decided here:** where a *rule* references a gate accessor — 0002's
+layout has no site for it; owner 0002 with 0004's semantics.
+
+**Observation for 0003's next touch (not this decision):** an unmarked
+`kind = "enum"` is a `2^|domain|` dimension under 0003's conservative default;
+every author will read `enum` as single-valued. The wire key is right either
+way.
+
 ---
 
 ## Interface record
@@ -371,34 +531,24 @@ not a negotiation.
   (`0003:1206-1217`, `0006:901-903`). The *coverage* half stands: escape rows
   participate in the union. This entry's decision is amended to that reading;
   0003 A17 closes on it.
-- **JD-15 `<clear>` at the write accessor.** Restored — iteration 1 homed this
-  as "JD-12" and the renumbering lost it. 0002 normalizes a rule-level clear
-  list to `<clear>` sentinel writes; 0009's escape-row contract depends on that
-  rendering; 0004 (re-locked 2026-08-21) contains the word "clear" zero times
-  and defines neither the write semantics (remove the key) nor the read-back
-  expectation (key absent) for it; 0006 cannot re-pair a clear from the
-  normalized value. Open: whether `<clear>` is reserved in the writes value
-  space, what the accessor does with it, and what read-back asserts. Siblings:
-  0002, 0004, 0009. *(0009×0004 F2 ledger; 0002×0004, 0002×0006 iteration 2)*
-- **JD-16 Match/Guard routing key.** 0002 routes each atom to `Match` or the
-  guard by **operator** (equality on a declared tag → `Match`; every other
-  operator, and every `unless` atom → guard; `0002:703-708`), while 0003's
-  lint reads participation by **authored block** (`match`/`all`/`unless`,
-  retained per §D1). A `[rule.match]` non-`eq` atom over an optional key is
-  green under 0003's block-keyed coverage and `guard_unevaluable` at runtime.
-  Open: one routing key, stated once, that both the kernel handoff and the
-  finite-domain proof read. Siblings: 0002, 0003. *(0002×0003 F1, iteration 2)*
-- **JD-17 What the closed TOML layout must additionally spell.** 0002 locks a
-  closed, strict-decoded layout ("MUST reject unmapped keys") that never
-  received the declarations its consumers locked against: 0006 requires an
-  initial owned state and terminal set (A6) and a write-replaces rule for
-  single-valued tags (A10), both booked as "scheduled edits on RDR 0002
-  (`Draft`)" the day 0002 locked without them; 0004 requires per-accessor
-  timeout/role/key metadata where 0002's `[accessors]` entry is `mode`+`path`;
-  and the five type-model fields rehomed to 0003 have no wire key in either
-  document. Open: the key set, in 0002's layout, for each. Siblings: 0002,
-  0003, 0004, 0006. *(0002×0006 G1/G2, 0002×0004 F1/F2/F3, 0002×0003 F2,
+- **JD-15 `<clear>` at the write accessor.** **Decided 2026-08-24 by §D5** —
+  the sentinel is reserved: refused as an authored tag value at load (0002); a
+  `<clear>` write removes the key, read-back asserts absence, clearing an absent
+  key succeeds (0004). Restored from iteration 1's lost "JD-12". Siblings:
+  0002, 0004, 0009. *(0009×0004 F2 ledger; 0002×0004 F-1, 0002×0006 G3,
   iteration 2)*
+- **JD-16 Match/Guard routing key.** **Decided 2026-08-24 by §D6** — the
+  authored block routes: match blocks admit `eq` and `in` (expanded per
+  member), refuse other operators at load; every guard-block atom is a guard
+  atom regardless of operator. Siblings: 0002, 0003. *(0002×0003 F1, iteration
+  2)*
+- **JD-17 What the closed TOML layout must additionally spell.** **Decided
+  2026-08-24 by §D7** — root `[initial]` assignments and `terminal` context-id
+  list; per-capability accessor tables with `keys` as the binding; type-model
+  keys `kind`/`domain`/`min`/`max`/`elements`/`single_valued`/`required`; a
+  write-replaces clause; `[model.metadata]`; two load categories for
+  declaration and literal-domain errors. Siblings: 0002, 0003, 0004, 0006.
+  *(0002×0006 G1/G2, 0002×0004 F1/F2/F3, 0002×0003 F2/F3, iteration 2)*
 - **JD-18 Conforming-view enforcer.** 0003 A18/A20 route the runtime half of
   the declaration-conformance check (an observed always-present key omitted at
   runtime refuses under a green lint) and the atom carrier to "0007's next
