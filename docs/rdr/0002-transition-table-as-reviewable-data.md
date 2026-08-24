@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-24; re-verify A1, A9, A12 — JDR 0001 §D6/§D7 answered §JD-16/§JD-17 against 0002's fenced operator-keyed routing and `[accessors.<id>]` layout; §D5 answered §JD-15 (unfenced Round-Trip prose only)]
+- **Status**: Draft
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,
@@ -99,10 +99,9 @@ factor common context instead of enumerating every Cartesian row.
   multi-tag writes, per-capability accessor tables with `keys` bindings, root
   `[initial]`/`terminal` declarations, the seven type-model keys, and
   `[model.metadata]` under strict decoding without ambiguous decoding.**
-  - **Status**: Pending (re-verify — the spike fixtures predate the JDR 0001
-    §D7 layout)
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: The pre-§D7 layout is witnessed: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && go run . rdr-fixture.toml kata-fixture.toml` parsed both fixtures with `github.com/pelletier/go-toml/v2`, including inherited match contexts, nested predicates, multi-tag writes, and explicit clears (`evidence/spikes/output.txt`). Those fixtures author `[accessors.<id>]` with `mode` and a tag-side `accessor` reference, which the Normative Contracts no longer admit. Owed: re-author both fixtures to the §D7 layout (`[read.<id>]`/`[write.<id>]`/`[gate.<id>]` with `keys`, `[initial]`, `terminal`, `[model.metadata]`, the type-model keys) and re-run the spike under strict decoding.
+  - **Evidence**: The §D7 closed layout is witnessed end to end. `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` decodes both fixtures with `github.com/pelletier/go-toml/v2` v2.3.1 under strict decoding and normalizes them to 9 and 2 rows (`evidence/spikes/iter-2/output.txt`, the normative fixture approved this stage). Each element the claim names is exercised: inherited match contexts (`large-prelock` → `prelock` → `draft`); multi-tag writes plus an explicit clear (`reconcile-rewind`); the three capability tables with `keys`, `rdr-status` appearing under both `[read.*]` and `[write.*]` since RDR 0004's identity is `(flow, name, capability)`; root `[initial]` (three owned assignments) and `terminal` resolving to a context; all seven type-model keys across the two fixtures; and `[model.metadata]` carried through uninterpreted. Strict decoding is real, not assumed: `-strict-only` reports `STRICT-OK` on both, `neg/neg-unknown-field.toml` refuses `unknown schema field: model.flavor`, and the pre-§D7 fixtures are now themselves refused (`unknown schema field: accessors.*, tags.*.accessor`) — the contracts reject the shapes they author. The API is confirmed in the module cache rather than from memory: `(*toml.Decoder).DisallowUnknownFields()` (`unmarshaler.go:52`) yields `*toml.StrictMissingError` whose `DecodeError.Key()` names the offending key (`errors.go:69`), `toml.Unmarshal` is permissive by default (`unmarshaler.go:21`) — which is why strictness is an obligation on this format, not a library property — a two-pass decode over one `[]byte` is re-runnable (so the version gate can precede strict decoding), and the strict check descends only into struct branches, leaving a `map[string]any` field untouched, which is what makes `[model.metadata]` free-form while the rest stays strict. 32 negative fixtures refuse one category each and 2 positive controls load (`evidence/spikes/iter-2/negative-cases.txt`).
   - **If wrong**: The chosen carrier either loses table semantics or forces a
     custom parser earlier than intended.
 - **A2 Row order is not part of successful edge selection.**
@@ -130,7 +129,7 @@ factor common context instead of enumerating every Cartesian row.
   enumeration.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GONOSUMDB='*' GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` parsed and normalized the RDR and kata fixtures. The fixtures cover status, profile, prelock iteration, equality, set membership, integer comparison, existence, self-loop, rewind, positive/negative guards, multi-tag writes, an `in` atom on `recognized` that expands into two candidate rows, and an explicit RDR `escape = ["no_match"]` row without host-code callbacks; `output.txt` captures the expanded candidate rows.
+  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 && GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml` parsed and normalized the RDR and kata fixtures under the §D7 layout. Between them the fixtures cover status, profile, stage, prelock iteration, equality, set membership (`in` on `recognized` and on `profile`), integer comparison (`lt`), existence (`exists = false`), a boolean guard, a set-valued write (`labels`), a terminal-context rule, rewind with an explicit clear, positive and negative guards, multi-tag writes, gate references, and an explicit `escape = ["no_match"]` rule that itself expands over two alphabet members — all without host-code callbacks or an embedded expression language. `iter-2/output.txt` captures the eleven expanded candidate rows.
   - **If wrong**: RDR 0003 must expand the predicate grammar or this table format
     becomes too weak for the target flows.
 - **A4 The model data can carry enough provenance to separate owned, observed,
@@ -151,7 +150,7 @@ factor common context instead of enumerating every Cartesian row.
   the RDR model sparse without hiding ambiguity.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `rdr-fixture.toml` encodes `draft -> prelock -> large-prelock` inherited contexts plus `all.iter.lt = 3` and `unless.profile.eq = "small"` guards; `output.txt` shows the normalized row with inherited status/stage/profile predicates and combined `all`/`unless` predicates, preserving ambiguity visibility in the expanded row.
+  - **Evidence**: `evidence/spikes/iter-2/rdr-fixture.toml` encodes `draft -> prelock -> large-prelock` inherited contexts plus `all.iter.lt = 3`, `all.finalized_at.exists = false`, and `unless.profile.eq = "small"` guards; `iter-2/output.txt` shows `continue-prelock` normalizing to rows carrying the inherited status/stage/profile predicates alongside the combined `all`/`unless` predicates, each atom tagged with its authored block, so no constraint is hidden by the factoring. The `continue-prelock` / `continue-prelock-cluster` sibling pair demonstrates the same at the ambiguity boundary: two rules share every inherited predicate and bind one outcome, differing only in their guards, and both survive normalization as distinct rows for RDR 0006 to adjudicate rather than being silently merged.
   - **If wrong**: The model either needs a richer statechart-like hierarchy or
     the table becomes too repetitive for reliable human review.
 - **A7 Deterministic expanded-table ordering is a format contract, not an
@@ -163,19 +162,27 @@ factor common context instead of enumerating every Cartesian row.
     tuple `(model id, rule id, expansion suffix)` compared field by field,
     byte-lexicographically, with the source locator excluded; the same field
     list is what the Round-Trip invariant preserves. The normalizer spike
-    witnesses it for the outcome-only expansion case (the generalized
-    match-block expansion and its sequence-valued suffix are owed with A1):
-    `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes &&
-    GOFLAGS=-mod=mod GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml`
+    witnesses it, including the generalized match-block expansion and its
+    sequence-valued suffix (re-verified this stage with A1):
+    `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2 &&
+    GOCACHE=/private/tmp/intrastate-rdr0002-gocache GOFLAGS=-mod=mod GOPROXY=off
+    go run . rdr-fixture.toml kata-fixture.toml`
     emits every field of the row value — identity with `#suffix` on expanded
     rows, locator, kind, lifted outcome, per-atom `@block`, next tags, writes
-    including `<clear>`, derived `requires_owned`, escape classes — with
-    atoms sorted by (key, block, operator, literal). Three consecutive runs
-    produced byte-identical output despite Go's randomized map iteration
-    (SHA-256 `c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b`,
-    `evidence/spikes/output.txt`), and two semantically identical fixtures
-    whose TOML keys are authored in different orders dumped byte-identically
-    (`evidence/spikes/negative-cases.txt`). Byte-lexicographic comparison is
+    including `<clear>`, derived `requires_owned`, gate ids, escape classes —
+    with atoms sorted by (key, block, operator, literal). Expansion is
+    witnessed on a non-`recognized` tag: `continue-prelock` expands on the
+    *inherited* `profile.in = ["large","foundational"]` into
+    `#large` / `#foundational`, so the suffix is a sequence and compares
+    element by element (`slices.Compare`), the empty suffix sorting first.
+    Three consecutive runs produced byte-identical output despite Go's
+    randomized map iteration (SHA-256
+    `6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`,
+    `evidence/spikes/iter-2/output.txt`), and three semantics-preserving
+    permutations of the RDR fixture — TOML key order, `[[rule]]` declaration
+    order, and `eq = "x"` versus `in = ["x"]` — all dumped byte-identically
+    (`evidence/spikes/iter-2/negative-cases.txt`). Rule-order permutation is
+    the control that excludes a positional tiebreak. Byte-lexicographic comparison is
     a Go spec guarantee ("Two string values are compared lexically
     byte-wise"), so the ordering is locale- and platform-independent. This
     explicitly rejects source-order, map-iteration, and renderer-specific
@@ -222,9 +229,18 @@ factor common context instead of enumerating every Cartesian row.
   set and still produce a conforming `resolve.Row` at the kernel handoff.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: Owed. The block-keyed `Match`/guard split (JDR 0001 §D6) is
-    pinned to the kernel handoff so the normalized value keeps each atom's
-    authored block (`match`/`all`/`unless`), which `Guard string` cannot carry.
+  - **Evidence**: Owed at implementation; the block it waits on is re-verified
+    at source. The block-keyed `Match`/guard split (JDR 0001 §D6) is pinned to
+    the kernel handoff so the normalized value keeps each atom's authored block
+    (`match`/`all`/`unless`), which `Guard string` cannot carry — and
+    `internal/resolve/resolve.go::Row` still carries `Guard string` and
+    `Match []Tag`, with no `Atom` type, no operator-token type, and no per-atom
+    block field anywhere in non-evidence Go source. So the field this assumption
+    targets does not yet exist, and the block is structural rather than a
+    scheduling preference. The normalizer half is witnessed: the spike carries
+    each atom's authored block through normalization and renders it
+    (`profile.eq=small@unless`, `cluster_ready.eq=true@all`,
+    `stage.eq=prelock@match` in `evidence/spikes/iter-2/output.txt`).
     Verification: the Testing Strategy scenario 2 normalization assertions plus
     scenario 4's `Resolve` run must both pass against one normalized value —
     the first reading the unified atom set, the second consuming the split row.
@@ -237,11 +253,13 @@ factor common context instead of enumerating every Cartesian row.
   single-document loader can or should report it.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: The decidability half is verified at source: the Resolve
-    spike's `evidence/spikes/main.go::Model` declares `Model` as a **singular
-    struct field**, not a slice, mirroring `[model]` as a singular TOML table
-    (`evidence/spikes/rdr-fixture.toml` authors one `id = "rdr"` per document),
-    so a single-document load structurally cannot observe two model ids. The
+  - **Evidence**: The decidability half is verified at source and survives the
+    §D7 re-authoring: `evidence/spikes/iter-2/main.go::Model` declares `Model`
+    as a **singular struct field** of type `ModelMeta`, not a slice, mirroring
+    `[model]` as a singular TOML table (`evidence/spikes/iter-2/rdr-fixture.toml`
+    authors one `id = "rdr"` per document; `[[rule]]` is the only array-of-tables
+    in the closed layout), so a single-document load structurally cannot observe
+    two model ids. The
     category is therefore scoped to a multi-document dump/lint invocation. The
     behavioral half is owed: the scenario 3 fixture for this category is a
     **pair** of documents sharing a `model id`, and a single-document load of
@@ -250,18 +268,26 @@ factor common context instead of enumerating every Cartesian row.
     surface exists that this RDR has not named.
 - **A11 An escape rule binding its outcome with an `in` atom expands into one
   rescuing row per member, each rescuing only its own outcome.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: Owed. The critique lens introduced the clause and booked it
-    unwitnessed; the spike fixture's escape rule
-    (`evidence/spikes/rdr-fixture.toml` `draft-no-match-escape`) binds with
-    `eq = "round-clean"`, so no captured run exercises escape expansion. The
-    kernel half is verified — `internal/resolve/resolve.go::escapeOrRefuse`
-    filters escape candidates on `row.Outcome != in.Recognized` exactly as
-    `::Resolve` does, so a per-outcome escape row is what the kernel admits.
-    Verification: extend the scenario 2 fixture with an escape rule binding
-    `in` over two alphabet members and assert it expands to two escape rows
-    carrying distinct expansion suffixes, each with an empty write set.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: Both halves now hold. The **kernel half** is Source Search:
+    `internal/resolve/resolve.go::escapeOrRefuse` filters escape candidates on
+    `row.Outcome != in.Recognized || !view.matches(row.Match)` exactly as
+    `::Resolve` does for ordinary rows, so a per-outcome escape row is what the
+    kernel admits and there is no table-wide catch-all. The **normalizer half**
+    was owed and is now witnessed: the critique lens introduced the clause
+    against a fixture whose escape rule bound `eq = "round-clean"`, and the
+    §D7 re-authoring changed it to bind `in` over two alphabet members.
+    `evidence/spikes/iter-2/rdr-fixture.toml` `draft-no-match-escape` authors
+    `[rule.match.recognized] in = ["round-clean", "reconcile-block"]` and
+    normalizes to exactly two escape rows —
+    `rdr.draft-no-match-escape#round-clean` and
+    `…#reconcile-block` — each carrying a distinct expansion suffix, its own
+    bound outcome, `write=[]`, `next=[]`, `requires_owned=[]`, and the modeled
+    class list `escape=[no_match]` (`evidence/spikes/iter-2/output.txt`). So an
+    escape rule expands like any other rule, and one authored rule covers
+    several outcomes. The MVV assertion in Testing Strategy scenario 2 remains
+    as the implementation-side control.
   - **If wrong**: One authored escape rule cannot cover several outcomes, so
     covering an alphabet of N outcomes requires N hand-authored escape rules
     and the "expand like any other rule" clause overstates the format.
@@ -269,45 +295,69 @@ factor common context instead of enumerating every Cartesian row.
   `Guard`, exhaustively and disjointly.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: Owed. A9 asserts the unified atom set *can* produce a
-    conforming `resolve.Row`; it does not assert the routing is total. Under
-    the block-keyed rule (JDR 0001 §D6) totality is structural — every atom
-    carries exactly one of three blocks — but the handoff code is the
-    enforcement point and lands in no assertion yet. Verification: a scenario
-    2 assertion that for the RDR fixture the union of the constructed row's
-    `Match` and guard atoms equals the normalized atom set and the
-    intersection is empty; the discriminating witnesses are an `eq` atom under
-    `guard.all` and the kata fixture's `status.eq=closed@unless`, both of which
-    route to the guard because of their block, not their operator. Blocked on
-    RDR 0007's kernel reshape (Prerequisites), like A9.
+  - **Evidence**: Owed at implementation; its discriminating witnesses now
+    exist in the fixture, which they did not before. A9 asserts the unified
+    atom set *can* produce a conforming `resolve.Row`; it does not assert the
+    routing is total. Under the block-keyed rule (JDR 0001 §D6) totality is
+    structural — every atom carries exactly one of three blocks — but the
+    handoff code is the enforcement point and lands in no assertion yet.
+    Verification: a scenario 2 assertion that for the RDR fixture the union of
+    the constructed row's `Match` and guard atoms equals the normalized atom
+    set and the intersection is empty. The discriminating witnesses are both
+    authored and normalized: `evidence/spikes/iter-2/rdr-fixture.toml`'s
+    `continue-prelock-cluster` carries `[rule.guard.all.cluster_ready] eq =
+    true` — an `eq` atom under `guard.all` over an optional (`required` unset)
+    owned key — and the kata fixture carries `status.eq=closed@unless`; both
+    render as guard-block atoms in `iter-2/output.txt`, routing by block rather
+    than operator. Blocked on RDR 0007's kernel reshape (Prerequisites), like
+    A9.
   - **If wrong**: An atom is silently dropped at the handoff or double-counted,
     which changes which rows match without any dump or normalization test
     observing it.
 - **A13 Merging is idempotent on identical atoms: one atom contributed by a
   rule and by one or more inherited contexts collapses to exactly one.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: Owed. Testing Strategy scenario 2 asserts the *differing*-
-    literal half (two atoms, both `use` orders); the mirror half landed in no
-    assertion, so a normalizer emitting duplicates passes every stated control.
-    Verification: a scenario 2 assertion that a rule and an inherited context
-    contributing a byte-identical `(block, key, operator, literal)` atom yield
-    an atom set of count one for that key.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: Both halves are witnessed, on the same fixture pair, so the
+    de-duplication is shown to be keyed on the full atom identity and not on a
+    proper prefix of it. **Idempotence half:**
+    `evidence/spikes/iter-2/merge-idempotent.toml` has `reconcile-rewind`
+    author `[rule.match.status] eq = "Draft"` while its inherited `draft`
+    context contributes the byte-identical atom; the normalized row carries
+    `atoms=[status.eq=Draft@match]` — count one.
+    **Distinct-literal mirror:** `merge-distinct.toml` adds a second context
+    contributing `status.eq=Final@match`, and the same row carries
+    `atoms=[status.eq=Draft@match; status.eq=Final@match]` — both survive; the
+    reversed `use` order (`merge-distinct-rev.toml`) digests identically
+    (`3813472915…`), so the result does not depend on `use` iteration order.
+    A merge keyed on `(block, key, operator)` would collapse the second pair
+    and fail; one keyed on nothing would inflate the first. Transcript in
+    `evidence/spikes/iter-2/negative-cases.txt`. The scenario 2 assertions
+    remain as the implementation-side controls.
   - **If wrong**: The normalized atom set carries duplicates, inflating the
     dump and the Round-Trip field list without changing match semantics — or
     a de-duplication keyed too widely drops the A13-adjacent distinct-literal
     atoms that scenario 2 requires to survive.
 - **A14 The version gate precedes strict field decoding, so a v2 document
   refuses as an unsupported version rather than an unknown schema field.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: Owed. The clause is normative and the only ordering this RDR
-    fixes, but scenario 3's `unsupported version` fixture is a v1-shaped
-    document with a bad version value, which trips the category on either
-    ordering and therefore cannot witness the precedence. Verification: a
-    scenario 3 fixture that is **v2-shaped** — `version = 2` plus a v2-only key
-    the strict decoder would reject — asserted to refuse `unsupported version`
-    and not `unknown schema field`.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: Witnessed by a **v2-shaped** fixture and a paired control
+    that isolates the ordering. `evidence/spikes/iter-2/neg/neg-v2-shaped.toml`
+    is the RDR fixture with `version = 2` plus a v2-only root table
+    (`[schema_v2]`) that the strict decoder would reject; it refuses
+    `unsupported version 2`, **not** `unknown schema field`. The
+    discriminating control is the same document with `version = 1` restored
+    and the v2-only key left in place: it refuses `unknown schema field:
+    schema_v2`. One key, two outcomes, and only the gate ordering separates
+    them — a loader decoding strictly first would name `schema_v2` in both
+    cases. Scenario 3's plain `unsupported version` fixture (a v1-shaped
+    document with a bad version value) trips the category on either ordering
+    and is retained as the category control, not the precedence one. The
+    two-pass shape this requires is confirmed feasible against the library:
+    `toml.Unmarshal` into a probe struct reading only `[model].version`, then
+    a second strict `toml.NewDecoder(bytes.NewReader(data))` pass over the same
+    `[]byte` (re-runnable — see A1).
   - **If wrong**: A future v2 file fails with a diagnostic naming an arbitrary
     field and never mentioning the version, which is the confusion the two-pass
     gate exists to prevent.
@@ -472,12 +522,19 @@ provenance-scoped:
   key may arrive from the caller (JDR 0001 §JD-9) — refusing it would make
   every `--tag`-supplied key unauthorable;
 - every key named by any rule's write block or clear list, and every key
-  assigned in `[initial]`, MUST be served by exactly one writer, and every
-  writer key MUST be owned (`write to non-owned tag`);
+  assigned in `[initial]`, MUST be served by exactly one writer
+  (`malformed accessor binding`);
+- every key in a `[write.<id>]` entry's `keys` list MUST be an **owned** tag
+  (`write to non-owned tag`);
 - every id in a rule's `gate` list MUST resolve to a `[gate.<id>]` entry
   (`unknown accessor`).
 
-A violation of the second or third bullet is a `malformed accessor binding`.
+A violation of the second or third bullet is a `malformed accessor binding`;
+the fourth carries `write to non-owned tag`. The writer-arity and
+writer-provenance obligations are stated as **separate bullets with separate
+categories on purpose**: they are independent predicates, and a single bullet
+naming both left it undecidable which category a violation carries — which
+matters because the Testing Strategy asserts on the category, not the message.
 This settles the provenance scope §D7(ii) left open at this RDR.
 
 **Gate references.** A rule's `gate` list names the gate accessors whose
@@ -490,7 +547,21 @@ This fills the site §D7 left blank for this RDR.
 **Root and stop set.** `[initial]` is a table of `tag = value` assignments;
 every key MUST be a declared owned tag and every value MUST be well-formed for
 that tag's declared kind and domain (`malformed initial declaration` otherwise;
-the `<clear>` sentinel is refused under the reserved-value rule). Root
+the `<clear>` sentinel is refused under the reserved-value rule).
+
+An **observed or recognized key in `[initial]` has no authorable form**, so this
+category's provenance arm is unreachable by construction. The writer-binding
+bullets above already require every `[initial]` key to be served by exactly one
+writer, and every writer key to be owned; a non-owned key therefore refuses as
+`malformed accessor binding` when no writer serves it, or as `write to
+non-owned tag` when one does, before the owned-tag predicate here is consulted.
+Those two authorings are exhaustive. `malformed initial declaration` is
+consequently witnessed by its **value** arm — a literal ill-formed for the
+declared kind or domain — and the Testing Strategy carries no observed-key
+control for it. This is Principle 8 working (JDR 0001: the layout makes illegal
+states unrepresentable), not a gap: the state is refused at load either way, and
+the same drafting applies as to the absent-`recognized` rule below, which is
+likewise unauthorable. Root
 `terminal` is a list of context ids, each of which MUST resolve (`unknown
 context`); a rule MAY `use` a terminal context, which is how an escape
 self-loop on a stop state is authored. Whether a model *omits* `[initial]` or
@@ -1114,19 +1185,20 @@ excludes) — are replaced by category-level assertions, RDR-fixture permutation
 and rule-order permutation respectively.
 
 **`trace`** — desk trace of the MVV against the clauses in force. One row per
-step; witness values from `evidence/spikes/output.txt`.
+step; witness values from `evidence/spikes/iter-2/output.txt`.
 
 | Step | Assertions in force | Witness / verdict |
 | --- | --- | --- |
-| load fixture | alphabet non-empty, dup-free, no empty string; version = 1 | `outcomes=round-clean,verdict-flapping,reconcile-block,finalized` — holds |
+| load fixture | closed §D7 layout under strict decoding; alphabet non-empty, dup-free, no empty string; version = 1 before field decoding | `STRICT-OK`; `outcomes=round-clean,verdict-flapping,reconcile-block,finalized terminal=archived metadata_keys=owner,review_cadence` — holds |
 | normalize | outcome lifted; per-atom block retained; `RequiresOwned` = writes ∪ clears | `continue-prelock … atoms=[…profile.eq=small@unless…] requires_owned=[iter,stage]` — holds |
-| expand `in` | one row per member of every multi-member match-block `in`; suffix only where the rule expands | `terminal-archive#finalized` / `#verdict-flapping` — holds for the `recognized` atom; the spike suffixes on expansion count (`main.go` `if len(outcomes) > 1`), so `eq`/single-member-`in` equivalence is witnessed by construction but has no fixture row. The spike does **not** expand `large-prelock`'s `profile.in` (it predates §D6), so the general expansion and its sequence suffix are owed with A1 |
-| escape row | no write block or clear list; `RequiresOwned` empty | `draft-no-match-escape … next=[] write=[] requires_owned=[]` — holds |
-| dump order | rows by identity tuple; locator excluded | three runs byte-identical — holds |
-| resolve, sibling gate | unevaluable survivor refuses despite a decidable sibling and an escape row | **no witness possible in the current fixture** — every outcome binds exactly one transition row; closed by the MVV's two-sibling requirement |
+| expand `in` | one row per member of every multi-member match-block `in`; suffix only where the rule expands | holds on both arms: `terminal-archive#finalized` / `#verdict-flapping` for the `recognized` atom, and `continue-prelock#large` / `#foundational` for the **inherited non-`recognized`** `profile.in`, so the expansion is general and the suffix is a sequence. `eq`/single-member-`in` equivalence is witnessed by `perm/rdr-eq-as-in.toml` digesting identically to the baseline |
+| escape row | no write block or clear list; `RequiresOwned` empty; expands like any other rule | `draft-no-match-escape#round-clean` / `#reconcile-block … next=[] write=[] requires_owned=[] escape=[no_match]` — holds, and covers A11 |
+| dump order | rows by identity tuple; locator excluded; no positional tiebreak | three runs byte-identical, and key-order **and rule-order** permutations digest identically — holds |
+| resolve, sibling gate | unevaluable survivor refuses despite a decidable sibling and an escape row | inputs now present: `continue-prelock` and `continue-prelock-cluster` both bind `round-clean`, the latter guarding on an optional owned key (`cluster_ready.eq=true@all`), alongside a `round-clean` escape row. The `Resolve` run itself is scenario 4's and waits on RDR 0007's reshape |
 
-No CONTRADICTION row survives: the sibling gap and the suffix divergence are
-booked as needs-verification items for Stage 6, not left as silent assumptions.
+No CONTRADICTION row survives. The two gaps this table previously recorded —
+the missing sibling pair and the outcome-only expansion — are closed by the
+§D7 re-authoring rather than carried forward.
 
 #### Illustrative Code
 
@@ -1200,6 +1272,9 @@ inherits = "draft"
 eq = "prelock"
 [context.prelock.match.profile]
 in = ["large", "foundational"]    # expands: one row per member
+
+[context.archived.match.stage]    # the stop set `terminal` names
+eq = "archive"
 
 [[rule]]
 id = "prelock-flapping-cap"
@@ -1495,14 +1570,18 @@ surviving escape row, and the gate refusals are never modeled.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified. A1 is re-verified by re-authoring
-  the spike fixtures to the §D7 layout and re-running the spike (Stage 4).
-  A9–A14 are `Pending` with named MVV assertions: A9/A12 are blocked on RDR
-  0007's kernel reshape (below); A10's decidability half is source-verified
-  and only its paired-document behavior is owed; A11/A13/A14 have oracles in
-  Testing Strategy scenarios 2 and 3 whose fixtures are owed at
-  implementation. None is load-bearing for a *pre-lock* MVV assertion; each is
-  survivable per its "If wrong".
+- [x] All Critical Assumptions verified **except A9, A10, and A12**. A1 was
+  re-verified at Stage 4 by re-authoring both spike fixtures to the §D7 layout
+  and re-running the spike under strict decoding; A7, A11, A13, and A14 were
+  promoted to `Verified` by that same run (general match-block expansion and
+  the sequence suffix; escape expansion under `in`; both merge halves; the
+  version-gate precedence, witnessed by a v2-shaped fixture against a v1
+  control). The three that remain `Pending` carry named MVV assertions:
+  **A9/A12** are blocked on RDR 0007's kernel reshape (below) — their fixture
+  inputs now exist, but no field exists to route into; **A10**'s decidability
+  half is source-verified and only its paired-document behavior is owed, since
+  no single-file fixture can express two model ids. None is load-bearing for a
+  *pre-lock* MVV assertion; each is survivable per its "If wrong".
 - [ ] RDR 0007 is the normative home of the atom shape and the existence
   constants this RDR's normalizer emits. RDR 0007 is `Final`, so the
   *specification* is settled — but its kernel reshape is unimplemented, and the
@@ -1559,20 +1638,25 @@ one-candidate-per-outcome fixture can never exercise "an unevaluable survivor
 refuses even though a decidable sibling and a modeled escape both exist," which
 is the property this RDR's row shape exists to support.
 
-**The spike fixtures predate the §D7 layout and do not yet carry those
-siblings; the MVV requirement wins over the promote-verbatim mandate.** The
-current RDR fixture authors `[accessors.<id>]`, a tag-side `accessor`
-reference, and no `[initial]`/`terminal`, and binds `round-clean` on one
-ordinary rule and one escape rule, so no two *ordinary* candidates ever
-contend — which is why the desk trace records "no witness possible in the
-current fixture" for the sibling-gate row. Promotion is therefore
-**re-author, extend, then promote**: the production fixture is the spike
-fixture re-authored to the closed layout (Stage 4, A1), plus a second ordinary
-rule binding an outcome one other ordinary rule already binds, whose guard
-carries an `eq` atom over an optional (`required` unset) owned key. The
-Load-Bearing Decisions' "canonical examples" clause fixes the authoring idiom
-those fixtures demonstrate, not their row census; a fixture may not be
-narrowed on promotion, only extended.
+**The fixtures now carry those siblings; the re-author-and-extend was done at
+Stage 4 (A1).** The pre-§D7 fixtures authored `[accessors.<id>]`, a tag-side
+`accessor` reference, and no `[initial]`/`terminal`, and bound `round-clean` on
+one ordinary rule and one escape rule, so no two *ordinary* candidates ever
+contended — which is why the desk trace used to record "no witness possible in
+the current fixture" for the sibling-gate row. Those fixtures are now refused
+outright by this RDR's own contracts (`unknown schema field` on
+`accessors.*` and `tags.*.accessor`), which is the sharpest statement of why
+they could not be promoted.
+
+`evidence/spikes/iter-2/` is the promoted set: both fixtures re-authored to the
+closed layout, plus `continue-prelock-cluster` — a second ordinary rule binding
+`round-clean`, which `continue-prelock` already binds, whose `guard.all`
+carries an `eq` atom over the optional (`required` unset) owned key
+`cluster_ready`. That single addition supplies the MVV's two-sibling
+requirement and A12's discriminating witness at once. The Load-Bearing
+Decisions' "canonical examples" clause fixes the authoring idiom those fixtures
+demonstrate, not their row census; a fixture may not be narrowed on promotion,
+only extended.
 
 **Every oracle must have a failing control.** An assertion that passes by
 absence-of-error, exit-0, or fixture-name match does not discharge an MVV item:
@@ -1605,11 +1689,15 @@ either — it is satisfied by the defect it was meant to catch.
 
 ### Phase 1: Fixture and Schema Spike
 
-Re-author the RDR and kata fixtures to the closed §D7 layout — capability
-tables with `keys`, `[initial]`, `terminal`, `[model.metadata]`, the type-model
-keys — keeping shared contexts, one self-loop, one rewind, one gate reference,
-one profile-dependent branch that expands under a match-block `in`, one
-explicit escape row, and one multi-tag write.
+**Discharged at Stage 4** — `evidence/spikes/iter-2/` holds the RDR and kata
+fixtures authored to the closed §D7 layout (capability tables with `keys`,
+`[initial]`, `terminal`, `[model.metadata]`, the type-model keys), keeping
+shared contexts, a rewind with an explicit clear, a gate reference, a
+profile-dependent branch that expands under an inherited match-block `in`, an
+escape rule that itself expands under `in`, a multi-tag write, and the two
+same-outcome sibling rows the MVV requires. Phase 1 remains listed because
+implementation promotes these fixtures into the production test tree; it does
+not re-derive them.
 
 ### Phase 2: Normalizer and Dump
 
@@ -1654,43 +1742,62 @@ Use `github.com/pelletier/go-toml/v2` as the TOML parser candidate. The Resolve
 spike ran against v2.3.1 from the local module cache, and the module license is
 MIT. No production dependency is added until implementation.
 
+The strict-decoding obligation this format states is satisfiable with that
+library, confirmed against its source rather than its documentation:
+`(*Decoder).DisallowUnknownFields()` returns `*StrictMissingError`, whose
+`DecodeError.Key()` and `Position()` name the offending key and location — so
+`unknown schema field` can carry a key, not just a message. Two properties the
+design depends on were checked at the same time: the strict check descends only
+into struct branches, so a `map[string]any` field passes untouched (this is what
+makes `[model.metadata]` free-form while the rest of the document stays strict),
+and a two-pass decode over one `[]byte` is re-runnable (this is what makes the
+version gate expressible ahead of strict decoding). `toml.Unmarshal` is
+permissive by default, which is precisely why strictness is stated as an
+obligation on this format rather than assumed from the parser.
+
+When the dependency lands it also settles the open TOML-library choice at
+`internal/cli/config/config.go::Load`, which carries a `TODO` for one; the two
+consumers should share a single library rather than each picking independently.
+
 ## Validation
 
 ### Testing Strategy
 
 Implementation tests must promote the Resolve spike into production fixtures:
 
-1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
+1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/iter-2/` into typed source structs.
    **Expected**: Tag declarations (including `[tags.recognized]` and the seven type-model keys), root recognized-outcome alphabets, `[initial]` and root `terminal`, `[model.metadata]` carried verbatim, `[read.*]`/`[write.*]`/`[gate.*]` tables with `keys`, rule-level `gate` lists, shared-context inheritance, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement under strict decoding.
-2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `reconcile-rewind`, `terminal-archive`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is the re-authored `evidence/spikes/output.txt` (Stage 4, A1).
+2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `continue-prelock-cluster`, `reconcile-rewind`, `terminal-archive`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is `evidence/spikes/iter-2/output.txt` (approved Stage 4, A1; SHA-256 `6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`), whose nine RDR rows and two kata rows are the expected value. Note the RDR fixture yields **nine** rows, not seven: `continue-prelock` and `continue-prelock-cluster` each expand on the inherited `profile.in`, and `draft-no-match-escape` expands on its `recognized.in`.
    **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array and a later mutation of one would silently move the other. Enforcement is by review of the normalizer, or by a test that mutates one field and asserts the other is unchanged.
    **Additionally**, atom-set semantics are asserted positively, since these shapes must *survive* load rather than be refused: two inherited contexts contributing the same key and operator with **different literals** yield **two** atoms in the normalized set, not one — asserted by count and by value, with the contexts listed in both `use` orders to prove the result is order-independent (a merge keyed on `(block, key, operator)` drops one and passes a count-only check on a single ordering); a set-valued literal whose member contains a space normalizes to a member sequence, so `["needs work"]` and `["needs", "work"]` are **distinct** atoms; and a rule authoring one atom in both `all` and `unless` loads successfully as two atoms and is reported by lint as a dead rule, not refused at load.
-   **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case.
-   **Escape expansion under `in` is asserted here (A11)**: the extended fixture carries an escape rule binding its outcome with `in` over two alphabet members, and normalization must yield **two** escape rows carrying distinct expansion suffixes, each with an empty write set and each retaining the modeled failure-class list. The current spike fixture's `draft-no-match-escape` binds with `eq`, so this shape has no captured witness and is owed at implementation.
-   **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty, and every `Match` atom carries block `match`. The discriminating cases are an `eq` atom under `guard.all` (the extended fixture's optional-key guard) and the kata fixture's `status.eq=closed@unless` — equality operators that route to the guard because of their block. Like the rest of Phase 2 this assertion is unsatisfiable until RDR 0007's reshape lands (Prerequisites).
-3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, a missing root outcome alphabet, a `lt` atom and separately an `exists` atom under `[rule.match]` (match-block operator restriction), a `#` inside a match-block `in` member, a predicate literal outside the tag's declared `domain`, a tag declaration RDR 0003's rules reject (`domain` on a `kind` that admits none), `<clear>` authored as a write value, as an `[initial]` value, and as a predicate literal, an `[initial]` key that is observed, an owned key served by zero readers and separately by two, a written key with no writer, a writer whose `keys` names an observed tag, `recognized` in a reader's `keys`, an accessor entry missing `timeout`, a rule whose `gate` names an id declared only under `[read.*]`, an escape rule carrying a `gate` list, and a `terminal` entry naming no context. Positive controls in the same fixture set: an observed key served by no reader loads (JD-9), and a model with no `[initial]` loads and is left to lint.
-   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. Nine categories are witnessed by the pre-§D7 spike, one refusal per mutated fixture, in `evidence/spikes/negative-cases.txt`: unsupported version, empty-string alphabet member, duplicate rule id, unknown written tag, write to an observed tag, escape rule carrying a write block, `exists` with a non-boolean literal, an outcome literal outside the alphabet, and a recognized declaration misnamed `outcome`; those fixtures are re-authored with A1. The remainder are owed at implementation.
+   **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case. Both halves are witnessed by the spike — `evidence/spikes/iter-2/merge-idempotent.toml` (count one) and `merge-distinct.toml` / `merge-distinct-rev.toml` (count two, both `use` orders digesting identically) — so these assertions promote a captured result rather than opening a new question.
+   **Escape expansion under `in` is asserted here (A11)**: the fixture's `draft-no-match-escape` binds its outcome with `in` over two alphabet members, and normalization must yield **two** escape rows carrying distinct expansion suffixes, each with an empty write set and each retaining the modeled failure-class list. Witnessed in `evidence/spikes/iter-2/output.txt` as `rdr.draft-no-match-escape#round-clean` and `…#reconcile-block`.
+   **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty, and every `Match` atom carries block `match`. The discriminating cases are now authored in the fixtures: `continue-prelock-cluster`'s `[rule.guard.all.cluster_ready] eq = true` — an `eq` atom under `guard.all` over an optional (`required` unset) owned key — and the kata fixture's `status.eq=closed@unless`; both are equality operators that route to the guard because of their block, and both appear as guard-block atoms in `evidence/spikes/iter-2/output.txt`. Like the rest of Phase 2 the assertion itself is unsatisfiable until RDR 0007's reshape lands (Prerequisites), but its inputs are no longer owed.
+3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, a missing root outcome alphabet, a `lt` atom and separately an `exists` atom under `[rule.match]` (match-block operator restriction), a `#` inside a match-block `in` member, a predicate literal outside the tag's declared `domain`, a tag declaration RDR 0003's rules reject (`domain` on a `kind` that admits none), `<clear>` authored as a write value, as an `[initial]` value, and as a predicate literal, an `[initial]` key that is undeclared, an owned key served by zero readers and separately by two, a written key with no writer, a writer whose `keys` names an observed tag, `recognized` in a reader's `keys`, an accessor entry missing `timeout`, a rule whose `gate` names an id declared only under `[read.*]`, an escape rule carrying a `gate` list, and a `terminal` entry naming no context. Positive controls in the same fixture set: an observed key served by no reader loads (JD-9), and a model with no `[initial]` loads and is left to lint.
+   **No control is listed for an `[initial]` key that is *observed*, because that document has no authorable form** (Normative Contracts, Root and stop set): the writer-binding bullets refuse it as `malformed accessor binding` or `write to non-owned tag` before the owned-tag predicate is reached, so a fixture for it would witness a different category than the one it names. `malformed initial declaration` is controlled by its value arm — a literal ill-formed for the declared kind or domain — and by the undeclared-key variant above. Verified by enumeration this stage: both authorings were built and each refused under the writer-binding category (`evidence/spikes/iter-2/probe-a.toml`, `probe-b.toml`).
+   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. **Thirty-five of these controls are witnessed by the §D7 spike**, one refusal per mutated fixture, in `evidence/spikes/iter-2/negative-cases.txt`, covering **18 of the 23 categories** named above. The five still owed at implementation are `malformed TOML`, `missing recognized outcome alphabet`, `cyclic context inheritance`, `malformed tag declaration` (RDR 0003 supplies its rejection rules), and `duplicate model id` (cross-document, so it needs the paired-document surface no single-file fixture can provide). Regenerate the whole set with `python3 evidence/spikes/iter-2/gen-cases.py`, which derives each fixture from the RDR fixture by a single mutation so the one-defect-per-fixture rule holds by construction. Implementation promotes these fixtures; it may extend the set but must not narrow it.
    **The version gate's precedence needs its own fixture (A14), separate from the `unsupported version` category fixture above.** That fixture is a v1-shaped document with a bad version value, which trips the category under *either* check ordering and therefore witnesses nothing about precedence. The precedence control is a **v2-shaped** document — `version = 2` plus a v2-only key the strict decoder would reject as an unknown schema field — asserted to refuse `unsupported version` and **not** `unknown schema field`. This is the only ordering this RDR fixes normatively, so it is the only ordering that gets an oracle.
 4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable because its `guard.all` carries an `eq` atom over an optional owned key the view does not hold — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order. The overlapping variant is reported by lint as an ambiguous overlap before the model is accepted, naming both rows.
 5. **Scenario**: Normalize and dump semantically identical variants of the **RDR** fixture — one with its TOML keys authored in a different order, one with its `[[rule]]` blocks declared in a different order, and one spelling a single-outcome binding `in = ["x"]` where the original spells `eq = "x"` — and dump the same fixture repeatedly in one process and across processes.
-   **Expected**: The normalized value is identical in every case because rows sort by the identity tuple and atoms/gate ids/next tags/writes/required-owned keys/escape classes sort by key, and because a single-member `in` contributes nothing to the expansion suffix — on `recognized` and on any other match-block tag alike; repeated dumps are byte-identical despite Go's randomized map iteration. Rule-order permutation is what excludes a positional tiebreak. Partially witnessed by the pre-§D7 spike in `evidence/spikes/negative-cases.txt` (reordered **kata** fixture, matching SHA-256) and by three consecutive byte-identical runs recorded under Performance Expectations; the RDR-fixture permutations and the `in`/`eq` equivalence are owed at implementation.
+   **Expected**: The normalized value is identical in every case because rows sort by the identity tuple and atoms/gate ids/next tags/writes/required-owned keys/escape classes sort by key, and because a single-member `in` contributes nothing to the expansion suffix — on `recognized` and on any other match-block tag alike; repeated dumps are byte-identical despite Go's randomized map iteration. Rule-order permutation is what excludes a positional tiebreak. Fully witnessed by the §D7 spike in `evidence/spikes/iter-2/negative-cases.txt`: all three permutations of the **RDR** fixture — `perm/rdr-keyorder.toml`, `perm/rdr-ruleorder.toml`, and `perm/rdr-eq-as-in.toml` — digest identically to the baseline (`2ff26b0add37…`), and three consecutive runs over both fixtures are byte-identical (`6ccfe9012b07…`). The RDR fixture is the one carrying the escape row, the `in`-expansions, `<clear>`, and inherited contexts, so the permutation control runs on the demanding fixture rather than the simpler kata one.
 6. **Scenario**: Normalize a rule carrying `exists = true` and one carrying `exists = false`, one carrying a non-boolean existence literal, and a variant spelling a declared tag `Status` where the declaration is `status`.
    **Expected**: Emitted atoms carry `resolve.OpExists` and `resolve.LiteralTrue`/`LiteralFalse` byte-for-byte, referencing the kernel constants directly rather than a local mirror — so this assertion compiles only once RDR 0007's reshape exports them (Prerequisites), and is owed at that point rather than satisfiable today. The non-boolean literal is refused at load as a malformed predicate atom; the mis-cased reference fails `unknown tag` rather than folding. The RDR fixture's `continue-prelock` guard carries the `finalized_at.exists=false@all` atom the spike emits; the spike mirrors the constants locally because the kernel does not yet export them.
 
 ### Performance Expectations
 
 Resolve evidence is functional rather than throughput-oriented. The spike
-(pre-§D7 layout; re-run owed with A1) normalizes representative RDR and kata
-sparse fixtures into seven deterministic rows — one explicit escape row and one
-rule that expands into two rows through an `in` atom on `recognized`; under
-the general expansion rule the same fixture yields one more row for
-`continue-prelock`. Three consecutive runs produced byte-identical
+(§D7 closed layout, `evidence/spikes/iter-2/`) normalizes representative RDR
+and kata sparse fixtures into eleven deterministic rows — nine RDR, two kata —
+comprising two escape rows from one escape rule expanding on a `recognized`
+`in`, and two pairs of ordinary rows expanding on an inherited
+non-`recognized` `profile.in`. Three consecutive runs produced byte-identical
 output with SHA-256
-`c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b`, and a
-fixture with the same semantics authored in a different key order produced a
-matching digest.
+`6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`, and three
+semantics-preserving permutations of the RDR fixture — different TOML key
+order, different `[[rule]]` declaration order, and `in = ["x"]` for
+`eq = "x"` — each produced a matching digest.
 
 Determinism checklist, as run: source key order is neutralized by sorting every
 emitted sequence; Go's map iteration is never the emission order (rows, atoms,
