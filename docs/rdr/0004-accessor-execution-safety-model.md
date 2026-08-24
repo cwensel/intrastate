@@ -6,7 +6,14 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-24; re-verify none — JDR 0001 §D5 (§JD-15) makes read-back assert absence for a `<clear>` write; 0004's read-back prose (0004:215, 511) asserts presence and none of §D5's clauses exist; §D7 (§JD-17) retires the "cannot be rebound" sentence (0004:371)]
+- **Status**: Final [re-locked 2026-08-24 — Gate PASS. JDR 0001 §D5 (§JD-15)
+  landed: `<clear>` is reserved, a clear is a removal, read-back asserts absence,
+  an idempotent clear succeeds, and a read yielding the literal is unreadable
+  (A11, MVV Scenario 9). §D7 (§JD-17) landed: the definition is the
+  capability-table entry, `keys` binds readers and writers alike, read-back is
+  equality, and the "cannot be rebound" sentence is retired — capability is part
+  of the identity. Three records remain Pending (A9, A10, A11), each a property
+  the MVV proves rather than a fixture it consumes, each with a named fallback.]
 - **Type**: Architecture
 - **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, write read-back, and clear-as-removal) governing authoritative artifact mutation.
 - **Priority**: High
@@ -522,10 +529,14 @@ over rows that survived match filtering. A row that consumes the key through
 `internal/resolve/adversarial_test.go::TestAdv1b_AllGuardsFalseIsNoMatchNotOwnedStateUnavailable`
 — not a defect to fix here. But it means this RDR's seam guarantee delivers
 `owned_state_unavailable` **only when the consuming row declares the key in
-`RequiresOwned`**, and JDR 0001 §JD-3 records that no layer is yet obliged to
-populate that field. Omitting the key is still strictly safer than a placeholder,
-which would mask the absence unconditionally; the seam clause is therefore
-necessary but not sufficient, and the remainder is tracked as a dependency below.
+`RequiresOwned`**, and that set is narrower than "every key the row reads": JDR
+0001 §JD-3 (CLOSED) names RDR 0002's normalizer as the producer, deriving the set
+as the rule's write block plus clear list, and RDR 0007 fixes its meaning as
+post-guard *write-dependency* keys. A key a row consumes only through `Row.Match`
+or a guard is therefore outside the set by construction, not by an unclosed
+decision. Omitting the key is still strictly safer than a placeholder, which would
+mask the absence unconditionally; the seam clause is therefore necessary but not
+sufficient, and the remainder is tracked as a dependency below.
 
 `exit code` is out of scope here — RDR 0005 owns the CLI mapping; this
 table stops at the structured value the accessor package returns.
@@ -614,7 +625,7 @@ Illustrative execution shape only:
 | Guard evaluation after binding | RDR 0003 | Pending | Accessors provide tag values; guards consume them symbolically. |
 | Stateless transition plan | RDR 0001 | Pending | Write accessors execute only a successful planned transition. |
 | Accessor capability taxonomy | This RDR | Introduced | Defines read, gate, write, and refusal classes. |
-| `Row.RequiresOwned` populated by some layer | RDR 0002 / JDR 0001 §JD-3 | **Open** | This RDR's absence-as-omission seam only reaches `owned_state_unavailable` for keys a surviving row declares in `RequiresOwned`. JD-3 records the field appears zero times in 0002, so the guarantee is currently conditional on an unclosed joint decision. Not resolvable here — 0002 owns the normalized row. |
+| `Row.RequiresOwned` derived by the normalizer | RDR 0002 / JDR 0001 §JD-3 (CLOSED); meaning per RDR 0007 | Decided, unimplemented | This RDR's absence-as-omission seam reaches `owned_state_unavailable` only for keys a surviving row declares in `RequiresOwned`. 0002's normalizer MUST derive that set as the rule's write block plus clear list, and 0007 fixes it as post-guard write-dependency keys — so a key consumed only through `Row.Match` or a guard is outside it by design. The residual loudness gap is a property of that scope, not of an open decision. Not resolvable here — 0002 owns the normalized row. |
 | CLI output mapping | Existing `respond` / `clierr`; RDR 0005 for user surface | Available / deferred | Accessor package returns values; CLI maps them later. |
 
 ### Existing Infrastructure Audit
@@ -815,10 +826,12 @@ reserved-sentinel clause (a clear is a removal; read-back asserts absence) is
 that guard.
 
 One shape is guarded but **not** fully closed by this RDR: a key omitted at the
-seam is loud only where a surviving row declares it in `Row.RequiresOwned` (see
-the note under the Disposition Table). Omission remains strictly safer than a
-placeholder, but the residual is a cross-RDR obligation, tracked in Capability
-Dependencies rather than claimed closed here. Diagnosis starts with the accessor identity, capability, artifact role,
+seam is loud only where a surviving row declares it in `Row.RequiresOwned` — the
+normalizer's write-plus-clear set, which excludes a key consumed only through
+`Row.Match` or a guard (see the note under the Disposition Table). Omission
+remains strictly safer than a placeholder, but the residual is a property of that
+peer-owned scope, tracked in Capability Dependencies rather than claimed closed
+here. Diagnosis starts with the accessor identity, capability, artifact role,
 timeout, and expected versus observed tag values.
 
 ## Implementation Plan
@@ -988,7 +1001,7 @@ transition boundaries, not inside graph-wide lint loops.
 
 ## Finalization Gate
 
-Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 2026-08-21)
+Responses: `0004-accessor-execution-safety-model/artifacts/gate.md` (Gate PASS 2026-08-24)
 
 ## References
 
@@ -997,6 +1010,8 @@ Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 202
 - JDR 0001 §D5: `<clear>` reserved — clear is removal, read-back asserts absence
 - JDR 0001 §D7(ii)/(iv): capability-table definition shape, `keys` binding,
   read-back equality
+- JDR 0001 §JD-3 (CLOSED): RDR 0002's normalizer is the `Row.RequiresOwned`
+  producer, deriving it as the rule's write block plus clear list
 - RDR 0007: Guard Predicate Totality — its A6b (Pending, downgraded at Stage 6)
   routed the read-completeness obligation to this RDR; the read-completeness
   clause and the seam-omission clause are what discharge it
