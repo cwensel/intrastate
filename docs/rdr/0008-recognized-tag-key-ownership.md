@@ -837,16 +837,20 @@ at the same `area:internal-resolve` seam.
     from `::normalize`; `::Row` now carries `Outcome string`).
     Command and verbatim output:
     `docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-lifted-outcome.md`.
-  - **Spike/contract gap in 0002, recorded not absorbed**:
-    `::liftOutcome` scans the merged atom map without reading
-    `Atom.Block`, so a `recognized` atom moved to
-    `[rule.guard.all.recognized]` or
-    `[rule.guard.unless.recognized]` is *lifted*, not refused
-    — both mutants normalize to the same five rows (spike
-    file, mutants 1–2). 0002's fenced text is the contract and
-    the refusal is 0002's to implement; this RDR's block 2
-    restates the fenced rule, not the spike. Flagged for the
-    0002 side at the next cluster reconcile.
+  - **Spike witnesses the lift, not the guard-position
+    refusal — and 0002 already books that**: `::liftOutcome`
+    scans the merged atom map without reading `Atom.Block`, so
+    a `recognized` atom moved to `[rule.guard.all.recognized]`
+    or `[rule.guard.unless.recognized]` is *lifted*, not
+    refused — both mutants normalize to the same five rows
+    (spike file, mutants 1–2). This is not a gap 0002 is
+    unaware of: its Testing Strategy scenario 3 names "a
+    `recognized` atom authored under `guard.all` and one under
+    `guard.unless`" among the mutants owed, and states that
+    the spike witnesses nine categories with "the remainder
+    … owed at implementation." 0002's fenced text is the
+    contract; this RDR's block 2 restates the fenced rule, not
+    the spike's current behavior. Nothing to route.
   - **Kernel side (unchanged)**:
     `internal/resolve/resolve.go::Row.Outcome` is gated by
     `row.Outcome != in.Recognized` in `::Resolve` and
