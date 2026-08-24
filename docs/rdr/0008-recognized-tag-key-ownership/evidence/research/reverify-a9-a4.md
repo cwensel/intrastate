@@ -104,7 +104,14 @@ Questions put, each with grounding:
    spike as a nine-category witness; a kata would duplicate 0002's own
    obligation.
 
-Dispositions are recorded in the close packet once answered.
+Round tally: 1 fixture put / 2 questions put / 3 approved / 0 rejected
+(author's round 2026-08-23). F-1 stands as scenario 5's normative fixture;
+Phase 2 carries no rename; the 0002 spike lift stays an observation. Prior
+art behind each recommendation: 0002's own `negative-cases.txt` convention
+(unpersisted mutant, one recorded refusal line, asserted by category); JD-10's
+precedent that the fixture owner renames at its own re-lock plus 07.1's HARD
+RULE against editing a Final peer; 0002 scenario 3 already owing both
+guard-position mutants.
 
 ## Profile
 
