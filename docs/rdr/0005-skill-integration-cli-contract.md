@@ -333,6 +333,24 @@ set value is an explicit container literal (§D11).
     move off bare `json.Marshal` onto one shared helper.
   - **If wrong**: Implementers would still need to invent request grammar,
     payload fields, or error-code spellings during code work.
+- **A7 RDR 0002's normalized model exposes, without evaluating missing facts,
+  which declared reader serves which owned key and which gates each candidate
+  row carries — enough to narrow `next` / `resolve` to the readers a candidate
+  row requires and to run only the reported candidates' gates under
+  `--evaluate-gates`.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: To verify. The narrowing clauses added at the repeatability
+    lens (Normative Contracts, `flow next` / `flow resolve`) assume the
+    reader→owned-key mapping and each row's gate list are readable from
+    normalized model data, the same "without evaluating missing facts" standard
+    the candidate-preview clause already relies on. Check RDR 0002's normalized
+    row and `[read.<id>].keys` shape for both; if only the gate list is exposed
+    and the reader→key mapping is not, the reader-narrowing clause falls back to
+    running every declared reader and `flow-artifact-missing` widens accordingly.
+  - **If wrong**: `next` / `resolve` either run readers a request does not need
+    (paying their timeouts and exit-3 surface) or refuse `flow-artifact-missing`
+    on roles irrelevant to the requested outcome.
 
 ### Reconciliation Report
 
@@ -348,6 +366,7 @@ re-entry Stage 6.
 | A4 verb owns load→decide, kernel stays pure | 4 | VERIFIED | Peer RDR recorded in A4 (JDR 0001 §D8/§D9, `0004::Normative Contracts`), kernel purity confirmed in source. |
 | A5 error codes + one `findings` field | 4 | VERIFIED | Exit mapping verified in `internal/cli/clierr::ExitCodeFor`; the `clierr.Finding` field set settled at the re-entry Stage 4 round as one flat `omitempty` record covering all five producers. |
 | A6 pinned grammar + code spellings | 4 | VERIFIED | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member escaping pinned to HTML-escaping-disabled at the round, with normative fixtures from `evidence/spikes/escaping-surfaces.out`. |
+| A7 normalized model exposes reader→owned-key and per-row gate lists | 5 | PENDING | Opened at the repeatability lens by the reader-set and `next` gate-scope pins. Check RDR 0002's normalized row and `[read.<id>].keys` shape. |
 | Reuse audit | 4 | NO FINDING | `internal/cli` registers only `newVersionCmd`; no TOML loader, accessor executor, `Finding` type, or `respond.OK` text-payload path exists. Greenfield; nothing to fold in. |
 
 **Method vocabulary** (pick exactly one per assumption):
@@ -454,7 +473,13 @@ JSON mode.
 `--model <path>` names a model file explicitly. They are mutually exclusive;
 either failing to resolve is `flow-model-not-found`. The CLI reads the file and
 hands RDR 0002's loader bytes plus the path as source id — the loader performs
-no file I/O. Every load category RDR 0002 defines, RDR 0003's two predicate
+no file I/O. `revision` on every payload is the loaded model's own revision
+identity, carried through verbatim: RDR 0002's loader produces it, the CLI
+echoes it, and the kernel treats it as opaque (`internal/resolve::Table.Revision`
+— "the opaque caller-supplied table revision identity. The kernel carries and
+compares it; it does not parse it"). The CLI never derives, hashes, or
+synthesizes it, so a model that declares none renders `revision` empty rather
+than a CLI-invented value. Every load category RDR 0002 defines, RDR 0003's two predicate
 categories, and RDR 0008's `reserved_tag_key` map to one code,
 `flow-model-invalid`, with one `findings[]` entry per category hit
 (`code` = category slug, `locator` = file:line). The remedy for all of them is
@@ -471,8 +496,10 @@ rendered with HTML escaping disabled; a bare scalar for a set key, or an array f
 a scalar key, is `flow-tag-invalid`. Owned state is never caller-supplied: it
 is assembled from declared read accessors over `--artifact role=path`
 bindings, where `role` is the model-declared artifact role and `path` the
-caller-owned artifact. A role an invoked accessor needs that no binding
-supplies is `flow-artifact-missing`.
+caller-owned artifact. On `next` and `resolve` the invoked set is narrowed to
+the readers serving an owned key some candidate row requires, so an unrelated
+model's unbound roles cost nothing; `read-state` runs them all. A role an
+invoked accessor needs that no binding supplies is `flow-artifact-missing`.
 
 **Outcome.** `flow resolve` requires `--outcome <tag>`; an absent or empty
 value is `flow-tag-invalid` at the CLI, and a value outside the model's
@@ -546,7 +573,10 @@ said no. No new exit group.
 
 Text mode renders the same result content in a human-scannable order; it does
 not invent fields absent from the JSON payload, and it renders `findings`
-one-per-line under the message.
+one-per-line under the message. The `--as` flag itself — its persistence at the
+root, its `text|json` domain, and its default — stays the root contract's
+(`docs/cli-output-contract.md`, `internal/cli::NewRootCmd`); this RDR inherits it
+unchanged and does not redefine it for the `flow` group.
 
 #### Normative Contracts
 
@@ -587,14 +617,26 @@ accessors. --tag values MUST enter as observed context. A --tag naming an owned
 key or the reserved recognized key MUST be refused at the CLI before any
 accessor runs.
 
+The invoked read-accessor set MUST be exactly those readers serving an owned key
+some candidate row of the requested model requires — not every declared reader.
+A reader no candidate row needs MUST NOT run, and its unbound artifact role MUST
+NOT raise flow-artifact-missing; flow-artifact-missing is scoped to the roles the
+invoked set needs. flow read-state is the exception and runs every declared
+reader, because a diagnostic read has no candidate set to narrow by.
+
 flow next MUST return the legal recognized-outcome alphabet for the supplied
 state, plus candidate summaries containing source rule identity, required
 facts, unresolved guard/gate facts, and preview next tags, write targets, and
 clear keys when those can be read from normalized model data without
 evaluating missing facts. It MUST run gate accessors only when --evaluate-gates
-is given; otherwise it MUST list gate ids as unresolved facts. It MUST NOT
-invent guard facts that were neither supplied, read, nor produced by a declared
-gate accessor.
+is given; otherwise it MUST list gate ids as unresolved facts. Under
+--evaluate-gates it MUST run the gates of every candidate row it reports and no
+others — a row whose guards already exclude it is not a candidate, so its gates
+MUST NOT run — and it MUST report each gate result on the candidate that carries
+it. A deny on one candidate constrains only that candidate: flow next reports it
+and still exits 0, because next enumerates rather than selects, and only flow
+resolve turns a deny into flow-gate-denied. It MUST NOT invent guard facts that
+were neither supplied, read, nor produced by a declared gate accessor.
 
 flow resolve MUST return exactly one plan or exactly one CLIError refusal.
 Kernel refusals MUST map one-to-one onto flow-unmodeled-outcome,
@@ -928,6 +970,22 @@ Stable code strings (the spellings are normative; the group fixes the exit):
 An escaped plan is not a failure: `flow resolve` exits 0 with `escaped: true`
 and `escape_class` on the payload.
 
+**Disposition of gate results by verb** (mini-check, fired by the
+`--evaluate-gates` outcome split added at the repeatability lens — the same gate
+result is terminal on `resolve` and merely reported on `next`):
+
+| Input class | `flow next --evaluate-gates` | `flow resolve` |
+| --- | --- | --- |
+| gate allows on a reported/selected row | exit 0; result on the candidate | exit 0; result in `gates[]` |
+| gate denies | exit 0; result on the candidate, no refusal | exit 2 `flow-gate-denied`, one `findings[]` per gate |
+| gate indeterminate, none deny | exit 0; result on the candidate | exit 2 `flow-gate-indeterminate` |
+| gate times out / fails to execute | exit 3 `flow-accessor-timeout` / `flow-accessor-failed` | exit 3, same codes |
+| gate on a guard-excluded row | not run, not reported | not run (row is not selected) |
+| gates not requested (`next` default) | not run; gate ids listed as unresolved facts | n/a — `resolve` always runs them |
+
+Loud in both verbs: no gate result is ever dropped silently, and a gate that
+could not be consulted is exit 3 rather than a deny.
+
 The main silent-failure risk is treating a failed accessor, a denied gate, or
 an ambiguous row as a successful transition. The recovery path is
 refusal-first: the command exits non-zero, emits the structured error envelope,
@@ -978,6 +1036,15 @@ through plan → request → read-back, so the encoder rule is covered by the
 validation rather than only by review. Run the happy path, one escaped
 plan, one gate deny, one kernel refusal, and one exit-3 accessor failure in
 `--as=text` and `--as=json`, asserting `findings[]` where the table names it.
+
+The fixture model MUST also declare one reader no candidate row needs, with its
+artifact role left unbound: `flow next` and `flow resolve` MUST succeed without
+invoking it or raising `flow-artifact-missing`, while `flow read-state` on the
+same model MUST invoke it and refuse the missing binding. That pair is the only
+assertion that distinguishes the narrowed invoked set from "every declared
+reader". `flow next --evaluate-gates` over a model with one gated candidate and
+one guard-excluded row MUST report the gate result on the reported candidate,
+run no gate for the excluded row, and exit 0 even when that gate denies.
 
 ### Phase 1: Command Contract Skeleton
 
@@ -1077,6 +1144,14 @@ typed refusal mapping for each verb.
    fields are absent from the JSON (`omitempty`); no producer nests its fields
    in a sub-object; and each finding's `message` alone renders the failure
    readably with no structured field consulted.
+8. **Scenario**: a fixture model declaring one reader no candidate row needs
+   (its role unbound) and, separately, `flow next --evaluate-gates` over one
+   gated candidate plus one guard-excluded gated row.
+   **Expected**: `next` and `resolve` neither invoke the unneeded reader nor
+   raise `flow-artifact-missing`, while `read-state` on the same model invokes
+   it and refuses the missing binding; under `--evaluate-gates` only the
+   reported candidate's gate runs, its result rides that candidate, and a deny
+   there still exits 0 (`next` enumerates, it does not select).
 
 ### Performance Expectations
 
