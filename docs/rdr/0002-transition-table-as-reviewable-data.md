@@ -316,11 +316,21 @@ factor common context instead of enumerating every Cartesian row.
     observing it.
 - **A13 Merging is idempotent on identical atoms: one atom contributed by a
   rule and by one or more inherited contexts collapses to exactly one.**
-  - **Status**: Verified
+  - **Status**: Pending
   - **Method**: Spike
-  - **Evidence**: Both halves are witnessed, on the same fixture pair, so the
-    de-duplication is shown to be keyed on the full atom identity and not on a
-    proper prefix of it. **Idempotence half:**
+  - **Evidence**: Both halves are witnessed on scalar literals, which establishes
+    the merge is not keyed on `(block, key, operator)` — but **not** that it is
+    keyed on the full atom identity. Every current witness uses a single-member
+    literal, where a joined rendering and a member sequence are the same string,
+    so the two candidate keys are indistinguishable under them. The spike is in
+    fact keyed on a joined rendering (`main.go::Atom.identity` calls
+    `literalString`, which is `strings.Join(a.Literal, ",")`), and two atoms
+    whose members differ only in comma placement collapse: a context
+    contributing `in = ["a,b", "c"]` and a rule contributing `in = ["a", "b,c"]`
+    on one key and block yield one surviving atom, and the rule normalizes to a
+    live expanding row instead of the dead rule the contexts clause requires.
+    Closing this needs a **multi-member** distinct-literal witness whose members
+    contain the joining delimiter. **Idempotence half:**
     `evidence/spikes/iter-2/merge-idempotent.toml` has `reconcile-rewind`
     author `[rule.match.status] eq = "Draft"` while its inherited `draft`
     context contributes the byte-identical atom; the normalized row carries
@@ -331,9 +341,10 @@ factor common context instead of enumerating every Cartesian row.
     reversed `use` order (`merge-distinct-rev.toml`) digests identically
     (`3813472915…`), so the result does not depend on `use` iteration order.
     A merge keyed on `(block, key, operator)` would collapse the second pair
-    and fail; one keyed on nothing would inflate the first. Transcript in
-    `evidence/spikes/iter-2/negative-cases.txt`. The scenario 2 assertions
-    remain as the implementation-side controls.
+    and fail; one keyed on nothing would inflate the first. A merge keyed on a
+    joined rendering passes both, which is why the delimiter-bearing witness is
+    owed. Transcript in `evidence/spikes/iter-2/negative-cases.txt`. The
+    scenario 2 assertions remain as the implementation-side controls.
   - **If wrong**: The normalized atom set carries duplicates, inflating the
     dump and the Round-Trip field list without changing match semantics — or
     a de-duplication keyed too widely drops the A13-adjacent distinct-literal
@@ -501,7 +512,15 @@ table is admitted (strict decoding, below).
 **`[model.metadata]` is the one sanctioned extension namespace.** The loader
 MUST decode it as a free-form table, carry it through to the normalized model
 untouched, and MUST NOT interpret any key in it; strictness applies everywhere
-else.
+else. It is a **model-level field and reaches no candidate row**, so it is
+outside the dump's field list and outside the Round-Trip invariant, which
+compares candidate-row sets: two documents differing only in `[model.metadata]`
+normalize to identical row sets while carrying different normalized models, and
+that is intended — the invariant is over rows, and metadata is carried for the
+caller, not for row semantics. Nothing here forbids a dump from rendering it as
+a header; that is presentation, like `[dump]`. Its internal shape is
+deliberately unconstrained (arbitrary keys, values, and nesting): constraining
+it would make it a schema, which is the opposite of an extension namespace.
 
 **Accessor tables.** Each capability table decodes to its own shape, so
 "exactly one capability per accessor" (RDR 0004) holds structurally rather than
@@ -591,6 +610,15 @@ visible rather than accidental: the Testing Strategy's one-defect-per-fixture
 rule makes order unobservable by construction, so a later implementation MUST
 NOT be read as bound to whichever order the first one happened to use, and an
 accumulating loader that returns a list is a different contract than this one.
+
+That argument is scoped to defects that **reach a check**. A defect consumed
+earlier in the pipeline — merged away, de-duplicated, or otherwise absorbed
+before any category is decided — trips *zero* categories rather than one, so a
+one-defect fixture for it asserts nothing and the order-unobservability argument
+does not cover it. Such absorption is a normalization defect in its own right
+(the merge clause's set-over-full-identity obligation, and the literals clause's
+ban on joined identities, exist to prevent exactly this), not a case the fail-fast
+freedom licenses.
 
 **Strict decoding is an obligation on this format, not a property of a library.**
 The decoder MUST reject unmapped keys so an unknown schema field is a stable
@@ -730,6 +758,21 @@ certifies the collision as canonical. Members sort byte-lexicographically so two
 authored orderings of one set are one literal; the sort is over members, after
 which the sequence — not a joined rendering — is the value that atom identity and
 the round-trip invariant compare.
+
+**The obligation binds every comparison of an atom, not only its stored value.**
+Wherever atoms are compared, keyed, deduplicated, or sorted — in particular the
+**merge key** the contexts clause makes a set over `(key, block, operator token,
+literal)` — the literal field MUST be compared as the member sequence,
+element by element. An implementation MUST NOT derive that key, or any other
+identity, by joining members into a string. Keeping `Literal` a sequence in the
+normalized value while keying the merge on a joined rendering satisfies the
+letter of the paragraph above and still collapses two distinct atoms: the loss
+happens in the merge, before the sort the paragraph above relies on can observe
+it — the same blind spot the contexts clause names for a prefix key, reached by a
+different route. Any delimiter is wrong here, not merely a delimiter a member
+might contain, because no delimiter is banned from a tag value: the
+expansion-suffix separator `#` is refused only in rule ids, alphabet members, and
+match-block `in` members, so every other string a member can hold is authorable.
 ```
 
 ```normative
@@ -1140,10 +1183,17 @@ define a dump grammar — no delimiter, escaping, quoting, or record separator.
 `dump` therefore has no specified inverse, and a textual round-trip is not
 claimed. One site makes the rendered form lossy today and would have to be
 closed by any later RDR that defines a re-readable dump: set-valued and
-multi-entry fields are rendered with unescaped separators. (The `<clear>`
-sentinel is reserved and the suffix separator is banned from every string it
-joins, so those two renderings are unambiguous.) Rendering is a review surface
-here, and the normalized value is the contract.
+multi-entry fields are rendered with unescaped separators. This makes the
+rendered form of a **set-valued atom literal** non-recoverable — `["a,b", "c"]`
+and `["a", "b,c"]` render identically — and the `#`-ban does not reach it: `#`
+is refused in rule ids, alphabet members, and match-block `in` members, which is
+what makes the rendered *row identity* recoverable, but an atom literal in a
+guard block or on any `string`-kind tag may hold any byte. (The `<clear>`
+sentinel is reserved and the suffix separator is banned from every string the
+row identity joins, so those two renderings are unambiguous.) Rendering is a
+review surface here, and the normalized value is the contract — which is why the
+literals clause forbids a joined rendering from becoming an identity anywhere
+upstream of the dump.
 Source rewrite is likewise out of scope for this RDR; a later rewrite-capability
 RDR must define its own source-preservation invariant before mutating authored
 TOML.
@@ -1157,7 +1207,7 @@ rendered form is lossy at one named site and carries no inverse.
 | --- | --- | --- |
 | parse (TOML → source) | none claimed — comments, key order, and whitespace are dropped by design; `[model.metadata]` carried verbatim | source rewrite out of scope |
 | normalize (source → rows) | **value identity**: key order, rule order, and `eq`/single-member-`in` spelling all normalize to one candidate-row set | contexts flattened; `recognized` atom lifted out; every multi-member match-block `in` expands 1→N (product across atoms); set literals member-sorted; `match`/`all`/`unless` merged with block retained |
-| dump (rows → text) | fixed field list + total row order; every field present, columns reorderable | **no grammar**: separators unescaped (`<clear>` reserved and `#` banned from identity parts, so those render unambiguously) |
+| dump (rows → text) | fixed field list + total row order; every field present, columns reorderable | **no grammar**: separators unescaped, so a set-valued atom literal's rendered form is non-recoverable (`<clear>` reserved and `#` banned from row-identity parts, so those two render unambiguously; the ban does not reach atom literals) |
 | read-back | **not claimed** — no inverse is specified | charted to a successor dump-format RDR |
 
 **`disposition`** — routing is by arity: single-rule → load (this RDR),
@@ -1182,7 +1232,14 @@ The three that previously passed against a wrong implementation — the category
 oracle (message text, not category), the determinism oracles (a constant
 passes), and "the comparator is total" (satisfied by the positional tiebreak it
 excludes) — are replaced by category-level assertions, RDR-fixture permutation,
-and rule-order permutation respectively.
+and rule-order permutation respectively. A fourth is added at cove iter-2: the
+**merge distinct-literal control**, which passed against a merge keyed on a
+joined rendering because every witness used a literal containing no delimiter.
+Its replacement uses members that contain the joining delimiter (Testing
+Strategy 2). The pattern across all four is the same — a control whose inputs
+cannot distinguish the right implementation from the wrong one — so a new
+assertion is not accepted here until a wrong implementation that fails it is
+named.
 
 **`trace`** — desk trace of the MVV against the clauses in force. One row per
 step; witness values from `evidence/spikes/iter-2/output.txt`.
@@ -1193,12 +1250,14 @@ step; witness values from `evidence/spikes/iter-2/output.txt`.
 | normalize | outcome lifted; per-atom block retained; `RequiresOwned` = writes ∪ clears | `continue-prelock … atoms=[…profile.eq=small@unless…] requires_owned=[iter,stage]` — holds |
 | expand `in` | one row per member of every multi-member match-block `in`; suffix only where the rule expands | holds on both arms: `terminal-archive#finalized` / `#verdict-flapping` for the `recognized` atom, and `continue-prelock#large` / `#foundational` for the **inherited non-`recognized`** `profile.in`, so the expansion is general and the suffix is a sequence. `eq`/single-member-`in` equivalence is witnessed by `perm/rdr-eq-as-in.toml` digesting identically to the baseline |
 | escape row | no write block or clear list; `RequiresOwned` empty; expands like any other rule | `draft-no-match-escape#round-clean` / `#reconcile-block … next=[] write=[] requires_owned=[] escape=[no_match]` — holds, and covers A11 |
+| merge atoms | the merged set is a set over the full atom identity `(key, block, operator token, literal)`, compared as a member sequence | **CONTRADICTION** — the spike keys the merge on a comma-joined rendering (`main.go::Atom.identity` → `literalString`), so `in = ["a,b", "c"]` and `in = ["a", "b,c"]` on one key and block collapse to one atom and the rule normalizes to a live expanding row instead of a dead rule. Scalar witnesses cannot see it. Clause tightened (literals clause); A13 → `Pending`; the delimiter-bearing control is owed |
 | dump order | rows by identity tuple; locator excluded; no positional tiebreak | three runs byte-identical, and key-order **and rule-order** permutations digest identically — holds |
 | resolve, sibling gate | unevaluable survivor refuses despite a decidable sibling and an escape row | inputs now present: `continue-prelock` and `continue-prelock-cluster` both bind `round-clean`, the latter guarding on an optional owned key (`cluster_ready.eq=true@all`), alongside a `round-clean` escape row. The `Resolve` run itself is scenario 4's and waits on RDR 0007's reshape |
 
-No CONTRADICTION row survives. The two gaps this table previously recorded —
-the missing sibling pair and the outcome-only expansion — are closed by the
-§D7 re-authoring rather than carried forward.
+One CONTRADICTION row survives — the merge row, whose contract is now tightened
+but whose witness is owed (A13 `Pending`). The two gaps this table previously
+recorded — the missing sibling pair and the outcome-only expansion — are closed
+by the §D7 re-authoring rather than carried forward.
 
 #### Illustrative Code
 
@@ -1570,17 +1629,21 @@ surviving escape row, and the gate refusals are never modeled.
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified **except A9, A10, and A12**. A1 was
+- [x] All Critical Assumptions verified **except A9, A10, A12, and A13**. A1 was
   re-verified at Stage 4 by re-authoring both spike fixtures to the §D7 layout
-  and re-running the spike under strict decoding; A7, A11, A13, and A14 were
+  and re-running the spike under strict decoding; A7, A11, and A14 were
   promoted to `Verified` by that same run (general match-block expansion and
-  the sequence suffix; escape expansion under `in`; both merge halves; the
+  the sequence suffix; escape expansion under `in`; the
   version-gate precedence, witnessed by a v2-shaped fixture against a v1
-  control). The three that remain `Pending` carry named MVV assertions:
+  control). The four that remain `Pending` carry named MVV assertions:
   **A9/A12** are blocked on RDR 0007's kernel reshape (below) — their fixture
   inputs now exist, but no field exists to route into; **A10**'s decidability
   half is source-verified and only its paired-document behavior is owed, since
-  no single-file fixture can express two model ids. None is load-bearing for a
+  no single-file fixture can express two model ids; **A13** was demoted at
+  pre-lock (cove iter-2) because every merge witness uses a literal under which
+  a joined rendering and a member sequence are indistinguishable, so the
+  witnesses do not establish the full-identity key they were read as
+  establishing. None is load-bearing for a
   *pre-lock* MVV assertion; each is survivable per its "If wrong".
 - [ ] RDR 0007 is the normative home of the atom shape and the existence
   constants this RDR's normalizer emits. RDR 0007 is `Final`, so the
@@ -1771,12 +1834,13 @@ Implementation tests must promote the Resolve spike into production fixtures:
    **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is `evidence/spikes/iter-2/output.txt` (approved Stage 4, A1; SHA-256 `6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd`), whose nine RDR rows and two kata rows are the expected value. Note the RDR fixture yields **nine** rows, not seven: `continue-prelock` and `continue-prelock-cluster` each expand on the inherited `profile.in`, and `draft-no-match-escape` expands on its `recognized.in`.
    **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array and a later mutation of one would silently move the other. Enforcement is by review of the normalizer, or by a test that mutates one field and asserts the other is unchanged.
    **Additionally**, atom-set semantics are asserted positively, since these shapes must *survive* load rather than be refused: two inherited contexts contributing the same key and operator with **different literals** yield **two** atoms in the normalized set, not one — asserted by count and by value, with the contexts listed in both `use` orders to prove the result is order-independent (a merge keyed on `(block, key, operator)` drops one and passes a count-only check on a single ordering); a set-valued literal whose member contains a space normalizes to a member sequence, so `["needs work"]` and `["needs", "work"]` are **distinct** atoms; and a rule authoring one atom in both `all` and `unless` loads successfully as two atoms and is reported by lint as a dead rule, not refused at load.
-   **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case. Both halves are witnessed by the spike — `evidence/spikes/iter-2/merge-idempotent.toml` (count one) and `merge-distinct.toml` / `merge-distinct-rev.toml` (count two, both `use` orders digesting identically) — so these assertions promote a captured result rather than opening a new question.
+   **The distinct-literal control must use members containing the implementation's own joining delimiter, whatever it is** — two contexts contributing `in = ["a,b", "c"]` and `in = ["a", "b,c"]` on one key and block must yield **two** atoms, and the rule must be a dead rule for lint rather than a live expanding row. A control using only scalar or space-bearing members does not discriminate: it passes against a merge keyed on a comma-joined rendering, which is what the spike does today (`main.go::Atom.identity` → `literalString`), collapsing the pair to one atom and normalizing the rule to a matching row. This is the assertion A13 needs and currently lacks.
+   **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case. Both halves are witnessed by the spike on scalar literals — `evidence/spikes/iter-2/merge-idempotent.toml` (count one) and `merge-distinct.toml` / `merge-distinct-rev.toml` (count two, both `use` orders digesting identically). Those witnesses promote a captured result for the `(block, key, operator)` question only; the delimiter-bearing control above is the one that remains open, which is why A13 is `Pending`.
    **Escape expansion under `in` is asserted here (A11)**: the fixture's `draft-no-match-escape` binds its outcome with `in` over two alphabet members, and normalization must yield **two** escape rows carrying distinct expansion suffixes, each with an empty write set and each retaining the modeled failure-class list. Witnessed in `evidence/spikes/iter-2/output.txt` as `rdr.draft-no-match-escape#round-clean` and `…#reconcile-block`.
    **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty, and every `Match` atom carries block `match`. The discriminating cases are now authored in the fixtures: `continue-prelock-cluster`'s `[rule.guard.all.cluster_ready] eq = true` — an `eq` atom under `guard.all` over an optional (`required` unset) owned key — and the kata fixture's `status.eq=closed@unless`; both are equality operators that route to the guard because of their block, and both appear as guard-block atoms in `evidence/spikes/iter-2/output.txt`. Like the rest of Phase 2 the assertion itself is unsatisfiable until RDR 0007's reshape lands (Prerequisites), but its inputs are no longer owed.
 3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, a missing root outcome alphabet, a `lt` atom and separately an `exists` atom under `[rule.match]` (match-block operator restriction), a `#` inside a match-block `in` member, a predicate literal outside the tag's declared `domain`, a tag declaration RDR 0003's rules reject (`domain` on a `kind` that admits none), `<clear>` authored as a write value, as an `[initial]` value, and as a predicate literal, an `[initial]` key that is undeclared, an owned key served by zero readers and separately by two, a written key with no writer, a writer whose `keys` names an observed tag, `recognized` in a reader's `keys`, an accessor entry missing `timeout`, a rule whose `gate` names an id declared only under `[read.*]`, an escape rule carrying a `gate` list, and a `terminal` entry naming no context. Positive controls in the same fixture set: an observed key served by no reader loads (JD-9), and a model with no `[initial]` loads and is left to lint.
    **No control is listed for an `[initial]` key that is *observed*, because that document has no authorable form** (Normative Contracts, Root and stop set): the writer-binding bullets refuse it as `malformed accessor binding` or `write to non-owned tag` before the owned-tag predicate is reached, so a fixture for it would witness a different category than the one it names. `malformed initial declaration` is controlled by its value arm — a literal ill-formed for the declared kind or domain — and by the undeclared-key variant above. Verified by enumeration this stage: both authorings were built and each refused under the writer-binding category (`evidence/spikes/iter-2/probe-a.toml`, `probe-b.toml`).
-   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. **Thirty-five of these controls are witnessed by the §D7 spike**, one refusal per mutated fixture, in `evidence/spikes/iter-2/negative-cases.txt`, covering **18 of the 23 categories** named above. The five still owed at implementation are `malformed TOML`, `missing recognized outcome alphabet`, `cyclic context inheritance`, `malformed tag declaration` (RDR 0003 supplies its rejection rules), and `duplicate model id` (cross-document, so it needs the paired-document surface no single-file fixture can provide). Regenerate the whole set with `python3 evidence/spikes/iter-2/gen-cases.py`, which derives each fixture from the RDR fixture by a single mutation so the one-defect-per-fixture rule holds by construction. Implementation promotes these fixtures; it may extend the set but must not narrow it.
+   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. **Thirty-five of these controls are witnessed by the §D7 spike**, one refusal per mutated fixture, in `evidence/spikes/iter-2/negative-cases.txt`, covering **18 of the 23 categories** named above. The five still owed at implementation are `malformed TOML`, `missing recognized outcome alphabet`, `cyclic context inheritance`, `malformed tag declaration` (RDR 0003 supplies its rejection rules), and `duplicate model id` (cross-document, so it needs the paired-document surface no single-file fixture can provide). Two of those five are owed only a **fixture**, not an implementation: `cyclic context inheritance` and `malformed tag declaration` are both already decided by the spike and were confirmed to fire this stage against mutated fixtures (`cyclic context inheritance at "prelock"`; `malformed tag declaration: "cluster_ready" has no kind`), so `gen-cases.py` should mint their single-mutation cases rather than leaving them to implementation discovery. Regenerate the whole set with `python3 evidence/spikes/iter-2/gen-cases.py`, which derives each fixture from the RDR fixture by a single mutation so the one-defect-per-fixture rule holds by construction. Implementation promotes these fixtures; it may extend the set but must not narrow it.
    **The version gate's precedence needs its own fixture (A14), separate from the `unsupported version` category fixture above.** That fixture is a v1-shaped document with a bad version value, which trips the category under *either* check ordering and therefore witnesses nothing about precedence. The precedence control is a **v2-shaped** document — `version = 2` plus a v2-only key the strict decoder would reject as an unknown schema field — asserted to refuse `unsupported version` and **not** `unknown schema field`. This is the only ordering this RDR fixes normatively, so it is the only ordering that gets an oracle.
 4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable because its `guard.all` carries an `eq` atom over an optional owned key the view does not hold — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order. The overlapping variant is reported by lint as an ambiguous overlap before the model is accepted, naming both rows.
