@@ -11,7 +11,7 @@ instance body). -->
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-5, §JD-8]
+- **Status**: Final [joint decision → JDR 0001 §JD-5, §JD-8, §JD-9: precondition precedence; payload/advisory carrier; `--tag recognized=` classification]
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real

@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-15, §JD-16, §JD-17: `<clear>` at the write accessor; Match/Guard routing key; wire keys for initial/terminal, write-replaces, accessor metadata, type-model fields]
+- **Status**: Draft [revised from Final 2026-08-24; re-verify A1, A9, A12 — JDR 0001 §D6/§D7 answered §JD-16/§JD-17 against 0002's fenced operator-keyed routing and `[accessors.<id>]` layout; §D5 answered §JD-15 (unfenced Round-Trip prose only)]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,
@@ -1546,3 +1546,54 @@ Responses: 0002-transition-table-as-reviewable-data/artifacts/gate.md (Gate PASS
 - RDR and kata flow audits from the state-machine prior-art corpus.
 - Tool-fit assessment for FSM libraries as validation/visualization tools, not
   runtime orchestrators.
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster / date**: `0002-0009`, iteration 3, 2026-08-24 — report at
+  `docs/rdr/cluster-reconcile/0002-0009/iter-3/reconcile-report.md`; check at
+  `…/iter-3/answer-check-0002.md`.
+- **Peer pair**: 0002 × home (JDR 0001 §D5/§D6/§D7 answered §JD-15/§JD-16/
+  §JD-17 on 2026-08-24); pairs 0002×0003, 0002×0004, 0002×0006 raised them.
+- **Defect** (answer-vs-fences check failed — fenced text contradicts the
+  ratified answers):
+  - §JD-16 (§D6, block-keyed routing): the fenced routing clause
+    (`0002:693-717`) "splits … by operator" — `eq` on a declared tag → `Match`,
+    every other operator and every `unless` atom → guard — with the rationale
+    "equality in a guard defers a decidable check"; §D6(b) routes by the
+    authored block, admits `eq`/`in` (expanded per member) under match blocks,
+    refuses other operators there at load, and makes every guard-block atom a
+    guard atom regardless of operator. The fenced block vocabulary is
+    two-valued "(`all` or `unless`)" (`0002:539-545`); §D6 makes it
+    three-valued (`match`). The generalized `in` expansion touches the
+    outcome-only suffix / totality proof (`0002:623-631`, `751-755`; critique
+    N-5).
+  - §JD-17 (§D7, closed layout): the fenced layout enumeration and accessor
+    entry (`0002:430-441` — `[accessors.<id>]` with `mode`+`path`, id-only
+    validation) and the tag-side `accessor` reference (`0002:813-814`,
+    `348-351`) are retired by §D7(ii) (`[read.<id>]`/`[write.<id>]`/
+    `[gate.<id>]`, `keys` as the binding, `role`/`timeout`/`read_back`);
+    `[initial]`/`terminal`, the seven type-model keys, `[model.metadata]`, the
+    write-replaces clause, the two declaration/literal load categories and the
+    binding validations are absent; `evidence/spikes/rdr-fixture.toml` is
+    non-conforming.
+  - §JD-15 (§D5, reserved `<clear>`): unfenced only — Round-Trip prose
+    "sentinel is not reserved" (`0002:936-938`), fidelity table (`0002:956`),
+    "lossy at three named sites" (`0002:949-950`); the `<clear>`-as-authored-
+    value load category is absent.
+- **Target re-entry stage**: 3 (Refine) — restate the fences to the answers;
+  Stage 4 then re-verifies the named assumptions, forward through 6 → 7.
+- **Re-entry scope**: STAGE-SCOPED — bounded `re-verify A1, A9, A12` (layout
+  representability; the unified block-retaining atom; Match/guard routing
+  totality). The chosen approach (sparse TOML wire format + a normalizer that
+  mints kernel rows) holds; no foundational assumption is voided, so
+  FULL-FLOW is not earned.
+- **Direction**: the home is the authority — 0002 conforms; cite §D5/§D6/§D7,
+  do not restate their derivation. Open at the home, to settle while
+  restating: §D7(ii)'s "key served by zero readers is refused" must not refuse
+  `recognized` (kernel-supplied) or `--tag` keys (§JD-9) — see the D7 note.
+  Sweep on the way (cosmetic, recorded iter-2/3): 0002 restates 0008's naming
+  rule and is stale on JD-10 (`0002:~199-204`, `1271-1276`); §D2
+  gate-then-count restated in prose (`325-329`, `384-393`); 0006's dead-rule /
+  scenario-14 fixture needs a `recognized`-absent atom 0002 refuses
+  (pairwise-0008-0005-0006 F6) — state the authorable form. No
+  joint-decision qualifier carries forward (all three answered).

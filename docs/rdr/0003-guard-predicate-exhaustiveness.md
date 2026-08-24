@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-16, §JD-18: Match/Guard routing key; conforming-view enforcer] [locked 2026-08-22 — Gate PASS. Owns the tag declaration
+- **Status**: Draft [revised from Final 2026-08-24; re-verify none — fenced clause 0003:1065-1067 routes the two rejection rules onto RDR 0006 findings; JDR 0001 §D7(iii) makes them RDR 0002 load categories (0006 mints nothing); §JD-16 answered consistent; carries joint decision → §JD-18: conforming-view enforcer] [locked 2026-08-22 — Gate PASS. Owns the tag declaration
   model (value kind, finite domain, optionality, single-valuedness, element
   universe), rehomed from RDR 0002 on 2026-08-21 and ratified by that
   document's refine. Eight records remain open, none lock-blocking: A10,
@@ -2368,3 +2368,31 @@ Responses: `0003-guard-predicate-exhaustiveness/artifacts/gate.md` (Gate PASS 20
 - Prior-art corpus: `../state-machines` audits, evals, contrasts, and checked
   repositories for `transitions`, stateless/qmuntal-stateless, SCXML/scxmlcc,
   Sismic, StateSmith, and Statewright.
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster / date**: `0002-0009`, iteration 3, 2026-08-24 — report at
+  `docs/rdr/cluster-reconcile/0002-0009/iter-3/reconcile-report.md`; check at
+  `…/iter-3/answer-check-0003.md`.
+- **Peer pair**: 0003 × home (JDR 0001 §D7 answered §JD-17 on 2026-08-24;
+  0003 is a named sibling although its Status never carried §JD-17).
+- **Defect** (answer-vs-fences check — one fenced clause): `0003:1065-1067`
+  (inside the ```normative fence opened at 1038): "Both surface through the
+  predicate semantic kinds this RDR owns (A4) onto RDR 0006 findings and the
+  RDR 0005 envelope." §D7(iii): "Two load categories in 0002, rules supplied
+  by 0003: `malformed tag declaration` … and `malformed predicate atom` …
+  0006 mints nothing for either; 0005 maps them under §JD-8." Rule substance,
+  phase boundaries and ownership agree — only the surfacing route is wrong.
+- **Target re-entry stage**: 3 (Refine) — reword the route to "onto RDR
+  0002's `malformed tag declaration` / `malformed predicate atom` load
+  categories and the RDR 0005 envelope (§JD-8)"; Stage 7 then re-locks.
+- **Re-entry scope**: RE-LOCK-ONLY — `re-verify none`; a cross-ref fix, no
+  assumption disturbed, no round re-runs.
+- **Direction**: cite §D6 as decided where the participation / can-refuse
+  clauses read the block (they already do); make the `min`/`max` spelling a
+  citation to 0002 (§D7(iii)) rather than an assertion. Sweep on the way
+  (cosmetic, unfenced): illustrative `optional = false` → `required`
+  (`0003:1640`); A16's quoted "optional accessor reference" (`0003:519`) is
+  retired by §D7(ii); "0006 Draft / no atom-level field" citations (iter-2).
+  Drop §JD-16 from the qualifier at re-lock (answered, consistent); keep
+  §JD-18 (open).

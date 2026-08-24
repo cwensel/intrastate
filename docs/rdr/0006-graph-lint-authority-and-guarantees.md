@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-17: initial/terminal and write-replaces keys in 0002's layout] [locked 2026-08-23 — Gate PASS. Owns blocking graph-lint
+- **Status**: Final [§JD-17 answered 2026-08-24 by JDR 0001 §D7, checked consistent at the 0002-0009 iteration-3 gate; additive landings deferred to `artifacts/deviations.md`] [locked 2026-08-23 — Gate PASS. Owns blocking graph-lint
   authority, the mandatory invariant taxonomy, and the owned-state reachability
   relation peers quantify over. Six records remain open, none lock-blocking, all
   DOWNGRADED at Stage 6: A5 and A8 discharge at implementation (CI `graph-lint`

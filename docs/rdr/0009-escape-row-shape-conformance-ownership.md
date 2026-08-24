@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-5, §JD-8, §JD-15: precondition precedence; envelope carrier for row identities; `<clear>` at the write accessor]
+- **Status**: Final [joint decision → JDR 0001 §JD-5, §JD-8: precondition precedence; envelope carrier for row identities] [§JD-15 answered 2026-08-24 by §D5, checked consistent at the 0002-0009 iteration-3 gate — 0009 unchanged]
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real

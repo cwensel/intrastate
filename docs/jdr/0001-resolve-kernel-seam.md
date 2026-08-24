@@ -432,7 +432,11 @@ not a negotiation.
   check both land at `Resolve` entry; neither orders itself against the other.
   Either order is defensible — pick one and pin it with a test on a table that
   breaches both. The silence is the defect, not the choice. *(0007×0009 F1,
-  0008×0009 F2)*
+  0008×0009 F2)* **Sharpened 2026-08-24** (iteration-3 gate): 0009's fenced
+  MUSTs (`0009:864-867`, `926-929`) admit only 0009-reports-first on a doubly
+  breaching table; 0008 licenses either order. The answer must also name the
+  error wrapping — 0008 has no sentinel, 0009's is `errors.Is`-classifiable
+  (`0008:1491-1495` vs `0009:917-921`).
 - **JD-6 Producer-defect surface.** **Closed by §D1** — with no reconstruction
   step there is no mapping failure to surface, so 0007's panic clause has no
   trigger and 0005's structured-envelope contract is unopposed. *(0007×0009 F3)*
@@ -458,12 +462,18 @@ not a negotiation.
   reopen §D4 for one `omitempty` structured `CLIError` field instead of
   `Detail` text (`0007:2028-2039`), and 0006's non-omitempty `Findings` field
   changes every `flow-*` envelope. 0005 is the sibling this answer re-walks.
+  A third carrier rides here (iteration 3): 0008's per-key failure payload
+  and its near-miss advisory (`0008:1155-1160`, `2191-2196`) — 0002 absorbed
+  the category, not the carrier, and 0006's tier is closed to it.
 - **JD-9 `--tag` provenance.** Caller-supplied tags enter as
   `ProvenanceObserved` and never satisfy an owned-state dependency. `assemble`
   already pins owned-over-observed precedence so the accessor snapshot is "never
   shadowed by caller-supplied context"; the exposure opens only if the `flow`
   verb wires `--tag` into `Input.Owned`. Wire it to `Observed`.
-  *(0007×0005 F4, 0008×0005 F2)*
+  *(0007×0005 F4, 0008×0005 F2)* Still open (iteration 3): the
+  *classification* arm — 0008 fences `--tag recognized=x` as a programmer
+  mistake, 0005 maps it `GroupUserEnv`; the provenance half above does not
+  decide it. Siblings: 0005, 0008.
 - **JD-10 Recognized-tag totality.** 0008's name constraint invalidates all
   three of 0002's canonical fixtures, which 0002 declares normative — rename
   them; there are no users to migrate. Still open: whether a declared
@@ -536,12 +546,17 @@ not a negotiation.
   `<clear>` write removes the key, read-back asserts absence, clearing an absent
   key succeeds (0004). Restored from iteration 1's lost "JD-12". Siblings:
   0002, 0004, 0009. *(0009×0004 F2 ledger; 0002×0004 F-1, 0002×0006 G3,
-  iteration 2)*
+  iteration 2)* Sibling checks (iteration 3, 2026-08-24): 0009 consistent,
+  qualifier cleared; 0002 fences consistent, unfenced Round-Trip prose false
+  — swept by its §JD-16/17 re-entry; 0004 read-back prose contradicts —
+  demoted RE-LOCK-ONLY to land the clauses.
 - **JD-16 Match/Guard routing key.** **Decided 2026-08-24 by §D6** — the
   authored block routes: match blocks admit `eq` and `in` (expanded per
   member), refuse other operators at load; every guard-block atom is a guard
   atom regardless of operator. Siblings: 0002, 0003. *(0002×0003 F1, iteration
-  2)*
+  2)* Sibling checks (iteration 3): 0003 consistent (its clauses already read
+  the block), qualifier cleared; 0002's fenced routing clause contradicts —
+  demoted STAGE-SCOPED.
 - **JD-17 What the closed TOML layout must additionally spell.** **Decided
   2026-08-24 by §D7** — root `[initial]` assignments and `terminal` context-id
   list; per-capability accessor tables with `keys` as the binding; type-model
@@ -549,6 +564,15 @@ not a negotiation.
   write-replaces clause; `[model.metadata]`; two load categories for
   declaration and literal-domain errors. Siblings: 0002, 0003, 0004, 0006.
   *(0002×0006 G1/G2, 0002×0004 F1/F2/F3, 0002×0003 F2/F3, iteration 2)*
+  Sibling checks (iteration 3): 0006 consistent, qualifier cleared, additive
+  landings deferred to its `artifacts/deviations.md`; 0004 fences consistent,
+  `0004:371` repair lands at its re-lock; 0003 one fenced clause contradicts
+  (`0003:1065-1067`, route onto 0006 findings) — demoted RE-LOCK-ONLY; 0002's
+  fenced layout contradicts — demoted STAGE-SCOPED. **Open at (ii)** (critique
+  N-4): "a key served by zero … readers" refused at load cannot apply to
+  `recognized` (kernel-supplied) or `--tag` keys (§JD-9) — the binding
+  validation needs a provenance scope; owner 0002 at its re-entry, with 0004's
+  semantics.
 - **JD-18 Conforming-view enforcer.** 0003 A18/A20 route the runtime half of
   the declaration-conformance check (an observed always-present key omitted at
   runtime refuses under a green lint) and the atom carrier to "0007's next

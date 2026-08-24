@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-15, §JD-17: `<clear>` write/read-back semantics; accessor metadata keys in 0002's layout]
+- **Status**: Draft [revised from Final 2026-08-24; re-verify none — JDR 0001 §D5 (§JD-15) makes read-back assert absence for a `<clear>` write; 0004's read-back prose (0004:215, 511) asserts presence and none of §D5's clauses exist; §D7 (§JD-17) retires the "cannot be rebound" sentence (0004:371)]
 - **Type**: Architecture
 - **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, and write read-back) governing authoritative artifact mutation.
 - **Priority**: High
@@ -938,3 +938,35 @@ Responses: 0004-accessor-execution-safety-model/artifacts/gate.md (Gate PASS 202
   `stateMgr.WriteState`, `stateMgr.PersistState`
 - Local ADO transition helper prior art: `Client::transitionWorkItem`
 
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster / date**: `0002-0009`, iteration 3, 2026-08-24 — report at
+  `docs/rdr/cluster-reconcile/0002-0009/iter-3/reconcile-report.md`; check at
+  `…/iter-3/answer-check-0004.md`.
+- **Peer pair**: 0004 × home (JDR 0001 §D5 answered §JD-15, §D7 answered
+  §JD-17, both 2026-08-24); raised by 0009×0004, 0002×0004.
+- **Defect** (answer-vs-fences check): every fenced clause is CONSISTENT or
+  silent. The contradiction is in meaning, unfenced: "expected owned-tag
+  values are present" (`0004:215`) and "present in the re-read … none"
+  (`0004:511`) assert presence on read-back, while §D5(a) states a `<clear>`
+  write removes the key and read-back asserts the key is **absent**; the word
+  "clear" occurs nowhere in 0004's body. §D7(ii) also names `0004:371`
+  "cannot be rebound" for repair (the same id in `[read.x]` and `[write.x]`
+  is legal; the fenced identity `(flow, name, capability)` at `0004:270-274`
+  already says so).
+- **Target re-entry stage**: 3 (Refine) — add the §D5 landing clauses
+  (remove-key; read-back-absent; clearing an absent key succeeds; a read
+  yielding `<clear>` as a value is unreadable) plus an MVV scenario for a
+  clearing rule; state read-back as equality (§D7(iv), already unfenced at
+  `0004:511`, `793`, `846`); writers carry `keys` and the accessor definition
+  is the capability-table entry (§D7(ii)) — by citation; repair `0004:371`.
+  Stage 7 then re-locks.
+- **Re-entry scope**: RE-LOCK-ONLY — `re-verify none`: additive clauses and a
+  wording repair; A2/A7 (write read-back can verify the intended effect) hold
+  unchanged for the clear case.
+- **Direction**: the home is the authority; cite §D5/§D7, do not restate
+  derivation. The Prerequisites checklist (`0004:771-780`) is still all
+  unchecked under a lock — the re-lock gate must resolve it (iter-1/2
+  observation; home "What this does not decide"). No joint-decision
+  qualifier carries forward (§JD-15 and §JD-17 both answered).
