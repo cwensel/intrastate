@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-15, §JD-16, §JD-17: `<clear>` at the write accessor; Match/Guard routing key; wire keys for initial/terminal, write-replaces, accessor metadata, type-model fields]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,

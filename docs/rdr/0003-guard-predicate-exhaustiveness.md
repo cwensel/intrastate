@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [locked 2026-08-22 — Gate PASS. Owns the tag declaration
+- **Status**: Final [joint decision → JDR 0001 §JD-16, §JD-18: Match/Guard routing key; conforming-view enforcer] [locked 2026-08-22 — Gate PASS. Owns the tag declaration
   model (value kind, finite domain, optionality, single-valuedness, element
   universe), rehomed from RDR 0002 on 2026-08-21 and ratified by that
   document's refine. Eight records remain open, none lock-blocking: A10,

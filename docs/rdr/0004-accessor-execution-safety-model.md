@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-15, §JD-17: `<clear>` write/read-back semantics; accessor metadata keys in 0002's layout]
 - **Type**: Architecture
 - **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, and write read-back) governing authoritative artifact mutation.
 - **Priority**: High

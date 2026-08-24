@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-18: carrier for the per-atom refusal payload; conforming-view enforcer]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer at the
   0001↔0003 seam, consumed by RDR 0003's value evaluator and
@@ -121,7 +121,7 @@ decisions fix the ground this RDR builds on:
   set or refuse. RDR 0004 carries the clause as its own;
   this RDR cites it (A6b).
 
-RDR 0003 and RDR 0002 are both **Draft** and cite the §D1
+RDR 0003 and RDR 0002 are both **Final** and cite the §D1
 atom shape rather than restating it. 0003 owns operator
 vocabulary and typed semantics; its evaluator is a *value*
 evaluator under this RDR.
@@ -156,7 +156,7 @@ The contract sits at the boundary between:
   (JDR 0001 §JD-3).
 - **RDR 0004** (`Final`) carries read completeness (§D3);
   **RDR 0005** (`Final`, tolerance §JD-8/§JD-9) renders
-  refusals; **RDR 0006** (`Draft`, re-entry at refine)
+  refusals; **RDR 0006** (`Final`, locked 2026-08-23)
   narrows lint's promise where this RDR's veto and its proof
   disagree — the narrowing is recorded by RDR 0003
   (JDR 0001 §JD-4, closed 2026-08-22) and cited by RDR 0006.
@@ -1708,9 +1708,9 @@ comparison.
 | --- | --- | --- | --- |
 | Parsed guard atoms on the row | JDR 0001 §D1 | Decided; lands here | `Row.Guard` becomes an atom slice; fixtures migrate |
 | Three-valued `GuardResult` + `guard_unevaluable` kind | RDR 0001 (implemented) | Available | Reused unchanged |
-| Existence-operator token | RDR 0003 (Draft) | Introduced | Kernel exports the constant; normalizer emits it (A16) |
+| Existence-operator token | RDR 0003 (Final) | Introduced | Kernel exports the constant; normalizer emits it (A16) |
 | Value evaluator over present values | RDR 0003 implementation (future) | Deferred | Narrow seam; value-contract tests (Phase 3) |
-| `RequiresOwned` producer | RDR 0002 (Draft, §JD-3) | Deferred | Escape rows carry none (A21) |
+| `RequiresOwned` producer | RDR 0002 (Final, §JD-3 closed) | Deferred | Escape rows carry none (A21) |
 | Read completeness | RDR 0004 (§D3) | Decided | Cited; no obligation here |
 | Escape-class closure | RDR 0002 | Available | `guard_unevaluable` non-escapable by construction |
 

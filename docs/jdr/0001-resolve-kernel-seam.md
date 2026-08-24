@@ -228,13 +228,16 @@ not a negotiation.
   longer has to survive a one-slot channel. *(0007×0003 F1)*
 - **JD-2 Resolver control flow.** **Closed by §D2** — gate, then count.
   *(0007×0002 F1)*
-- **JD-3 `RequiresOwned` producer.** The field appears **zero** times in 0002,
-  which owns the normalized row and enumerates what the dump preserves — so no
-  layer is obliged to populate it, and 0007's owned-before-guard ordering may
-  quantify over an always-empty set. On escape rows 0007 derives it from
-  `Writes` while 0009 empties `Writes`. Not answered by D1, but D1 reopens the
-  same type and is the natural occasion to settle it. *(0007×0002 F3,
-  0007×0009 F2)*
+- **JD-3 `RequiresOwned` producer.** **CLOSED 2026-08-23** by the `0002-0009`
+  iteration-2 gate: RDR 0002's normalizer is the producer (`0002::Normative
+  Contracts`, "`Row.RequiresOwned` has no authored form. The normalizer MUST
+  derive it … sorted, duplicate-free set of tag keys named by the rule's write
+  block and clear list"; escape rows carry an empty set). 0007 owns the field's
+  meaning; 0009 is consistent (escape rows carry neither writes nor a set). One
+  implementation-order residue, not a decision: whichever of 0007 Phase 1 /
+  0009 Phase 1-2 lands first repairs `fixtures_test.go::escapeRow` on both
+  `Writes` and `RequiresOwned`. *(0007×0002 F3, 0007×0009 F2; closed via
+  `docs/rdr/cluster-reconcile/0002-0009/iter-2/`)*
 - **JD-4 Lint's promise is what gives.** Where 0006's exhaustiveness proof and
   0007's veto disagree, the *promise* narrows — P5 decides the substance.
   **CLOSED 2026-08-22** by the `0003-0006-0007` cluster gate, which is the venue
@@ -261,7 +264,10 @@ not a negotiation.
     (`0006:363-367`) carries no atom-level field, so the atom-naming half of
     0003's clause has no producer. 0006 MUST extend the finding record to carry
     the refusing atom. This is a payload extension, discharged at 0006's refine.
-  *(0007×0006 F2, 0007×0003 F3; closed via `docs/rdr/cluster-reconcile/0003-0006-0007/`)*
+  *(0007×0006 F2, 0007×0003 F3; closed via `docs/rdr/cluster-reconcile/0003-0006-0007/`.
+  The two 0007×0008 rows iteration 1 routed here — absent `recognized` key,
+  `exists` on the reserved key — are answered by §D4, not by this entry: the
+  kernel decides presence and `exists` provenance-blind.)*
 - **JD-5 Precondition precedence.** 0009's breach check and 0008's reserved-key
   check both land at `Resolve` entry; neither orders itself against the other.
   Either order is defensible — pick one and pin it with a test on a table that
@@ -281,6 +287,17 @@ not a negotiation.
   distinction an exit code can carry is exit 3 — and an accessor that could not
   read the artifact is what `GroupEnvUnavailable` already means. *(blank, except
   the exit-3 call)* *(0007×0005 F1/F2/F3, 0009×0005 F1/F2, 0008×0005 F1)*
+  **Widened 2026-08-23** (iteration-2 gate): the open question is the whole
+  code table, not three codes. 0005's June-locked table (`0005:601-614`) has
+  no row for 0004's refusal family (`incomplete_read`, post-mutation timeout,
+  gate deny — `read_back_incomplete` currently collapses into
+  `flow-write-readback-mismatch`, which 0004 forbids), 0002's ~20 load
+  categories, 0003's predicate semantic kinds, or an escape-disposition marker
+  on a resolve plan; and 0005 has no path form for the model 0002 says enters
+  at the CLI seam. Two carrier questions ride here: 0007's Prerequisite asks to
+  reopen §D4 for one `omitempty` structured `CLIError` field instead of
+  `Detail` text (`0007:2028-2039`), and 0006's non-omitempty `Findings` field
+  changes every `flow-*` envelope. 0005 is the sibling this answer re-walks.
 - **JD-9 `--tag` provenance.** Caller-supplied tags enter as
   `ProvenanceObserved` and never satisfy an owned-state dependency. `assemble`
   already pins owned-over-observed precedence so the accessor snapshot is "never
@@ -294,6 +311,17 @@ not a negotiation.
   with no outcome in flight), which decides whether an empty-outcome row is
   satisfiable, dead, or a lint error. No normalizer exists yet to observe it.
   *(0008×0002 F1/F2/F3, 0008×0009 F3)*
+  **ANSWERED 2026-08-23** — ratified at this home by the iteration-2 gate from
+  RDR 0002's re-lock: the `recognized` tag is **total over matching** — the
+  kernel refuses `unmodeled_outcome` before any row is consulted, the single
+  `recognized` match atom is the rule's mandatory outcome binding and is
+  lifted into `Row.Outcome`, a `recognized` atom in a guard block is refused at
+  load, the `outcomes` alphabet is non-empty and never contains the empty
+  string, and a rule requiring `recognized` absent is dead (0006's
+  unreachable-rule finding). Fixtures already renamed. 0008's answer-vs-fences
+  check failed (A9 verified on the superseded spike; block 2's
+  predicate-position clause; scenario 5's two-failure count vs fail-fast load)
+  — a SPEC-DEFECT routed to 0008 at Stage 4, STAGE-SCOPED.
 
 - **JD-12 Guard enforcement site.** **Closed by §D4** — the kernel enforces
   presence, `exists`, and combination; the evaluator seam is per-atom over a
@@ -335,6 +363,49 @@ not a negotiation.
   imply resolution succeeds) and RDR 0001's runtime refusal of ambiguity. 0006
   repairs invariants 3 and 4 to match its own Load-Bearing Decision at its
   refine. *(0003×0006 F8 — new at this gate, on no prior list)*
+  **Corrected 2026-08-23** (iteration-2 gate): the *overlap* half above
+  overshot. Both members now state, in fenced text, that overlap is checked in
+  **two populations** — ordinary rows among themselves, and escape rows among
+  themselves per declared failure class — never escape-vs-ordinary, because
+  the runtime consults escape rows only to rescue a `no_match`/`ambiguous_match`
+  (`0003:1206-1217`, `0006:901-903`). The *coverage* half stands: escape rows
+  participate in the union. This entry's decision is amended to that reading;
+  0003 A17 closes on it.
+- **JD-15 `<clear>` at the write accessor.** Restored — iteration 1 homed this
+  as "JD-12" and the renumbering lost it. 0002 normalizes a rule-level clear
+  list to `<clear>` sentinel writes; 0009's escape-row contract depends on that
+  rendering; 0004 (re-locked 2026-08-21) contains the word "clear" zero times
+  and defines neither the write semantics (remove the key) nor the read-back
+  expectation (key absent) for it; 0006 cannot re-pair a clear from the
+  normalized value. Open: whether `<clear>` is reserved in the writes value
+  space, what the accessor does with it, and what read-back asserts. Siblings:
+  0002, 0004, 0009. *(0009×0004 F2 ledger; 0002×0004, 0002×0006 iteration 2)*
+- **JD-16 Match/Guard routing key.** 0002 routes each atom to `Match` or the
+  guard by **operator** (equality on a declared tag → `Match`; every other
+  operator, and every `unless` atom → guard; `0002:703-708`), while 0003's
+  lint reads participation by **authored block** (`match`/`all`/`unless`,
+  retained per §D1). A `[rule.match]` non-`eq` atom over an optional key is
+  green under 0003's block-keyed coverage and `guard_unevaluable` at runtime.
+  Open: one routing key, stated once, that both the kernel handoff and the
+  finite-domain proof read. Siblings: 0002, 0003. *(0002×0003 F1, iteration 2)*
+- **JD-17 What the closed TOML layout must additionally spell.** 0002 locks a
+  closed, strict-decoded layout ("MUST reject unmapped keys") that never
+  received the declarations its consumers locked against: 0006 requires an
+  initial owned state and terminal set (A6) and a write-replaces rule for
+  single-valued tags (A10), both booked as "scheduled edits on RDR 0002
+  (`Draft`)" the day 0002 locked without them; 0004 requires per-accessor
+  timeout/role/key metadata where 0002's `[accessors]` entry is `mode`+`path`;
+  and the five type-model fields rehomed to 0003 have no wire key in either
+  document. Open: the key set, in 0002's layout, for each. Siblings: 0002,
+  0003, 0004, 0006. *(0002×0006 G1/G2, 0002×0004 F1/F2/F3, 0002×0003 F2,
+  iteration 2)*
+- **JD-18 Conforming-view enforcer.** 0003 A18/A20 route the runtime half of
+  the declaration-conformance check (an observed always-present key omitted at
+  runtime refuses under a green lint) and the atom carrier to "0007's next
+  touch"; 0007 is Final and silent; 0006 enforces only the owned half
+  (`0006:935-940`). Open: which document states the view-level check and where
+  it runs. Siblings: 0003, 0007. *(0007×0003 F1, 0003×0006 A18/A20,
+  iteration 2)*
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve

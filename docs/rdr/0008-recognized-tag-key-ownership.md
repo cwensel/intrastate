@@ -11,7 +11,7 @@ instance body). -->
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-5]
+- **Status**: Draft [revised from Final 2026-08-23; re-verify A9, A4 — verified against RDR 0002's superseded normalizer spike; block 2's predicate-position clause and scenario 5 contradict Final 0002's fenced outcome-lifting and fail-fast load] [joint decision → JDR 0001 §JD-5, §JD-8]
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real
@@ -2486,3 +2486,40 @@ Responses: `0008-recognized-tag-key-ownership/artifacts/gate.md`
   demoted to A3). External source paths there and above are
   relative to the `../state-machines` sibling checkout, not
   this repo.
+
+## Refinement Context (cluster re-entry — delete on re-lock)
+
+- **Cluster / date**: `0002-0009`, iteration 2, 2026-08-23 — report at
+  `docs/rdr/cluster-reconcile/0002-0009/iter-2/reconcile-report.md`.
+- **Peer pair**: 0008 × 0002 (ledger entry JDR 0001 §JD-10, answered by RDR
+  0002's re-lock of 2026-08-23 and ratified at the home).
+- **Defect** (answer-vs-fences check failed):
+  - A9 `Verified` (Method: Spike) on "re-running RDR 0002's own normalizer
+    spike … The normalized row has **no outcome field to receive a predicate**
+    … All three tag-predicate positions are therefore view-read; none produces
+    `Row.Outcome`." Final 0002 (`0002:623-641`, fenced): "Outcome binding reads
+    the match blocks only … Normalization lifts that atom out of the predicate
+    set into the row's outcome field … A `recognized` atom authored under
+    `guard.all` or `guard.unless` MUST be refused at load."
+  - Block 2 (`0008:1283-1290`, fenced): "Reserved-name uses in predicate
+    positions (`[rule.match.<tag>]`, `[rule.guard.all.<tag>]`,
+    `[rule.guard.unless.<tag>]`) need no separate reserved-key check: a
+    conforming model declares `recognized` and those references resolve to it"
+    — 0002 refuses the guard-position forms at load.
+  - Scenario 5 (`0008:2340-2352`) expects "two failures, not one"; 0002
+    (`0002:455-463`, fenced): "Load is fail-fast: the first category a document
+    trips is the refusal."
+  - A4 census / Phase 2 rename scope stale: 0002's fixtures are already
+    renamed; the one remaining `recognized`-provenance guard atom
+    (`0003 … guard-fixture.toml:36/72`) is a load failure under 0002, not a
+    rename.
+- **Target re-entry stage**: 4 (Resolve).
+- **Re-entry scope**: STAGE-SCOPED — re-verify A9 and A4 against Final 0002;
+  restate block 2 and scenario 5 to the lifted-outcome / fail-fast shape. The
+  chosen approach (reserve the name; enforce at the kernel input boundary) is
+  untouched; no foundational assumption is voided.
+- **Direction**: 0002 owns normalization and is internally consistent — 0008
+  conforms. Sweep on the way: `0008:1668` ("0009 still `Draft`" — false),
+  stale 0007 quotes at `0008:673-681` / `1778-1782`, and "§JD-4 … open there"
+  at `0008:688-690` / `1947-1949`. Carry the §JD-5 / §JD-8 qualifiers forward
+  at re-lock.
