@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-06-24; re-verify A3, A4, A5, A6; STAGE-SCOPED — JDR 0001 §D8–§D11 answered JD-8/9/19/20 and land here; §D13 by citation]
+- **Status**: Draft [revised from Final 2026-06-24; re-verify A3, A4, A5, A6 (done, Stage 4) + A7 (done, Stage 6); STAGE-SCOPED — JDR 0001 §D8–§D11 answered JD-8/9/19/20 and land here; §D13 by citation]
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -338,16 +338,35 @@ set value is an explicit container literal (§D11).
   row carries — enough to narrow `next` / `resolve` to the readers a candidate
   row requires and to run only the reported candidates' gates under
   `--evaluate-gates`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: To verify. The narrowing clauses added at the repeatability
-    lens (Normative Contracts, `flow next` / `flow resolve`) assume the
-    reader→owned-key mapping and each row's gate list are readable from
-    normalized model data, the same "without evaluating missing facts" standard
-    the candidate-preview clause already relies on. Check RDR 0002's normalized
-    row and `[read.<id>].keys` shape for both; if only the gate list is exposed
-    and the reader→key mapping is not, the reader-narrowing clause falls back to
-    running every declared reader and `flow-artifact-missing` widens accordingly.
+  - **Evidence**: Both legs hold in RDR 0002's normalized model, at load and
+    before any evaluation. **Reader→owned-key (leg a):** RDR 0002
+    `Normative Contracts` *Accessor tables* gives every entry `role`, `path`,
+    `keys` ("a non-empty list of declared tag keys"), and `timeout`, and binds
+    them by arity — "every **owned** tag MUST be served by exactly one reader;
+    an **observed** tag MAY be served by at most one reader". The mapping is
+    therefore total and unambiguous for owned keys, and it is *declaration*
+    metadata: RDR 0004 `Normative Contracts` forbids deriving it from execution
+    — "Every read accessor definition MUST declare the requested key set as
+    validated metadata. The set MUST NOT be derived from the keys a read
+    actually resolved." RDR 0002 `Technical Design` puts the check at load
+    ("Load-time validation rejects … accessor `keys` that bind a tag to zero or
+    several readers or writers"). **Per-row gates (leg b):** RDR 0002
+    `Normative Contracts` *Gate references* states "the list is carried on the
+    normalized row and is part of its value", deferring only *when* it runs to
+    RDR 0004; `Technical Design`'s normalized-row enumeration carries "the gate
+    accessor ids the rule names" alongside "the required-owned key set derived
+    from those writes". That derived set is `0002::Normative Contracts`
+    `Row.RequiresOwned` — "the sorted, duplicate-free set of tag keys named by
+    the rule's write block and clear list" — which is precisely the per-row
+    owned demand this RDR narrows the invoked reader set by. Both legs are
+    dumpable columns of the normalized value (`identity, source, kind, outcome,
+    atoms, next, writes, requires_owned, gate, escape`), and RDR 0002 scopes
+    "Load" as "the whole source-to-candidate-rows pipeline", refusing every
+    category "before it yields candidate rows" — the pre-evaluation property
+    this assumption needs. The fallback branch (run every declared reader,
+    widen `flow-artifact-missing`) is therefore not triggered.
   - **If wrong**: `next` / `resolve` either run readers a request does not need
     (paying their timeouts and exit-3 surface) or refuse `flow-artifact-missing`
     on roles irrelevant to the requested outcome.
@@ -355,7 +374,8 @@ set value is an explicit container literal (§D11).
 ### Reconciliation Report
 
 A3–A6 re-verified at the re-entry Stage 4; the two items A5 and A6 opened on
-were settled at that stage's author's round. This table is rewritten at the
+were settled at that stage's author's round. A7 was opened by the repeatability
+lens and verified at the re-entry Stage 6. This table is rewritten at the
 re-entry Stage 6.
 
 | Item | Source | Disposition | Evidence pointer or plan |
@@ -366,7 +386,7 @@ re-entry Stage 6.
 | A4 verb owns load→decide, kernel stays pure | 4 | VERIFIED | Peer RDR recorded in A4 (JDR 0001 §D8/§D9, `0004::Normative Contracts`), kernel purity confirmed in source. |
 | A5 error codes + one `findings` field | 4 | VERIFIED | Exit mapping verified in `internal/cli/clierr::ExitCodeFor`; the `clierr.Finding` field set settled at the re-entry Stage 4 round as one flat `omitempty` record covering all five producers. |
 | A6 pinned grammar + code spellings | 4 | VERIFIED | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member escaping pinned to HTML-escaping-disabled at the round, with normative fixtures from `evidence/spikes/escaping-surfaces.out`. |
-| A7 normalized model exposes reader→owned-key and per-row gate lists | 5 | PENDING | Opened at the repeatability lens by the reader-set and `next` gate-scope pins. Check RDR 0002's normalized row and `[read.<id>].keys` shape. |
+| A7 normalized model exposes reader→owned-key and per-row gate lists | 1, 4 | VERIFIED | Peer RDR recorded in A7: `0002::Normative Contracts` *Accessor tables* (declared `keys`, exactly one reader per owned key) and *Gate references* ("carried on the normalized row and is part of its value"), plus `Row.RequiresOwned`; `0004::Normative Contracts` forbids deriving the key set from execution. Both legs available at load, pre-evaluation; fallback branch not triggered. |
 | Reuse audit | 4 | NO FINDING | `internal/cli` registers only `newVersionCmd`; no TOML loader, accessor executor, `Finding` type, or `respond.OK` text-payload path exists. Greenfield; nothing to fold in. |
 
 **Method vocabulary** (pick exactly one per assumption):
@@ -1181,7 +1201,8 @@ Rewritten at the re-entry Stage 7 re-lock.
 
 ### Assumption Verification
 
-Rewritten at the re-entry Stage 7 re-lock, after A3–A6 re-verify at Stage 4.
+Rewritten at the re-entry Stage 7 re-lock, after A3–A6 re-verify at Stage 4 and
+A7 verifies at Stage 6.
 
 ### Scope Verification
 
@@ -1189,7 +1210,12 @@ The Minimum Viable Validation is in scope for implementation: one fixture-backed
 flow must prove `flow next`, `flow resolve`, `flow read-state`, and
 `flow set-state` through the production Cobra path in both output modes,
 including a read-assembled plan, a gated row, an escaped plan, a set write
-with a clear, and at least one exit-2 and one exit-3 refusal.
+with a clear, and at least one exit-2 and one exit-3 refusal. It also carries
+the two narrowing assertions added at the repeatability lens: an unneeded
+reader with its role unbound (`next` / `resolve` succeed without invoking it,
+`read-state` invokes it and refuses) and `next --evaluate-gates` over one
+gated candidate plus one guard-excluded row (only the reported candidate's
+gate runs; a deny there still exits 0).
 
 ### Cross-Cutting Concerns
 
@@ -1220,7 +1246,11 @@ and carries no prior accretion in Seam Lineage.
 - `docs/cli-output-contract.md`
 - `docs/jdr/0001-resolve-kernel-seam.md` §D2, §D4, §D8, §D9, §D10, §D11, §D13
 - `docs/rdr/0005-skill-integration-cli-contract/evidence/spikes/d13-canonical-set.out`
-  (§D13 canonical set-value byte form; the escaping edge is open)
+  (§D13 canonical set-value byte form: sorting, duplicate-free, compact,
+  empty-set, delimiter-collision legs)
+- `docs/rdr/0005-skill-integration-cli-contract/evidence/spikes/escaping-surfaces.out`
+  (set-member escaping: the normative `["cli","final"]` / `["a<b","p>q","x&y"]`
+  fixtures behind A6's HTML-escaping-disabled pin)
 - `docs/rdr/0005-skill-integration-cli-contract/evidence/research/citations.md`
 - `internal/cli/respond::OK`
 - `internal/cli/respond::Fail`
@@ -1228,8 +1258,10 @@ and carries no prior accretion in Seam Lineage.
 - `internal/cli/clierr::CLIError`
 - `internal/cli/clierr::ExitCodeFor`
 - `internal/cli::ExecuteAndEmit`
+- `internal/cli::NewRootCmd`
 - `internal/cli::newVersionCmd`
 - `internal/resolve::Resolve`
+- `internal/resolve::Table.Revision`
 - `internal/resolve::RefusalKinds`
 - RDR 0001, 0002, 0003, 0004, and 0006
 - `../state-machines/attic/RESOLVER-CLI.md`
