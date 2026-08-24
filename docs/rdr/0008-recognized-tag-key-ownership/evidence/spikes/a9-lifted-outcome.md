@@ -58,13 +58,16 @@ Result: **both exit 0** and emit the same five rows as §1 (each rule's
 `@all` / `@unless` block tag never appears because the atom was removed
 before rendering).
 
-Reading: this is a **spike-vs-contract gap on 0002's side**, not a 0008
-finding. 0002's fenced text — "A `recognized` atom authored under `guard.all`
-or `guard.unless` MUST be refused at load as a malformed outcome binding —
-never lifted" — is the contract; `main.go::liftOutcome` scans the merged
-atom map without consulting `Atom.Block`, so it lifts from any block. Recorded
-in A9 for the next cluster reconcile; 0008 restates the fenced rule (block 2),
-not the spike's behavior.
+Reading: the spike witnesses the *lift*, not the guard-position *refusal*.
+0002's fenced text — "A `recognized` atom authored under `guard.all` or
+`guard.unless` MUST be refused at load as a malformed outcome binding — never
+lifted" — is the contract; `main.go::liftOutcome` scans the merged atom map
+without consulting `Atom.Block`, so it lifts from any block. **0002 already
+books this**: its Testing Strategy scenario 3 lists "a `recognized` atom
+authored under `guard.all` and one under `guard.unless`" among the mutants
+owed, and records that the spike witnesses nine categories, "the remainder
+… owed at implementation." Not a defect to route; 0008 restates the fenced
+rule (block 2), not the spike's behavior.
 
 ## 3. Mutant — two recognized-provenance declarations (0008 scenario 5 fixture)
 

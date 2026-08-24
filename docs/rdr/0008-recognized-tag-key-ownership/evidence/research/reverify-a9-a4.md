@@ -42,14 +42,17 @@ the naming rule and category as their single home (blocks 2–3), the
 failure-payload contract (block 3 — not absorbed by 0002; rides JDR 0001
 §JD-8), and the `Input` / `RequiresOwned` predicate (blocks 4–5).
 
-## Net-new finding, routed not absorbed
+## Observation, not a finding
 
-**0002 spike/contract gap.** `main.go::liftOutcome` lifts a `recognized` atom
-from *any* block; 0002's fenced text requires refusal for `guard.all` /
-`guard.unless`. Mutants in `spikes/a9-lifted-outcome.md` §2 normalize
-successfully. Single-RDR (0002), spike-side; 0008 restates the fenced rule.
-Recorded in A9 for the next cluster reconcile; no edit to 0002 (Final; RDRs
-are not amended from a sibling's stage).
+**0002's spike lifts from any block.** `main.go::liftOutcome` lifts a
+`recognized` atom from *any* block; 0002's fenced text requires refusal for
+`guard.all` / `guard.unless`. Mutants in `spikes/a9-lifted-outcome.md` §2
+normalize successfully. Checked against 0002's own Testing Strategy before
+routing: scenario 3 already names both guard-position mutants as owed and
+records the spike as witnessing nine categories with the remainder owed at
+implementation. So this is a booked witness gap on 0002's side, not an
+unrecorded defect — nothing to route, no edit to 0002 (Final; RDRs are not
+amended from a sibling's stage). 0008 restates the fenced rule.
 
 ## Sweep on the way (demotion's "Direction")
 
@@ -95,9 +98,11 @@ Questions put, each with grounding:
    than routing a rename to RDR 0003. Grounding: §5 of the spike file; 0002
    Testing Strategy scenarios 1–2; JDR 0001 §JD-16 lists 0002×0003 as the
    sibling pair for layout reconciliation.
-2. **0002 spike gap disposition** — record in A9 + this file for the next
-   cluster reconcile (chosen) vs. route now. Grounding: 0002 is Final and
-   RDRs are not amended; cluster-reconcile owns cross-RDR drift.
+2. **0002 spike lift-from-any-block** — record as an observation (chosen)
+   vs. file a kata against 0002. Grounding: 0002's Testing Strategy scenario 3
+   already owes both guard-position mutants at implementation and records the
+   spike as a nine-category witness; a kata would duplicate 0002's own
+   obligation.
 
 Dispositions are recorded in the close packet once answered.
 
