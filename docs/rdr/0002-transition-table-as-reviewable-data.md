@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,
@@ -2303,7 +2303,7 @@ normalized candidate-row semantics.
 
 ## Finalization Gate
 
-Responses: 0002-transition-table-as-reviewable-data/artifacts/gate.md (Gate PASS 2026-08-23)
+Responses: 0002-transition-table-as-reviewable-data/artifacts/gate.md (Gate PASS 2026-08-24)
 
 ## References
 
