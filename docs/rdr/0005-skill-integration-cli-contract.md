@@ -156,39 +156,60 @@ set value is an explicit container literal (§D11).
     state-binding logic outside intrastate.
 - **A3 `next` can expose the legal-outcome alphabet without owning guard
   semantics or hiding unresolved facts.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
   - **Evidence**: RDR 0002 `Technical Design` defines the recognized outcome
-    alphabet and normalized candidate rows with rule ids/source locators. The
-    selection procedure — gate-then-count, exact-one survivor, which refusals
-    are escapable — is JDR 0001 §D2's and the kernel's
-    (`internal/resolve::RefusalKinds`), which RDR 0002 relies on rather than
-    defines. RDR 0003 `Approach` and `Technical Design` make guard facts
-    symbolic tag-set predicates owned outside this CLI; presence and
-    unevaluability are decided in the kernel (JDR 0001 §D4). Therefore `next`
-    can enumerate the alphabet, surface supplied and unresolved facts, and map
-    kernel refusals without becoming the owner of guard truth. Re-verify: the
-    citation moved from RDR 0002 `Normative Contracts` to §D2 / the kernel.
+    alphabet ("the closed set of outcome tags that the recognizer may emit for
+    the flow") and normalized candidate rows carrying "the source identity
+    (`(model id, rule id)` plus any expansion suffix, and the source locator)".
+    The selection procedure — gate-then-count, exact-one survivor, which
+    refusals are escapable — is JDR 0001 §D2's ("**Resolved: (b).** Gate, then
+    count.") and the kernel's (`internal/resolve::RefusalKinds`);
+    RDR 0002 `Normative Contracts` states the disclaimer itself — the procedure
+    "is **JDR 0001 §D2's and the kernel's, and MUST NOT be restated here**" —
+    so 0002 relies on it rather than defining it. RDR 0003 `Approach` makes
+    every guard "a symbolic tag-set predicate that lint can reason about", owned
+    outside this CLI; presence and unevaluability are decided in the kernel
+    (JDR 0001 §D4, "**Resolved: (b).** The kernel enforces the guard domain").
+    Therefore `next` can enumerate the alphabet, surface supplied and unresolved
+    facts, and map kernel refusals without becoming the owner of guard truth.
+    Re-verified at the re-entry Stage 4: the citation now anchors on §D2 / the
+    kernel, and RDR 0002 `Normative Contracts` carries no competing selection
+    procedure.
   - **If wrong**: The CLI would either under-inform constrained decoding or
     incorrectly become the owner of conditional evaluation.
 - **A4 The resolver kernel stays pure while each verb owns load→decide: reads
   and gates bind in the verb over explicit artifact bindings; selection stays
   in `internal/resolve`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: JDR 0001 §D8 resolves that `flow resolve` and `flow next` run
-    declared read accessors over the caller's `--artifact` bindings, assemble
-    `Input.Owned`, and call `Resolve` in the same invocation; the purity fence
-    is `internal/resolve`, not the verb. §D9 resolves that only the selected
-    row's gates run, after exact-one selection and before the plan. RDR 0004
-    `Technical Design` and `Normative Contracts` keep read, gate, and write
-    capabilities distinct over caller-supplied artifact roles: reads return
-    typed tags, gates return allow/deny/indeterminate, writes apply planned
-    owned-tag mutations with same-role read-back. Therefore the CLI binds reads
-    and gates in `next` / `resolve`, reads only in `read-state`, and writes only
-    in `set-state`, without making the kernel stateful or coercing gate results
-    into tag values. Re-verify: the June evidence had `resolve` fenced from
-    read accessors and gates running before the kernel call.
+  - **Evidence**: JDR 0001 §D8 resolves that "`flow resolve` and `flow next` MAY
+    run declared read accessors over explicit `--artifact` bindings and MUST
+    assemble `Input.Owned` from them", and that "the purity fence moves to where
+    it belongs: `internal/resolve`, not the verb". §D9 resolves "**(c)**" — "Only
+    the selected row's `gate` list runs", after exact-one selection and before
+    the plan, with "**All gates on the selected row run; deny-overrides; every
+    result reported.**" and "**Deny is not an escape class.**" RDR 0004
+    `Normative Contracts` keeps the capabilities distinct over caller-supplied
+    artifact roles ("Every accessor definition MUST declare exactly one
+    capability: read, gate, or write"; "Accessors MUST operate on caller-supplied
+    artifact roles"): reads return typed tags, gates return
+    allow/deny/indeterminate, writes apply planned owned-tag mutations with
+    same-role read-back that also verifies "observed and recognized tag values
+    present before the write are unchanged". The kernel half is confirmed in
+    source: `internal/resolve::Resolve` is pure (the package imports only
+    `slices` and `strings`, enforced by
+    `internal/resolve/resolve_test.go::TestReq11_KernelImportsNoCLIOutputOrPersistenceFacility`)
+    and never executes accessors to fill missing owned state
+    (`::TestReq13_KernelDoesNotExecuteAccessorsToFillMissingOwnedState`).
+    Therefore the CLI binds reads and gates in `next` / `resolve`, reads only in
+    `read-state`, and writes only in `set-state`, without making the kernel
+    stateful or coercing gate results into tag values. Re-verified at the
+    re-entry Stage 4: the June fencing (`resolve` barred from read accessors,
+    gates before the kernel call) is superseded by §D8/§D9. Implementation note:
+    the kernel's unexported pre-selection guard filter also spells itself
+    `gate`; it is a different mechanism from this RDR's post-selection accessor
+    gates and must not be wired to them.
   - **If wrong**: Either every write-bearing row refuses `owned_state_unavailable`
     (caller-supplied context can never satisfy an owned dependency), or a
     stale caller-carried snapshot mints a plan `set-state` applies blindly.
@@ -197,17 +218,44 @@ set value is an explicit container literal (§D11).
   no new exit group.**
   - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: `internal/cli/clierr::CLIError` carries a stable string
-    `Code` plus optional `omitempty` `Param`, `Detail`, and `Hint`; `ErrorCode`
-    exposes the code for branching; `ExitCodeFor` maps `GroupUserEnv` and
-    `GroupInternal` to exit 2, `GroupEnvUnavailable` to exit 3, and
-    `GroupSignalCancel` to 130. JDR 0001 §D10 assigns exit 3 to
-    "environment could not be consulted; repair and re-run unchanged" and exit
-    2 to everything else, and adds exactly one `omitempty` structured field —
-    `Findings []clierr.Finding` — as the carrier for per-row, per-key,
-    per-atom, per-gate, and per-load-category discriminators. Re-verify: the
-    field does not exist yet in `clierr`; the June evidence claimed no new
-    envelope field was needed.
+  - **Evidence**: The exit-mapping half is verified in source.
+    `internal/cli/clierr::CLIError` carries a stable string `Code` plus optional
+    `omitempty` `Param`, `Detail`, and `Hint`;
+    `internal/cli/clierr::ErrorCode` exposes the code for branching;
+    `internal/cli/clierr::ExitCodeFor` maps `GroupUserEnv` and `GroupInternal`
+    to exit 2 (one case arm — the distinction is carried by `Code`, not by
+    group), `GroupEnvUnavailable` to exit 3, `GroupSignalCancel` to 130, and a
+    non-`CLIError` to 1. JDR 0001 §D10 assigns "**Exit 3 = the environment could
+    not be consulted; repair it and re-run the same request unchanged.**" and
+    "**Exit 2 = the request or the model is wrong, or the model said no.**",
+    with "No new exit group (0005's A-block)", and adds exactly one `omitempty`
+    structured field — `Findings []clierr.Finding` — as the carrier for
+    per-row, per-key, per-atom, per-gate, and per-load-category discriminators.
+    §D10 is the *sole* authority for the exit-3 rule: RDR 0004 mints the
+    accessor refusal classes but its `Disposition Table` states "`exit code` is
+    out of scope here — RDR 0005 owns the CLI mapping", so no second leg
+    supports it. Re-verified: `Findings []Finding` does not exist yet in
+    `clierr`, as this RDR states.
+    **Open (blocks Verified) — the `Finding` field set.** This RDR pins
+    `Finding{Code, Message, Param, Locator, Hint}` and calls it shared with RDR
+    0006. RDR 0006 is Final and normatively requires strictly more of that same
+    `clierr` type: "Every blocking finding MUST carry a stable code, model
+    identity, severity, human-readable message, and the source rule/context id
+    or source span … A finding attributed to one guard atom MUST carry that
+    atom's `Key`, `Operator`, `Literal`, and `Block`; a finding scoped to an
+    escape population MUST carry the failure class"
+    (`0006::Normative Contracts`), named as Go fields in
+    `0006::Technical Design` ("`Key`, `Operator`, `Literal`, `Block`, and
+    `Class` are `string`"). `severity`, model identity, and `Class` have no home
+    in the five. JDR 0001 §D10 item 3 called the five-field spelling
+    "non-normative" and the change "a 0006 citation repair, not a reopening",
+    but 0006's text is unamended and Final. Verification plan: settle the field
+    set with the author (widen this RDR's record to the union, or record the
+    mapping onto the five), then re-run this Source Search against the settled
+    shape. The `omitempty` half is NOT open — §D10 item 3 resolves it: the
+    `CLIError` field is `omitempty` and never empty on a failure; 0006's "empty
+    list is the receipt" binds the success payload's own non-omitempty
+    `data.findings`.
   - **If wrong**: Scripted skill calls could not branch deterministically on
     resolver failure classes, or model repair could not locate the defect.
 - **A6 The pinned request grammar, minimum success payload fields, and
@@ -221,20 +269,50 @@ set value is an explicit container literal (§D11).
     JSON `data` fields in Technical Design, and the code table in Failure Modes
     are this RDR's implementation contract. The rejected alternative is leaving
     grammar, payload fields, or error-code spelling to implementation-time
-    invention. Re-accept at Stage 4 against the grammar as now pinned (JDR 0001
-    §D10 item 6, §D11).
+    invention. Re-accepted at the re-entry Stage 4 against the grammar as
+    pinned upstream: JDR 0001 §D11 fixes "**`--write k=v` ↔ the write block; a
+    repeatable `--clear <key>` ↔ the rule-level `clear` list.**", the refusal of
+    `--write k=<clear>` with the hint "use `--clear`", and "**A `set`-kind key's
+    `--write` value is a JSON array literal**"; §D10 item 6 fixes model entry as
+    "an explicit file path … beside the config-resolved `--flow <id>`; mutually
+    exclusive; `flow-model-not-found` either way". Three spellings here are
+    this RDR's own, beyond the JDR's non-normative table, and are recorded as
+    RDR-owned rather than cited: `flow-write-duplicate`; the set-kind `--tag`
+    array literal with `flow-tag-invalid` on kind mismatch; and
+    `flow-model-not-found` covering the selection *arity* error as well as
+    non-resolution.
+    **Open (blocks Verified) — set-member string escaping.** JDR 0001 §D13 fixes
+    "members sorted, duplicate-free, compact encoding" but is silent on JSON
+    string escaping inside a member, and no RDR or JDR text supplies it. Spike
+    `evidence/spikes/d13-canonical-set.out` shows the sorting, duplicate-free,
+    compact, empty-set, and delimiter-collision legs all hold, and shows the
+    open edge: `json.Marshal` renders `["a\u003cb","x\u0026y"]` where an
+    `Encoder` with `SetEscapeHTML(false)` renders `["a<b","x&y"]` — not byte
+    identical. Both shipped output paths already use `json.Marshal`
+    (`internal/cli/clierr::CLIError` emit, `internal/cli/respond` JSON emit),
+    and the spike confirms copy-through is byte-stable end to end through it
+    (plan → `Tag.Value` string → payload → re-render all agree). Because this
+    RDR claims "copy-through and read-back equality are byte equality", the
+    encoder must be pinned. Verification plan: settle the encoder with the
+    author, record it as a normative clause plus a named normative fixture from
+    that spike, then mark Verified.
   - **If wrong**: Implementers would still need to invent request grammar,
     payload fields, or error-code spellings during code work.
 
 ### Reconciliation Report
 
-A3–A6 re-verify at the re-entry Stage 4; this table is rewritten at the
-re-entry Stage 6.
+A3–A6 re-verified at the re-entry Stage 4; A5 and A6 remain open on one item
+each. This table is rewritten at the re-entry Stage 6.
 
 | Item | Source | Disposition | Evidence pointer or plan |
 | --- | --- | --- | --- |
-| A1 output gateway | 1 | VERIFIED | Source Search recorded in A1. |
+| A1 output gateway | 1 | VERIFIED | Source Search recorded in A1; anchors re-checked at the re-entry Stage 4 and all still resolve. |
 | A2 four-verb minimality | 1 | VERIFIED | MVV Test recorded in A2. |
+| A3 `next` alphabet without guard ownership | 4 | VERIFIED | Peer RDR recorded in A3 (JDR 0001 §D2/§D4, `0002::Normative Contracts` disclaimer, `0003::Approach`). |
+| A4 verb owns load→decide, kernel stays pure | 4 | VERIFIED | Peer RDR recorded in A4 (JDR 0001 §D8/§D9, `0004::Normative Contracts`), kernel purity confirmed in source. |
+| A5 error codes + one `findings` field | 4 | OPEN | Exit mapping verified in `internal/cli/clierr::ExitCodeFor`; the `clierr.Finding` field set conflicts with Final RDR 0006 — settle with the author, then re-run the Source Search. |
+| A6 pinned grammar + code spellings | 4 | OPEN | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member JSON escaping unfixed by any document — settle the encoder, record a normative fixture from `evidence/spikes/d13-canonical-set.out`. |
+| Reuse audit | 4 | NO FINDING | `internal/cli` registers only `newVersionCmd`; no TOML loader, accessor executor, `Finding` type, or `respond.OK` text-payload path exists. Greenfield; nothing to fold in. |
 
 **Method vocabulary** (pick exactly one per assumption):
 
@@ -807,8 +885,11 @@ role from RDR 0004.
 - [x] RDR 0001 is implemented (`internal/resolve`); RDR 0002, 0003, and 0004
       are Final and expose enough contract for the CLI to call without owning
       their semantics.
-- [ ] A3–A6 re-verified at the re-entry Stage 4 against JDR 0001 §D8–§D11 and
-      the code as it stands.
+- [x] A3 and A4 re-verified at the re-entry Stage 4 against JDR 0001 §D2/§D4/
+      §D8/§D9 and the code as it stands.
+- [ ] A5's `clierr.Finding` field set settled against Final RDR 0006's
+      normative requirement, and A6's set-member escaping encoder pinned; both
+      are open author's-round items from the re-entry Stage 4.
 - [ ] Add text success payload rendering through `respond.OK` or a
       respond-owned helper used by `respond.OK`; do not print directly from
       resolver verbs.
@@ -980,7 +1061,10 @@ and carries no prior accretion in Seam Lineage.
 ## References
 
 - `docs/cli-output-contract.md`
-- `docs/jdr/0001-resolve-kernel-seam.md` §D8, §D9, §D10, §D11, §D13
+- `docs/jdr/0001-resolve-kernel-seam.md` §D2, §D4, §D8, §D9, §D10, §D11, §D13
+- `docs/rdr/0005-skill-integration-cli-contract/evidence/spikes/d13-canonical-set.out`
+  (§D13 canonical set-value byte form; the escaping edge is open)
+- `docs/rdr/0005-skill-integration-cli-contract/evidence/research/citations.md`
 - `internal/cli/respond::OK`
 - `internal/cli/respond::Fail`
 - `internal/cli/respond::ValidateMode`
