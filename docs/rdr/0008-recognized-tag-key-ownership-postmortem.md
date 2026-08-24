@@ -14,16 +14,17 @@ authored after implementation.
 
 **Notes.**
 
-- Both rows share one root cause: an assumption verified against a *moving*
-  peer or a *future* caller was stamped with a point-in-time fact and no
-  re-verification trigger. The first read Draft 0009 and never re-read the
+- All three rows share one root cause: an assumption verified against a
+  *moving* peer or a *future* caller was stamped with a point-in-time fact and
+  no re-verification trigger. The first read Draft 0009 and never re-read the
   Final; the second swept a package with zero non-test callers and generalized
-  past the callers RDR 0005 has not written yet.
+  past the callers RDR 0005 has not written yet; the third read RDR 0002's
+  spike as it stood and never re-read it after 0002 rebuilt and re-locked.
 - The first row's citations were bare peer line numbers, which is what made the
   staleness invisible. Stage 6 has since converted every live peer-RDR citation
   in this RDR to a durable anchor (section heading or assumption ID) per
   rdr-common's anchor doctrine.
 - The third row is the same root cause a second time, against a different peer artifact: the first re-entry (2026-08-21) re-verified A6/A11 against Final 0009 but carried A9/A4 forward as `Verified` while 0002 — then `Draft [revised from Final]` and actively rebuilding its spike — was moving. A scoped re-entry that carries assumptions forward needs the same "peer is moving" check on every carried-forward assumption whose Evidence names a peer artifact, not only on the listed IDs.
-- Neither escape was caught by a pre-lock lens. All four required lenses ran and
+- No escape was caught by a pre-lock lens. All four required lenses ran and
   returned clean on these passages, so the miss is not lens coverage but the
   absence of a "peer is Final and may move" check at Stage 4.

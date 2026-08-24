@@ -1807,7 +1807,9 @@ The blast-radius row was **re-scored after** the Enforcement
 locus settled to (b)+(c), since the fork was originally
 weighed against an R that changed no kernel code. R now
 carries one exported predicate, the kernel's first non-nil
-error path, and a three-fixture rename (A4). The ranking is
+error path, and the fixture rename JDR 0001 §JD-10 ordered —
+which 0002 discharged at its own re-lock, so R's migration
+inventory is now empty (A4). The ranking is
 unchanged — M still grows `Input` or `assemble` *and* the
 normalized-table surface *and* threads a name through 0005,
 strictly dominating R's addition, and W still reopens a
