@@ -216,7 +216,7 @@ set value is an explicit container literal (§D11).
 - **A5 Stable CLI error codes plus one structured `findings` field can carry
   every input, model-load, kernel, gate, accessor, and write refusal class with
   no new exit group.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: The exit-mapping half is verified in source.
     `internal/cli/clierr::CLIError` carries a stable string `Code` plus optional
@@ -236,32 +236,54 @@ set value is an explicit container literal (§D11).
     out of scope here — RDR 0005 owns the CLI mapping", so no second leg
     supports it. Re-verified: `Findings []Finding` does not exist yet in
     `clierr`, as this RDR states.
-    **Open (blocks Verified) — the `Finding` field set.** This RDR pins
-    `Finding{Code, Message, Param, Locator, Hint}` and calls it shared with RDR
-    0006. RDR 0006 is Final and normatively requires strictly more of that same
-    `clierr` type: "Every blocking finding MUST carry a stable code, model
-    identity, severity, human-readable message, and the source rule/context id
-    or source span … A finding attributed to one guard atom MUST carry that
-    atom's `Key`, `Operator`, `Literal`, and `Block`; a finding scoped to an
-    escape population MUST carry the failure class"
-    (`0006::Normative Contracts`), named as Go fields in
-    `0006::Technical Design` ("`Key`, `Operator`, `Literal`, `Block`, and
-    `Class` are `string`"). `severity`, model identity, and `Class` have no home
-    in the five. JDR 0001 §D10 item 3 called the five-field spelling
-    "non-normative" and the change "a 0006 citation repair, not a reopening",
-    but 0006's text is unamended and Final. Verification plan: settle the field
-    set with the author (widen this RDR's record to the union, or record the
-    mapping onto the five), then re-run this Source Search against the settled
-    shape. The `omitempty` half is NOT open — §D10 item 3 resolves it: the
-    `CLIError` field is `omitempty` and never empty on a failure; 0006's "empty
-    list is the receipt" binds the success payload's own non-omitempty
-    `data.findings`.
+    **The `Finding` field set — settled at the re-entry Stage 4 author's
+    round.** This RDR's five (`Code`, `Message`, `Param`, `Locator`, `Hint`)
+    are the subset it populates, not the whole type: `clierr.Finding` is shared
+    by five producers, and RDR 0006 — Final — normatively requires more of that
+    same type. `0006::Normative Contracts`: "Every blocking finding MUST carry a
+    stable code, model identity, severity, human-readable message, and the
+    source rule/context id or source span … A finding attributed to one guard
+    atom MUST carry that atom's `Key`, `Operator`, `Literal`, and `Block`; a
+    finding scoped to an escape population MUST carry the failure class."
+    **Resolved: one flat record, widened with `omitempty` fields; each producer
+    populates the subset it owns.** The atom's four fields sit flat on the
+    record, not in a nested `atom` object. Grounding: the shipped type's own doc
+    comment already fixes the project convention — "Extend with new optional
+    fields as needed — keep them `omitempty` so the envelope stays append-only
+    and stable for tools" (`internal/cli/clierr::CLIError`) — and `0009::A9`
+    closed the same additive question by source search, finding that no consumer
+    or test reads an exact field set. Prior art agrees: `golangci-lint`'s
+    `Issue` carries ~100 producers on one flat record and met this exact case
+    with nolintlint by **promoting** its producer-specific fields flat rather
+    than nesting them (`golangci-lint/pkg/result/issue.go:16`); `beads`'
+    `Issue` does the same across ~30 banner-grouped fields
+    (`beads/internal/types/types.go:19`); and no system examined nests a typed
+    per-producer sub-object on a finding — Kubernetes nests typed `Details` on
+    the *envelope*, one per response keyed by reason, and still flattens
+    structured detail into the message for generic consumers
+    (`k8s.io/apimachinery/.../api/errors/errors.go::NewInvalid`). Flattening the
+    other way — forcing 0006's data into the five — is refused: `0006::Normative
+    Contracts` sorts findings "by model id, invariant code, source rule/context
+    id … then normalized predicate/write fingerprint", and under five fields
+    `model` and `severity` have no field while `rule` fuses into `locator`, so
+    the sort key must be re-parsed out of a string and collides whenever a rule
+    id contains the delimiter (`evidence/spikes/finding-shape-options.out`).
+    Carried obligation, from every prior-art system that kept structured detail:
+    `Message` MUST stand alone without the structured fields
+    (`evidence/spikes/finding-shape-tiebreak.out`). Note `0006::Technical
+    Design`'s "`Key`, `Operator`, `Literal`, `Block`, and `Class` are `string`"
+    agrees with this shape; 0006's illustrative JSON showing a nested
+    `"atom": {…}` does not, and is the side that needs a citation repair — it is
+    illustrative, not normative. The `omitempty` half was never open: §D10 item
+    3 resolves it — the `CLIError` field is `omitempty` and never empty on a
+    failure, while 0006's "empty list is the receipt" binds the success
+    payload's own non-omitempty `data.findings`.
   - **If wrong**: Scripted skill calls could not branch deterministically on
     resolver failure classes, or model repair could not locate the defect.
 - **A6 The pinned request grammar, minimum success payload fields, and
   stable `flow-*` code spellings are sufficient for the first fixture-backed
   CLI implementation.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Design Decision
   - **Evidence**: The grammar (`--flow <id>` | `--model <path>`, repeated
     `--tag name=value`, `--artifact role=path`, `--outcome <tag>`,
@@ -281,28 +303,42 @@ set value is an explicit container literal (§D11).
     array literal with `flow-tag-invalid` on kind mismatch; and
     `flow-model-not-found` covering the selection *arity* error as well as
     non-resolution.
-    **Open (blocks Verified) — set-member string escaping.** JDR 0001 §D13 fixes
-    "members sorted, duplicate-free, compact encoding" but is silent on JSON
-    string escaping inside a member, and no RDR or JDR text supplies it. Spike
-    `evidence/spikes/d13-canonical-set.out` shows the sorting, duplicate-free,
-    compact, empty-set, and delimiter-collision legs all hold, and shows the
-    open edge: `json.Marshal` renders `["a\u003cb","x\u0026y"]` where an
-    `Encoder` with `SetEscapeHTML(false)` renders `["a<b","x&y"]` — not byte
-    identical. Both shipped output paths already use `json.Marshal`
-    (`internal/cli/clierr::CLIError` emit, `internal/cli/respond` JSON emit),
-    and the spike confirms copy-through is byte-stable end to end through it
-    (plan → `Tag.Value` string → payload → re-render all agree). Because this
-    RDR claims "copy-through and read-back equality are byte equality", the
-    encoder must be pinned. Verification plan: settle the encoder with the
-    author, record it as a normative clause plus a named normative fixture from
-    that spike, then mark Verified.
+    **Set-member string escaping — settled at the re-entry Stage 4 author's
+    round.** JDR 0001 §D13 fixes "members sorted, duplicate-free, compact
+    encoding" but is silent on JSON string escaping inside a member, and no RDR
+    or JDR text supplied it. Because this RDR claims "copy-through and read-back
+    equality are byte equality", the encoder is pinned here: the canonical set
+    literal is rendered with HTML escaping **disabled**, so `<`, `>`, and `&`
+    serialize as themselves. Grounding: RFC 8785 (JSON Canonicalization Scheme)
+    §3.2.2.2 requires a Unicode value outside the ASCII control range to be
+    serialized "as is" unless it is a backslash or a quote, which makes a
+    `\uXXXX` spelling of `<`/`>`/`&` non-conformant rather than merely verbose;
+    peer Go CLIs disable it on exactly this kind of path
+    (`gh-cli/pkg/cmdutil/json_flags.go:228`, the single funnel for every
+    `gh --json` output; `beads/cmd/bd/protocol/corpus.go:343::marshalCanonical`,
+    "without HTML-escaping, so the bytes are stable and minimal"); and Go's own
+    `SetEscapeHTML` doc names non-HTML readability as the reason to disable it,
+    which is this case — no set literal is ever embedded in a `<script>` tag.
+    Normative fixtures approved at the round, from spike
+    `evidence/spikes/escaping-surfaces.out`: `["cli","final"]` (the common case,
+    identical under either encoder) and `["a<b","p>q","x&y"]` (the divergent
+    case). Spike `evidence/spikes/d13-canonical-set.out` carries the sorting,
+    duplicate-free, compact, empty-set, and delimiter-collision legs. The
+    divergence surface is exactly three characters: U+2028, U+2029, quote,
+    backslash, tab, newline, NUL, non-ASCII, and emoji are byte-identical under
+    both encoders, so disabling HTML escaping is minimal over ASCII but not
+    strictly JCS-conformant — a recorded deviation, since JCS conformance is not
+    claimed. Cost accepted: both shipped emit sites
+    (`internal/cli/clierr::EmitJSON`, `internal/cli/respond::writeJSONLine`)
+    move off bare `json.Marshal` onto one shared helper.
   - **If wrong**: Implementers would still need to invent request grammar,
     payload fields, or error-code spellings during code work.
 
 ### Reconciliation Report
 
-A3–A6 re-verified at the re-entry Stage 4; A5 and A6 remain open on one item
-each. This table is rewritten at the re-entry Stage 6.
+A3–A6 re-verified at the re-entry Stage 4; the two items A5 and A6 opened on
+were settled at that stage's author's round. This table is rewritten at the
+re-entry Stage 6.
 
 | Item | Source | Disposition | Evidence pointer or plan |
 | --- | --- | --- | --- |
@@ -310,8 +346,8 @@ each. This table is rewritten at the re-entry Stage 6.
 | A2 four-verb minimality | 1 | VERIFIED | MVV Test recorded in A2. |
 | A3 `next` alphabet without guard ownership | 4 | VERIFIED | Peer RDR recorded in A3 (JDR 0001 §D2/§D4, `0002::Normative Contracts` disclaimer, `0003::Approach`). |
 | A4 verb owns load→decide, kernel stays pure | 4 | VERIFIED | Peer RDR recorded in A4 (JDR 0001 §D8/§D9, `0004::Normative Contracts`), kernel purity confirmed in source. |
-| A5 error codes + one `findings` field | 4 | OPEN | Exit mapping verified in `internal/cli/clierr::ExitCodeFor`; the `clierr.Finding` field set conflicts with Final RDR 0006 — settle with the author, then re-run the Source Search. |
-| A6 pinned grammar + code spellings | 4 | OPEN | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member JSON escaping unfixed by any document — settle the encoder, record a normative fixture from `evidence/spikes/d13-canonical-set.out`. |
+| A5 error codes + one `findings` field | 4 | VERIFIED | Exit mapping verified in `internal/cli/clierr::ExitCodeFor`; the `clierr.Finding` field set settled at the re-entry Stage 4 round as one flat `omitempty` record covering all five producers. |
+| A6 pinned grammar + code spellings | 4 | VERIFIED | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member escaping pinned to HTML-escaping-disabled at the round, with normative fixtures from `evidence/spikes/escaping-surfaces.out`. |
 | Reuse audit | 4 | NO FINDING | `internal/cli` registers only `newVersionCmd`; no TOML loader, accessor executor, `Finding` type, or `respond.OK` text-payload path exists. Greenfield; nothing to fold in. |
 
 **Method vocabulary** (pick exactly one per assumption):
@@ -430,7 +466,8 @@ an owned key is refused `flow-tag-owned`; one naming `recognized` is refused
 silently shadow under owned-over-observed precedence). A duplicate tag name is
 `flow-tag-duplicate`. A set-kind tag's value is a JSON array literal
 (`'labels=["a","b"]'`), the same canonical form the kernel seam carries (JDR
-0001 §D13) and `--write` accepts; a bare scalar for a set key, or an array for
+0001 §D13) and `--write` accepts — sorted, duplicate-free, compact, and
+rendered with HTML escaping disabled; a bare scalar for a set key, or an array for
 a scalar key, is `flow-tag-invalid`. Owned state is never caller-supplied: it
 is assembled from declared read accessors over `--artifact role=path`
 bindings, where `role` is the model-declared artifact role and `path` the
@@ -493,9 +530,15 @@ envelope. The minimum `data` shape is:
   values.
 
 Failure payloads use the existing `CLIError` envelope plus exactly one new
-`omitempty` structured field, `findings` — a list of
-`Finding{Code, Message, Param, Locator, Hint}` — subsystem-agnostic and shared
-with RDR 0006's lint findings (§D10). Exit codes: **3** means the environment
+`omitempty` structured field, `findings` — a list of `Finding`,
+subsystem-agnostic and shared with RDR 0006's lint findings (§D10). `Finding`
+is one **flat** record whose optional fields are `omitempty`; each producer
+populates the subset it owns. This RDR populates `code`, `message`, `param`,
+`locator`, and `hint`; RDR 0006 additionally populates `severity`, `model`,
+`rule`, the guard atom's `key` / `operator` / `literal` / `block`, and `class`.
+The atom's four fields sit flat on the record, not in a nested `atom` object.
+`message` must stand alone: it renders the failure readably without any
+structured field being consulted. Exit codes: **3** means the environment
 could not be consulted (accessor timeout, execution failure, incomplete read,
 read-back incomplete, post-mutation timeout) — repair it and re-run the same
 request unchanged; **2** means the request or the model is wrong, or the model
@@ -522,9 +565,15 @@ terminal envelope with type "ok" and verb-specific data. Under --as=text, each
 successful invocation MUST emit human output derived from the same verb-specific
 result. Failures MUST use the existing CLIError JSON/text envelope defined by
 docs/cli-output-contract.md and internal/cli/clierr, extended by exactly one
-omitempty structured field, findings, per JDR 0001 §D10. Exit 3 MUST mean the
-environment could not be consulted and the same request may be re-run
-unchanged; every other failure MUST exit 2. No new exit group.
+omitempty structured field, findings, per JDR 0001 §D10. Finding MUST be one
+flat record with omitempty optional fields, carrying at least code, message,
+param, locator, hint, severity, model, rule, key, operator, literal, block, and
+class; each producer populates only the fields it owns, and no producer nests
+its own fields in a sub-object. Finding.message MUST be self-sufficient — it
+MUST render the failure readably with no structured field consulted.
+
+Exit 3 MUST mean the environment could not be consulted and the same request
+may be re-run unchanged; every other failure MUST exit 2. No new exit group.
 
 Model selection MUST accept exactly one of --flow <id> or --model <path>. The
 CLI MUST perform the model file I/O and hand RDR 0002's loader bytes plus a
@@ -576,8 +625,11 @@ non-owned tags are unchanged (RDR 0004). It MUST NOT treat --tag values as
 writes.
 
 A set-valued tag crossing the CLI in --tag, --write, or any payload MUST use
-the canonical JSON array form JDR 0001 §D13 fixes, so plan-to-request
-copy-through and read-back equality are byte equality.
+the canonical JSON array form JDR 0001 §D13 fixes — members sorted,
+duplicate-free, compact — rendered with HTML escaping DISABLED, so <, >, and &
+serialize as themselves and never as \u003c, \u003e, or \u0026. Every site
+that emits or compares a canonical set literal MUST use the same encoder, so
+plan-to-request copy-through and read-back equality are byte equality.
 ```
 
 #### Load-Bearing Decisions
@@ -592,7 +644,8 @@ copy-through and read-back equality are byte equality.
   `docs/cli-output-contract.md`; this RDR introduces verb-specific JSON `data`
   payloads and exactly one new `omitempty` `CLIError` field (`findings`), not a
   new terminal envelope or exit group. Set values are JDR 0001 §D13's
-  canonical JSON array everywhere they cross the CLI.
+  canonical JSON array everywhere they cross the CLI, rendered with HTML
+  escaping disabled so `<`, `>`, and `&` serialize as themselves.
 - **Naming** - the user-facing group is `flow`, with verbs `next`, `resolve`,
   `read-state`, and `set-state`; flags `--flow`, `--model`, `--tag`,
   `--artifact`, `--outcome`, `--evaluate-gates`, `--write`, `--clear`. Rejected
@@ -617,7 +670,12 @@ owns surfacing the outcome through the CLI contract.
 
 `resolve` → skill → `set-state` is copy-through: every `writes` value and
 `clear[]` key in a plan is accepted verbatim by `set-state`'s `--write` /
-`--clear` grammar, so a set write survives the round trip byte-identical.
+`--clear` grammar, so a set write survives the round trip byte-identical. This
+holds because one encoder renders every canonical set literal; two emit sites
+disagreeing on HTML escaping would report `flow-write-readback-mismatch` on a
+write that actually succeeded, and only for members containing `<`, `>`, or `&`
+— a data-dependent failure ASCII-clean fixtures never catch
+(`evidence/spikes/escaping-surfaces.out`).
 
 `read-state` → `--tag` re-pairs only for observed tags; an owned tag read by
 `read-state` cannot be handed back through `--tag` (refused `flow-tag-owned`)
@@ -655,7 +713,8 @@ Non-normative payload and refusal shapes are the examples under JDR 0001 §D8,
 | --- | --- | --- | --- | --- |
 | Output mode validation | `internal/cli/respond::ValidateMode` | Current verbs must call it manually. | Reuse | Every new verb starts with it. |
 | Success rendering | `internal/cli/respond::OK` | Text mode currently emits only advisories, while `version` uses `cmd.Println`. | Extend `respond.OK` or a respond-owned helper | New verbs must not use direct Cobra printing for text payloads. |
-| Failure rendering | `internal/cli/respond::Fail` and `internal/cli/clierr::CLIError` | No resolver-specific codes; no structured diagnostics field. | Extend codes; add `Findings []Finding` `omitempty` | Append-only; no new exit groups. |
+| Failure rendering | `internal/cli/respond::Fail` and `internal/cli/clierr::CLIError` | No resolver-specific codes; no structured diagnostics field. | Extend codes; add `Findings []Finding` `omitempty` (one flat record, shared with RDR 0006) | Append-only; no new exit groups. |
+| Canonical JSON rendering | `internal/cli/clierr::EmitJSON` and `internal/cli/respond::writeJSONLine` | Both call bare `json.Marshal`, which HTML-escapes `<`, `>`, `&` | **Extend** — route both through one helper with `SetEscapeHTML(false)` | Set-literal bytes become stable across emit sites; touches RDR 0006's envelope path. |
 | Root wiring | `internal/cli::NewRootCmd` / `ExecuteAndEmit` | Only `version` is registered today. | Extend | Register `flow` group and keep Cobra errors structured. |
 | Kernel call | `internal/resolve::Resolve` / `Input` | Takes assembled `Owned`/`Observed`; performs no I/O. | Reuse | Verbs assemble `Input` from readers and `--tag`. |
 | Config discovery | `internal/cli/config` | Parser placeholder; no transition-model config yet. | Extend later | `--model <path>` ships first; `--flow <id>` config lookup may follow. |
@@ -887,14 +946,23 @@ role from RDR 0004.
       their semantics.
 - [x] A3 and A4 re-verified at the re-entry Stage 4 against JDR 0001 §D2/§D4/
       §D8/§D9 and the code as it stands.
-- [ ] A5's `clierr.Finding` field set settled against Final RDR 0006's
-      normative requirement, and A6's set-member escaping encoder pinned; both
-      are open author's-round items from the re-entry Stage 4.
+- [x] A5's `clierr.Finding` field set and A6's set-member escaping encoder
+      settled at the re-entry Stage 4 author's round: one flat `Finding` record
+      with `omitempty` fields, and HTML escaping disabled on the canonical set
+      literal.
 - [ ] Add text success payload rendering through `respond.OK` or a
       respond-owned helper used by `respond.OK`; do not print directly from
       resolver verbs.
-- [ ] Add `Findings []Finding` (`json:"findings,omitempty"`) and the `Finding`
-      record to `internal/cli/clierr`, shared with RDR 0006.
+- [ ] Add `Findings []Finding` (`json:"findings,omitempty"`) and the flat
+      `Finding` record to `internal/cli/clierr`, shared with RDR 0006 — fields
+      `Code`, `Message`, plus `omitempty` `Param`, `Locator`, `Hint`,
+      `Severity`, `Model`, `Rule`, `Key`, `Operator`, `Literal`, `Block`,
+      `Class`.
+- [ ] Route `internal/cli/clierr::EmitJSON` and
+      `internal/cli/respond::writeJSONLine` through one shared helper using
+      `SetEscapeHTML(false)`, so canonical set literals render `<`, `>`, `&` as
+      themselves and every emit site agrees byte-for-byte. Bare `json.Marshal`
+      must not remain on a path a set value crosses.
 
 ### Minimum Viable Validation
 
@@ -904,7 +972,10 @@ gate ids as unresolved facts; `flow resolve` reads owned state from a fixture
 artifact, maps one outcome to one plan, and runs one gate on the selected row;
 `flow read-state` reads the fixture artifact tags per reader; and
 `flow set-state` persists one scalar write, one set write as a JSON array, and
-one `--clear`, then read-back-verifies them. Run the happy path, one escaped
+one `--clear`, then read-back-verifies them. The set write's members MUST
+include one containing `<` and one containing `&`, asserted byte-identical
+through plan → request → read-back, so the encoder rule is covered by the
+validation rather than only by review. Run the happy path, one escaped
 plan, one gate deny, one kernel refusal, and one exit-3 accessor failure in
 `--as=text` and `--as=json`, asserting `findings[]` where the table names it.
 
@@ -989,13 +1060,23 @@ typed refusal mapping for each verb.
    `set-state` reports success only after read-back proves the scalar, the
    set (byte-equal canonical array), and the cleared key absent; `--write
    k=<clear>`, an unbound key, and a wrong-kind value are refused before any
-   accessor runs.
+   accessor runs. One set member carries `<` and one carries `&`: both render
+   as themselves at every emit site — `["a<b","x&y"]`, never
+   `["a\u003cb","x\u0026y"]` — and plan, request, and read-back agree
+   byte-for-byte (normative fixture, `evidence/spikes/escaping-surfaces.out`).
 6. **Scenario**: read accessor timeout during `resolve`, gate execution
    failure, write read-back incomplete, and write read-back mismatch.
    **Expected**: the first three exit 3 with `GroupEnvUnavailable` and a
    "may have been applied" detail on the write case; the mismatch exits 2 with
    `findings[]` per key; none is a successful transition or a coerced
    `read-state` payload.
+7. **Scenario**: a refusal carrying `findings[]` is rendered in both modes, and
+   the same `Finding` record is populated by a kernel refusal, a gate result,
+   and a model-load category.
+   **Expected**: each producer populates only its own fields and unset optional
+   fields are absent from the JSON (`omitempty`); no producer nests its fields
+   in a sub-object; and each finding's `message` alone renders the failure
+   readably with no structured field consulted.
 
 ### Performance Expectations
 
@@ -1046,7 +1127,8 @@ with a clear, and at least one exit-2 and one exit-3 refusal.
 - **Canonical-form / determinism**: the deterministic claim is request-level
   semantic determinism over the same model revision and artifact contents, not
   byte-identical output; the one byte-level claim is the canonical set literal
-  (JDR 0001 §D13) surviving plan→request→read-back.
+  (JDR 0001 §D13) surviving plan→request→read-back, which holds only because
+  one encoder — HTML escaping disabled — renders it at every emit site.
 
 ### Proportionality
 
