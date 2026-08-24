@@ -10,14 +10,15 @@
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,
-  `RequiresOwned`, next-state tags and writes, existence constants, per-atom
-  block), the expanded-table dump format and its total ordering, and the
-  validation category taxonomy — consumed by RDRs 0003, 0006, 0007, 0008,
-  and 0009.
+  match-block expansion, block-keyed `Match`/guard routing, `RequiresOwned`,
+  next-state tags and writes, existence constants, per-atom block), the
+  expanded-table dump format and its total ordering, and the validation
+  category taxonomy — consumed by RDRs 0003, 0004, 0006, 0007, 0008, and 0009.
 - **Priority**: High
 - **Related Issues**: None
 - **Predecessors**: 0001-resolution-kernel; JDR 0001
-  (`docs/jdr/0001-resolve-kernel-seam.md`) §D2, §D4, §JD-3, §JD-10
+  (`docs/jdr/0001-resolve-kernel-seam.md`) §D2, §D4, §D5, §D6, §D7, §JD-3,
+  §JD-9, §JD-10, §JD-15, §JD-16, §JD-17
 - **Overrides**: None
 - **Seam Lineage**: no prior accretion
 
@@ -95,10 +96,13 @@ factor common context instead of enumerating every Cartesian row.
 ### Critical Assumptions
 
 - **A1 TOML can represent sparse transition rules with nested match predicates,
-  multi-tag writes, and accessor references without ambiguous decoding.**
-  - **Status**: Verified
+  multi-tag writes, per-capability accessor tables with `keys` bindings, root
+  `[initial]`/`terminal` declarations, the seven type-model keys, and
+  `[model.metadata]` under strict decoding without ambiguous decoding.**
+  - **Status**: Pending (re-verify — the spike fixtures predate the JDR 0001
+    §D7 layout)
   - **Method**: Spike
-  - **Evidence**: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && go run . rdr-fixture.toml kata-fixture.toml` parsed both fixtures with `github.com/pelletier/go-toml/v2`, including inherited match contexts, nested predicates, accessor references, multi-tag writes, and explicit clears; transcript captured in `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/output.txt`.
+  - **Evidence**: The pre-§D7 layout is witnessed: `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes && go run . rdr-fixture.toml kata-fixture.toml` parsed both fixtures with `github.com/pelletier/go-toml/v2`, including inherited match contexts, nested predicates, multi-tag writes, and explicit clears (`evidence/spikes/output.txt`). Those fixtures author `[accessors.<id>]` with `mode` and a tag-side `accessor` reference, which the Normative Contracts no longer admit. Owed: re-author both fixtures to the §D7 layout (`[read.<id>]`/`[write.<id>]`/`[gate.<id>]` with `keys`, `[initial]`, `terminal`, `[model.metadata]`, the type-model keys) and re-run the spike under strict decoding.
   - **If wrong**: The chosen carrier either loses table semantics or forces a
     custom parser earlier than intended.
 - **A2 Row order is not part of successful edge selection.**
@@ -159,7 +163,8 @@ factor common context instead of enumerating every Cartesian row.
     tuple `(model id, rule id, expansion suffix)` compared field by field,
     byte-lexicographically, with the source locator excluded; the same field
     list is what the Round-Trip invariant preserves. The normalizer spike
-    witnesses it:
+    witnesses it for the outcome-only expansion case (the generalized
+    match-block expansion and its sequence-valued suffix are owed with A1):
     `cd docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes &&
     GOFLAGS=-mod=mod GOPROXY=off go run . rdr-fixture.toml kata-fixture.toml`
     emits every field of the row value — identity with `#suffix` on expanded
@@ -196,12 +201,8 @@ factor common context instead of enumerating every Cartesian row.
     `slices.Contains` — so with `Input.Recognized == ""` *and* the empty
     string in the alphabet, a row with an empty `Outcome` matches and emits a
     plan against a view carrying no `recognized` key. The recognized-totality
-    clause below is the sole barrier; RDR 0008 observed the same path and
-    left it "unforbidden rather than silently assumed away," and its
-    accompanying "nothing in this RDR or RDR 0002 forbids that alphabet
-    entry" predates that clause. JDR 0001 §JD-10 (whether a declared
-    `recognized` tag is total when no outcome is in flight) is a different
-    question and remains open.
+    clause below is the sole barrier, and JDR 0001 §JD-10 ratifies it: the
+    `recognized` tag is total over matching.
 
     **The barrier's reach is bounded, and this is a known residual.** The
     alphabet ban is a *load-time* check in the normalizer; the kernel does not
@@ -221,14 +222,14 @@ factor common context instead of enumerating every Cartesian row.
   set and still produce a conforming `resolve.Row` at the kernel handoff.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: Owed. The repeatability lens found the RDR placed the
-    operator-based `Match`/`Guard` split on two different artifacts; it is now
-    pinned to the handoff so the normalized value keeps each atom's authored
-    block, which `Guard string` cannot carry. Verification: the Testing Strategy
-    scenario 2 normalization assertions plus scenario 4's `Resolve` run must
-    both pass against one normalized value — the first reading the unified atom
-    set, the second consuming the split row. Blocked on RDR 0007's kernel
-    reshape (Prerequisites), like the rest of Phase 2.
+  - **Evidence**: Owed. The block-keyed `Match`/guard split (JDR 0001 §D6) is
+    pinned to the kernel handoff so the normalized value keeps each atom's
+    authored block (`match`/`all`/`unless`), which `Guard string` cannot carry.
+    Verification: the Testing Strategy scenario 2 normalization assertions plus
+    scenario 4's `Resolve` run must both pass against one normalized value —
+    the first reading the unified atom set, the second consuming the split row.
+    Blocked on RDR 0007's kernel reshape (Prerequisites), like the rest of
+    Phase 2.
   - **If wrong**: Either block retention is lost (breaking RDR 0003 downstream
     and the Round-Trip field list) or the kernel handoff needs a shape this RDR
     does not model.
@@ -269,14 +270,16 @@ factor common context instead of enumerating every Cartesian row.
   - **Status**: Pending
   - **Method**: MVV Test
   - **Evidence**: Owed. A9 asserts the unified atom set *can* produce a
-    conforming `resolve.Row`; it does not assert the routing is total. The
-    critique lens booked this separately and it landed in no assertion.
-    Verification: a scenario 2 assertion that for the RDR fixture the union of
-    the constructed row's `Match` and guard atoms equals the normalized atom
-    set and the intersection is empty — including the `unless`-block equality
-    atom (`status.eq=closed@unless` in the kata fixture), which routes to the
-    guard despite being an equality operator. Blocked on RDR 0007's kernel
-    reshape (Prerequisites), like A9.
+    conforming `resolve.Row`; it does not assert the routing is total. Under
+    the block-keyed rule (JDR 0001 §D6) totality is structural — every atom
+    carries exactly one of three blocks — but the handoff code is the
+    enforcement point and lands in no assertion yet. Verification: a scenario
+    2 assertion that for the RDR fixture the union of the constructed row's
+    `Match` and guard atoms equals the normalized atom set and the
+    intersection is empty; the discriminating witnesses are an `eq` atom under
+    `guard.all` and the kata fixture's `status.eq=closed@unless`, both of which
+    route to the guard because of their block, not their operator. Blocked on
+    RDR 0007's kernel reshape (Prerequisites), like A9.
   - **If wrong**: An atom is silently dropped at the handoff or double-counted,
     which changes which rows match without any dump or normalization test
     observing it.
@@ -319,17 +322,15 @@ outcome groups, guarded rules, and tag writes; the tool normalizes that source
 into a full row set for lint, resolver lookup, and table dumps.
 The rendered table is review support, not the source authors maintain.
 
-Each flow has a named model with flow-level tag declarations, optional accessor
-references, a legal recognized-outcome alphabet, and sparse rules that encode
-the match predicates and tag writes produced by legal edges. The source model
-must provide enough structure for RDR 0001's exact-one resolver contract under
-the gate-then-count ordering JDR 0001 §D2 fixes: guards are evaluated over every
-candidate first, an unevaluable survivor vetoes the resolution, and only then is
-exact-one counted; zero or multiple survivors are value-level refusals unless
-the table also defines exactly one matching escape row for that failure class.
-Unknown outcomes and unavailable accessors remain resolver refusals; malformed
-TOML or schema-invalid rules are load/lint failures before the resolver sees a
-table.
+Each flow has a named model with flow-level tag declarations, per-capability
+accessor tables, a declared initial owned state and terminal contexts, a legal
+recognized-outcome alphabet, and sparse rules that encode the match predicates
+and tag writes produced by legal edges. The source model must provide enough
+structure for RDR 0001's exact-one resolver contract under the gate-then-count
+ordering JDR 0001 §D2 fixes (cited, not restated — see the selection clause in
+Normative Contracts). Unknown outcomes and unavailable accessors remain
+resolver refusals; malformed TOML or schema-invalid rules are load/lint
+failures before the resolver sees a table.
 
 The model is data, not generated code and not a runtime FSM engine. RDR 0001's
 resolver consumes the normalized representation, RDR 0003 owns the fixed
@@ -342,38 +343,51 @@ normalized expanded-table view those peers consume.
 
 ### Technical Design
 
-The source schema has six conceptual parts:
+The source schema has eight conceptual parts:
 
-1. Flow metadata: table id, version, and human description.
+1. Flow metadata: table id, version, human description, and a free-form
+   `[model.metadata]` extension table the loader carries untouched.
 2. Tag declarations: tag name, provenance (`owned`, `observed`, `recognized`),
-   the RDR 0003 type model (value kind, and optionally finite domain,
-   optionality, set-element universe, and single-valued marker), and optional
-   accessor reference for observed or owned read-back. Provenance and authoring
-   location are this RDR's; the type model is RDR 0003's and is cited, not
-   restated. The recognized-provenance declaration is named `recognized` (RDR
-   0008).
+   and the RDR 0003 type model spelled as the wire keys `kind`, `domain`,
+   `min`, `max`, `elements`, `single_valued`, `required`. Provenance,
+   authoring location, and key spelling are this RDR's; what the keys mean is
+   RDR 0003's and is cited, not restated. The recognized-provenance
+   declaration is named `recognized` (RDR 0008). A declaration carries no
+   accessor reference — the binding runs the other way (part 4).
 3. Recognized outcome alphabet: the closed set of outcome tags that the
    recognizer may emit for the flow.
-4. Shared match contexts: named predicate blocks for dimensions such as RDR
+4. Accessor tables: one table per capability — `[read.<id>]`, `[write.<id>]`,
+   `[gate.<id>]` — each naming the tag `keys` it serves; `keys` is the only
+   binding between tags and accessors. RDR 0004 owns what the entries mean and
+   how they execute.
+5. Root and stop set: `[initial]`, a table of owned `tag = value` assignments
+   fixing the root node, and root `terminal`, a list of context ids naming the
+   stop set — consumed by RDR 0006's reachability and dead-end checks.
+6. Shared match contexts: named predicate blocks for dimensions such as RDR
    `Status`, `Profile`, stage, prelock iteration, cluster eligibility, or kata
    lifecycle. Contexts may inherit from another context to model statechart-like
    hierarchy without adopting a statechart runtime.
-5. Sparse transition rules: reviewable rule ids, optional context references, a
-   local match block, positive `all` guards, negative `unless` guards, and
-   either a write block containing one or more tag assignments plus an optional
-   explicit clear list, or an explicit `escape` list naming the resolver
-   failure class the row models.
-6. Render settings: deterministic ordering and field selection for the expanded
+7. Sparse transition rules: reviewable rule ids, optional context references, a
+   local match block, positive `all` guards, negative `unless` guards, an
+   optional list of gate accessors the plan must pass, and either a write block
+   containing one or more tag assignments plus an optional explicit clear list,
+   or an explicit `escape` list naming the resolver failure class the row
+   models.
+8. Render settings: deterministic ordering and field selection for the expanded
    table dump.
 
 The parser turns TOML into typed source data, then normalizes it into explicit
-candidate rows. Load-time validation rejects malformed tags, unsupported model
-versions, malformed predicate atoms (unknown operator, or a literal ill-formed
-for its operator — including any existence literal other than the kernel's two
-boolean forms), writes to non-owned tags, rules that match on missing tag
-declarations, unresolvable or cyclic context references, unknown accessor names,
-malformed escape declarations, a rule that binds zero or more than one outcome,
-and a recognized-provenance declaration not named `recognized`.
+candidate rows. Load-time validation rejects malformed tag declarations,
+unsupported model versions, malformed predicate atoms (unknown operator; a
+literal ill-formed for its operator, including any existence literal other than
+the kernel's two boolean forms; a literal outside the tag's declared domain; or
+an operator other than `eq`/`in` under a match block), the reserved `<clear>`
+sentinel authored as a tag value, writes to non-owned tags, rules that match on
+missing tag declarations, unresolvable or cyclic context references, unknown
+accessor ids, accessor `keys` that bind a tag to zero or several readers or
+writers, malformed escape declarations, a rule that binds zero or more than one
+outcome, a malformed `[initial]` assignment, and a recognized-provenance
+declaration not named `recognized`.
 
 Load and lint split on **arity, not severity**: a check decidable from one rule
 plus the model's declarations is load-time and this RDR's; a check that must
@@ -382,17 +396,12 @@ read-before-write — is graph lint and RDR 0006's. Ambiguous overlap between
 candidate rows is therefore a lint finding, not a load failure.
 
 Runtime matching is deliberately priority-free and follows the kernel's
-gate-then-count ordering (JDR 0001 §D2; RDR 0007 states it as the kernel's):
-the resolver collects the non-escape candidate rows for the recognized outcome
-whose match pattern holds, evaluates every candidate's guard, prunes guard-FALSE
-rows, reports absent owned state among survivors, refuses `guard_unevaluable`
-if any survivor is undecidable, and only then counts. Exactly one survivor is
-the plan. If zero or multiple survive, the resolver may return a modeled escape
-disposition only when exactly one escape row for that failure class survives
-the same gate; otherwise it returns the kernel-owned typed refusal.
-`guard_unevaluable` and `owned_state_unavailable` are never escapable. Multi-tag
-writes are first-class because RDR rewinds and kata lifecycle moves need to set
-both the next stage/state and side-channel scope tags in one edge.
+gate-then-count ordering (JDR 0001 §D2; RDR 0007 is its normative home). This
+RDR's part is the row shape that ordering evaluates: a match pattern the kernel
+tests as equality, a guard predicate handed to the seam, one bound outcome, and
+— for escape rows — the failure class the row rescues. Multi-tag writes are
+first-class because RDR rewinds and kata lifecycle moves need to set both the
+next stage/state and side-channel scope tags in one edge.
 
 Guard factoring follows the `transitions` prior art: positive predicates and
 negative predicates are authored separately and normalized into one predicate
@@ -404,11 +413,11 @@ views derived from model metadata and must carry enough source ids to send
 diagnostics back to the authored sparse rule.
 
 The normalized candidate row is the kernel row up to the predicate split — the
-kernel's `Match`/`Guard` routing is applied at the handoff (Normative
+kernel's `Match`/guard routing is applied at the handoff (Normative
 Contracts), not stored in the normalized value. It carries the source identity
 (`(model id, rule id)` plus any expansion suffix, and the source locator), the
-single outcome the row responds to, the
-predicate atoms (key, operator token, literal, block), the next-state tags and
+single outcome the row responds to, the predicate atoms (key, operator token,
+literal, block), the gate accessor ids the rule names, the next-state tags and
 the writes, both including rendered `<clear>` entries, the required-owned key
 set derived from those writes, and the escape failure-class list. The
 identity tuple `(model id, rule id, expansion suffix)` is what the dump sorts
@@ -428,16 +437,66 @@ and not a fully expanded Cartesian-product table.
 ```
 
 ```normative
-The source schema MUST use the Resolve spike field layout: root `outcomes`,
-`[model]`, `[tags.<tag>]`, `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`,
-and `[dump]`. Context predicates live under `[context.<id>.match.<tag>]`; rule
-predicates live under `[rule.match.<tag>]`, `[rule.guard.all.<tag>]`, and
-`[rule.guard.unless.<tag>]`; writes live under `[rule.write]`; explicit clears
-live in a rule-level `clear` list; modeled escape rows live in a rule-level
-`escape` list. An `[accessors.<id>]` entry carries `mode` and `path`, as the
-spike fixtures author it; this RDR validates only that a referenced accessor id
-resolves to a declared entry (`unknown accessor` otherwise) — RDR 0004 owns the
-entry's semantics and execution.
+The source schema is the closed layout JDR 0001 §D7 fixes: root `outcomes`,
+root `terminal`, `[model]` (with the free-form sub-table `[model.metadata]`),
+`[initial]`, `[tags.<tag>]`, `[read.<id>]`, `[write.<id>]`, `[gate.<id>]`,
+`[context.<id>]`, `[[rule]]`, and `[dump]`. Context predicates live under
+`[context.<id>.match.<tag>]`; rule predicates live under `[rule.match.<tag>]`,
+`[rule.guard.all.<tag>]`, and `[rule.guard.unless.<tag>]`; writes live under
+`[rule.write]`; explicit clears live in a rule-level `clear` list; gate
+accessor references live in a rule-level `gate` list of `[gate.<id>]` ids;
+modeled escape rows live in a rule-level `escape` list. No other root key or
+table is admitted (strict decoding, below).
+
+**`[model.metadata]` is the one sanctioned extension namespace.** The loader
+MUST decode it as a free-form table, carry it through to the normalized model
+untouched, and MUST NOT interpret any key in it; strictness applies everywhere
+else.
+
+**Accessor tables.** Each capability table decodes to its own shape, so
+"exactly one capability per accessor" (RDR 0004) holds structurally rather than
+by validation. Every entry carries `role`, `path`, `keys` (a non-empty list of
+declared tag keys), and `timeout` (a Go duration string; missing or
+non-positive is a malformed accessor declaration); a `[write.<id>]` entry
+additionally carries `read_back = true`. The same id MAY appear under two
+capability tables — RDR 0004's identity is `(flow, name, capability)`. RDR 0004
+owns what `role`, `timeout`, and `read_back` mean and how an accessor executes;
+this RDR owns the layout and the **binding validations**, which are
+provenance-scoped:
+
+- every key in a `keys` list MUST be a declared tag (`unknown tag`), and MUST
+  NOT be `recognized` — the kernel supplies that key and no accessor reads or
+  writes it (RDR 0008);
+- every **owned** tag MUST be served by exactly one reader; an **observed** tag
+  MAY be served by at most one reader, and zero is legal because an observed
+  key may arrive from the caller (JDR 0001 §JD-9) — refusing it would make
+  every `--tag`-supplied key unauthorable;
+- every key named by any rule's write block or clear list, and every key
+  assigned in `[initial]`, MUST be served by exactly one writer, and every
+  writer key MUST be owned (`write to non-owned tag`);
+- every id in a rule's `gate` list MUST resolve to a `[gate.<id>]` entry
+  (`unknown accessor`).
+
+A violation of the second or third bullet is a `malformed accessor binding`.
+This settles the provenance scope §D7(ii) left open at this RDR.
+
+**Gate references.** A rule's `gate` list names the gate accessors whose
+`allow` the executor requires before applying that rule's plan; the list is
+carried on the normalized row and is part of its value. When it runs, and what
+`deny` and `indeterminate` mean, are RDR 0004's. An escape rule MUST NOT carry
+a `gate` list (it yields no plan to gate) — `malformed escape declaration`.
+This fills the site §D7 left blank for this RDR.
+
+**Root and stop set.** `[initial]` is a table of `tag = value` assignments;
+every key MUST be a declared owned tag and every value MUST be well-formed for
+that tag's declared kind and domain (`malformed initial declaration` otherwise;
+the `<clear>` sentinel is refused under the reserved-value rule). Root
+`terminal` is a list of context ids, each of which MUST resolve (`unknown
+context`); a rule MAY `use` a terminal context, which is how an escape
+self-loop on a stop state is authored. Whether a model *omits* `[initial]` or
+`terminal`, and whether a terminal context matches a non-owned tag, are RDR
+0006's blocking findings, not load failures: the loader accepts the absence and
+lint refuses to certify the graph without a root or stop set.
 ```
 
 ```normative
@@ -477,10 +536,16 @@ total row ordering, rests on this.
 
 Each transition rule MUST contain a stable rule id, zero or more shared-context
 references, and a local match block. An ordinary transition rule MUST contain a
-write block and MAY contain a rule-level explicit clear list. A write block MAY
-assign more than one tag. An escape rule MUST contain an `escape` list and MUST
-NOT contain a write block or clear list, even an empty one (RDR 0009 binds the
-same obligation at the kernel boundary).
+write block, MAY contain a rule-level explicit clear list, and MAY contain a
+rule-level `gate` list. A write block MAY assign more than one tag. An escape
+rule MUST contain an `escape` list and MUST NOT contain a write block, clear
+list, or `gate` list, even an empty one (RDR 0009 binds the write-free
+obligation at the kernel boundary).
+
+**A write replaces.** A write assigns a tag's whole value and supplants
+whatever was held; for a `set` kind the array literal is the whole new set.
+There is no accumulate form. RDR 0004's read-back therefore compares the held
+value for equality (JDR 0001 §D7(iv)).
 ```
 
 ```normative
@@ -537,12 +602,15 @@ RDR 0006's unreachable-rule finding, not a load failure here.
 
 ```normative
 Guard predicates MUST be represented as positive `all` predicates and negative
-`unless` predicates. Normalization MUST combine both into one candidate-row
-predicate set before ambiguity checks, and each atom in that set MUST retain
-the key, operator token, literal, and the block (`all` or `unless`) it was
-authored in — the atom shape JDR 0001 §D1 fixes and RDR 0007 spells. Block
-retention is carriage: RDR 0003's atom identity tuple and `unless` semantics
-read it downstream, and normalization MUST NOT fold `unless` atoms into `all`.
+`unless` predicates. Normalization MUST combine the match atoms and both guard
+blocks into one candidate-row predicate set before ambiguity checks, and each
+atom in that set MUST retain the key, operator token, literal, and the block
+it was authored in — a three-valued domain, `match`, `all`, or `unless` — the
+atom shape JDR 0001 §D1 fixes and RDR 0007 spells. The block is load-bearing,
+not merely carried: it is the key the handoff routes on (JDR 0001 §D6, below),
+RDR 0003's atom identity tuple and `unless` semantics read it downstream, and
+RDR 0006 serializes it. Normalization MUST NOT fold `unless` atoms into `all`
+or `match` atoms into either guard block.
 
 Because the block is part of the atom identity, one atom authored in **both**
 `all` and `unless` is two distinct atoms and both survive normalization; this is
@@ -594,16 +662,26 @@ the round-trip invariant compare.
 ```
 
 ```normative
-**Rule ids and outcome literals MUST NOT contain the expansion-suffix
-separator.** The identity tuple `(model id, rule id, expansion suffix)` is total
-only if its fields cannot bleed into one another. Because a rendered row identity
-joins rule id and suffix with `#`, a rule id containing `#` makes the rendered
-identity ambiguous: rule `a#x` and rule `a` expanding on outcome `x` render the
-same string. Rejecting `#` in both rule ids and alphabet members at load closes
-this at the source rather than leaving the rendered form to disambiguate what the
-value could not — and it is what lets the Round-Trip section's third lossy site
-be a rendering caveat instead of an identity collision. Violations are a
-malformed rule id and a malformed recognized outcome alphabet respectively.
+**Rule ids, outcome literals, and the members of any match-block `in` literal
+MUST NOT contain the expansion-suffix separator `#`.** The identity tuple
+`(model id, rule id, expansion suffix)` is total only if its fields cannot
+bleed into one another. The rendered row identity joins the rule id and each
+suffix element with `#`, so a `#` inside any of them makes the rendered
+identity ambiguous: rule `a#x` and rule `a` expanding on member `x` render the
+same string. Rejecting `#` at load in every string that can reach the rendered
+identity closes this at the source, and is what makes the rendered identity
+recoverable — splitting on `#` is unambiguous. Violations are a malformed rule
+id, a malformed recognized outcome alphabet, and a malformed predicate atom
+respectively.
+
+**The `<clear>` sentinel is reserved (JDR 0001 §D5).** The string `<clear>`
+MUST be refused at load wherever a tag value is authored — a write-block value,
+an `[initial]` assignment, or a predicate literal — as a `reserved tag value`.
+Rendering an authored clear as a `<clear>` write is therefore unambiguous:
+RDR 0004 removes the key on that write and asserts absence on read-back, and
+RDR 0006 reads it as removal. A predicate literal of `<clear>` is refused
+rather than admitted as a dead atom because no view can ever hold it and a
+silent dead rule is the more dangerous failure.
 ```
 
 ```normative
@@ -614,9 +692,13 @@ category set. The `recognized` tag is total over matching: the kernel refuses
 `unmodeled_outcome` before any row is consulted unless the resolve carries an
 outcome in the declared alphabet, so every view that reaches a row binds
 `recognized` (JDR 0001 §JD-10). Consequently the `outcomes` alphabet MUST be
-non-empty, duplicate-free, and MUST NOT contain the empty string; a rule whose
-predicate set requires `recognized` to be absent is dead, which is RDR 0006's
-unreachable-rule finding, not a load failure here.
+non-empty, duplicate-free, and MUST NOT contain the empty string. A rule
+requiring `recognized` to be absent has **no authorable form**: the only
+spelling — a `recognized` atom in a guard block — is refused at load as a
+malformed outcome binding (below), so it never reaches lint. The dead rules
+that *do* reach RDR 0006's unreachable-rule check are the authorable ones: one
+atom in both `all` and `unless`, or two non-identical `eq` atoms on one key
+accumulated through inheritance (the contexts clause).
 ```
 
 ```normative
@@ -625,10 +707,11 @@ binding reads the match blocks only** — the rule's local `match` block plus th
 `match` blocks of its inherited contexts. That set MUST contain exactly one atom
 on `recognized`, using `eq` or `in`, whose literal(s) are members of the
 `outcomes` alphabet. Normalization lifts that atom out of the predicate set into
-the row's outcome field; an `in` atom expands into one candidate row per member,
-each identified by the rule id plus the outcome literal as its expansion suffix.
-A rule binding zero outcomes, more than one `recognized` atom, or a literal
-outside the alphabet is a load failure.
+the row's outcome field; an `in` atom expands into one candidate row per member
+under the general match-block expansion rule below, the chosen outcome literal
+being that atom's contribution to the expansion suffix. A rule binding zero
+outcomes, more than one `recognized` atom, or a literal outside the alphabet is
+a load failure.
 
 "Combined predicate set" is used in two extents in this document and they are
 not interchangeable: **outcome binding** scans the match blocks (above), while
@@ -640,12 +723,25 @@ the exact inversion the author guarded against, turning "this rule does not
 apply to outcome X" into "this rule binds outcome X," with no diagnostic and a
 normalized row that reads as intentional.
 
-**Expansion suffixes attach only where a rule expands.** A rule binding one
-outcome normalizes to an unsuffixed row whether it was authored `eq = "x"` or
-`in = ["x"]` — a single-member `in` expands to one row and takes no suffix, so
-two spellings of one edge cannot mint two identities. A suffix is present
-exactly when the rule produced more than one row. (RDR 0003 rejects a repeated
-element at parse, so no two expansions of one rule can share a suffix.)
+**Match-block expansion is general (JDR 0001 §D6).** Every `in` atom in a
+rule's match blocks — local `match` and inherited context `match`, on
+`recognized` or on any other declared tag — expands into one candidate row per
+member, and the rule's rows are the Cartesian product of its expanding atoms.
+In each expanded row the `in` atom becomes an `eq` atom on the chosen member,
+still carrying block `match`, so every match-block atom the kernel receives is
+an equality the `Match` pattern can test. The **expansion suffix** is the
+sequence of chosen members, one per atom with **more than one member**, taken
+in the atoms' sort order `(key, block, operator token, literal)`; it is empty
+when no such atom exists. Because RDR 0003 rejects a repeated `in` element at
+parse, no two rows of one rule share a suffix, which is what keeps the identity
+tuple total.
+A product row whose expanded atoms cannot be satisfied together (two `eq` on
+one key, different literals) is a dead row for RDR 0006, not a load failure.
+
+**Expansion suffixes attach only where a rule expands.** A single-member `in`
+expands to one row whose suffix is empty, so `eq = "x"` and `in = ["x"]` are
+one spelling of one edge and cannot mint two identities. A suffix is
+non-empty exactly when the rule produced more than one row.
 ```
 
 ```normative
@@ -691,29 +787,38 @@ that future divergence a silent behavior change rather than a compile-time one.
 
 ```normative
 **The unified predicate set splits across the kernel's two predicate fields by
-operator, and this RDR owns the split — at the kernel handoff, not in the
-normalized value.** The normalized candidate row carries the atoms as **one
-unified set with each atom's authored block retained**; that single field is
-what the dump contract lists, what the Round-Trip invariant compares, and what
-RDR 0003 reads downstream. The split is applied when a `resolve.Row` is
-constructed for the kernel. It cannot be applied earlier without loss:
-`Guard string` carries no per-atom block, so a normalized value already split
-into `Match`/`Guard` could not satisfy the block-retention obligation above.
+authored block (JDR 0001 §D6), and this RDR owns the split — at the kernel
+handoff, not in the normalized value.** The normalized candidate row carries
+the atoms as **one unified set with each atom's authored block retained**; that
+single field is what the dump contract lists, what the Round-Trip invariant
+compares, and what RDR 0003 reads downstream. The split is applied when a
+`resolve.Row` is constructed for the kernel. It cannot be applied earlier
+without loss: `Guard string` carries no per-atom block, so a normalized value
+already split into `Match`/`Guard` could not satisfy the block-retention
+obligation above.
 
 The kernel row exposes `Match []Tag` (an equality pattern the kernel tests
-directly) and `Guard string` (handed to the guard seam), so the handoff MUST
-route each atom to exactly one of them: atoms
-whose operator is equality on a declared tag populate `Match`; every other atom —
-set membership, comparison, existence, and every `unless` atom regardless of
-operator — belongs to the guard predicate. An atom MUST NOT appear in both.
+directly) and a guard predicate (handed to the guard seam), and the handoff
+MUST route each atom to exactly one of them by its block: every atom carrying
+block `match` populates `Match`; every atom carrying block `all` or `unless`
+belongs to the guard predicate, **regardless of operator** — an `eq` atom
+under `guard.all` is a guard atom. The routing is exhaustive and disjoint by
+construction because the block domain is exactly those three values.
 
-Routing an atom into `Match` that the kernel cannot evaluate as an equality tag
-would make it silently fail to match rather than reach the guard seam, and
-routing an equality atom into the guard defers a decidable check to a seam that
-can report `guard_unevaluable`. Which surface the guard predicate itself presents
-— the atom shape and its encoding — is RDR 0007's, and the reshape named in
-Prerequisites replaces the `Guard string` field; this clause fixes only which
-atoms are the guard's, which is stable across that reshape.
+The block is the author's declared intent about masking — "select on" versus
+"gate on". A guard `eq` over an optional key that is absent reaches the seam
+and refuses `guard_unevaluable` instead of silently dropping the row as a
+non-candidate, which is the masking the kernel forbids; that is the wanted
+behavior, not a deferral to avoid. For the same reason a **match block admits
+only `eq` and `in`** (`in` by expansion into per-member `eq` rows): a
+comparison, existence, `contains`, or any other operator under `[rule.match]`
+or `[context.<id>.match]` is refused at load as a malformed predicate atom,
+because `Match` can only test equality and an atom the kernel cannot evaluate
+there would silently fail to match rather than reach the guard seam. Which
+surface the guard predicate itself presents — the atom shape and its encoding
+— is RDR 0007's, and the reshape named in Prerequisites replaces the `Guard
+string` field; this clause fixes only which atoms are the guard's, which is
+stable across that reshape.
 ```
 
 ```normative
@@ -725,9 +830,9 @@ retain its source rule id and source locator.
 ```normative
 The expanded table dump MUST be derived from the normalized candidate-row value
 and MUST carry every field of it: row identity, source locator, outcome,
-predicate atoms (with block), next-state tags, writes including `<clear>`
-entries, required-owned keys, and escape failure classes — plus the derived row
-kind column. `[dump]` settings MAY reorder the rendered columns; they MUST NOT
+predicate atoms (with block), gate ids, next-state tags, writes including
+`<clear>` entries, required-owned keys, and escape failure classes — plus the
+derived row kind column. `[dump]` settings MAY reorder the rendered columns; they MUST NOT
 omit a field. A dump missing any field is not an expanded table dump and does
 not satisfy the Round-Trip invariant.
 
@@ -743,14 +848,17 @@ move, and reserve rendered-text goldens for tests of rendering itself.
 
 Dump ordering MUST be deterministic across source key order. Rows sort by row
 identity, compared field by field as the tuple `(model id, rule id, expansion
-suffix)`, each field compared byte-lexicographically on the post-parse string;
-an absent expansion suffix sorts before any present one. Within each row,
-atoms sort by (key, block, operator token, literal), and next-state tags,
-writes, required-owned keys, and escape classes sort by key.
+suffix)`; `model id` and `rule id` compare byte-lexicographically on the
+post-parse string, and the expansion suffix compares as a sequence —
+element by element, byte-lexicographically, a shorter sequence that is a
+prefix of a longer one sorting first, so the empty suffix sorts before any
+non-empty one. Within each row, atoms sort by (key, block, operator token,
+literal), and next-state tags, writes, required-owned keys, gate ids, and
+escape classes sort by key.
 
 The ordering is total **over one model's rows**: rule ids are unique within a
-model, and an expansion suffix is a member of the `outcomes` alphabet, which is
-non-empty and duplicate-free — so no two distinct rows compare equal and no
+model, and two rows of one rule differ in at least one suffix element because
+no `in` literal repeats a member — so no two distinct rows compare equal and no
 positional tiebreak is needed (RDR 0009 A8 establishes that a tiebreak on table
 position is forbidden; RDR 0001's identity rule makes two orderings of one row
 set the same input). A dump spanning more than one model MUST carry a
@@ -805,16 +913,20 @@ provenance: owned, observed, or recognized.
 ```
 
 ```normative
-A tag declaration also carries its **type model** — value kind, and optionally a
-finite domain, an optionality marker, a set-element universe, and a
-single-valued marker. RDR 0003 is the normative home of that model: what those
-fields mean, which kinds admit a finite domain, and how domain/kind
-disagreement is rejected are stated there and MUST NOT be restated here. This
-RDR owns where a declaration is authored — under `[tags.<tag>]`, beside
-`provenance` and the optional accessor reference — and requires normalization
-to carry every declared field through to the normalized model without loss, so
-lint (RDR 0006) and the guard proof (RDR 0003) read the same declaration the
-author wrote.
+A tag declaration also carries its **type model**, spelled as the wire keys
+`kind`, `domain`, `min`, `max`, `elements`, `single_valued`, and `required`
+(JDR 0001 §D7(iii); `required` is the optionality marker and defaults to
+optional). RDR 0003 is the normative home of that model: what those keys mean,
+which kinds admit a finite domain, and how domain/kind disagreement is rejected
+are stated there and MUST NOT be restated here. This RDR owns where a
+declaration is authored — under `[tags.<tag>]`, beside `provenance`, with no
+accessor reference — and the two load categories that carry RDR 0003's
+rejection rules: `malformed tag declaration` (a declaration RDR 0003's rules
+reject, decided before normalization completes) and `malformed predicate atom`
+(a literal outside the tag's declared domain, decided after declarations load
+and before rows are yielded). Normalization MUST carry every declared field
+through to the normalized model without loss, so lint (RDR 0006) and the guard
+proof (RDR 0003) read the same declaration the author wrote.
 ```
 
 ```normative
@@ -830,13 +942,18 @@ recognized outcome alphabet, malformed recognized outcome alphabet (an empty
 alphabet, a duplicate member, the empty string as a member, or a member
 containing the expansion-suffix separator — each distinguishable), unknown tag,
 unknown context, cyclic context inheritance, write to non-owned tag, unknown
-accessor, unsupported version, malformed predicate atom, malformed escape
-declaration, malformed outcome binding (including a `recognized` atom authored
-in a guard block), **malformed rule shape** (an ordinary rule carrying no write
-block — the mirror of `malformed escape declaration`, which covers only the
-escape-side shapes), malformed rule id (containing the expansion-suffix
-separator), duplicate rule id, duplicate model id, and `reserved_tag_key`
-(RDR 0008).
+accessor, malformed accessor declaration, malformed accessor binding,
+malformed tag declaration, malformed initial declaration, reserved tag value,
+unsupported version, malformed predicate atom (unknown operator; literal
+ill-formed for its operator; literal outside the declared domain; operator not
+admitted under a match block; `#` in a match-block `in` member — each
+distinguishable), malformed escape declaration (a write block, clear list, or
+`gate` list on an escape rule), malformed outcome binding (including a
+`recognized` atom authored in a guard block), **malformed rule shape** (an
+ordinary rule carrying no write block — the mirror of `malformed escape
+declaration`, which covers only the escape-side shapes), malformed rule id
+(containing the expansion-suffix separator), duplicate rule id, duplicate model
+id, and `reserved_tag_key` (RDR 0008).
 
 These are the checks the load/lint arity split assigns to this RDR. All but one
 are single-rule — decidable from one rule plus the model's declarations.
@@ -875,17 +992,29 @@ identifiers are an API surface, not message text.
 
 - **Identity** — a transition rule is identified by `(model id, rule id)`.
   Normalized candidate rows inherit that identity plus a deterministic expansion
-  suffix — the outcome literal when an `in` atom on `recognized` expands the
-  rule. Rule ids are stable review anchors and must not be reused for a
-  different edge. The identity tuple `(model id, rule id, expansion suffix)`
-  is also the dump's row-sort key, and it is total; the source locator is
-  diagnostic and deliberately excluded from it.
+  suffix — the sequence of chosen members, one per multi-member `in` atom in
+  the rule's match blocks, in atom sort order. Rule ids are stable review
+  anchors and must not be reused for a different edge. The identity tuple
+  `(model id, rule id, expansion suffix)` is also the dump's row-sort key, and
+  it is total; the source locator is diagnostic and deliberately excluded from
+  it. Rejected: a suffix drawn from the `outcomes` alphabet alone, because
+  JDR 0001 §D6 generalizes expansion to every match-block `in` and a
+  non-outcome member is not an alphabet element; rejected: a positional
+  suffix (`#1`, `#2`), because it would move when an unrelated member is added
+  to the literal.
 - **Wire / byte format** — TOML is the on-disk carrier. The exact field names
-  are the Resolve spike layout: root `outcomes`, `[model]`, `[tags.<tag>]`,
-  `[accessors.<id>]`, `[context.<id>]`, `[[rule]]`, `[rule.write]`,
-  rule-level `clear`, rule-level `escape`, and `[dump]`. `[model].version = 1`
-  is the only accepted format version. The RDR and kata spike fixtures are the
-  canonical examples implementation tests must promote.
+  are the JDR 0001 §D7 closed layout: root `outcomes`, root `terminal`,
+  `[model]`, `[model.metadata]`, `[initial]`, `[tags.<tag>]` with `provenance`
+  and the seven type-model keys, `[read.<id>]`/`[write.<id>]`/`[gate.<id>]`
+  with `role`, `path`, `keys`, `timeout`, and `read_back`, `[context.<id>]`,
+  `[[rule]]`, `[rule.write]`, rule-level `clear`, `gate`, and `escape`, and
+  `[dump]`. `[model].version = 1` is the only accepted format version. The RDR
+  and kata fixtures, re-authored to this layout, are the canonical examples
+  implementation tests must promote. Rejected: a tag-side `accessor`
+  reference, because `keys` on the capability table already binds the pair
+  and a second copy can disagree; rejected: `[accessors.<id>]` with a `mode`
+  field, because one-capability-per-entry is then a validation rule rather
+  than a shape the strict decoder refuses.
 - **Naming** — the canonical source artifact name is "transition model"; the
   canonical rendered view is "expanded transition table." Tag keys are exact
   byte strings with no folding, and the recognized-provenance tag is the
@@ -901,6 +1030,12 @@ identifiers are an API surface, not message text.
   rejected because it launders missing state into an escapable `no_match`
   (JDR 0001 §D2). Lint rejects ambiguous ordinary overlaps and ambiguous escape
   overlaps before runtime.
+- **Routing key** — an atom reaches `Match` or the guard by its authored
+  block, never by its operator (JDR 0001 §D6). Match blocks admit `eq` and
+  `in`; everything else there is a load refusal. Rejected: operator-keyed
+  routing, because it makes the author's block advisory and turns an `eq`
+  guard over an optional key into a silent non-candidate — the masking the
+  kernel exists to forbid.
 - **Outcome binding** — a rule's outcome is the single `recognized` atom in its
   **match blocks** (local `match` plus inherited context `match`), lifted into
   the row's outcome field. The extent is the narrow one the Normative Contracts
@@ -917,9 +1052,9 @@ fixtures: two authorings of one model — differing in TOML key order, rule
 declaration order, or `eq`-versus-single-member-`in` spelling — must normalize
 to the same candidate-row set, compared as values over the full field list the
 dump contract carries (row identity, source locator, outcome, predicate atoms
-with block, next-state tags, writes, required-owned keys, escape failure
-classes), with the source locator's optional line/column detail excluded from
-the comparison.
+with block, gate ids, next-state tags, writes, required-owned keys, escape
+failure classes), with the source locator's optional line/column detail
+excluded from the comparison.
 
 The locator's **presence and its rule-identifying part are compared**, even
 though its line/column detail is not: excluding the whole field would let a
@@ -932,14 +1067,12 @@ The invariant is stated over the **normalized value, not the dump text**,
 because this RDR fixes the dump's field list and row ordering but does not
 define a dump grammar — no delimiter, escaping, quoting, or record separator.
 `dump` therefore has no specified inverse, and a textual round-trip is not
-claimed. Three sites make the rendered form lossy today and would each have to
-be closed by any later RDR that defines a re-readable dump: the `<clear>`
-sentinel is not reserved in the tag-value space, so an authored value of
-`<clear>` renders identically to a cleared tag; set-valued and multi-entry
-fields are rendered with unescaped separators; and the expansion suffix has no
-reserved separator, so a rule id containing it makes `(rule id, suffix)`
-unrecoverable from the rendered identity. Rendering is a review surface here,
-and the normalized value is the contract.
+claimed. One site makes the rendered form lossy today and would have to be
+closed by any later RDR that defines a re-readable dump: set-valued and
+multi-entry fields are rendered with unescaped separators. (The `<clear>`
+sentinel is reserved and the suffix separator is banned from every string it
+joins, so those two renderings are unambiguous.) Rendering is a review surface
+here, and the normalized value is the contract.
 Source rewrite is likewise out of scope for this RDR; a later rewrite-capability
 RDR must define its own source-preservation invariant before mutating authored
 TOML.
@@ -947,13 +1080,13 @@ TOML.
 #### Conditional Mini-Checks
 
 **`fidelity`** — the chain's invariant holds over the normalized value; the
-rendered form is lossy at three named sites and carries no inverse.
+rendered form is lossy at one named site and carries no inverse.
 
 | Operation | Invariant | Lossy exemptions |
 | --- | --- | --- |
-| parse (TOML → source) | none claimed — comments, key order, and whitespace are dropped by design | source rewrite out of scope |
-| normalize (source → rows) | **value identity**: key order, rule order, and `eq`/single-member-`in` spelling all normalize to one candidate-row set | contexts flattened; `recognized` atom lifted out; `in` expands 1→N; set literals member-sorted; `all`/`unless` merged with block retained |
-| dump (rows → text) | fixed field list + total row order; every field present, columns reorderable | **no grammar**: `<clear>` unreserved in the value space; separators unescaped; suffix separator unreserved |
+| parse (TOML → source) | none claimed — comments, key order, and whitespace are dropped by design; `[model.metadata]` carried verbatim | source rewrite out of scope |
+| normalize (source → rows) | **value identity**: key order, rule order, and `eq`/single-member-`in` spelling all normalize to one candidate-row set | contexts flattened; `recognized` atom lifted out; every multi-member match-block `in` expands 1→N (product across atoms); set literals member-sorted; `match`/`all`/`unless` merged with block retained |
+| dump (rows → text) | fixed field list + total row order; every field present, columns reorderable | **no grammar**: separators unescaped (`<clear>` reserved and `#` banned from identity parts, so those render unambiguously) |
 | read-back | **not claimed** — no inverse is specified | charted to a successor dump-format RDR |
 
 **`disposition`** — routing is by arity: single-rule → load (this RDR),
@@ -964,8 +1097,9 @@ rather than single-rule (Normative Contracts); it stays this RDR's.
 | Input class | Bucket | Owner | Silent vs loud |
 | --- | --- | --- | --- |
 | malformed TOML, unknown schema field, unsupported/duplicate version or model id | load | this RDR | loud, stable category |
-| unknown/cyclic context, unknown tag, unknown accessor, write to non-owned tag | load | this RDR | loud, stable category |
-| malformed predicate atom, escape declaration, outcome binding, alphabet; `reserved_tag_key` | load | this RDR (0008 for the reserved key) | loud, stable category |
+| unknown/cyclic context, unknown tag, unknown accessor, malformed accessor declaration/binding, write to non-owned tag, malformed initial declaration | load | this RDR (0004 supplies accessor semantics) | loud, stable category |
+| malformed tag declaration, malformed predicate atom (incl. literal outside domain, non-`eq`/`in` under a match block), reserved tag value, escape declaration, outcome binding, alphabet; `reserved_tag_key` | load | this RDR (0003 supplies the declaration/domain rules; 0008 the reserved key) | loud, stable category |
+| missing `[initial]` / `terminal`, terminal context on a non-owned tag | lint | RDR 0006 | loud, blocking |
 | overlap, gap, dead row, read-before-write, ambiguous expansion | lint | RDR 0006 | loud, blocking |
 | expansion counts per rule | lint | RDR 0006 | reported, non-blocking; no threshold here |
 | `unmodeled_outcome`, `owned_state_unavailable`, `guard_unevaluable` | kernel refusal | RDR 0001 | loud; the last two are never escapable |
@@ -986,7 +1120,7 @@ step; witness values from `evidence/spikes/output.txt`.
 | --- | --- | --- |
 | load fixture | alphabet non-empty, dup-free, no empty string; version = 1 | `outcomes=round-clean,verdict-flapping,reconcile-block,finalized` — holds |
 | normalize | outcome lifted; per-atom block retained; `RequiresOwned` = writes ∪ clears | `continue-prelock … atoms=[…profile.eq=small@unless…] requires_owned=[iter,stage]` — holds |
-| expand `in` | one row per member; suffix only where the rule expands | `terminal-archive#finalized` / `#verdict-flapping` — holds; the spike suffixes on expansion count (`main.go` `if len(outcomes) > 1`), matching the contract, so `eq`/single-member-`in` equivalence is witnessed by construction but has no fixture row — the permutation test owes it |
+| expand `in` | one row per member of every multi-member match-block `in`; suffix only where the rule expands | `terminal-archive#finalized` / `#verdict-flapping` — holds for the `recognized` atom; the spike suffixes on expansion count (`main.go` `if len(outcomes) > 1`), so `eq`/single-member-`in` equivalence is witnessed by construction but has no fixture row. The spike does **not** expand `large-prelock`'s `profile.in` (it predates §D6), so the general expansion and its sequence suffix are owed with A1 |
 | escape row | no write block or clear list; `RequiresOwned` empty | `draft-no-match-escape … next=[] write=[] requires_owned=[]` — holds |
 | dump order | rows by identity tuple; locator excluded | three runs byte-identical — holds |
 | resolve, sibling gate | unevaluable survivor refuses despite a decidable sibling and an escape row | **no witness possible in the current fixture** — every outcome binds exactly one transition row; closed by the MVV's two-sibling requirement |
@@ -999,26 +1133,86 @@ booked as needs-verification items for Stage 6, not left as silent assumptions.
 Illustrative sparse source shape, not a locked schema:
 
 ```toml
-[context.draft]
-status.eq = "Draft"
+outcomes = ["round-clean", "verdict-flapping"]
+terminal = ["archived"]
+
+[model]
+id = "rdr"
+version = 1
+
+[initial]
+status = "Draft"
+stage = "propose"
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final"]
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["propose", "prelock", "archive"]
+
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large", "foundational"]
+
+[tags.iter]
+provenance = "owned"
+kind = "int"
+min = 0
+
+[tags.finalized_at]
+provenance = "observed"
+kind = "string"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+
+[read.rdr-status]
+role = "rdr"
+path = "rdr.status"
+keys = ["status", "stage", "profile", "iter"]
+timeout = "2s"
+
+[write.rdr-status]
+role = "rdr"
+path = "rdr.status"
+keys = ["status", "stage", "iter"]
+timeout = "2s"
+read_back = true
+
+[gate.rdr-lock]
+role = "rdr"
+path = "rdr.lock"
+keys = ["status"]
+timeout = "2s"
+
+[context.draft.match.status]
+eq = "Draft"
 
 [context.prelock]
 inherits = "draft"
-stage.eq = "prelock"
+[context.prelock.match.stage]
+eq = "prelock"
+[context.prelock.match.profile]
+in = ["large", "foundational"]    # expands: one row per member
 
 [[rule]]
 id = "prelock-flapping-cap"
 use = ["prelock"]
-
-[rule.match]
-recognized.eq = "verdict-flapping"
-
-[rule.guard.all]
-iter.lt = 3
-
-[rule.guard.unless]
-profile.eq = "small"
-
+gate = ["rdr-lock"]
+[rule.match.recognized]
+eq = "verdict-flapping"
+[rule.guard.all.iter]
+lt = 3
+[rule.guard.all.finalized_at]
+exists = false
+[rule.guard.unless.profile]
+eq = "small"
 [rule.write]
 stage = "prelock"
 
@@ -1026,9 +1220,8 @@ stage = "prelock"
 id = "draft-no-match-escape"
 use = ["draft"]
 escape = ["no_match"]
-
-[rule.match]
-recognized.eq = "round-clean"
+[rule.match.recognized]
+eq = "round-clean"
 ```
 
 ### Capability Dependencies
@@ -1037,9 +1230,9 @@ recognized.eq = "round-clean"
 | --- | --- | --- | --- |
 | Stateless exact-one resolution | RDR 0001 | Implemented | This RDR must provide normalized candidate rows, outcome binding, and tag writes the kernel can evaluate. |
 | Fixed predicate operators and tag type model | RDR 0003 | Pending | This RDR names predicate slots and carries declarations but does not own the operator grammar or declaration semantics. |
-| Accessor references and safe read-back | RDR 0004 | Pending | This RDR may reference accessors but does not execute them. |
+| Accessor execution and safe read-back | RDR 0004 | Pending | This RDR authors the capability tables, the `keys` binding, and rule-level gate references, and validates the bindings; RDR 0004 owns execution, `role`/`timeout`/`read_back` semantics, and what a `<clear>` write and its read-back mean. |
 | CLI parse/lint output | RDR 0005 plus existing respond gateway | Pending | Failures must map to the CLI output contract. |
-| Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks. |
+| Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks, including the declared `[initial]` root and `terminal` stop set (RDR 0006 A6). |
 | Guard seam, atom shape, existence constants, gate ordering | RDR 0007 | Final, kernel reshape unimplemented | Normalizer emits per-atom block and the kernel's `OpExists`/`LiteralTrue`/`LiteralFalse`; derives `RequiresOwned`. The constants and the atom-shaped row do not exist in `internal/resolve` yet, so Phases 2–3 sequence behind that reshape (Prerequisites). |
 | Reserved recognized tag key | RDR 0008 | Final | Declaration named `recognized`; `reserved_tag_key` joins this RDR's category set. |
 | Escape-row shape conformance | RDR 0009 | Final | Escape rules carry no write block or clear list; normalized escape rows render write-free. |
@@ -1264,29 +1457,31 @@ TOML can carry the same semantics.
   permutes rule declaration order and asserts the normalized value is
   unchanged, so a later identity change cannot reintroduce a positional
   tiebreak unnoticed.
-- **Risk**: This RDR is the cluster's only unlocked document — 0001 is
-  `Implemented` and 0003, 0004, 0005, 0006, 0007, 0008, 0009 are `Final` — so
-  the producer locks *after* its consumers, inverting the dependency order.
-  RDR 0009 twice cites "RDR 0002's **Final** escape-rule prohibition" and rests
-  its enforcement argument on it, and RDR 0008's normative block still asserts
-  "nothing in this RDR or RDR 0002 forbids that alphabet entry" about the
-  empty-string outcome, which this RDR now **does** forbid and which A8 leans on
-  as its sole barrier. The decisions are compatible — 0008 explicitly scoped
-  itself out ("not this RDR's to rule on") — so this is stale peer *fact*, not
-  a contract conflict, and RDRs are never amended.
-  **Mitigation**: Every contract this pass changed is checked against the Final
-  peers' verified assumptions before implementation via
-  `/rdr-cluster-reconcile`, which is the mechanism that owns cross-RDR drift.
-  Routed there by the cove lens (CV-020, CV-021) and carried here so the
-  obligation survives lock.
+- **Risk**: This RDR is the cluster's wire-format producer and locks after
+  several of its consumers (0003, 0004, 0006, 0007, 0008, 0009 are `Final`),
+  so a layout or routing change here can leave a peer's cited fact stale.
+  **Mitigation**: The layout, routing key, and sentinel are fixed by JDR 0001
+  §D5–§D7 and this RDR cites them rather than deriving them; cross-RDR drift
+  is checked by `/rdr-cluster-reconcile` before implementation, and peers
+  absorb by citation at their own re-lock.
+- **Risk**: A `keys` binding that must cover every declared key would make
+  `recognized` and caller-supplied `--tag` keys unauthorable.
+  **Mitigation**: The binding validation is provenance-scoped — exactly one
+  reader per owned key, at most one per observed key, none for `recognized` —
+  and scenario 3 carries a fixture for each arm.
 
 ### Failure Modes
 
 Malformed TOML, unknown schema fields, unresolvable or cyclic context
-references, malformed predicate atoms, malformed escape declarations, malformed
-outcome bindings, a misnamed recognized declaration, or a write to an undeclared
-or non-owned tag fail at load/validation time with stable CLI errors — each is
-decidable from one rule plus the declarations. A row gap, overlap, dead row,
+references, malformed tag or accessor declarations, an accessor binding that
+leaves an owned key unread or a written key unwritten, malformed predicate
+atoms (including a non-`eq`/`in` operator under a match block or a literal
+outside its domain), the reserved `<clear>` value authored as a tag value,
+malformed escape declarations, malformed outcome bindings, a malformed
+`[initial]` assignment, a misnamed recognized declaration, or a write to an
+undeclared or non-owned tag fail at load/validation time with stable CLI
+errors — each is decidable from one rule plus the declarations. A missing root
+or stop set is RDR 0006's blocking finding. A row gap, overlap, dead row,
 read-before-write condition, or ambiguous expansion requires comparing
 normalized rows and is therefore an RDR 0006 lint failure before the model is
 accepted. Expansion counts are a lint diagnostic reported per rule, not a
@@ -1300,16 +1495,14 @@ surviving escape row, and the gate refusals are never modeled.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A2, A7 re-verified; A8 resolved).
-  A1–A8 are terminal. **A9–A14 are `Pending` by deliberate Stage 6 disposition,
-  every one of them a DOWNGRADE with a named MVV assertion**, not an unexamined
-  gap: A9/A12 are blocked on RDR 0007's kernel reshape (below) and are
-  unverifiable before it lands; A10's decidability half is source-verified and
-  only its paired-document behavior is owed; A11/A13/A14 are contract clauses
-  the review rounds introduced whose oracles now exist in Testing Strategy
-  scenarios 2 and 3 but whose fixtures are owed at implementation. None is
-  load-bearing for a *pre-lock* MVV assertion; each is survivable per its
-  "If wrong".
+- [ ] All Critical Assumptions verified. A1 is re-verified by re-authoring
+  the spike fixtures to the §D7 layout and re-running the spike (Stage 4).
+  A9–A14 are `Pending` with named MVV assertions: A9/A12 are blocked on RDR
+  0007's kernel reshape (below); A10's decidability half is source-verified
+  and only its paired-document behavior is owed; A11/A13/A14 have oracles in
+  Testing Strategy scenarios 2 and 3 whose fixtures are owed at
+  implementation. None is load-bearing for a *pre-lock* MVV assertion; each is
+  survivable per its "If wrong".
 - [ ] RDR 0007 is the normative home of the atom shape and the existence
   constants this RDR's normalizer emits. RDR 0007 is `Final`, so the
   *specification* is settled — but its kernel reshape is unimplemented, and the
@@ -1366,16 +1559,20 @@ one-candidate-per-outcome fixture can never exercise "an unevaluable survivor
 refuses even though a decidable sibling and a modeled escape both exist," which
 is the property this RDR's row shape exists to support.
 
-**The spike fixtures do not yet carry those siblings, and the MVV requirement
-wins over the promote-verbatim mandate.** The current RDR fixture binds
-`round-clean` on one ordinary rule and one escape rule, so no two *ordinary*
-candidates ever contend — which is why the desk trace records "no witness
-possible in the current fixture" for the sibling-gate row. Promotion is
-therefore **extend-then-promote**: the production fixture is the spike fixture
-plus a second ordinary rule binding an outcome one other ordinary rule already
-binds. The Load-Bearing Decisions' "canonical examples" clause fixes the field
-layout and the authoring idiom those fixtures demonstrate, not their row census;
-a fixture may not be narrowed on promotion, only extended.
+**The spike fixtures predate the §D7 layout and do not yet carry those
+siblings; the MVV requirement wins over the promote-verbatim mandate.** The
+current RDR fixture authors `[accessors.<id>]`, a tag-side `accessor`
+reference, and no `[initial]`/`terminal`, and binds `round-clean` on one
+ordinary rule and one escape rule, so no two *ordinary* candidates ever
+contend — which is why the desk trace records "no witness possible in the
+current fixture" for the sibling-gate row. Promotion is therefore
+**re-author, extend, then promote**: the production fixture is the spike
+fixture re-authored to the closed layout (Stage 4, A1), plus a second ordinary
+rule binding an outcome one other ordinary rule already binds, whose guard
+carries an `eq` atom over an optional (`required` unset) owned key. The
+Load-Bearing Decisions' "canonical examples" clause fixes the authoring idiom
+those fixtures demonstrate, not their row census; a fixture may not be
+narrowed on promotion, only extended.
 
 **Every oracle must have a failing control.** An assertion that passes by
 absence-of-error, exit-0, or fixture-name match does not discharge an MVV item:
@@ -1408,10 +1605,11 @@ either — it is satisfied by the defect it was meant to catch.
 
 ### Phase 1: Fixture and Schema Spike
 
-Name the minimal sparse TOML field layout and encode representative RDR and kata
-rules, including shared contexts, one self-loop, one rewind, one accessor
-reference, one profile-dependent branch, one explicit escape row, and one
-multi-tag write.
+Re-author the RDR and kata fixtures to the closed §D7 layout — capability
+tables with `keys`, `[initial]`, `terminal`, `[model.metadata]`, the type-model
+keys — keeping shared contexts, one self-loop, one rewind, one gate reference,
+one profile-dependent branch that expands under a match-block `in`, one
+explicit escape row, and one multi-tag write.
 
 ### Phase 2: Normalizer and Dump
 
@@ -1422,9 +1620,12 @@ ordering and source rule ids.
 
 ### Phase 3: Parser and Validation Skeleton
 
-Add validation rules for declarations, the reserved `recognized` name, rule
-ids, context references, predicate atoms, outcome bindings, write targets,
-explicit clears, escape declarations, and expansion-count diagnostics.
+Add validation rules for tag and accessor declarations, the provenance-scoped
+`keys` bindings, the reserved `recognized` name and `<clear>` value, rule ids,
+context references, `[initial]` assignments and `terminal` ids, predicate
+atoms (including the match-block operator restriction and domain membership),
+outcome bindings, gate references, write targets, explicit clears, escape
+declarations, and expansion-count diagnostics.
 
 ### Phase 4: Resolver Handshake
 
@@ -1460,30 +1661,32 @@ MIT. No production dependency is added until implementation.
 Implementation tests must promote the Resolve spike into production fixtures:
 
 1. **Scenario**: Parse the RDR and kata sparse TOML fixtures from `docs/rdr/0002-transition-table-as-reviewable-data/evidence/spikes/` into typed source structs.
-   **Expected**: Tag declarations (including `[tags.recognized]`), root recognized-outcome alphabets, shared-context inheritance, accessor references, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement.
+   **Expected**: Tag declarations (including `[tags.recognized]` and the seven type-model keys), root recognized-outcome alphabets, `[initial]` and root `terminal`, `[model.metadata]` carried verbatim, `[read.*]`/`[write.*]`/`[gate.*]` tables with `keys`, rule-level `gate` lists, shared-context inheritance, positive/negative guards, explicit clears, escape declarations, and multi-tag writes decode without ambiguous field placement under strict decoding.
 2. **Scenario**: Normalize the RDR fixture's `continue-prelock`, `reconcile-rewind`, `terminal-archive`, and `draft-no-match-escape` rules and the kata fixture's `review-accepted` and `review-needs-work` rules.
-   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `in` atom expands to two rows carrying the outcome literal as their expansion suffix. The normative fixture for this scenario is `evidence/spikes/output.txt`.
+   **Expected**: Candidate rows retain source rule ids/source locators, inherited predicates are expanded, each atom reports its authored block (`match`/`all`/`unless`), the single `recognized` atom is lifted into the row's outcome field and absent from the predicate set, `RequiresOwned` equals the sorted write-plus-clear key set (empty on the escape row), gate ids are carried, escape rows retain their modeled failure class list — from which the derived `escape` kind is computed — and carry neither writes nor next-state tags, and writes are deterministic. `terminal-archive`'s `recognized.in` expands to two rows whose suffix is the one-element sequence of the outcome literal; `continue-prelock`, inheriting `large-prelock`'s `profile.in = ["large", "foundational"]`, expands to two rows carrying `profile.eq=<member>@match` and the member as their suffix; a rule with two multi-member match `in` atoms yields their product with a two-element suffix in atom sort order. The normative fixture for this scenario is the re-authored `evidence/spikes/output.txt` (Stage 4, A1).
    **The no-alias obligation on next-state tags and writes is not assertable by value comparison** — the two fields hold equal sets under this RDR's authoring surface, so an aliased pair and an independently built pair compare equal. On `main` both are `[]Tag` slices, so an alias also shares a backing array and a later mutation of one would silently move the other. Enforcement is by review of the normalizer, or by a test that mutates one field and asserts the other is unchanged.
    **Additionally**, atom-set semantics are asserted positively, since these shapes must *survive* load rather than be refused: two inherited contexts contributing the same key and operator with **different literals** yield **two** atoms in the normalized set, not one — asserted by count and by value, with the contexts listed in both `use` orders to prove the result is order-independent (a merge keyed on `(block, key, operator)` drops one and passes a count-only check on a single ordering); a set-valued literal whose member contains a space normalizes to a member sequence, so `["needs work"]` and `["needs", "work"]` are **distinct** atoms; and a rule authoring one atom in both `all` and `unless` loads successfully as two atoms and is reported by lint as a dead rule, not refused at load.
    **The idempotence mirror of that assertion is required too (A13)**: a rule and an inherited context contributing a **byte-identical** `(block, key, operator, literal)` atom collapse to **exactly one** atom, asserted by count on that key. Without it a normalizer that de-duplicates nothing passes every control above, since they only ever count the two-distinct-literal case.
    **Escape expansion under `in` is asserted here (A11)**: the extended fixture carries an escape rule binding its outcome with `in` over two alphabet members, and normalization must yield **two** escape rows carrying distinct expansion suffixes, each with an empty write set and each retaining the modeled failure-class list. The current spike fixture's `draft-no-match-escape` binds with `eq`, so this shape has no captured witness and is owed at implementation.
-   **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty. The kata fixture's `status.eq=closed@unless` atom is the discriminating case — an equality operator that must route to the guard because its block is `unless`. Like the rest of Phase 2 this assertion is unsatisfiable until RDR 0007's reshape lands (Prerequisites).
-3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, and a missing root outcome alphabet.
-   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. Nine categories are already witnessed by the spike, one refusal per mutated fixture, in `evidence/spikes/negative-cases.txt`: unsupported version, empty-string alphabet member, duplicate rule id, unknown written tag, write to an observed tag, escape rule carrying a write block, `exists` with a non-boolean literal, an outcome literal outside the alphabet, and a recognized declaration misnamed `outcome`. The remainder are owed at implementation.
+   **Handoff routing is asserted as total and disjoint (A12)**: constructing the `resolve.Row` for each normalized RDR-fixture row, the union of `Match` and the guard's atoms equals the normalized atom set and their intersection is empty, and every `Match` atom carries block `match`. The discriminating cases are an `eq` atom under `guard.all` (the extended fixture's optional-key guard) and the kata fixture's `status.eq=closed@unless` — equality operators that route to the guard because of their block. Like the rest of Phase 2 this assertion is unsatisfiable until RDR 0007's reshape lands (Prerequisites).
+3. **Scenario**: Validate one malformed variant per load-time category — unknown tag written, unknown tag matched, unknown context, cyclic context inheritance, writes to non-owned tags, unknown accessors, unsupported versions, unknown schema field, malformed predicate atoms (unknown operator; `exists` with a non-boolean literal), malformed escape declarations (an empty write block on an escape rule, and separately an escape rule carrying a `clear` list — the normalizer is the only enforcement point for a write-free escape row, so each shape needs its own control), a rule with zero or two `recognized` atoms, a `recognized` atom authored under `guard.all` and one under `guard.unless`, a rule id containing `#` and an alphabet member containing `#`, an outcome literal outside the alphabet, an alphabet containing the empty string, a duplicate alphabet member, an empty alphabet, an owned declaration named `recognized` and a recognized declaration named `outcome`, a duplicate rule id, a duplicate model id (a **pair** of documents sharing a `model id`, loaded into one invocation — the only surface on which the category is decidable), an ordinary rule carrying no write block, a missing root outcome alphabet, a `lt` atom and separately an `exists` atom under `[rule.match]` (match-block operator restriction), a `#` inside a match-block `in` member, a predicate literal outside the tag's declared `domain`, a tag declaration RDR 0003's rules reject (`domain` on a `kind` that admits none), `<clear>` authored as a write value, as an `[initial]` value, and as a predicate literal, an `[initial]` key that is observed, an owned key served by zero readers and separately by two, a written key with no writer, a writer whose `keys` names an observed tag, `recognized` in a reader's `keys`, an accessor entry missing `timeout`, a rule whose `gate` names an id declared only under `[read.*]`, an escape rule carrying a `gate` list, and a `terminal` entry naming no context. Positive controls in the same fixture set: an observed key served by no reader loads (JD-9), and a model with no `[initial]` loads and is left to lint.
+   **Expected**: Each variant is refused with the **one** category its mutation targets and no other — the assertion is on the category, not the message text, so an implementation collapsing several categories into one code fails. Ambiguous overlap is deliberately absent from this scenario: it is cross-row and therefore an RDR 0006 lint finding (scenario 4), not a load failure. Nine categories are witnessed by the pre-§D7 spike, one refusal per mutated fixture, in `evidence/spikes/negative-cases.txt`: unsupported version, empty-string alphabet member, duplicate rule id, unknown written tag, write to an observed tag, escape rule carrying a write block, `exists` with a non-boolean literal, an outcome literal outside the alphabet, and a recognized declaration misnamed `outcome`; those fixtures are re-authored with A1. The remainder are owed at implementation.
    **The version gate's precedence needs its own fixture (A14), separate from the `unsupported version` category fixture above.** That fixture is a v1-shaped document with a bad version value, which trips the category under *either* check ordering and therefore witnesses nothing about precedence. The precedence control is a **v2-shaped** document — `version = 2` plus a v2-only key the strict decoder would reject as an unknown schema field — asserted to refuse `unsupported version` and **not** `unknown schema field`. This is the only ordering this RDR fixes normatively, so it is the only ordering that gets an oracle.
-4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
+4. **Scenario**: Run `internal/resolve::Resolve` over one matching ordinary tag-set in which every sibling candidate's guard is decidable, one tag-set with no ordinary match but one matching `no_match` escape row, and one tag-set in which a sibling candidate's guard is unevaluable because its `guard.all` carries an `eq` atom over an optional owned key the view does not hold — all three drawn from the fixture's two same-outcome sibling rows. Separately, run RDR 0006's lint over a deliberately overlapping variant.
    **Expected**: The matching ordinary tag-set resolves to one transition row; the no-match tag-set resolves to the modeled escape disposition; the unevaluable-sibling tag-set refuses `guard_unevaluable` even though a decidable sibling and a `no_match` escape row exist; zero or multiple survivors without exactly one surviving escape row are refusals and never fall back to row order. The overlapping variant is reported by lint as an ambiguous overlap before the model is accepted, naming both rows.
 5. **Scenario**: Normalize and dump semantically identical variants of the **RDR** fixture — one with its TOML keys authored in a different order, one with its `[[rule]]` blocks declared in a different order, and one spelling a single-outcome binding `in = ["x"]` where the original spells `eq = "x"` — and dump the same fixture repeatedly in one process and across processes.
-   **Expected**: The normalized value is identical in every case because rows sort by the identity tuple and atoms/next tags/writes/required-owned keys/escape classes sort by key, and because a single-member `in` takes no expansion suffix; repeated dumps are byte-identical despite Go's randomized map iteration. Rule-order permutation is what excludes a positional tiebreak. Partially witnessed in `evidence/spikes/negative-cases.txt` (reordered **kata** fixture, matching SHA-256) and by three consecutive byte-identical runs recorded under Performance Expectations; the RDR-fixture permutations and the `in`/`eq` equivalence are owed at implementation.
+   **Expected**: The normalized value is identical in every case because rows sort by the identity tuple and atoms/gate ids/next tags/writes/required-owned keys/escape classes sort by key, and because a single-member `in` contributes nothing to the expansion suffix — on `recognized` and on any other match-block tag alike; repeated dumps are byte-identical despite Go's randomized map iteration. Rule-order permutation is what excludes a positional tiebreak. Partially witnessed by the pre-§D7 spike in `evidence/spikes/negative-cases.txt` (reordered **kata** fixture, matching SHA-256) and by three consecutive byte-identical runs recorded under Performance Expectations; the RDR-fixture permutations and the `in`/`eq` equivalence are owed at implementation.
 6. **Scenario**: Normalize a rule carrying `exists = true` and one carrying `exists = false`, one carrying a non-boolean existence literal, and a variant spelling a declared tag `Status` where the declaration is `status`.
    **Expected**: Emitted atoms carry `resolve.OpExists` and `resolve.LiteralTrue`/`LiteralFalse` byte-for-byte, referencing the kernel constants directly rather than a local mirror — so this assertion compiles only once RDR 0007's reshape exports them (Prerequisites), and is owed at that point rather than satisfiable today. The non-boolean literal is refused at load as a malformed predicate atom; the mis-cased reference fails `unknown tag` rather than folding. The RDR fixture's `continue-prelock` guard carries the `finalized_at.exists=false@all` atom the spike emits; the spike mirrors the constants locally because the kernel does not yet export them.
 
 ### Performance Expectations
 
 Resolve evidence is functional rather than throughput-oriented. The spike
-normalizes representative RDR and kata sparse fixtures into seven deterministic
-rows — one explicit escape row and one rule that expands into two rows through
-an `in` atom on `recognized`. Three consecutive runs produced byte-identical
+(pre-§D7 layout; re-run owed with A1) normalizes representative RDR and kata
+sparse fixtures into seven deterministic rows — one explicit escape row and one
+rule that expands into two rows through an `in` atom on `recognized`; under
+the general expansion rule the same fixture yields one more row for
+`continue-prelock`. Three consecutive runs produced byte-identical
 output with SHA-256
 `c4be7447a241fb724632c53a9e5f39c7a9b5c7cc78e0a1e74ae4132271432a1b`, and a
 fixture with the same semantics authored in a different key order produced a
@@ -1513,8 +1716,11 @@ Responses: 0002-transition-table-as-reviewable-data/artifacts/gate.md (Gate PASS
   `::Resolve`, `::assemble`.
 - JDR 0001, `docs/jdr/0001-resolve-kernel-seam.md` — §D2 (gate-then-count),
   §D4 (kernel-enforced guard domain; normalizer emits existence constants),
-  §JD-3 (`RequiresOwned` producer), §JD-10 (reserved-key fixture rename;
-  recognized-tag totality).
+  §D5 (reserved `<clear>`), §D6 (block-keyed routing; general match-block
+  expansion), §D7 (closed layout: root/stop set, capability tables with
+  `keys`, type-model keys, write-replaces, `[model.metadata]`), §JD-3
+  (`RequiresOwned` producer), §JD-9 (`--tag` keys are observed), §JD-10
+  (recognized-tag totality), §JD-15/§JD-16/§JD-17 (interface record).
 - RDR 0007, Guard Predicate Totality — atom shape, `OpExists`/`LiteralTrue`/
   `LiteralFalse`, A21/A22, gate ordering.
 - RDR 0008, Recognized Tag Key Ownership — reserved `recognized` name and
@@ -1546,54 +1752,3 @@ Responses: 0002-transition-table-as-reviewable-data/artifacts/gate.md (Gate PASS
 - RDR and kata flow audits from the state-machine prior-art corpus.
 - Tool-fit assessment for FSM libraries as validation/visualization tools, not
   runtime orchestrators.
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-- **Cluster / date**: `0002-0009`, iteration 3, 2026-08-24 — report at
-  `docs/rdr/cluster-reconcile/0002-0009/iter-3/reconcile-report.md`; check at
-  `…/iter-3/answer-check-0002.md`.
-- **Peer pair**: 0002 × home (JDR 0001 §D5/§D6/§D7 answered §JD-15/§JD-16/
-  §JD-17 on 2026-08-24); pairs 0002×0003, 0002×0004, 0002×0006 raised them.
-- **Defect** (answer-vs-fences check failed — fenced text contradicts the
-  ratified answers):
-  - §JD-16 (§D6, block-keyed routing): the fenced routing clause
-    (`0002:693-717`) "splits … by operator" — `eq` on a declared tag → `Match`,
-    every other operator and every `unless` atom → guard — with the rationale
-    "equality in a guard defers a decidable check"; §D6(b) routes by the
-    authored block, admits `eq`/`in` (expanded per member) under match blocks,
-    refuses other operators there at load, and makes every guard-block atom a
-    guard atom regardless of operator. The fenced block vocabulary is
-    two-valued "(`all` or `unless`)" (`0002:539-545`); §D6 makes it
-    three-valued (`match`). The generalized `in` expansion touches the
-    outcome-only suffix / totality proof (`0002:623-631`, `751-755`; critique
-    N-5).
-  - §JD-17 (§D7, closed layout): the fenced layout enumeration and accessor
-    entry (`0002:430-441` — `[accessors.<id>]` with `mode`+`path`, id-only
-    validation) and the tag-side `accessor` reference (`0002:813-814`,
-    `348-351`) are retired by §D7(ii) (`[read.<id>]`/`[write.<id>]`/
-    `[gate.<id>]`, `keys` as the binding, `role`/`timeout`/`read_back`);
-    `[initial]`/`terminal`, the seven type-model keys, `[model.metadata]`, the
-    write-replaces clause, the two declaration/literal load categories and the
-    binding validations are absent; `evidence/spikes/rdr-fixture.toml` is
-    non-conforming.
-  - §JD-15 (§D5, reserved `<clear>`): unfenced only — Round-Trip prose
-    "sentinel is not reserved" (`0002:936-938`), fidelity table (`0002:956`),
-    "lossy at three named sites" (`0002:949-950`); the `<clear>`-as-authored-
-    value load category is absent.
-- **Target re-entry stage**: 3 (Refine) — restate the fences to the answers;
-  Stage 4 then re-verifies the named assumptions, forward through 6 → 7.
-- **Re-entry scope**: STAGE-SCOPED — bounded `re-verify A1, A9, A12` (layout
-  representability; the unified block-retaining atom; Match/guard routing
-  totality). The chosen approach (sparse TOML wire format + a normalizer that
-  mints kernel rows) holds; no foundational assumption is voided, so
-  FULL-FLOW is not earned.
-- **Direction**: the home is the authority — 0002 conforms; cite §D5/§D6/§D7,
-  do not restate their derivation. Open at the home, to settle while
-  restating: §D7(ii)'s "key served by zero readers is refused" must not refuse
-  `recognized` (kernel-supplied) or `--tag` keys (§JD-9) — see the D7 note.
-  Sweep on the way (cosmetic, recorded iter-2/3): 0002 restates 0008's naming
-  rule and is stale on JD-10 (`0002:~199-204`, `1271-1276`); §D2
-  gate-then-count restated in prose (`325-329`, `384-393`); 0006's dead-rule /
-  scenario-14 fixture needs a `recognized`-absent atom 0002 refuses
-  (pairwise-0008-0005-0006 F6) — state the authorable form. No
-  joint-decision qualifier carries forward (all three answered).
