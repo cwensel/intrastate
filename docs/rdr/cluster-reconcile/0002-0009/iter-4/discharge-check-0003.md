@@ -1,0 +1,46 @@
+Model: claude-fable-5
+
+# Discharge check — RDR 0003 (guard-predicate-exhaustiveness), iteration 4
+
+Date: 2026-08-24. Read-only. Task B per `brief.md`. Evidence only; the gate dispositions.
+
+Inputs: `../iter-3/reconcile-report.md` §SPEC-DEFECT — RDR 0003 (RE-LOCK-ONLY, re-verify none, carries §JD-18, §JD-16 cleared); `../iter-3/answer-check-0003.md`; home `docs/jdr/0001-resolve-kernel-seam.md` §D6, §D7, JD-16/17/18 (`567600f`); current `docs/rdr/0003-guard-predicate-exhaustiveness.md` (2182 lines, `31bb9e4`, re-locked 2026-08-24; refine `aa39d86`); `docs/rdr/README.md` (`ffaf897`); `0003-guard-predicate-exhaustiveness/artifacts/gate.md` (Gate PASS 2026-08-24). Line anchors are current-file lines.
+
+## 1. The named defect — fenced route "onto RDR 0006 findings" (old `0003:1065-1067`)
+
+**LANDED.** Successor is inside the ```normative fence at 0003:893-926 (the domain/kind agreement clause), lines 0003:915-925:
+
+> "Both are this RDR's rejection rules carried by RDR 0002's load categories (JDR 0001 §D7(iii)): the malformed declaration is a `malformed tag declaration`, the out-of-domain literal a `malformed predicate atom`. RDR 0006 mints nothing for either; RDR 0005 maps both onto the envelope under JDR 0001 §JD-8. The predicate semantic kinds this RDR owns (A4) name *which* rule fired within those categories."
+
+Home §D7(iii): "Two load categories in 0002, rules supplied by 0003: `malformed tag declaration` (kind/domain disagreement; before normalization completes) and `malformed predicate atom` (literal outside domain; after declarations load, before rows are yielded). 0006 mints nothing for either; 0005 maps them under §JD-8." Value-for-value agreement: category names, owner (0002), the "mints nothing" negative, and the §JD-8 mapping. Phase windows in the same fence (0003:910-915: "rejected by the declaration loader before normalization completes" / "rejected by guard parsing after the declarations have loaded and before rows are yielded") now match D7's windows exactly (iter-3 had noted 0003's "before resolution" as a superset; the re-lock tightened it to D7's bound).
+
+`grep -n "onto RDR 0006\|RDR 0006 finding\b"` over the current file: no hit. The phrase is gone.
+
+## 2. Other iter-3-named clauses (answer-check-0003 rows that were not CONSISTENT-as-is)
+
+| Iter-3 clause | Verdict | Current evidence |
+| --- | --- | --- |
+| Disposition-table rows "→ RDR 0006 finding → RDR 0005 envelope" (old 0003:1518-1520, unfenced) | LANDED | 0003:1387-1389 (unfenced table): "Predicate semantic kind (this RDR) → RDR 0002 load category (`malformed predicate atom`, `unknown tag`) → RDR 0005 envelope (§JD-8)"; "`literal-outside-declared-domain` (this RDR) → RDR 0002 `malformed predicate atom` → RDR 0005 envelope (§JD-8)"; "Declaration/kind disagreement (this RDR) → RDR 0002 `malformed tag declaration` → RDR 0005 envelope (§JD-8)". Phase column for the literal row now reads "Rejected at guard parse, after declarations load and before rows are yielded" — D7's window. |
+| A4 evidence line (old 0003:199) | LANDED | 0003:195: "those load-time rejections surface through RDR 0002's load categories (`malformed tag declaration`, `malformed predicate atom` — JDR 0001 §D7(iii)) … RDR 0006 owns graph-lint finding codes for non-exhaustive and overlapping row groups". |
+| `min`/`max` asserted, not cited (old 0003:958-966, fenced) | LANDED | Fence 0003:805-817: "an `int` declares a `{min..max}` bound — notation, not wire spelling: RDR 0002 spells the authored form as the two wire keys `min` and `max` (`0002::Normative Contracts`, the type-model clause; JDR 0001 §D7(iii)), and this RDR fixes their meaning — both endpoints are **inclusive**". Citation form, as D7's "Lands in 0003" asks. |
+| §D6 / JD-16 citation anchor absent | LANDED | Fenced participation clause 0003:990-996: "The authored block is what makes an atom a guard atom (JDR 0001 §D6): every atom under `guard.all` or `guard.unless` is a guard atom regardless of operator, `eq` included." Fenced match-keys clause 0003:998-1001: "(`[rule.match.*]` vs. `[rule.guard.*]`, routed by block per JDR 0001 §D6)". Also unfenced 0003:415-421, 1227; References 0003:2166. Status line 0003:14: "§JD-16 answered by §D6". |
+| Illustrative `optional = false` (old 0003:1634-1646) | LANDED | 0003:1504 (```toml fixture): "required = true          # always-present; contributes no {absent} assignment"; 0003:1522: "The key spellings above are RDR 0002's wire keys (JDR 0001 §D7(iii); A16)". `grep "optional = false"`: no hit. |
+| A16 evidence quoting 0002's superseded "optional accessor reference" (old 0003:519) | LANDED | 0003:478-483 now quotes re-locked 0002: "under `[tags.<tag>]`, beside `provenance`, with no accessor reference" — consistent with D7(ii) (`[tags.<tag>].accessor` removed). `grep "optional accessor"`: no hit. |
+| MVV Scenario 4 expected line "a predicate semantic kind that RDR 0006 can map to a lint finding" (old 0003:2277-2290, unfenced) | **NOT LANDED** (residue) | 0003:2093-2095 (unfenced, Validation §MVV): "Each failure is rejected before resolution with a predicate semantic kind that RDR 0006 can map to a lint finding and RDR 0005 can map to the structured CLI gateway." Unchanged wording. Home §D7(iii): "0006 mints nothing for either." The sentence is permissive ("can map"), not an assertion a scenario would test, and the same paragraph's phase text ("rejected before normalization completes") agrees with D7; iter-3 already flagged this line as "same note applies" but the re-lock did not sweep it. Unfenced; does not alter the meaning of the fenced rule (0003:915-925), which it now contradicts within the same document. |
+| Trade-offs "Error ownership" bullet | LANDED DIFFERENTLY (silent) | 0003:1478-1481 (unfenced): "RDR 0006 maps graph-level predicate failures to lint finding codes, and RDR 0005 maps those findings/refusals to the CLI envelope." Scoped to *graph-level* failures, which D7 leaves with 0006; does not name the two load categories either way. Not a contradiction. |
+| JD-17 absent from Status qualifier (iter-3 note) | MOOT | JD-17 is answered; the qualifier now names only §JD-18 (0003:9). The Status prose cites §D7(iii) directly (0003:13-14). |
+
+## 3. Structural checks
+
+- **Refinement Context section**: absent. `grep -n "Refinement Context"`: no hit; headings at 0003:6 Metadata, 25 Problem Statement, 29 Context, 41 Research Findings, 636 Proposed Solution, 1590 Alternatives, 1775 Trade-offs, 1825 Implementation Plan, 2006 Validation, 2154 Finalization Gate, 2158 References.
+- **Status line** (0003:9): `Final [joint decision → JDR 0001 §JD-18: conforming-view enforcer] [re-locked 2026-08-24 — Gate PASS. … §JD-16 answered by §D6. Four records remain open, none lock-blocking: A18 and A20 close on JDR 0001 §JD-18, and A15 and A21 are discharged by MVV Scenarios 3 and 4 at implementation.]`
+- **README Index row** (README.md:14): `| [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final [joint decision → JDR 0001 §JD-18] | High |` — **agrees** with the Status line (Final; single qualifier §JD-18; JD-16 dropped from both).
+- **§JD-18 carried**: qualifier present (0003:9); A18 `Pending` (0003:531 region, plan at 0003:547-550: "JDR 0001 **§JD-18** (open; siblings 0003 and 0007) decides …"); A20 `Pending` (0003:587-589); Implementation Plan unchecked boxes A18/A20 at 0003:1888-1898 route to §JD-18; References 0003:2172. Home JD-18 entry unchanged ("Open: which document states the view-level check and where it runs. Siblings: 0003, 0007.") — 0003 and home agree it is open.
+- **§JD-16 cleared**: not in the qualifier; home JD-16 says "0003 consistent … qualifier cleared" — agrees.
+- **Re-verify none** (RE-LOCK-ONLY): no Critical Assumption was required to re-verify. Observed states: A15, A18, A20, A21 `Pending` (all four named in the Status line as non-lock-blocking); every other record `Verified`. Refine commit `aa39d86` additionally closed A10/A12/A17/A19 against 0006 (gate.md:56 "A17 is now `Verified`") — additive closures, not re-verifications the disposition demanded.
+- **Gate record**: `artifacts/gate.md` names the discharge explicitly (gate.md:32-40: "The fenced clause at the old `0003:1065-1067` routed this RDR's two rejection rules onto *RDR 0006 findings*. JDR 0001 §D7(iii) decides otherwise … The RDR now routes exactly there — in A4's Evidence, in the `disposition` table's three rows, and in the load-category passage"). The gate's list of swept sites does not include MVV Scenario 4.
+- **Home contradiction check**: no current 0003 fenced clause contradicts §D6, §D7(iii), or the open JD-18. The single residue (0003:2094) is unfenced and disagrees with §D7(iii)'s "0006 mints nothing for either" only in a permissive "can map" clause.
+
+## 4. Summary
+
+The iter-3 SPEC-DEFECT is discharged in fenced text: the surfacing route now cites 0002's two load categories, states "RDR 0006 mints nothing for either", and pins the phase windows to D7's. All other iter-3-named sweeps landed (min/max citation, §D6 anchors, `required` spelling, A16 quote refreshed, disposition rows). One unfenced residue remains at 0003:2094 (MVV Scenario 4, "RDR 0006 can map to a lint finding"). Refinement Context absent; Status and README agree; §JD-18 carried; §JD-16 cleared on both sides.
