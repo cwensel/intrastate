@@ -83,9 +83,10 @@ instance body). -->
   category (`reserved tag key`, within its "including at
   minimum" extensible list). Narrows RDR 0002's
   `[tags.<tag>]` naming freedom for exactly one provenance
-  value, and invalidates its three canonical fixtures; JDR
-  0001 §JD-10 rules the rename ("rename them; there are no
-  users to migrate"). Narrows nothing in RDR 0001.
+  value, which invalidated the naming in its two canonical
+  fixtures — renamed at 0002's re-lock of 2026-08-23 per JDR
+  0001 §JD-10 ("rename them; there are no users to migrate").
+  Narrows nothing in RDR 0001.
 - **Seam Lineage**: `area:internal-resolve` (recognized-tag
   key identity at the RDR 0001 ↔ 0002 boundary) — no prior
   accretion.
@@ -140,10 +141,11 @@ exactly why this RDR needs a validation category where XState
 needs none. The prior art supports the *posture* (the carrier
 fixes the injected datum's name), not the *mechanism*. The
 in-repo evidence also cuts against treating the name as
-incidental: all three committed recognized-provenance
-declarations chose an author name (`outcome`, `outcome`,
-`rewind_target` — A4), so every author observed so far
-exercised the freedom this RDR withdraws. The stance still
+incidental: before RDR 0002's re-lock, all three committed
+recognized-provenance declarations chose an author name
+(`outcome`, `outcome`, `rewind_target` — A4), so every author
+observed before this rule exercised the freedom it withdraws;
+0002 has since renamed its two to `recognized`. The stance still
 holds, because a firing row with a diagnosable failure is what
 the author is ultimately after and a fixed name is the only
 branch that delivers it (Decision Rationale) — but it is a
@@ -246,15 +248,30 @@ at the same `area:internal-resolve` seam.
   Multi-recognizer or prior-step outcomes are out of scope
   here — they would first have to extend RDR 0001's `Input`
   contract (premortem P-2).
-- **Documented** — RDR 0002's Normative Contracts require
-  declaring every matched/written tag with provenance
-  (`owned`, `observed`, `recognized`) but never bind the
-  recognized declaration's *name*. `recognized` appears in
-  RDR 0002 exclusively as one of three provenance values,
-  never as a tag key, and no tag key named `outcome` appears
-  in the RDR 0002 body — so the two sides do not collide
-  today on any concrete spelling; the gap is unbound
-  authority, not a live incompatibility.
+- **Documented** — RDR 0002's Normative Contracts, as this
+  RDR was seeded against them, required declaring every
+  matched/written tag with provenance (`owned`, `observed`,
+  `recognized`) but never bound the recognized declaration's
+  *name* — the gap was unbound authority, not a live
+  incompatibility. Superseded on 0002's side at its re-lock
+  (2026-08-23): Final 0002 now binds the name in its own
+  fenced text, cites this RDR for the `reserved_tag_key`
+  category, and has renamed its canonical fixtures to
+  `[tags.recognized]` (A4, A12). The seam is closed on the
+  declaration side; what stays this RDR's is the kernel-side
+  ratification, the `Input`/`RequiresOwned` channel, and the
+  failure-payload contract.
+- **Documented** (Stage 4 re-entry, 2026-08-23) — Final RDR
+  0002 makes the `recognized` match atom the rule's mandatory
+  **outcome binding**: normalization lifts it out of the
+  predicate set into the row's outcome field, a `recognized`
+  atom authored under `guard.all` or `guard.unless` is refused
+  at load, and load is fail-fast — one refusal per document,
+  order unspecified beyond the version gate (RDR 0002 ->
+  Technical Design -> Normative Contracts; A9). The reserved
+  name therefore reaches the kernel as `Row.Outcome` (the
+  gate) and as the view tag `assemble` injects — never as a
+  `Row.Match` or guard atom minted by 0002.
 - **Documented** — RDR 0002's validation-failure contract is
   explicitly extensible: "stable data-level categories …
   including at minimum malformed TOML, unknown schema field,
@@ -315,12 +332,11 @@ at the same `area:internal-resolve` seam.
     0001's five refusal kinds — a different layer this RDR
     does not touch. Corroborating (A1d): `recognized` appears
     in RDR 0002 only as a provenance value, never as a tag
-    key, and both canonical fixtures name the
-    recognized-provenance tag `outcome`
-    (`0002-…/evidence/spikes/rdr-fixture.toml`,
-    `kata-fixture.toml`: `[tags.outcome]` /
-    `provenance = "recognized"`) — the name `recognized` is
-    unclaimed vacancy, not a collision.
+    key, and at verification both canonical fixtures named
+    the recognized-provenance tag `outcome` — the name
+    `recognized` was unclaimed vacancy, not a collision. 0002's
+    re-lock has since claimed it conformingly
+    (`[tags.recognized]` in both fixtures — A4).
   - **Scope limit — this covers the category list only**: the
     "including at minimum" fence lives in RDR 0002's
     *validation-category* normative block (RDR 0002 ->
@@ -348,6 +364,10 @@ at the same `area:internal-resolve` seam.
     engine mechanism carries this RDR's `Overrides` to a
     `Final` peer's implementation, so the handoff is now an
     explicit Prerequisite rather than an assumed traversal.
+    That Prerequisite is discharged in the cross-RDR-edit
+    form: Final 0002 (re-locked 2026-08-23) names
+    `reserved_tag_key (RDR 0008)` in its category block and
+    carries the naming rule in its own fenced text (A12).
   - **If wrong**: the `reserved tag key` category cannot be
     added by this RDR; enforcement must be re-homed or RDR
     0002 reopened, surfacing as a Stage 8.1 cross-RDR
@@ -433,74 +453,79 @@ at the same `area:internal-resolve` seam.
     and the QOC matrix, but the Decision Rationale's
     prior-art row weakens from "standard + engines" to
     "engines".
-- **A4 The reserved-key rule invalidates nothing at HEAD in
-  its *second* clause (no owned/observed tag is named
-  `recognized`) but its *first* clause invalidates every
-  committed recognized-provenance declaration in the repo —
-  three fixtures, each of which RDR 0002 designates a
-  canonical example.**
-  - **Status**: Verified (both clauses swept separately)
-  - **Method**: Source Search
-  - **Evidence**: The rule has two clauses with different
-    blast radii, so each is swept separately — a sweep of the
-    second alone licenses no conclusion about the first.
-    *Second clause* (no owned/observed named `recognized`) —
-    repo-wide whole-token sweep returns zero uses as a tag
-    *key* in owned/observed position. In Go table data the
-    literal key appears exactly once —
+- **A4 The reserved-key rule's *second* clause invalidates
+  nothing at HEAD (no owned/observed tag is named
+  `recognized`); its *first* clause has already been enforced
+  on RDR 0002's two canonical fixtures — renamed at 0002's
+  re-lock of 2026-08-23 — leaving exactly one committed
+  recognized-provenance declaration under an author name, in
+  RDR 0003's guard fixture, which is not a 0002 model and is
+  refused by 0002's loader on grounds prior to naming.**
+  - **Status**: Verified (re-verified at the Stage 4 re-entry
+    of 2026-08-23; both clauses swept separately)
+  - **Method**: Source Search + Spike
+  - **Corrects**: the pre-demotion text counted "three
+    violations at HEAD" and a six-site migration inventory
+    (`rdr-fixture.toml:25`, `kata-fixture.toml:22`,
+    `[rule.match.outcome]` at five sites). True when read,
+    false since 0002's re-lock performed the rename JDR 0001
+    §JD-10 ordered — the same escape class as A6/A11: a
+    point-in-time fact about a moving `Final` peer stamped
+    with no re-verification trigger. Withdrawn; ledger row
+    appended.
+  - **Evidence**: *Second clause* (no owned/observed named
+    `recognized`) — repo-wide whole-token sweep, unchanged:
+    the literal key appears in Go table data exactly once,
     `internal/resolve/fixtures_test.go::recognizedTagSensitiveTable`,
-    where it is a read-only **match pattern**
-    (`Match: {{Key: "status", …}, {Key: "recognized", Value:
-    "successful"}}`) against the tag `assemble` injects; that
-    fixture's `RequiresOwned` is `["status"]` and its
-    `NextTags`/`Writes` are `{Key: "status"}`, so the key
-    never occupies owned, observed, or write position.
+    as a read-only **match pattern** against the tag
+    `assemble` injects; its `RequiresOwned` is `["status"]`
+    and its `NextTags`/`Writes` are `{Key: "status"}`, so the
+    key never occupies owned, observed, or write position.
     *First clause* (a recognized-provenance declaration MUST
-    be named `recognized`) — **three violations at HEAD**, the
-    complete set of committed recognized-provenance
-    declarations: `0002-…/evidence/spikes/rdr-fixture.toml:25`
-    and `kata-fixture.toml:22` (both `[tags.outcome]`), and
-    `0003-…/evidence/spikes/guard-fixture.toml:36`
-    (`[tags.rewind_target]`). RDR 0002 Load-Bearing Decisions
-    names these "the canonical examples implementation tests
-    must promote" (RDR 0002 -> Technical Design,
-    Load-Bearing Decisions), so the rule's first
-    enforcement lands on the peer's own worked examples.
-  - **Migration inventory**: the three declarations above plus
-    **six** reference sites across all three fixtures —
-    `[rule.match.outcome]` at `rdr-fixture.toml:59,74,86` and
-    `kata-fixture.toml:47,57`, and
-    `[rule.guard.all.rewind_target]` at `guard-fixture.toml:72`.
-    The guard site belongs in the inventory for the same reason
-    the match sites do: RDR 0002's grammar puts
-    `[rule.match.<tag>]`, `[rule.guard.all.<tag>]`, and
-    `[rule.guard.unless.<tag>]` in one tag-predicate family
-    (RDR 0002 -> Technical Design, tag-predicate grammar), so a
-    renamed declaration carries every
-    one of them. Renaming a declaration without its guard
-    reference would leave an undeclared-tag reference that
-    trips RDR 0002's pre-existing `unknown tag` category — a
-    regression introduced *by* the migration, in a category
-    this RDR does not own.
-  - **Sub-question this surfaced, since closed (A9,
-    Verified)**: in the canonical fixture the
+    be named `recognized`) — on disk,
+    `0002-…/evidence/spikes/rdr-fixture.toml` and
+    `kata-fixture.toml` both declare `[tags.recognized]` /
+    `provenance = "recognized"`, and every predicate site is
+    `[rule.match.recognized]` (four in the RDR fixture, two in
+    the kata fixture); RDR 0002's Testing Strategy scenario 1
+    names `[tags.recognized]` and scenario 2 names the re-run
+    spike output `evidence/spikes/output.txt` as its normative
+    fixture. Re-running 0002's spike over both fixtures
+    reproduces that file byte-for-byte
+    (`docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-lifted-outcome.md`).
+    The one remaining recognized-provenance declaration under
+    an author name is
+    `0003-…/evidence/spikes/guard-fixture.toml`
+    `[tags.rewind_target]` with `[rule.guard.all.rewind_target]`.
+    It is not a 0002 model: it carries no root `outcomes`
+    alphabet and no `[rule.match.recognized]` on any rule, and
+    0002's spike refuses it at load — `refused: missing
+    recognized outcome alphabet`, the first category tripped
+    under fail-fast (it would also trip `reserved_tag_key`,
+    zero-outcome binding, and the guard-position refusal —
+    A9). It is RDR 0003's guard-grammar witness, and
+    reconciling it with 0002's layout is the 0002×0003 pair's
+    work (JDR 0001 §JD-16 siblings), not this RDR's.
+  - **Migration inventory: empty.** No rename remains for this
+    RDR's Phase 2. The rule's first clause debuts on 0002's
+    already-conforming fixtures, and 0002's own
+    `reserved_tag_key` refusal — witnessed by its spike's
+    `neg-recognized-misnamed.toml` case — is what would catch
+    a regression.
+  - **Sub-question this surfaced, since re-closed (A9,
+    re-verified)**: in the canonical fixture the
     recognized-provenance tag is *also* the outcome-gating
-    predicate — `[tags.outcome]` is matched by
-    `[rule.match.outcome] eq = "round-clean"` whose values are
-    exactly the root `outcomes` alphabet
-    (`rdr-fixture.toml:1,25,59`). Whether that predicate
-    normalizes into `Row.Match` or into `Row.Outcome` is not
-    stated in RDR 0002, but it *is* decidable against 0002's
-    own normalizer spike, which A9 ran: the predicate lands in
-    the candidate row's predicate set and the normalized row
-    has no outcome field at all. The rename is therefore
-    mechanical, and this migration inventory stands as
-    written.
-  - **If wrong** (the spike's normalization is not what 0002
-    implements): the fixture rename becomes a cross-RDR edit
-    routed to RDR 0002 rather than fixture work landing under
-    this RDR's Phase 2, and block 2's reference-position
-    fall-through needs the corresponding rewrite.
+    predicate. Final 0002 decides it in fenced text: the
+    `[rule.match.recognized]` atom *is* the rule's outcome
+    binding, lifted into `Row.Outcome`. The 2026-08-11 reading
+    that it "lands in the predicate set" and that the rename
+    was therefore mechanical is withdrawn with A9.
+  - **If wrong** (0002's fixtures regress to author names, or
+    0003's fixture is promoted as a 0002 model without
+    rework): the rename is 0002's or 0003's work under their
+    own fenced rules — 0002's `reserved_tag_key` refuses the
+    regression at load — and never fixture work under this
+    RDR's Phase 2.
 - **A5 The kernel's D3 precedence (`owned` > `observed` >
   `recognized`) can remain unchanged as the deterministic
   backstop, because a table that passes the reserved-key
@@ -670,26 +695,27 @@ at the same `area:internal-resolve` seam.
     clause covers the *guard-decidability domain rule*, and
     its `RequiresOwned` normative block is wholly semantic
     (what the field means, what it is not responsible for,
-    what diagnosis a listed key yields). Decisively, 0007
-    *itself* cites this RDR's rule approvingly as a peer's
-    name constraint — "The single input-side producer
-    obligation in the whole RDR set constrains one reserved
-    key *name*, not provenance origin: RDR 0008's 'Producers
-    of kernel `Input` MUST NOT supply an owned or observed tag
-    keyed `recognized`'" (RDR 0007 -> Critical Assumptions ->
-    A13 Evidence; anchored by assumption ID, not line, since
-    bare peer line numbers are what went stale for A6/A11).
-    0007 draws the
-    name/meaning line itself and places this clause on the
-    name side, so no concurrence is outstanding and no
-    reopening is implied.
+    what diagnosis a listed key yields). Final 0007 (re-locked
+    with §JD-8/§JD-18) no longer quotes this RDR's producer
+    sentence — its A13 now homes the caller-supplied-observed
+    exposure at JDR 0001 §JD-9 — and names this RDR only as a
+    seam whose transport §D1 settled (RDR 0007 -> Decision
+    Rationale -> Joint-check). Its `RequiresOwned` contract
+    stays wholly semantic and constrains no tag *name*, so the
+    name/meaning line holds without a concurrence sentence
+    from 0007; no reopening is implied. (Re-anchored at the
+    2026-08-23 re-entry: the quoted sentence went stale when
+    0007 re-locked — the peer-is-Final-and-may-move class
+    again.)
   - **Residual after Stage 7.1** (it has run): none for
     ownership — the 0007x0008 pairwise recorded "No
     duplication finding." It raised two `blocks-impl` items on
     the *absent*-key evaluation domain instead, both routed to
-    JDR 0001 §JD-4 and open there (see Risks). Also standing:
-    the watch item on 0007 A13's negative-existential,
-    falsifiable by a *future* peer.
+    JDR 0001 §JD-4 at iteration 1 and answered by §D4 (JD-4's
+    closing note: the kernel decides presence and `exists`
+    provenance-blind; see Risks). The former watch item on
+    0007 A13's negative-existential is retired: Final 0007's
+    A13 no longer carries that sweep (Ownership above).
   - **Enforcement locus corrected at Pre-Lock (3amigo
     IMP-1)**: `RequiresOwned` has **no authored source
     form** — RDR 0002's normative field layout
@@ -763,62 +789,91 @@ at the same `area:internal-resolve` seam.
     and the Enforcement-locus decision must record that
     reduced guarantee.
 
-- **A9 Every tag-predicate reference to a
-  recognized-provenance declaration normalizes into a
-  view-read row field — `Row.Match` for
-  `[rule.match.<tag>]`, the guard field for
-  `[rule.guard.all.<tag>]` / `[rule.guard.unless.<tag>]` —
-  rather than into `Row.Outcome`, so renaming the declaration
-  carries all of them with it and changes no gating
-  semantics.**
-  - **Status**: Verified
-  - **Method**: Spike
-  - **Evidence**: settled by re-running RDR 0002's own
-    normalizer spike — the peer's executable artifact, not a
-    reading of its prose — over all three committed fixtures.
+- **A9 Under Final RDR 0002 the `[rule.match.recognized]`
+  atom is the rule's mandatory outcome binding: normalization
+  lifts it out of the predicate set into `Row.Outcome`, a
+  `recognized` atom authored under `guard.all` or
+  `guard.unless` is refused at load, and no other
+  tag-predicate position can carry the reserved key — so the
+  reserved name reaches the kernel through `Row.Outcome` (the
+  gate) and through the assembled view (the tag `assemble`
+  injects), never as a `Row.Match` or guard atom minted by
+  0002.**
+  - **Status**: Verified (re-verified at the Stage 4 re-entry
+    of 2026-08-23; supersedes the 2026-08-11 verdict, which
+    read 0002's pre-lift spike)
+  - **Method**: Peer RDR + Spike
+  - **Corrects**: the pre-demotion A9 concluded the opposite —
+    "the normalized row has no outcome field to receive a
+    predicate … all three tag-predicate positions are
+    view-read; none produces `Row.Outcome`" — by re-running
+    0002's normalizer spike as it stood on 2026-08-11. 0002's
+    Stage 4 (2026-08-22) rebuilt that spike to its dump
+    contract with outcome lifting, and its re-lock
+    (2026-08-23) fenced the rule. Same escape class as
+    A6/A11: a verdict on a moving peer's artifact stamped with
+    no re-verification trigger. Withdrawn; ledger row
+    appended.
+  - **Evidence (contract)**: RDR 0002 -> Technical Design ->
+    Normative Contracts, outcome-binding block — "Every rule
+    — ordinary or escape — MUST bind exactly one outcome.
+    **Outcome binding reads the match blocks only** … That set
+    MUST contain exactly one atom on `recognized`, using `eq`
+    or `in` … Normalization lifts that atom out of the
+    predicate set into the row's outcome field … A
+    `recognized` atom authored under `guard.all` or
+    `guard.unless` MUST be refused at load as a malformed
+    outcome binding — never lifted." Load-Bearing Decisions /
+    Outcome binding rejects the alternative this RDR had
+    assumed: "leaving the atom in the predicate set only,
+    because the kernel filters on `Row.Outcome` before
+    matching." JDR 0001 §JD-10 ratifies it (ANSWERED
+    2026-08-23).
+  - **Evidence (spike)**: 0002's current spike re-run over its
+    two fixtures reproduces `0002-…/evidence/spikes/output.txt`
+    byte-for-byte: every row carries `outcome=<literal>` and
+    its `atoms=[…]` holds no `recognized` atom
+    (`0002-…/evidence/spikes/main.go::liftOutcome`, called
+    from `::normalize`; `::Row` now carries `Outcome string`).
     Command and verbatim output:
-    `docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-normalization.md`.
-    Three findings, each decisive for one position. (1) The
-    normalized row has **no outcome field to receive a
-    predicate**: `0002-…/evidence/spikes/main.go::Row` is
-    `{Model, Rule, Kind, Source string; Match, Write []string}`.
-    (2) `[rule.match.<tag>]` lands in the predicate set —
-    `outcome.eq=round-clean` appears inside `match=[…]`,
-    unprefixed and sorted among `stage.eq`, `status.eq`,
-    `profile.in`, with no special-casing on the name. (3) Both
-    guard positions land in that same set, prefixed:
-    `::normalize` merges `rule.Match` (`""`),
-    `rule.Guard.All` (`"all:"`), and `rule.Guard.Unless`
-    (`"unless:"`) into one map, rendered as `all:iter.lt=3` /
-    `unless:profile.eq=small`. The root `outcomes` alphabet is
-    model metadata printed on the MODEL line, never routed into
-    a row. All three tag-predicate positions are therefore
-    view-read; none produces `Row.Outcome`.
-  - **Why `Row.Outcome` is not the destination**: it is not
-    RDR 0002's field to populate — 0002 never names it. It is
-    a kernel field fed from `Input.Recognized`, gated by
-    `row.Outcome != in.Recognized`
-    (`internal/resolve/resolve.go::Resolve`), while
-    `::assemble` separately injects the same value as a tag so
-    a row may *also* match it (RDR 0001 REQ-17; D2: "a future
-    RDR (0002 normalization) must spell the same key for a
-    table row to match on the recognized outcome **as a
-    tag**"). The two paths are complementary, which is why
-    both readings looked live: the fixture's
-    `[rule.match.outcome]` is a tag-level restatement of a
-    value the outcome gate reads independently.
-  - **Consequence**: the first reading holds, so A4's
-    migration inventory, block 2's reference-position
-    fall-through, and Phase 2's rename all stand as written.
-    The rename is mechanical and changes no gating semantics;
-    it does not route to RDR 0002. Noted rather than left
-    implicit: the rename makes those fixtures *newly
-    functional* against the kernel — the predicate key
-    `outcome` cannot match `assemble`'s injected key
-    `recognized` today and can afterward. That is a strict
-    improvement with nothing depending on the current
-    behavior, since no normalizer exists under `internal/` to
-    turn these fixtures into a `resolve.Table`.
+    `docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-lifted-outcome.md`.
+  - **Spike/contract gap in 0002, recorded not absorbed**:
+    `::liftOutcome` scans the merged atom map without reading
+    `Atom.Block`, so a `recognized` atom moved to
+    `[rule.guard.all.recognized]` or
+    `[rule.guard.unless.recognized]` is *lifted*, not refused
+    — both mutants normalize to the same five rows (spike
+    file, mutants 1–2). 0002's fenced text is the contract and
+    the refusal is 0002's to implement; this RDR's block 2
+    restates the fenced rule, not the spike. Flagged for the
+    0002 side at the next cluster reconcile.
+  - **Kernel side (unchanged)**:
+    `internal/resolve/resolve.go::Row.Outcome` is gated by
+    `row.Outcome != in.Recognized` in `::Resolve` and
+    `::escapeOrRefuse`, while `::assemble` injects the same
+    value as the view tag `recognized`. Under lifting these
+    are one authored atom with two kernel readers — the gate
+    reads `Row.Outcome`; guards and any directly constructed
+    `Row.Match` read the view key (RDR 0001 REQ-17; RDR 0007's
+    guard domain, JDR 0001 §D4). REQ-17's "as a tag"
+    affordance survives in the view even though 0002 mints no
+    `Row.Match` atom on the key.
+  - **Consequence**: block 2's predicate-position clause,
+    scenario 3's authored-table note, scenario 5, Phase 2 and
+    the Risks entry are restated to this shape. The 2026-08-11
+    claim that the fixture rename "changes no gating
+    semantics" is withdrawn: the rename *is* the gating
+    semantics — before it the `outcome` atom was a
+    never-satisfiable tag predicate, after it the `recognized`
+    atom is the row's outcome binding. That is the strict
+    improvement this RDR predicted, delivered by 0002's design
+    rather than by a mechanical edit.
+  - **If wrong** (0002's implementation leaves the atom in the
+    predicate set, or lifts from guard blocks as its spike
+    still does): 0002's own scenario 2 (normative fixture
+    `output.txt`) goes red on 0002's side; for this RDR only
+    block 2's fall-through prose changes — the naming rule,
+    category, payload and `Input` predicate are untouched.
 
 - **A10 No accessor-produced owned tag key at HEAD, and no
   key derivable from a committed artifact shape, spells
@@ -1015,12 +1070,15 @@ at the same `area:internal-resolve` seam.
     0002's implementation explicitly — 0002's Stage 8 run takes
     this RDR's Normative Contracts as a named input, or a
     pointer lands in 0002's own surface as a cross-RDR edit.
-    Which of the two is a cluster-level call. Stage 7.1 has
-    run and gave that choice a named home without picking a
-    form — JDR 0001 §JD-10 carries it ("No pointer from 0002
-    to 0008; handoff form undetermined"), open there. The
-    *obligation to do one of them* is settled here and is no
-    longer assumed away.
+    The cross-RDR-edit form has happened: Final RDR 0002
+    (re-locked 2026-08-23) names `reserved_tag_key (RDR
+    0008)` in its validation-category block, carries the
+    naming rule in its own fenced text, and lists this RDR
+    under its Prerequisites — the pointer a 0002 implementer
+    needed now lives in 0002 (JDR 0001 §JD-10, answered). What
+    0002 did *not* absorb is block 3's failure-payload contract
+    and the near-miss advisory channel; that carrier rides JDR
+    0001 §JD-8 (Prerequisites).
 
 - **A13 `Input.Owned` and `Input.Observed` are ordered
   sequences of key/value tags, not keyed maps, so duplicate tag
@@ -1092,7 +1150,11 @@ the model conforms to it rather than choosing it. Concretely:
    code, is RDR 0005's mapping decision and is not settled
    here. Stage 7.1 gave that remainder a named home: JDR 0001
    §JD-8 carries it ("`reserved_tag_key` has no CLI code or
-   exit mapping"), open there, and notes 0005's own A-block
+   exit mapping"), open there — widened at iteration 2 to the
+   whole code table, and now also the home of the loader's
+   failure-payload fields (block 3) and the near-miss advisory
+   channel, which 0002's re-lock did not absorb — and notes
+   0005's own A-block
    pre-authorizes resolver-specific `Code` values without new
    envelope fields or exit groups — so the mapping is expected
    to be additive, not a reopening of this RDR. No new refusal
@@ -1231,12 +1293,15 @@ domain is non-empty outcomes. A table whose declared
 alphabet gate (`Table.models` is a plain
 `slices.Contains`, `internal/resolve/resolve.go:216-218`, and
 `assemble` runs before it at `:319-321`) and resolve with no
-reserved key in the view; nothing in this RDR or RDR 0002
-forbids that alphabet entry. It is left unforbidden rather
-than silently assumed away — an empty-string outcome is
-degenerate for reasons that are not this RDR's to rule on, and
-the binding obligation above is scoped so that such a resolve
-is simply outside it, not in breach of it.
+reserved key in the view. RDR 0002 forbids that alphabet entry
+at load for every table its loader builds (its
+recognized-totality clause; JDR 0001 §JD-10, answered); this
+RDR does not, and for any other `resolve.Table` producer the
+path stays reachable as RDR 0001's residual (RDR 0002 ->
+Critical Assumptions -> A8). The binding obligation above is
+scoped so that such a resolve is outside it, not in breach of
+it — an empty-string outcome is degenerate for reasons that
+are not this RDR's to rule on.
 ```
 
 ```normative
@@ -1255,20 +1320,22 @@ before this rule is reached. The scope unit is one `[model]`
 (RDR 0002's schema unit); this RDR defines no cross-model or
 cross-file cardinality rule.
 
-The bound is an upper one only, deliberately: this RDR imposes
-**no lower bound** — a model that declares no
-recognized-provenance tag at all is conforming here. Matching
-the recognized outcome as a tag is an affordance, not an
-obligation (Key Discoveries: outcome gating never reads the
-key), so requiring the declaration would break every model
-that gates only on `Row.Outcome`. The consequence is stated so
-it is not mistaken for coverage: a model whose rows were meant
-to match the recognized tag but which declares no
-recognized-provenance tag lints clean and refuses `no_match`
-at resolve time. That is the same intent-channel gap the
-reference-position paragraph below describes and the Failure
-Modes section charts — not a naming defect, and not closed
-here.
+The bound is an upper one only: this RDR's naming rule imposes
+**no lower bound** of its own. The lower bound is RDR 0002's —
+its outcome-binding contract requires every rule to carry
+exactly one `recognized` match atom and every matched tag to
+be declared, so any 0002 model with a rule declares
+`[tags.recognized]` or fails load (zero outcomes bound, or
+`unknown tag`), and a model that gates on `Row.Outcome` *is* a
+model that authored that atom (A9). The division is stated so
+neither RDR is read as owning the other's clause: 0002 decides
+that the declaration exists, this RDR decides what it is
+named. For a `resolve.Table` built by any producer other than
+0002's loader no lower bound applies, and a row meant to match
+the recognized tag under an undeclared or innocent name
+refuses `no_match` at resolve time — the intent-channel gap
+the Failure Modes section charts, not a naming defect, and not
+closed here.
 
 Any violation is a data-level validation failure in the
 `reserved_tag_key` category, reported at table load/lint
@@ -1281,13 +1348,19 @@ ordinary and unreserved). TOML quoting is a surface artifact,
 not a name variant: `[tags."recognized"]` and
 `[tags.recognized]` parse to the identical key string and are
 therefore both reserved. The checked positions are the
-`[tags.<tag>]` declaration keys only. Reserved-name uses in
-predicate positions (`[rule.match.<tag>]`,
-`[rule.guard.all.<tag>]`, `[rule.guard.unless.<tag>]`) need no
-separate reserved-key check: a conforming model declares
-`recognized` and those references resolve to it, while a model
-that does not declare it already fails RDR 0002's `unknown
-tag` rule. `[rule.write]` is covered by a *different*
+`[tags.<tag>]` declaration keys only. Predicate positions need
+no separate reserved-key check because RDR 0002's
+outcome-binding contract already decides every one of them
+(RDR 0002 -> Technical Design -> Normative Contracts,
+outcome-binding block; A9): `[rule.match.recognized]` is the
+rule's mandatory outcome binding, lifted into `Row.Outcome`
+and never left in the predicate set, and a `recognized` atom
+under `[rule.guard.all.<tag>]` or `[rule.guard.unless.<tag>]`
+is refused at load as a malformed outcome binding. A model
+that references `recognized` without declaring it fails
+0002's `unknown tag` rule; one that declares it under another
+name fails this block's naming rule. `[rule.write]` is covered
+by a *different*
 pre-existing rule and must not be folded into the sentence
 above: once a model legally declares `[tags.recognized]` the
 name is a **known** tag, so `unknown tag` no longer fires on
@@ -1304,9 +1377,13 @@ provenance `owned`) *and* writes `[rule.match.outcome]` where
 it meant the recognized one. Every rule in this RDR passes —
 the recognized declaration is named correctly, no owned tag is
 named `recognized`, and `outcome` is declared so `unknown tag`
-is silent — and the row still never fires. That is the
-Problem Statement's symptom surviving inside a conforming
-model. It is **not** closed here, and it is not a naming
+is silent. Under Final 0002 that rule must *also* carry its
+`recognized` atom or fail load (A9), so it binds the right
+outcome and additionally requires the owned tag `outcome` to
+hold the literal — the row fires only when the stray predicate
+happens to be satisfied. Narrower than before 0002's outcome
+binding, but still the Problem Statement's symptom surviving
+inside a conforming model. It is **not** closed here, and it is not a naming
 defect: no name is wrong, a reference points at the wrong
 declared tag. Closing it needs a rule over declaration
 *intent* rather than declaration *name*, which is the same
@@ -1316,12 +1393,14 @@ and says so; a reader must not read block 2 as a guarantee
 that a conforming model's outcome row fires.
 ```
 
-**Boundary against JDR 0001 §JD-10 (open).** JD-10 leaves open
-"whether a declared `recognized` tag is total (always present,
-possibly empty) or partial (absent with no outcome in
-flight)," which decides whether an empty-outcome row is
-satisfiable, dead, or a lint error. Blocks 1 and 2 do **not**
-settle it and must not be read as doing so. Block 1's "an
+**Boundary against JDR 0001 §JD-10 (answered 2026-08-23).**
+JD-10 asked "whether a declared `recognized` tag is total
+(always present, possibly empty) or partial (absent with no
+outcome in flight)"; the home now ratifies 0002's answer —
+total over matching, the alphabet never contains the empty
+string, a rule requiring the key absent is dead (RDR 0006's
+finding). Blocks 1 and 2 did **not** settle it, do not restate
+it, and must not be read as its home. Block 1's "an
 absent outcome yields a view with no `recognized` key" is not
 a design choice this RDR takes — it is a *source fact* about
 implemented RDR 0001 (`internal/resolve/resolve.go::assemble`
@@ -1664,9 +1743,9 @@ disposition change for any conforming caller.
   change" claim in the Decision Rationale is therefore scoped
   to *disposition for conforming input*, not to zero surface.
   The predicate's exported name is implementation latitude —
-  do **not** bind it to any symbol name from RDR 0009, which
-  is still `Draft` with its predicate form explicitly
-  "sharpened at Pre-Lock". Breach of the precondition returns
+  do **not** bind it to any symbol name from RDR 0009
+  (`Final`); its predicate's exported name is 0009's to fix
+  (A11). Breach of the precondition returns
   a non-nil error and no `Result` disposition; conforming
   callers see no behavior change.
 
@@ -1700,7 +1779,7 @@ affordance.
 | --- | --- | --- | --- |
 | Correctness fit (fixes silent no-match discovery) | collision impossible after lint; diagnosis at authoring time | correct only if declaration threads everywhere; misdeclaration becomes a runtime concern | dissolves the tag path but removes the capability the user wanted |
 | Prior-art alignment | matches the W3C SCXML §5.10 reserved-system-variable rule (A3, verified), XState's fixed `event` slot, Inngest system fields, and RDR 0002's `<clear>` precedent — standard **and** engines | no surveyed engine lets authors rename the injected slot (negative result, research cache) | no engine surveyed withdraws event visibility from guards |
-| Blast radius | no disposition change for conforming input, but **not zero surface**: one exported `Input` predicate plus its `Resolve` entry call (the kernel's first non-nil error path, on error surface RDR 0001 already reserves — A6, A8), one additive lint category + declaration constraint in 0002, and a rename of three committed fixtures plus six reference sites (A4) | new public kernel surface (`Input` key field or parameterized `assemble`), normalized-table surface, threads through 0005; frozen fixture repinned | violates locked REQ-17 of implemented Final RDR 0001; removes guard-visible recognized value that RDR 0007's chosen guard domain reads |
+| Blast radius | no disposition change for conforming input, but **not zero surface**: one exported `Input` predicate plus its `Resolve` entry call (the kernel's first non-nil error path, on error surface RDR 0001 already reserves — A6, A8), one additive lint category + declaration constraint in 0002, and the fixture rename JDR 0001 §JD-10 ordered, already landed at 0002's re-lock (A4) | new public kernel surface (`Input` key field or parameterized `assemble`), normalized-table surface, threads through 0005; frozen fixture repinned | violates locked REQ-17 of implemented Final RDR 0001; removes guard-visible recognized value that RDR 0007's chosen guard domain reads |
 | Reversibility | high — a later RDR could still parameterize; reserving now forecloses nothing | low — public surface, once shipped, is load-bearing | low — deleting shipped kernel behavior and reopening 0001 |
 | Consistency with 0007/0009 posture at this seam | same shape as 0009: producer/lint obligation, kernel unchanged for conforming input, no new refusal kind | cuts against both peers: grows kernel surface to solve an authored-data problem | cuts against 0007, whose guard domain assumes the assembled view carries the recognized tag |
 | Cost | doc ratification + lint checks inside work 0002 already owes | largest: kernel, table schema, CLI threading, fixtures | medium code deletion + cross-RDR contract reopening |
@@ -1766,24 +1845,19 @@ Premortem: hardened (variant) — critic verdict PASS, no
 switch forced. Every finding is folded into live text; the
 P-numbers are cited inline where each cure lives.
 
-Joint-check: clear (7 peers). One inbound reference, not a
-dependency: RDR 0007 (`Final`) quotes this RDR's `Input`
-producer sentence in its A13 evidence
-(RDR 0007 -> Critical Assumptions -> A13 Evidence) as the
-last item in a five-peer sweep
-showing *no* constraint on caller-supplied observed tags. It
-corroborates a negative-existential rather than supplying a
-premise — A13's "accepted exposure" verdict is unchanged or
-reinforced however this RDR's enforcement locus settles, and
-0007 elsewhere lists this RDR under "Related but distinct
-seams, deliberately not folded in" (RDR 0007 -> Context ->
-Background) and disclaims that it owns anything 0007 depends
-on (RDR 0007 -> Critical Assumptions, guard-grammar ownership
-note).
-What the reference does create: A13's claim that the RDR set
-holds exactly one input-side producer obligation is
-falsifiable by any *future* peer adding a second one — a
-cluster-reconcile watch item, not a constraint on this RDR.
+Joint-check: clear (7 peers). Two inbound references, neither
+a constraint. RDR 0007 (`Final`) names this RDR among the
+seams whose *transport* JDR 0001 §D1 settled (RDR 0007 ->
+Decision Rationale -> Joint-check) and homes the
+caller-supplied-observed exposure this RDR's producer sentence
+once corroborated at JDR 0001 §JD-9 (RDR 0007 -> Critical
+Assumptions -> A13); it draws no premise from here, and
+nothing here depends on 0007's verdict for an absent key
+(§D4). RDR 0002 (`Final`, re-locked 2026-08-23) *adopted* this
+RDR's naming rule and category into its own fenced text,
+citing this RDR as their owner — an inbound dependency this
+RDR keeps satisfied by leaving blocks 1–3 as written, not a
+constraint on them.
 
 ## Alternatives Considered
 
@@ -1883,8 +1957,8 @@ capability — the highest-cost, least-reversible branch.
   RDR can still parameterize the key). Not "cheapest to
   implement" without qualification: the settled enforcement
   locus adds an exported predicate and the kernel's first
-  non-nil error path, and A4's inventory adds a rename of
-  three committed fixtures and six reference sites. Cheapest
+  non-nil error path; the fixture rename JD-10 ordered was
+  0002's re-lock work and is already done (A4). Cheapest
   *relative to M and W*, which is what the QOC matrix ranks.
 - Positive: a consistent trust story at the 0001↔0002 seam
   with RDR 0009 (normalizer enforces, no new refusal kind,
@@ -1945,14 +2019,16 @@ capability — the highest-cost, least-reversible branch.
   -> "Not raised as findings"). If it nonetheless does
   encroach, A7's "If wrong" downgrades it to an advisory rule.
   What that pairwise raised instead is a *different* pair of
-  `blocks-impl` items, both routed to JDR 0001 §JD-4 and open
-  there: whether an absent `recognized` key makes a guard
+  `blocks-impl` items, both routed to JDR 0001 §JD-4 at
+  iteration 1 and since answered by §D4 (JD-4's closing note:
+  the kernel decides presence and `exists` provenance-blind):
+  whether an absent `recognized` key makes a guard
   unevaluable (0007's table-wide veto) or a plain no-match,
   and whether `exists` on the reserved key is an unowned
-  outcome-gating backdoor. Neither is this RDR's to settle —
+  outcome-gating backdoor. Neither was this RDR's to settle —
   0007 owns the verdict for an absent key, this RDR owns only
-  whether the key is absent — and neither disturbs the name
-  reservation above. Cite JD-4; do not pre-empt it.
+  whether the key is absent — and the answer disturbs nothing
+  in the name reservation above. Cite §D4; do not restate it.
 - **Risk**: kernel and normalizer spellings drift (two
   constants, one contract).
   **Mitigation**: the conformance test is normatively
@@ -1989,23 +2065,24 @@ capability — the highest-cost, least-reversible branch.
   obligation, and the innocent-collision case is a lint
   fixture whose refusal text tells the author what to rename.
 
-- **Risk**: the rule's *first* clause breaks the peer's own
-  worked examples on day one — all three committed
-  recognized-provenance declarations are wrong-named under it,
-  and RDR 0002 designates them "the canonical examples
-  implementation tests must promote" (RDR 0002 -> Technical
-  Design, Load-Bearing Decisions). The
-  reserved-key rule's debut is a red test on the reference
-  model (A4, first clause).
-  **Mitigation**: the migration is named work, not a
-  discovered surprise — A4 carries the inventory (three
-  declarations, six tag-predicate reference sites)
-  and Phase 2 carries the edits. The rename is **mechanical**,
-  settled at Reconcile: A9 is Verified against RDR 0002's own
-  normalizer spike, which puts every tag predicate — match and
-  both guard positions — into the candidate row's predicate
-  set and produces no outcome field, so no gating semantics
-  move with the rename. The fixture work is no longer gated.
+- **Risk**: the rule's *first* clause broke the peer's own
+  worked examples on day one — before RDR 0002's re-lock, all
+  three committed recognized-provenance declarations were
+  wrong-named under it, and RDR 0002 designates its two "the
+  canonical examples implementation tests must promote" (RDR
+  0002 -> Technical Design, Load-Bearing Decisions).
+  **Mitigation**: discharged on 0002's side — JDR 0001 §JD-10
+  ordered the rename and 0002's re-lock (2026-08-23) performed
+  it; its fixtures declare `[tags.recognized]` and its
+  normative spike output lifts the atom into the row's
+  outcome field (A4, A9). The rename was **not** mechanical,
+  contrary to the 2026-08-11 reading: under Final 0002 the
+  `recognized` match atom is the rule's outcome binding, so
+  the rename moved the fixtures from a never-satisfiable tag
+  predicate to a bound outcome — the improvement this RDR
+  predicted, delivered by 0002's design. The residual is
+  0003's `guard-fixture.toml`, which is not a 0002 model and
+  is 0003's to reconcile (Phase 2).
 
 ### Failure Modes
 
@@ -2050,20 +2127,25 @@ category, payload, or predicate depends on the answer — what
 depended on it was this paragraph's blast-radius claim, now
 scoped to what A10 actually proves.
 
-Silent, residual — **and not a narrow path**: an author who
+Silent, residual — narrowed by Final RDR 0002: an author who
 declares an *observed* tag under an innocent name (`result`,
 `outcome`) intending recognizer semantics passes every name
-check and the row never fires, because intent is invisible to
-a name-and-provenance validator (premortem P-3). This RDR's
-own evidence shows the shape is common rather than
-exotic: both canonical RDR 0002 fixtures name the
-recognized-provenance tag `outcome`
-(`0002-…/evidence/spikes/rdr-fixture.toml`,
-`kata-fixture.toml`), so every existing example of an author
-naming this datum chose an innocent name. The reserved-key
-rule catches the author who got the *provenance* right and
-only the *name* wrong; it does not catch the author who
-reached for `provenance = "observed"` instead.
+check, because intent is invisible to a name-and-provenance
+validator (premortem P-3). Under 0002's outcome-binding
+contract that rule no longer fails silently on the 0002 path:
+a rule with no `recognized` match atom is refused at load
+(zero outcomes bound — A9), so the author is told before any
+resolve. The silent form survives where the rule *also*
+carries a correct `recognized` atom and the innocent tag is a
+stray extra predicate, and for any `resolve.Table` producer
+other than 0002's loader. Before 0002's re-lock the shape was
+the common one — both of its canonical fixtures named the
+datum `outcome` — so the narrowing is real, not hypothetical.
+The reserved-key rule catches the author who got the
+*provenance* right and only the *name* wrong; 0002's outcome
+binding catches the one who reached for `provenance =
+"observed"` and bound no outcome; neither catches the
+stray-predicate case.
 
 Scoped honestly: this RDR closes the naming channel, not the
 intent channel. The intent channel needs a heuristic over
@@ -2091,20 +2173,21 @@ pointer to this RDR.
 - [ ] RDR 0002 implementation underway (the enforcement
       point is its normalizer's load/lint path; this RDR's
       checks land inside that work, not before it)
-- [ ] **The carried half is handed to 0002 explicitly** — this
-      RDR's Normative Contracts are a named input to RDR
-      0002's Stage 8 run, or a pointer to this RDR lands in
-      0002's own surface as a cross-RDR edit. Not optional and
-      not automatic: A12 established that no engine mechanism
-      carries a later RDR's `Overrides` to a `Final` peer's
-      implementation (the launch prompt implements one RDR and
-      puts cross-RDR orchestration out of scope; `Predecessors`
-      points backward only; `Overrides` is read by nothing).
-      Without this, 0002 ships a normalizer that accepts any
-      `[tags.<name>]` and the authoring-time diagnosis — the
-      Problem Statement's outcome — never arrives. Which of
-      the two forms is used is owned by JDR 0001 §JD-10, open
-      there; that one of them happens is a gate here.
+- [x] **The carried half is handed to 0002 explicitly** —
+      satisfied in the cross-RDR-edit form at RDR 0002's
+      re-lock (2026-08-23): Final 0002 names
+      `reserved_tag_key (RDR 0008)` in its validation-category
+      block, carries the naming rule in its own fenced text,
+      and lists this RDR under its Prerequisites (A12; JDR
+      0001 §JD-10, answered). The gate existed because no
+      engine mechanism carries a later RDR's `Overrides` to a
+      `Final` peer's implementation (A12).
+- [ ] **The payload and advisory carrier close at JDR 0001
+      §JD-8** — 0002 absorbed the category and the name rule
+      but not block 3's three failure-payload fields nor the
+      near-miss advisory channel (Load-Bearing Decisions /
+      Identity); that carrier rides §JD-8 and must close before
+      scenarios 4 and 7 can go green on 0002's side.
 
 ### Minimum Viable Validation
 
@@ -2155,21 +2238,24 @@ derivation it is already covered by 0002's `write to non-owned
 tag` rule. Its enforcement is the exported `Input` predicate
 (block 5), which binds any future derivation path.
 
-Also in Phase 2: rename the three committed
-recognized-provenance declarations and **all six** of their
-tag-predicate reference sites (A4's inventory — five
-`[rule.match.outcome]` plus `[rule.guard.all.rewind_target]`
-at `guard-fixture.toml:72`). A declaration renamed without
-every one of its references leaves an undeclared-tag
-reference and trips 0002's `unknown tag`. The rename is
-mechanical and no longer gated: A9 is Verified, so every one
-of those references normalizes into the candidate row's
-predicate set and no gating semantics move. Expect the
-renamed fixtures to become *newly* matchable against the
-kernel (the key `outcome` cannot match `assemble`'s injected
-`recognized` today) — an improvement, and safe because no
-code path at HEAD normalizes these fixtures into a
-`resolve.Table`.
+No fixture rename remains in Phase 2. The rename JDR 0001
+§JD-10 ordered landed at RDR 0002's re-lock (2026-08-23): both
+canonical fixtures declare `[tags.recognized]`, every
+predicate site is `[rule.match.recognized]`, and 0002's
+scenario 2 names the re-run spike output as its normative
+fixture (A4). The one committed recognized-provenance
+declaration still under an author name —
+`0003-…/evidence/spikes/guard-fixture.toml` `[tags.rewind_target]`
+with `[rule.guard.all.rewind_target]` — belongs to RDR 0003
+and is not a 0002 model (no `outcomes` alphabet, no
+`[rule.match.recognized]`; 0002's spike refuses it at load —
+A4). Under Final 0002 it is a load failure on several
+categories, not a rename, and reconciling 0003's fixture with
+0002's layout is the 0002×0003 pair's work (JDR 0001 §JD-16
+siblings), outside this RDR. The pre-lift rationale — "the
+rename is mechanical, no gating semantics move" — is withdrawn
+with A9: the `recognized` match atom is the outcome binding
+0002 lifts into `Row.Outcome`.
 
 Not RDR 0006's graph lint, and not a competing acceptance
 rule under its "MUST NOT define different acceptance rules"
@@ -2262,7 +2348,11 @@ and answered it: `docs/rdr/cluster-reconcile/0002-0009/report.md`
 returns **NOT RECONCILED** for the cluster and states plainly
 "Do not implement over these," with twelve joint decisions
 (this RDR touches JD-4, JD-5, JD-8, JD-9, JD-10) owed a
-normative home first. So the honest disposition named here is
+normative home first. Iteration 2
+(`…/0002-0009/iter-2/reconcile-report.md`, 2026-08-23) closed
+JD-4 by §D4 and answered JD-10; JD-5, JD-8 and JD-9 stay open,
+and this RDR's Status carries §JD-5 and §JD-8. So the honest
+disposition named here is
 the operative one: hold this RDR at Final-unimplemented until
 0002's work starts and the JDs this RDR depends on close,
 rather than implement a kernel predicate in isolation. Locking
@@ -2309,7 +2399,12 @@ implementing, not on locking.
    suite's only guard seam today discards the view
    (`fixtureGuards.Evaluate` takes `_ resolve.TagSet`), so no
    existing test would catch a guard/matcher view split
-   (premortem P-7).
+   (premortem P-7). The rows here are constructed directly:
+   Final RDR 0002 mints no guard atom on `recognized` — it
+   refuses one at load (A9) — so this is a kernel-plumbing
+   test of A2's same-view property, not a shape any
+   0002-loaded table produces; the guard-side read of the view
+   key is RDR 0007's domain (JDR 0001 §D4).
 
 4. **Scenario** (identity/exactness): near-spellings of the
    reserved word as declared tag names — `Recognized`,
@@ -2342,14 +2437,30 @@ implementing, not on locking.
    recognized-provenance declarations — necessarily two
    different names, e.g. `[tags.outcome]` and
    `[tags.result]`, since `[tags.<tag>]` is name-keyed.
-   **Expected**: both fail in the `reserved_tag_key` category
-   on the naming rule (two failures, not one), leaving at most
-   one surviving recognized-provenance declaration — which
-   matches RDR 0001's single `Input.Recognized` per resolve
-   (Key Discoveries: singleton by inheritance). The
-   same-name variant is out of scope for this category:
-   `[tags.recognized]` twice is a TOML duplicate-key error in
-   `malformed TOML`, asserted as such.
+   **Expected**: the load is refused with **exactly one**
+   failure, in the `reserved_tag_key` category, naming one of
+   the two declarations as authored; which of the two is
+   reported is unspecified and MUST NOT be asserted (RDR 0002
+   -> Technical Design -> Normative Contracts: "Load is
+   fail-fast: the first category a document trips is the
+   refusal … an accumulating loader that returns a list is a
+   different contract than this one"). The assertion is by
+   category, not message text (0002's failing-control rule).
+   Normative fixture:
+   `docs/rdr/0008-recognized-tag-key-ownership/evidence/spikes/a9-lifted-outcome.md`
+   § mutant 3 — 0002's spike over its RDR fixture with
+   `[tags.recognized]` renamed to `[tags.outcome]` and a second
+   recognized-provenance `[tags.result]` added refuses with one
+   line, `reserved_tag_key: recognized declaration named
+   "outcome"`, exit 1. The cardinality consequence still holds
+   — at most one recognized-provenance declaration can survive,
+   matching RDR 0001's single `Input.Recognized` per resolve
+   (Key Discoveries: singleton by inheritance) — but it is
+   observed as "fix one, load again, the other is reported",
+   never as two reports from one load. The same-name variant
+   is out of scope for this category: `[tags.recognized]`
+   twice is a TOML duplicate-key error in `malformed TOML`,
+   asserted as such.
 
 6. **Scenario** (A6 — producer obligation): kernel `Input`
    carrying an owned or observed tag keyed `recognized`,
