@@ -11,7 +11,7 @@ engine README — this file is only the per-project index.
 | --- | --- | --- | --- |
 | 0001 | Resolution kernel | Implemented | — |
 | [0002](0002-transition-table-as-reviewable-data.md) | Transition table as reviewable data | Final | High |
-| [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Draft [revised from Final 2026-08-24; re-verify none — RE-LOCK-ONLY; carries joint decision → JDR 0001 §JD-18] | High |
+| [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final [joint decision → JDR 0001 §JD-18] | High |
 | 0004 | Accessor execution safety model | Draft [revised from Final 2026-08-24; re-verify none — RE-LOCK-ONLY, re-enter Stage 3] | High |
 | 0005 | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9] | High |
 | 0006 | Graph lint authority and guarantees | Final | High |

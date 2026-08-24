@@ -6,12 +6,14 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-08-24; re-verify none — fenced clause 0003:1065-1067 routes the two rejection rules onto RDR 0006 findings; JDR 0001 §D7(iii) makes them RDR 0002 load categories (0006 mints nothing); §JD-16 answered consistent; carries joint decision → §JD-18: conforming-view enforcer] [locked 2026-08-22 — Gate PASS. Owns the tag declaration
+- **Status**: Final [joint decision → JDR 0001 §JD-18: conforming-view enforcer] [re-locked 2026-08-24 — Gate PASS. Owns the tag declaration
   model (value kind, finite domain, optionality, single-valuedness, element
   universe), rehomed from RDR 0002 on 2026-08-21 and ratified by that
-  document's refine. Four records remain open, none lock-blocking: A18 and
-  A20 close on JDR 0001 §JD-18, and A15 and A21 are discharged by MVV
-  Scenarios 3 and 4 at implementation.]
+  document's refine. Rejection rules route to RDR 0002's `malformed tag
+  declaration` / `malformed predicate atom` load categories (JDR 0001
+  §D7(iii)); §JD-16 answered by §D6. Four records remain open, none
+  lock-blocking: A18 and A20 close on JDR 0001 §JD-18, and A15 and A21 are
+  discharged by MVV Scenarios 3 and 4 at implementation.]
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
@@ -383,7 +385,8 @@ parallel guard model.
   both `in` and `contains`.**
   - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: RDR 0007 (`docs/rdr/0007-guard-predicate-totality.md:1585-1595`)
+  - **Evidence**: RDR 0007 (`0007::Normative Contracts`, the literal-spelling
+    condition the totality claim rests on)
     assigns the canonical spelling duty to this RDR and names `in` explicitly.
     A9 books only the *element universe* for `contains`, which is a different
     thing from the literal's encoding: `in` takes a typed literal **set** and is
@@ -403,14 +406,20 @@ parallel guard model.
   - **Status**: Verified
   - **Method**: Peer RDR
   - **Evidence**: RDR 0002 states the carriage clause normatively. Its
-    normalization contract reads "Normalization MUST combine both into one candidate-row
-    predicate set before ambiguity checks, and each atom in that set MUST retain
-    the key, operator token, literal, and the block (`all` or `unless`) it was
-    authored in", followed by an explicit anti-collapse obligation naming this
-    RDR as the reason: "Block retention is carriage: RDR 0003's atom identity
-    tuple and `unless` semantics read it downstream, and normalization MUST NOT
-    fold `unless` atoms into `all`" (`0002::Normative Contracts`, the
-    normalization block). The block also survives into the reviewable surface:
+    normalization contract reads "Normalization MUST combine the match atoms and
+    both guard blocks into one candidate-row predicate set before ambiguity
+    checks, and each atom in that set MUST retain the key, operator token,
+    literal, and the block it was authored in — a three-valued domain, `match`,
+    `all`, or `unless`", followed by an explicit anti-collapse obligation naming
+    this RDR as the reason: "The block is load-bearing, not merely carried: it
+    is the key the handoff routes on (JDR 0001 §D6, below), RDR 0003's atom
+    identity tuple and `unless` semantics read it downstream, and RDR 0006
+    serializes it. Normalization MUST NOT fold `unless` atoms into `all` or
+    `match` atoms into either guard block" (`0002::Normative Contracts`, the
+    normalization block). The third `match` member is RDR 0002's own widening on
+    JDR 0001 §D6's authority — this RDR and RDR 0007 spell the two-valued guard
+    domain §D1 fixes, and §D6 routes the handoff on the authored block — so the
+    guard-side carriage this record depends on is unaffected. The block also survives into the reviewable surface:
     the dump field list carries "predicate atoms (with block)" and the dump's
     within-row total order sorts atoms by "(key, block, operator token,
     literal)", so `block` is load-bearing in the ordering rather than merely
@@ -624,49 +633,6 @@ parallel guard model.
     forces the inversion is a fork decided here and carried to RDR 0002 and
     RDR 0006, so it is worth measuring early in Phase 3 rather than late.
 
-**Method vocabulary** (pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
-
 ## Proposed Solution
 
 ### Approach
@@ -727,8 +693,8 @@ exact-one edge selection, and RDR 0006 consumes the symbolic predicate
 constraints for graph lint.
 
 The atom shape is fixed at the kernel seam by JDR 0001 §D1 and stated
-normatively in RDR 0007 (`docs/rdr/0007-guard-predicate-totality.md:1249-1266`):
-four fields — `Key`, `Operator`, `Literal`, `Block`. This RDR cites that shape
+normatively in RDR 0007 (`0007::Normative Contracts`, the SEAM parsed-atom
+clause): four fields — `Key`, `Operator`, `Literal`, `Block`. This RDR cites that shape
 and does not restate it. What this RDR adds are the well-formedness rules over
 it: `Key` must resolve to a declared tag, `Operator` must be allowed by the
 operator/kind matrix above, and `Literal` must parse to the operator's literal
@@ -1411,7 +1377,7 @@ unevaluable).
 | Every `all` atom decides true; `unless` block not fully true | Row qualifies | Row contributes its accepted assignments | none | — |
 | `all` atom decides false | Row pruned | Row contributes nothing | none | Silent by design — a decided false is not a defect |
 | Full `unless` block decides true | Row disabled | Excluded intersection subtracted | none | Silent by design |
-| Value atom **inside `unless`** over an absent key | `guard_unevaluable` refusal — `¬U = U`, so the row is unevaluable, not merely un-excluded (RDR 0007 `:1412-1414`, `:1435-1436`) | Exhaustiveness claim **withheld** for that group; the block is **not** subtracted as if decided | Runtime: RDR 0007's per-row/per-atom payload. Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
+| Value atom **inside `unless`** over an absent key | `guard_unevaluable` refusal — `¬U = U`, so the row is unevaluable, not merely un-excluded (`0007::Normative Contracts`, the strong-Kleene atom-verdict clause and the row-verdict clause) | Exhaustiveness claim **withheld** for that group; the block is **not** subtracted as if decided | Runtime: RDR 0007's per-row/per-atom payload. Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
 | Value atom over an absent key | `guard_unevaluable` refusal (RDR 0007 veto) | Exhaustiveness claim **withheld** for that group | Runtime: RDR 0007's per-row/per-atom payload (key, block, reason `absent`). Lint: the blocking inability-to-prove finding, naming the row and the refusing atom | Loud — both surfaces mint an artifact |
 | Existence atom over an absent key | Decided (`presence == literal`) — never unevaluable | Selects `{absent}` on the presence dimension (A7) | none | — |
 | Zero rows qualify | RDR 0001 refuses | Coverage gap if the product is provable | `graph-coverage-gap` (RDR 0006), naming the selection context, every rule id in the group, and one uncovered assignment | Loud |
@@ -2187,7 +2153,7 @@ refusal behavior.
 
 ## Finalization Gate
 
-Responses: `0003-guard-predicate-exhaustiveness/artifacts/gate.md` (Gate PASS 2026-08-22)
+Responses: `0003-guard-predicate-exhaustiveness/artifacts/gate.md` (Gate PASS 2026-08-24)
 
 ## References
 
