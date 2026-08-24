@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-18: carrier for the per-atom refusal payload; conforming-view enforcer]
+- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-18, §JD-21, §JD-22: carrier for the per-atom refusal payload; conforming-view enforcer; `Block` cardinality; set-value encoding]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer at the
   0001↔0003 seam, consumed by RDR 0003's value evaluator and

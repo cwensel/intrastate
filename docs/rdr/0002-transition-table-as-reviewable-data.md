@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-9, §JD-19, §JD-20, §JD-21, §JD-22: owned-state assembly for `flow resolve`; gate site and deny semantics; CLI carriage of clear/set writes; `Block` cardinality; set-value encoding]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,

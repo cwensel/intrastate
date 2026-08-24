@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-9]
+- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-9, §JD-19, §JD-20: code table and carriers; owned-state assembly for `flow resolve`; gate site and deny semantics; CLI carriage of clear/set writes]
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High

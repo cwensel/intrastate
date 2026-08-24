@@ -334,7 +334,10 @@ breaking replace.
   so the tag-side `accessor` reference is a second copy and is removed. Readers
   and writers both declare `keys`; the loader refuses a key served by zero or
   two readers, a written or cleared key not in exactly one writer, and a
-  writer key that is not owned. Fields: `role`, `path`, `keys`, `timeout` (Go
+  writer key that is not owned — **provenance-scoped (settled 2026-08-24 by
+  0002 at re-entry, `0002:675-707`)**: an owned key needs exactly one reader;
+  an observed key at most one (zero is legal — it may arrive by `--tag`,
+  §JD-9); `recognized` never appears in `keys`. Fields: `role`, `path`, `keys`, `timeout` (Go
   duration string; missing or non-positive refused), and `read_back = true` on
   writers. The same id in `[read.x]` and `[write.x]` is legal — 0004's fenced
   identity is `(flow, name, capability)`; its unfenced "cannot be rebound"
@@ -441,7 +444,10 @@ not a negotiation.
   step there is no mapping failure to surface, so 0007's panic clause has no
   trigger and 0005's structured-envelope contract is unopposed. *(0007×0009 F3)*
 - **JD-7 Read completeness.** **Closed by §D3** — a partial read refuses.
-  *(0007×0004 F1/F3, 0009×0004 F1)*
+  *(0007×0004 F1/F3, 0009×0004 F1)* Residue (iteration 4): 0009's
+  write-accessor obligation and its escaped-plan / `NextTags` test
+  (`0009:1515-1527`) still bind nobody in 0004; deferred to 0004's
+  `artifacts/deviations.md` D1 (unfenced, test-decided).
 - **JD-8 Refusal codes.** `owned_state_unavailable` and `reserved_tag_key` need
   `Code` values; 0009 needs `GroupInternal`, which **already ships** in
   `clierr.go`. 0005's own A-block pre-authorizes this: resolver-specific values
@@ -465,6 +471,12 @@ not a negotiation.
   A third carrier rides here (iteration 3): 0008's per-key failure payload
   and its near-miss advisory (`0008:1155-1160`, `2191-2196`) — 0002 absorbed
   the category, not the carrier, and 0006's tier is closed to it.
+  **Ordering root (iteration 4):** every member's Prerequisites now wait on
+  this entry and none owns the next move; the answer is 0005's re-entry
+  (0005 is the only member never re-walked since June), and it should land
+  before any member starts Stage 8 against the code table. 0004's fenced
+  "MUST NOT collapse `read_back_incomplete` into a mismatch" (`0004:376-390`)
+  is the sharpest instance.
 - **JD-9 `--tag` provenance.** Caller-supplied tags enter as
   `ProvenanceObserved` and never satisfy an owned-state dependency. `assemble`
   already pins owned-over-observed precedence so the accessor snapshot is "never
@@ -473,7 +485,15 @@ not a negotiation.
   *(0007×0005 F4, 0008×0005 F2)* Still open (iteration 3): the
   *classification* arm — 0008 fences `--tag recognized=x` as a programmer
   mistake, 0005 maps it `GroupUserEnv`; the provenance half above does not
-  decide it. Siblings: 0005, 0008.
+  decide it. Siblings: 0005, 0008. **Sharpened 2026-08-24** (iteration-4
+  gate): the provenance directive above collides with re-locked 0002 —
+  0005 fences `flow resolve` as taking no read accessors (`0005:380-383`),
+  `--tag` wired to `Observed` never satisfies `RequiresOwned`, and 0002 now
+  makes every ordinary row write-bearing (`0002:830-833`, `1125-1130`), so
+  every ordinary row refuses `owned_state_unavailable`. The open question is
+  therefore *which verb assembles owned state and calls `Resolve` in one
+  invocation* — not whether `--tag` is Observed. 0002 joins as a sibling.
+  Siblings: 0002, 0005, 0008. *(0002×0005 F8, critique Q-3)*
 - **JD-10 Recognized-tag totality.** 0008's name constraint invalidates all
   three of 0002's canonical fixtures, which 0002 declares normative — rename
   them; there are no users to migrate. Still open: whether a declared
@@ -572,7 +592,11 @@ not a negotiation.
   N-4): "a key served by zero … readers" refused at load cannot apply to
   `recognized` (kernel-supplied) or `--tag` keys (§JD-9) — the binding
   validation needs a provenance scope; owner 0002 at its re-entry, with 0004's
-  semantics.
+  semantics. **Closed at (ii) 2026-08-24** (iteration-4 gate): 0002 settled
+  it in fenced text (`0002:675-707`) and §D7(ii) above now carries the scope;
+  0004's unscoped restatement (`0004:254-257`) is a citation repair
+  (0004 `deviations.md` D2). Sibling re-locks (iteration 4): 0002, 0003, 0004
+  all checked consistent with §D5/§D6/§D7 (`iter-4/discharge-check-*.md`).
 - **JD-18 Conforming-view enforcer.** 0003 A18/A20 route the runtime half of
   the declaration-conformance check (an observed always-present key omitted at
   runtime refuses under a green lint) and the atom carrier to "0007's next
@@ -580,6 +604,43 @@ not a negotiation.
   (`0006:935-940`). Open: which document states the view-level check and where
   it runs. Siblings: 0003, 0007. *(0007×0003 F1, 0003×0006 A18/A20,
   iteration 2)*
+- **JD-19 Gate evaluation site and `deny` semantics.** 0002's closed layout
+  admits `[gate.<id>]` and a row-level `gate` list but delegates *when* the
+  gate runs and *what a deny means* to 0004 (`0002:709-714`); 0004 lists
+  `gate denied` once as a refusal (`0004:804`) and once as a typed
+  non-refusal result (`0004:502`) and never states the site; 0005's fenced
+  `resolve` verb has no gate carrier (`0005:380-386`, `393-397`). Open: where
+  in §D2's gate-then-count flow a gate accessor is consulted, whether a deny
+  is a refusal or an escape class, and how a plan reports it. User-visible
+  stake: a gated row either never fires silently or surfaces as an error.
+  Siblings: 0002, 0004, 0005. *(0002×0004 F-B, 0004×0005 F8, critique Q-2,
+  iteration 4)*
+- **JD-20 CLI carriage of §D5/§D7 write semantics.** 0005's `--write
+  name=value` grammar (`0005:393-395`) cannot carry a reserved `<clear>` or
+  a set-kind member sequence, and no boundary refuses a `--write` key outside
+  any writer's `keys`; §D5's landing list omits 0005. Open: the `set-state`
+  / `--write` / `--tag` syntax for a clear and for a set value, and whether
+  the CLI or the accessor refuses an unbound write key. User-visible stake: a
+  skill cannot clear a tag or write a set through the CLI at all. Siblings:
+  0002, 0004, 0005. *(0004×0005 F7/F8, 0002×0005 F7, iteration 4)*
+- **JD-21 `Block` cardinality.** 0007 fences the atom's `Block` as "an
+  exported named STRING type carrying exactly two constants" (`0007:1264-1266`,
+  per §D1); 0002 fences a third `match` member on §D6's authority and tells an
+  implementer building from 0007 to widen (`0002:923-938`). One Go type
+  cannot satisfy both. Open: does `Block` gain `BlockMatch`, or does the
+  match/guard split live outside the atom (a separate slice on `Row`)?
+  User-visible stake: none directly; it is the type 0006 serializes and
+  0003's identity tuple reads. Siblings: 0002, 0003, 0007. *(critique Q-4,
+  iteration 4)*
+- **JD-22 Set-valued tag *value* encoding at the kernel seam.** The kernel's
+  `Tag.Value` is a `string`; 0002 stores a set-kind write as a member
+  sequence (`0002:843-853`, `1146-1150`), 0004 asserts read-back equality
+  over an unspecified form, and 0007's `contains` contract-test leg is
+  blocked on 0003 declaring the element encoding (`0007:2157-2168`) — 0003
+  declares literal spelling and element universe only. Open: the canonical
+  byte form of a set value crossing `Tag.Value`, and who declares it
+  (0007 assigns 0003). Siblings: 0002, 0003, 0004, 0007. *(0007×0003 F5,
+  0002×0004 F-A, critique Q-5, iteration 4)*
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve

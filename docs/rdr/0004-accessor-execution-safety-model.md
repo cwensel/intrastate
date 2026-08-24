@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [re-locked 2026-08-24 — Gate PASS. JDR 0001 §D5 (§JD-15)
+- **Status**: Final [joint decision → JDR 0001 §JD-19, §JD-20, §JD-22: gate site and deny semantics; CLI carriage of clear/set writes; set-value encoding] [re-locked 2026-08-24 — Gate PASS. JDR 0001 §D5 (§JD-15)
   landed: `<clear>` is reserved, a clear is a removal, read-back asserts absence,
   an idempotent clear succeeds, and a read yielding the literal is unreadable
   (A11, MVV Scenario 9). §D7 (§JD-17) landed: the definition is the
