@@ -717,28 +717,35 @@ const adversarialSubprocessEnv = "GUARD_ADV_SUBPROCESS"
 // three standard descriptors come first.
 const adversarialReadyFD = 3
 
-// Startup is generous because it is bounded by the machine, not by the
-// code under test. The body deadline is the one that matters — it is the
-// window a regressed enumeration allocates in, and the work it covers is
-// microseconds of honest enumeration.
+// Startup and teardown are generous because they are bounded by the
+// machine — process spawn and the test framework's exit path — not by the
+// code under test, and nothing is enumerating during either. The body
+// deadline is the one that matters: it is the only window a regressed
+// enumeration allocates in, and it covers microseconds of honest work.
 const (
-	adversarialStartupDeadline = 30 * time.Second
-	adversarialBodyDeadline    = 2 * time.Second
+	adversarialStartupDeadline  = 30 * time.Second
+	adversarialBodyDeadline     = 500 * time.Millisecond
+	adversarialTeardownDeadline = 30 * time.Second
 )
 
 func assertTerminates(t *testing.T, what string, body func()) {
 	t.Helper()
 
-	// Inside the child: signal the parent immediately before entering the
-	// body, then run only the call this child was spawned for — skipping
-	// the others so one hang cannot be blamed on its siblings.
+	// Inside the child: bracket the body with a signal on each side, so the
+	// parent can time the BODY rather than the whole process. Only the call
+	// this child was spawned for runs; skipping its siblings keeps one hang
+	// from being blamed on them.
 	if want := os.Getenv(adversarialSubprocessEnv); want != "" {
 		if want == what {
-			if ready := os.NewFile(adversarialReadyFD, "ready"); ready != nil {
-				_, _ = ready.Write([]byte{1})
-				_ = ready.Close()
+			signal := os.NewFile(adversarialReadyFD, "signal")
+			if signal != nil {
+				_, _ = signal.Write([]byte{1}) // entering the body
 			}
 			body()
+			if signal != nil {
+				_, _ = signal.Write([]byte{1}) // the body returned
+				_ = signal.Close()
+			}
 		}
 		return
 	}
@@ -766,35 +773,105 @@ func assertTerminates(t *testing.T, what string, body func()) {
 	}
 	pw.Close() // the parent's copy, so the read below sees EOF if the child dies
 
-	ready := make(chan struct{})
+	// Each signal byte the child writes, delivered as its own receive.
+	signals := make(chan struct{}, 2)
 	go func() {
-		defer close(ready)
-		_, _ = pr.Read(make([]byte, 1))
+		defer close(signals)
+		buf := make([]byte, 1)
+		for {
+			if _, err := pr.Read(buf); err != nil {
+				return // the child exited or closed its end
+			}
+			signals <- struct{}{}
+		}
 	}()
 
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
-	// Two deadlines, because they bound different things. Process startup
-	// is slow and varies with the machine, so it gets a generous one. The
-	// body itself enumerates a domain of at most two values, so once the
-	// child signals it should return in microseconds — and that is the
-	// window in which a regressed tree allocates. Keeping it tight is what
-	// holds the runaway's footprint down; the startup allowance costs
-	// nothing, since nothing is enumerating yet.
-	select {
-	case <-ready:
-	case err := <-done:
-		if err != nil {
+	// Three phases, each bounded by what it actually contains. Startup and
+	// teardown are bounded by the machine — process spawn, and the test
+	// framework's own exit path — so they get generous allowances, and
+	// nothing is enumerating during either. Between the two signals sits
+	// the body alone: a domain of at most two values, microseconds of
+	// honest work, and the ONLY window a regressed tree allocates in. That
+	// is why it gets a sub-second deadline. Timing the body by waiting for
+	// process exit instead would fold teardown into the same budget and
+	// force it wide enough to cover `-race`, which is what a runaway would
+	// then have to grow in.
+	// `exited` holds the child's result once observed, so a phase that sees
+	// the process end does not consume it away from the teardown check.
+	var exited error
+	var haveExited bool
+
+	awaitSignal := func(phase string, deadline time.Duration) bool {
+		// The signals are AUTHORITATIVE, so take one whenever it is already
+		// buffered. A fast child can write both bytes and exit before the
+		// parent's first receive, leaving this select with two ready cases;
+		// `select` would then pick between them at random and report that
+		// the child exited before signalling — a flake on correct code.
+		select {
+		case _, ok := <-signals:
+			if ok {
+				return true
+			}
+		default:
+		}
+
+		select {
+		case _, ok := <-signals:
+			if !ok {
+				break
+			}
+			return true
+		case err := <-done:
+			exited, haveExited = err, true
+			// The child may have signalled on its way out. Its write end is
+			// closed now that it has exited, so the reader drains what is
+			// left and closes `signals`; ranging to completion collects any
+			// such byte, and one of them decides this phase.
+			for range signals {
+				return true
+			}
+			if err != nil {
+				t.Errorf("%s failed in the watchdog subprocess: %v\n%s",
+					what, err, out.String())
+			} else {
+				t.Errorf("%s: the watchdog subprocess exited before it "+
+					"signalled %s\n%s", what, phase, out.String())
+			}
+			return false
+		case <-time.After(deadline):
+			_ = cmd.Process.Kill()
+			<-done
+			if phase == "the body returning" {
+				t.Errorf("%s did not terminate: the loop test `n <= max` "+
+					"cannot fail at MaxInt, so enumerating a narrow "+
+					"dimension runs forever", what)
+			} else {
+				t.Errorf("%s: the watchdog subprocess never signalled %s\n%s",
+					what, phase, out.String())
+			}
+			return false
+		}
+		t.Errorf("%s: the watchdog subprocess closed its signal pipe before "+
+			"signalling %s\n%s", what, phase, out.String())
+		return false
+	}
+
+	if !awaitSignal("entering the body", adversarialStartupDeadline) {
+		return
+	}
+	if !awaitSignal("the body returning", adversarialBodyDeadline) {
+		return
+	}
+
+	if haveExited {
+		if exited != nil {
 			t.Errorf("%s failed in the watchdog subprocess: %v\n%s",
-				what, err, out.String())
+				what, exited, out.String())
 		}
 		return
-	case <-time.After(adversarialStartupDeadline):
-		_ = cmd.Process.Kill()
-		<-done
-		t.Fatalf("%s: the watchdog subprocess never reached the body\n%s",
-			what, out.String())
 	}
 
 	select {
@@ -803,12 +880,11 @@ func assertTerminates(t *testing.T, what string, body func()) {
 			t.Errorf("%s failed in the watchdog subprocess: %v\n%s",
 				what, err, out.String())
 		}
-	case <-time.After(adversarialBodyDeadline):
+	case <-time.After(adversarialTeardownDeadline):
 		_ = cmd.Process.Kill()
 		<-done
-		t.Errorf("%s did not terminate: the loop test `n <= max` cannot "+
-			"fail at MaxInt, so enumerating a narrow dimension runs forever",
-			what)
+		t.Errorf("%s: the watchdog subprocess did not exit after its body "+
+			"returned\n%s", what, out.String())
 	}
 }
 
