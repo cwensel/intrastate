@@ -234,3 +234,91 @@ func TestAdv3_ClearingWriteDispositionMustNotRecordTheClearLiteral(t *testing.T)
 		}
 	}
 }
+
+// --- ADV-4 ---------------------------------------------------------------
+
+// ADV-4 — a PARTIAL pre-write snapshot silently drops the unread keys'
+// protection (Phase 3a FAIL-2).
+//
+// A narrower and more reachable variant of ADV-2: the pre-write read does
+// NOT fail as a whole, so `raw.class` is empty and the wholly-failed-
+// snapshot guard never fires. It simply names one protected key
+// unreadable. `readOutcome.classify` reports that key in its `unread`
+// return, which the pre-write path discarded — unlike the post-write
+// read-back, which correctly refuses `read_back_incomplete` on a non-empty
+// `unread`. The unread key therefore acquires no baseline, and
+// `verifyReadBack`'s `before` loop has nothing to compare it against, so a
+// write that clobbers it passes green.
+//
+// `0004:C12` requires observed and recognized tag values "present before
+// the write" to be verified unchanged. A key whose pre-write value was
+// never established cannot support that claim, so the verification did not
+// run for it: `read_back_incomplete` (`0004:C13`, REQ-62), carrying the
+// applied-but-unverified sense because the command already ran
+// (`0004:C14`, REQ-63).
+//
+// Defends: `0004:C12` / REQ-53, REQ-58, REQ-62, REQ-80.
+func TestAdv4_PartialPreWriteSnapshotMustNotYieldSuccess(t *testing.T) {
+	s := newStore(map[string]string{keyStatus: "draft", keyProfile: "large"})
+
+	w := &writeBinding{store: s}
+	r := &readBinding{store: s}
+	e := writeExec(t, s, w, r, keyStatus)
+
+	// The pre-write read RESOLVES `status` and names only `profile`
+	// unreadable, so the read as a whole does not refuse — `raw.class`
+	// stays empty and only `classify`'s `unread` return carries the gap.
+	// The post-write re-read sees a readable, clobbered `profile`.
+	s.unreadable[keyProfile] = true
+	w.corrupt = func(st *store) {
+		st.tags[keyProfile] = "small"
+		delete(st.unreadable, keyProfile)
+	}
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyStatus, Value: "final"},
+	))
+
+	if !got.Refused() {
+		t.Fatalf("Write reported SUCCESS (Written=%+v) after a PARTIAL pre-write "+
+			"snapshot left %q with no baseline, while the write changed it from %q "+
+			"to %q; want a refusal — the verification did not run for that key",
+			got.Written, keyProfile, "large", "small")
+	}
+
+	switch got.Refusal.Class {
+	case accessor.ClassReadBackIncomplete, accessor.ClassReadBackMismatch:
+	default:
+		t.Errorf("Write refused %q; want read_back_incomplete or read_back_mismatch",
+			got.Refusal.Class)
+	}
+
+	if !got.Refusal.Applied() {
+		t.Errorf("Refusal.Applied() = false; the write command already ran, so the " +
+			"refusal MUST carry the applied-but-unverified sense (`0004:C14`)")
+	}
+	if w.Invocations() != 1 {
+		t.Errorf("write binding invoked %d times; want exactly 1 — no retry, undo, "+
+			"or re-derivation (`0004:C14`)", w.Invocations())
+	}
+}
+
+// ADV-4 negative control: with a FULLY readable pre-write snapshot and no
+// clobber, the identical fixture must SUCCEED. Without this, ADV-4 would
+// pass against an executor that refuses every write.
+func TestAdv4Control_CompletePreWriteSnapshotStillSucceeds(t *testing.T) {
+	s := newStore(map[string]string{keyStatus: "draft", keyProfile: "large"})
+	w := &writeBinding{store: s}
+	r := &readBinding{store: s}
+	e := writeExec(t, s, w, r, keyStatus)
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyStatus, Value: "final"},
+	))
+	mustWriteSucceed(t, got)
+
+	if v, absent, _ := s.get(keyProfile); absent || v != "large" {
+		t.Errorf("protected tag %q = (%q, absent=%v); want %q untouched",
+			keyProfile, v, absent, "large")
+	}
+}

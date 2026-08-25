@@ -281,11 +281,27 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// nothing to snapshot and no pre-write read runs.
 	protected := protectedKeys(reader, hasReader, plannedKeys)
 	before := map[string]string{}
+	// baselineUnread names protected keys whose PRE-write value could not
+	// be established. Their "unchanged" claim is unverifiable, so the
+	// verification did not run for them (`0004:C13`). The write still
+	// proceeds and the refusal is raised post-command: `read_back_incomplete`
+	// is by contract reported after the write command already ran and
+	// carries the applied-but-unverified sense (`0004:C14`, REQ-63).
+	var baselineUnread []string
 	if len(protected) != 0 {
 		rt, _ := reader.timeout()
 		raw := e.invokeRead(ctx, reader, art, rt, protected)
-		if raw.class == "" {
-			vals, _ := raw.classify(protected, false)
+		if raw.class != "" {
+			// A timed-out, errored, or incomplete pre-write read
+			// establishes NO baseline. Discarding it leaves `before`
+			// empty, which makes `0004:C12`'s protected-tag clause
+			// vacuously true (REQ-53, REQ-80).
+			baselineUnread = slices.Clone(protected)
+		} else {
+			vals, unread := raw.classify(protected, false)
+			// A PARTIAL snapshot protects only the keys it read; the
+			// unread remainder is unverifiable, not unconstrained.
+			baselineUnread = unread
 			for _, v := range vals {
 				if !v.Absent {
 					// Tags absent before the write are unconstrained.
@@ -319,6 +335,18 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		r := refusalOf(def, timeout, ClassReadBackIncomplete)
 		r.applied = true
 		r.Keys = plannedKeys
+		r.Expected = planned
+		return WriteResult{Refusal: r}
+	}
+
+	// A protected key with no established pre-write value cannot be
+	// compared, so `0004:C12`'s "unchanged" clause did not run for it.
+	// That is `read_back_incomplete` — never a mismatch, which asserts
+	// the artifact is wrong, and never success (`0004:C13`, REQ-62).
+	if len(baselineUnread) != 0 {
+		r := refusalOf(def, timeout, ClassReadBackIncomplete)
+		r.applied = true
+		r.Keys = baselineUnread
 		r.Expected = planned
 		return WriteResult{Refusal: r}
 	}
