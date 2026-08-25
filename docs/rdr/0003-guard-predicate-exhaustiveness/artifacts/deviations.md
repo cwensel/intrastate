@@ -218,3 +218,179 @@ in run 4. Instantiates `resolve.TestGuardEvaluatorContract` (0007 Phase 3). See
   test still shows carriage is decided by the OPERATOR rather than by the
   declared kind — the point the fixture's own comment makes. No assertion
   changed.
+
+---
+
+# Phase 3c fixup — new entries
+
+## D10 — `acceptedIn` is expressed over the group's DECIDABLE sub-product
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation
+- **What**: the RDR states the scoped product as one product over every
+  participating dimension, and states that an atom lint cannot project
+  takes the blocking inability-to-prove outcome "for that dimension". It
+  does not say what a row constraining only PROVABLE dimensions denotes
+  when some OTHER dimension of its group is unprovable. Read as one
+  indivisible product, every row in such a group becomes undecidable and
+  the surviving overlap check (REQ-44) has nothing left to run on.
+- **Evidence**: REQ-44 scopes the surviving check to "the group's
+  **decidable** rows", which presupposes a group can hold both kinds at
+  once. The MVV Scenario-2 walkthrough (`0003:1408`) declines overlap
+  because "step 4 produced none **for the two ordinary rows**" — the rows
+  that CARRY the unprojectable atoms — rather than because the group holds
+  one. REQ-58 assigns the outcome "for that dimension". REQ-95 requires
+  every decidable defect in one pass.
+- **Resolution**: unprojectability is scoped to the dimension that carries
+  it. `acceptedIn` projects onto the group's decidable sub-product — the
+  participating keys with a finite declared domain over which no row
+  carries an unprojectable atom. A row carrying an atom over an
+  undecidable dimension still yields the unprojectable set: dropping the
+  atom would widen the row past what it denotes. Where every dimension is
+  decidable the sub-product IS the scoped product, so the provable path is
+  byte-identical to before, and COVERAGE is still compared against the
+  full product — never against the restriction, which would be a green
+  claim over a proper subset of the product.
+- **New public surface**: none. `decidableKeys` / `decidableProduct` /
+  `productOver` are unexported.
+
+## D11 — The published bound applies per dimension, not only per product
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation
+- **What**: REQ-86 – REQ-92 state the bound over the SCOPED PRODUCT's
+  cardinality. They do not say what a single dimension whose own
+  assignment count exceeds the bound denotes. Read strictly per-product,
+  `Denotation` was free to enumerate a 2^22 value dimension before any
+  bound was consulted — on the refusal path itself (ADV-2).
+- **Evidence**: the bound's own rationale is "the largest product this
+  implementation's enumerating proof representation completes over within
+  its budget", so a dimension carrying more assignments than that can
+  appear in NO product this implementation enumerates. REQ-108 forbids
+  silently capping enumeration; the record's Risks mitigation forbids
+  naive powerset enumeration outright and requires the refusal be
+  reachable without it. A15 claims the cardinality bound PREDICTS
+  provability, which a per-product-only reading refutes.
+- **Resolution**: `valueAssignments` declines a dimension whose own
+  assignment count exceeds `Bound()`. `lintGroup` tests the bound before
+  the projection scan and after every dimension is known finite — the
+  order REQ-93 states — so a finite over-large product still refuses
+  `graph-product-too-large` carrying `(computed size, bound)`, and a
+  product carrying an unprovable dimension still reports no computed size
+  (REQ-94). No verdict changes; only the cost of reaching it.
+- **New public surface**: none.
+
+## D12 — The exponential must saturate, not wrap
+
+- **Type**: SPEC-DEFECT (implementation), mechanically resolvable
+- **Status**: mechanical translation
+- **What**: `domainSize` computed a `set` dimension as `1 << |elements|`
+  and `spread` computed an unmarked dimension as `1 << |domain|`, neither
+  guarded. In Go a shift at or past the integer width yields ZERO and a
+  shift of 63 yields a negative. A 64-element element universe therefore
+  reported a value dimension of size 0 and a whole-product cardinality of
+  0 — comfortably UNDER the published bound, fully "provable", and GREEN.
+- **Evidence**: `Cardinality` already saturates at `cardinalityCeiling`
+  on exactly this reasoning, stated in its own comment: "a wrapped
+  negative would read as under the bound and certify the very product the
+  clause refuses". The rule was stated for the product and not applied to
+  the dimensions composing it. REQ-86 requires the bound be ENFORCED,
+  which a wrapped comparison does not do.
+- **Resolution**: `spread` saturates at the same ceiling and floors a
+  negative domain at zero. Found while fixing ADV-2; not in the Phase 3b
+  findings.
+- **New public surface**: none.
+
+## D13 — ADV-4: an inverted int bound carries no readable domain
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation
+- **What**: Phase 3b recorded ADV-4 as LATENT, because `table.Load`
+  refuses `min > max` before a declaration reaches this package. But
+  `AssignmentCount` is exported and takes a `table.TagDecl` directly, and
+  `agrees`' doc comment states the agreement rule is read "on this RDR's
+  own surface, so a declaration built in memory is judged by it too" —
+  which it was not: `agrees` never compared the endpoints.
+- **Evidence**: REQ-18 fixes `{min..max}` as inclusive at both endpoints,
+  "so `{0..3}` has cardinality 4", which presumes an ordered pair; `{3..0}`
+  names no value. REQ-15's family makes a declaration that carries no
+  readable finite domain take the blocking inability-to-prove outcome
+  rather than yielding a count.
+- **Resolution**: `agrees` requires `*Min <= *Max`, so an inverted bound
+  carries no readable domain — the same answer the loader gives, now
+  reachable on this RDR's own surface. `spread`'s floor (D12)
+  independently removes the `1 << -2` panic. **Weighed and fixed rather
+  than left latent**: the defence-in-depth cost is one comparison, the
+  exposure is an exported function, and the doc comment already claimed
+  the behaviour. The tripwire `TestAdv_RecordedIntBoundInversion` is
+  unchanged and still green — it asserts the loader premise, not this.
+- **New public surface**: none.
+
+## D14 — ADV-1: the non-empty rule is the LITERAL's, not the held value's
+
+- **Type**: SPEC-DEFECT (implementation), mechanically resolvable
+- **Status**: mechanical translation
+- **What**: ADV-1's two surfaces disagreed about whether a held `[]` is a
+  value at all. REQ-89 makes a `set` dimension `2^|element universe|` — "a
+  set-valued tag holds any SUBSET" — so the scoped product enumerates the
+  empty subset, and `Conforms` admits `caps=[]` as a conforming view. But
+  `Evaluator.Evaluate`'s `contains` arm parsed the HELD value with
+  `parseSetLiteral`, whose non-empty requirement is the operator/kind
+  matrix's published shape for the AUTHORED LITERAL (REQ-4). A held `[]`
+  was therefore unevaluable, and the kernel refused `guard_unevaluable` on
+  a conforming view lint had proved — the false exhaustiveness claim
+  REQ-67 forbids.
+- **Evidence**: REQ-57 states `contains` denotes "the assignments whose
+  held set **contains** every listed element". Containment is TOTAL over
+  sets: `[]` does not contain `x`, so the verdict is FALSE, not
+  undecidable. Nothing in the record extends the literal's non-empty shape
+  to a held value, and REQ-13's declaration model carries no
+  non-emptiness marker a `set` tag could be declared with.
+- **Resolution**: `parseHeldSet` decodes a held §D13 canonical JSON array
+  with no cardinality rule; `parseSetLiteral` keeps the non-empty rule and
+  is used for the authored literal only. `Denotation` additionally
+  propagates the seam's three-valued verdict instead of collapsing
+  UNEVALUABLE into false, so any future unevaluable assignment makes the
+  atom unprojectable rather than crediting its complement.
+- **Alternative rejected**: dropping the empty subset from the product —
+  named as a candidate in the Phase 3b note — would make a `set`
+  dimension `2^n - 1` and contradict REQ-89, whose own test
+  (`TestReq89_…`) pins the powerset. It would also assert non-emptiness of
+  a `set` tag, a declaration property the model does not carry.
+- **New public surface**: none.
+
+## D15 — ADV-1's second assertion is stale against its own premise
+
+- **Type**: TEST-FIXTURE
+- **Status**: needs author decision — **and the work continued**
+- **What**: `TestAdv1_GreenClaimCoversAViewTheRuntimeRefuses` closes with a
+  second assertion guarded as "so a fix that merely stops the kernel
+  refusing does not satisfy this test: either the empty subset leaves the
+  product, or the group must not be green". After D14 the group IS green,
+  the empty subset IS in the product, and the two surfaces AGREE — the
+  runtime resolves `caps=[]` to `adv1-not` and `caps=["x"]` to `adv1-has`,
+  a genuine complete partition. The assertion still fires, on a message
+  whose own premise ("the runtime finds its guard UNEVALUABLE over a held
+  `[]`") is no longer true.
+- **Why this is not a weakened test**: the obligation the assertion states
+  is "Lint MUST NOT credit a row with an assignment the runtime cannot
+  decide." That obligation is now SATISFIED — the runtime can decide it.
+  The author foresaw two fixes and guarded against a third that would have
+  weakened the runtime veto (REQ-67). D14 is not that third fix: it
+  removes a SPURIOUS refusal the RDR's own `contains` semantics never
+  called for (REQ-57), rather than weakening a genuine veto. Both of the
+  author's own candidates are ruled out by the enforcement surface —
+  dropping the empty subset contradicts REQ-89's pinned powerset, and
+  withholding the group's claim would require declaring the dimension
+  unprovable, which REQ-58 reserves for atoms that cannot project.
+- **What was NOT done**: the assertion was not edited, relaxed, or
+  deleted. It stands exactly as authored, and the guard suite therefore
+  reports one failure.
+- **Standing in its place**: `TestFixup_EmptyHeldSetIsDecidedRatherThanRefused`
+  pins the underlying obligation directly — every conforming view a green
+  group covers, the runtime decides; the empty subset stays in the
+  product — and was verified to FAIL against the pre-fix evaluator.
+- **The decision the author owns**: whether to retire the stale assertion
+  now that its premise is gone, or to reject D14's reading of REQ-57 and
+  require a different resolution. The implementation follows the evidence
+  as recorded above.

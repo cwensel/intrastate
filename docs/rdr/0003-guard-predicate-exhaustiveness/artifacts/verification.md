@@ -338,3 +338,126 @@ failures in the repository; every pre-existing test still passes.
   `domainSize` does not floor the computed range. Whether to harden this is
   a judgement call — it is defence in depth behind a loader check that
   currently holds.
+
+---
+
+# Phase 3c — fixup outcomes
+
+How each defect was closed. Every fix is the minimum change that makes the
+governing clause true; no existing assertion was edited, relaxed, or
+deleted. New deviations D10–D15 in `deviations.md`.
+
+## FAIL-1 — CLOSED
+
+- **Root cause**: `acceptedIn` consulted only PROJECTION — the group's
+  product and each atom's `Denotation` — and never `CanRefuse`. The
+  withholding decision and the projection decision are independent: when
+  every dimension is finite and single-valued, which is the narrowing's own
+  interesting case, a can-refuse row's atoms all project.
+- **Fix**: `acceptedIn` returns the unprojectable set for a row that can
+  refuse. One condition, at the head of the function. Both doc comments
+  (`AcceptedAssignments`, `coverageUnion`) already described this.
+- **Effect**: the row contributes nothing to the union (REQ-43) and is never
+  paired by `pairwiseOverlaps` (REQ-44). The withholding finding still
+  fires, so the fix cannot be mistaken for dropping the row from lint.
+- **Regression test**: `TestFail1_CanRefuseRowContributesNoAcceptedAssignments`
+  — verified to fail on all three symptoms before the fix.
+
+## ADV-1 — CLOSED (one assertion outstanding; see D15)
+
+- **Root cause**: NOT where Phase 3b placed it. The defect is in the
+  EVALUATOR, not in lint's projection. `Evaluate`'s `contains` arm parsed
+  the HELD value with `parseSetLiteral`, whose non-empty requirement is the
+  operator/kind matrix's published shape for the AUTHORED LITERAL (REQ-4).
+  A held `[]` was refused as unevaluable, so the kernel refused
+  `guard_unevaluable` on a conforming view lint's own product enumerates.
+- **What settles it**: REQ-57 — `contains` denotes "the assignments whose
+  held set CONTAINS every listed element". Containment is TOTAL over sets;
+  `[]` does not contain `x`, so the verdict is FALSE, not undecidable. The
+  literal's shape rule never governed the held value.
+- **Fix**: `parseHeldSet` decodes a held §D13 array with no cardinality
+  rule; `parseSetLiteral` keeps the non-empty rule for the authored literal.
+  `Denotation` additionally propagates the seam's three-valued verdict
+  rather than collapsing UNEVALUABLE into false — reading a three-valued
+  seam two-valued is the general shape of the defect, and the `contains` arm
+  was the reachable instance.
+- **Both Phase 3b candidates were weighed and rejected**: dropping the empty
+  subset makes a `set` dimension `2^n-1`, contradicting REQ-89, whose own
+  test pins the powerset; propagating UNEVALUABLE as unprojectable ALONE
+  (without fixing the evaluator) was implemented, measured, and reverted —
+  it broke four Phase-1 tests (REQ-84, REQ-129, REQ-57, and the MVV
+  gap-and-overlap scenario) by making every `contains` dimension
+  unprojectable, since `[]` is a member of every powerset.
+- **Verified outcome**: the runtime now resolves `caps=[]` to `adv1-not` and
+  `caps=["x"]` to `adv1-has` — a genuine complete partition. The group's
+  green claim is TRUE: every conforming view it covers, the runtime decides.
+- **Regression test**: `TestFixup_EmptyHeldSetIsDecidedRatherThanRefused` —
+  verified to fail against the pre-fix evaluator.
+- **Outstanding**: `TestAdv1_…`'s second assertion still fires, on a message
+  whose own premise is now false. It was NOT edited. See D15 — the only
+  entry needing an author decision.
+
+## ADV-2 — CLOSED
+
+- **Root cause**: the bound was compared AFTER the work rather than before
+  it. `Denotation` consulted no bound, calling `valueAssignments` → the full
+  powerset; `unprovableReason` reached `Denotation` for every guard atom, so
+  the enumeration ran on the refusal path itself.
+- **Fix**, three parts, one cause:
+  1. `valueAssignments` declines a dimension whose own assignment count
+     exceeds `Bound()` — a dimension larger than the whole product bound can
+     appear in no product this implementation enumerates (D11).
+  2. `lintGroup` tests the bound BEFORE the projection scan and after every
+     dimension is known finite, the order REQ-93 states. `graph-product-too-large`
+     still carries `(computed size, bound)`; a product with an unprovable
+     dimension still reports no computed size (REQ-94).
+  3. `spread` saturates at the same ceiling `Cardinality` saturates at (D12).
+- **Effect**: guard suite wall-clock 1.6s → 0.4s. No verdict changed.
+- **Regression test**: `TestFixup_HugeSetUniverseIsRefusedRatherThanWrappingUnderTheBound`
+  — covers the D12 wrap at |universe| ∈ {40, 63, 64, 65, 96}; verified to
+  fail (OOM/hang) against the unguarded shift.
+
+## ADV-3 — CLOSED
+
+- **Root cause**: unprojectability was scoped to the GROUP rather than to
+  the dimension carrying it. `Product` returned the unprojectable set as
+  soon as any dimension lacked a finite domain, and `acceptedIn`
+  short-circuited on that, so one opaque `scalar` key made every row in the
+  group undecidable.
+- **Fix**: `acceptedIn` projects onto the group's DECIDABLE sub-product (D10).
+  A row carrying an atom over an undecidable dimension still yields the
+  unprojectable set. Where every dimension is decidable the sub-product IS
+  the scoped product, so the provable path is unchanged; coverage is still
+  compared against the FULL product.
+- **Grounding**: the MVV Scenario-2 walkthrough (`0003:1408`) declines
+  overlap because "step 4 produced none FOR THE TWO ORDINARY ROWS" — the
+  rows carrying the unprojectable atoms — which is the per-row reading.
+- **Regression test**: the Phase 3b `TestAdv3_…`, now passing on both its
+  halves (the emitted finding AND the accepted-assignment surface).
+
+## ADV-4 — FIXED, not left latent
+
+- **Weighed**: the Phase 3b note called hardening "a judgement call — it is
+  defence in depth behind a loader check that currently holds". Fixed,
+  because the cost is one comparison, `AssignmentCount` is EXPORTED and
+  takes a `table.TagDecl` directly, and `agrees`' own doc comment already
+  claims the rule is read "on this RDR's own surface, so a declaration built
+  in memory is judged by it too" — a claim the code did not honour.
+- **Fix**: `agrees` requires `*Min <= *Max` (D13); `spread`'s floor (D12)
+  independently removes the `1 << -2` panic. REQ-18 fixes both endpoints
+  inclusive, which presumes an ordered pair — `{3..0}` names no value, so it
+  carries no readable finite domain.
+- **Tripwire**: `TestAdv_RecordedIntBoundInversion` is UNCHANGED and still
+  green. It asserts the loader premise, which still holds.
+- **Regression test**: `TestFixup_InvertedIntBoundCarriesNoReadableDomain` —
+  asserts no count is reported, none is negative, and the ordered `{0..3}`
+  sibling still counts 4.
+
+## Suite state
+
+`go build ./...` clean; `golangci-lint run` 0 issues; `go test -race`
+clean. `internal/resolve`, `internal/table`, `internal/cli` green. In
+`internal/guard`: 148 tests pass — the 142 Phase-1 tests, the four
+Phase-3c regressions, `TestAdv2_…`, `TestAdv3_…`, and the `TestAdv_Recorded…`
+tripwire. One assertion fails: `TestAdv1_…`'s second half, unedited, per
+D15. No pre-existing test was edited, weakened, or broken.
