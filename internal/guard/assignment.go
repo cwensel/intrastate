@@ -297,8 +297,14 @@ func valueAssignments(d table.TagDecl) ([]string, bool) {
 			// per-dimension: a direct caller must not reach the loop.
 			return nil, false
 		}
+		// Counted, not bounded by `n <= *d.Max`: at `*d.Max == MaxInt`
+		// that test is unfalsifiable, because the `n++` past the last
+		// value wraps to MinInt rather than exceeding MaxInt. `width` is
+		// already the exact number of values the bound names, so
+		// iterating it that many times terminates on every domain
+		// `intWidth` admits.
 		domain := make([]string, 0, width)
-		for n := *d.Min; n <= *d.Max; n++ {
+		for n, i := *d.Min, 0; i < width; n, i = n+1, i+1 {
 			domain = append(domain, strconv.Itoa(n))
 		}
 		return spreadValues(domain, d.SingleValued), true

@@ -233,8 +233,11 @@ func IntDomain(d table.TagDecl) []int {
 	if !ok {
 		return nil
 	}
+	// Counted, not bounded by `n <= *d.Max` — see `valueAssignments`: a
+	// domain ending at MaxInt wraps its own loop variable rather than
+	// passing the test, so the exact width drives the iteration.
 	out := make([]int, 0, width)
-	for n := *d.Min; n <= *d.Max; n++ {
+	for n, i := *d.Min, 0; i < width; n, i = n+1, i+1 {
 		out = append(out, n)
 	}
 	return out

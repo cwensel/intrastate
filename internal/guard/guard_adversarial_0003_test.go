@@ -597,3 +597,66 @@ func TestAdv_WideIntDomainRefusesRatherThanCertifying(t *testing.T) {
 		})
 	}
 }
+
+// --- ADV-4c: a NARROW int domain whose top endpoint is MaxInt ------------
+
+// REQ-108: lint MUST "refuse or downgrade — never silently cap
+// enumeration", which presumes the enumeration terminates at all.
+//
+// `intWidth` (ADV-4b) refuses a width too wide to represent, but
+// `{MaxInt..MaxInt}` is only ONE value: the width is 1, the dimension is
+// far under the published bound, and `valueAssignments` therefore admits
+// it and enters the loop. The loop's `n <= *Max` test is unfalsifiable at
+// that endpoint — the `n++` past the last value wraps to MinInt instead of
+// exceeding MaxInt — so enumeration never returns and `guard.Lint` does
+// not terminate. Saturating the WIDTH does not reach this; only counting
+// the iterations does.
+//
+// The enumeration runs under a watchdog so this test fails rather than
+// hangs against an implementation that still wraps.
+// ADVERSARIAL
+func TestAdv_NarrowIntDomainAtMaxIntTerminates(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max int
+	}{
+		{"the single top value", math.MaxInt, math.MaxInt},
+		{"the top two values", math.MaxInt - 1, math.MaxInt},
+		{"the single bottom value", math.MinInt, math.MinInt},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			minV, maxV := tc.min, tc.max
+			d := table.TagDecl{
+				Kind: "int", Min: &minV, Max: &maxV,
+				SingleValued: true, Required: true,
+			}
+
+			want := maxV - minV + 1
+			n, ok := guard.AssignmentCount(d)
+			if !ok || n != want {
+				t.Fatalf("AssignmentCount({%d..%d}) = (%d, %v); want (%d, true)",
+					minV, maxV, n, ok, want)
+			}
+
+			got := make(chan []int, 1)
+			go func() { got <- guard.IntDomain(d) }()
+			select {
+			case values := <-got:
+				if len(values) != want {
+					t.Errorf("IntDomain({%d..%d}) enumerated %d values; want %d",
+						minV, maxV, len(values), want)
+				}
+				if len(values) > 0 && values[len(values)-1] != maxV {
+					t.Errorf("IntDomain({%d..%d}) ended at %d; want %d",
+						minV, maxV, values[len(values)-1], maxV)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatalf("IntDomain({%d..%d}) did not terminate: the loop "+
+					"test `n <= max` cannot fail at MaxInt, so enumerating a "+
+					"one-value dimension runs forever", minV, maxV)
+			}
+		})
+	}
+}
