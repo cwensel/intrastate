@@ -354,3 +354,56 @@ func TestFixup_EmptyHeldSetIsDecidedRatherThanRefused(t *testing.T) {
 		}
 	}
 }
+
+// A dimensionless group — one carrying no guard dimension at all — makes no
+// exhaustiveness claim, and lint correctly withholds one. But withholding the
+// CLAIM is not withholding every check: the overlap invariant ("no
+// finite-domain input assignment may enable two ordinary rows") carries no
+// finitely-declared precondition, because it reads declarations rather than a
+// product. Two guard-atom-free ordinary rows in one selection context are
+// enabled by EVERY assignment, so returning before `overlapFindings` emitted
+// no verdict and no finding at all — lint exited clean on a model the kernel
+// always refuses `ambiguous_match`. Found by roborev triage (job 6087).
+// ADVERSARIAL
+func TestFixup_DimensionlessGroupStillReportsOrdinaryOverlap(t *testing.T) {
+	m := mustLoadSource(t, declBlock(`
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large"]
+single_valued = true
+required = true
+`)+`
+[[rule]]
+id = "a"
+source = "t:a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+
+[[rule]]
+id = "b"
+source = "t:b"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+`)
+
+	g := groupOf(t, m, "a")
+	if len(guard.Dimensions(m, g)) != 0 {
+		t.Fatalf("the fixture's premise is gone: the group carries %d "+
+			"dimensions, so it is not the dimensionless case under test",
+			len(guard.Dimensions(m, g)))
+	}
+
+	reports := guard.Lint(m)
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeOverlap
+	}) {
+		t.Errorf("two unguarded ordinary rows in one selection context "+
+			"produced no `graph-overlap` finding; findings=%v. Every "+
+			"assignment enables both rows, and the kernel refuses "+
+			"`ambiguous_match` on this model, so lint exiting clean here is "+
+			"a false green", allFindings(reports))
+	}
+}

@@ -179,6 +179,21 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 		// is nothing here for a claim to range over. Certifying it green
 		// would put a proof beside groups that carry one, and the reader
 		// could not tell the two apart.
+		//
+		// OVERLAP still runs. Withholding the CLAIM is not withholding
+		// every check: the exhaustiveness claim carries the
+		// finitely-declared precondition, while the overlap invariant
+		// ("no finite-domain input assignment may enable two ordinary
+		// rows") carries none — it reads declarations, never a product.
+		// Two guard-atom-free rows in one selection context are enabled by
+		// EVERY assignment, so returning here emitted no verdict and no
+		// finding at all: lint exited clean on a model the kernel always
+		// refuses `ambiguous_match`. That is the false green this record
+		// exists to prevent, reached by skipping a claim-independent check.
+		r.Findings = append(r.Findings, overlapFindings(m, g)...)
+		if countCodeIn(r.Findings, CodeOverlap) > 0 {
+			r.Verdict = VerdictOverlap
+		}
 		r.CoverageUnion = newSet(nil)
 		return r
 	}
@@ -407,6 +422,15 @@ func coverageFindings(m *table.Model, g Group) ([]Finding, string) {
 	var out []Finding
 	var closedBy string
 
+	// NOTE: RDR 0006 requires the `ambiguous_match` arm be treated as
+	// vacuously closed for a group whose ordinary population is
+	// overlap-free, checking it only where a `graph-overlap` finding makes
+	// it reachable. This implementation does NOT do that, deliberately:
+	// REQ-77 (`0003:C15`) requires the unclosed arm draw its gap finding
+	// per (group x declared class), and its own test fixture is
+	// overlap-free — so the two locked records prescribe opposite outcomes
+	// on the same model. Picking a side here would silently overrule one of
+	// them, so the conflict is recorded for adjudication instead.
 	for _, class := range RescuableClasses() {
 		union := CoverageUnionFor(m, g, class)
 		if union.Equal(product) {
