@@ -22,11 +22,20 @@ engine README — this file is only the per-project index.
 ## Implementing
 
 Read **[BUILD-ORDER.md](BUILD-ORDER.md)** before `/rdr-implement` on any
-`0002-0009` member. Build order is **not** the lock order the cluster gate
-reasoned about, and the two run in opposite directions at the head of the
-graph: **RDR 0007 Phase 1 defines the `internal/resolve::Row` that RDR 0002
-Phase 2 normalizes to**, so 0007 goes first even though 0002 produces the wire
-format. Neither open joint decision (§JD-5, §JD-18) blocks the build.
+`0002-0009` member. Each RDR is implemented to completion in one run; the run
+order is:
+
+```
+0007 → 0002 → 0003 → 0006 → 0004 → 0005 → 0008 → 0009
+```
+
+The first two are forced: **RDR 0007 defines the `internal/resolve::Row` that
+RDR 0002 normalizes to**, so 0007 goes first even though 0002 produces the wire
+format — run order is not the lock order the cluster gate reasoned about, and
+the two invert at the head of the graph. 0002 must then precede 0003, because
+JDR 0001 §D13 moved the set-value encoding declaration to 0002 and that is what
+broke the 0007↔0003 cycle. Neither open joint decision (§JD-5, §JD-18) blocks
+any run.
 
 ## Status legend
 

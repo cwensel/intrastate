@@ -5,8 +5,9 @@ Pre-seeded by the `0002-0009` cluster gate, iteration 4 (2026-08-24 —
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
-**Build order: after 0007 Phase 1 and 0002's §D13 clause** — read-back equality
-is byte equality over 0002's canonical JSON array. See
+**Run order: 5 of 8** — after 0007, 0002 and 0006. Read-back equality is byte
+equality over 0002's canonical JSON array; §D9 settles the `gate denied`
+refusal/non-refusal split (D3 below). See
 [`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
 
 ---

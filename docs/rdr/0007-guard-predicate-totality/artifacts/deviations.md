@@ -6,10 +6,12 @@ Opened 2026-08-24 to record the joint decisions JDR 0001 answered after the
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
-**Build order: this RDR's Phase 1 is the head of the cluster graph** — it defines
-the `internal/resolve::Row` that RDR 0002 Phase 2 normalizes to, so it lands
-before 0002's Go phases despite 0002 owning the wire format. §D12 lands here.
-See [`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
+**Run order: this RDR runs FIRST (1 of 8)** — it defines the
+`internal/resolve::Row` that RDR 0002 normalizes to, so it precedes 0002
+despite 0002 owning the wire format. §D12 (`BlockMatch`) lands here. Phase 3's
+`contains` leg cites §D13's JSON-array form directly — 0002 writes that clause
+in run 2 and must match it, not redefine it. See
+[`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
 
 ---
 

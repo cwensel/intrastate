@@ -5,8 +5,8 @@ Pre-seeded by the `0002-0009` cluster gate, iteration 3 (2026-08-24 —
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
-**Build order: late (step 6)** — §JD-5's ordering resolves when both this RDR's
-and 0009's `Resolve`-entry checks are written. See
+**Run order: 7 of 8** — §JD-5's ordering resolves in run 8, when the second of
+this RDR's and 0009's `Resolve`-entry checks is written. See
 [`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
 
 ---

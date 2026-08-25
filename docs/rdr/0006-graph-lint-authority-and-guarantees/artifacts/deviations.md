@@ -5,6 +5,11 @@ Pre-seeded by the `0002-0009` cluster gate, iteration 3 (2026-08-24 —
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
+**Run order: 4 of 8** — after 0003, whose tag declaration model IS this RDR's
+lint input contract; ahead of 0004/0005. D2's stale citations include sites
+that 0002's and 0003's re-locks moved. See
+[`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
+
 ---
 
 ## D1 — §D7 landings absent from 0006's text (A6/A10 flip; terminal-non-owned finding; terminal spelling)
