@@ -564,7 +564,18 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 	atomSets := [][]Atom{nil}
 
 	for _, c := range candidates {
-		expanding := c.atom.Operator == "in"
+		// Expansion is a MATCH-BLOCK mechanism (`0002:C13`: "Every `in`
+		// atom in a rule's match blocks … expands"). A guard `in` is ONE
+		// predicate over a member set: `unless x in [a, b]` means "not a
+		// AND not b" — one row. Expanding it would mint one row per
+		// member, each excluding only its own, turning the author's
+		// conjunction into a disjunction so every minted row matches a
+		// view the author excluded. It would also fold an `unless` atom
+		// into a per-member `eq`, which `0002:C7` forbids outright, and
+		// bleed a guard member into the expansion suffix — where `#` is
+		// legally authorable, since `0002:C17` scopes the `#` ban to
+		// match-block `in` members "since only match blocks expand".
+		expanding := c.atom.Operator == "in" && c.atom.Block == BlockMatch
 		members := c.atom.Literal
 		if !expanding {
 			members = []string{""}
