@@ -664,42 +664,96 @@ func TestReq17_LoadReturnsOneRefusalNotAList(t *testing.T) {
 // The clause's own claim: neither absorbed-defect shape refuses. The
 // counts themselves are REQ-126 and REQ-127; here the assertion is that
 // both documents LOAD, so a refusal-shaped oracle would be wrong.
+//
+// SURVIVAL, not difference. Both legs run the REQ-126/127 five-delimiter
+// parameterization (`,` `;` `|` space, empty), mirroring REQ-59's loop.
+// The merge leg asserts the count over EVERY expanded row, not just the
+// first: `reconcile-rewind` inherits two match-block `in` lists of two
+// members each and expands to four rows, so indexing `rows[0]` would let a
+// normalizer that merged atoms on rows 2-4 only pass. The write leg
+// asserts the member sequence by exact content, sorted per REQ-57: mere
+// inequality survives a `members[0]` truncation, which yields ["x,y"] vs
+// ["x"] — distinct, yet the sequence did not survive.
 func TestReq18_AbsorbedDefectsTripNoCategory(t *testing.T) {
-	t.Run("the merge case loads and its atoms survive", func(t *testing.T) {
-		const rel = "delim/merge-delim-comma.toml"
-		m, err := table.Load(readFixture(t, rel), rel)
-		if err != nil {
-			t.Fatalf("%s refused with %v; this class trips no category and must "+
-				"be asserted positively over the normalized value", rel, err)
-		}
-		// The positive oracle: a COUNT over the normalized value.
-		rows := rowsByRuleID(m, "reconcile-rewind")
-		if len(rows) == 0 {
-			t.Fatal("the contributing rule normalized to no rows")
-		}
-		if got := len(atomsOn(rows[0], "finalized_at")); got != 2 {
-			t.Errorf("%d atoms; want 2 — the oracle is the atom count over the "+
-				"normalized value, never a refusal", got)
+	// Each fixture family spells the same two-member sets with one
+	// candidate in-member separator embedded in a member. The expected
+	// sequences are derived from that separator, not transcribed, so the
+	// oracle stays tied to the fixture's own delimiter.
+	seps := map[string]string{
+		"comma": ",",
+		"semi":  ";",
+		"pipe":  "|",
+		"space": " ",
+		"empty": "",
+	}
+
+	t.Run("the merge case loads and every expanded row's atoms survive", func(t *testing.T) {
+		for _, d := range []string{"comma", "semi", "pipe", "space", "empty"} {
+			t.Run(d, func(t *testing.T) {
+				rel := "delim/merge-delim-" + d + ".toml"
+				m, err := table.Load(readFixture(t, rel), rel)
+				if err != nil {
+					t.Fatalf("%s refused with %v; this class trips no category and must "+
+						"be asserted positively over the normalized value", rel, err)
+				}
+				// The positive oracle: a COUNT over the normalized value,
+				// asserted on every row the contributing rule expands to.
+				rows := rowsByRuleID(m, "reconcile-rewind")
+				// Two inherited match-block `in` lists of two members each:
+				// the §D6 expansion is the 2x2 product.
+				if len(rows) != 4 {
+					t.Fatalf("the contributing rule normalized to %d rows; want 4 — "+
+						"a count asserted on one row of four is not a count over the "+
+						"normalized value: %v", len(rows), rowIdentities(m))
+				}
+				for _, r := range rows {
+					if got := len(atomsOn(r, "finalized_at")); got != 2 {
+						t.Errorf("row %s carries %d atoms; want 2 — the two spellings "+
+							"stay distinct on EVERY expanded row, never a refusal",
+							r.Identity(), got)
+					}
+				}
+			})
 		}
 	})
 
-	t.Run("the write case loads and its two spellings stay distinct", func(t *testing.T) {
-		a, err := table.Load(readFixture(t, "delim/write-delim-comma-a.toml"),
-			"delim/write-delim-comma-a.toml")
-		if err != nil {
-			t.Fatalf("arm a refused: %v", err)
-		}
-		b, err := table.Load(readFixture(t, "delim/write-delim-comma-b.toml"),
-			"delim/write-delim-comma-b.toml")
-		if err != nil {
-			t.Fatalf("arm b refused: %v", err)
-		}
-		// The positive oracle: the write value's MEMBER SEQUENCE.
-		va := setWriteValue(t, a, "labels")
-		vb := setWriteValue(t, b, "labels")
-		if reflect.DeepEqual(va, vb) {
-			t.Errorf("the two spellings normalized to %v alike; the member "+
-				"sequence must survive normalization intact", va)
+	t.Run("the write case loads and its member sequence survives intact", func(t *testing.T) {
+		for _, d := range []string{"comma", "semi", "pipe", "space", "empty"} {
+			t.Run(d, func(t *testing.T) {
+				sep := seps[d]
+				// Arm a authors ["x<sep>y","z"], arm b ["x","y<sep>z"]: the
+				// same six characters, split two ways. Both are already in
+				// byte-lexicographic order (REQ-57), since 'x' < 'y' < 'z'
+				// and every separator sorts below 'y'.
+				cases := []struct {
+					rel  string
+					want []string
+				}{
+					{"delim/write-delim-" + d + "-a.toml", []string{"x" + sep + "y", "z"}},
+					{"delim/write-delim-" + d + "-b.toml", []string{"x", "y" + sep + "z"}},
+				}
+				var got [][]string
+				for _, c := range cases {
+					m, err := table.Load(readFixture(t, c.rel), c.rel)
+					if err != nil {
+						t.Fatalf("%s refused with %v; this class trips no category", c.rel, err)
+					}
+					// The positive oracle: the write value's MEMBER SEQUENCE,
+					// asserted by content. Inequality alone would survive a
+					// truncation to members[0].
+					v := setWriteValue(t, m, "labels")
+					if !reflect.DeepEqual(v, c.want) {
+						t.Errorf("%s normalized labels to %v; want %v — the member "+
+							"sequence must survive normalization intact", c.rel, v, c.want)
+					}
+					got = append(got, v)
+				}
+				// And, surviving intact, the two spellings stay distinct.
+				if reflect.DeepEqual(got[0], got[1]) {
+					t.Errorf("the two spellings normalized to %v alike under the %s "+
+						"delimiter; each member is delimited unambiguously", got[0], d)
+				}
+			})
 		}
 	})
 }
