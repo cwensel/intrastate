@@ -72,9 +72,11 @@ func Reach(m *table.Model) []Node {
 // found — the caller reports the ceiling rather than running on.
 //
 // The traversal is a fixpoint over MERGED nodes, never path-sensitive, and
-// the successor relation is what makes that literal rather than incidental:
-// every edge leaving one node reaches ONE successor node, whose per-tag
-// value sets are the join of what those edges produce. A path-sensitive
+// the node identity is what makes that literal rather than incidental: a
+// node is keyed by its owned-state, not by the path that reached it, so
+// every path arriving at one owned-state arrives at ONE node. Edges
+// reaching the SAME successor join into it; edges reaching different
+// successors stay distinct, which is all REQ-108 licenses. A path-sensitive
 // enumeration is therefore unrepresentable here rather than merely avoided,
 // and the exponential reading the record rejects has nowhere to arise.
 func reach(m *table.Model) (nodes []Node, complete bool) {
@@ -110,36 +112,61 @@ func reach(m *table.Model) (nodes []Node, complete bool) {
 		i := worklist[0]
 		worklist = worklist[1:]
 
-		next, any := successorOf(m, nodes[i])
-		if !any {
-			continue
-		}
-
-		// The successor folds into an EXISTING node whenever one already
+		// Each successor folds into an EXISTING node whenever one already
 		// stands for every concrete view it stands for, so a cycle closes on
 		// the node it came from rather than minting a fresh one each time
 		// round. The lattice is finite — a finitely-declared tag ranges over
 		// its declared domain's subsets, a tag with no finite domain over
 		// {held, absent} — so the widening reaches a fixpoint, self-loops
 		// and cycles included.
-		j := indexOf(nodes, next)
-		if j < 0 {
-			nodes = append(nodes, next)
-			worklist = append(worklist, len(nodes)-1)
-			continue
+		for _, next := range successorsOf(m, nodes[i]) {
+			j := indexOf(nodes, next)
+			if j < 0 {
+				nodes = append(nodes, next)
+				worklist = append(worklist, len(nodes)-1)
+				continue
+			}
+			merged := joinNodes(nodes[j], next)
+			if merged.key() == nodes[j].key() {
+				continue
+			}
+			nodes[j] = merged
+			worklist = append(worklist, j)
 		}
-		merged := joinNodes(nodes[j], next)
-		if merged.key() == nodes[j].key() {
-			continue
-		}
-		nodes[j] = merged
-		worklist = append(worklist, j)
 	}
 	return nodes, complete
 }
 
-// successorOf joins every edge leaving src into the ONE successor node they
-// share, and reports whether any edge left at all.
+// successorsOf returns the distinct successor nodes the edges leaving src
+// reach.
+//
+// Two edges reach THE SAME SUCCESSOR — and are joined, per REQ-108 — when
+// the nodes they produce hold the same OWNED TAGS. A node is an abstract
+// owned-state, "per owned tag: absent, or held with its set of possible
+// declared values" (REQ-101), so the presence footprint IS the successor's
+// identity and the per-tag value sets are what the lattice widening unions
+// over it. Two edges writing different values to the same tag therefore
+// still converge on one node whose value set is their union, which is the
+// merged, never-path-sensitive fixpoint REQ-108 requires.
+//
+// Two edges establishing DIFFERENT owned tags are not joined, because they
+// do not reach the same successor. Folding them together anyway — a
+// functional successor relation, one successor per source node — is unsound
+// in the false-green direction: `joinNodes` drops a key absent on either
+// side, so two rows writing different keys annihilate each other and the
+// relation stands for a concrete view no path produces. That
+// under-approximates presence, against REQ-106's over-approximation
+// contract and REQ-110's premise that a merged node admits a SUPERSET of
+// concrete views. Grouping by the presence footprint first is what makes
+// the join total: within one group every key is held on both sides, so the
+// absence-dominates arm never fires and no reachable key is erased.
+//
+// This stays a fixpoint over MERGED nodes and never path-sensitive: a node
+// is keyed by its owned-state, not by the path that reached it, so every
+// path arriving at one owned-state arrives at one node. Successor
+// multiplicity is a property of the transition relation, not of path
+// sensitivity — a DFA state has many successors and enumerates no paths —
+// and the lattice stays finite, so the widening still terminates.
 //
 // Escape rows are edges too, and they are SELF-LOOPS: an escape row carries
 // neither a write block nor a clear list, so its successor equals its
@@ -147,9 +174,12 @@ func reach(m *table.Model) (nodes []Node, complete bool) {
 // keeps a node reachable only through an escape rescue reachable here, and
 // what stops invariant 2 accusing the recovery arm and invariant 6 accusing
 // the rows downstream of it.
-func successorOf(m *table.Model, src Node) (Node, bool) {
-	var out Node
-	var any bool
+func successorsOf(m *table.Model, src Node) []Node {
+	// index maps a successor's presence footprint to its position in out,
+	// so edges reaching the same successor join into one node while edges
+	// establishing a different owned tag set stay apart.
+	index := map[string]int{}
+	var out []Node
 	for _, row := range m.Rows {
 		if row.Kind() == table.KindEscape {
 			continue
@@ -158,13 +188,28 @@ func successorOf(m *table.Model, src Node) (Node, bool) {
 			continue
 		}
 		produced := successor(m, src, row)
-		if !any {
-			out, any = produced, true
+		id := presenceKey(produced)
+		if at, seen := index[id]; seen {
+			out[at] = joinNodes(out[at], produced)
 			continue
 		}
-		out = joinNodes(out, produced)
+		index[id] = len(out)
+		out = append(out, produced)
 	}
-	return out, any
+	return out
+}
+
+// presenceKey renders a node's presence footprint: the sorted set of owned
+// tags it holds, with no value sets. It is the successor identity the join
+// groups on — two nodes sharing it stand for the same abstract owned-state
+// up to the widening REQ-108 licenses.
+func presenceKey(n Node) string {
+	var b strings.Builder
+	for _, k := range slices.Sorted(maps.Keys(n.Values)) {
+		b.WriteString(k)
+		b.WriteString(";")
+	}
+	return b.String()
 }
 
 // indexOf finds the node already standing for every concrete view want

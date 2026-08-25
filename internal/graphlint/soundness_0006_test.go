@@ -4,6 +4,7 @@ package graphlint_test
 // and the accepted false positives it deliberately buys (REQ-117 / SC-10).
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -245,18 +246,47 @@ status = "end"
 `
 	m := mustLoad(t, source(decls, body))
 
-	// The node form: one merged node for `status = mid`, standing for both
-	// paths. A path-sensitive enumeration would produce two.
-	var mids int
+	// The node form, not a per-path enumeration. `skips-opt` reaches the
+	// owned-state {status=mid} and `writes-opt` reaches {status=mid, opt=p}:
+	// two distinct abstract owned-states, since REQ-101 makes "absent" a
+	// value of a tag's dimension, and one node each. What must NOT appear is
+	// a second node for the SAME owned-state — that is the path-sensitive
+	// enumeration REQ-108's fixpoint rules out — so the oracle counts nodes
+	// per owned-state identity rather than per `status` value.
+	//
+	// Counting `status = mid` nodes instead would demand the two footprints
+	// be folded into one, which under absence-dominates erases a key no
+	// sibling path establishes. REQ-108 licenses the join only between edges
+	// reaching "the same successor", and these two do not: see FAIL-2 in
+	// artifacts/verification.md, where folding divergent footprints is the
+	// false green.
+	seen := map[string]int{}
 	for _, n := range graphlint.Reach(m) {
-		if slices.Contains(n.Values["status"], "mid") {
-			mids++
+		if !slices.Contains(n.Values["status"], "mid") {
+			continue
+		}
+		seen[fmt.Sprint(n.Values)]++
+	}
+	for id, count := range seen {
+		if count != 1 {
+			t.Errorf("%d nodes carry the owned-state %s; the traversal is a "+
+				"fixpoint over MERGED nodes, so every path reaching one "+
+				"owned-state reaches ONE node; nodes=%v", count, id,
+				graphlint.Reach(m))
 		}
 	}
-	if mids != 1 {
-		t.Errorf("%d nodes carry `status = mid`; the traversal is a fixpoint "+
-			"over MERGED nodes, so the two converging paths produce one; "+
-			"nodes=%v", mids, graphlint.Reach(m))
+	// The `opt`-absent path must be represented: it is the node invariant 6
+	// reads below, and losing it would make the finding vacuous.
+	var sawAbsent bool
+	for _, n := range graphlint.Reach(m) {
+		if slices.Contains(n.Values["status"], "mid") && len(n.Values["opt"]) == 0 {
+			sawAbsent = true
+		}
+	}
+	if !sawAbsent {
+		t.Errorf("no reachable owned-state carries `status = mid` without "+
+			"`opt`, but `skips-opt` reaches exactly that; nodes=%v",
+			graphlint.Reach(m))
 	}
 
 	r := graphlint.Run(graphlint.NewRequest(m))
