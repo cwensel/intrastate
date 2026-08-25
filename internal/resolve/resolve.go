@@ -112,6 +112,11 @@ type TagSet struct {
 type taggedValue struct {
 	value      string
 	provenance Provenance
+	// conflicted marks a key that arrived more than once WITHIN one
+	// provenance carrying different values. The key is present, but no
+	// single value is a function of the input tuple, so a value-comparing
+	// guard atom over it is unevaluable (`0007:C8`, see assemble).
+	conflicted bool
 }
 
 // recognizedTagKey is the tag key the freshly recognized outcome takes in
@@ -130,6 +135,15 @@ func (s TagSet) Lookup(key string) (value string, prov Provenance, ok bool) {
 
 // Len reports how many distinct tag keys the view carries.
 func (s TagSet) Len() int { return len(s.tags) }
+
+// conflicting reports whether key was supplied more than once within one
+// provenance with differing values, so the view carries no single value
+// for it (see assemble). Unexported: `0007:C8`'s obligation is on the
+// kernel's verdict, and Lookup's exported shape is fenced by `0007:C1`'s
+// presence test.
+func (s TagSet) conflicting(key string) bool {
+	return s.tags[key].conflicted
+}
 
 // has reports whether key is present with the given provenance.
 func (s TagSet) has(key string, prov Provenance) bool {
@@ -155,6 +169,28 @@ func (s TagSet) matches(want []Tag) bool {
 // caller-supplied context. Within one provenance the last tag wins; the
 // merge is order-insensitive across provenances, which is what value-level
 // replay determinism requires (REQ-3).
+//
+// "Last tag wins" is order-insensitive only while no key REPEATS within one
+// provenance, and nothing constrains a caller-supplied Observed slice from
+// repeating one (A13). Two orderings of the same tag multiset would then
+// assemble different values, and a guard verdict — and under D8 whether the
+// row is pruned at all — would be a function of slice position rather than
+// of the input tuple, which `0007:C8` and RDR 0001 REQ-1 forbid.
+//
+// Such a key is therefore marked CONFLICTED rather than silently resolved:
+// it is present (presence stays provenance-blind and positional-free,
+// `0007:C4`), but the view carries no single value for it, so a
+// value-comparing atom over it is unevaluable with reason `uncomparable` —
+// "the key was present and its value was not compared to a verdict"
+// (`0007:C8`). This is the same posture the RDR takes everywhere else: an
+// undecidable input is a refusal-class result, never a false allow and
+// never a false deny. Both orderings then agree.
+//
+// A repeat carrying the SAME value is not a conflict — either resolution is
+// the same value — and a key crossing PROVENANCES is resolved by the
+// precedence above, which is a property of the tuple, not of slice order.
+// The merge's control flow, and RDR 0001's non-duplicate merge semantics,
+// are otherwise unchanged.
 func assemble(in Input) TagSet {
 	view := TagSet{tags: make(map[string]taggedValue, len(in.Owned)+len(in.Observed)+1)}
 
@@ -164,13 +200,21 @@ func assemble(in Input) TagSet {
 			provenance: ProvenanceRecognized,
 		}
 	}
-	for _, t := range in.Observed {
-		view.tags[t.Key] = taggedValue{value: t.Value, provenance: ProvenanceObserved}
-	}
-	for _, t := range in.Owned {
-		view.tags[t.Key] = taggedValue{value: t.Value, provenance: ProvenanceOwned}
-	}
+	view.merge(in.Observed, ProvenanceObserved)
+	view.merge(in.Owned, ProvenanceOwned)
 	return view
+}
+
+// merge folds one provenance's tags into the view, marking any key the
+// slice repeats with differing values as conflicted (see assemble).
+func (s TagSet) merge(tags []Tag, prov Provenance) {
+	for _, t := range tags {
+		next := taggedValue{value: t.Value, provenance: prov}
+		if prior, ok := s.tags[t.Key]; ok && prior.provenance == prov {
+			next.conflicted = prior.conflicted || prior.value != t.Value
+		}
+		s.tags[t.Key] = next
+	}
 }
 
 // Row is one normalized candidate edge from the reviewable transition

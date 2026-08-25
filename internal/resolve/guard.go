@@ -201,6 +201,16 @@ func evaluateAtom(atom GuardAtom, seam GuardEvaluator, view TagSet) (verdict Gua
 	if !present {
 		return GuardUnevaluable, ReasonAbsent, false
 	}
+	if view.conflicting(atom.Key) {
+		// The key was supplied more than once within one provenance with
+		// differing values, so the view carries no single value to compare
+		// (see assemble). The key IS present, so `absent` would be a lie;
+		// the value was not compared to a verdict, which is exactly what
+		// `uncomparable` names. The seam is not consulted: handing it one
+		// of the colliding values would make the verdict a function of
+		// slice position, which `0007:C8` forbids.
+		return GuardUnevaluable, ReasonUncomparable, false
+	}
 	if seam == nil {
 		// A nil seam is a wiring fact, not a reason of its own: the key is
 		// present, so `absent` would be a lie (`0007:C1`).
