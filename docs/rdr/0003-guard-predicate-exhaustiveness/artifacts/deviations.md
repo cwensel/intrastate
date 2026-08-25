@@ -33,3 +33,33 @@ escalates only if its check contradicts a contract.
   "RDR 0002 | Pending" vs `0003:1539`; 0006 as lint-finding enveloper at
   `0003:1481, 1364, 1354, 1567, 1545` vs `0005:447`.
 - **Check**: `grep -n '0006 can map' docs/rdr/0003-*.md` → 0.
+
+## D3 — §JD-22 answered: cite §D13 for the set-value encoding
+
+- **Type**: TEST-FIXTURE
+- **Status**: OPEN (citation repair pending 0003's next touch)
+- **Source**: JDR 0001 §D13 (`d937eec`, settled `5c2b96b`, both 2026-08-24) —
+  answered *after* the `0002-0009` iteration-4 gate recorded §JD-22 as
+  unanswered. Status qualifier and README row corrected 2026-08-24 (§JD-22
+  dropped; §JD-18 retained).
+- **The answer**: `Tag.Value` stays `string`; a set crosses the kernel seam as
+  its canonical JSON array — members sorted, duplicate-free, compact encoding —
+  and **RDR 0002 declares it**. Read-back equality is byte equality; no third
+  encoding exists.
+- **Scoped answer-vs-fences check: CONSISTENT.** §D13 governs *carriage* of a
+  set tag value across `Tag.Value`; this RDR owns the set **literal** spelling
+  (A13, `0003:1241-1248`) and the **element universe** (A9) — distinct things,
+  and §D13 says so ("0003 … declares spelling and universe only"; "Encoding is
+  carriage, not declaration semantics"). No fenced clause here contradicts it:
+  A13's unordered/duplicate-free literal and §D13's sorted/duplicate-free
+  carriage share one normal form, and `grep -n 'Tag\.Value'` over this RDR
+  returns no fenced tag-value byte claim. The silence §D13 fills is real
+  silence, so §D13 *narrows* what 0007 had assigned here rather than
+  contradicting a clause.
+- **Effect on peers**: 0007's `contains` contract-test leg (`0007:2159-2170`,
+  "Blocked on one RDR 0003 declaration") and Testing Strategy scenario 8's
+  present-key half are unblocked — the encoding is 0002's, and it is stated.
+- **Check** (Stage 8): A13's Evidence and the References list cite JDR 0001
+  §D13, noting the tag-value encoding is RDR 0002's while the literal spelling
+  stays A13's. `grep -n '§D13' docs/rdr/0003-*.md` → ≥1. If the citation cannot
+  be added without a fenced change, escalate.

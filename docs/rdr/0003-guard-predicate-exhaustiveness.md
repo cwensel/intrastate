@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-18, §JD-22: conforming-view enforcer; set-value element encoding] [re-locked 2026-08-24 — Gate PASS. Owns the tag declaration
+- **Status**: Final [joint decision → JDR 0001 §JD-18: conforming-view enforcer] [re-locked 2026-08-24 — Gate PASS. Owns the tag declaration
   model (value kind, finite domain, optionality, single-valuedness, element
   universe), rehomed from RDR 0002 on 2026-08-21 and ratified by that
   document's refine. Rejection rules route to RDR 0002's `malformed tag
