@@ -449,7 +449,27 @@ func Denotation(m *table.Model, key string, atom table.Atom) AssignmentSet {
 
 	out := newSet(dims)
 	for _, v := range values {
-		if !valueSatisfies(atom, v) {
+		switch valueSatisfies(atom, v) {
+		case resolve.GuardUnevaluable:
+			// The atom has NO verdict on this assignment: the runtime finds
+			// it unevaluable and refuses `guard_unevaluable` on any view
+			// carrying that value. Counting it as "does not satisfy" would
+			// credit the atom's complement with a point the runtime cannot
+			// decide, and lint would then certify exhaustive a group
+			// covering a conforming view the runtime refuses — the false
+			// exhaustiveness claim REQ-67 forbids. The atom is one lint
+			// cannot project, so the dimension takes the blocking
+			// inability-to-prove outcome, exactly as an atom over a
+			// non-single-valued dimension does.
+			//
+			// Reaching this arm is a genuine gap between the seam's
+			// semantics and the declared domain, not a routine outcome: a
+			// value the dimension ranges over is by construction one the
+			// declaration admits, so an operator the matrix accepts for the
+			// kind should decide it.
+			return AssignmentSet{}
+		case resolve.GuardTrue:
+		default:
 			continue
 		}
 		a := Assignment{key: v}
@@ -476,8 +496,11 @@ func presenceFor(atom table.Atom) string {
 //
 // It is the same decision the runtime evaluator makes, over the same
 // rendered value form, which is what keeps the lint claim about the runtime
-// it describes rather than about a second semantics.
-func valueSatisfies(atom table.Atom, held string) bool {
+// it describes rather than about a second semantics — and it returns the
+// seam's THREE-VALUED verdict, because reading a three-valued seam
+// two-valued is what makes lint's claim stronger than the runtime it
+// describes.
+func valueSatisfies(atom table.Atom, held string) resolve.GuardResult {
 	seam := Evaluator{}
 	literal := strings.Join(atom.Literal, "")
 	if atom.Operator == "in" || atom.Operator == "contains" {
@@ -488,7 +511,7 @@ func valueSatisfies(atom table.Atom, held string) bool {
 		Operator: atom.Operator,
 		Literal:  literal,
 		Block:    atom.Block,
-	}, held) == resolve.GuardTrue
+	}, held)
 }
 
 // --- row acceptance ------------------------------------------------------

@@ -125,7 +125,7 @@ func (Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardRes
 		if !ok {
 			return resolve.GuardUnevaluable
 		}
-		held, ok := parseSetLiteral(value)
+		held, ok := parseHeldSet(value)
 		if !ok {
 			// A `contains` value crosses the seam as the §D13 canonical JSON
 			// array. A bare string is not a held set, so the comparison has
@@ -147,15 +147,37 @@ func (Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardRes
 	return resolve.GuardUnevaluable
 }
 
-// parseSetLiteral decodes a §D13 canonical JSON array. A NON-EMPTY set is
-// the published literal shape for both set-shaped operators, so an empty
-// array is not a well-formed literal.
+// parseSetLiteral decodes an authored set LITERAL from its §D13 canonical
+// JSON array. A NON-EMPTY set is the published literal shape for both
+// set-shaped operators, so an empty array is not a well-formed literal.
 func parseSetLiteral(s string) ([]string, bool) {
-	var members []string
-	if err := json.Unmarshal([]byte(s), &members); err != nil {
+	members, ok := parseHeldSet(s)
+	if !ok || len(members) == 0 {
 		return nil, false
 	}
-	if len(members) == 0 {
+	return members, true
+}
+
+// parseHeldSet decodes a HELD set-valued tag value from its §D13 canonical
+// JSON array.
+//
+// The non-empty requirement is a rule about the authored LITERAL — the
+// operator/kind matrix publishes `contains`' literal shape as a "non-empty
+// typed element set" — and it does NOT carry over to the held value. A
+// set-valued tag holds any SUBSET of its declared element universe, the
+// empty subset included: the assignment-count table makes the dimension
+// `2^|universe|` by construction, and `Conforms` admits a held `[]` as a
+// conforming view.
+//
+// Containment is total over sets, so `contains ["x"]` against a held `[]`
+// has an answer — FALSE, since the held set does not contain `x`. Applying
+// the literal's non-empty rule to the held value refused instead, and the
+// kernel then refused `guard_unevaluable` on a conforming view that lint's
+// own scoped product enumerates. That disagreement is the false
+// exhaustiveness claim REQ-67 forbids, reached from the runtime side.
+func parseHeldSet(s string) ([]string, bool) {
+	var members []string
+	if err := json.Unmarshal([]byte(s), &members); err != nil {
 		return nil, false
 	}
 	return members, true

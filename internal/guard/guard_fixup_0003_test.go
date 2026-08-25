@@ -275,3 +275,82 @@ func TestFixup_InvertedIntBoundCarriesNoReadableDomain(t *testing.T) {
 			"the ordered case", n, ok)
 	}
 }
+
+// ADV-1 — the lint claim and the runtime must agree about the empty subset.
+//
+// REQ-67: "An exhaustiveness claim MUST NOT be stronger than the runtime it
+// describes." The two surfaces disagreed about whether a held `[]` is a
+// value at all:
+//
+//   - REQ-89 makes a `set` dimension `2^|element universe|` — "a set-valued
+//     tag holds any SUBSET" — so the scoped product enumerates the empty
+//     subset, and `Conforms` admits `caps=[]` as a conforming view.
+//   - `Evaluator.Evaluate` refused a held `[]`, because its `contains` arm
+//     parsed the HELD value with `parseSetLiteral`, whose non-empty rule is
+//     the operator/kind matrix's published shape for the authored LITERAL
+//     ("non-empty typed element set", REQ-4).
+//
+// REQ-57 settles which surface was wrong: `contains` denotes "the
+// assignments whose held set CONTAINS every listed element", and containment
+// is total over sets — `[]` does not contain `x`, so the answer is FALSE,
+// not undecidable. The literal's shape rule never governed the held value.
+//
+// Dropping the empty subset from the product instead would contradict
+// REQ-89's `2^|universe|`, which its own test pins. So the fix is on the
+// runtime side, and the two surfaces now agree: the `contains` / `unless
+// contains` pair is a genuine complete partition of the powerset.
+func TestFixup_EmptyHeldSetIsDecidedRatherThanRefused(t *testing.T) {
+	m := mustLoadSource(t, adv1EmptySetSource())
+	kt := m.KernelTable()
+
+	// The runtime decides every conforming view, the empty subset included.
+	for _, held := range []string{`[]`, `["x"]`} {
+		view := guard.View{"caps": held}
+		if err := guard.Conforms(m, view); err != nil {
+			t.Fatalf("the fixture's premise is gone: caps=%s is no longer a "+
+				"conforming view (%v)", held, err)
+		}
+		res := resolveWith(t, kt, view)
+		if res.Refused() {
+			t.Errorf("the kernel refuses %s on the conforming view caps=%s. "+
+				"`contains` denotes the assignments whose held set CONTAINS "+
+				"every listed element (REQ-57), and containment is total "+
+				"over sets — the empty subset simply does not contain `x`, "+
+				"which is FALSE, not undecidable. The non-empty rule belongs "+
+				"to the authored LITERAL (REQ-4), not to the held value",
+				res.Refusal.Kind, held)
+		}
+	}
+
+	// The empty subset is IN the product: REQ-89 makes a set dimension the
+	// full powerset of its universe, never the universe minus a member.
+	g := groupOf(t, m, "adv1-has")
+	product := guard.Product(m, g)
+	if !product.Projectable() || !product.Contains(guard.Assignment{"caps": `[]`}) {
+		t.Errorf("the scoped product does not carry the empty-subset "+
+			"assignment (projectable=%v len=%d). A set-valued tag holds any "+
+			"SUBSET, so its assignment space is 2^|universe| — dropping the "+
+			"empty subset would make it 2^n-1 and contradict REQ-89",
+			product.Projectable(), product.Len())
+	}
+
+	// And every conforming view a GREEN group claims to cover, the runtime
+	// decides. This is the obligation ADV-1 names, stated directly.
+	for _, r := range guard.Lint(m) {
+		if !r.Green {
+			continue
+		}
+		for _, held := range []string{`[]`, `["x"]`} {
+			view := guard.View{"caps": held}
+			if !r.Covers(view) {
+				continue
+			}
+			if res := resolveWith(t, kt, view); res.Refused() {
+				t.Errorf("group %s is certified EXHAUSTIVE and covers the "+
+					"conforming view caps=%s, yet the kernel refuses %s on "+
+					"it. A green claim MUST NOT be stronger than the runtime "+
+					"it describes (REQ-67)", r.Context, held, res.Refusal.Kind)
+			}
+		}
+	}
+}
