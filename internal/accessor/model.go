@@ -378,7 +378,10 @@ func (r GateResult) Refused() bool { return r.Refusal != nil }
 // WriteResult is a write accessor's disposition after read-back
 // verification.
 type WriteResult struct {
-	// Written echoes the planned owned tags the read-back verified.
+	// Written echoes the planned owned tags the read-back verified as
+	// HELD. A key the plan cleared is OMITTED — read-back verified it
+	// absent, and a verified removal is not a written value (`0004:C11`,
+	// REQ-32).
 	Written []resolve.Tag
 	// Refusal is non-nil exactly when the write refused, INCLUDING when
 	// the command succeeded but read-back failed (`0004:C12`).

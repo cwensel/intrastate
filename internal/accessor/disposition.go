@@ -21,7 +21,9 @@ type Disposition struct {
 	Timeout    time.Duration
 	// Refusal is the refusal class, empty on success.
 	Refusal RefusalClass
-	// Tags is the returned tag values, rendered deterministically.
+	// Tags is the returned tag values, rendered deterministically. A key
+	// a write plan CLEARED is omitted: the record must not assert the
+	// artifact holds a key read-back verified absent (`0004:C11`, REQ-32).
 	Tags []resolve.Tag
 	// Verdict is the gate verdict, empty for non-gate invocations.
 	Verdict Verdict

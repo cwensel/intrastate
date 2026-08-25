@@ -399,7 +399,25 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		return WriteResult{Refusal: r}
 	}
 
-	return WriteResult{Written: planned}
+	return WriteResult{Written: verifiedWritten(planned)}
+}
+
+// verifiedWritten renders what the read-back actually VERIFIED as held.
+// A cleared key is OMITTED: read-back verified it ABSENT, so echoing the
+// reserved `<clear>` literal as a written value would record the artifact
+// as HOLDING a key it does not hold — the placeholder-for-absence
+// encoding this RDR exists to forbid, here in the record rather than at
+// the seam (`0004:C11`, REQ-32, REQ-45, REQ-46, REQ-80). It is the same
+// rule `ReadResult.OwnedSnapshot` applies to an absent key.
+func verifiedWritten(planned []resolve.Tag) []resolve.Tag {
+	out := make([]resolve.Tag, 0, len(planned))
+	for _, t := range planned {
+		if IsClear(t.Value) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // nonOwnedPlanKeys names the planned keys this write accessor has no
