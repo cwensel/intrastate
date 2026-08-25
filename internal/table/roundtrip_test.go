@@ -597,7 +597,22 @@ func TestReq123_MetadataDeepEqualityAndAnnotationKeysDecode(t *testing.T) {
 // these inputs. This test enforces the ban by scanning the suite for the
 // digest and for any hashing of dump text.
 func TestReq124_NoGoldenHashOfRenderedText(t *testing.T) {
-	const spikeSHA = "6ccfe9012b0705ef4d4b3d1c620daffd69523436175120be1bea8a05df9c55dd"
+	// The needles are assembled from halves that Go folds at compile time, so
+	// the runtime strings are exact while no verbatim needle appears in this
+	// file's source bytes. That is what lets the scan below cover EVERY .go
+	// file in the package with no exemption — including this one, the primary
+	// round-trip file and the likeliest place a golden hash would be reached
+	// for. An earlier revision instead exempted this file wholesale, because
+	// the needles were verbatim literals here and the scan matched itself
+	// (deviations.md D6); the exemption fixed that red-against-every-
+	// implementation defect at the cost of blinding the scan to this file.
+	// Assembling the needles removes the reason for the exemption. If a future
+	// author writes a needle verbatim here, the scan fires — which is exactly
+	// the signal the ban wants.
+	const spikeSHA = "6ccfe9012b0705ef4d4b3d1c620da" +
+		"ffd69523436175120be1bea8a05df9c55dd"
+	const shaPkg = "crypto/" + "sha256"
+	const md5Pkg = "crypto/" + "md5"
 
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -612,19 +627,10 @@ func TestReq124_NoGoldenHashOfRenderedText(t *testing.T) {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}
 		src := string(b)
-		// The constant above is this test's own witness; any OTHER
-		// occurrence is a golden-hash assertion.
-		if e.Name() != "roundtrip_test.go" && strings.Contains(src, spikeSHA) {
+		if strings.Contains(src, spikeSHA) {
 			t.Errorf("%s asserts the spike SHA as a golden hash", e.Name())
 		}
-		// Self-exempt for the same reason the SHA check above does: the
-		// needles are written HERE, as this scan's own literals, so
-		// without the exemption the file matches itself and the assertion
-		// is red against every implementation (deviations.md D6).
-		if e.Name() == "roundtrip_test.go" {
-			continue
-		}
-		if strings.Contains(src, "crypto/sha256") || strings.Contains(src, "crypto/md5") {
+		if strings.Contains(src, shaPkg) || strings.Contains(src, md5Pkg) {
 			t.Errorf("%s hashes output; assert over the normalized value and "+
 				"reserve rendered-text goldens for tests of rendering itself", e.Name())
 		}
