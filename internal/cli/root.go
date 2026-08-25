@@ -53,6 +53,9 @@ func NewRootCmd() *cobra.Command {
 	// Register verbs here. The version subcommand below is the worked
 	// example of the respond/clierr wiring every verb follows.
 	cmd.AddCommand(newVersionCmd())
+	// Root `lint` is the authoritative graph-acceptance surface
+	// (`0006:C19`), deliberately not under RDR 0005's `flow` group.
+	cmd.AddCommand(newLintCmd())
 
 	return cmd
 }

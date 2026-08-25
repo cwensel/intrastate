@@ -57,6 +57,15 @@ type CLIError struct {
 	// Hint is an optional one-line remedy.
 	Hint string `json:"hint,omitempty"`
 
+	// Findings carries the individual structured findings an aggregate
+	// failure reports. It is the ONE exception to this envelope's
+	// `omitempty` habit: the key must serialize even when the list is
+	// empty, because an empty list is the proof's receipt (`0006:C14`).
+	// It is a top-level SIBLING of `code` on the marshalled CLIError —
+	// EmitJSON marshals the *CLIError itself, so there is no `error`
+	// wrapper to nest under.
+	Findings []Finding `json:"findings"`
+
 	// Group selects the exit code; not serialized.
 	Group ErrorGroup `json:"-"`
 
@@ -150,4 +159,48 @@ func EmitText(out io.Writer, e *CLIError) {
 	if e.Hint != "" {
 		_, _ = fmt.Fprintf(out, "  hint: %s\n", e.Hint)
 	}
+}
+
+// --- graph-lint findings (RDR 0006) --------------------------------------
+//
+// SKELETON (RDR 0006 Stage 8, Phase 1). The Finding record is defined
+// HERE, in the leaf error package, so `clierr` gains no dependency on the
+// graph-lint package (`0006:C14`). The atom and class fields are declared
+// STRING-typed, not enums: `Block` is RDR 0002 authoring vocabulary and
+// `Class` is RDR 0001's RefusalKind, and importing either type would give
+// `clierr` exactly the dependency this clause prevents. `clierr` ascribes
+// these fields no meaning — it only transports and serializes them; the
+// producing package owns the vocabulary.
+
+// Finding is one graph-lint finding as it crosses the wire. It is
+// subsystem-agnostic by construction.
+type Finding struct {
+	Code     string `json:"code"`
+	Model    string `json:"model"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+
+	// Rule names the source rule/context id when the normalized model can
+	// provide one; Span and Element carry the fallbacks.
+	Rule    string `json:"rule,omitempty"`
+	Span    string `json:"span,omitempty"`
+	Element string `json:"element,omitempty"`
+
+	// Reason is the discriminator `graph-unprovable-coverage` carries.
+	Reason string `json:"reason,omitempty"`
+	// Dimension names the dimension a per-dimension finding is about.
+	Dimension string `json:"dimension,omitempty"`
+
+	// Key/Operator/Literal/Block are the atom fields an atom-attributed
+	// finding carries. Declared string, never an enum.
+	Key      string `json:"key,omitempty"`
+	Operator string `json:"operator,omitempty"`
+	Literal  string `json:"literal,omitempty"`
+	Block    string `json:"block,omitempty"`
+	// Class is the declared failure class an escape-scoped finding carries.
+	Class string `json:"class,omitempty"`
+
+	// Fingerprint is the canonical sortable predicate/write serialization
+	// the finding-identity tuple closes on.
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
