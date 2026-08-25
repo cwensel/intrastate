@@ -444,6 +444,12 @@ status = "b"
 // first-failure engine cannot pass: an overlapping ordinary pair, two rows
 // that can refuse `guard_unevaluable`, and a guard read of an owned key no
 // row writes.
+//
+// All four rows bind the SAME recognized outcome, so they form ONE scoped
+// row group per REQ-19 — the RDR names a multi-defect GROUP (0006:1450),
+// and grouping is by the authored match pattern (gate.md §1). Splitting
+// `over-*` onto `go` and `refuse-*` onto `stop` made two groups carrying
+// one defect class each, which is not the scenario the record prescribes.
 var mvvMultiDefect = mvvHeader + `terminal = ["done"]
 ` + mvvModelTable + mvvStatus + mvvOpt + mvvAlways +
 	mvvAccessors(`["always", "opt", "status"]`) + `
@@ -478,7 +484,7 @@ id = "refuse-one"
 [rule.match.status]
 eq = "a"
 [rule.match.recognized]
-eq = "stop"
+eq = "go"
 [rule.guard.all.opt]
 eq = "p"
 [rule.write]
@@ -489,7 +495,7 @@ id = "refuse-two"
 [rule.match.status]
 eq = "a"
 [rule.match.recognized]
-eq = "stop"
+eq = "go"
 [rule.guard.all.opt]
 eq = "q"
 [rule.guard.all.always]

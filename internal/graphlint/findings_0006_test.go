@@ -5,12 +5,14 @@ package graphlint_test
 // (REQ-83..REQ-89), and the finding-identity tuple (REQ-114, REQ-127).
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
 	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/newcoinc/intrastate/internal/table"
 )
 
 // REQ-71: "Every blocking finding MUST carry a stable code, model
@@ -790,15 +792,150 @@ func TestReq87_FingerprintIsACanonicalSortableSerializationNeverAHash(t *testing
 		t.Errorf("reordering the authored atoms changed the fingerprint:\n"+
 			"  %q\n  %q", fpOn, got)
 	}
+
+	// The clause is "over the row's predicate atoms AND NEXT-STATE TAGS".
+	// The pair above differs in a guard literal with identical writes, so
+	// an implementation that omitted the writes entirely would still tell
+	// them apart. This pair differs ONLY in `[rule.write]` — same match,
+	// same guard, same outcome — so it separates the two.
+	const writeDecls = `
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b", "c"]
+single_valued = true
+required = true
+`
+	const writeBody = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "writes-b"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "writes-c"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "c"
+`
+	w := mustLoad(t, source(writeDecls, writeBody))
+	toB := rowByRuleID(t, w, "writes-b")
+	toC := rowByRuleID(t, w, "writes-c")
+
+	// PRECONDITION: the two rows really are predicate-identical, so the
+	// comparison below can only be decided by the writes.
+	fpPredicatesOnly := func(row table.Row) string {
+		atoms := slices.Clone(row.Atoms)
+		slices.SortFunc(atoms, func(x, y table.Atom) int {
+			return strings.Compare(
+				x.Key+"|"+string(x.Block)+"|"+x.Operator+"|"+strings.Join(x.Literal, ","),
+				y.Key+"|"+string(y.Block)+"|"+y.Operator+"|"+strings.Join(y.Literal, ","))
+		})
+		var b strings.Builder
+		for _, a := range atoms {
+			fmt.Fprintf(&b, "%s|%s|%s|%s;",
+				a.Key, a.Block, a.Operator, strings.Join(a.Literal, ","))
+		}
+		return b.String()
+	}
+	if fpPredicatesOnly(toB) != fpPredicatesOnly(toC) {
+		t.Fatalf("the write-only pair differs in its predicate atoms too, so "+
+			"a fingerprint omitting the writes would still separate them and "+
+			"this assertion is vacuous:\n  %q\n  %q",
+			fpPredicatesOnly(toB), fpPredicatesOnly(toC))
+	}
+
+	fpB, fpC := graphlint.Fingerprint(toB), graphlint.Fingerprint(toC)
+	if fpB == fpC {
+		t.Errorf("two rows differing ONLY in their next-state tags share the "+
+			"fingerprint %q; the serialization is over the predicate atoms "+
+			"AND the next-state tags", fpB)
+	}
+	// Never a hash: the written value is READABLE in the serialization.
+	// Scope the search to the next-state half after the `#` separator --
+	// a bare Contains(fpC, "c") also matches the `recognized` predicate
+	// token, so an opaque write encoding would still satisfy it.
+	_, writes, ok := strings.Cut(fpC, "#")
+	if !ok {
+		t.Fatalf("the fingerprint %q has no `#` separator, so the predicate "+
+			"and next-state halves cannot be told apart", fpC)
+	}
+	if !strings.Contains(writes, "status=c;") {
+		t.Errorf("the next-state half %q of fingerprint %q does not carry the "+
+			"written tag `status=c`; a canonical sortable serialization is "+
+			"not a hash", writes, fpC)
+	}
 }
 
 // REQ-88: "When one run mixes identity namespaces, a source rule/context
 // id sorts before any graph element id."
 // BOUNDARY
 func TestReq88_RuleIDsSortBeforeGraphElementIDs(t *testing.T) {
-	// The multi-defect fixture mixes namespaces: rule-scoped findings and
-	// the model/traversal-scoped ones that carry an element id instead.
-	r := lint(t, optionalGuardDecls, multiDefectBody)
+	// The clause orders the two identity namespaces WITHIN one (model,
+	// code) bucket, so the fixture must mint the SAME code in both. The
+	// shared multi-defect body does not: its rule-scoped and element-scoped
+	// findings land in disjoint buckets, so the loop below `continue`d on
+	// every pair and compared nothing.
+	//
+	// `graph-unprovable-coverage` has both spellings — an element-scoped
+	// one naming the group's unprovable dimension, and a rule-scoped one
+	// naming a row that can refuse `guard_unevaluable` — so one group
+	// carrying both mints the mixed bucket.
+	const decls = statusOnlyDecls + `
+[tags.multi]
+provenance = "owned"
+kind = "enum"
+domain = ["p", "q"]
+required = true
+
+[tags.opt]
+provenance = "owned"
+kind = "enum"
+domain = ["p", "q"]
+single_valued = true
+`
+	const body = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+multi = "p"
+opt = "p"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "reads-multi-and-opt"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.multi]
+eq = "p"
+[rule.guard.all.opt]
+eq = "p"
+[rule.write]
+status = "b"
+`
+	r := lint(t, decls, body)
 
 	var sawRule, sawElement bool
 	for _, f := range r.Findings {
@@ -817,18 +954,53 @@ func TestReq88_RuleIDsSortBeforeGraphElementIDs(t *testing.T) {
 			"report:%s", sawRule, sawElement, render(r))
 	}
 
+	// PRECONDITION. The loop below `continue`s on any (Model, Code)
+	// mismatch, so unless SOME bucket carries both namespaces it compares
+	// nothing and passes on an empty quantification. Proving both
+	// namespaces appear SOMEWHERE in the run is not enough — they must
+	// meet inside one bucket for the ordering clause to have a subject.
+	mixed := map[string]struct{ rule, element bool }{}
+	for _, f := range r.Findings {
+		bucket := f.Model + "\x00" + f.Code
+		got := mixed[bucket]
+		if f.Rule != "" {
+			got.rule = true
+		} else if f.Element != "" {
+			got.element = true
+		}
+		mixed[bucket] = got
+	}
+	var mixedBucket bool
+	for _, got := range mixed {
+		if got.rule && got.element {
+			mixedBucket = true
+		}
+	}
+	if !mixedBucket {
+		t.Fatalf("no (model, code) bucket carries BOTH a rule-id finding "+
+			"and an element-id one, so the ordering loop below compares "+
+			"nothing; the fixture must mint two findings of the same code "+
+			"in the two identity namespaces; report:%s", render(r))
+	}
+
 	// Within one (model, code) bucket, every rule-id finding precedes
 	// every element-id one.
+	var compared int
 	for i := 1; i < len(r.Findings); i++ {
 		prev, cur := r.Findings[i-1], r.Findings[i]
 		if prev.Model != cur.Model || prev.Code != cur.Code {
 			continue
 		}
+		compared++
 		if prev.Rule == "" && prev.Element != "" && cur.Rule != "" {
 			t.Errorf("a graph element id sorts before a source rule id "+
 				"within the %s bucket:\n  [%d] element=%q\n  [%d] rule=%q",
 				cur.Code, i-1, prev.Element, i, cur.Rule)
 		}
+	}
+	if compared == 0 {
+		t.Errorf("the ordering loop compared no adjacent pair inside one "+
+			"(model, code) bucket; report:%s", render(r))
 	}
 }
 

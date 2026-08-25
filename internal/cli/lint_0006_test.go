@@ -600,11 +600,19 @@ func TestReq95And96_FindingLivesInClierrWithStringTypedAtomFields(t *testing.T) 
 	// The atom and class fields are declared `string`, so `clierr`
 	// ascribes them no meaning and imports neither RDR 0002's Block
 	// vocabulary nor RDR 0001's RefusalKind.
-	f.Key = ""
-	f.Operator = ""
-	f.Literal = ""
-	f.Block = ""
-	f.Class = ""
+	//
+	// Assigning a bare `""` would NOT say that: an untyped string constant
+	// is assignable to any named string type, so `f.Block = ""` compiles
+	// just as well if `Block` were declared `table.Block`. Taking the
+	// address and binding it to a `*string` does not convert, so these
+	// declarations compile only if the fields are `string` itself.
+	var (
+		_ *string = &f.Key
+		_ *string = &f.Operator
+		_ *string = &f.Literal
+		_ *string = &f.Block
+		_ *string = &f.Class
+	)
 
 	// clierr gains no dependency on the graph-lint package.
 	root := repoRootFor(t)

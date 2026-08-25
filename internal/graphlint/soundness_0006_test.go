@@ -18,14 +18,21 @@ import (
 // predecessors* are the rows on any root-to-source path."
 // HAPPY PATH
 func TestReq105_ASelectionContextIsReachableWhenSomeNodeSatisfiesIt(t *testing.T) {
-	// `status = a` is the root, so its context is reachable; `status =
-	// orphan` is written by no row, so its context is not — and the
-	// advisory names exactly the unreachable one.
+	// The clause is "SOME reachable owned-state satisfies its match
+	// pattern" — not "the root does". The row under test therefore matches
+	// `status = mid`, a NON-root value some other row writes, so an engine
+	// that only ever treated root-matching contexts as reachable would
+	// report it unreachable and fail here. Letting the sole reachable row
+	// match the `[initial]` value (the earlier shape) made the two
+	// readings indistinguishable.
+	//
+	// `status = orphan` is written by no row, so its context is not
+	// reachable under either reading — and the advisory names exactly it.
 	const decls = `
 [tags.status]
 provenance = "owned"
 kind = "enum"
-domain = ["a", "b", "orphan"]
+domain = ["a", "mid", "b", "orphan"]
 single_valued = true
 required = true
 `
@@ -40,9 +47,18 @@ status = "a"
 eq = "b"
 
 [[rule]]
-id = "reachable"
+id = "leaves-root"
 [rule.match.status]
 eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "mid"
+
+[[rule]]
+id = "reachable"
+[rule.match.status]
+eq = "mid"
 [rule.match.recognized]
 eq = "go"
 [rule.write]
@@ -71,6 +87,17 @@ status = "b"
 			"nodes=%v", graphlint.Reach(m))
 	}
 
+	// PRECONDITION: the row under test matches no root value, so the
+	// assertion below distinguishes "some reachable owned-state" from
+	// "the root".
+	for _, tv := range m.Initial {
+		if tv.Key == "status" && slices.Contains(tv.Value, "mid") {
+			t.Fatalf("`status = mid` is a ROOT value, so the reachable row "+
+				"below is reachable under either reading and the clause is "+
+				"untested; initial=%v", m.Initial)
+		}
+	}
+
 	r := graphlint.Run(graphlint.NewRequest(m))
 	if !namesRule(r, graphlint.CodeUnreachableRule, "unreachable") {
 		t.Errorf("no %s finding names the row whose selection context no "+
@@ -78,9 +105,11 @@ status = "b"
 			graphlint.CodeUnreachableRule, render(r))
 	}
 	for _, f := range withCode(r, graphlint.CodeUnreachableRule) {
-		if f.Rule == "reachable" {
-			t.Errorf("%s names the row whose context the ROOT satisfies; "+
-				"report:%s", graphlint.CodeUnreachableRule, render(r))
+		if f.Rule == "reachable" || f.Rule == "leaves-root" {
+			t.Errorf("%s names the row %q, whose selection context a "+
+				"reachable owned-state DOES satisfy; reachability is over "+
+				"every reachable owned-state, not the root alone; report:%s",
+				graphlint.CodeUnreachableRule, f.Rule, render(r))
 		}
 	}
 }

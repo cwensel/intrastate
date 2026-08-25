@@ -439,11 +439,16 @@ status = "review"
 // terminal-participating keys only, never the whole lattice."
 // BOUNDARY
 func TestReq37_SplitIsBoundedByTerminalParticipatingKeysOnly(t *testing.T) {
-	// `status` participates in the terminal; `other` does not. Splitting
-	// on the whole lattice would multiply the node count by `other`'s
-	// domain. The observable consequence: a model whose non-participating
-	// keys are wide still lints without tripping the node ceiling, and
-	// still reports the dead end exactly once per stuck split.
+	// `status` participates in the terminal; `other` does not. The earlier
+	// shape declared `other` an int and wrote it once, so it was a
+	// SINGLETON in every reachable node — `splitNode` skips a key holding
+	// one value, so a whole-lattice split produced the same node set as
+	// the bounded one and went unpunished.
+	//
+	// Here two rows converge on one merged node holding `other` MULTI-
+	// VALUED. The bounded split ranges over `status` alone and yields one
+	// stuck split; a split over the whole lattice would range over
+	// `other`'s held values too and yield one stuck split per value.
 	const decls = `
 [tags.status]
 provenance = "owned"
@@ -454,9 +459,8 @@ required = true
 
 [tags.other]
 provenance = "owned"
-kind = "int"
-min = 0
-max = 200
+kind = "enum"
+domain = ["o0", "o1", "o2"]
 single_valued = true
 required = true
 `
@@ -465,7 +469,7 @@ terminal = ["finished"]
 
 [initial]
 status = "start"
-other = 0
+other = "o0"
 
 [context.finished]
 [context.finished.match.status]
@@ -479,6 +483,7 @@ eq = "start"
 eq = "go"
 [rule.write]
 status = "done"
+other = "o1"
 
 [[rule]]
 id = "send-to-review"
@@ -488,11 +493,30 @@ eq = "start"
 eq = "stop"
 [rule.write]
 status = "review"
+other = "o2"
 `
-	r := lint(t, decls, body)
+	m := mustLoad(t, source(decls, body))
+
+	// PRECONDITION. Without a reachable node holding `other` multi-valued
+	// there is nothing for a whole-lattice split to multiply over, and the
+	// count below cannot tell a bounded split from an unbounded one.
+	var multiValued bool
+	for _, n := range graphlint.Reach(m) {
+		if len(n.Values["other"]) > 1 {
+			multiValued = true
+		}
+	}
+	if !multiValued {
+		t.Fatalf("no reachable node holds the non-participating key `other` "+
+			"multi-valued, so a whole-lattice split would produce the same "+
+			"node set as the bounded one and this assertion is vacuous; "+
+			"nodes=%v", graphlint.Reach(m))
+	}
+
+	r := graphlint.Run(graphlint.NewRequest(m))
 
 	// The `review` split is stuck, so exactly one dead end — not one per
-	// value of the non-participating `other`.
+	// value the non-participating `other` holds there.
 	if n := countCode(r, graphlint.CodeDeadEnd); n != 1 {
 		t.Errorf("%d %s findings; want exactly 1 — the split is bounded by "+
 			"the terminal-participating keys only, never the whole lattice; "+
@@ -1139,10 +1163,15 @@ func TestReq102_EscapeRowsAreSelfLoopEdges(t *testing.T) {
 // are **not** pruned — every such edge is taken as traversable."
 // ADVERSARIAL
 func TestReq104_ObservedMatchAtomsAndGuardAtomsAreNotPruned(t *testing.T) {
-	// The row's guard can never hold (`opt` is matched `eq = p` and
-	// `eq = q` by two atoms), and its match carries an observed key. A
-	// guard-aware traversal would prune the edge and report `status = b`
-	// unreachable; the clause says every such edge is traversable.
+	// The row's guard is FALSE at the source node — `status` holds `a`
+	// there and the guard demands `b` — and its match carries an observed
+	// key naming a value no owned-state can supply. A guard-aware
+	// traversal would prune the edge and report `status = b` unreachable;
+	// the clause says every such edge is traversable.
+	//
+	// The earlier fixture guarded on `status eq "a"`, which is TRUE at the
+	// root, so a guard-EVALUATING traversal took the edge too and the
+	// assertion could not tell the two apart.
 	const decls = statusOnlyDecls + `
 [tags.seen]
 provenance = "observed"
@@ -1170,7 +1199,7 @@ eq = "y"
 [rule.match.recognized]
 eq = "go"
 [rule.guard.all.status]
-eq = "a"
+eq = "b"
 [rule.write]
 status = "b"
 `

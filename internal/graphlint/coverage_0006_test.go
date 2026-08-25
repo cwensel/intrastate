@@ -5,7 +5,9 @@ package graphlint_test
 // (REQ-38, REQ-39, REQ-45..REQ-66), and the precedence clause (REQ-115).
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/graphlint"
@@ -337,7 +339,11 @@ single_valued = true
 required = true
 `
 	// Several nodes reach `status = a` so the per-node/per-group
-	// distinction is observable.
+	// distinction is observable — and they reach it holding DIFFERENT
+	// `flag` values, so the two arrivals are distinct concrete views
+	// rather than the same owned-state twice. Letting both paths preserve
+	// `flag = false` (the earlier shape) made a per-node implementation
+	// and a per-group one indistinguishable: there was only ever one node.
 	const body = `
 terminal = ["done"]
 
@@ -375,6 +381,7 @@ eq = "d"
 eq = "go"
 [rule.write]
 status = "a"
+flag = "true"
 
 [[rule]]
 id = "overlap-one"
@@ -1158,14 +1165,46 @@ status = "b"
 	f := requireCode(t, r, graphlint.CodeProductTooLarge)
 
 	// The disposition table: the group-scoped finding names group + bound.
+	// `Rule != "" || Element != ""` would NOT say that — the traversal-scoped
+	// spelling of this same code satisfies the `Element` half (see
+	// TestReq60_ReachableNodeSetOverTheCeilingIsProductTooLargeOnTheTraversal),
+	// so the two would be indistinguishable. The group-scoped finding is the
+	// one carrying a source rule id AND a selection-context element AND the
+	// dimension whose declared domain blew the bound.
 	var namesGroup bool
 	for _, got := range f {
-		if got.Rule != "" || got.Element != "" {
-			namesGroup = true
+		if got.Rule != "wide" {
+			continue
 		}
+		if got.Element == "" || got.Element == "traversal" {
+			t.Errorf("the group-scoped %s finding carries element %q; it "+
+				"must name the selection context, never the traversal: %+v",
+				graphlint.CodeProductTooLarge, got.Element, got)
+			continue
+		}
+		// Compare parsed tokens, never a substring: `Dimension` is a
+		// comma-joined list and a bare Contains(..., "n") also matches
+		// `recognized` and `unknown`.
+		if !slices.Contains(strings.Split(got.Dimension, ","), "n") {
+			t.Errorf("the group-scoped %s finding names dimensions %q; it "+
+				"must name `n`, whose declared domain exceeds the bound: %+v",
+				graphlint.CodeProductTooLarge, got.Dimension, got)
+			continue
+		}
+		// The diagnostic must quote the PUBLISHED bound, not merely
+		// report that some bound was exceeded: a message naming a wrong
+		// or stale constant misdirects the narrowing it asks for.
+		if want := fmt.Sprintf("%d", bound); !strings.Contains(got.Message, want) {
+			t.Errorf("the group-scoped %s finding's message %q does not name "+
+				"the published product bound %s: %+v",
+				graphlint.CodeProductTooLarge, got.Message, want, got)
+			continue
+		}
+		namesGroup = true
 	}
 	if !namesGroup {
-		t.Errorf("no %s finding names the group; report:%s",
+		t.Errorf("no %s finding names the group by its source rule `wide`, "+
+			"its selection context, and the offending dimension; report:%s",
 			graphlint.CodeProductTooLarge, render(r))
 	}
 
@@ -1246,110 +1285,121 @@ func TestReq60_ReachableNodeSetOverTheCeilingIsProductTooLargeOnTheTraversal(t *
 			"implementation constant", ceiling)
 	}
 
-	// Several owned int tags with wide declared domains make the
-	// owned-state lattice exponentially large.
-	const decls = `
-[tags.status]
-provenance = "owned"
-kind = "enum"
-domain = ["a", "b"]
-single_valued = true
-required = true
+	decls, body := overCeilingFixture(ceilingKeys)
+	m := mustLoad(t, source(decls, body))
+	nodes := graphlint.Reach(m)
 
-[tags.p]
-provenance = "owned"
-kind = "int"
-min = 0
-max = 500
-single_valued = true
-required = true
+	// PRECONDITION, not a branch. The old shape wrapped this whole
+	// assertion in `if len(Reach(...)) > ceiling` and the fixture produced
+	// two nodes, so the body never ran and the ceiling check could have
+	// been deleted outright with the suite still green. A fixture that
+	// fails to exceed the ceiling is a BROKEN FIXTURE and must say so.
+	if len(nodes) <= ceiling {
+		t.Fatalf("the fixture reaches %d nodes, at or under the published "+
+			"ceiling of %d, so the clause under test is unexercised; widen "+
+			"the generated fixture rather than accepting a vacuous pass",
+			len(nodes), ceiling)
+	}
 
-[tags.q]
-provenance = "owned"
-kind = "int"
-min = 0
-max = 500
-single_valued = true
-required = true
+	r := graphlint.Run(graphlint.NewRequest(m))
+	f := requireCode(t, r, graphlint.CodeProductTooLarge)
 
-[tags.r]
-provenance = "owned"
-kind = "int"
-min = 0
-max = 500
-single_valued = true
-required = true
-`
-	const body = `
-terminal = ["done"]
-
-[initial]
-status = "a"
-p = 0
-q = 0
-r = 0
-
-[context.done]
-[context.done.match.status]
-eq = "b"
-
-[[rule]]
-id = "bump-p"
-[rule.match.status]
-eq = "a"
-[rule.match.recognized]
-eq = "go"
-[rule.write]
-p = 1
-q = 1
-r = 1
-
-[[rule]]
-id = "bump-q"
-[rule.match.status]
-eq = "a"
-[rule.match.recognized]
-eq = "stop"
-[rule.write]
-p = 2
-q = 2
-r = 2
-
-[[rule]]
-id = "finish"
-[rule.match.status]
-eq = "a"
-[rule.match.recognized]
-eq = "go"
-[rule.write]
-status = "b"
-`
-	r := lint(t, decls, body)
-
-	// The traversal must be bounded: either the model stays under the
-	// ceiling and lints, or it exceeds it and reports — never an unbounded
-	// run and never a partial green.
-	if len(graphlint.Reach(mustLoad(t, source(decls, body)))) > ceiling {
-		f := requireCode(t, r, graphlint.CodeProductTooLarge)
-		var namesTraversal bool
-		for _, got := range f {
-			// The ceiling finding names the TRAVERSAL, not a group, so it
-			// carries no rule id.
-			if got.Rule == "" {
-				namesTraversal = true
-			}
+	// The ceiling finding names the TRAVERSAL, not a group: it carries the
+	// traversal element id and no rule id. The group-scoped spelling of
+	// this same code carries both (see
+	// TestReq57And59_DeclaredFiniteProductOverTheBoundIsProductTooLarge),
+	// so accepting either would not tell the two apart.
+	var namesTraversal bool
+	for _, got := range f {
+		if got.Rule != "" || got.Element != "traversal" {
+			continue
 		}
-		if !namesTraversal {
-			t.Errorf("the node-ceiling %s finding names a group; it must name "+
-				"the traversal; report:%s",
-				graphlint.CodeProductTooLarge, render(r))
+		// The diagnostic must quote the PUBLISHED ceiling. Without this
+		// the message could name any number -- or none -- and the test
+		// would still see a correctly scoped finding.
+		if want := fmt.Sprintf("%d", ceiling); !strings.Contains(got.Message, want) {
+			t.Errorf("the traversal-scoped %s finding's message %q does not "+
+				"name the published node ceiling %s: %+v",
+				graphlint.CodeProductTooLarge, got.Message, want, got)
+			continue
 		}
+		namesTraversal = true
+	}
+	if !namesTraversal {
+		t.Errorf("no %s finding names the traversal (rule=\"\", "+
+			"element=%q); the node-ceiling finding is traversal-scoped, "+
+			"never group-scoped; report:%s",
+			graphlint.CodeProductTooLarge, "traversal", render(r))
 	}
 
 	// The ceiling is model-independent.
 	if graphlint.NodeCeiling() != ceiling {
 		t.Error("the published node ceiling varied between calls")
 	}
+}
+
+// ceilingKeys is the number of clearable owned tags
+// `overCeilingFixture` emits. The reachable owned-state set is the
+// subset lattice over their presence footprints, so the node count is
+// 2^ceilingKeys — 8192 against the published ceiling of 4096, the
+// smallest power of two that clears it with margin.
+const ceilingKeys = 13
+
+// overCeilingFixture generates a model whose reachable node set exceeds
+// the published node ceiling, and returns its declarations and body.
+//
+// Widening a declared int domain does NOT do this: `reach` folds
+// successors into existing nodes and mints a node only for a written
+// value, so a declared domain's width never drives the node count. What
+// multiplies nodes is the PRESENCE FOOTPRINT — `successorsOf` groups
+// successors by which owned tags they hold — so n independently clearable
+// optional owned tags give 2^n distinct reachable owned-states.
+func overCeilingFixture(keys int) (decls, body string) {
+	var d, b strings.Builder
+
+	d.WriteString(`
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b"]
+single_valued = true
+required = true
+`)
+	for k := range keys {
+		fmt.Fprintf(&d, `
+[tags.k%d]
+provenance = "owned"
+kind = "enum"
+domain = ["on"]
+single_valued = true
+`, k)
+	}
+
+	b.WriteString("\nterminal = [\"done\"]\n\n[initial]\nstatus = \"a\"\n")
+	for k := range keys {
+		fmt.Fprintf(&b, "k%d = \"on\"\n", k)
+	}
+	b.WriteString(`
+[context.done]
+[context.done.match.status]
+eq = "b"
+`)
+	// One row per key, each clearing that key alone. Every subset of the
+	// keys is therefore a reachable presence footprint.
+	for k := range keys {
+		fmt.Fprintf(&b, `
+[[rule]]
+id = "drop%d"
+clear = ["k%d"]
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "a"
+`, k, k)
+	}
+	return d.String(), b.String()
 }
 
 // REQ-61: "An escape row closes coverage only for the failure classes it
