@@ -71,10 +71,6 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	// deliberately: "Match keys are not product dimensions … a separate
 	// field from its guard". A match block's own operator restriction is
 	// `eq`/`in` above, and its member semantics are RDR 0002's.
-	if b != BlockMatch && !operatorAcceptsKind(operator, decl.Kind) {
-		return badAtom("operator " + operator + " does not accept kind " + decl.Kind)
-	}
-
 	members, err := valueMembers(raw)
 	if err != nil {
 		return badAtom(err.Error())
@@ -82,9 +78,18 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 
 	// The `<clear>` ban binds every atom regardless of operator or block
 	// (`0002:C17`), and outranks kind conformance so a sentinel authored on
-	// a bool or int tag still reports as the reserved value it is.
+	// a bool or int tag still reports as the reserved value it is. It is
+	// therefore tested BEFORE the operator/kind matrix below: an atom
+	// pairing the sentinel with a matrix-illegal operator/kind (say
+	// `contains` on a `scalar`) must still report the stable
+	// `reserved_tag_value` category RDR 0005's envelope routes on, not the
+	// `malformed_predicate_atom` the matrix would return first.
 	if slices.Contains(members, ClearSentinel) {
 		return Atom{}, fail(CatReservedTagValue, where+" authors the reserved value "+ClearSentinel)
+	}
+
+	if b != BlockMatch && !operatorAcceptsKind(operator, decl.Kind) {
+		return badAtom("operator " + operator + " does not accept kind " + decl.Kind)
 	}
 
 	switch operator {

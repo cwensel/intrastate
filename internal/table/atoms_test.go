@@ -641,6 +641,40 @@ func TestReq61_ClearSentinelIsReservedAtEveryAuthoringSite(t *testing.T) {
 		}
 	})
 
+	// The existing sites above all pair the sentinel with an operator/kind
+	// the RDR 0003 matrix already accepts, so none of them can catch a gate
+	// ordered ahead of the sentinel check. This one pairs it with a
+	// matrix-ILLEGAL pair on purpose: `contains` over a `scalar` tag. The
+	// `<clear>` ban "binds every atom regardless of operator" (`0002:C17`),
+	// so the reserved-value category must survive an atom the matrix would
+	// otherwise reject first.
+	t.Run("sentinel outranks a matrix-illegal operator/kind pair", func(t *testing.T) {
+		// Every site above pairs the sentinel with an operator/kind the RDR
+		// 0003 matrix already accepts, so none can catch a matrix gate
+		// ordered ahead of the sentinel check. This one pairs it with a
+		// matrix-ILLEGAL pair on purpose — `contains` over the `scalar` tag
+		// `finalized_at`. The `<clear>` ban "binds every atom regardless of
+		// operator" (`0002:C17`), so the reserved-value category must
+		// survive an atom the matrix would otherwise reject first.
+		base := string(readFixture(t, "neg/neg-guard-all-clear.toml"))
+		src := strings.Replace(base,
+			"[rule.guard.all.cluster_ready]\neq = \"<clear>\"",
+			"[rule.guard.all.finalized_at]\ncontains = [\"<clear>\"]", 1)
+		if src == base {
+			t.Fatal("guard atom substitution did not apply")
+		}
+		_, err := table.Load([]byte(src), "clear-with-illegal-pair.toml")
+		if err == nil {
+			t.Fatal("a <clear> literal on a matrix-illegal pair loaded clean")
+		}
+		if cat, _ := table.CategoryOf(err); cat != table.CatReservedTagValue {
+			t.Errorf("category = %q; want %q — the operator/kind matrix "+
+				"preempted the sentinel ban, so a reserved value reports as "+
+				"a malformed atom and RDR 0005's envelope routes it wrong",
+				cat, table.CatReservedTagValue)
+		}
+	})
+
 	t.Run("the sentinel string is exactly <clear>", func(t *testing.T) {
 		if table.ClearSentinel != "<clear>" {
 			t.Errorf("ClearSentinel = %q; want %q", table.ClearSentinel, "<clear>")
