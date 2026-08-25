@@ -338,31 +338,52 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 	}
 
-	// The PRESENT VALUE axis proper, which the pinned-operand rule above
-	// does not carry on its own: when the fixed operand is the value, the
-	// literal did all the discriminating, so that rule alone would admit an
-	// operator whose value never moved. The contract is over the present
-	// value × literal × operator product, so every operator must be offered
-	// at least two distinct values somewhere.
+	// The PRESENT VALUE axis proper: the seam's answer must observably
+	// DEPEND on the value. Neither rule above carries that on its own —
+	// pinning an operand allows the literal to do all the discriminating,
+	// and counting distinct values says nothing about whether those values
+	// changed any answer.
 	//
-	// Stated per operator over values rather than as a per-operator
-	// orientation table, so it holds for any operator the matrix later
-	// grows. The shipped table satisfies it on both shapes: `eq`, `gte` and
-	// `in` vary the value against a fixed literal, and `contains` varies it
-	// between its set value and its unparseable one.
-	valuesSeen := map[string]map[string]bool{}
-	for _, c := range rec.calls {
-		if valuesSeen[c.Operator] == nil {
-			valuesSeen[c.Operator] = map[string]bool{}
+	// So require, per operator, one literal under which two distinct values
+	// draw DIFFERENT verdicts. Any two verdict classes count, not TRUE and
+	// FALSE specifically: a value that decides and a value the operator
+	// cannot parse differ exactly because the seam read the value, which is
+	// the property being established. That keeps the rule operator-agnostic
+	// — it holds for whatever the RDR 0003 matrix later grows, rather than
+	// pinning the four shapes shipped today.
+	//
+	// The shipped table satisfies it on both orientations: `eq`, `gte` and
+	// `in` split TRUE from FALSE under one literal, and `contains` splits
+	// TRUE from UNEVALUABLE under `["alpha"]` via `["alpha","beta"]` versus
+	// the unparseable `"alpha"`.
+	valueDrivesVerdict := map[string]bool{}
+	byLiteral := map[string]map[string]resolve.GuardResult{}
+	for i, c := range rec.calls {
+		k := c.Operator + "\x00" + c.Literal
+		if byLiteral[k] == nil {
+			byLiteral[k] = map[string]resolve.GuardResult{}
 		}
-		valuesSeen[c.Operator][c.Value] = true
+		byLiteral[k][c.Value] = rec.verdicts[i]
+	}
+	for k, seen := range byLiteral {
+		var first resolve.GuardResult
+		have := false
+		for _, verdict := range seen {
+			if !have {
+				first, have = verdict, true
+				continue
+			}
+			if verdict != first {
+				valueDrivesVerdict[k[:strings.Index(k, "\x00")]] = true
+			}
+		}
 	}
 	for _, op := range []string{opEq, opGte, opIn, opContains} {
-		if asked[op] && len(valuesSeen[op]) < 2 {
-			t.Errorf("the contract test offers %q only the value(s) %v; the contract "+
-				"is over the PRESENT VALUE × literal × operator product, and an "+
-				"operator asked about a single value never exercises the value axis",
-				op, valuesSeen[op])
+		if asked[op] && !valueDrivesVerdict[op] {
+			t.Errorf("the contract test never shows %q's answer depending on the "+
+				"PRESENT VALUE: no literal is offered two distinct values that draw "+
+				"different verdicts, so a seam deciding on the literal alone would "+
+				"satisfy every case it asks", op)
 		}
 	}
 
