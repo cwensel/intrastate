@@ -6,7 +6,14 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final
+- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-9, §JD-19, §JD-20: code
+  table and carriers; owned-state assembly for `flow resolve`; gate site and deny
+  semantics; CLI carriage of clear/set writes] [re-locked 2026-08-24 — Gate PASS.
+  Re-entered from Final on JDR 0001 §D8–§D11 and cites them without restatement:
+  `resolve`/`next` assemble owned state (§D8), gates run after selection with `deny`
+  a refusal (§D9), the envelope carries one `omitempty` `findings` list under the
+  exit-3 rule (§D10), and `--clear` plus JSON-array set writes carry §D5/§D7
+  semantics (§D11). A3–A6 re-verified.]
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High

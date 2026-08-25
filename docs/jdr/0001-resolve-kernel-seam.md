@@ -1,6 +1,6 @@
 ---
 authors: Chris K Wensel <cwensel@retrofit.sh>
-state: open
+state: settled
 cluster: 0002, 0003, 0004, 0005, 0006, 0007, 0008, 0009
 labels: intrastate, internal-resolve, refusals, guard-evaluation, rdr-cluster
 ---
