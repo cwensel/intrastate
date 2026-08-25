@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"math"
 	"slices"
 
 	"github.com/newcoinc/intrastate/internal/table"
@@ -110,7 +111,17 @@ func domainSize(d table.TagDecl) (int, bool) {
 		if d.Min == nil || d.Max == nil {
 			return 0, false
 		}
-		return spread(*d.Max-*d.Min+1, d.SingleValued), true
+		width, ok := intWidth(*d.Min, *d.Max)
+		if !ok {
+			// The width itself overflowed, so the domain is FINITE but
+			// larger than this implementation counts to. Reporting the
+			// ceiling makes `Cardinality` saturate into the too-large
+			// refusal, the same answer D12 gives an over-large exponent;
+			// reporting no domain at all would instead misreport an
+			// author's fully-declared bound as carrying no finite domain.
+			return cardinalityCeiling, true
+		}
+		return spread(width, d.SingleValued), true
 	case "set":
 		if len(d.Elements) == 0 {
 			return 0, false
@@ -151,6 +162,29 @@ func spread(domain int, singleValued bool) int {
 // ceilingExponent is the exponent at which the spread saturates:
 // `cardinalityCeiling` is `1 << ceilingExponent`.
 const ceilingExponent = 40
+
+// intWidth returns how many values the inclusive bound `{minV..maxV}`
+// names, and whether that count fits in an int.
+//
+// `maxV - minV + 1` is evaluated in WRAPPING int arithmetic, so a domain
+// as wide as the int range — `{MinInt..MaxInt}`, `{0..MaxInt}`,
+// `{MinInt+1..MaxInt}` — yields zero or a negative before any ceiling
+// applies. D12 saturated the SHIFT and never covered this SUBTRACTION, so
+// a wrapped width read as a tiny domain: under the published bound, fully
+// provable, and certified GREEN over an unbounded dimension — and then
+// enumerated one value at a time, which does not terminate. Refusing the
+// width here is what keeps REQ-86's bound comparison a comparison.
+func intWidth(minV, maxV int) (int, bool) {
+	if minV > maxV {
+		return 0, false
+	}
+	span := maxV - minV
+	if span < 0 || span == math.MaxInt {
+		// The subtraction wrapped, or the inclusive `+1` would.
+		return 0, false
+	}
+	return span + 1, true
+}
 
 // agrees reports whether a declared domain agrees with its value kind, per
 // the kind/field agreement table. The loader rejects a disagreement before
@@ -195,7 +229,11 @@ func IntDomain(d table.TagDecl) []int {
 	if d.Kind != "int" || d.Min == nil || d.Max == nil {
 		return nil
 	}
-	out := make([]int, 0, *d.Max-*d.Min+1)
+	width, ok := intWidth(*d.Min, *d.Max)
+	if !ok {
+		return nil
+	}
+	out := make([]int, 0, width)
 	for n := *d.Min; n <= *d.Max; n++ {
 		out = append(out, n)
 	}

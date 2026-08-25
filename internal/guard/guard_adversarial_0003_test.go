@@ -15,6 +15,8 @@ package guard_test
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -459,5 +461,139 @@ required = true
 			"finite count for such a declaration, and its unmarked sibling " +
 			"panics on a negative shift, so the loader was the only thing " +
 			"keeping the defect latent. See ADV-4.")
+	}
+}
+
+// --- ADV-4b: the int domain WIDTH overflows before it saturates ----------
+
+// wideIntSource is a single-valued, always-present int tag carrying the
+// authored bound `{min..max}`, guarded by one row.
+//
+// The bound is authored as TOML, so the whole chain under test is the one
+// an author reaches: `table.Load` normalizes it, `guard` reads the width.
+func wideIntSource(minV, maxV int) string {
+	return declBlock(`
+[tags.n]
+provenance = "owned"
+kind = "int"
+min = `+strconv.Itoa(minV)+`
+max = `+strconv.Itoa(maxV)+`
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "wide"
+source = "t:wide"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.n]
+lt = 3
+[rule.write]
+`
+}
+
+// REQ-86: "\"Too large to prove\" MUST be a declared, model-independent
+// bound ... the implementation MUST publish the bound it enforces".
+//
+// An int domain as wide as the int range evaluates `*Max - *Min + 1` in
+// WRAPPING arithmetic: `{MinInt..MaxInt}` yields 0, `{0..MaxInt}` yields
+// MinInt, `{MinInt+1..MaxInt}` yields -1. D12 saturated the exponent and
+// floored a negative domain, but it scoped that to the SHIFT and never
+// covered the SUBTRACTION feeding it — so the wrapped width read as a
+// domain of size 0 or 1: comfortably UNDER the published bound, fully
+// "provable", and GREEN over a dimension carrying 2^64 values. The bound
+// comparison stopped being a comparison, exactly what D12 forbids.
+//
+// This asserts the ARITHMETIC only and never enumerates, so it terminates
+// whatever the fix does.
+// ADVERSARIAL
+func TestAdv_WideIntDomainWidthSaturatesRatherThanWrapping(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max int
+	}{
+		{"the whole int range", math.MinInt, math.MaxInt},
+		{"the non-negative half", 0, math.MaxInt},
+		{"the range less its floor", math.MinInt + 1, math.MaxInt},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			minV, maxV := tc.min, tc.max
+			for _, singleValued := range []bool{true, false} {
+				d := table.TagDecl{
+					Kind: "int", Min: &minV, Max: &maxV,
+					SingleValued: singleValued, Required: true,
+				}
+				n, ok := guard.AssignmentCount(d)
+				if !ok {
+					t.Fatalf("AssignmentCount({%d..%d}, single_valued=%v) "+
+						"carries no finite domain; a fully declared bound "+
+						"names a finite — if astronomical — domain",
+						minV, maxV, singleValued)
+				}
+				if n <= guard.Bound() {
+					t.Errorf("AssignmentCount({%d..%d}, single_valued=%v) = %d, "+
+						"which is at or under the published bound %d — the "+
+						"width wrapped instead of saturating, so lint would "+
+						"certify an unbounded dimension as provable",
+						minV, maxV, singleValued, n, guard.Bound())
+				}
+			}
+
+			// IntDomain shares the same unguarded expression as its
+			// allocation hint. It is asserted through `AssignmentCount`'s
+			// ceiling above rather than by calling it here: at HEAD it
+			// enumerates the range one value at a time, so a direct call
+			// would not return. `Bound()` is what keeps every caller in
+			// this package away from it; the guarded width is what keeps a
+			// direct caller from sizing a slice off a wrapped count.
+		})
+	}
+}
+
+// REQ-86 / REQ-93: a finite product larger than the bound draws the
+// blocking `graph-product-too-large` refusal.
+//
+// Before the width was saturated this group certified GREEN over an int
+// dimension spanning the whole int range, and `guard.Lint` then hung
+// enumerating it one value at a time.
+// ADVERSARIAL
+func TestAdv_WideIntDomainRefusesRatherThanCertifying(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max int
+	}{
+		{"the whole int range", math.MinInt, math.MaxInt},
+		{"the non-negative half", 0, math.MaxInt},
+		{"the range less its floor", math.MinInt + 1, math.MaxInt},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := mustLoadSource(t, wideIntSource(tc.min, tc.max))
+
+			card, ok := guard.Cardinality(m, guard.Groups(m)[0])
+			if !ok || card <= guard.Bound() {
+				t.Fatalf("Cardinality over {%d..%d} = (%d, %v); want a finite "+
+					"count above the bound %d", tc.min, tc.max, card, ok, guard.Bound())
+			}
+
+			reports := guard.Lint(m)
+			if countCode(reports, guard.CodeProductTooLarge) == 0 {
+				t.Errorf("an int dimension spanning {%d..%d} drew no %q "+
+					"finding; findings=%v", tc.min, tc.max,
+					guard.CodeProductTooLarge, allFindings(reports))
+			}
+			for _, f := range findingsWithCode(reports, guard.CodeProductTooLarge) {
+				if !f.Blocking {
+					t.Errorf("%q finding is not blocking", f.Code)
+				}
+			}
+			if hasGreen(reports) {
+				t.Errorf("a group over an int dimension spanning {%d..%d} "+
+					"certified green", tc.min, tc.max)
+			}
+		})
 	}
 }

@@ -289,7 +289,15 @@ func valueAssignments(d table.TagDecl) ([]string, bool) {
 		if d.Min == nil || d.Max == nil {
 			return nil, false
 		}
-		domain := make([]string, 0, *d.Max-*d.Min+1)
+		width, ok := intWidth(*d.Min, *d.Max)
+		if !ok {
+			// An overflowing width names no dimension this implementation
+			// can enumerate. The `n > Bound()` precheck already declines
+			// it once `domainSize` saturates, but D11's posture is
+			// per-dimension: a direct caller must not reach the loop.
+			return nil, false
+		}
+		domain := make([]string, 0, width)
 		for n := *d.Min; n <= *d.Max; n++ {
 			domain = append(domain, strconv.Itoa(n))
 		}
