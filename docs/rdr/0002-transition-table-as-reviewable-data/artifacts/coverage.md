@@ -389,3 +389,99 @@ were already resolved there as assumptions and are carried above as items
 is one-sided rather than conclusive, and both are single-test-shaped, so a
 later phase that finds otherwise changes an assertion's shape, not a
 contract.
+
+---
+
+## Phase 2 — REQ-MVV end-to-end result (recorded)
+
+Run after the suite went green.
+
+```
+$ go test ./internal/table/ -run TestMVV_ParseNormalizeDumpValidateAndResolve -v
+--- PASS: TestMVV_ParseNormalizeDumpValidateAndResolve (0.01s)
+    --- PASS: .../1_parse_two_fixtures_into_typed_source_data (0.00s)
+    --- PASS: .../2_normalize_into_candidate_rows (0.00s)
+    --- PASS: .../3_dump_the_expanded_table (0.00s)
+    --- PASS: .../4_validate_the_eight_named_families (0.00s)
+    --- PASS: .../5_one_sample_tag_set_resolves_to_exactly_one_ordinary_row (0.00s)
+    --- PASS: .../6_one_unmatched_tag_set_resolves_to_one_modeled_escape_row (0.00s)
+    --- PASS: .../7_round_trip_value_identity (0.00s)
+    --- PASS: .../8_unsupported_version_is_refused_before_normalization (0.00s)
+    --- PASS: .../9_overlap_is_deferred_to_the_phase_5_lint_handshake (0.00s)
+PASS
+ok      github.com/newcoinc/intrastate/internal/table   0.170s
+```
+
+Leg 9 is DEFERRED by REQ-117, not counted satisfied: it asserts only what
+this RDR owes before RDR 0006's lint handshake — the overlapping rows are
+distinguishable by identity, bind one outcome, and are comparable by
+predicate set.
+
+**Whole-package state**: `go test ./...` green; `internal/table` runs 147
+top-level tests / 467 including subtests, 0 failures, stable under
+`-count=3`. `go vet ./...` clean; `gofmt -l` empty.
+
+### The normalized dump, as produced
+
+The approved row census and identities (nine RDR rows, two kata rows) hold
+value-for-value against `evidence/spikes/iter-2/output.txt`. Two fields
+differ from the spike's bytes, both because the record names the spike's
+form a defect rather than a permitted reading:
+
+- **The locator is derived**, `<model id>:<rule id>`, not copied from the
+  authored `source`. `0002:TD` says so and calls the spike's
+  `Locator = rule.Source` "a spike defect against this clause"; REQ-92's
+  control edits `source` and asserts the locator does not move.
+- **A set-valued field renders bracketed and quoted** — `labels=["needs
+  work"]`, not `labels=needs work`. `0002:C10` requires each member
+  delimited unambiguously and `0002:RT` requires a set to render visibly
+  as a set. Set-ness is the DECLARED kind, so a one-member set still
+  brackets; otherwise read-back could not tell `["a"]` from the scalar `a`.
+
+```
+MODEL rdr rows=9 outcomes=round-clean,verdict-flapping,reconcile-block,finalized
+identity=rdr.continue-prelock#foundational source=rdr:continue-prelock kind=transition outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=foundational@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] writes=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+identity=rdr.continue-prelock#large source=rdr:continue-prelock kind=transition outcome=round-clean atoms=[finalized_at.exists=false@all; iter.lt=3@all; profile.eq=large@match; profile.eq=small@unless; stage.eq=prelock@match; status.eq=Draft@match] next=[iter=2; stage=prelock] writes=[iter=2; stage=prelock] requires_owned=[iter,stage] gate=[rdr-lock] escape=[]
+identity=rdr.continue-prelock-cluster#foundational source=rdr:continue-prelock-cluster kind=transition outcome=round-clean atoms=[cluster_ready.eq=true@all; profile.eq=foundational@match; stage.eq=prelock@match; status.eq=Draft@match] next=[prelock_lens=critique; stage=prelock] writes=[prelock_lens=critique; stage=prelock] requires_owned=[prelock_lens,stage] gate=[] escape=[]
+identity=rdr.continue-prelock-cluster#large source=rdr:continue-prelock-cluster kind=transition outcome=round-clean atoms=[cluster_ready.eq=true@all; profile.eq=large@match; stage.eq=prelock@match; status.eq=Draft@match] next=[prelock_lens=critique; stage=prelock] writes=[prelock_lens=critique; stage=prelock] requires_owned=[prelock_lens,stage] gate=[] escape=[]
+identity=rdr.draft-no-match-escape#reconcile-block source=rdr:draft-no-match-escape kind=escape outcome=reconcile-block atoms=[status.eq=Draft@match] next=[] writes=[] requires_owned=[] gate=[] escape=[no_match]
+identity=rdr.draft-no-match-escape#round-clean source=rdr:draft-no-match-escape kind=escape outcome=round-clean atoms=[status.eq=Draft@match] next=[] writes=[] requires_owned=[] gate=[] escape=[no_match]
+identity=rdr.reconcile-rewind source=rdr:reconcile-rewind kind=transition outcome=reconcile-block atoms=[status.eq=Draft@match] next=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] writes=[prelock_lens=<clear>; rewind_scope=assumptions; stage=resolve; status=Draft] requires_owned=[prelock_lens,rewind_scope,stage,status] gate=[] escape=[]
+identity=rdr.terminal-archive#finalized source=rdr:terminal-archive kind=transition outcome=finalized atoms=[stage.eq=archive@match] next=[stage=archive] writes=[stage=archive] requires_owned=[stage] gate=[] escape=[]
+identity=rdr.terminal-archive#verdict-flapping source=rdr:terminal-archive kind=transition outcome=verdict-flapping atoms=[stage.eq=archive@match] next=[stage=archive] writes=[stage=archive] requires_owned=[stage] gate=[] escape=[]
+MODEL kata rows=2 outcomes=accepted,needs-work,closed
+identity=kata.review-accepted source=kata:review-accepted kind=transition outcome=accepted atoms=[owner.eq=current-session@all; phase.eq=review@match; status.eq=open@match; status.eq=closed@unless] next=[phase=ship; status=accepted] writes=[phase=ship; status=accepted] requires_owned=[phase,status] gate=[] escape=[]
+identity=kata.review-needs-work source=kata:review-needs-work kind=transition outcome=needs-work atoms=[phase.eq=review@match; status.eq=open@match] next=[labels=["needs work"]; phase=resolve; status=open] writes=[labels=["needs work"]; phase=resolve; status=open] requires_owned=[labels,phase,status] gate=[] escape=[]
+```
+
+### Pre-seeded deviation checks, discharged
+
+- **D1** — discharged **at the promoted set**, which is what the loader
+  reads: `grep -rn 'kind = "string"' internal/table/testdata/` → 0, and
+  `TestReq64` asserts an unknown kind token refuses
+  `malformed_tag_declaration` while all five of RDR 0003's tokens are
+  admitted (`table.IsDeclaredKind`). The *spike* directory still carries
+  71 hits, because it is Stage-4/6 evidence of what was reviewed then and
+  this build is read-only over it; the rewrite D1 asks for landed on
+  promotion (REQ-118: extended, never narrowed), which `TestReq118`
+  enforces by name. Re-running `gen-cases.py` to refresh the evidence is
+  the residual, and it changes no clause and no assertion.
+- **D2** — `neg-escape-with-empty-write.toml` refuses
+  `malformed_escape_declaration`: `sourceRule.Write` is a POINTER, so the
+  loader keys on key presence rather than `len(...) > 0`.
+- **D3** — `neg-write-value-outside-domain` and
+  `neg-write-value-wrong-kind` both refuse `malformed_tag_declaration`, the
+  category D3's check names. No fenced category had to widen.
+- **D5** — the §D13 landing is implemented at the kernel seam
+  (`model.go::seamValue`): sorted, duplicate-free, compact JSON array,
+  matching the form RDR 0007 already wrote its `contains` leg against.
+  `TestReq93` asserts all four legs including read-back byte equality.
+
+### New deviations minted this phase
+
+**D6** and **D7**, both TEST-FIXTURE, both `Status: mechanical
+translation` — two Phase-1 assertions that were red against every possible
+implementation. Each was repaired at the fixture, never by weakening the
+assertion; see `deviations.md`.
+
+**Open author decisions: none.**

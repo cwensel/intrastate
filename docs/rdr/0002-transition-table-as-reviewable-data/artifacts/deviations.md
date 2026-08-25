@@ -175,3 +175,44 @@ is what broke the 0007↔0003 cycle. See
   `guard_unevaluable`, and its payload names exactly
   `{cluster_ready, all, eq, true, absent}` on
   `continue-prelock-cluster` — the atom the leg exists to witness.
+
+---
+
+## Phase 2 dispositions for the pre-seeded entries
+
+Running each entry's named check IS its disposition. None contradicted a
+contract, so none escalated.
+
+- **D1** — DISCHARGED at the promoted set. Check 1:
+  `grep -rn 'kind = "string"' internal/table/testdata/` → **0**; the
+  promoted fixtures carry RDR 0003's five tokens, and the loader refuses
+  an unknown kind token as `malformed_tag_declaration`
+  (`load.go::tagDecl`, asserted by `TestReq64`). Check 2 (`iter` /
+  `cluster_ready` conform to `0003:948-952`): `iter` is
+  `kind = "int", min = 0, max = 9, required = true` and `cluster_ready` is
+  `kind = "bool"` — neither declares `single_valued`, so the assignment
+  table is satisfied without a fenced change on either side. The *spike*
+  directory retains 71 hits and is deliberately untouched: it is Stage-4/6
+  evidence of what was reviewed, and this build is read-only over it. The
+  residual is re-running `gen-cases.py` to refresh that evidence; it moves
+  no clause and no assertion.
+- **D2** — DISCHARGED. `neg-escape-with-empty-write.toml` is promoted and
+  refuses `malformed_escape_declaration`. The loader keys on key PRESENCE,
+  not length: `sourceRule.Write` is `*map[string]any`, so `write = []`
+  and a populated block refuse alike (`normalize.go::normalizeRule`).
+- **D3** — DISCHARGED, no widening. Both scenario-3 fixtures
+  (`neg-write-value-outside-domain`, `neg-write-value-wrong-kind`) refuse
+  `malformed_tag_declaration`, the category D3's check names, via
+  `renderWrites`'s `conform` call. No fenced category had to widen, so the
+  escalation arm did not fire.
+- **D4** — NO ACTION for this build; it is a citation repair on the record,
+  and RDRs are never amended. Its substance was already discharged in
+  `req-list.md`'s standing correction 2: the 0007 reshape HAS landed, so
+  every REQ marked *(was blocked)* was satisfiable and is now green.
+- **D5** — DISCHARGED as a LANDING. The §D13 set-value encoding is
+  implemented at the kernel seam (`model.go::seamValue`): a set crosses as
+  its canonical JSON array, members sorted, duplicate-free, compact,
+  matching the form RDR 0007 already wrote its `contains` leg against
+  rather than redefining it. Read-back equality is byte equality over that
+  array. `TestReq93` asserts all four legs. It contradicted no existing
+  fence, so the escalation arm did not fire.
