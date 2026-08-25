@@ -342,9 +342,11 @@ func packageGoFiles(t *testing.T) []string {
 // key in it; strictness applies everywhere else."
 // HAPPY PATH
 func TestReq9_MetadataIsFreeFormAndUninterpreted(t *testing.T) {
-	// A metadata table carrying keys that collide with the schema's own
-	// root vocabulary. Interpreting any of them would change the model;
-	// strictness applied inside would refuse the document.
+	// A LEGAL document whose metadata table carries keys that collide with
+	// the schema's own root vocabulary. Interpreting any of them would
+	// change the model; strictness applied inside would refuse the
+	// document. The rule writes an owned tag so the only thing that can
+	// refuse this document is the metadata table itself.
 	src := []byte(`outcomes = ["done"]
 
 [model]
@@ -356,40 +358,79 @@ outcomes = ["not-the-alphabet"]
 version = 99
 flavor = "vanilla"
 
+[tags.phase]
+provenance = "owned"
+kind = "enum"
+domain = ["start", "end"]
+single_valued = true
+required = true
+
 [tags.recognized]
 provenance = "recognized"
 kind = "enum"
 required = true
+
+[read.m-phase]
+role = "m"
+path = "m.phase"
+keys = ["phase"]
+timeout = "2s"
+
+[write.m-phase]
+role = "m"
+path = "m.phase"
+keys = ["phase"]
+timeout = "2s"
+read_back = true
+
+[initial]
+phase = "start"
 
 [[rule]]
 id = "r"
 [rule.match.recognized]
 eq = "done"
 [rule.write]
-recognized = "done"
+phase = "end"
 `)
-	// The write above is illegal (recognized is not owned), so this
-	// document is used only through the metadata leg: load the promoted
-	// fixture for the positive case and assert non-interpretation here by
-	// the categories that must NOT appear.
-	_, err := table.Load(src, "metadata-collision.toml")
+	m, err := table.Load(src, "metadata-collision.toml")
 	if err != nil {
-		if cat, ok := table.CategoryOf(err); ok {
-			switch cat {
-			case table.CatUnknownSchemaField, table.CatUnsupportedVersion,
-				table.CatMalformedRecognizedOutcomeAlphabet:
-				t.Errorf("category = %q: a key inside [model.metadata] was "+
-					"interpreted or strictness was applied inside it", cat)
-			}
+		t.Fatalf("the metadata-collision document is legal and MUST load "+
+			"clean; refused: %v", err)
+	}
+
+	// Carried through untouched: every authored key reaches the model with
+	// its authored value, whatever the root vocabulary means by that name.
+	if _, isMap := any(m.Metadata).(map[string]any); !isMap {
+		t.Fatalf("metadata field is %T; want a free-form map[string]any", m.Metadata)
+	}
+	wantMeta := map[string]any{
+		"outcomes": []any{"not-the-alphabet"},
+		"version":  int64(99),
+		"flavor":   "vanilla",
+	}
+	for k, want := range wantMeta {
+		got, ok := m.Metadata[k]
+		if !ok {
+			t.Errorf("metadata key %q did not reach the model; have %v",
+				k, m.Metadata)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("metadata[%q] = %#v; want %#v — the value was interpreted, "+
+				"not carried through", k, got, want)
 		}
 	}
 
-	m := mustLoad(t, rdrFixture)
+	// Not interpreted: the colliding keys left the root vocabulary of THIS
+	// document alone.
 	if m.Version != 1 {
-		t.Errorf("model version = %d; want 1", m.Version)
+		t.Errorf("model version = %d; want 1 — metadata.version was interpreted",
+			m.Version)
 	}
-	if _, isMap := any(m.Metadata).(map[string]any); !isMap {
-		t.Errorf("metadata field is %T; want a free-form map[string]any", m.Metadata)
+	if want := []string{"done"}; !reflect.DeepEqual(m.Outcomes, want) {
+		t.Errorf("outcomes = %v; want %v — metadata.outcomes was interpreted",
+			m.Outcomes, want)
 	}
 }
 

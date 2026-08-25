@@ -31,10 +31,17 @@ func TestReq34_RuleIDsAreUniqueByExactByteEquality(t *testing.T) {
 		if src == base {
 			t.Fatal("rule id substitution did not apply")
 		}
-		if _, err := table.Load([]byte(src), "case-differing-ids.toml"); err != nil {
-			if cat, _ := table.CategoryOf(err); cat == table.CatDuplicateRuleID {
-				t.Fatal("`Continue-Prelock` and `continue-prelock` reported as " +
-					"duplicates; rule ids compare by exact byte equality")
+		m, err := table.Load([]byte(src), "case-differing-ids.toml")
+		if err != nil {
+			t.Fatalf("`Continue-Prelock` and `continue-prelock` are two ids, "+
+				"not a duplicate; the document MUST load clean, refused: %v", err)
+		}
+		// Both ids survive normalization as distinct rows: neither was
+		// folded into the other, and neither was dropped.
+		for _, id := range []string{"Continue-Prelock", "continue-prelock"} {
+			if len(rowsByRuleID(m, id)) == 0 {
+				t.Errorf("no normalized row carries rule id %q; case-differing "+
+					"ids were folded together", id)
 			}
 		}
 	})
