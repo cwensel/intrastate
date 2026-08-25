@@ -285,33 +285,56 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 	}
 
-	// The product's value axis, PER OPERATOR — asserted on the VERDICT
-	// CLASS, not on value distinctness. Two distinct values are only a
-	// proxy for a decided-both-ways operator, and an unsound one: `gte`
-	// against literal "3" with values "4" and "3" varies the value while
-	// answering TRUE to both, so a seam constant-TRUE for every parseable
-	// `gte` would still pass a contract table that had lost its FALSE leg.
-	// Requiring both classes is what `guardcontract.go` already says it is
-	// doing ("decided both ways against one literal, so a constant-
-	// answering seam cannot pass"); this asserts that obligation directly
-	// and survives any case-table rewrite that keeps it.
-	decided := map[string]map[resolve.GuardResult]bool{}
+	// The product's value axis, PER OPERATOR: each operator must be driven
+	// to both TRUE and FALSE while ONE of its two operands is held fixed.
+	// Both halves of that are load-bearing, and each rules out a different
+	// constant seam.
+	//
+	// Verdict classes rather than distinct values, because distinctness is
+	// only a proxy for decided-both-ways, and an unsound one: `gte` against
+	// literal "3" with values "4" and "3" varies the value while answering
+	// TRUE to both, so a table that lost its FALSE leg would still admit a
+	// seam constant-TRUE for every parseable `gte`.
+	//
+	// With an operand pinned rather than merely somewhere-per-operator,
+	// because two verdicts that share neither operand are explained by a
+	// seam that ignores one of them: `gte` "1" vs "9" both against value
+	// "5" decides both ways without ever exercising the value axis.
+	//
+	// EITHER operand may be the pinned one, because which side carries the
+	// variation is the operator's own business. `gte` and `eq` vary the
+	// value against a fixed bound; `contains` is the mirror — the value is
+	// the container and the literal is the probe, so the shipped table
+	// varies the probe against a fixed container. Demanding a fixed literal
+	// for every operator would reject that legitimate shape.
+	sameLiteral := map[string]map[resolve.GuardResult]bool{}
+	sameValue := map[string]map[resolve.GuardResult]bool{}
 	for i, c := range rec.calls {
-		if decided[c.Operator] == nil {
-			decided[c.Operator] = map[resolve.GuardResult]bool{}
+		lk := c.Operator + "\x00" + c.Literal
+		vk := c.Operator + "\x00" + c.Value
+		if sameLiteral[lk] == nil {
+			sameLiteral[lk] = map[resolve.GuardResult]bool{}
 		}
-		decided[c.Operator][rec.verdicts[i]] = true
+		if sameValue[vk] == nil {
+			sameValue[vk] = map[resolve.GuardResult]bool{}
+		}
+		sameLiteral[lk][rec.verdicts[i]] = true
+		sameValue[vk][rec.verdicts[i]] = true
+	}
+	bothWays := map[string]bool{}
+	for _, group := range []map[string]map[resolve.GuardResult]bool{sameLiteral, sameValue} {
+		for k, verdicts := range group {
+			if verdicts[resolve.GuardTrue] && verdicts[resolve.GuardFalse] {
+				bothWays[k[:strings.Index(k, "\x00")]] = true
+			}
+		}
 	}
 	for _, op := range []string{opEq, opGte, opIn, opContains} {
-		if !asked[op] {
-			continue
-		}
-		for _, want := range []resolve.GuardResult{resolve.GuardTrue, resolve.GuardFalse} {
-			if !decided[op][want] {
-				t.Errorf("the contract test never drives %q to %v; an operator "+
-					"decided only one way cannot distinguish a conforming seam "+
-					"from one that answers that verdict constantly", op, want)
-			}
+		if asked[op] && !bothWays[op] {
+			t.Errorf("the contract test never drives %q to both GuardTrue and "+
+				"GuardFalse with one operand held fixed; an operator decided only "+
+				"one way cannot be told from a constant, and two verdicts sharing "+
+				"neither operand are explained by a seam ignoring one of them", op)
 		}
 	}
 
