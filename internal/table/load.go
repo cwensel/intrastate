@@ -201,6 +201,15 @@ func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {
 	if len(src.Elements) > 0 && src.Kind != "set" {
 		return bad("kind " + src.Kind + " admits no elements")
 	}
+	// The single-valued marker is meaningful only where the kind has both a
+	// single-valued and a non-single-valued assignment count. A `set` holds
+	// any subset, so its count is `2^|element universe|` and never
+	// `|universe|`; a `scalar` has no finite declared domain to partition
+	// (`0003:1273-1283`). `0003:1389` rejects both here, in the declaration
+	// loader, under `0002:C22`'s malformed tag declaration.
+	if src.SingleValued && (src.Kind == "set" || src.Kind == "scalar") {
+		return bad("kind " + src.Kind + " admits no single_valued marker")
+	}
 	if src.Min != nil && src.Max != nil && *src.Min > *src.Max {
 		return bad("min exceeds max")
 	}

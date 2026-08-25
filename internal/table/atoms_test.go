@@ -799,6 +799,24 @@ func TestReq64_DeclarationSiteAndTheTwoRejectionCategories(t *testing.T) {
 		}
 	})
 
+	// `single_valued` is meaningful only where the kind has both
+	// single-valued and non-single-valued assignment counts. `0003:1273-1283`
+	// fixes a `set` at `2^|element universe|` — "never `|universe|`" — and
+	// lists no row for `scalar`, a kind with no finite declared domain, so on
+	// those two the marker asserts nothing. `0003:1389` routes such a
+	// declaration to the loader; `0002:C22` (REQ-64) owns the category.
+	t.Run("declaration RDR 0003 rejects: single_valued on a kind admitting none",
+		func(t *testing.T) {
+			for _, rel := range []string{
+				"neg/neg-tagdecl-single-valued-on-set.toml",
+				"neg/neg-tagdecl-single-valued-on-scalar.toml",
+			} {
+				if got := loadCategory(t, rel); got != table.CatMalformedTagDeclaration {
+					t.Errorf("%s: category = %q; want %q", rel, got, table.CatMalformedTagDeclaration)
+				}
+			}
+		})
+
 	t.Run("predicate literal outside the declared domain", func(t *testing.T) {
 		got := loadCategory(t, "neg/neg-literal-outside-domain.toml")
 		if got != table.CatMalformedPredicateAtom {
