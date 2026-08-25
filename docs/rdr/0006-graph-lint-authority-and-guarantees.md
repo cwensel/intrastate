@@ -6,13 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [§JD-17 answered 2026-08-24 by JDR 0001 §D7, checked consistent at the 0002-0009 iteration-3 gate; additive landings deferred to `artifacts/deviations.md`] [locked 2026-08-23 — Gate PASS. Owns blocking graph-lint
-  authority, the mandatory invariant taxonomy, and the owned-state reachability
-  relation peers quantify over. Six records remain open, none lock-blocking, all
-  DOWNGRADED at Stage 6: A5 and A8 discharge at implementation (CI `graph-lint`
-  job and the checked-in transition model), A6 and A10 are scheduled edits on
-  RDR 0002 (`Draft`), A7 is a route-back on RDR 0003 A18, and A9 flips when RDR
-  0005 lands transition-model config discovery.]
+- **Status**: Implemented
 - **Type**: Feature
 - **Profile**: large — locks one graph-lint acceptance contract: blocking authority plus invariant taxonomy.
 - **Priority**: High
