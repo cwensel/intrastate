@@ -46,8 +46,12 @@ import (
 // multi-member literal at LOAD (`0002:C3` — a stable refusal, never a
 // silent reinterpretation), and `in`/`contains` cross the seam whole.
 func TestFail1_MultiMemberLiteralIsNeverTruncatedAtTheKernelSeam(t *testing.T) {
-	// A `scalar`-kind owned tag, so nothing here is a declared `set`: the
-	// whole point is that carriage must not be decided by the kind alone.
+	// `status` is `scalar`-kind, so nothing carried on it is a declared
+	// `set`: that is what shows carriage is not decided by the kind alone.
+	// `labels` is the declared `set` the `contains` arms need, since RDR
+	// 0003's operator/kind matrix admits `contains` over `set` alone — the
+	// carriage question the arms ask is unchanged by which tag carries it,
+	// and the `in` arm still asks it on the `scalar`.
 	build := func(guard, write string) string {
 		return `outcomes = ["done"]
 
@@ -59,6 +63,10 @@ version = 1
 provenance = "owned"
 kind = "scalar"
 
+[tags.labels]
+provenance = "owned"
+kind = "set"
+
 [tags.recognized]
 provenance = "recognized"
 kind = "enum"
@@ -67,13 +75,13 @@ required = true
 [read.r]
 role = "m"
 path = "m"
-keys = ["status"]
+keys = ["labels", "status"]
 timeout = "2s"
 
 [write.w]
 role = "m"
 path = "m"
-keys = ["status"]
+keys = ["labels", "status"]
 timeout = "2s"
 read_back = true
 
@@ -87,29 +95,33 @@ status = ` + write + `
 `
 	}
 
-	guardLiteral := func(t *testing.T, m *table.Model, operator string) string {
+	guardLiteralOn := func(t *testing.T, m *table.Model, key, operator string) string {
 		t.Helper()
 		kr := m.Rows[0].KernelRow()
 		for _, a := range kr.Guard {
-			if a.Key == "status" && a.Operator == operator {
+			if a.Key == key && a.Operator == operator {
 				return a.Literal
 			}
 		}
-		t.Fatalf("no `status` %s guard atom reached the kernel row: %+v",
-			operator, kr.Guard)
+		t.Fatalf("no `%s` %s guard atom reached the kernel row: %+v",
+			key, operator, kr.Guard)
 		return ""
+	}
+	guardLiteral := func(t *testing.T, m *table.Model, operator string) string {
+		t.Helper()
+		return guardLiteralOn(t, m, "status", operator)
 	}
 
 	// --- the two set-valued operators cross whole ---
 
 	t.Run("a guard `contains` literal crosses as the §D13 array", func(t *testing.T) {
 		m, err := table.Load([]byte(build(
-			"[rule.guard.all.status]\ncontains = [\"done\", \"open\"]", `"done"`)),
+			"[rule.guard.all.labels]\ncontains = [\"done\", \"open\"]", `"done"`)),
 			"fail1-contains.toml")
 		if err != nil {
 			t.Fatalf("refused: %v", err)
 		}
-		got := guardLiteral(t, m, "contains")
+		got := guardLiteralOn(t, m, "labels", "contains")
 		if got != `["done","open"]` {
 			t.Errorf("GuardAtom.Literal = %q; want %q — REQ-93 sends any "+
 				"set-valued atom literal across as its canonical JSON array, "+
@@ -149,12 +161,12 @@ status = ` + write + `
 
 	t.Run("the encoding is canonical: sorted, duplicate-free, compact", func(t *testing.T) {
 		m, err := table.Load([]byte(build(
-			"[rule.guard.all.status]\ncontains = [\"zulu\", \"alpha\"]", `"done"`)),
+			"[rule.guard.all.labels]\ncontains = [\"zulu\", \"alpha\"]", `"done"`)),
 			"fail1-canonical.toml")
 		if err != nil {
 			t.Fatalf("refused: %v", err)
 		}
-		if got := guardLiteral(t, m, "contains"); got != `["alpha","zulu"]` {
+		if got := guardLiteralOn(t, m, "labels", "contains"); got != `["alpha","zulu"]` {
 			t.Errorf("GuardAtom.Literal = %q; want the sorted, compact %q",
 				got, `["alpha","zulu"]`)
 		}
@@ -166,12 +178,12 @@ status = ` + write + `
 		// member the author shared between them.
 		load := func(members string) string {
 			m, err := table.Load([]byte(build(
-				"[rule.guard.all.status]\ncontains = "+members, `"done"`)),
+				"[rule.guard.all.labels]\ncontains = "+members, `"done"`)),
 				"fail1-share.toml")
 			if err != nil {
 				t.Fatalf("refused: %v", err)
 			}
-			return guardLiteral(t, m, "contains")
+			return guardLiteralOn(t, m, "labels", "contains")
 		}
 		a := load(`["AAA", "open"]`)
 		b := load(`["ZZZ", "open"]`)

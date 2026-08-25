@@ -57,6 +57,23 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	if b == BlockMatch && operator != "eq" && operator != "in" {
 		return badAtom("a match block admits only eq and in")
 	}
+	// RDR 0003's operator/kind matrix decides which kinds each operator
+	// accepts, and an unsupported pair is one of RDR 0003's rejection rules
+	// this package's `malformed predicate atom` category carries
+	// (`0002:C22`, JDR 0001 §D7(iii)). It sits beside the operator-set and
+	// literal-shape gates because all three answer the same question — is
+	// this a well-formed atom — and RDR 0003's parser is not what loads
+	// this document.
+	//
+	// It binds GUARD blocks only. RDR 0003 scopes the matrix to the guard
+	// atom ("`Operator` must be allowed by the operator/kind matrix above"
+	// is stated of the guard atom shape) and separates the two populations
+	// deliberately: "Match keys are not product dimensions … a separate
+	// field from its guard". A match block's own operator restriction is
+	// `eq`/`in` above, and its member semantics are RDR 0002's.
+	if b != BlockMatch && !operatorAcceptsKind(operator, decl.Kind) {
+		return badAtom("operator " + operator + " does not accept kind " + decl.Kind)
+	}
 
 	members, err := valueMembers(raw)
 	if err != nil {
@@ -88,6 +105,9 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 		if dup, ok := firstDuplicate(members); ok {
 			return badAtom("member " + strconv.Quote(dup) + " is repeated")
 		}
+		if len(members) == 0 {
+			return badAtom("`in` takes a non-empty member set")
+		}
 		if b == BlockMatch {
 			// The `#` reservation is match-only: only match blocks expand,
 			// and a `#` inside a chosen member would make the rendered row
@@ -102,6 +122,17 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	case "contains":
 		if !isArray(raw) {
 			return badAtom("`contains` takes an array of members")
+		}
+		// A `contains` literal is a set literal exactly as an `in` literal
+		// is, so RDR 0003's set-literal clause binds it identically: two
+		// spellings differing only in element order parse to one literal,
+		// and "a repeated element MUST be rejected at parse rather than
+		// silently collapsed". The dedup below would otherwise collapse it.
+		if dup, ok := firstDuplicate(members); ok {
+			return badAtom("member " + strconv.Quote(dup) + " is repeated")
+		}
+		if len(members) == 0 {
+			return badAtom("`contains` takes a non-empty element set")
 		}
 	case resolve.OpExists:
 		// An existence atom emits the kernel's exported constants verbatim,

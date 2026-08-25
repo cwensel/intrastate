@@ -76,6 +76,33 @@ func Operators() []string {
 	return slices.Clone(operators)
 }
 
+// operatorKinds is RDR 0003's operator/kind matrix, mirrored here for the
+// same reason `declaredKinds` and `operators` are: RDR 0003 owns the
+// matrix, this RDR's loader is what enforces it at load, and `guard`
+// imports this package rather than the other way round. `guard.Accepts` is
+// the authority and its REQ-4 test pins the matrix cell by cell.
+//
+// `exists` accepts every kind — it reads presence, not value. The RDR's
+// matrix cell adds "provided the tag is declared optional", but that is a
+// vacuity report, not a rejection ("well-formed but vacuous — lint reports
+// it as such rather than rejecting it"), so it is lint's, not load's.
+var operatorKinds = map[string][]string{
+	"eq":       {"enum", "bool", "int", "scalar"},
+	"in":       {"enum", "bool", "int", "scalar"},
+	"lt":       {"int"},
+	"lte":      {"int"},
+	"gt":       {"int"},
+	"gte":      {"int"},
+	"exists":   {"enum", "bool", "int", "set", "scalar"},
+	"contains": {"set"},
+}
+
+// operatorAcceptsKind reports whether the operator/kind matrix admits the
+// pair. An operator outside the closed set accepts no kind.
+func operatorAcceptsKind(operator, kind string) bool {
+	return slices.Contains(operatorKinds[operator], kind)
+}
+
 // TagDecl is one tag's declaration: its provenance plus the type model RDR
 // 0003 owns, spelled as the wire keys `kind`, `domain`, `min`, `max`,
 // `elements`, `single_valued`, and `required` (`0002:C22`). Every declared
