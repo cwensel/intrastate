@@ -102,3 +102,162 @@ actually expose, so Phase 2 does not read the test shape as a shortcut.
   failing gate rather than a silently dropped REQ. REQ-MVV proper is
   fixture-backed and does not consume the CI gate, so the MVV is
   independently satisfiable.
+
+---
+
+# Stage 8 Phase 2 (implementation)
+
+Recorded by the Phase 2 implementer. Every entry below was resolved
+against the record's own evidence base and the landed peers; none blocked
+progress and none weakened a Phase 1 assertion.
+
+## D5 — `respond.FindingCarrier` is a new public surface the record does not name
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation (derived choice recorded)
+- **REQ**: REQ-97 ("Text mode MUST enumerate every finding's code and
+  message, which requires extending … the `respond.OK` text branch
+  (success, which renders only `Notes`/`Warnings` today and drops
+  `Data`)").
+- **Finding**: the record books the edit but names no mechanism. The text
+  branch must read the verb's `Data` payload, and `respond` must not
+  import `internal/graphlint` — the same leaf-package discipline
+  `0006:C14` fixes for `clierr`. Three shapes were available: a
+  `Findings` field on `respond.Success` (a verb-specific field the record
+  explicitly declines — "rather than growing `respond.Success` a
+  verb-specific field"), a type switch on the concrete payload (which
+  imports the producing package), or an interface the payload satisfies.
+- **Evidence**: `0006:C14` fixes both constraints — success findings
+  travel "under the existing `respond.Success.Data` payload" and the
+  gateway gains no dependency on the producing package. An interface is
+  the only one of the three that satisfies both.
+- **Chosen**: `respond.FindingCarrier` with one method
+  `LintFindings() []clierr.Finding`; `internal/cli.lintPayload`
+  implements it. `clierr.EmitFindingsText` is the shared renderer both
+  branches call, so the failure and success surfaces cannot drift.
+- **Ships untested by a REQ-N of its own**: REQ-97/REQ-98 exercise it end
+  to end through the CLI in both modes, so the behaviour is covered even
+  though the surface is not named.
+
+## D6 — The `ambiguous_match` arm's coverage union excludes ordinary rows
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation (derived choice recorded)
+- **REQ**: REQ-62, REQ-63; SC-19a/SC-19b.
+- **Finding**: `0006:C10` requires the union be computed per (group ×
+  declared rescuable class) and that the `ambiguous_match` arm be checked
+  for a group carrying a `graph-overlap` finding. It does not say WHICH
+  rows close that arm. Reading "every row participates" uniformly makes
+  the arm vacuously closed for every group whose ordinary rows cover the
+  product — which is every overlapping group, since overlapping rows
+  cover at least as much as one of them alone. SC-19a's fixture would
+  then emit no `graph-coverage-gap`, contradicting REQ-62's own scenario.
+- **Evidence**: `0006:C10` states the mechanism — "`escapeOrRefuse`
+  selects escapes by `row.rescues(r.Kind)` for the kind that actually
+  occurred". The kernel reaches `escapeOrRefuse` on `ambiguous_match`
+  PRECISELY because none of the ordinary rows was the exact-one match, so
+  an ordinary row cannot rescue an ambiguity it caused. `no_match` is the
+  opposite condition — it arises exactly where no row accepts — so an
+  ordinary row accepting the assignment is what keeps the refusal from
+  arising, and the ordinary population does close that arm.
+- **Chosen**: `no_match`'s union is the ordinary rows plus the escape rows
+  declaring the class (RDR 0003's `CoverageUnionFor`); `ambiguous_match`'s
+  union is the escape rows declaring the class alone.
+- **Note**: `internal/guard`'s own `coverageFindings` carries a NOTE
+  declining to implement REQ-63's vacuous-closure rule, citing a conflict
+  between the two locked records. This RDR owns the graph-lint verdict, so
+  the arms are computed here rather than delegated, and `guard.Lint` is
+  not called. No RDR 0003 test changes.
+
+## D7 — `graph-overlap` excludes subsumption pairs
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-27, REQ-77.
+- **Finding**: two rows whose accepted assignments intersect can be either
+  an overlap (blocking) or a redundant row (advisory). The record draws
+  the line in the advisory tier's own definition: overlap "is a partial
+  intersection between two rows neither of which subsumes the other", and
+  a redundant row is one "whose accepted assignments are a *proper
+  subset* of a sibling's". The two are therefore disjoint by construction,
+  and a pair where one side properly subsumes the other takes the
+  advisory code alone.
+- **Consequence**: `advisoryBody` / `mvvLegalAdvisory` (a bare row and a
+  guarded row in one group) lints CLEAN with `graph-redundant-row`, which
+  is what REQ-75 and the MVV's legal advisory matrix require. Two rows
+  with EQUAL accepted sets are not a proper subset either way and stay
+  blocking overlap, which is what `mvvOrdinaryOverlap` requires.
+
+## D8 — The bare-escape closure is reported whatever else closes the arm
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation (derived choice recorded)
+- **REQ**: REQ-65, REQ-66; SC-19b.
+- **Finding**: `0006:C9` says a group "whose coverage is closed by a bare
+  escape row MUST emit `graph-coverage-closed-by-escape`". RDR 0003's
+  landed implementation additionally suppresses the report when the
+  group's ordinary rows already close the product alone. SC-19b's fixture
+  is exactly that shape — `advance-on`/`advance-off` partition `flag` AND
+  a bare escape row declares `no_match` — and REQ-63 requires the closure
+  code be emitted there.
+- **Evidence**: the clause's purpose is stated in the same fence: "a bare
+  green MUST NOT satisfy this clause", i.e. the reader must be able to
+  tell a group carrying a catch-all from one that does not WITHOUT
+  inspecting the model. Suppressing the report exactly where the ordinary
+  rows close makes a bare green satisfy it for that group.
+- **Chosen**: the finding fires whenever the closing population contains a
+  bare escape row. It is `info`, so it never changes the disposition.
+
+## D9 — The reachability successor relation is functional, not per-write
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-101, REQ-108, REQ-110, REQ-112.
+- **Finding**: "two edges reaching the same successor produce one node" does
+  not fix WHEN two edges reach the same successor. Keying the successor on
+  its own value assignment never merges anything (two writes of different
+  values are two assignments), which REQ-108 and REQ-110/112 both refute.
+- **Evidence**: `0006:LBD` states the traversal is "a fixpoint over merged
+  nodes, NEVER path-sensitive", and rejects the path-sensitive reading as
+  exponential. The strongest reading of "never path-sensitive" is the one
+  under which a path-sensitive enumeration is unrepresentable: every edge
+  leaving one node reaches ONE successor node, whose per-tag value sets are
+  the join of what those edges produce.
+- **Chosen**: a functional successor relation, with the join taking the
+  union of per-tag value sets and ABSENCE DOMINATING — a key one path never
+  established is absent in the join, since the node stands for every
+  concrete view some path reaches it with. Recording it as held would let
+  invariant 6 certify a read the runtime finds unavailable, which is the
+  false-green direction the record's soundness clause forbids. The fixpoint
+  folds a successor into an existing node whenever that node already stands
+  for every view it stands for, which is what terminates on cycles.
+
+## D10 — `graph-coverage-gap` attribution splits by arm
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-88, REQ-111, REQ-127; ASSUMPTION-8.
+- **Finding**: REQ-111 requires the gap finding NAME the row (`f.Rule ==
+  "only-on"`); REQ-88 requires a run mixing rule-id and graph-element-id
+  namespaces, and the multi-defect fixture's only non-rule-scoped finding
+  is a coverage gap.
+- **Chosen**: a gap the group's OWN ROWS leave uncovered names the row; a
+  gap that is the ABSENT rescue arm — the group's ordinary rows close the
+  product but no escape row declares the class — names the selection
+  context as a graph element id and carries no rule, because there is no
+  authored row to name for a row that was never written. REQ-127's
+  fallback is what keeps the second arm actionable.
+
+## D3 disposition (Phase 2)
+
+The single-valued check IS implemented as a total function over its input
+(`internal/graphlint/analysis.go::checkSingleValuedState`): it scans every
+row's write block for a single-valued tag assigned more than one value.
+The loader still refuses every authorable spelling upstream, so no fixture
+reaches it — the entry stays OPEN on RDR 0002's terms, not on this one's.
+
+## D4 disposition (Phase 2)
+
+Discharged. `models/rdr.toml` is authored and homed, `.github/workflows/ci.yml`
+carries the `graph-lint` job, and the `Makefile` carries the `graph-lint`
+target plus the `build` edge on `check`.
