@@ -141,3 +141,220 @@ exists to rescue one.
 
 5 added test functions, all failing against the current implementation. No
 pre-existing test was weakened, and no pre-existing test fails.
+
+---
+
+## Phase 3a — CoVe verification
+
+Independent Chain-of-Verification pass over the 147 REQs in
+[`req-list.md`](req-list.md). Method: for each REQ, name an input that would
+make a correct implementation visibly violate it, then run that input against
+the shipped package through its public API (`table.Load`, `table.Dump`,
+`table.DumpAll`, `table.CheckModelIDs`, `Row.KernelRow`, `Model.KernelTable`,
+and `resolve.Resolve`). Probes were throwaway `go run` programs over
+hand-authored TOML, deleted after the run.
+
+**Independence.** No `internal/table/*_test.go` file and no
+`internal/table/testdata/` fixture was read. Every fixture below was authored
+fresh for this pass.
+
+### Coverage
+
+Meaningfully probed: **131 of 147** REQs. The 16 not probed are REQ-116
+(source rewrite, explicitly out of scope), REQ-104 (a MUST-NOT-restate
+clause with no runtime surface), REQ-111/REQ-112/REQ-117/REQ-144 (RDR 0006's
+lint, unimplemented and deferred by REQ-117 itself), REQ-118/REQ-119/REQ-124/
+REQ-131/REQ-132/REQ-133/REQ-134/REQ-139 (obligations on the *test suite*,
+which this phase is barred from reading), REQ-145 (a derived, non-blocking
+dump property), and REQ-7 (parser choice, confirmed statically in `go.mod`).
+
+REQ-MVV was probed end-to-end: a hand-authored model normalizes, dumps, and
+resolves through `internal/resolve::Resolve` to exactly one ordinary row, to
+exactly one modeled `no_match` escape row, and refuses `guard_unevaluable` on
+the unevaluable-sibling tag-set — matching REQ-137's expectation. The overlap
+leg is deferred per REQ-117.
+
+Conforming under probe, among others: the version gate's precedence over
+strict decoding (REQ-14/15/135), the full load-category taxonomy (REQ-106/110,
+25 identifiers), block-agnostic atom validation across all three blocks
+(REQ-88), per-operator conformance including the unchecked comparison bound
+(REQ-89), the merge over the full atom identity under all five forgery
+delimiters (REQ-46/58/126/128), set-write member sequences under the same
+(REQ-38/127), the dump's total ordering and 200-run byte-identity
+(REQ-98/99/102/122/146), `[dump]` never reaching the normalized value
+(REQ-97), the round-trip invariant over key order, rule order, and
+`eq`-vs-single-member-`in` (REQ-113), the no-alias mutation control
+(REQ-82/125), byte-exact tag-key identity at all five sites (REQ-54/121), and
+the §D13 canonical JSON array at the kernel seam for declared `set` tags,
+including the one-member and `<clear>` cases (REQ-93).
+
+### FAIL-1 — A multi-member literal on a single-value operator is silently truncated at the kernel seam
+
+**REQ violated.** REQ-93 (§D13 landing, `deviations.md` D5): *"`Tag.Value`
+stays `string`; a set crosses as its canonical JSON array — members sorted,
+duplicate-free, compact encoding — and 0002 declares it."* The req-list adds
+that this covers *"any set-valued atom literal handed to the guard seam"* and
+that RDR 0007 *"already wrote its `contains` leg against it"*, so this build
+must **match** that form. Also engages REQ-84/REQ-85 (the handoff routes each
+atom to exactly one destination) and REQ-56 (a set-valued literal MUST NOT be
+rendered into a single string as its normalized value — here the seam value
+is not merely joined, it is *dropped*).
+
+**Failing input.** Any multi-member literal on a tag whose declared `kind` is
+not `set`. Minimal case, on a `kind = "scalar"` tag `status`:
+
+```toml
+[tags.status]
+provenance = "owned"
+kind = "scalar"
+
+[[rule]]
+id = "advance"
+[rule.match.recognized]
+eq = "approve"
+[rule.guard.all.status]
+contains = ["done", "open"]
+[rule.write]
+status = "done"
+```
+
+**Observed.** Loads clean. The normalized atom is
+`{status all contains [done open]}` — correct. `Row.KernelRow()` then yields:
+
+```json
+[{"Key":"status","Operator":"contains","Literal":"done","Block":"all"}]
+```
+
+`"open"` is gone, with no refusal and no diagnostic.
+
+**Spec-required.** `internal/resolve/guardcontract.go` — the cross-RDR seam
+contract RDR 0007 shipped — fixes the byte form for exactly these operators:
+`{"contains/superset", "contains", ["alpha"], ["alpha","beta"], GuardTrue}`
+and `{"in/member", "in", ["alpha","beta"], "alpha", GuardTrue}`. The literal
+must cross as `["done","open"]`.
+
+**Mechanism.** `model.go::seamValue` branches on `isSet`, which is
+`Row.setKeys` membership — the *declared kind*. For any non-`set` tag it
+returns `members[0]` unconditionally, discarding members 1..n. It is the
+only writer of `resolve.Tag.Value` and `resolve.GuardAtom.Literal`.
+
+**Reproduced on four independent paths**, all on a non-`set` tag:
+
+| Site | Normalized value | Seam value |
+| --- | --- | --- |
+| `guard.all` `contains = ["done","open"]` | `[done open]` | `"done"` |
+| `guard.all` `in = ["alpha","beta"]` | `[alpha beta]` | `"alpha"` |
+| `guard.all` `eq = ["done","open"]` | `[done open]` | `"done"` |
+| `[rule.write] status = ["done","open"]` | `[done open]` | `"done"` |
+
+The `guard.all` `in` arm is the sharpest: the kernel hands that literal to
+RDR 0003's evaluator, whose contract parses it as a JSON array. Given the
+bare string `alpha` the seam must answer `GuardUnevaluable` — so the row
+deadlocks the flow under RDR 0007's veto rather than refusing at load.
+
+**Consequence.** Two rows whose normalized atoms differ only past member 0
+are distinguishable in the dump and indistinguishable at the seam.
+Demonstrated: rules `advance` (`status.eq=[AAA open]`) and `bravo`
+(`status.eq=[ZZZ open]`) normalize to distinct atoms and cross as
+`{"status":"AAA"}` and `{"status":"ZZZ"}` — both dropping `open`, the member
+the author shared between them.
+
+**Note on scope.** REQ-89 says `eq`, `in`, and `contains` *"take members"*, so
+the RDR does not obviously forbid authoring a multi-member `eq`. Whichever way
+that reads, the seam must not silently truncate: either the load refuses the
+literal as a `malformed predicate atom`, or `seamValue` encodes the full
+member sequence. It currently does neither.
+
+### FAIL-2 — A nested one-element array literal is silently flattened
+
+**REQ violated.** REQ-6 (`0002:C3`): *"**Strict decoding is an obligation on
+this format, not a property of a library.** The decoder MUST reject unmapped
+keys so an unknown schema field is a stable refusal rather than a silent
+no-op."* The governing principle — a malformed authoring is a stable refusal,
+never a silent reinterpretation — is defeated here at the value layer.
+Engages REQ-64/REQ-106's *"literal ill-formed for its operator"* arm of
+`malformed predicate atom`, and REQ-30's *"every value MUST be well-formed for
+that tag's declared kind"* for the `[initial]` site.
+
+**Failing input.** Any array literal containing a one-element nested array:
+
+```toml
+[rule.match.status]
+in = [["a"], "b"]
+```
+
+**Observed.** Loads clean and normalizes as if the author had written
+`in = ["a", "b"]` — expanding into rows `probe.advance#a` and
+`probe.advance#b`. Arbitrary nesting depth flattens the same way:
+`labels = [[[["a"]]], "b"]` normalizes to the write value `[a b]`.
+
+**Spec-required.** `malformed_predicate_atom` (or
+`malformed_initial_declaration` at the `[initial]` site). A nested array is
+not a member sequence and the format admits no such spelling.
+
+**Mechanism.** `load.go::valueMembers` recurses on `[]any` and rejects an
+element only when `len(members) != 1`. A one-element nested array satisfies
+that test, so it is unwrapped rather than refused. A *multi*-element nested
+array *is* caught — `labels = [["a","b"], "c"]` refuses — which makes the
+refusal depend on the inner array's arity rather than on its shape.
+
+**Reproduced at four sites**, all accepted where a refusal is required:
+a match-block `in`, a `guard.all` `contains`, a `[rule.write]` value, and an
+`[initial]` assignment. Two controls confirm the gap is specific to
+`valueMembers`' arity test rather than general: an inline table
+(`eq = {a = 1}`) and a TOML datetime both refuse `malformed_predicate_atom`
+correctly, and the `<clear>` ban still fires post-flattening.
+
+**Severity.** Lower than FAIL-1 — no value is lost, and the flattened reading
+is the one the author most likely meant. It is filed because REQ-6 makes
+"stable refusal, never a silent no-op" the format's obligation, and because
+the arity-dependent behaviour means the same authoring error refuses or
+succeeds depending on how many elements the nested array happens to hold.
+
+### Cross-checks against Phase 3b
+
+Phase 3b's three findings were re-derived independently here before its
+section was read, and all three reproduce:
+
+- **ADV-1** — `[rule.guard.unless.status] in = ["small", "mid"]` expands to
+  **2 rows** carrying suffixes `#small` / `#mid`, each with the atom rewritten
+  to `eq` in the `unless` block. Confirms the REQ-72 (match-blocks-only) and
+  REQ-51 (no rewriting across blocks) violation Phase 3b filed. Not double-
+  counted here.
+- **ADV-2** — a rule write naming an observed tag refuses
+  `malformed_accessor_binding`, not `write_to_non_owned_tag`. Confirmed.
+- **ADV-3** — `in = ["approve", "approve"]` loads clean and mints **2 rows
+  sharing the identity** `probe.advance#approve`. Confirmed.
+
+### Unconfirmed — suspected but not demonstrated
+
+- **REQ-70 / REQ-131, outcome-literal category.** A `recognized` literal
+  outside the alphabet refuses `malformed_outcome_binding` only when the
+  `recognized` declaration's `domain` does not already exclude it. When
+  `[tags.recognized]` is `kind = "enum"` with `domain` equal to the alphabet
+  — the natural authoring, and the shape a reviewer would expect — the same
+  mutation refuses `malformed_predicate_atom` instead. REQ-131 requires each
+  variant to refuse *"the **one** category its mutation targets"*, so a
+  negative control written against the natural declaration would observe a
+  different category than one written against `kind = "scalar"`. Marked
+  unconfirmed rather than a FAIL because the RDR fixes the *failure* but not
+  the *category* for this arm (`0002:1094` says only "is a load failure"),
+  and REQ-16 leaves the order of independent checks deliberately unspecified.
+
+- **REQ-30, `[initial]` provenance arm.** An observed key in `[initial]`
+  refuses `malformed_accessor_binding`, not `malformed_initial_declaration`.
+  **Not a defect**: `0002:725-734` states the provenance arm is *"unreachable
+  by construction"* and that a non-owned key *"refuses as `malformed accessor
+  binding` … before the owned-tag predicate here is consulted"*. The
+  implementation matches the record exactly. Recorded so a later reader does
+  not re-open it.
+
+### Phase 3a summary
+
+| Entry | REQ | Status |
+| --- | --- | --- |
+| FAIL-1 | REQ-93 (also REQ-84/85, REQ-56) | Confirmed, 4 paths |
+| FAIL-2 | REQ-6 (also REQ-64/106, REQ-30) | Confirmed, 4 sites |
+
+2 confirmed violations, 131/147 REQs probed, 3 Phase 3b findings independently
+reproduced.
