@@ -6,6 +6,11 @@ Opened 2026-08-24 to record the joint decisions JDR 0001 answered after the
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
+**Build order: this RDR's Phase 1 is the head of the cluster graph** — it defines
+the `internal/resolve::Row` that RDR 0002 Phase 2 normalizes to, so it lands
+before 0002's Go phases despite 0002 owning the wire format. §D12 lands here.
+See [`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
+
 ---
 
 ## D1 — JD-8/JD-21/JD-22 answered: two landings and one citation

@@ -19,6 +19,15 @@ engine README — this file is only the per-project index.
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Final [joint decision → JDR 0001 §JD-5] | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Final [joint decision → JDR 0001 §JD-5] | Medium |
 
+## Implementing
+
+Read **[BUILD-ORDER.md](BUILD-ORDER.md)** before `/rdr-implement` on any
+`0002-0009` member. Build order is **not** the lock order the cluster gate
+reasoned about, and the two run in opposite directions at the head of the
+graph: **RDR 0007 Phase 1 defines the `internal/resolve::Row` that RDR 0002
+Phase 2 normalizes to**, so 0007 goes first even though 0002 produces the wire
+format. Neither open joint decision (§JD-5, §JD-18) blocks the build.
+
 ## Status legend
 
 - **Draft** — during the planning/research phase

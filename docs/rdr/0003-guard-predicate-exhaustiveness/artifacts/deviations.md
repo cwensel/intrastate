@@ -5,6 +5,10 @@ Pre-seeded by the `0002-0009` cluster gate, iteration 4 (2026-08-24 —
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
+**Build order: step 4** — consumes 0007's atom shape and 0002's normalized
+model; 0006's lint input contract reads the tag declaration model this RDR
+owns. See [`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
+
 ---
 
 ## D1 — Empty / omitted `unless` identity is stated by 0007, not here

@@ -5,6 +5,13 @@ Pre-seeded by the `0002-0009` cluster gate, iteration 4 (2026-08-24 —
 opens this file; running each named check IS the entry's disposition. An entry
 escalates only if its check contradicts a contract.
 
+**Build order: Phases 2–5 sequence behind RDR 0007 Phase 1** — this RDR's own
+text says so at `0002:1651`, `1662`, `1772`, `2263`, `2278`: the atom-shaped
+`Row` and its constants do not exist in `internal/resolve` until 0007's reshape
+lands. Phase 1 (fixtures/schema) is already discharged at Stage 4. Pull D5's
+§D13 encoding clause early — 0007 and 0004 both cite it. See
+[`../../BUILD-ORDER.md`](../../BUILD-ORDER.md).
+
 ---
 
 ## D1 — Canonical fixtures vs RDR 0003's declaration vocabulary
