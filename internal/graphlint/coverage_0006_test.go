@@ -1297,6 +1297,82 @@ status = "b"
 	}
 }
 
+// REQ-58: "An atom over a tag not declared single-valued has no projection
+// and MUST take `graph-unprovable-coverage` (`0003::A21`)."
+// REQ-80 (tag-not-single-valued arm).
+//
+// The stable-reason table (RDR 0006 §"stable reasons", ~line 733) fires
+// `tag-not-single-valued` on "an `eq`/`in`/comparison atom over a tag
+// lacking the single-valued marker", so `in` is named alongside `eq`.
+// The sibling test above pins the `eq` spelling; this one pins `in`,
+// which is a DIFFERENT entry in the implementation's single-value
+// operator set. Dropping `in` from that set silently reclassifies this
+// atom as `dimension-not-finite` — a wrong but still-blocking reason the
+// `eq` test cannot see.
+// DOMAIN EDGE
+func TestReq58_InAtomOverANonSingleValuedTagIsUnprovable(t *testing.T) {
+	// Cloned verbatim from the `eq` fixture above so the only difference
+	// between the two cases is the guard atom's operator: `multi`
+	// declares a finite domain but carries NO single-valued marker.
+	const decls = statusOnlyDecls + `
+[tags.multi]
+provenance = "owned"
+kind = "enum"
+domain = ["p", "q"]
+required = true
+`
+	const body = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+multi = "p"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "reads-multi"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.multi]
+in = ["p"]
+[rule.write]
+status = "b"
+`
+	r := lint(t, decls, body)
+	f := requireCode(t, r, graphlint.CodeUnprovableCoverage)
+
+	var named bool
+	for _, got := range f {
+		if got.Reason != graphlint.ReasonTagNotSingleValued {
+			continue
+		}
+		named = true
+		if got.Key != "multi" && got.Dimension != "multi" {
+			t.Errorf("the %q finding names neither the key nor the "+
+				"dimension `multi`: %+v", got.Reason, got)
+		}
+		// The atom fields must pin WHICH atom drove the
+		// classification. Without this the test would still pass if the
+		// reason were reached by some other route than the `in` atom.
+		if got.Operator != "in" {
+			t.Errorf("the %q finding reports operator %q; want `in`, the "+
+				"operator of the only guard atom in the fixture: %+v",
+				got.Reason, got.Operator, got)
+		}
+	}
+	if !named {
+		t.Errorf("no %s finding carries reason %q for an `in` atom; the "+
+			"single-value operator set no longer recognizes `in`; report:%s",
+			graphlint.CodeUnprovableCoverage,
+			graphlint.ReasonTagNotSingleValued, render(r))
+	}
+}
+
 // REQ-60: "Lint MUST therefore publish a **model-independent node
 // ceiling** alongside the product bound, and MUST emit
 // `graph-product-too-large` naming the traversal (not a group) when a
