@@ -358,3 +358,190 @@ section was read, and all three reproduce:
 
 2 confirmed violations, 131/147 REQs probed, 3 Phase 3b findings independently
 reproduced.
+
+---
+
+## Phase 3c — Fixup resolutions
+
+Every defect Phase 3a and Phase 3b filed is fixed in the implementation. No
+test was weakened: the five Phase 3b adversarial tests are byte-identical to
+what Phase 3b wrote, and the Phase 3a findings gained new oracles in
+`internal/table/fixup_0002_test.go`. Each new test was verified to FAIL
+against the pre-fix tree (`facf741^`) before being accepted, so no arm is
+vacuous.
+
+Suite state: `go test ./...` green (`internal/cli`, `internal/resolve`,
+`internal/table`), stable over `-count=3`; `go vet ./...` and `gofmt -l .`
+clean.
+
+### ADV-1 — resolved (`f713048`)
+
+**Wrong.** `normalize.go::expand` decided expansion on
+`c.atom.Operator == "in"` alone, so a `guard.all` or `guard.unless` `in`
+expanded too.
+
+**Changed.** The predicate is now
+`c.atom.Operator == "in" && c.atom.Block == BlockMatch`, matching REQ-72's
+scope ("Every `in` atom in a rule's **match blocks** … expands"). A guard
+`in` falls to the `default:` arm and survives verbatim as the one predicate
+it was authored as, so REQ-51's ban on folding `unless` atoms into a
+per-member `eq` holds, and no guard member reaches the expansion suffix —
+which is what REQ-90 relies on when it scopes the `#` ban to match-block
+`in` members.
+
+**Guarded by.** `TestAdv1_GuardBlockInMustNotExpand`,
+`TestAdv1b_GuardInMustNotBleedHashIntoRowIdentity`.
+
+### ADV-2 — resolved (`ac3b881`)
+
+**Wrong.** `write to non-owned tag` was checked only on `[write.<id>].keys`
+(`load.go::loadAccessors`). A rule whose write block or clear list named an
+observed tag fell through to `checkAccessorBindings`' writer-arity count and
+reported `malformed_accessor_binding` — the model's accessor wiring blamed
+for a defect in the rule, and a refusal needing the whole writer table
+rather than "one rule plus the declarations".
+
+**Changed.** `normalize.go::renderWrites` now checks each write-block key's
+and each clear-list key's declared provenance and refuses
+`write_to_non_owned_tag` directly. This is what `0002:C14` relies on when it
+derives `RequiresOwned` from the write block and clear list and asserts "by
+the write-to-non-owned-tag rule every such key is an owned tag"; the clear
+list carries the same obligation because a clear IS a `<clear>` write
+(`0002:C23`). The writer-table check is untouched, so
+`neg-owned-no-reader.toml`'s arity defect still reports its own category and
+the two obligations no longer collapse.
+
+**Guarded by.** `TestAdv2_RuleWriteToNonOwnedTagIsRefusedAsSuch` (3 arms),
+alongside the pre-existing
+`TestReq27_ReaderArityAndWriterProvenanceCarryDistinctCategories`.
+
+### ADV-3 — resolved (`facf741`)
+
+**Wrong.** A repeated `in` member loaded clean and minted two byte-identical
+rows under one identity.
+
+**Changed.** `normalize.go::atom` refuses a repeated `in` element as
+`malformed_predicate_atom`. `0002:C13` rests the identity tuple's totality
+on RDR 0003 rejecting it at parse; RDR 0003's parser is not what loads this
+document, so `0002:C22` — which gives this package "the two load categories
+that carry RDR 0003's rejection rules" — lands the rejection here.
+Deduplicating silently was rejected: it would mint the row set the author
+meant while leaving the authoring error unreported, and on an escape rule
+the duplicate is a self-inflicted `ambiguous_match` (`0002:C5`).
+
+`in` members now also sort byte-lexicographically. REQ-57 ("Members sort
+byte-lexicographically so two authored orderings of one set are one
+literal") is unconditional on operator, and an `in` literal is a member set;
+with duplicates refused the sort needs no dedup pass to be faithful. The row
+set is unchanged — each product row still picks one member, and rows re-sort
+by suffix (REQ-98) — and ADV-1's assertion that the guard `unless` literal
+normalizes to `[mid small]` depends on it.
+
+**Guarded by.** `TestAdv3_RepeatedInMemberIsRefused` (2 arms),
+`TestAdv3b_RowIdentityIsTotalAcrossTheModel` (2 arms).
+
+### FAIL-1 — resolved (`7d4455e`)
+
+**Wrong.** `model.go::seamValue` gated the §D13 array encoding on `isSet`,
+which is the tag's DECLARED kind. On any non-`set` tag a multi-member
+literal crossed as `members[0]` alone, dropping members 1..n with no refusal
+and no diagnostic, on all four paths Phase 3a reproduced.
+
+**The choice Phase 3a left open, and how it was settled.** Phase 3a named
+two candidate arms — a load-time refusal, or a full member-sequence encoding
+at the seam — and asked for grounding before choosing. Grounding it against
+RDR 0003's fenced operator semantics shows the two arms belong to two
+different operator classes and **both** are owed:
+
+> **`eq`, `in`, and the integer comparisons are single-value operators** …
+> Each is defined over a tag holding exactly one value … so an atom denotes
+> the assignments in which the tag's single held value **is the literal**
+> (`eq`), is a member of the literal set (`in`) …
+> `contains` is the operator for a tag whose … (`0003:948-960`)
+
+So `in` and `contains` are the two operators whose right-hand side is a
+member **set**; `eq` and the comparisons take one value and a multi-member
+literal has no denotation at all. `internal/resolve/guardcontract.go` — the
+cross-RDR contract RDR 0007 shipped, which RDR 0003's evaluator is
+instantiated against — agrees byte for byte, driving
+`{"in", ["alpha","beta"], "alpha"}` and
+`{"contains", ["alpha"], ["alpha","beta"]}` and nothing array-shaped for
+`eq` or `gte`.
+
+**Changed.** Two halves, one per operator class.
+
+1. *Carriage.* `setValuedLiteral(operator)` reports `in`/`contains`, and
+   `Row.KernelRow` encodes a guard atom's literal as the §D13 canonical
+   array when either the operator OR the declared kind says set. The tag
+   VALUE side (`Tag.Value` on match tags, `NextTags`, `Writes`) is
+   unchanged and still keyed on declared kind — that is the question §D13
+   answers, and a one-member set must stay `["a"]` or RDR 0004's read-back
+   could not tell it from the scalar `a`. This is the arm that closes the
+   deadlock: RDR 0007's evaluator must answer `GuardUnevaluable` on a bare
+   string where its contract expects an array, and the
+   unevaluable-candidate veto then blocks decidable siblings rather than
+   refusing.
+2. *Refusal.* A multi-member literal on `eq` is now
+   `malformed_predicate_atom`, and a multi-member value on a non-`set` kind
+   is `malformed_tag_declaration` at the write site and
+   `malformed_initial_declaration` at `[initial]` — REQ-30's "well-formed
+   for that tag's declared kind" includes arity, and `0002:C4` gives the
+   array literal a meaning for a `set` kind only. The comparison operators
+   already refused arrays. `0002:C3`'s governing principle applies: a
+   malformed authoring is a stable refusal, never a silent
+   reinterpretation.
+
+Together these leave `seamValue`'s non-set branch with no multi-member
+producer, so the truncation is unreachable rather than merely unlikely.
+A one-element `eq` array stays admitted, since `0002:C13` fixes `eq = "x"`
+and the one-member spelling as one spelling of one edge.
+
+**Guarded by.** `TestFail1_MultiMemberLiteralIsNeverTruncatedAtTheKernelSeam`
+(8 subtests: both set-valued operators, the canonical form, the
+shared-member distinguishability consequence Phase 3a demonstrated, the
+`eq` refusal across all three blocks, the one-member admission control, and
+the write and `[initial]` refusals) and
+`TestFail1b_GuardLiteralCarriageMatchesTheShippedSeamContract`, which pins
+the emitted literal against `guardcontract.go`'s own `in/member` bytes
+rather than against a literal this package chose.
+
+### FAIL-2 — resolved (`7d4455e`, same commit as FAIL-1)
+
+**Wrong.** `load.go::valueMembers` recursed on `[]any` and rejected a nested
+element only when it yielded more than one member, so `[["a"], "b"]` was
+unwrapped into `["a", "b"]` while `[["a","b"], "c"]` refused. The refusal
+depended on the inner array's ARITY rather than its SHAPE.
+
+**Changed.** `valueMembers` now refuses any nested array outright
+(`isArray(item)`), before recursing. A nested array is not a member sequence
+and the format admits no such spelling, so `0002:C3`'s stable-refusal
+obligation binds it. Each site keeps the category it already carried:
+`malformed_predicate_atom` for a predicate literal,
+`malformed_tag_declaration` for a write value,
+`malformed_initial_declaration` for an `[initial]` assignment.
+
+**Note on commit granularity.** This landed in the FAIL-1 commit rather than
+its own. Both touch the same value layer and the split would have been
+cosmetic; the diff is one guard clause in `valueMembers` plus its test.
+
+**Guarded by.** `TestFail2_NestedArrayLiteralsAreRefusedOnShapeNotArity`, a
+4-site × 3-arity matrix (one-element, multi-element, and deeply nested
+one-element, at a match-block `in`, a guard `contains`, a write value, and
+an `[initial]` assignment) plus a flat-array control at all four sites
+proving the fix is not over-broad. The multi-element column is the
+pre-existing behaviour asserted as a control, which is what pins the refusal
+to shape rather than arity.
+
+### Phase 3c summary
+
+| Entry | Phase | Fix | Guarding test | Now |
+| --- | --- | --- | --- | --- |
+| ADV-1 | 3b | `expand` gates on block | `TestAdv1`, `TestAdv1b` | PASS |
+| ADV-2 | 3b | rule-level provenance check | `TestAdv2` (3 arms) | PASS |
+| ADV-3 | 3b | repeated `in` member refused | `TestAdv3` (2), `TestAdv3b` (2) | PASS |
+| FAIL-1 | 3a | operator-keyed seam carriage + single-value refusals | `TestFail1` (8), `TestFail1b` | PASS |
+| FAIL-2 | 3a | nested array refused on shape | `TestFail2` (13 arms) | PASS |
+
+5 defects fixed, 3 regression test functions added (FAIL-1/1b/2), 5
+pre-existing adversarial test functions now pass unmodified, whole suite
+green.

@@ -216,3 +216,117 @@ contract, so none escalated.
   rather than redefining it. Read-back equality is byte equality over that
   array. `TestReq93` asserts all four legs. It contradicted no existing
   fence, so the escalation arm did not fire.
+
+---
+
+## Phase 3c deviations
+
+Opened while fixing the Phase 3a (`FAIL-N`) and Phase 3b (`ADV-N`) findings.
+Resolutions and the tests that guard them are in
+[`verification.md`](verification.md) § *Phase 3c — Fixup resolutions*.
+
+## D8 — A guard atom's literal carriage is keyed on the OPERATOR, which no fence states
+
+- **Type**: SPEC-UNDER
+- **Status**: resolved from evidence (no author decision needed)
+- **Site**: `internal/table/model.go::setValuedLiteral`, `::seamValue`,
+  `Row.KernelRow`. Filed against FAIL-1.
+- **The gap.** REQ-93 (the §D13 landing) says "a **set** crosses as its
+  canonical JSON array", covering "any set-valued atom literal handed to
+  the guard seam" — but it never says what makes an *atom literal* set-
+  valued. The shipped build read it as the tag's declared `kind`, which
+  truncated a multi-member `in`/`contains` literal on any non-`set` tag to
+  `members[0]`. Nothing in RDR 0002's fences distinguishes the two
+  readings.
+- **Evidence the resolution rests on.**
+  1. `internal/resolve/guardcontract.go` — the cross-RDR contract RDR 0007
+     shipped, which RDR 0003's evaluator is instantiated against — fixes
+     the byte form per OPERATOR and mentions no declared kind:
+     `{"in", ["alpha","beta"], "alpha"}` and
+     `{"contains", ["alpha"], ["alpha","beta"]}`. BUILD-ORDER is explicit
+     that 0007 wrote these against §D13 first and "0002's later run must
+     **match**, not redefine".
+  2. RDR 0003 `0003:948-960` fences which operators take a set:
+     "**`eq`, `in`, and the integer comparisons are single-value
+     operators** … an atom denotes the assignments in which the tag's
+     single held value **is the literal** (`eq`), is a member of the
+     literal set (`in`) … `contains` is the operator for a tag whose …".
+     So `in` and `contains` are exactly the two whose right-hand side is a
+     member set, whatever the tag's kind.
+  3. `0002:C17` (REQ-89) already makes conformance "per operator, not per
+     literal", so keying carriage on the operator is the same axis the
+     record uses for the neighbouring obligation.
+- **Resolution.** The tag VALUE side (`Tag.Value` on match tags,
+  `NextTags`, `Writes`) stays keyed on the declared kind — that is the
+  question §D13 answers, and a one-member set must stay `["a"]` or RDR
+  0004's read-back could not tell it from the scalar `a`. The guard atom
+  LITERAL side is additionally keyed on the operator. The two rules answer
+  different questions and neither displaces the other; no fence had to
+  widen, so the escalation arm did not fire.
+- **Additive surface**: none. `setValuedLiteral` is unexported and no
+  exported identifier, signature, or category was added.
+- **Residue for the record.** RDR 0002 is §D13's landing document, so the
+  operator half of the carriage rule arguably belongs in its normative
+  clause rather than only in this package's comments. RDRs are never
+  amended, so it is noted here for whoever next opens the record.
+
+## D9 — Arity is not stated as part of "well-formed for the declared kind"
+
+- **Type**: SPEC-UNDER
+- **Status**: resolved from evidence (no author decision needed)
+- **Sites**: `normalize.go::atom` (the `eq` arm), `::renderWrites`,
+  `load.go::loadInitial`. Filed against FAIL-1's refusal half.
+- **The gap.** REQ-30 requires every `[initial]` value to be "well-formed
+  for that tag's declared kind and domain", and `0002:C4` says "for a
+  `set` kind the array literal is the whole new set" — but neither says
+  what a multi-member array MEANS on a kind that is not `set`, and
+  `0002:C17` lists `eq` among the operators that "take members" (plural)
+  without fencing its arity. The shipped `conform` checked each member
+  individually, so a multi-member literal passed every stated check and
+  was then silently truncated at the seam.
+- **Evidence the resolution rests on.** RDR 0003's single-value-operator
+  fence (`0003:948-960`, quoted in D8) gives `eq` and the comparisons a
+  denotation over "a tag holding exactly one value", so a multi-member
+  `eq` literal denotes nothing; `0002:C22` (REQ-64) gives this package
+  "the two load categories that carry RDR 0003's rejection rules", of
+  which `malformed predicate atom` is one. `0002:C3` (REQ-6) supplies the
+  governing principle for the write and `[initial]` sites: a malformed
+  authoring is "a stable refusal rather than a silent no-op".
+- **Resolution.** A multi-member literal on `eq` refuses
+  `malformed_predicate_atom`; a multi-member value on a non-`set` kind
+  refuses `malformed_tag_declaration` at the write site and
+  `malformed_initial_declaration` at `[initial]` — each the category that
+  site already carries for a kind/domain defect, so no category was
+  minted. A one-element array stays admitted, since `0002:C13` fixes
+  `eq = "x"` and the one-member spelling as one spelling of one edge.
+- **Additive surface**: none. No category was added to `Categories()`; the
+  closed set of 25 is unchanged.
+- **Why a refusal and not only a seam encoding.** Encoding a multi-member
+  `eq` as an array would invent a literal form no consumer parses: the
+  shipped contract drives `eq` with a bare string, so an array would reach
+  RDR 0003's evaluator as an unparseable literal and answer
+  `GuardUnevaluable` — trading a silent truncation for a silent deadlock.
+
+## D10 — REQ-57's member sort is exercised on `contains`, applied here to `in`
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **Site**: `internal/table/normalize.go::atom`. Filed against ADV-3.
+- **The reading.** REQ-57 (`0002:C10`) states "Members sort
+  byte-lexicographically so two authored orderings of one set are one
+  literal" with no operator qualifier, and REQ-56 makes the obligation
+  bind "a set-valued literal". An `in` literal is a member set — RDR 0003
+  fences it as "a member of the literal **set**" — so the sort binds it.
+  The shipped build excluded `in` from the sort; `TestReq57` happens to
+  exercise `contains`, so nothing observed the exclusion.
+- **Why it is safe.** The row set is unchanged: a match-block `in` still
+  yields one row per member, and rows re-sort by the identity tuple
+  afterwards (REQ-98), so only the enumeration order inside `expand`
+  moves. The `slices.Compact` that accompanies the sort can drop nothing,
+  because a repeated `in` element now refuses at load (ADV-3) before the
+  sort runs — the two changes are ordered deliberately.
+- **Why it was needed.** Phase 3b's `TestAdv1_GuardBlockInMustNotExpand`
+  asserts the surviving guard `unless` literal is `[mid small]` from an
+  authored `["small", "mid"]`. Without the sort the assertion could only
+  be satisfied by weakening it, which `§scope-discipline` forbids.
+- **Additive surface**: none.

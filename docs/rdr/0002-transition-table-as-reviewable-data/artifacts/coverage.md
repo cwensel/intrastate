@@ -57,7 +57,7 @@ and each would fail against a wrong implementation:
 | REQ-3 | HAPPY PATH | `TestReq3_EveryAuthoringSiteReachesTheNormalizedRow` | `format_test.go` |
 | REQ-4 | HAPPY PATH | `TestReq4_DescriptionAndSourceAreAdmittedAndCarried` | `format_test.go` |
 | REQ-5 | ADVERSARIAL | `TestReq5_NoOtherRootKeyOrTableIsAdmitted` | `format_test.go` |
-| REQ-6 | ADVERSARIAL | `TestReq6_UnmappedKeyIsAStableRefusalNotASilentNoOp` | `format_test.go` |
+| REQ-6 | ADVERSARIAL | `TestReq6_UnmappedKeyIsAStableRefusalNotASilentNoOp` **+** `TestFail2_NestedArrayLiteralsAreRefusedOnShapeNotArity` (Phase 3c) | `format_test.go`, `fixup_0002_test.go` |
 | REQ-7 | BOUNDARY | `TestReq7_TOMLParserIsGoTOMLV2` | `format_test.go` |
 | REQ-8 | BOUNDARY | `TestReq8_LoadTakesBytesAndSourceIDAndDoesNoFileIO` | `format_test.go` |
 | REQ-9 | HAPPY PATH | `TestReq9_MetadataIsFreeFormAndUninterpreted` | `format_test.go` |
@@ -144,7 +144,7 @@ and each would fail against a wrong implementation:
 | REQ-90 | BOUNDARY | `TestReq90_TwoRulesAreLegitimatelyMatchOnly` | `normalize_test.go` |
 | REQ-91 | HAPPY PATH | `TestReq91_EveryCandidateRowRetainsRuleIDAndLocator` | `dump_test.go` |
 | REQ-92 | ADVERSARIAL | `TestReq92_LocatorIsDerivedFromModelAndRuleIDNeverFromSource` | `dump_test.go` |
-| REQ-93 | BOUNDARY | `TestReq93_SetsCrossTheKernelSeamAsCanonicalJSONArrays` | `dump_test.go` |
+| REQ-93 | BOUNDARY | `TestReq93_SetsCrossTheKernelSeamAsCanonicalJSONArrays` **+** `TestFail1_MultiMemberLiteralIsNeverTruncatedAtTheKernelSeam`, `TestFail1b_GuardLiteralCarriageMatchesTheShippedSeamContract` (Phase 3c) | `dump_test.go`, `fixup_0002_test.go` |
 | REQ-94 | HAPPY PATH | `TestReq94_DumpCarriesEveryFieldOfTheNormalizedValue` | `dump_test.go` |
 | REQ-95 | BOUNDARY | `TestReq95_DumpColumnVocabularyIsClosedAndVerbatim` | `dump_test.go` |
 | REQ-96 | ADVERSARIAL | `TestReq96_DumpOrderMayReorderButNeverOmit` | `dump_test.go` |
@@ -483,5 +483,48 @@ identity=kata.review-needs-work source=kata:review-needs-work kind=transition ou
 translation` — two Phase-1 assertions that were red against every possible
 implementation. Each was repaired at the fixture, never by weakening the
 assertion; see `deviations.md`.
+
+**Open author decisions: none.**
+
+---
+
+## Phase 3c — coverage added by the fixup pass
+
+Phases 3a (CoVe) and 3b (adversarial) both returned BLOCK. Every finding is
+fixed; resolutions are in [`verification.md`](verification.md) § *Phase 3c*.
+
+### Tests added
+
+`internal/table/fixup_0002_test.go` (3 functions, 22 subtests):
+
+| Test | Guards | Finding |
+| --- | --- | --- |
+| `TestFail1_MultiMemberLiteralIsNeverTruncatedAtTheKernelSeam` | REQ-93, REQ-56, REQ-84/85, REQ-30, REQ-6 | FAIL-1 |
+| `TestFail1b_GuardLiteralCarriageMatchesTheShippedSeamContract` | REQ-93 against `internal/resolve/guardcontract.go` itself | FAIL-1 |
+| `TestFail2_NestedArrayLiteralsAreRefusedOnShapeNotArity` | REQ-6, REQ-64/106, REQ-30 | FAIL-2 |
+
+The five Phase 3b adversarial tests in
+`internal/table/adversarial_0002_test.go` are unmodified and now pass; they
+are the guarding tests for ADV-1, ADV-2, and ADV-3.
+
+Every new subtest was run against the pre-fix tree and verified to FAIL
+there, so no arm is vacuous. The FAIL-2 matrix additionally carries a
+multi-element column (pre-existing behaviour, asserted as a control) and a
+flat-array control at all four sites, which is what pins the refusal to the
+literal's SHAPE rather than to its arity.
+
+### New deviations minted this phase
+
+**D8** and **D9**, both SPEC-UNDER, both resolved from evidence — the
+record does not state what makes a guard atom's literal set-valued (D8) or
+that arity is part of "well-formed for the declared kind" (D9). Each was
+grounded against `internal/resolve/guardcontract.go` and RDR 0003's
+single-value-operator fence before the resolution was chosen. **D10**,
+IMPL-DECISION, `Status: mechanical translation` — REQ-57's member sort
+applied to `in` as well as `contains`.
+
+No new exported identifier, signature, or load category was added: the
+closed 25-member `Categories()` set is unchanged, and the two new helpers
+(`setValuedLiteral`, `firstDuplicate`) are unexported.
 
 **Open author decisions: none.**
