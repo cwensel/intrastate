@@ -420,9 +420,24 @@ func (a *analysis) nodeMeetsAll(n Node, set []table.Atom) bool {
 	return len(set) > 0
 }
 
-// hasOutgoingOrdinaryRow reports whether some modeled NON-ESCAPE row's match
-// pattern is satisfiable in the node. An escape row's successor equals its
-// source, so counting it would call a self-loop progress.
+// hasOutgoingOrdinaryRow reports whether the node is the source of some
+// modeled non-escape row. An escape row's successor equals its source, so
+// counting it would call a self-loop progress.
+//
+// The node reaching here is ALREADY SPLIT on the terminal-participating
+// keys (REQ-36), so on every key that decides terminal satisfaction it
+// holds a single value and the test is exact there. On the remaining keys
+// it stays a merged node read existentially, and that is deliberate:
+// REQ-37 bounds the split "by the declared domains of terminal-participating
+// keys only, never the whole lattice", so widening the quantifier to those
+// keys is not available to this invariant.
+//
+// The residual imprecision is the accepted false-NEGATIVE the record books
+// against invariant 2 — a node multi-valued on a key participating in no
+// terminal can be rescued by an exit that serves only one of its values.
+// Closing it requires ranging over key combinations the merged node never
+// correlated, which manufactures concrete views no path produces and turns
+// the bound REQ-37 sets into false POSITIVES on a conforming model. See D12.
 func (a *analysis) hasOutgoingOrdinaryRow(n Node) bool {
 	for _, row := range a.model.Rows {
 		if row.Kind() == table.KindEscape {

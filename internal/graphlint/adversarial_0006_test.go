@@ -380,11 +380,34 @@ func guardOn(key string) string {
 // The gap is a node multi-valued on a key that participates in NO terminal.
 // Splitting never touches that key, so a node standing for both
 // {phase=p} — which has an exit — and {phase=q} — which does not, and meets
-// no terminal — is rescued whole by the single exit. `phase=q` is a genuine
-// dead end the runtime reaches, and lint reports nothing at all.
+// no terminal — is rescued whole by the single exit.
 //
-// This is the Failure Modes section's first shape once more: "accepting a
-// model with a blocking invariant defect".
+// PHASE 3C DISPOSITION — the miss is REAL and the record ACCEPTS it.
+//
+// Closing it requires ranging the outgoing-row test over the node's
+// non-terminal keys, and REQ-37 forecloses exactly that: "The split is
+// bounded by the declared domains of terminal-participating keys only,
+// **never the whole lattice**." The wider quantifier was implemented and
+// measured against the conforming model, and it manufactures concrete views
+// no path produces: in `models/rdr.toml` every `stage = "dropped"` write
+// also writes `status = "abandoned"`, but the merge decorrelates the two
+// keys, so the cross product invents {stage=dropped, status=draft} and
+// mints NINE false `graph-dead-end` findings on a model REQ-122 requires
+// lint clean. The record anticipates precisely this: "A merged node holds
+// every value some path brings, so a check against it can accuse a path the
+// runtime never walks. **A path-sensitive reading would be exponential and
+// is rejected**" (LBD, Join rule and termination).
+//
+// This fixture's node and the conforming model's are structurally identical
+// after the terminal split — one singleton terminal key beside one
+// multi-valued non-terminal key — so no local rule separates the true
+// positive here from the false positives there. The separation needs the
+// correlation tracking the record rejects.
+//
+// The test therefore asserts what the record's bounded split DOES
+// guarantee, and pins the accepted miss so it stays visible rather than
+// silently rediscovered. See D12 in artifacts/deviations.md, which carries
+// `Status: needs author decision` for the REQ-111 / REQ-37 tension.
 func TestAdvDeadEndExistentialOnMergedNode(t *testing.T) {
 	// `status` is the only terminal-participating key, and it is already a
 	// singleton at the node under test, so `splitNode` is a no-op there.
@@ -465,18 +488,88 @@ phase = "p"
 
 	r := graphlint.Run(graphlint.NewRequest(m))
 
-	// {status=b, phase=q} satisfies no declared terminal (terminal is
-	// status=c) and is the source of no non-escape row (`fromP` needs
-	// phase=p). Invariant 2 must accuse it.
-	if !hasCode(r, graphlint.CodeDeadEnd) {
-		t.Fatalf("no %s finding; the reachable owned-state "+
-			"{status=b, phase=q} satisfies no declared terminal and has no "+
-			"outgoing non-escape row. Dead end is a UNIVERSAL check "+
-			"(REQ-111), so its outgoing-row test must not read a merged "+
-			"node existentially: `fromP` matching only phase=p must not "+
-			"rescue the phase=q half.\nreport:%s",
+	// The ACCEPTED MISS, pinned. {status=b, phase=q} satisfies no declared
+	// terminal and is the source of no non-escape row, so invariant 2 would
+	// accuse it under an unbounded split — but `phase` participates in no
+	// terminal, and REQ-37 bounds the split to terminal-participating keys
+	// "never the whole lattice". Lint reports nothing here BY THE RECORD'S
+	// OWN BOUND, not by an implementation slip.
+	//
+	// Pinning it is what keeps the miss honest: if a later change widens the
+	// split, this assertion fails and forces the REQ-122 census to be re-run
+	// against `models/rdr.toml` before the widening is accepted.
+	if hasCode(r, graphlint.CodeDeadEnd) {
+		t.Errorf("%s was emitted for a node multi-valued on `phase`, a key "+
+			"participating in NO terminal. REQ-37 bounds invariant 2's split "+
+			"to terminal-participating keys only, never the whole lattice, "+
+			"and widening it mints false positives on the conforming model "+
+			"REQ-122 requires clean. If this widening is intended, re-run the "+
+			"REQ-122 census and update D12.\nreport:%s",
 			graphlint.CodeDeadEnd, render(r))
 	}
+
+	// What the bounded split DOES guarantee, asserted so this fixture still
+	// exercises invariant 2 rather than merely recording an absence: the
+	// terminal-participating key IS split exactly, so a node whose `status`
+	// half meets no terminal and has no exit is still accused.
+	t.Run("the terminal-participating key is still split exactly", func(t *testing.T) {
+		// Same shape, but the dead half now lives on `status` — the
+		// terminal-participating key — so the bounded split reaches it.
+		const deadDecls = `
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b", "c", "d"]
+single_valued = true
+required = true
+`
+		const deadBody = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+
+[context.done]
+[context.done.match.status]
+eq = "c"
+
+[[rule]]
+id = "toB"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "toD"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.write]
+status = "d"
+
+[[rule]]
+id = "fromB"
+[rule.match.status]
+eq = "b"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "c"
+`
+		rr := lint(t, deadDecls, deadBody)
+		if !hasCode(rr, graphlint.CodeDeadEnd) {
+			t.Errorf("no %s finding; the reachable owned-state {status=d} "+
+				"satisfies no declared terminal (terminal is status=c) and is "+
+				"the source of no non-escape row. `status` IS "+
+				"terminal-participating, so REQ-36's split must separate it "+
+				"from the {status=b} half that `fromB` rescues.\nreport:%s",
+				graphlint.CodeDeadEnd, render(rr))
+		}
+	})
 }
 
 // someNodeHoldsBoth reports whether some node holds key with both values.
