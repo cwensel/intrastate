@@ -89,6 +89,19 @@ func AssignmentCount(d table.TagDecl) (int, bool) {
 
 	count := values
 	if !d.Required {
+		// Saturate rather than double blindly. An optional key's presence
+		// factor is the LAST arithmetic between a declared domain and the
+		// bound comparison, and it is as able to wrap as the width and the
+		// shift before it: a single-valued `{MinInt..-2}` has a width of
+		// MaxInt, which doubles to -2 — read as under the bound, fully
+		// provable, and GREEN over a dimension spanning the int range.
+		// That is the same defect D12 named for the exponent and this
+		// record's `intWidth` closed for the subtraction, so it takes the
+		// same answer: report the ceiling, keep the domain finite-but-huge,
+		// and let `Cardinality` saturate into `graph-product-too-large`.
+		if count > cardinalityCeiling/2 {
+			return cardinalityCeiling, true
+		}
 		count *= 2
 	}
 	return count, true

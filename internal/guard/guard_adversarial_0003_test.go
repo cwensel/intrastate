@@ -811,3 +811,102 @@ func assertTerminates(t *testing.T, what string, body func()) {
 			what)
 	}
 }
+
+// --- ADV-4d: the OPTIONAL-presence factor overflows ----------------------
+
+// optionalWideIntSource is `wideIntSource`'s optional twin: the same
+// single-valued int bound, but `required = false`, so `AssignmentCount`
+// applies the presence factor of two on top of the value domain.
+func optionalWideIntSource(minV, maxV int) string {
+	return declBlock(`
+[tags.n]
+provenance = "owned"
+kind = "int"
+min = `+strconv.Itoa(minV)+`
+max = `+strconv.Itoa(maxV)+`
+single_valued = true
+required = false
+`) + `
+[[rule]]
+id = "wide-opt"
+source = "t:wide-opt"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.n]
+lt = 3
+[rule.write]
+`
+}
+
+// REQ-86 / REQ-93: the published bound must be ENFORCED, which a wrapped
+// comparison does not do.
+//
+// The presence factor is the LAST arithmetic standing between a declared
+// domain and the bound comparison, and ADV-4b left it unguarded. A
+// single-valued `{MinInt..-2}` has a width of MaxInt — honest, and
+// `intWidth` rightly admits it — but `count *= 2` for an OPTIONAL key
+// wraps it to -2. That reads as under the bound of 2048: fully provable,
+// no `graph-product-too-large`, and GREEN over a dimension spanning
+// essentially the whole int range. It is D12's defect ("a wrapped negative
+// would read as under the bound and certify the very product the clause
+// refuses") displaced one operation later.
+//
+// This asserts the arithmetic and the refusal without enumerating.
+// ADVERSARIAL
+func TestAdv_OptionalPresenceFactorSaturatesRatherThanWrapping(t *testing.T) {
+	cases := []struct {
+		name     string
+		min, max int
+	}{
+		{"the negative half less its top", math.MinInt, -2},
+		{"the non-negative half less its top", 0, math.MaxInt - 1},
+		{"the whole int range", math.MinInt, math.MaxInt},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			minV, maxV := tc.min, tc.max
+			d := table.TagDecl{
+				Kind: "int", Min: &minV, Max: &maxV,
+				SingleValued: true, Required: false,
+			}
+
+			n, ok := guard.AssignmentCount(d)
+			if !ok {
+				t.Fatalf("AssignmentCount({%d..%d}, optional) carries no "+
+					"finite domain; a fully declared bound names a finite — "+
+					"if astronomical — domain", minV, maxV)
+			}
+			if n <= guard.Bound() {
+				t.Fatalf("AssignmentCount({%d..%d}, optional) = %d, at or "+
+					"under the published bound %d — the presence factor "+
+					"wrapped instead of saturating, so lint would certify an "+
+					"unbounded dimension as provable", minV, maxV, n, guard.Bound())
+			}
+
+			m := mustLoadSource(t, optionalWideIntSource(minV, maxV))
+			card, ok := guard.Cardinality(m, guard.Groups(m)[0])
+			if !ok || card <= guard.Bound() {
+				t.Fatalf("Cardinality over optional {%d..%d} = (%d, %v); want "+
+					"a finite count above the bound %d",
+					minV, maxV, card, ok, guard.Bound())
+			}
+
+			reports := guard.Lint(m)
+			if countCode(reports, guard.CodeProductTooLarge) == 0 {
+				t.Errorf("an optional int dimension spanning {%d..%d} drew no "+
+					"%q finding; findings=%v", minV, maxV,
+					guard.CodeProductTooLarge, allFindings(reports))
+			}
+			for _, f := range findingsWithCode(reports, guard.CodeProductTooLarge) {
+				if !f.Blocking {
+					t.Errorf("%q finding is not blocking", f.Code)
+				}
+			}
+			if hasGreen(reports) {
+				t.Errorf("a group over an optional int dimension spanning "+
+					"{%d..%d} certified green", minV, maxV)
+			}
+		})
+	}
+}
