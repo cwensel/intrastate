@@ -135,14 +135,16 @@ func TestAdv2_UnreadablePreWriteSnapshotMustNotYieldSuccess(t *testing.T) {
 			got.Written, keyProfile, "large", "small")
 	}
 
-	switch got.Refusal.Class {
-	case accessor.ClassReadBackIncomplete, accessor.ClassReadBackMismatch:
-		// Either is defensible: the baseline was unreadable
-		// (`read_back_incomplete`), or the boundary otherwise establishes
-		// the observed tag moved (`read_back_mismatch`).
-	default:
-		t.Errorf("Write refused %q; want read_back_incomplete or read_back_mismatch",
-			got.Refusal.Class)
+	// REQ-62 requires `read_back_incomplete` here and FORBIDS
+	// `read_back_mismatch`, "which asserts the artifact is wrong": the
+	// baseline was never established, so the verification did not RUN for
+	// that key. Accepting either class would pass an implementation that
+	// mints the forbidden one.
+	if got.Refusal.Class != accessor.ClassReadBackIncomplete {
+		t.Errorf("Write refused %q; want read_back_incomplete — the pre-write baseline "+
+			"for %q was unreadable, so the verification did not run and the boundary "+
+			"may not assert the artifact is wrong (`0004:C13`, REQ-62)",
+			got.Refusal.Class, keyProfile)
 	}
 
 	if !got.Refusal.Applied() {
@@ -286,11 +288,13 @@ func TestAdv4_PartialPreWriteSnapshotMustNotYieldSuccess(t *testing.T) {
 			got.Written, keyProfile, "large", "small")
 	}
 
-	switch got.Refusal.Class {
-	case accessor.ClassReadBackIncomplete, accessor.ClassReadBackMismatch:
-	default:
-		t.Errorf("Write refused %q; want read_back_incomplete or read_back_mismatch",
-			got.Refusal.Class)
+	// As in ADV-2: REQ-62 requires `read_back_incomplete` and FORBIDS
+	// `read_back_mismatch` where the pre-write value was never established.
+	if got.Refusal.Class != accessor.ClassReadBackIncomplete {
+		t.Errorf("Write refused %q; want read_back_incomplete — the PARTIAL snapshot "+
+			"left %q with no baseline, so the verification did not run for it and the "+
+			"boundary may not assert the artifact is wrong (`0004:C13`, REQ-62)",
+			got.Refusal.Class, keyProfile)
 	}
 
 	if !got.Refusal.Applied() {
