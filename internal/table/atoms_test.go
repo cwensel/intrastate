@@ -807,12 +807,26 @@ func TestReq64_DeclarationSiteAndTheTwoRejectionCategories(t *testing.T) {
 	// declaration to the loader; `0002:C22` (REQ-64) owns the category.
 	t.Run("declaration RDR 0003 rejects: single_valued on a kind admitting none",
 		func(t *testing.T) {
-			for _, rel := range []string{
-				"neg/neg-tagdecl-single-valued-on-set.toml",
-				"neg/neg-tagdecl-single-valued-on-scalar.toml",
+			for _, tc := range []struct {
+				rel    string
+				marker string
+			}{
+				{"neg/neg-tagdecl-single-valued-on-set.toml", "elements = [\"bug\", \"chore\", \"needs work\"]\nsingle_valued = true"},
+				{"neg/neg-tagdecl-single-valued-on-scalar.toml", "kind = \"scalar\"\nsingle_valued = true"},
 			} {
-				if got := loadCategory(t, rel); got != table.CatMalformedTagDeclaration {
-					t.Errorf("%s: category = %q; want %q", rel, got, table.CatMalformedTagDeclaration)
+				if got := loadCategory(t, tc.rel); got != table.CatMalformedTagDeclaration {
+					t.Errorf("%s: category = %q; want %q", tc.rel, got, table.CatMalformedTagDeclaration)
+				}
+
+				authored := string(readFixture(t, tc.rel))
+				src := strings.Replace(authored, tc.marker, strings.TrimSuffix(tc.marker, "true")+"false", 1)
+				if src == authored {
+					t.Fatalf("%s: target single_valued marker not found", tc.rel)
+				}
+				_, err := table.Load([]byte(src), tc.rel)
+				if got, ok := table.CategoryOf(err); !ok || got != table.CatMalformedTagDeclaration {
+					t.Errorf("%s with single_valued = false: category = %q, %v; want %q",
+						tc.rel, got, err, table.CatMalformedTagDeclaration)
 				}
 			}
 		})

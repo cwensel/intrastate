@@ -207,7 +207,7 @@ func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {
 	// `|universe|`; a `scalar` has no finite declared domain to partition
 	// (`0003:1273-1283`). `0003:1389` rejects both here, in the declaration
 	// loader, under `0002:C22`'s malformed tag declaration.
-	if src.SingleValued && (src.Kind == "set" || src.Kind == "scalar") {
+	if src.SingleValued != nil && (src.Kind == "set" || src.Kind == "scalar") {
 		return bad("kind " + src.Kind + " admits no single_valued marker")
 	}
 	if src.Min != nil && src.Max != nil && *src.Min > *src.Max {
@@ -221,7 +221,7 @@ func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {
 		Min:          src.Min,
 		Max:          src.Max,
 		Elements:     src.Elements,
-		SingleValued: src.SingleValued,
+		SingleValued: src.SingleValued != nil && *src.SingleValued,
 		Required:     src.Required,
 	}, nil
 }

@@ -44,7 +44,7 @@ type sourceTagDecl struct {
 	Min          *int     `toml:"min"`
 	Max          *int     `toml:"max"`
 	Elements     []string `toml:"elements"`
-	SingleValued bool     `toml:"single_valued"`
+	SingleValued *bool    `toml:"single_valued"`
 	Required     bool     `toml:"required"`
 }
 
