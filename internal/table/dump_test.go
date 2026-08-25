@@ -192,28 +192,99 @@ func seamValue(t *testing.T, m *table.Model, rowID, key string) string {
 // next-state tags, writes including `<clear>` entries, required-owned
 // keys, and escape failure classes — plus the derived row kind column."
 // HAPPY PATH
+//
+// Each witness is asserted inside its OWN `col=` segment of a NAMED row,
+// never against the whole dump: `reconcile-block` occurs four times (as an
+// outcome and inside the identity `rdr.draft-no-match-escape#reconcile-block`),
+// `prelock_lens` nine times, `rewind_scope` three times. A whole-dump
+// `Contains` therefore lets one column's text stand in for another's: a
+// renderer that dropped the `outcome` column, or rendered the identity
+// there, still satisfies the `reconcile-block` witness out of the
+// `rdr.draft-no-match-escape#reconcile-block` identity string.
+//
+// The witness set spans three anchor rows because no single row carries
+// every field: `rdr.reconcile-rewind` has empty `gate` and `escape`, the
+// gate ids live on `rdr.continue-prelock#*`, and the escape classes and
+// the `escape` kind on `rdr.draft-no-match-escape#*`.
 func TestReq94_DumpCarriesEveryFieldOfTheNormalizedValue(t *testing.T) {
 	m := mustLoad(t, rdrFixture)
 	out := table.Dump(m)
 
-	witnesses := map[string]string{
-		"row identity":    "rdr.reconcile-rewind",
-		"source locator":  rowByID(t, m, "rdr.reconcile-rewind").SourceLocator,
-		"outcome":         "reconcile-block",
-		"predicate atoms": "status",
-		"atom block":      string(table.BlockUnless),
-		"gate ids":        "rdr-lock",
-		"next-state tags": "rewind_scope",
-		"<clear> writes":  table.ClearSentinel,
-		"required-owned":  "prelock_lens",
-		"escape classes":  "no_match",
-		"derived kind":    string(table.KindEscape),
+	const (
+		rewind = "rdr.reconcile-rewind"
+		gated  = "rdr.continue-prelock#large"
+		escape = "rdr.draft-no-match-escape#reconcile-block"
+	)
+
+	witnesses := []struct{ field, identity, column, want string }{
+		{"row identity", rewind, "identity", rewind},
+		{"source locator", rewind, "source", rowByID(t, m, rewind).SourceLocator},
+		{"derived kind", rewind, "kind", string(table.KindTransition)},
+		{"outcome", rewind, "outcome", "reconcile-block"},
+		{"predicate atoms", rewind, "atoms", "status"},
+		{"next-state tags", rewind, "next", "rewind_scope"},
+		{"<clear> writes", rewind, "writes", table.ClearSentinel},
+		{"required-owned", rewind, "requires_owned", "prelock_lens"},
+		{"atom block", gated, "atoms", "@" + string(table.BlockUnless)},
+		{"gate ids", gated, "gate", "rdr-lock"},
+		{"derived kind (escape row)", escape, "kind", string(table.KindEscape)},
+		{"escape classes", escape, "escape", "no_match"},
 	}
-	for field, want := range witnesses {
-		if !strings.Contains(out, want) {
-			t.Errorf("the dump does not carry %s (%q):\n%s", field, want, out)
+	for _, w := range witnesses {
+		got := dumpColumn(t, dumpLine(t, out, w.identity), w.column)
+		if !strings.Contains(got, w.want) {
+			t.Errorf("the %s column of %s does not carry %s (%q); it carries %q:\n%s",
+				w.column, w.identity, w.field, w.want, got, out)
 		}
 	}
+}
+
+// dumpColumn returns the rendered value of one column of one dump row.
+//
+// The split is driven by the CLOSED column vocabulary — every
+// `table.DumpColumns()` identifier that appears in the line as ` col=` —
+// and never by scanning for the next `=`, because `renderTagValues` emits
+// `k=v` pairs INSIDE the `next` and `writes` values
+// (`next=[prelock_lens=<clear>; stage=resolve]`). Splitting on any `=`
+// would truncate those columns and hand the caller a false verdict either
+// way. Locating every column marker and slicing to the next one also makes
+// the helper independent of `[dump].order`.
+func dumpColumn(t *testing.T, line, col string) string {
+	t.Helper()
+
+	if !slices.Contains(table.DumpColumns(), col) {
+		t.Fatalf("%q is not a dump column; the vocabulary is %v", col, table.DumpColumns())
+	}
+
+	// Column markers, in the order the line renders them. The first
+	// column carries no leading space, so the line is scanned as if it
+	// did.
+	padded := " " + line
+	starts := make([]int, 0, len(table.DumpColumns()))
+	want := -1
+	for _, name := range table.DumpColumns() {
+		i := strings.Index(padded, " "+name+"=")
+		if i < 0 {
+			continue
+		}
+		if name == col {
+			want = i
+		}
+		starts = append(starts, i)
+	}
+	if want < 0 {
+		t.Fatalf("no %q column on the dump row:\n%s", col, line)
+	}
+	slices.Sort(starts)
+
+	value := padded[want+len(" "+col+"="):]
+	for _, next := range starts {
+		if next <= want {
+			continue
+		}
+		return padded[want+len(" "+col+"=") : next]
+	}
+	return value
 }
 
 // REQ-95: "`[dump]` carries exactly one key, `order`: a list of column
