@@ -45,3 +45,60 @@ that 0002's and 0003's re-locks moved. See
   layout description. Artifact of record: `docs/rdr/README.md` Index.
 - **Check**: `grep -n 'Draft' docs/rdr/0006-*.md` returns no peer-status
   claim that disagrees with the README Index.
+
+---
+
+# Stage 8 Phase 1 (test authoring)
+
+Recorded by the Phase 1 test author. Neither entry changes a REQ; both
+record a gap between a clause and the input surface the landed peers
+actually expose, so Phase 2 does not read the test shape as a shortcut.
+
+## D3 — `graph-single-valued-state` has no authorable input surface
+
+- **Type**: SPEC-vs-LANDED-PEER
+- **Status**: OPEN (Phase 2 to confirm the check is implemented as a total
+  function over its input, even though no fixture can trigger it)
+- **REQ**: REQ-40 (invariant 5, "no row's write block may assign a
+  single-valued tag two values"); REQ-31 lists the class as mandatory.
+- **Finding**: RDR 0002's loader refuses every TOML spelling of the defect
+  *before* normalization, so lint never receives it. Probed against the
+  landed `internal/table` loader:
+  - `enum` / `int` / `bool` / `scalar` declared `single_valued = true` and
+    written a member sequence → `malformed_tag_declaration: rule r write
+    <k>: kind <kind> holds one value, not a member sequence`.
+  - `set` declared `single_valued = true` → `malformed_tag_declaration:
+    tag <k>: kind set admits no single_valued marker`, so the one kind
+    that admits a member sequence cannot carry the marker.
+  - `[initial]` assigning two members to a single-valued key →
+    `malformed_initial_declaration`.
+- **Disposition**: `TestReq40_SingleValuedStateIsDecidedPerRowSyntactically`
+  asserts (a) the code is a declared, blocking member of the taxonomy, and
+  (b) the per-row reading does not fire on the legal multi-row shape,
+  rather than driving the defect through a fixture that cannot exist.
+  REQ-41's negative half (a merged node holding two values is NOT a
+  violation) is fully testable and is tested.
+- **Not escalated**: the clause is not wrong — it is the model-level half
+  of RDR 0003's single-valued conformance conjunct, and stating it keeps
+  the invariant set total. It is simply discharged upstream today. If a
+  later RDR 0002 revision admits a `set` with a single-valued marker, the
+  fixture becomes authorable and this entry closes.
+
+## D4 — A8's checked-in transition model does not exist yet
+
+- **Type**: PREREQUISITE
+- **Status**: OPEN (Phase 2 authors the model, the CI job, and the
+  Makefile edge)
+- **REQ**: REQ-119, REQ-120, REQ-121, REQ-122.
+- **Finding**: no transition model is checked into this repo; the only
+  `.toml` files are `internal/table/testdata/` fixtures, which SC-7
+  explicitly excludes ("not a hook wrapper, unit-test-only engine path, or
+  fixture-only corpus"). `.github/workflows/ci.yml` carries no
+  `graph-lint` job, and the `Makefile`'s `check` target lacks the `build`
+  edge IP Phase 3 requires.
+- **Disposition**: per ASSUMPTION-9 the model is authored during this
+  implementation. `internal/cli/lint_gate_0006_test.go` pins its home at
+  `models/rdr.toml` and is red until it exists, so the prerequisite is a
+  failing gate rather than a silently dropped REQ. REQ-MVV proper is
+  fixture-backed and does not consume the CI gate, so the MVV is
+  independently satisfiable.
