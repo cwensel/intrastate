@@ -523,10 +523,20 @@ func TestReq44_RenderedKindDoesNotFeedBackIntoTheNormalizedValue(t *testing.T) {
 	assertCloneRowsCoversEverySliceField(t)
 
 	m := mustLoad(t, rdrFixture)
-
 	before := cloneRows(m.Rows)
-
 	out := table.Dump(m)
+	if !reflect.DeepEqual(before, m.Rows) {
+		t.Errorf("rendering the %s dump mutated the normalized candidate rows; "+
+			"the view must not feed back into the normalized value", rdrFixture)
+	}
+
+	setModel := mustLoad(t, kataFixture)
+	before = cloneRows(setModel.Rows)
+	table.Dump(setModel)
+	if !reflect.DeepEqual(before, setModel.Rows) {
+		t.Errorf("rendering the %s dump mutated the normalized candidate rows; "+
+			"the view must not feed back into the normalized value", kataFixture)
+	}
 
 	// The derived kind column must be rendered, and must be rendered ON
 	// THE ROW IT DESCRIBES: an escape row spells `escape`, a transition
@@ -545,11 +555,6 @@ func TestReq44_RenderedKindDoesNotFeedBackIntoTheNormalizedValue(t *testing.T) {
 			t.Errorf("%s: dumped kind column = %q; want %q\n%s",
 				w.identity, got, w.want, out)
 		}
-	}
-
-	if !reflect.DeepEqual(before, m.Rows) {
-		t.Error("rendering the dump mutated the normalized candidate rows; the " +
-			"view must not feed back into the normalized value")
 	}
 
 	// And the kernel row carries no kind either.

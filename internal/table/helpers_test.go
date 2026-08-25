@@ -243,14 +243,14 @@ func assertGuardBijection(t *testing.T, row table.Row, guard []resolve.GuardAtom
 // then be invisible to a `reflect.DeepEqual(before, m.Rows)` oracle, which
 // is exactly the defect this helper exists to close (REQ-44).
 //
-// The row is assigned wholesale first so that unexported fields (setKeys)
-// travel, then every slice field named by `Row` is replaced with a
+// The package-internal helper first detaches the unexported setKeys field,
+// then every exported slice field named by `Row` is replaced with a
 // detached copy. assertCloneRowsCoversEverySliceField pins the field list
 // so that a slice field added to `Row` fails loudly rather than silently
 // reopening the aliasing hole.
 func cloneRows(in []table.Row) []table.Row {
-	out := make([]table.Row, len(in))
-	for i, r := range in {
+	out := table.CloneRowSetKeysForTest(in)
+	for i, r := range out {
 		r.Suffix = slices.Clone(r.Suffix)
 		r.Atoms = cloneAtoms(r.Atoms)
 		r.Gate = slices.Clone(r.Gate)
@@ -293,18 +293,16 @@ func cloneAtoms(in []table.Atom) []table.Atom {
 	return out
 }
 
-// clonedRowSliceFields names every EXPORTED slice-typed field of
-// table.Row that cloneRows detaches. Row's unexported slice field
-// (setKeys) is derived from the model's declarations and is neither
-// reachable nor comparable from this package, so it is excluded by name.
+// clonedRowSliceFields names every slice-typed field of table.Row that
+// cloneRows detaches.
 var clonedRowSliceFields = []string{
-	"Suffix", "Atoms", "Gate", "NextTags", "Writes", "RequiresOwned", "Escape",
+	"Suffix", "Atoms", "Gate", "NextTags", "Writes", "RequiresOwned", "Escape", "setKeys",
 }
 
-// assertCloneRowsCoversEverySliceField fails if table.Row grows an
-// exported slice field that cloneRows does not detach. Without this,
-// adding a field would silently restore the aliasing that REQ-44's oracle
-// depends on being absent.
+// assertCloneRowsCoversEverySliceField fails if table.Row grows a slice
+// field that cloneRows does not detach. Without this, adding a field would
+// silently restore the aliasing that REQ-44's oracle depends on being
+// absent.
 func assertCloneRowsCoversEverySliceField(t *testing.T) {
 	t.Helper()
 
@@ -312,7 +310,7 @@ func assertCloneRowsCoversEverySliceField(t *testing.T) {
 	var have []string
 	for i := range rt.NumField() {
 		f := rt.Field(i)
-		if f.IsExported() && f.Type.Kind() == reflect.Slice {
+		if f.Type.Kind() == reflect.Slice {
 			have = append(have, f.Name)
 		}
 	}
