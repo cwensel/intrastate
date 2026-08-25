@@ -114,7 +114,7 @@ eq = "archive"
 # Ordinary rule: inherits a match-block `in` (profile) -> expands to two rows
 # under the general §D6 expansion rule. Carries a gate reference.
 [[rule]]
-id = "continue-prelock"
+id = "continue-prelock-b"
 use = ["large-prelock"]
 source = "rdr:prelock"
 gate = ["rdr-lock"]
@@ -134,7 +134,7 @@ iter = 2
 # carries an `eq` atom over an optional (required-unset) owned key. This is
 # the MVV's two-sibling requirement and A12's discriminating witness.
 [[rule]]
-id = "continue-prelock-cluster"
+id = "continue-prelock-cluster-b"
 use = ["large-prelock"]
 source = "rdr:prelock-cluster"
 [rule.match.recognized]
@@ -161,7 +161,7 @@ rewind_scope = "assumptions"
 # Escape rule binding its outcome with `in` over two alphabet members:
 # expands to two escape rows, each rescuing only its own outcome (A11).
 [[rule]]
-id = "draft-no-match-escape"
+id = "draft-no-match-escape-b"
 use = ["draft"]
 source = "rdr:escape"
 escape = ["no_match"]
@@ -170,7 +170,7 @@ in = ["round-clean", "reconcile-block"]
 
 # Self-loop on a terminal context (authored via `use` of a terminal id).
 [[rule]]
-id = "terminal-archive"
+id = "terminal-archive-b"
 use = ["archived"]
 source = "rdr:terminal"
 [rule.match.recognized]

@@ -2,10 +2,6 @@
 outcomes = ["round-clean", "verdict-flapping", "reconcile-block", "finalized"]
 terminal = ["archived"]
 
-[model.metadata]
-owner = "flow-team"
-review_cadence = "per-lock"
-
 [initial]
 status = "Draft"
 stage = "propose"

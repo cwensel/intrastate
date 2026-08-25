@@ -585,8 +585,24 @@ func TestReq13_ModelHeaderAndVersionOne(t *testing.T) {
 		}
 	})
 	t.Run("absent [model] refuses malformed_model_declaration", func(t *testing.T) {
-		if got := loadCategory(t, "neg/neg-no-model-table.toml"); got != table.CatMalformedModelDeclaration {
+		rel := "neg/neg-no-model-table.toml"
+		if got := loadCategory(t, rel); got != table.CatMalformedModelDeclaration {
 			t.Errorf("category = %q; want %q", got, table.CatMalformedModelDeclaration)
+		}
+		// The category alone does not witness this arm. A genuinely absent
+		// `[model]` and a `[model]` carrying no `version` share the
+		// category, so a fixture that only reaches the version arm — as
+		// this one did while it opened with `[model.metadata]`, which in
+		// TOML implicitly creates the parent table — leaves the
+		// absent-table branch untested while the test stays green. The
+		// message is the only oracle that separates them.
+		_, err := table.Load(readFixture(t, rel), rel)
+		if err == nil {
+			t.Fatalf("%s loaded clean", rel)
+		}
+		if !strings.Contains(err.Error(), "no [model] table") {
+			t.Errorf("refusal = %q; want the absent-table arm, not a sibling "+
+				"arm sharing the same category", err.Error())
 		}
 	})
 	t.Run("version 1 is accepted", func(t *testing.T) {
