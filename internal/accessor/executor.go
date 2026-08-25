@@ -254,6 +254,21 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		plannedKeys = append(plannedKeys, t.Key)
 	}
 
+	// `0004:C10` binds what the accessor APPLIES, not only what a
+	// definition declares. Validation's `write_non_owned_tag` arm inspects
+	// declared metadata; the PLAN is caller-supplied at this boundary, so
+	// a plan naming an observed or recognized tag would otherwise reach
+	// `Apply` unfiltered and mutate the artifact under a green read-back
+	// (REQ-40, REQ-41, REQ-80; FM lists "write attempted for a non-owned
+	// tag" among the typed refusals). The check runs BEFORE the command:
+	// the write must not reach the artifact at all (deviations D16).
+	if nonOwned := nonOwnedPlanKeys(def, e.Registry, plannedKeys); len(nonOwned) != 0 {
+		r := refusalOf(def, timeout, ClassExecutionFailure)
+		r.Keys = nonOwned
+		r.Expected = planned
+		return WriteResult{Refusal: r}
+	}
+
 	// The read-back re-read goes through the READ path over the SAME
 	// caller-supplied role the write binding names — never an ambient
 	// artifact and never an unrelated role (`0004:C12`, `0004:C13`).
@@ -357,6 +372,26 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	}
 
 	return WriteResult{Written: planned}
+}
+
+// nonOwnedPlanKeys names the planned keys this write accessor has no
+// authority to apply: a key outside the writer definition's own `keys`,
+// or one the model does not carry as an owned tag. Both are required —
+// the definition bounds what THIS accessor writes, and `Registry.OwnedTags`
+// bounds what is an owned tag at all, which is what separates an owned tag
+// from an observed or recognized one (`0004:C10`, REQ-40, REQ-41).
+func nonOwnedPlanKeys(def Definition, reg Registry, plannedKeys []string) []string {
+	owned := def.OwnedKeys()
+	var out []string
+	for _, k := range plannedKeys {
+		if slices.Contains(out, k) {
+			continue
+		}
+		if !slices.Contains(owned, k) || !slices.Contains(reg.OwnedTags, k) {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // protectedKeys is the pre-write snapshot's key set: the reader's
