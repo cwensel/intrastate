@@ -536,10 +536,19 @@ func TestReq33_AbsentInitialOrTerminalIsNotALoadFailure(t *testing.T) {
 		}
 		// And the non-owned predicate is dereferenced and carried, not
 		// silently dropped.
+		// The whole atom is the oracle, not just its key: a dereference
+		// producing the right key under the wrong block, operator, or
+		// literal is still a defect.
+		want := table.Atom{
+			Key:      "owner",
+			Block:    table.BlockMatch,
+			Operator: "eq",
+			Literal:  []string{"current-session"},
+		}
 		if len(m.Terminal) != 1 || len(m.Terminal[0]) != 1 ||
-			m.Terminal[0][0].Key != "owner" {
+			!reflect.DeepEqual(m.Terminal[0][0], want) {
 			t.Errorf("terminal predicate sets = %+v; want the dereferenced "+
-				"`owner.eq=current-session` atom", m.Terminal)
+				"`owner.eq=current-session` atom %+v", m.Terminal, want)
 		}
 	})
 }
