@@ -462,24 +462,46 @@ func (a *analysis) hasOutgoingOrdinaryRow(n Node) bool {
 // terminal. The prohibition on lint's own reasoning is what makes such a
 // model a defect rather than a silently-accepted shape.
 func (a *analysis) checkTerminalEscape() {
-	if len(a.model.Terminal) > 0 || len(a.nodes) == 0 {
+	if len(a.nodes) == 0 {
 		return
 	}
+
+	// The condition is PER NODE, not a property of the model as a whole:
+	// "a reachable non-terminal node with no outgoing non-escape row and no
+	// terminal declaration covering it". Gating on the model declaring no
+	// terminal AT ALL would make the code unreachable for every model that
+	// declares one, so the fixture the record prescribes — "authored by
+	// omitting the declaration the model depends on", i.e. omitting ONE
+	// terminal — could never mint it.
+	//
+	// The node is tested on its SPLIT form for the same reason invariant 2
+	// is (REQ-36): terminal coverage is universal over a node's per-tag
+	// value sets, so a merged node is anti-monotone in it and would accuse
+	// every converging flow.
+	keys := a.terminalKeys()
+	seen := map[string]bool{}
 	for _, n := range a.nodes {
-		if a.hasOutgoingOrdinaryRow(n) {
-			continue
+		for _, split := range splitNode(n, keys) {
+			id := split.key()
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if a.satisfiesSomeTerminal(split) || a.hasOutgoingOrdinaryRow(split) {
+				continue
+			}
+			a.emit(clierr.Finding{
+				Code:    CodeTerminalEscape,
+				Element: nodeElement(split),
+				Message: fmt.Sprintf("the reachable owned-state %s has no "+
+					"outgoing non-escape row and no declared terminal covers "+
+					"it, so the model relies on an inferred terminal; declare "+
+					"it in the root `terminal` list", nodeElement(split)),
+			})
+			// The reliance is one defect against the missing declaration,
+			// not one per node it happens to end at.
+			return
 		}
-		a.emit(clierr.Finding{
-			Code:    CodeTerminalEscape,
-			Element: nodeElement(n),
-			Message: fmt.Sprintf("the reachable owned-state %s has no "+
-				"outgoing non-escape row and the model declares no terminal "+
-				"covering it, so the model relies on an inferred terminal; "+
-				"declare it in the root `terminal` list", nodeElement(n)),
-		})
-		// The reliance is one defect against the missing declaration, not
-		// one per node it happens to end at.
-		return
 	}
 }
 

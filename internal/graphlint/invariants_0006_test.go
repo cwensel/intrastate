@@ -714,6 +714,128 @@ status = "b"
 	requireNoCode(t, clean, graphlint.CodeTerminalEscape)
 }
 
+// REQ-43 / FAIL-1 (Phase 3a): the invariant 7 condition is stated PER NODE
+// — "a reachable non-terminal node with no outgoing non-escape row and no
+// terminal declaration covering it (an implied terminal)" — not as a
+// property of the model as a whole.
+//
+// `checkTerminalEscape` opened with `if len(a.model.Terminal) > 0 { return }`,
+// so `graph-terminal-escape` could fire ONLY on a model declaring no
+// terminal whatsoever. Every model that declares even one terminal was
+// exempt, however many of its reachable nodes relied on an inferred one.
+//
+// That is exactly the fixture the record prescribes being unable to mint
+// the code: "a fixture is authored by omitting the declaration the model
+// depends on" — omitting ONE terminal, not all of them. Under the global
+// gate the illegal matrix entry for this code was satisfiable only by the
+// degenerate no-terminal-whatsoever model above.
+// ADVERSARIAL — REGRESSION (Phase 3c)
+func TestReq43_ImpliedTerminalIsMintedInAModelDeclaringOtherTerminals(t *testing.T) {
+	// The model DOES declare a terminal — `stage = x`, reached by `r-x`.
+	// `r-y` reaches `stage = y`, which satisfies no declared terminal and is
+	// the source of no non-escape row: an implied terminal, and the very
+	// shape invariant 7 mints for. The declared terminal must not exempt it.
+	const decls = `
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "x", "y"]
+single_valued = true
+required = true
+`
+	const body = `
+terminal = ["fin"]
+
+[initial]
+stage = "a"
+
+[context.fin]
+[context.fin.match.stage]
+eq = "x"
+
+[[rule]]
+id = "r-x"
+[rule.match.stage]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+stage = "x"
+
+[[rule]]
+id = "r-y"
+[rule.match.stage]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.write]
+stage = "y"
+`
+	r := lint(t, decls, body)
+
+	if !hasCode(r, graphlint.CodeTerminalEscape) {
+		t.Errorf("no %s finding; `stage = y` is reachable, satisfies no "+
+			"declared terminal, and is the source of no non-escape row — "+
+			"invariant 7's implied terminal. The model declaring a DIFFERENT "+
+			"terminal (`stage = x`) must not exempt it: the clause states a "+
+			"per-node condition, not a per-model one.\nreport:%s",
+			graphlint.CodeTerminalEscape, render(r))
+	}
+
+	// REQ-83's complete-emission clause: invariants 2 and 7 are separate
+	// obligations over the same node and one must not stand in for the
+	// other. The node is both a dead end and an implied terminal.
+	if !hasCode(r, graphlint.CodeDeadEnd) {
+		t.Errorf("no %s finding alongside %s; the two invariants are "+
+			"separate obligations and REQ-83 forbids reporting only the "+
+			"first defect.\nreport:%s", graphlint.CodeDeadEnd,
+			graphlint.CodeTerminalEscape, render(r))
+	}
+
+	// The control, isolating the defect to the missing declaration: cover
+	// `stage = y` with a second terminal and the finding clears, with the
+	// model otherwise byte-identical.
+	const covered = `
+terminal = ["fin", "fin-y"]
+
+[initial]
+stage = "a"
+
+[context.fin]
+[context.fin.match.stage]
+eq = "x"
+
+[context.fin-y]
+[context.fin-y.match.stage]
+eq = "y"
+
+[[rule]]
+id = "r-x"
+[rule.match.stage]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+stage = "x"
+
+[[rule]]
+id = "r-y"
+[rule.match.stage]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.write]
+stage = "y"
+`
+	clean := lint(t, decls, covered)
+	if hasCode(clean, graphlint.CodeTerminalEscape) {
+		t.Errorf("%s fired on a model whose every terminal node IS declared; "+
+			"declaring the terminal the model depends on is the cure, so the "+
+			"control must be clean.\nreport:%s",
+			graphlint.CodeTerminalEscape, render(clean))
+	}
+}
+
 // REQ-44: "A model that declares no initial owned state MUST be rejected
 // with a blocking finding; lint MUST NOT treat an absent root as an empty
 // reachable set and report a clean model."
