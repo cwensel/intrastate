@@ -171,18 +171,30 @@ func (a *analysis) checkOverlap(g guard.Group) {
 
 // emitOverlaps reports each overlapping pair within one population. ONE pair
 // is ONE finding naming BOTH rows, never one per row.
+//
+// Overlap is decided on the dimensions lint CAN project, never skipped
+// because some other dimension is unprovable. REQ-84 is explicit that
+// "withholding a group's exhaustiveness claim MUST NOT suppress overlap,
+// coverage, or further withholding findings for that group", and REQ-85
+// makes the two independent findings: "each unprovable dimension, each
+// refusing row, each overlapping pair … is its own finding". A row carrying
+// one atom over an optional key can refuse, so RDR 0003 gives it no whole
+// accepted-assignment set — but an overlap living on a fully-declared
+// finite dimension is decidable regardless, and declining to decide it
+// because a DIFFERENT dimension is unprovable is the suppression REQ-84
+// forbids.
 func (a *analysis) emitOverlaps(g guard.Group, rows []table.Row, class string) {
 	rows = slices.Clone(rows)
 	slices.SortFunc(rows, func(x, y table.Row) int { return strings.Compare(x.RuleID, y.RuleID) })
 
 	for i := range rows {
-		left := guard.AcceptedAssignments(a.model, rows[i])
-		if !left.Projectable() {
+		left, leftOK := a.decidableAccepted(g, rows[i])
+		if !leftOK {
 			continue
 		}
 		for _, right := range rows[i+1:] {
-			other := guard.AcceptedAssignments(a.model, right)
-			if !other.Projectable() || left.Intersect(other).Len() == 0 {
+			other, otherOK := a.decidableAccepted(g, right)
+			if !otherOK || left.Intersect(other).Len() == 0 {
 				continue
 			}
 			if properSubset(left, other) || properSubset(other, left) {
@@ -219,6 +231,63 @@ func classSuffix(class string) string {
 // right's.
 func properSubset(left, right guard.AssignmentSet) bool {
 	return left.Subset(right) && left.Len() < right.Len()
+}
+
+// decidableAccepted returns the row's accepted assignments over the
+// dimensions lint can project, and whether the row is decidable at all.
+//
+// Where the row projects whole, this IS `guard.AcceptedAssignments` and the
+// provable path is unchanged. Where it does not — the row carries a value
+// atom over an optional key, so RDR 0003 declines to give it an
+// accepted-assignment set at all — the row is re-expressed by intersecting
+// its PROJECTABLE atom denotations into the group's scoped product, so a
+// defect decidable on the fully-declared dimensions is still decided. That
+// is RDR 0003's own move one level down: `acceptedIn` already computes over
+// the group's DECIDABLE sub-product because "an atom lint cannot project
+// belongs to the row that carries it, not to every row sharing its group".
+//
+// The relaxation is sound for OVERLAP specifically, and only because
+// overlap is EXISTENTIAL (REQ-110): dropping an undecidable conjunct WIDENS
+// a row's accepted set, so an intersection found here may be separated by
+// the dropped dimension at runtime — a false positive, never a missed
+// defect, which is the direction the record accepts (REQ-117: "the cure is
+// a clearer model, never a weaker lint"). It MUST NOT be reused for
+// coverage, which is universal and where a widened union is the false-green
+// direction; coverage keeps comparing the full product against
+// `guard.CoverageUnion` in coverage.go.
+func (a *analysis) decidableAccepted(g guard.Group, row table.Row) (guard.AssignmentSet, bool) {
+	if whole := guard.AcceptedAssignments(a.model, row); whole.Projectable() {
+		return whole, true
+	}
+
+	product := guard.Product(a.model, g)
+	if !product.Projectable() {
+		// No enumerable product to express the row over — the group is
+		// refused as over-large or undeclared upstream, and that refusal is
+		// its own finding rather than something overlap may paper over.
+		return guard.AssignmentSet{}, false
+	}
+
+	accepted := product
+	var decided bool
+	for _, atom := range guardAtomsOf(row) {
+		if atom.Block == table.BlockUnless {
+			// `unless` is not per-atom negation — the block matches as ONE
+			// conjunction — so a partial view of it cannot be subtracted
+			// soundly. A row carrying one stays undecided here rather than
+			// being decided wrongly.
+			return guard.AssignmentSet{}, false
+		}
+		d := guard.Denotation(a.model, atom.Key, atom)
+		if !d.Projectable() {
+			// The undecidable conjunct is DROPPED, which widens the row.
+			// See the existential-soundness note above.
+			continue
+		}
+		accepted = accepted.Intersect(d)
+		decided = true
+	}
+	return accepted, decided
 }
 
 // --- the redundant-row advisory ------------------------------------------
