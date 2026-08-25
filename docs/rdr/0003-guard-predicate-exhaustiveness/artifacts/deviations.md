@@ -362,7 +362,7 @@ in run 4. Instantiates `resolve.TestGuardEvaluatorContract` (0007 Phase 3). See
 ## D15 — ADV-1's second assertion is stale against its own premise
 
 - **Type**: TEST-FIXTURE
-- **Status**: needs author decision — **and the work continued**
+- **Status**: CLOSED — author decision recorded 2026-08-25 (retire the stale assertion)
 - **What**: `TestAdv1_GreenClaimCoversAViewTheRuntimeRefuses` closes with a
   second assertion guarded as "so a fix that merely stops the kernel
   refusing does not satisfy this test: either the empty subset leaves the
@@ -394,3 +394,29 @@ in run 4. Instantiates `resolve.TestGuardEvaluatorContract` (0007 Phase 3). See
   now that its premise is gone, or to reject D14's reading of REQ-57 and
   require a different resolution. The implementation follows the evidence
   as recorded above.
+
+- **Decision (2026-08-25)**: RETIRE the stale assertion; D14's reading
+  stands. The decision did not rest on this record's REQ-57 alone — it
+  rests on the OWNING record. RDR 0007 owns the `guard_unevaluable`
+  payload (JDR 0001 §D4) and its Normative Contracts already separate the
+  two cases the assertion had merged: "An absent set-valued tag MUST be
+  treated as unevaluable under set containment, NOT as the empty set."
+  RDR 0007's **A1** records that clause as pinning `contains` against this
+  record's silence, and its Testing Strategy row 8 is that exact case, so
+  the absent-vs-empty split is ratified upstream rather than inferred here.
+- **Corroboration**: the shipped kernel implements the split —
+  `internal/resolve/guard.go::evaluateAtom` returns `GuardUnevaluable` on
+  absence (`ReasonAbsent`), a conflicting view, or a nil seam, and never on
+  a present key holding `[]`, which routes to `seam.Evaluate`. REQ-67's veto
+  is scoped to a row that **can refuse** `guard_unevaluable`; post-D14 this
+  row cannot, and ADV-1's kernel-side loop — which resolves every conforming
+  view a green group covers — reports no refusal. Prior art agrees: the
+  DevRef database corpus is consistent that NULL marks a MISSING value
+  rather than being one, which is the same absent-vs-empty separation.
+- **What was retired**: only ADV-1's SECOND (lint-side) assertion, replaced
+  in place by a comment citing `0007:C1`, REQ-57/67/89/58 and pointing at
+  the replacement test. ADV-1's first, substantive assertion — the
+  false-exhaustiveness catch — remains live and enforcing, and the test now
+  passes on it. The obligation is additionally pinned by
+  `TestFixup_EmptyHeldSetIsDecidedRatherThanRefused`, verified to fail
+  against the pre-fix evaluator.

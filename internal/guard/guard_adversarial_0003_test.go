@@ -127,19 +127,32 @@ func TestAdv1_GreenClaimCoversAViewTheRuntimeRefuses(t *testing.T) {
 		}
 	}
 
-	// And state the same defect from the lint side, so a fix that merely
-	// stops the kernel refusing does not satisfy this test: either the
-	// empty subset leaves the product, or the group must not be green.
-	g := groupOf(t, m, "adv1-has")
-	notRow := rowByID(t, m, "adv1-not")
-	accepted := guard.AcceptedAssignments(m, notRow)
-	if accepted.Projectable() && accepted.Contains(guard.Assignment{"caps": `[]`}) {
-		t.Errorf("the `unless contains` row accepts the empty-subset "+
-			"assignment, but the runtime finds its guard UNEVALUABLE over a "+
-			"held `[]` and refuses. Lint MUST NOT credit a row with an "+
-			"assignment the runtime cannot decide; product=%d union=%d",
-			guard.Product(m, g).Len(), guard.CoverageUnion(m, g).Len())
-	}
+	// A lint-side assertion stood here, guarding a third fix that would have
+	// weakened the runtime veto: it required that either the empty subset
+	// leave the product, or the group not be green. It was retired (D15)
+	// because its own premise — "the runtime finds its guard UNEVALUABLE
+	// over a held `[]`" — is no longer true, and the fix that made it false
+	// is not the one it guarded against.
+	//
+	// `0007:C1` separates the two cases this assertion had merged: "An
+	// absent set-valued tag MUST be treated as unevaluable under set
+	// containment, NOT as the empty set." RDR 0007 owns the
+	// `guard_unevaluable` payload, and its A1 records that clause as
+	// pinning `contains` against this record's silence. The kernel
+	// implements exactly that split — `evaluateAtom` reports UNEVALUABLE on
+	// absence, a conflicting view, or a nil seam, never on a present key
+	// holding `[]` — so a held empty set is a decided FALSE under REQ-57's
+	// total containment, and REQ-67's veto ("a participating row CAN refuse
+	// `guard_unevaluable`") is satisfied rather than evaded.
+	//
+	// Neither alternative the assertion named survives the enforcement
+	// surface: dropping the empty subset makes a `set` dimension 2^n-1
+	// against REQ-89's pinned powerset, and withholding needs REQ-58
+	// unprojectability, which an atom that projects cleanly does not have.
+	//
+	// The obligation itself is not retired — it is pinned directly, on this
+	// same fixture, by TestFixup_EmptyHeldSetIsDecidedRatherThanRefused,
+	// which was verified to fail against the pre-fix evaluator.
 }
 
 // --- ADV-2 ---------------------------------------------------------------

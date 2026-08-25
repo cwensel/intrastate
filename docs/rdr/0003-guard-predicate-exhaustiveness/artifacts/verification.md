@@ -363,7 +363,7 @@ deleted. New deviations D10–D15 in `deviations.md`.
 - **Regression test**: `TestFail1_CanRefuseRowContributesNoAcceptedAssignments`
   — verified to fail on all three symptoms before the fix.
 
-## ADV-1 — CLOSED (one assertion outstanding; see D15)
+## ADV-1 — CLOSED (D15 resolved 2026-08-25: stale assertion retired)
 
 - **Root cause**: NOT where Phase 3b placed it. The defect is in the
   EVALUATOR, not in lint's projection. `Evaluate`'s `contains` arm parsed
@@ -457,7 +457,13 @@ deleted. New deviations D10–D15 in `deviations.md`.
 
 `go build ./...` clean; `golangci-lint run` 0 issues; `go test -race`
 clean. `internal/resolve`, `internal/table`, `internal/cli` green. In
-`internal/guard`: 148 tests pass — the 142 Phase-1 tests, the four
-Phase-3c regressions, `TestAdv2_…`, `TestAdv3_…`, and the `TestAdv_Recorded…`
-tripwire. One assertion fails: `TestAdv1_…`'s second half, unedited, per
-D15. No pre-existing test was edited, weakened, or broken.
+`internal/guard`: **150 tests pass, 0 fail** — the 142 Phase-1 tests, the
+four Phase-3c regressions, `TestAdv1_…`, `TestAdv2_…`, `TestAdv3_…`, and
+the `TestAdv_Recorded…` tripwire.
+
+D15 was resolved by the author on 2026-08-25: ADV-1's second (lint-side)
+assertion was retired, its premise having been falsified by D14's fix, and
+replaced in place by a comment citing `0007:C1`'s absent-vs-empty contract.
+ADV-1's first, substantive assertion — the false-exhaustiveness catch —
+remains live and now passes. No pre-existing test was weakened or broken:
+the only test edit in this stage beyond new files is that retirement.
