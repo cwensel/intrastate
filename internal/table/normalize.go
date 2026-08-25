@@ -66,10 +66,8 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	// The `<clear>` ban binds every atom regardless of operator or block
 	// (`0002:C17`), and outranks kind conformance so a sentinel authored on
 	// a bool or int tag still reports as the reserved value it is.
-	for _, m := range members {
-		if m == ClearSentinel {
-			return Atom{}, fail(CatReservedTagValue, where+" authors the reserved value "+ClearSentinel)
-		}
+	if slices.Contains(members, ClearSentinel) {
+		return Atom{}, fail(CatReservedTagValue, where+" authors the reserved value "+ClearSentinel)
 	}
 
 	switch operator {
@@ -483,11 +481,9 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		if err != nil {
 			return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
 		}
-		for _, m := range members {
-			if m == ClearSentinel {
-				return nil, nil, fail(CatReservedTagValue,
-					"rule "+id+" write "+key+" authors the reserved value "+ClearSentinel)
-			}
+		if slices.Contains(members, ClearSentinel) {
+			return nil, nil, fail(CatReservedTagValue,
+				"rule "+id+" write "+key+" authors the reserved value "+ClearSentinel)
 		}
 		// A write-block value's kind and domain conformance is filed under
 		// the declaration category (deviations.md D3): `0002:C24` names no
@@ -535,13 +531,12 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 	}
 
 	keys := slices.Sorted(maps.Keys(assignments))
-	// NextTags and Writes are populated INDEPENDENTLY and neither is an
-	// alias of the other: the two slices are built separately so a mutation
-	// of one is not observable through the other (`0002:C15`).
-	next := make([]TagValue, 0, len(keys))
+	// This returns the write set only. NextTags and Writes must never alias
+	// each other, and that guarantee is discharged at row assembly, where
+	// each is cloned from this set independently so a mutation of one is not
+	// observable through the other (`0002:C15`).
 	writes := make([]TagValue, 0, len(keys))
 	for _, key := range keys {
-		next = append(next, TagValue{Key: key, Value: slices.Clone(assignments[key])})
 		writes = append(writes, TagValue{Key: key, Value: slices.Clone(assignments[key])})
 	}
 	return writes, slices.Clone(keys), nil

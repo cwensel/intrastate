@@ -475,10 +475,8 @@ func (l *loader) loadInitial() error {
 		}
 		// The reserved-value rule takes precedence over the value arm: the
 		// sentinel is refused wherever a tag value is authored (`0002:C11`).
-		for _, m := range members {
-			if m == ClearSentinel {
-				return fail(CatReservedTagValue, "[initial] "+key+" authors the reserved value "+ClearSentinel)
-			}
+		if slices.Contains(members, ClearSentinel) {
+			return fail(CatReservedTagValue, "[initial] "+key+" authors the reserved value "+ClearSentinel)
 		}
 		// An [initial] value ill-formed for its declared kind or outside
 		// its declared domain is scoped by SITE to this category, while the
@@ -577,12 +575,6 @@ func isArray(v any) bool {
 // isBool reports whether an authored value was spelled as a TOML boolean.
 func isBool(v any) bool {
 	_, ok := v.(bool)
-	return ok
-}
-
-// isInt reports whether an authored value was spelled as a TOML integer.
-func isInt(v any) bool {
-	_, ok := v.(int64)
 	return ok
 }
 
