@@ -283,11 +283,36 @@ func compareUndecidedAtoms(a, b UndecidedAtom) int {
 	return strings.Compare(a.Literal, b.Literal)
 }
 
-// compareUndecidedRows orders payload rows by their source identity, the
-// row half of REQ-55's tuple.
+// compareUndecidedRows orders payload rows by REQ-55's six-field tuple:
+// source identity first, then — for rows that TIE on identity — the atom
+// half, entry by entry over each row's already-sorted atom list.
+//
+// Identity alone is not total. `0007:C8` fences the sort key as total over
+// payload ENTRIES, and the entry key is `(RuleID, SourceLocator, key,
+// block, operator token, literal)` — row identity is a COMPONENT of it,
+// not a partition boundary. Nothing in this RDR makes `(RuleID,
+// SourceLocator)` unique across rows, and `slices.SortFunc` is not stable,
+// so comparing identity alone leaves rows that tie on it in `Table.Rows`
+// position — the row-order dependence this clause exists to forbid, one
+// level above the atom order the entry sort already closes.
+//
+// Two rows equal under this comparison carry the same identity and the
+// same atom entries, so they are indistinguishable in the payload and
+// their relative order cannot be observed.
 func compareUndecidedRows(a, b UndecidedRow) int {
 	if c := strings.Compare(a.RuleID, b.RuleID); c != 0 {
 		return c
 	}
-	return strings.Compare(a.SourceLocator, b.SourceLocator)
+	if c := strings.Compare(a.SourceLocator, b.SourceLocator); c != 0 {
+		return c
+	}
+	for i := range min(len(a.Atoms), len(b.Atoms)) {
+		if c := compareUndecidedAtoms(a.Atoms[i], b.Atoms[i]); c != 0 {
+			return c
+		}
+		if c := strings.Compare(string(a.Atoms[i].Reason), string(b.Atoms[i].Reason)); c != 0 {
+			return c
+		}
+	}
+	return len(a.Atoms) - len(b.Atoms)
 }
