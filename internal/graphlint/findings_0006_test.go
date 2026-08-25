@@ -101,8 +101,24 @@ status = "b"
 	r := lint(t, statusOnlyDecls, noRoot)
 	f := requireCode(t, r, graphlint.CodeDanglingEdge)
 
+	// The fixture authors exactly one rule, so the only rule id a finding
+	// may claim is `advance`. Skipping every finding that carries SOME
+	// rule id — as a bare `if got.Rule != "" { continue }` does — makes the
+	// clause vacuous the moment the engine misattributes: a dangling-edge
+	// finding wrongly stamped `advance` would take the skip and never be
+	// checked at all. Every finding is inspected, and a rule id is only
+	// accepted when it names a row the model actually authors.
+	authored := []string{"advance"}
+	var carried int
 	for _, got := range f {
 		if got.Rule != "" {
+			if !slices.Contains(authored, got.Rule) {
+				t.Errorf("%s claims the rule id %q, which the model does "+
+					"not author (%v); the identity fields must be stable "+
+					"and actionable, so an invented id is worse than the "+
+					"span fallback: %+v", got.Code, got.Rule, authored, got)
+			}
+			carried++
 			continue
 		}
 		// No rule id, so a span or a graph element id must stand in.
@@ -111,6 +127,15 @@ status = "b"
 				"graph element id, so it is neither actionable nor stable: "+
 				"%+v", got.Code, got)
 		}
+	}
+	// The discriminating half: the missing-root dangling finding names a
+	// DECLARATION, not a rule, so at least one finding must exercise the
+	// fallback arm. If every finding carried a rule id the loop above
+	// would prove nothing about REQ-127.
+	if carried == len(f) {
+		t.Errorf("every %s finding carries a rule id, so the span/element "+
+			"fallback this clause is about is never exercised; report:%s",
+			graphlint.CodeDanglingEdge, render(r))
 	}
 }
 
@@ -709,6 +734,86 @@ status = "b"
 			t.Errorf("the single %s finding does not name the row %q: %+v",
 				f.Code, want, f)
 		}
+	}
+
+	// A single pair cannot discriminate "one finding per PAIR" from "one
+	// finding per overlapping GROUP" — both predict exactly one finding.
+	// Three MUTUALLY overlapping rows separate them: per-pair is three
+	// findings, per-group is one, and per-row is three-that-name-one-row.
+	// Each finding must therefore name a DISTINCT unordered pair.
+	const three = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "left"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "middle"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "right"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+`
+	tri := lint(t, statusOnlyDecls, three)
+	overlaps := requireCode(t, tri, graphlint.CodeOverlap)
+	if len(overlaps) != 3 {
+		t.Fatalf("%d %s findings for three MUTUALLY overlapping rows; want "+
+			"exactly 3 — one per overlapping PAIR, not one per group and "+
+			"not one per row; report:%s",
+			len(overlaps), graphlint.CodeOverlap, render(tri))
+	}
+
+	wantPairs := []string{"left|middle", "left|right", "middle|right"}
+	var gotPairs []string
+	for _, got := range overlaps {
+		var named []string
+		text := got.Rule + " " + got.Message + " " + got.Span + " " +
+			got.Element
+		for _, row := range []string{"left", "middle", "right"} {
+			if strings.Contains(text, row) {
+				named = append(named, row)
+			}
+		}
+		if len(named) != 2 {
+			t.Errorf("a %s finding names %v; one overlapping PAIR is one "+
+				"finding naming exactly two rows: %+v",
+				got.Code, named, got)
+			continue
+		}
+		slices.Sort(named)
+		gotPairs = append(gotPairs, strings.Join(named, "|"))
+	}
+	slices.Sort(gotPairs)
+	if !slices.Equal(gotPairs, wantPairs) {
+		t.Errorf("the overlapping pairs named are %v; want each unordered "+
+			"pair exactly once (%v) — a duplicated pair means the same "+
+			"ambiguity is reported twice, and a missing one means an "+
+			"ambiguity goes unreported; report:%s",
+			gotPairs, wantPairs, render(tri))
 	}
 }
 

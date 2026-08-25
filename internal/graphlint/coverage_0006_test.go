@@ -632,7 +632,10 @@ eq = "go"
 			"report:%s", len(f), graphlint.CodeOverlap, render(r))
 	}
 	// Each finding is scoped to an escape population, so it carries the
-	// failure class.
+	// failure class — and REQ-30's "one finding NAMING BOTH ROWS" means
+	// each per-class finding names esc-one AND esc-two. A finding that
+	// named only one row would satisfy a count-plus-nonempty-class check
+	// while telling the author half the story.
 	classes := map[string]bool{}
 	for _, got := range f {
 		if got.Class == "" {
@@ -640,6 +643,28 @@ eq = "go"
 				"failure class: %+v", got.Code, got)
 		}
 		classes[got.Class] = true
+
+		// The pair is named in the IDENTITY fields, and is asserted as an
+		// exact unordered pair. Substring-matching a blob of concatenated
+		// fields would accept a prefixed id (`esc-one-b`) and would also
+		// let unrelated message prose stand in for an identity, so the
+		// two identity fields are compared directly.
+		//
+		// This also carries the ordinary-row exclusion: `ordinary` shares
+		// the same match pattern but is overlap-checked in a separate
+		// population, and an exact pair equal to {esc-one, esc-two}
+		// cannot name it.
+		pair := []string{got.Rule, got.Element}
+		slices.Sort(pair)
+		if wantPair := []string{"esc-one", "esc-two"}; !slices.Equal(
+			pair, wantPair) {
+			t.Errorf("the %s finding for class %q names the row pair %v; "+
+				"want exactly %v — one overlapping pair is one finding "+
+				"naming BOTH escape rows, and escape rows are "+
+				"overlap-checked in one population per declared class, "+
+				"NEVER against ordinary rows: %+v",
+				got.Code, got.Class, pair, wantPair, got)
+		}
 	}
 	for _, want := range guard.RescuableClasses() {
 		if !classes[want] {
@@ -1457,7 +1482,23 @@ eq = "go"
 	// The group overlaps, so the ambiguous_match arm is reachable.
 	requireCode(t, r, graphlint.CodeOverlap)
 	// And its coverage is not closed by the no_match-only escape row.
-	requireCode(t, r, graphlint.CodeCoverageGap)
+	// REQ-61 is class-SCOPED: a bare `graph-coverage-gap` proves nothing,
+	// because a gap on the `no_match` arm — the arm the escape row DOES
+	// close — would satisfy it while demonstrating the opposite defect.
+	//
+	// The fixture has ONE group and ONE uncovered class, so the gap is
+	// exactly one finding: counting `ambiguous_match` findings and only
+	// requiring a nonzero count would green-pass an engine reporting the
+	// same gap twice.
+	gap := requireOneCode(t, r, graphlint.CodeCoverageGap)
+	if gap.Class != "ambiguous_match" {
+		t.Errorf("the %s finding carries class %q; want %q — the arm the "+
+			"escape row does NOT declare is the one left open, and "+
+			"letting the no_match row close it is the defect. The union "+
+			"is computed per (group x declared rescuable class) over "+
+			"`no_match` and `ambiguous_match` only: %+v",
+			gap.Code, gap.Class, "ambiguous_match", gap)
+	}
 	// The rescuable class vocabulary is exactly the two RDR 0003 names.
 	if got := guard.RescuableClasses(); len(got) != 2 {
 		t.Errorf("rescuable classes = %v; the union is computed per (group x "+

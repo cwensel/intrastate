@@ -16,6 +16,8 @@ import (
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
 	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/newcoinc/intrastate/internal/guard"
+	"github.com/newcoinc/intrastate/internal/table"
 )
 
 // REQ-MVV: "Add a fixture-backed lint invocation that uses the same
@@ -288,27 +290,64 @@ func mvvMultiDefectGroup(t *testing.T) {
 		t.Fatalf("the failure envelope carries no `findings` key:\n%s", stdout)
 	}
 
+	// The scenario the RDR prescribes is a multi-defect GROUP: all four
+	// rows bind the same match pattern and outcome, so RDR 0003's grouping
+	// puts them in ONE group carrying every defect class. Splitting them
+	// across two single-class groups would still satisfy a code-set
+	// assertion while no longer being the prescribed scenario, so the
+	// grouping is pinned directly against the fixture the run reads.
+	m, lerr := table.Load([]byte(mvvMultiDefect), path)
+	if lerr != nil {
+		t.Fatalf("the multi-defect fixture does not normalize: %v", lerr)
+	}
+	groups := guard.Groups(m)
+	if len(groups) != 1 {
+		var ctxs []string
+		for _, g := range groups {
+			ctxs = append(ctxs, g.Context.String())
+		}
+		t.Fatalf("the multi-defect fixture forms %d scoped row groups (%v); "+
+			"want exactly 1 — the RDR names a multi-defect GROUP, and rows "+
+			"split across per-class groups are a different scenario",
+			len(groups), ctxs)
+	}
+	var groupRows []string
+	for _, row := range groups[0].Rows {
+		groupRows = append(groupRows, row.RuleID)
+	}
+	slices.Sort(groupRows)
+	wantRows := []string{"over-one", "over-two", "refuse-one", "refuse-two"}
+	if !slices.Equal(groupRows, wantRows) {
+		t.Errorf("the single group %q carries rows %v; want all four "+
+			"defect-bearing rows %v in ONE group",
+			groups[0].Context.String(), groupRows, wantRows)
+	}
+
+	// Every expected code from a SINGLE run, asserted as the exact
+	// MULTISET the run reports. A deduped code SET leaves per-row
+	// multiplicity unproven: the two rows that can refuse are two
+	// withheld-claim findings, and an engine collapsing them to one
+	// would report the same set.
 	var got []string
 	for _, f := range *env.Findings {
-		if !slices.Contains(got, f.Code) {
-			got = append(got, f.Code)
-		}
+		got = append(got, f.Code)
 	}
 	slices.Sort(got)
 
-	// Every expected code from a SINGLE run. A first-failure engine emits
-	// only the first and fails here.
 	want := []string{
+		graphlint.CodeAlwaysPresentOwned,
 		graphlint.CodeOverlap,
 		graphlint.CodeOwnedBeforeWrite,
 		graphlint.CodeUnprovableCoverage,
+		graphlint.CodeUnprovableCoverage,
 	}
-	for _, c := range want {
-		if !slices.Contains(got, c) {
-			t.Errorf("the multi-defect run did not report %q; got %v. A "+
-				"first-failure engine cannot pass this scenario.\nstdout:\n%s",
-				c, got, stdout)
-		}
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("the multi-defect run reported the finding codes %v; want "+
+			"exactly %v. A first-failure engine reports a prefix; an engine "+
+			"deduping per-row findings reports one %q instead of two.\n"+
+			"stdout:\n%s", got, want,
+			graphlint.CodeUnprovableCoverage, stdout)
 	}
 
 	// One overlapping pair is ONE finding naming both rows, not one per row.
@@ -321,6 +360,21 @@ func mvvMultiDefectGroup(t *testing.T) {
 	if overlaps != 1 {
 		t.Errorf("%d %s findings for one overlapping pair; want exactly 1 "+
 			"naming both rows:\n%s", overlaps, graphlint.CodeOverlap, stdout)
+	}
+
+	// And the two withheld claims name the two DISTINCT refusing rows, so
+	// the multiplicity above is per-row and not one row reported twice.
+	var refusing []string
+	for _, f := range *env.Findings {
+		if f.Code == graphlint.CodeUnprovableCoverage {
+			refusing = append(refusing, f.Rule)
+		}
+	}
+	slices.Sort(refusing)
+	if wantRefusing := []string{"refuse-one", "refuse-two"}; !slices.Equal(
+		refusing, wantRefusing) {
+		t.Errorf("the withheld-claim findings name %v; want one per "+
+			"refusing row, %v:\n%s", refusing, wantRefusing, stdout)
 	}
 }
 

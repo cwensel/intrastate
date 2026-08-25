@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -340,6 +341,14 @@ func TestReq10And11_FlowAndModelAreMutuallyExclusiveUsageErrors(t *testing.T) {
 	if ce.Group != clierr.GroupUserEnv {
 		t.Errorf("group = %v; want GroupUserEnv — it is a usage error", ce.Group)
 	}
+	// The group and the exit code are shared by every usage error, so
+	// neither distinguishes THIS refusal. The stable code does, and a
+	// consumer branches on it.
+	if ce.Code != "flag-mutually-exclusive" {
+		t.Errorf("code = %q; want %q — the refusal is identified by its "+
+			"stable code, not merely by its group", ce.Code,
+			"flag-mutually-exclusive")
+	}
 	if got := clierr.ExitCodeFor(err); got != 2 {
 		t.Errorf("exit = %d; want 2", got)
 	}
@@ -664,15 +673,16 @@ func TestReq97And98_TextModeEnumeratesEveryFindingsCodeAndMessage(t *testing.T) 
 			}
 			combined := textOut + textErrOut
 
-			// Layout and wrapping are unasserted; a renderer that DROPS any
-			// finding fails.
-			for _, code := range wantCodes {
-				if !strings.Contains(combined, code) {
-					t.Errorf("text output drops the finding code %q present "+
-						"in JSON output; the code sets must be equal.\n"+
-						"--- text ---\n%s\n--- json ---\n%s",
-						code, combined, jsonOut)
-				}
+			// REQ-98 is set EQUALITY, not containment. A one-way
+			// JSON->text containment loop green-passes a renderer that
+			// invents a code JSON never reported, so the text codes are
+			// parsed back out and the two sets compared both directions.
+			gotCodes := codesFromText(combined)
+			if !slices.Equal(gotCodes, wantCodes) {
+				t.Errorf("the text finding-code set is not EQUAL to the "+
+					"JSON set:\n  text: %v\n  json: %v\n"+
+					"--- text ---\n%s\n--- json ---\n%s",
+					gotCodes, wantCodes, combined, jsonOut)
 			}
 			// And every finding's MESSAGE is enumerated, not merely an
 			// aggregate summary.
@@ -760,13 +770,71 @@ func TestReq59And60And126_BothBoundsAppearInTheCommandsHelpOutput(t *testing.T) 
 				"implementation constant", tc.name, tc.value)
 			continue
 		}
-		if !strings.Contains(help, itoa(tc.value)) {
-			t.Errorf("the command's help output does not publish the %s "+
-				"(%d); SC-22 asserts the ceiling against the PUBLISHED "+
-				"constant, not a test-local value:\n%s",
-				tc.name, tc.value, help)
+		// The value must appear on the line carrying ITS OWN label.
+		// Searching the whole help text for the bare number lets the two
+		// values be swapped between their labels and stay green, which
+		// publishes the wrong number under each name.
+		line, ok := helpLineFor(help, tc.name)
+		if !ok {
+			t.Errorf("the command's help output carries no line labelled "+
+				"%q; both bounds are published as named implementation "+
+				"constants:\n%s", tc.name, help)
+			continue
+		}
+		// The number is parsed out and compared for EQUALITY. A substring
+		// test green-passes any value the published one is a prefix or
+		// infix of — `20480` contains `2048` — so a bound that gained a
+		// digit would still read as correct.
+		got, ok := numberOn(line)
+		if !ok {
+			t.Errorf("the help line for the %s reads %q, which publishes "+
+				"no number; SC-22 asserts the ceiling against the "+
+				"PUBLISHED constant, not a test-local value:\n%s",
+				tc.name, strings.TrimSpace(line), help)
+			continue
+		}
+		if got != tc.value {
+			// A swap between the two labels lands here too, naming the
+			// other bound's value as what this label wrongly publishes.
+			t.Errorf("the help line for the %s reads %q, publishing %d; "+
+				"want %d", tc.name, strings.TrimSpace(line), got, tc.value)
 		}
 	}
+}
+
+// numberOn returns the single decimal number published on a help line, and
+// reports whether exactly one exists — two would make "the value under this
+// label" ambiguous and the equality assertion unsound.
+func numberOn(line string) (int, bool) {
+	fields := strings.FieldsFunc(line, func(r rune) bool {
+		return r < '0' || r > '9'
+	})
+	if len(fields) != 1 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// helpLineFor returns the single help line carrying label, and reports
+// whether exactly one such line exists — two would make "the line for this
+// label" ambiguous and the per-label assertion unsound.
+func helpLineFor(help, label string) (string, bool) {
+	var found string
+	var n int
+	for _, line := range strings.Split(help, "\n") {
+		if strings.Contains(line, label) {
+			found = line
+			n++
+		}
+	}
+	if n != 1 {
+		return "", false
+	}
+	return found, true
 }
 
 // --- helpers -------------------------------------------------------------
@@ -788,6 +856,40 @@ func codesFromJSON(t *testing.T, stdout string, failure bool) []string {
 	for _, f := range findingsFromJSON(t, stdout, failure) {
 		if !slices.Contains(out, f.Code) {
 			out = append(out, f.Code)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// codesFromText recovers the finding codes text mode rendered, so REQ-98's
+// "the set of finding codes appearing in text output equals the set in
+// JSON output" can be asserted as an equality rather than a containment.
+//
+// `EmitFindingsText` renders one finding per line as "  <code>: <message>",
+// and quotes identity values and folds line-affecting characters out of the
+// message, so one finding is one line and the code is the token before the
+// first colon. The aggregate `error: <code>: <message>` line is NOT a
+// finding and is skipped: it carries the envelope code, which JSON reports
+// in `error.code`, not in `findings`.
+func codesFromText(combined string) []string {
+	var out []string
+	for _, line := range strings.Split(combined, "\n") {
+		if !strings.HasPrefix(line, "  ") {
+			continue
+		}
+		body := strings.TrimSpace(line)
+		code, _, ok := strings.Cut(body, ": ")
+		if !ok || code == "" || strings.ContainsAny(code, " \t") {
+			// "  detail: ..." / "  hint: ..." are envelope lines, and
+			// anything else indented is not a finding line.
+			continue
+		}
+		if code == "detail" || code == "hint" {
+			continue
+		}
+		if !slices.Contains(out, code) {
+			out = append(out, code)
 		}
 	}
 	slices.Sort(out)
