@@ -183,6 +183,32 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 		return r
 	}
 
+	// The bound is tested BEFORE the projection scan, and after every
+	// participating dimension is known finite — which is exactly the order
+	// REQ-93 states ("lint MUST compute the cardinality and test the bound
+	// after every participating dimension is known finite"). Both halves of
+	// the order matter: testing it earlier would report a computed size for
+	// a product carrying an unprovable dimension, and testing it later
+	// would send the projection scan through a product this implementation
+	// has already declined to enumerate — the naive enumeration on the
+	// refusal path that the record's mitigation forbids.
+	if card, ok := Cardinality(m, g); ok && card > Bound() {
+		r.Verdict = VerdictWithheld
+		r.Cardinality = card
+		r.CoverageUnion = newSet(nil)
+		r.Findings = append(r.Findings, Finding{
+			Code:         CodeProductTooLarge,
+			Context:      r.Context,
+			RuleIDs:      r.RuleIDs,
+			Locators:     locators(g.Rows),
+			ComputedSize: card,
+			Bound:        Bound(),
+			Blocking:     true,
+		})
+		r.Findings = append(r.Findings, withholdingFindings(m, g)...)
+		return r
+	}
+
 	unprovable := unprovableFindings(m, g)
 	refusing := withholdingFindings(m, g)
 	r.Findings = append(r.Findings, unprovable...)
@@ -210,21 +236,9 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 	}
 	r.Cardinality = card
 
-	if card > Bound() {
-		r.Verdict = VerdictWithheld
-		r.CoverageUnion = newSet(nil)
-		r.Findings = append(r.Findings, Finding{
-			Code:         CodeProductTooLarge,
-			Context:      r.Context,
-			RuleIDs:      r.RuleIDs,
-			Locators:     locators(g.Rows),
-			ComputedSize: card,
-			Bound:        Bound(),
-			Blocking:     true,
-		})
-		return r
-	}
-
+	// The over-large refusal is already decided above, before the
+	// projection scan ran. Reaching here means the product is finite, under
+	// the bound, and fully projectable.
 	r.CoverageUnion = CoverageUnion(m, g)
 	r.Findings = append(r.Findings, overlapFindings(m, g)...)
 	gaps, closedBy := coverageFindings(m, g)

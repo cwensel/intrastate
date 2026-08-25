@@ -354,7 +354,7 @@ func Cardinality(m *table.Model, g Group) (int, bool) {
 // reports. It is far above the published bound, so every product it
 // saturates is already refused; it exists only so an astronomically large
 // finite product reports a large number rather than an overflowed one.
-const cardinalityCeiling = 1 << 40
+const cardinalityCeiling = 1 << ceilingExponent
 
 // ProofCompletes reports whether the proof representation completes within
 // the implementation's own resource budget.

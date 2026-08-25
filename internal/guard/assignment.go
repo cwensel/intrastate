@@ -260,8 +260,21 @@ func (s AssignmentSet) Projectable() bool { return s.projectable }
 
 // valueAssignments enumerates the values a key's VALUE dimension ranges
 // over, rendered the way a held value crosses the seam.
+//
+// The published bound applies HERE, not only to the assembled product: the
+// bound is "the largest product this implementation's enumerating proof
+// representation completes over within its budget", and a single dimension
+// carrying more assignments than that can appear in no product this
+// implementation enumerates. Materializing it first and comparing the bound
+// afterwards would make the refusal cost exactly what the refusal exists to
+// avoid — the naive powerset enumeration the record's mitigation forbids,
+// run on the refusal path itself. So the count is decided from declaration
+// arithmetic and the enumeration declines rather than caps.
 func valueAssignments(d table.TagDecl) ([]string, bool) {
 	if !agrees(d) {
+		return nil, false
+	}
+	if n, ok := domainSize(d); !ok || n > Bound() {
 		return nil, false
 	}
 	switch d.Kind {

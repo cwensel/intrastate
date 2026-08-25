@@ -117,7 +117,7 @@ func domainSize(d table.TagDecl) (int, bool) {
 		}
 		// Values co-occur by construction, so the marker is never carried
 		// and the space is always the powerset.
-		return 1 << len(d.Elements), true
+		return spread(len(d.Elements), false), true
 	default:
 		// `scalar` is the opaque scalar: it carries no finite domain and can
 		// never bear an exhaustiveness claim.
@@ -130,12 +130,27 @@ func domainSize(d table.TagDecl) (int, bool) {
 // could co-occur, so it is one independent boolean dimension per value —
 // 2^|domain|, minus nothing, since the model does not assume at least one
 // holds.
+//
+// The exponential saturates at the same ceiling `Cardinality` saturates at,
+// for the same reason it does: `1 << 64` is 0 in Go and `1 << 63` is
+// negative, and either would read as UNDER the published bound and certify
+// exactly the product the too-large clause refuses. Saturating keeps the
+// bound comparison a comparison. A negative domain likewise floors at zero
+// rather than shifting by a negative count, which panics.
 func spread(domain int, singleValued bool) int {
+	domain = max(domain, 0)
 	if singleValued {
 		return domain
 	}
+	if domain >= ceilingExponent {
+		return cardinalityCeiling
+	}
 	return 1 << domain
 }
+
+// ceilingExponent is the exponent at which the spread saturates:
+// `cardinalityCeiling` is `1 << ceilingExponent`.
+const ceilingExponent = 40
 
 // agrees reports whether a declared domain agrees with its value kind, per
 // the kind/field agreement table. The loader rejects a disagreement before
@@ -152,7 +167,13 @@ func agrees(d table.TagDecl) bool {
 	case "bool":
 		return !hasDomain && !hasBound && !hasElements
 	case "int":
-		return !hasDomain && !hasElements
+		// An INVERTED bound is not a readable finite domain: REQ-18 fixes
+		// `{min..max}` as inclusive at both endpoints, which presumes an
+		// ordered pair — `{3..0}` names no value at all. The loader already
+		// refuses it; this is the same rule read on this RDR's own surface,
+		// so a declaration built in memory is judged by it too rather than
+		// yielding a domain size the table defines no value for.
+		return !hasDomain && !hasElements && orderedBound(d)
 	case "set":
 		return !hasDomain && !hasBound && !d.SingleValued
 	case "scalar":
@@ -160,6 +181,12 @@ func agrees(d table.TagDecl) bool {
 	default:
 		return false
 	}
+}
+
+// orderedBound reports whether a declared int bound is ordered. A partial
+// bound carries no domain at all, so it never reaches the comparison.
+func orderedBound(d table.TagDecl) bool {
+	return d.Min == nil || d.Max == nil || *d.Min <= *d.Max
 }
 
 // IntDomain enumerates a bounded int declaration's inclusive values. Both
