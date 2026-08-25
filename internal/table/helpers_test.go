@@ -49,6 +49,12 @@ func mustLoad(t *testing.T, rel string) *table.Model {
 	if m == nil {
 		t.Fatalf("fixture %s loaded nil model with no error", rel)
 	}
+	// A loader returning an empty model with no error would let every
+	// "for each row" assertion below pass vacuously. No fixture in the
+	// promoted set normalizes to zero rows.
+	if len(m.Rows) == 0 {
+		t.Fatalf("fixture %s loaded clean but normalized to no candidate rows", rel)
+	}
 	return m
 }
 

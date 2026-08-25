@@ -74,6 +74,27 @@ func TestReq50_BlockDomainIsTheKernelsThreeValues(t *testing.T) {
 				"type widens to three members, it does not fork", got, want)
 		}
 	}
+
+	// The behavioural half: an authored guard block reaches the kernel row
+	// carrying the KERNEL's constant, so the widening is real rather than a
+	// pair of parallel vocabularies that happen to agree.
+	kr := rowByID(t, mustLoad(t, kataFixture), "kata.review-accepted").KernelRow()
+
+	seen := map[resolve.Block]bool{}
+	for _, a := range kr.Guard {
+		seen[a.Block] = true
+	}
+	if !seen[resolve.BlockAll] {
+		t.Errorf("no kernel guard atom carries resolve.BlockAll: %+v", kr.Guard)
+	}
+	if !seen[resolve.BlockUnless] {
+		t.Errorf("no kernel guard atom carries resolve.BlockUnless: %+v", kr.Guard)
+	}
+	// And a match-block atom reaches Match rather than being minted as a
+	// third kernel block.
+	if len(kr.Match) == 0 {
+		t.Error("no match-block atom reached the kernel row's Match pattern")
+	}
 }
 
 // REQ-51: "Normalization MUST NOT fold `unless` atoms into `all` or
@@ -391,7 +412,15 @@ labels = ["a"]
 		t.Fatalf("order-b refused: %v", err)
 	}
 
-	got := atomsOn(a.Rows[0], "labels")[0].Literal
+	if len(a.Rows) == 0 || len(b.Rows) == 0 {
+		t.Fatalf("the ordering fixtures normalized to no rows: a=%d b=%d",
+			len(a.Rows), len(b.Rows))
+	}
+	labels := atomsOn(a.Rows[0], "labels")
+	if len(labels) != 1 {
+		t.Fatalf("%d atoms on `labels`; want 1: %+v", len(labels), labels)
+	}
+	got := labels[0].Literal
 	// Byte-lexicographic: uppercase Z (0x5A) sorts before lowercase a (0x61).
 	want := []string{"Z", "a", "b", "z"}
 	if !reflect.DeepEqual(got, want) {
@@ -464,6 +493,9 @@ labels = ["a"]
 		t.Fatalf("refused: %v", err)
 	}
 
+	if len(m.Rows) == 0 {
+		t.Fatal("the sequence-identity fixture normalized to no rows")
+	}
 	got := atomsOn(m.Rows[0], "labels")
 	if len(got) != 2 {
 		t.Fatalf("%d atoms on labels; want 2 — a joined identity collapses "+

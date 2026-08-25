@@ -491,16 +491,32 @@ func TestReq32_TerminalIsDereferencedToPredicateSets(t *testing.T) {
 // findings, not load failures: the loader accepts the absence"
 // INPUT EDGE
 func TestReq33_AbsentInitialOrTerminalIsNotALoadFailure(t *testing.T) {
+	// Each arm asserts the absence is ACCEPTED *and* that the rest of the
+	// document still normalized: a loader returning an empty model with no
+	// error would otherwise pass by doing nothing.
 	t.Run("no [initial]", func(t *testing.T) {
 		m := mustLoad(t, "pos-no-initial.toml")
 		if len(m.Initial) != 0 {
 			t.Errorf("[initial] = %+v; want empty", m.Initial)
+		}
+		if len(m.Rows) != 9 {
+			t.Errorf("%d candidate rows; want 9 — the absence is accepted and "+
+				"the rest of the document still normalizes", len(m.Rows))
+		}
+		if len(m.Terminal) == 0 {
+			t.Error("the stop set was dropped along with [initial]")
 		}
 	})
 	t.Run("no terminal", func(t *testing.T) {
 		m := mustLoad(t, "pos-no-terminal.toml")
 		if len(m.Terminal) != 0 {
 			t.Errorf("terminal = %+v; want empty", m.Terminal)
+		}
+		if len(m.Rows) != 9 {
+			t.Errorf("%d candidate rows; want 9", len(m.Rows))
+		}
+		if len(m.Initial) == 0 {
+			t.Error("the root was dropped along with `terminal`")
 		}
 	})
 	t.Run("terminal context matching a non-owned tag", func(t *testing.T) {
@@ -513,9 +529,17 @@ func TestReq33_AbsentInitialOrTerminalIsNotALoadFailure(t *testing.T) {
 		if src == base {
 			t.Fatal("terminal context substitution did not apply")
 		}
-		if _, err := table.Load([]byte(src), "terminal-observed.toml"); err != nil {
-			t.Errorf("a terminal context over a non-owned tag refused with %v; "+
+		m, err := table.Load([]byte(src), "terminal-observed.toml")
+		if err != nil {
+			t.Fatalf("a terminal context over a non-owned tag refused with %v; "+
 				"it is RDR 0006's blocking finding, not a load failure", err)
+		}
+		// And the non-owned predicate is dereferenced and carried, not
+		// silently dropped.
+		if len(m.Terminal) != 1 || len(m.Terminal[0]) != 1 ||
+			m.Terminal[0][0].Key != "owner" {
+			t.Errorf("terminal predicate sets = %+v; want the dereferenced "+
+				"`owner.eq=current-session` atom", m.Terminal)
 		}
 	})
 }

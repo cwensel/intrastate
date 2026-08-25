@@ -321,9 +321,18 @@ func TestReq97_DumpSettingsDoNotReachTheNormalizedValue(t *testing.T) {
 		t.Fatalf("reordered refused: %v", err)
 	}
 
+	if len(a.Rows) == 0 || len(b.Rows) == 0 {
+		t.Fatalf("one side normalized to no rows (%d / %d); the comparison "+
+			"would be vacuous", len(a.Rows), len(b.Rows))
+	}
 	if !reflect.DeepEqual(a.Rows, b.Rows) {
 		t.Error("two models differing only in [dump] normalized to different " +
 			"candidate-row sets; normalization must ignore [dump] entirely")
+	}
+	// And the two models DO differ, so the fixture pair is real.
+	if reflect.DeepEqual(a.DumpOrder, b.DumpOrder) {
+		t.Error("the [dump].order permutation did not take effect; the control " +
+			"compares two identical documents")
 	}
 }
 

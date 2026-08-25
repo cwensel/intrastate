@@ -665,16 +665,41 @@ func TestReq17_LoadReturnsOneRefusalNotAList(t *testing.T) {
 // counts themselves are REQ-126 and REQ-127; here the assertion is that
 // both documents LOAD, so a refusal-shaped oracle would be wrong.
 func TestReq18_AbsorbedDefectsTripNoCategory(t *testing.T) {
-	for _, rel := range []string{
-		"delim/merge-delim-comma.toml",
-		"delim/write-delim-comma-a.toml",
-		"delim/write-delim-comma-b.toml",
-	} {
-		t.Run(rel, func(t *testing.T) {
-			if _, err := table.Load(readFixture(t, rel), rel); err != nil {
-				t.Errorf("%s refused with %v; this class trips no category and "+
-					"must be asserted positively over the normalized value", rel, err)
-			}
-		})
-	}
+	t.Run("the merge case loads and its atoms survive", func(t *testing.T) {
+		const rel = "delim/merge-delim-comma.toml"
+		m, err := table.Load(readFixture(t, rel), rel)
+		if err != nil {
+			t.Fatalf("%s refused with %v; this class trips no category and must "+
+				"be asserted positively over the normalized value", rel, err)
+		}
+		// The positive oracle: a COUNT over the normalized value.
+		rows := rowsByRuleID(m, "reconcile-rewind")
+		if len(rows) == 0 {
+			t.Fatal("the contributing rule normalized to no rows")
+		}
+		if got := len(atomsOn(rows[0], "finalized_at")); got != 2 {
+			t.Errorf("%d atoms; want 2 — the oracle is the atom count over the "+
+				"normalized value, never a refusal", got)
+		}
+	})
+
+	t.Run("the write case loads and its two spellings stay distinct", func(t *testing.T) {
+		a, err := table.Load(readFixture(t, "delim/write-delim-comma-a.toml"),
+			"delim/write-delim-comma-a.toml")
+		if err != nil {
+			t.Fatalf("arm a refused: %v", err)
+		}
+		b, err := table.Load(readFixture(t, "delim/write-delim-comma-b.toml"),
+			"delim/write-delim-comma-b.toml")
+		if err != nil {
+			t.Fatalf("arm b refused: %v", err)
+		}
+		// The positive oracle: the write value's MEMBER SEQUENCE.
+		va := setWriteValue(t, a, "labels")
+		vb := setWriteValue(t, b, "labels")
+		if reflect.DeepEqual(va, vb) {
+			t.Errorf("the two spellings normalized to %v alike; the member "+
+				"sequence must survive normalization intact", va)
+		}
+	})
 }
