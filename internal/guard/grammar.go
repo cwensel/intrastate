@@ -180,6 +180,17 @@ func parseHeldSet(s string) ([]string, bool) {
 	if err := json.Unmarshal([]byte(s), &members); err != nil {
 		return nil, false
 	}
+	// `null` decodes without error into a NIL slice, while `[]` decodes into a
+	// non-nil empty one — so the nil check is exactly the line between a value
+	// that is not a set at all and the empty subset. Without it a held `null`
+	// would read as `[]` and `contains` would DECIDE it false, converting an
+	// unevaluable into a decided verdict — the direction `0007:C1` forbids
+	// ("never to false and never to true"), and the mirror image of the defect
+	// D14 fixed. Lint never renders `null` (`renderSet` marshals a []string),
+	// so only a runtime caller can supply it.
+	if members == nil {
+		return nil, false
+	}
 	return members, true
 }
 

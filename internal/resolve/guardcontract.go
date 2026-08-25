@@ -43,6 +43,7 @@ func TestGuardEvaluatorContract(t *testing.T, seam GuardEvaluator) {
 		{"contains/superset", "contains", `["alpha"]`, `["alpha","beta"]`, GuardTrue},
 		{"contains/missing member", "contains", `["gamma"]`, `["alpha","beta"]`, GuardFalse},
 		{"contains/unparseable value", "contains", `["alpha"]`, "alpha", GuardUnevaluable},
+		{"contains/null value", "contains", `["alpha"]`, "null", GuardUnevaluable},
 	}
 
 	for _, tc := range cases {
