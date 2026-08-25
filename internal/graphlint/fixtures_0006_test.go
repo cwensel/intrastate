@@ -455,3 +455,212 @@ status = "a"
 [context.done.match.status]
 eq = "b"
 `
+
+// --- the multi-defect fixture (REQ-MVV, SC-13) ---------------------------
+//
+// One model carrying several INDEPENDENT decidable defects across two
+// groups, so a first-failure engine emitting only the first cannot pass.
+// It pairs with multiDefectBodyReversed, which authors the same rules in
+// the opposite order: the emitted finding set must be identical.
+//
+// The defects: an overlapping ordinary pair (`over-one` x `over-two`), two
+// rows that can refuse `guard_unevaluable` over the optional `opt`
+// (`refuse-one`, `refuse-two`), and a reachable node with no outgoing row
+// and no terminal covering it.
+
+const multiDefectBody = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+opt = "p"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "over-one"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "over-two"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "refuse-one"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.guard.all.opt]
+eq = "p"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "refuse-two"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.guard.all.opt]
+eq = "q"
+[rule.write]
+status = "b"
+`
+
+// multiDefectBodyReversed authors the same four rules in the opposite
+// order. The emitted finding set must not depend on it.
+const multiDefectBodyReversed = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+opt = "p"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "refuse-two"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.guard.all.opt]
+eq = "q"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "refuse-one"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.guard.all.opt]
+eq = "p"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "over-two"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "over-one"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+`
+
+// advisoryBody is a clean model carrying advisory findings only: a group
+// closed by a bare escape row, a redundant row (a proper subset of a
+// sibling's assignments), and a rule no reachable node satisfies.
+const advisoryBody = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+flag = "false"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "wide"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "narrow"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = "true"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "only-on"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+[rule.guard.all.flag]
+eq = "true"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "bare-rescue"
+escape = ["no_match", "ambiguous_match"]
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "stop"
+`
+
+// legalBodyReordered authors legalBody's `advance-on` rule with its match
+// and guard blocks in the opposite order. Normalization sorts the atom
+// set, so the two must be indistinguishable downstream.
+const legalBodyReordered = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+flag = "false"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "advance-on"
+[rule.guard.all.flag]
+eq = "true"
+[rule.match.recognized]
+eq = "go"
+[rule.match.status]
+eq = "a"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "advance-off"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = "false"
+[rule.write]
+status = "b"
+`
