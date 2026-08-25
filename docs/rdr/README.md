@@ -13,7 +13,7 @@ engine README — this file is only the per-project index.
 | [0002](0002-transition-table-as-reviewable-data.md) | Transition table as reviewable data | Final [joint decision → JDR 0001 §JD-9, §JD-19, §JD-20, §JD-21, §JD-22] | High |
 | [0003](0003-guard-predicate-exhaustiveness.md) | Guard predicate exhaustiveness | Final [joint decision → JDR 0001 §JD-18, §JD-22] | High |
 | [0004](0004-accessor-execution-safety-model.md) | Accessor execution safety model | Final [joint decision → JDR 0001 §JD-19, §JD-20, §JD-22] | High |
-| [0005](0005-skill-integration-cli-contract.md) | Skill integration CLI contract | Draft [revised from Final 2026-06-24; re-verify A3, A4, A5, A6; STAGE-SCOPED — JDR 0001 §D8–§D11 answered JD-8/9/19/20] | High |
+| [0005](0005-skill-integration-cli-contract.md) | Skill integration CLI contract | Final [joint decision → JDR 0001 §JD-8, §JD-9, §JD-19, §JD-20] | High |
 | 0006 | Graph lint authority and guarantees | Final | High |
 | [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Final [joint decision → JDR 0001 §JD-8, §JD-18, §JD-21, §JD-22] | Medium |
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Final [joint decision → JDR 0001 §JD-5, §JD-8, §JD-9] | Medium |

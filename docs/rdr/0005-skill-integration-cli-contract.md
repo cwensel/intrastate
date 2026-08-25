@@ -6,7 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Draft [revised from Final 2026-06-24; re-verify A3, A4, A5, A6 (done, Stage 4) + A7 (done, Stage 6); STAGE-SCOPED — JDR 0001 §D8–§D11 answered JD-8/9/19/20 and land here; §D13 by citation]
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: mid — one user-facing CLI integration contract over resolver, accessor, and output seams.
 - **Priority**: High
@@ -388,49 +388,6 @@ re-entry Stage 6.
 | A6 pinned grammar + code spellings | 4 | VERIFIED | Grammar re-accepted against JDR 0001 §D10 item 6 / §D11; set-member escaping pinned to HTML-escaping-disabled at the round, with normative fixtures from `evidence/spikes/escaping-surfaces.out`. |
 | A7 normalized model exposes reader→owned-key and per-row gate lists | 1, 4 | VERIFIED | Peer RDR recorded in A7: `0002::Normative Contracts` *Accessor tables* (declared `keys`, exactly one reader per owned key) and *Gate references* ("carried on the normalized row and is part of its value"), plus `Row.RequiresOwned`; `0004::Normative Contracts` forbids deriving the key set from execution. Both legs available at load, pre-evaluation; fallback branch not triggered. |
 | Reuse audit | 4 | NO FINDING | `internal/cli` registers only `newVersionCmd`; no TOML loader, accessor executor, `Finding` type, or `respond.OK` text-payload path exists. Greenfield; nothing to fold in. |
-
-**Method vocabulary** (pick exactly one per assumption):
-
-- **Source Search** — verified against dependency
-  source code. Evidence: a greppable `path::Symbol`
-  (function/type/const name), **not a bare `file:line`**;
-  a commit-SHA permalink only for audit/traceability.
-  Standard for libraries. (Why symbol not line: flow
-  README *Doctrine*.)
-- **Spike** — verified by running code against a live
-  service or fixture. Evidence: command run + path to
-  captured output.
-- **Prior Art** — same property holds in ≥1 named
-  external system. Evidence: system + section/page.
-- **Derivation** — pure math or proof. Evidence: the
-  derivation, shown inline.
-- **Design Decision** — a scoping choice this RDR is
-  *making* (not *verifying*). Evidence: the decision
-  and the alternative explicitly rejected.
-- **Peer RDR** — relies on a property defined in
-  another RDR. Evidence: RDR ID + section.
-- **MVV Test** — the property is testable via the
-  Minimum Viable Validation, and the test
-  is named in this RDR's Validation section (pending
-  implementation at lock time). Evidence: test name.
-- **Docs Only** — documentation reading alone.
-  **Insufficient** for load-bearing assumptions; allowed
-  only when paired with a Spike or Source Search plan
-  in the Evidence line.
-
-A `Method: Source Search` whose Evidence cites this
-same RDR file — or any path under the RDR's artifact
-directory — is self-reference and not Verified. The
-cited proof must also support **the specific claim**,
-not an adjacent one: confirming a neighboring fact and
-stamping the assumption `Verified` is not verification.
-The cited symbol must resolve on `main` (a renamed,
-deleted, or never-built symbol fails the check).
-
-Any exactness claim such as all/every, first/nearest,
-byte-identical, lossless, canonical, deterministic, or
-stable order must be covered by a Critical Assumption
-Evidence Record or by the Minimum Viable Validation.
 
 ## Proposed Solution
 
@@ -1184,62 +1141,7 @@ surfaces as an exit-3 refusal and an indeterminate gate as an exit-2 refusal.
 
 ## Finalization Gate
 
-> Complete each item with a written response before
-> marking this RDR as **Final**. Written responses
-> prevent rubber-stamping and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses below.
-
-### Contradiction Check
-
-Rewritten at the re-entry Stage 7 re-lock.
-
-### Assumption Verification
-
-Rewritten at the re-entry Stage 7 re-lock, after A3–A6 re-verify at Stage 4 and
-A7 verifies at Stage 6.
-
-### Scope Verification
-
-The Minimum Viable Validation is in scope for implementation: one fixture-backed
-flow must prove `flow next`, `flow resolve`, `flow read-state`, and
-`flow set-state` through the production Cobra path in both output modes,
-including a read-assembled plan, a gated row, an escaped plan, a set write
-with a clear, and at least one exit-2 and one exit-3 refusal. It also carries
-the two narrowing assertions added at the repeatability lens: an unneeded
-reader with its role unbound (`next` / `resolve` succeed without invoking it,
-`read-state` invokes it and refuses) and `next --evaluate-gates` over one
-gated candidate plus one guard-excluded row (only the reported candidate's
-gate runs; a deny there still exits 0).
-
-### Cross-Cutting Concerns
-
-- **Versioning**: verb-specific JSON `data` payloads and the `findings` field
-  are append-only under the existing CLI output envelope.
-- **Incremental adoption**: `--model <path>` and fixture-backed model loading
-  ship before config-resolved `--flow <id>`.
-- **Secret/credential lifecycle**: this RDR does not introduce credentials;
-  accessor execution and external availability belong to RDR 0004.
-- **Canonical-form / determinism**: the deterministic claim is request-level
-  semantic determinism over the same model revision and artifact contents, not
-  byte-identical output; the one byte-level claim is the canonical set literal
-  (JDR 0001 §D13) surviving plan→request→read-back, which holds only because
-  one encoder — HTML escaping disabled — renders it at every emit site.
-
-### Proportionality
-
-This RDR is right-sized for one load-bearing contract: the user-facing CLI
-integration surface over the resolver, accessor, and output seams. It does not
-own kernel selection semantics, transition-model format, guard predicate
-meaning, accessor safety, or graph lint invariants; the four cross-seam
-decisions it depends on live at JDR 0001 and are cited. The `mid` profile
-remains appropriate because the contract is user-facing but not foundational
-and carries no prior accretion in Seam Lineage.
+Responses: 0005-skill-integration-cli-contract/artifacts/gate.md (Gate PASS 2026-08-24)
 
 ## References
 
