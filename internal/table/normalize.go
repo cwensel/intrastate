@@ -450,6 +450,20 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		if !ok {
 			return nil, nil, fail(CatUnknownTag, "rule "+id+" writes the undeclared tag "+key)
 		}
+		// `write to non-owned tag` is a RULE-level refusal, decidable from
+		// one rule plus the declarations (Failure Modes). It is what
+		// `0002:C14` relies on when it derives `RequiresOwned` from the
+		// write block and clear list and asserts "by the
+		// write-to-non-owned-tag rule every such key is an owned tag" —
+		// and `RequiresOwned` is the kernel's owned-state gate, so a
+		// non-owned key reaching it is a runtime refusal load must
+		// pre-empt. Leaving it to the accessor arity count would report
+		// the model's wiring for a defect in the rule and collapse two
+		// categories `0002:C24` states separately.
+		if decl.Provenance != ProvenanceOwned {
+			return nil, nil, fail(CatWriteToNonOwnedTag,
+				"rule "+id+" writes the "+string(decl.Provenance)+" tag "+key)
+		}
 		raw := (*rule.Write)[key]
 		members, err := valueMembers(raw)
 		if err != nil {
@@ -482,8 +496,16 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 	// (`0002:C23`).
 	if rule.Clear != nil {
 		for _, key := range *rule.Clear {
-			if _, ok := l.model.Tags[key]; !ok {
+			decl, ok := l.model.Tags[key]
+			if !ok {
 				return nil, nil, fail(CatUnknownTag, "rule "+id+" clears the undeclared tag "+key)
+			}
+			// A clear IS a `<clear>` write (`0002:C23`) and `0002:C14`
+			// derives `RequiresOwned` from the write block AND clear list,
+			// so it carries the same provenance obligation.
+			if decl.Provenance != ProvenanceOwned {
+				return nil, nil, fail(CatWriteToNonOwnedTag,
+					"rule "+id+" clears the "+string(decl.Provenance)+" tag "+key)
 			}
 			assignments[key] = []string{ClearSentinel}
 		}
