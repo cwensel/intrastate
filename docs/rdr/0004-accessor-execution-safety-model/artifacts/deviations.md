@@ -276,3 +276,120 @@ refusal/non-refusal split (D3 below). See
   `timeout` row carries the applied-but-unverified sense, which
   `Refusal.Applied()` reports on both post-mutation classes alike
   (`0004:C14`).
+
+## D16 — the runtime non-owned-plan refusal takes `execution_failure`
+
+- **Type**: SPEC-UNDER
+- **Status**: needs author decision (implemented against the best-supported
+  reading; see Recommendation)
+- **Source**: Stage 8 Phase 3c, closing FAIL-3 / ADV-1; REQ-40, REQ-41,
+  `0004:C10`, `0004:FM`.
+- **The gap**: `0004:C10` states "A write accessor MUST apply only planned
+  owned-tag writes produced by a successful transition. It MUST NOT write
+  observed or recognized tags." REQ-41's annotation names the
+  DEFINITION-level arm (`write_non_owned_tag`), and that arm exists in
+  `Validate`. But REQ-40's obligation is on what the accessor APPLIES, and
+  the plan is caller-supplied at this boundary. Nothing constrained
+  `plan.Writes` to the writer's owned keys, so a registry that validates
+  clean still applied an observed tag and reported success — with
+  `protectedKeys` excluding every planned key from the pre-write snapshot,
+  the clobbered tag was dropped from the non-owned comparison and read-back
+  confirmed the clobber. The RDR does not name a REFUSAL CLASS for this
+  runtime arm.
+- **Evidence weighed**: `0004:FM` enumerates the visible typed refusals and
+  includes "write attempted for a non-owned tag" in that list — so the
+  shape is a refusal the RDR expects at execution, not only a validation
+  code. But `RefusalClass` is a closed eight-member set (`0004:FM`: the
+  accessor classes are "disjoint from the kernel's closed five-kind
+  `resolve.RefusalKinds` set"), and none of the eight is named for it.
+  `read_back_mismatch` is wrong: it asserts the ARTIFACT is wrong, and here
+  the artifact is untouched. `read_back_incomplete` is wrong: it carries the
+  applied-but-unverified sense (`0004:C14`), and this write never ran.
+  `0004:FM` already precedents folding a non-enumerated execution-side
+  defect into `execution_failure` ("An unsupplied or unreadable artifact
+  role is **not** a separate class — it is `execution_failure`").
+- **Recommendation**: `execution_failure`, with `Refusal.Keys` naming the
+  offending non-owned keys and `Refusal.Expected` carrying the plan, so
+  diagnosis still starts from the tuple `0004:FM` requires. Adding a ninth
+  `RefusalClass` would extend a closed set that the CLI mapping (RDR 0005)
+  has not been written against; folding into `execution_failure` keeps the
+  set closed and is the precedent the RDR itself sets. The author may
+  prefer a distinct `write_non_owned_tag` refusal class — that is a
+  one-line change plus its `RefusalClasses()` entry, and ADV-1 stays green
+  either way, since it asserts only that the class is not
+  `read_back_mismatch`.
+- **Disposition**: implemented as `execution_failure` in
+  `internal/accessor/executor.go::nonOwnedPlanKeys` and its call site. The
+  check runs BEFORE `binding.Apply`, so the write never reaches the
+  artifact — the safest reading, and the one ADV-1 asserts.
+- **Consequence, recorded**: a planned key must be owned by BOTH the writer
+  definition's `keys` AND `Registry.OwnedTags`. The definition bounds what
+  this accessor may write; `OwnedTags` is what separates an owned tag from
+  an observed or recognized one. Either test alone is insufficient.
+
+## D17 — a failed pre-write baseline refuses AFTER the write command runs
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation (grounded in the record)
+- **Source**: Stage 8 Phase 3c, closing FAIL-1 / ADV-2 and FAIL-2;
+  REQ-53, REQ-62, REQ-63, `0004:C12`, `0004:C13`, `0004:C14`.
+- **The question**: an unestablished pre-write baseline is knowable BEFORE
+  the write command runs. Refusing there would leave the artifact
+  untouched, which is superficially the safer move. The implementation
+  instead proceeds with the write and refuses `read_back_incomplete`
+  afterwards.
+- **Evidence weighed**: `0004:C12` frames the protected-tag comparison as a
+  post-command obligation — "**After** a write accessor reports
+  command-level success, the executor MUST re-read ... and verify ... that
+  observed and recognized tag values present before the write are
+  unchanged." `0004:C13` names the failure of that verification
+  `read_back_incomplete` — "the verification did not run". `0004:C14` and
+  REQ-63 then fix its post-mutation sense as a matter of contract:
+  "`read_back_incomplete` and a post-mutation `timeout` are reported after
+  the write command already ran", carrying "the mutation may have been
+  applied and was not verified". A pre-write abort would mint
+  `read_back_incomplete` for a write that demonstrably did NOT occur,
+  contradicting REQ-64 ("it MUST NOT be represented to callers as a write
+  that did not occur") in the opposite direction.
+- **Disposition**: the pre-write snapshot records unestablished keys in
+  `baselineUnread`; the write proceeds; the refusal is raised post-command
+  with `applied = true` and `Keys` naming the unestablished keys. This is
+  distinct from D16's arm, which refuses pre-command because there the
+  defect is in the PLAN's authority, not in a verification that could not
+  run.
+- **Consequence, recorded**: two independent paths feed `baselineUnread` —
+  a wholly failed pre-write read (`raw.class != ""`, FAIL-1/ADV-2) and a
+  partial one whose `classify` reports `unread` (FAIL-2). The second is not
+  closed by fixing the first: a partial snapshot leaves `raw.class` empty,
+  so only the discarded `unread` return carries the gap. Verified by
+  mutation — reverting the `unread` line alone fails `TestAdv4` while ADV-2
+  stays green.
+
+## D18 — a cleared key is omitted from the written tag record
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation (grounded in the record)
+- **Source**: Stage 8 Phase 3c, closing FAIL-4 / ADV-3; REQ-32, REQ-45,
+  REQ-46, REQ-80, `0004:C11`.
+- **The question**: `WriteResult.Written` was documented as "the planned
+  owned tags the read-back verified" and returned `planned` verbatim,
+  `<clear>` sentinels included. What did read-back verify for a cleared
+  key?
+- **Evidence weighed**: `0004:C11` — "its read-back MUST assert the key is
+  absent". So what read-back verified for a cleared key is ABSENCE, and
+  recording it as a held value carrying the reserved literal asserts the
+  opposite. REQ-32 names that encoding the regression this RDR exists to
+  prevent: "A sentinel value would make an absent key read as *present* and
+  silently retire `owned_state_unavailable` for it". The disposition is
+  what a replay consumes (CA A4), so the defect reaches a consumer.
+  `ReadResult.OwnedSnapshot` already applies the omission rule to an absent
+  key; the write path did not.
+- **Disposition**: `executor.go::verifiedWritten` drops cleared keys from
+  `Written` on the success branch, and `WriteDisposition` inherits the fix
+  because it renders `r.Written`. Fixed at the SOURCE rather than in the
+  disposition renderer, so both the returned value and the record agree.
+- **Consequence, recorded**: `Written` and `Disposition.Tags` are the tags
+  verified HELD, never the plan echoed back. A caller wanting the full
+  planned set including clears reads the plan it supplied; a refusal still
+  carries the whole plan in `Refusal.Expected`, clears included, because
+  there the plan is the diagnostic.

@@ -232,3 +232,75 @@ The agreement is corroboration, not restatement. FAIL-2 is additional: the
 *partial* pre-write snapshot is a distinct and more reachable path than the
 wholly-unreadable snapshot, and it is not closed by fixing the `raw.class`
 guard alone — `classify`'s discarded `unread` return must also be honoured.
+
+---
+
+# Phase 3c — resolution
+
+All four defects fixed, each as its own green increment. The full repo
+suite is green (`go test ./...`), `gofmt` clean, `go vet` clean, and
+`golangci-lint run ./internal/accessor/...` reports 0 issues. REQ-MVV was
+re-run end to end: all nine numbered scenarios pass with their named
+negative controls, and the recorded actual output in `coverage.md` is
+unchanged, so it was not amended.
+
+The unifying theme both phases named — a success-shaped result over state
+the executor did not establish (REQ-80) — is what each fix addresses at the
+point where the state is (or is not) established, not at the point where it
+is reported.
+
+## FAIL-3 / ADV-1 — closed
+
+`executor.go::nonOwnedPlanKeys` filters `plan.Writes` against the writer
+definition's `keys` AND `Registry.OwnedTags`; a planned key failing either
+refuses BEFORE `binding.Apply`, so the write never reaches the artifact.
+`0004:C10` binds what the accessor applies, and the plan is caller-supplied
+at this boundary, so the definition-level `write_non_owned_tag` arm could
+not carry the clause alone. The RDR names no refusal class for the runtime
+arm; `execution_failure` was adopted following `0004:FM`'s own precedent for
+non-enumerated execution-side defects, with `Refusal.Keys` naming the
+offending keys. Recorded as **D16, the one entry left `needs author
+decision`** — the class choice, not the refusal itself, is what is open.
+
+## FAIL-1 / ADV-2 and FAIL-2 — closed, one path, two distinct causes
+
+The pre-write snapshot now records every protected key whose baseline it
+could not establish in `baselineUnread`, from both causes:
+
+- a wholly failed pre-write read (`raw.class != ""` — timeout, execution
+  failure, incomplete) — FAIL-1 / ADV-2;
+- a PARTIAL read whose `classify` reports `unread` while the read as a
+  whole succeeded — FAIL-2, which the first fix does not close, because a
+  partial snapshot leaves `raw.class` empty.
+
+Either refuses `read_back_incomplete` after the command runs, with
+`applied = true`. The post-command placement is `0004:C14`/REQ-63's, which
+fixes `read_back_incomplete` as by definition reported after the write ran;
+a pre-write abort would mint it for a write that did not occur, against
+REQ-64. Recorded as D17.
+
+Phase 3b's suite covered only ADV-2, so FAIL-2 got its own regression test,
+`TestAdv4_PartialPreWriteSnapshotMustNotYieldSuccess`, plus a passing
+negative control (`TestAdv4Control_CompletePreWriteSnapshotStillSucceeds`)
+proving the fixture still succeeds on a complete snapshot. Their
+independence was confirmed by mutation: reverting only the `unread` line
+fails `TestAdv4` while ADV-2 stays green — so the two findings are two
+defects, exactly as Phase 3a argued.
+
+## FAIL-4 / ADV-3 — closed
+
+`executor.go::verifiedWritten` omits cleared keys from
+`WriteResult.Written` on the success branch; `WriteDisposition` inherits
+the fix because it renders `r.Written`. Fixed at the source rather than in
+the renderer, so the returned value and the replay-stable record agree.
+What read-back verified for a cleared key is ABSENCE (`0004:C11`), and
+absence crosses as omission, never as a sentinel (REQ-32) — the same rule
+`ReadResult.OwnedSnapshot` already applied on the read path. A refusal
+still carries the full plan including clears in `Refusal.Expected`, where
+the plan is the diagnostic. Recorded as D18.
+
+## Verdict
+
+`PASS` — all four closed, no test weakened, one open author decision (D16,
+the refusal class for the runtime non-owned-plan arm; the refusal is
+implemented and green either way).
