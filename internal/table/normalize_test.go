@@ -505,6 +505,12 @@ func TestReq81_EscapeRowsCarryEmptyNextTagsAndWrites(t *testing.T) {
 // independently built pair compare equal. Both are slices, so an alias
 // shares a backing array — the control MUTATES one field in place and
 // asserts the other is unchanged.
+//
+// The aliasing is two-level, so the control mutates at both levels. A
+// member write (`Value[0] = ...`) reaches the inner []string backing
+// array; replacing the slice header (`Value = []string{...}`) reaches the
+// outer []TagValue. A header replacement alone cannot observe a shared
+// inner array, so it is not a substitute for the member write.
 func TestReq82_NextTagsAndWritesAreNotAliased(t *testing.T) {
 	m := mustLoad(t, rdrFixture)
 	row := rowByID(t, m, "rdr.reconcile-rewind")
@@ -513,16 +519,33 @@ func TestReq82_NextTagsAndWritesAreNotAliased(t *testing.T) {
 		t.Fatal("the row under test carries no writes")
 	}
 
-	before := make([]table.TagValue, len(row.Writes))
-	copy(before, row.Writes)
+	if len(row.NextTags[0].Value) == 0 || len(row.Writes[0].Value) == 0 {
+		t.Fatal("the first write of the row under test carries no value")
+	}
 
-	// Mutate one field in place. An aliased pair shares the backing array,
-	// so the sibling changes too.
+	// The snapshot MUST be deep. A shallow copy shares each TagValue.Value
+	// backing array with the row, so it would record the mutation too and
+	// the comparison below would pass vacuously.
+	before := deepCloneTagValues(row.Writes)
+
+	// Mutate a MEMBER of the nested value in place. Assigning a fresh slice
+	// header to the field (below) only detects sharing of the outer
+	// []TagValue; only a member write reaches the inner backing array.
+	row.NextTags[0].Value[0] = "MUTATED"
+
+	if !reflect.DeepEqual(row.Writes, before) {
+		t.Errorf("mutating NextTags[0].Value[0] changed Writes:\n got = %+v\nwant = %+v — "+
+			"each TagValue.Value must have its own backing array, never one shared "+
+			"between the two fields",
+			row.Writes, before)
+	}
+
+	// Replacing the slice headers detects sharing of the outer []TagValue.
 	row.NextTags[0].Key = "MUTATED"
 	row.NextTags[0].Value = []string{"MUTATED"}
 
 	if !reflect.DeepEqual(row.Writes, before) {
-		t.Errorf("mutating NextTags[0] changed Writes:\n got = %+v\nwant = %+v — "+
+		t.Errorf("replacing NextTags[0] changed Writes:\n got = %+v\nwant = %+v — "+
 			"the two fields must be populated independently, never by aliasing",
 			row.Writes, before)
 	}
@@ -530,16 +553,38 @@ func TestReq82_NextTagsAndWritesAreNotAliased(t *testing.T) {
 	// And the mirror direction.
 	m2 := mustLoad(t, rdrFixture)
 	row2 := rowByID(t, m2, "rdr.reconcile-rewind")
-	beforeNext := make([]table.TagValue, len(row2.NextTags))
-	copy(beforeNext, row2.NextTags)
+	if len(row2.NextTags) == 0 || len(row2.Writes) == 0 {
+		t.Fatal("the mirror row carries no writes")
+	}
+	if len(row2.Writes[0].Value) == 0 {
+		t.Fatal("the first write of the mirror row carries no value")
+	}
+	beforeNext := deepCloneTagValues(row2.NextTags)
+
+	row2.Writes[0].Value[0] = "MUTATED"
+
+	if !reflect.DeepEqual(row2.NextTags, beforeNext) {
+		t.Errorf("mutating Writes[0].Value[0] changed NextTags:\n got = %+v\nwant = %+v",
+			row2.NextTags, beforeNext)
+	}
 
 	row2.Writes[0].Key = "MUTATED"
 	row2.Writes[0].Value = []string{"MUTATED"}
 
 	if !reflect.DeepEqual(row2.NextTags, beforeNext) {
-		t.Errorf("mutating Writes[0] changed NextTags:\n got = %+v\nwant = %+v",
+		t.Errorf("replacing Writes[0] changed NextTags:\n got = %+v\nwant = %+v",
 			row2.NextTags, beforeNext)
 	}
+}
+
+// deepCloneTagValues snapshots tag values so that neither the outer slice
+// nor any TagValue.Value backing array is shared with the source.
+func deepCloneTagValues(in []table.TagValue) []table.TagValue {
+	out := make([]table.TagValue, len(in))
+	for i, tv := range in {
+		out[i] = table.TagValue{Key: tv.Key, Value: slices.Clone(tv.Value)}
+	}
+	return out
 }
 
 // REQ-83: "Clearing a tag MUST be represented by an explicit rule-level
