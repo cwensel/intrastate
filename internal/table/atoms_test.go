@@ -374,6 +374,12 @@ provenance = "owned"
 kind = "set"
 elements = ["a", "b", "Z", "z"]
 
+[tags.tier]
+provenance = "owned"
+kind = "enum"
+domain = ["one"]
+single_valued = true
+
 [tags.recognized]
 provenance = "recognized"
 kind = "enum"
@@ -382,13 +388,13 @@ required = true
 [read.r]
 role = "m"
 path = "m"
-keys = ["labels"]
+keys = ["labels", "tier"]
 timeout = "2s"
 
 [write.w]
 role = "m"
 path = "m"
-keys = ["labels"]
+keys = ["labels", "tier"]
 timeout = "2s"
 read_back = true
 
@@ -468,6 +474,12 @@ provenance = "owned"
 kind = "set"
 elements = ["a", "b", "z", "a!q"]
 
+[tags.tier]
+provenance = "owned"
+kind = "enum"
+domain = ["one"]
+single_valued = true
+
 [tags.recognized]
 provenance = "recognized"
 kind = "enum"
@@ -476,13 +488,13 @@ required = true
 [read.r]
 role = "m"
 path = "m"
-keys = ["labels"]
+keys = ["labels", "tier"]
 timeout = "2s"
 
 [write.w]
 role = "m"
 path = "m"
-keys = ["labels"]
+keys = ["labels", "tier"]
 timeout = "2s"
 read_back = true
 
@@ -498,6 +510,10 @@ in = ["a!q", "b"]
 [[rule]]
 id = "r"
 use = ["c1", "seq-a", "seq-b"]
+# REQ-35 requires a local match block on every rule. The tier atom is chosen
+# so it ties with neither in-atom on labels, leaving the sort control intact.
+[rule.match.tier]
+eq = "one"
 [rule.write]
 labels = ["a"]
 `

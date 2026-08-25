@@ -386,3 +386,67 @@ Resolutions and the tests that guard them are in
   document. D8's residue read as an addition, which is how it was
   implemented; stating it as the whole rule would have foreclosed this
   finding. RDRs are never amended, so it is noted here.
+
+## D12 — REQ-35's match-block obligation names no load category of its own
+
+- **Type**: SPEC-UNDER
+- **Status**: resolved from evidence (no author decision needed)
+- **Site**: `internal/table/normalize.go::normalizeRule` (the
+  `rule.Match == nil` arm). Filed against range-net finding R4 (kata
+  `q7jc`).
+- **The gap.** REQ-35 (`0002:C4`) requires each transition rule to carry
+  "a stable rule id, zero or more shared-context references, and a local
+  match block" — the "zero or more" allowance is spent on the context
+  references, so the match-block obligation is unqualified. The write-block
+  half of that same sentence lands as `malformed rule shape`, but REQ-106
+  (`0002:C24`) scopes that category with the parenthetical "(an ordinary
+  rule carrying no write block …)", which is narrower than the category
+  name and enumerates only the write half. The match half named no
+  category, and the shipped loader carried no check: `rule.Match` was
+  passed straight to `atomsFromBlock`, which returns zero atoms harmlessly
+  from a nil map.
+- **What that admitted.** With a context contributing a `recognized` atom,
+  a rule with no `[rule.match]` at all — and an escape rule likewise —
+  loaded clean. Only when BOTH the local block and the contributing
+  context were absent did it refuse, and then as
+  `malformed_outcome_binding`, a different category for a different defect
+  that any inherited `recognized` atom defeats. `0002:C3` (REQ-6) governs:
+  a malformed authoring is "a stable refusal rather than a silent no-op".
+- **Resolution.** Reuse `CatMalformedRuleShape` past REQ-106's
+  parenthetical. It is the rule-SHAPE category and REQ-35 is the
+  rule-shape clause, and the parenthetical is read as illustrative rather
+  than fenced — `req-list.md:437` states the escalation rule is "if a
+  **fenced** category must widen", and nothing here mints a category.
+  Two standing precedents reuse a category whose parenthetical does not
+  enumerate the case: **D3** (write-block value kind/domain conformance
+  under `malformed tag declaration`) and **D9** (arity under
+  `malformed predicate atom`).
+- **Binds escape rules too.** REQ-35's "Each transition rule" is not
+  qualified by kind, and REQ-36 (`0002:834-836`) enumerates only what an
+  escape rule must NOT carry — a write block, a clear list, a gate list —
+  never exempting it from the match block.
+- **Presence-keyed, per D2.** `sourceRule.Match` is
+  `map[string]map[string]any` (`source.go:66`), and under
+  `pelletier/go-toml/v2` both an absent `[rule.match]` and a
+  present-but-empty one decode to `nil`, while a populated one does not.
+  Both are equally malformed under REQ-35, so `rule.Match == nil` is the
+  correct and complete predicate — the same key-presence rather than
+  length keying D2 established for the escape side.
+- **Ordering.** The check fires BEFORE the `rule.Use` inheritance loop and
+  before atom processing, so it cannot mask a legitimate
+  `malformed_outcome_binding` refusal (a rule reaching that check still
+  has a non-nil `Match`), and cannot mask a malformed-atom refusal either.
+- **Additive surface**: none. No category was added to `Categories()`; the
+  closed set of 25 is unchanged.
+- **Two in-repo tests asserted the admitted shape and were corrected, not
+  weakened.** `TestReq68`'s "binding via an inherited context match block"
+  subtest DROPPED the rule's local block when it only needed to RELOCATE
+  the `recognized` atom onto the context; REQ-68 says outcome binding
+  reads "the rule's local `match` block plus the `match` blocks of its
+  inherited contexts", which makes the local block one of two sources
+  read, not an optional one. The subtest now relocates the atom and keeps
+  a local block, so what it tests is unchanged. `TestReq58`'s inline
+  document omitted a local match block incidentally — its assertion is
+  about literal sort order — and gained a match atom on a fresh key
+  chosen to tie with neither `in` atom on `labels`, leaving the four-row
+  expansion and its suffix ordering intact.

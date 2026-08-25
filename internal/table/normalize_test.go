@@ -42,9 +42,12 @@ func TestReq68_EveryRuleBindsExactlyOneOutcomeFromItsMatchBlocks(t *testing.T) {
 		src := strings.Replace(base,
 			"[context.archived.match.stage]\neq = \"archive\"",
 			"[context.archived.match.stage]\neq = \"archive\"\n[context.archived.match.recognized]\neq = \"finalized\"", 1)
+		// REQ-35 keeps the local match block mandatory, so the outcome atom
+		// is RELOCATED onto the context rather than the block being dropped:
+		// what REQ-68 tests is that binding reads the inherited block too.
 		src = strings.Replace(src,
 			"source = \"rdr:terminal\"\n[rule.match.recognized]\nin = [\"finalized\", \"verdict-flapping\"]",
-			"source = \"rdr:terminal\"", 1)
+			"source = \"rdr:terminal\"\n[rule.match.stage]\neq = \"archive\"", 1)
 		m, err := table.Load([]byte(src), "inherited-outcome.toml")
 		if err != nil {
 			t.Fatalf("an outcome bound by an inherited context refused: %v", err)

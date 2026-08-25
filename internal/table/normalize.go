@@ -327,6 +327,19 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 		return nil, fail(CatMalformedRuleShape, "ordinary rule "+id+" carries no write block")
 	}
 
+	// EVERY transition rule MUST carry a local match block (`0002:C4`).
+	// REQ-35's "Each transition rule" is not qualified by kind, and REQ-36
+	// enumerates only what an escape rule must NOT carry, so this binds
+	// escape rules too. Like the escape checks above, it keys on key
+	// PRESENCE rather than length (deviations.md D2): both an absent
+	// `[rule.match]` and a present-but-empty one decode to nil, and both
+	// are equally malformed. It fires BEFORE inheritance so a context
+	// contributing a `recognized` atom cannot stand in for the rule's own
+	// declaration of what it selects on (`0002:C3`, deviations.md D12).
+	if rule.Match == nil {
+		return nil, fail(CatMalformedRuleShape, "rule "+id+" carries no match block")
+	}
+
 	// Shared-context references must resolve; inheritance normalizes to an
 	// explicit predicate set before anything downstream reads it.
 	var inherited []Atom

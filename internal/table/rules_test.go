@@ -61,6 +61,25 @@ func TestReq35_OrdinaryRuleShape(t *testing.T) {
 		}
 	})
 
+	// "and a local match block" — the "zero or more" allowance is spent on
+	// the shared-context references, so the match-block obligation is
+	// unqualified. A rule whose entire selection criterion is inherited
+	// declares nothing at the rule site, which `0002:C3` makes a stable
+	// refusal rather than a silent admission. Presence-keyed per D2: an
+	// absent block and an explicit empty one both decode to nil.
+	for name, rel := range map[string]string{
+		"no match block":         "neg/neg-rule-no-match-block.toml",
+		"empty match block":      "neg/neg-rule-empty-match-block.toml",
+		"escape, no match block": "neg/neg-escape-no-match-block.toml",
+	} {
+		t.Run(name+" refuses", func(t *testing.T) {
+			got := loadCategory(t, rel)
+			if got != table.CatMalformedRuleShape {
+				t.Errorf("category = %q; want %q", got, table.CatMalformedRuleShape)
+			}
+		})
+	}
+
 	t.Run("a write block MAY assign more than one tag", func(t *testing.T) {
 		m := mustLoad(t, rdrFixture)
 		row := rowByID(t, m, "rdr.reconcile-rewind")
