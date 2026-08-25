@@ -102,3 +102,120 @@ in run 2 and must match it, not redefine it. See
 - **Check** (Phase 2): each item is confirmed by the implementation
   compiling against the tests unchanged, or corrected by a one-line edit
   in the named place.
+
+---
+
+## D3 — D1's Stage-8 checks run; all four pass
+
+- **Type**: TEST-FIXTURE
+- **Status**: CLOSED by Phase 2. Running each named check IS the entry's
+  disposition, and none contradicts a contract.
+- **Check results** (worktree `worktree-rdr-0007`, commit `d63950c`):
+  - `grep -c '§D1[023]' docs/rdr/0007-guard-predicate-totality.md` → 1 each
+    for `§D10`, `§D12`, `§D13`. ≥1 each: **pass**.
+  - `BlockMatch` exists in the Phase 1 type: `internal/resolve/guard.go:24`
+    declares `BlockMatch Block = "match"` as a third constant on the SAME
+    `Block` type, with no separate slice on `Row`. **pass**.
+  - The `contains` contract-test leg is written against 0002's JSON-array
+    form: `guardcontract.go`'s `in` and `contains` cases carry
+    `["alpha","beta"]` / `["alpha"]` — sorted, duplicate-free, compact —
+    and `guard_fixtures_test.go::d13Set` renders the same form for the
+    kernel tests. **pass**.
+  - `0007:2182` names 0002 as the declarer: the citation repair stands in
+    this file and in `req-list.md`'s standing correction 2; the RDR
+    markdown is not amended (we never amend RDRs). **pass**.
+- **The §D12 fence change was NOT taken silently.** It landed as the scoped
+  normative re-entry D1 describes: one type, one constant, no widening of
+  the K3 verdict formula `0007:C6` fences. Per Q1 reading (a),
+  `BlockMatch` atoms are not evaluated by the guard pipeline —
+  `evaluateAtoms` folds any non-`unless` block into the conjunctive
+  reading, and `TestReq78` holds `TagSet.matches` unchanged.
+
+---
+
+## D4 — D2's six Phase-1 test-author decisions all confirmed
+
+- **Type**: TEST-FIXTURE / NAMING
+- **Status**: CLOSED. The implementation compiles against the Phase 1
+  tests unchanged; no test file was edited in Phase 2. Item by item:
+  1. **`GuardAtom`** — adopted verbatim. No rename.
+  2. **`Row.Guard` keeps its name, changes its type** — adopted:
+     `Guard []GuardAtom` replaces the field in place.
+  3. **`BlockMatch = "match"`** — adopted. No 0007 clause reads the block's
+     bytes, so the assumption stays a one-line change if §D12's home later
+     spells it otherwise.
+  4. **`TestGuardEvaluatorContract` inspected, not failed** — the exported
+     harness satisfies both halves as written: 4 operators (`eq`, `gte`,
+     `in`, `contains`) over 12 cases, two values against one literal on
+     both `eq` and `gte`, and two unparseable-value legs
+     (`gte`/`"many"`, `contains`/`"alpha"`) whose obligation is
+     `unevaluable, never false`.
+  5. **Frozen-suite migration** — confirmed sound. The full frozen RDR 0001
+     suite passes against the implementation, `TestFixup1d` (RE-DECIDED)
+     and `TestReq33` (payload plumbing) included.
+  6. **Escape-row payload (Q2)** — confirmed. `escapeOrRefuse` delegates to
+     the same `gate`, which populates `Undecided`, so an unevaluable escape
+     row's payload rides along. No parallel implementation was written.
+
+---
+
+## D5 — A foreign `OpExists` literal reports `uncomparable` even when the key is ABSENT
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation — the RDR states the rule
+  unconditionally; recorded because it affects how a reader reconciles two
+  clauses.
+- **The apparent tension.** `0007:C8` (REQ-45) glosses the reason set as
+  `absent` = "the key was not in the view" and `uncomparable` = "the key
+  was PRESENT and its value was not compared to a verdict". Read alone,
+  that gloss says an atom over an absent key is always `absent`. But
+  `0007:C3` (REQ-25) states the foreign-literal rule with no presence
+  condition at all.
+- **Evidence** (`{RDR_RESOURCES}` → design docs; the RDR's own normative
+  fence, read at `docs/rdr/0007-guard-predicate-totality.md:1371-1381`):
+  *"A foreign LITERAL on an `OpExists` atom — any value that is neither
+  `LiteralTrue` nor `LiteralFalse`, the empty literal included — is
+  UNEVALUABLE at the kernel, reason `uncomparable`; the kernel MUST NOT
+  decide such an atom from presence."* The clause is unconditional, and
+  the phrase "MUST NOT decide such an atom from presence" is precisely a
+  direction to stop consulting presence for these atoms — so presence
+  cannot select the reason either. Phase 1 asserts the same reading
+  independently: `TestReq25_ForeignLiteralOnAnExistsAtomIsKernelUncomparable`
+  runs each foreign literal over BOTH `reviews` (present) and
+  `iterations` (absent) and requires `uncomparable` in both.
+- **Resolution.** `evaluateAtom` returns `ReasonUncomparable` for a foreign
+  `OpExists` literal regardless of presence. `0007:C8`'s gloss is a
+  description of the two reasons' ordinary provenance, not a fenced
+  predicate; `0007:C3`'s rule is the fenced one and is more specific. The
+  substantive reading is consistent: what failed is the atom's own
+  literal, not the view, so `absent` would name the wrong fact — exactly
+  the argument REQ-15 makes for the nil-seam case ("its key is present, so
+  `absent` would be a lie"), applied to the other direction.
+- **Downstream note.** RDR 0005's renderer reads `Reason` as an opaque
+  closed-set value, so this affects diagnosis wording only, never a
+  verdict: every foreign-literal atom is UNEVALUABLE under both readings.
+- **Escalation**: none. The evidence base resolves it. **Status:
+  mechanical translation.**
+
+---
+
+## D6 — No unnamed public surface was added
+
+- **Type**: IMPL-DECISION
+- **Status**: informational; recorded so the ADDITIVE-IS-NOT-EXEMPT gate
+  has a written disposition rather than silence.
+- Every exported symbol this build adds is named by a REQ in
+  `req-list.md`: `Block` / `BlockAll` / `BlockUnless` (REQ-6),
+  `BlockMatch` (REQ-6 as widened by §D12), `GuardAtom` and its four fields
+  (REQ-1, REQ-5), `OpExists` / `LiteralTrue` / `LiteralFalse` (REQ-22,
+  REQ-23), `Reason` / `ReasonAbsent` / `ReasonUncomparable` / `Reasons()`
+  (REQ-49), `UndecidedRow` / `UndecidedAtom` / `Refusal.Undecided`
+  (REQ-48), and the narrowed `GuardEvaluator.Evaluate(GuardAtom, string)`
+  (REQ-10). `TestGuardEvaluatorContract` is the exception the launch
+  prompt already grants, named by REQ-71 as normative surface.
+- Everything else the build adds is unexported: `evaluateAtoms`,
+  `evaluateAtom`, `appendAtom`, `kleeneAnd`, `kleeneNot`, `boolResult`,
+  `compareUndecidedAtoms`, `compareUndecidedRows`. The retired
+  `evaluateGuard` and `gate`'s `slices.MinFunc` call are removed, not
+  re-typed (REQ-52).
+- No **SPEC-UNDER** entry is owed.

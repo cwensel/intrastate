@@ -183,3 +183,85 @@ weakened.
    `TestFixup1d` (RE-DECIDED, expected) and `TestReq33` (waiting on the
    payload plumbing Phase 2 adds) — confirming the mechanical adaptation
    preserved behaviour rather than weakening it.
+
+---
+
+# Phase 2 — green, and REQ-MVV's actual output
+
+Implementation landed in `internal/resolve/guard.go` (new, the atom
+pipeline and K3 combinator), `internal/resolve/guardcontract.go` (new,
+the exported cross-RDR contract test), and `internal/resolve/resolve.go`
+(the seam, `Row`, `Refusal`, and `gate`).
+
+## Suite state
+
+`go build ./... && go test ./... && golangci-lint run` — all clean.
+
+| Measure | Value |
+| --- | --- |
+| Top-level tests in `internal/resolve` | 134 pass, 0 fail |
+| Including subtests | 334 pass, 0 fail |
+| RDR 0007 tests (`TestReq*` + `TestMVV*`) | 121 top-level, all pass |
+| `gofmt -l .` | empty |
+| `golangci-lint run` | 0 issues |
+
+The frozen RDR 0001 suite passes in full, `TestFixup1d` (RE-DECIDED per
+REQ-17) and `TestReq33` (payload plumbing) included. No test outside RDR
+0007's surface was weakened.
+
+## REQ-MVV end-to-end — actual output
+
+Driven against the real `resolve.Resolve` through the exported surface
+only. Full transcript below; each scenario is the disposition `0007:MVV`
+names.
+
+```
+--- scenario 1 — masking probe inverted (absent guard key, RequiresOwned satisfied)
+  err=<nil>
+  Plan: <nil>
+  Refusal: Kind="guard_unevaluable" Revision="rev-mvv-1" Flow="rdr" Recognized="successful"
+    Rows=[{rdr.mvv.candidate flows/rdr.toml:200}] MissingOwned=[]
+    Undecided row "rdr.mvv.candidate" @ "flows/rdr.toml:200":
+      {Key:"quorum" Block:"all" Operator:"eq" Literal:"3" Reason:"absent"}
+
+--- scenario 2 — key present, value FALSE (D8 preserved)
+  err=<nil>
+  Plan: RuleID="rdr.mvv.escape" Escaped=true NextTags=[{status Blocked}] Writes=[] Revision="rev-mvv-2"
+  Refusal: <nil>
+
+--- scenario 3 — unevaluable blocks true sibling
+  err=<nil>
+  Plan: <nil>
+  Refusal: Kind="guard_unevaluable" Revision="rev-mvv-3" Flow="rdr" Recognized="successful"
+    Rows=[{rdr.mvv.a flows/rdr.toml:202}] MissingOwned=[]
+    Undecided row "rdr.mvv.a" @ "flows/rdr.toml:202":
+      {Key:"quorum" Block:"all" Operator:"eq" Literal:"3" Reason:"absent"}
+
+--- scenario 4 — exists=false over the absent key decides TRUE
+  err=<nil>
+  Plan: RuleID="rdr.mvv.exists" Escaped=false NextTags=[{status Final}] Writes=[{status Final}] Revision="rev-mvv-4"
+  Refusal: <nil>
+```
+
+Reading each against `0007:MVV`:
+
+1. **Masking probe inverted** — `Refusal.Kind == guard_unevaluable`, a nil
+   `Plan`, the absent key `quorum` in the payload with reason `absent`,
+   and the row in `Refusal.Rows`. `MissingOwned` is empty, confirming the
+   satisfied `RequiresOwned` did the load-bearing job the MVV assigns it:
+   this is the domain rule refusing, not the owned sweep. The modeled
+   `no_match` escape row was in the table and did NOT rescue — the
+   pre-0007 masking path is closed.
+2. **D8 preserved** — the same table with `quorum` present and the value
+   decided FALSE prunes the candidate and the escape plans
+   (`Escaped=true`, empty `Writes` per RDR 0009).
+3. **Unevaluable blocks a decided-TRUE sibling** — refusal naming row A
+   only, no plan. The decided-TRUE row B is absent from both `Undecided`
+   and `Rows`.
+4. **The one sanctioned route from absence to a verdict** — `exists =
+   false` over the absent key decides TRUE, the row is selected
+   unescaped, and its `Writes` land.
+
+The MVV's own oracle control (same table, key present, value decided
+TRUE ⇒ the guarded row plans) passes, so scenario 1's refusal is
+discriminating rather than an absence-of-success.
