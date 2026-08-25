@@ -77,6 +77,19 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 		if !isArray(raw) {
 			return badAtom("`in` takes an array of members")
 		}
+		// A repeated `in` element is refused here. `0002:C13` rests the
+		// identity tuple's totality on it — "Because RDR 0003 rejects a
+		// repeated `in` element at parse, no two rows of one rule share a
+		// suffix, which is what keeps the identity tuple total" — and RDR
+		// 0003's parser is not what loads this document, so `0002:C22`
+		// lands the rejection in this package's `malformed predicate atom`
+		// category. Deduplicating silently would mint the row set the
+		// author meant while leaving the authoring error unreported; on an
+		// escape rule the duplicate is a self-inflicted `ambiguous_match`
+		// (`0002:C5`).
+		if dup, ok := firstDuplicate(members); ok {
+			return badAtom("member " + strconv.Quote(dup) + " is repeated")
+		}
 		if b == BlockMatch {
 			// The `#` reservation is match-only: only match blocks expand,
 			// and a `#` inside a chosen member would make the rendered row
@@ -121,11 +134,27 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	// A set-valued literal normalizes to an ORDERED member sequence, each
 	// member compared byte-exactly, and members sort byte-lexicographically
 	// so two authored orderings of one set are one literal (`0002:C10`).
+	// This binds `in` too: its literal is a member SET, and a repeated
+	// element was refused above, so the sort needs no dedup pass to be
+	// faithful. Row identity is unaffected — a match-block `in` still
+	// yields one row per member and rows re-sort by suffix (`0002:C19`).
 	// A single-value operator keeps its one member as authored.
-	if isArray(raw) && operator != "in" {
+	if isArray(raw) {
 		members = slices.Compact(slices.Sorted(slices.Values(members)))
 	}
 	return Atom{Key: key, Block: b, Operator: operator, Literal: members}, nil
+}
+
+// firstDuplicate reports the first member that repeats an earlier one.
+func firstDuplicate(members []string) (string, bool) {
+	seen := make(map[string]bool, len(members))
+	for _, m := range members {
+		if seen[m] {
+			return m, true
+		}
+		seen[m] = true
+	}
+	return "", false
 }
 
 // atomIdentity encodes the full atom identity tuple (key, block, operator
