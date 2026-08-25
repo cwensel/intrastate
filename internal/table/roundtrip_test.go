@@ -468,6 +468,13 @@ func TestReq124_NoGoldenHashOfRenderedText(t *testing.T) {
 		if e.Name() != "roundtrip_test.go" && strings.Contains(src, spikeSHA) {
 			t.Errorf("%s asserts the spike SHA as a golden hash", e.Name())
 		}
+		// Self-exempt for the same reason the SHA check above does: the
+		// needles are written HERE, as this scan's own literals, so
+		// without the exemption the file matches itself and the assertion
+		// is red against every implementation (deviations.md D6).
+		if e.Name() == "roundtrip_test.go" {
+			continue
+		}
 		if strings.Contains(src, "crypto/sha256") || strings.Contains(src, "crypto/md5") {
 			t.Errorf("%s hashes output; assert over the normalized value and "+
 				"reserve rendered-text goldens for tests of rendering itself", e.Name())

@@ -106,3 +106,72 @@ is what broke the 0007↔0003 cycle. See
   fence citing §D13; `grep -n '§D1[123]\|§D[89]\b' docs/rdr/0002-*.md` → ≥1 per
   answered JD. If the §D13 landing cannot be written without contradicting an
   existing fence, escalate — that is a contract conflict, not a citation.
+
+## D6 — REQ-124's `crypto/sha256` scan fires against its own source
+
+- **Type**: TEST-FIXTURE
+- **Status**: mechanical translation (Phase 2; fixture repaired, assertion
+  preserved)
+- **Site**: `internal/table/roundtrip_test.go::TestReq124_NoGoldenHashOfRenderedText`.
+- **The defect**: the test walks every `.go` file in the package and fails
+  any file containing the literal `"crypto/sha256"`. Its sibling check —
+  the one for the spike SHA — carries a self-exemption
+  (`e.Name() != "roundtrip_test.go"`); the hashing check does not. The
+  literal `"crypto/sha256"` is written in `roundtrip_test.go` itself, as
+  the needle of that very check, so the file matches its own scan. The
+  assertion is therefore RED against every possible implementation,
+  including a correct one: no code change can make it pass. It is a
+  Phase-1 authoring slip, not a spec obligation the implementation failed.
+- **Grounding**: `0002:TS` scenario 2 states the obligation as "**This SHA
+  MUST NOT be asserted as a golden hash by any implementation test** …
+  Assert over the normalized value" (REQ-124). The obligation binds
+  *implementation* tests hashing *output*; the scan's needle in the test's
+  own source is neither. Nothing in the record asks the scanner to exempt
+  itself from the SHA check but not from the hashing check — the asymmetry
+  is unmotivated, and the sibling exemption two lines above shows the
+  intended shape.
+- **Resolution**: apply the SAME self-exemption the SHA check already
+  carries. The assertion's discriminating power is untouched: any other
+  file in the package — implementation or test — that imports
+  `crypto/sha256` or `crypto/md5` still fails. No implementation file
+  imports either.
+
+## D7 — REQ-137's third leg omits an owned key its own scenario needs
+
+- **Type**: TEST-FIXTURE
+- **Status**: mechanical translation (Phase 2; fixture repaired, assertion
+  preserved)
+- **Site**: `internal/table/mvv_test.go::TestReq137_ResolveOverTheNormalizedFixtureRows`,
+  subtest "an unevaluable sibling refuses guard_unevaluable".
+- **The defect**: the leg's `owned` map carries `status`, `stage`,
+  `profile`, and `iter`, and deliberately omits `cluster_ready` so
+  `continue-prelock-cluster`'s `[rule.guard.all.cluster_ready] eq = true`
+  is unevaluable. But that rule also *writes* `prelock_lens`, so its
+  `RequiresOwned` is `[prelock_lens, stage]` (REQ-77: "the sorted,
+  duplicate-free set of tag keys named by the rule's write block and clear
+  list"), and `prelock_lens` is absent from the same map. The kernel's
+  gate reports owned state before an undecidable guard (`0007:C7`,
+  source-verified at `internal/resolve/resolve.go::gate`), so the row
+  refuses `owned_state_unavailable` and the guard verdict is never
+  reached. The leg asserts `guard_unevaluable`.
+- **Grounding**: the two clauses are jointly satisfiable and neither is
+  wrong. `0002:TS` scenario 4 expects "the unevaluable-sibling tag-set
+  refuses `guard_unevaluable` even though a decidable sibling and a
+  `no_match` escape row exist" (REQ-137), and `0002:C14` derives
+  `RequiresOwned` from the write-plus-clear key set with no guard-read
+  keys added (REQ-77, REQ-79) — which the shipped normalizer does, and
+  which `TestReq77` asserts as `[prelock_lens, stage]` on this very row.
+  The kernel's precedence is `0007:C7`'s and is "pinned to shipped
+  behavior". So the contradiction is not between contracts: it is that
+  this leg's tag-set does not satisfy the *precondition* its own comment
+  states — the guard must be the row's only undecided input.
+  Leg 1 does not hit this because `cluster_ready = "false"` decides that
+  guard FALSE, pruning the row and its owned obligation with it.
+- **Resolution**: add `"prelock_lens": "critique"` to the leg's owned map.
+  The scenario is unchanged and every discriminating element survives:
+  `cluster_ready` stays absent, the cluster row still survives the prune
+  as unevaluable, `continue-prelock` is still decidable, and the
+  `no_match` escape row still exists. Verified: the refusal is
+  `guard_unevaluable`, and its payload names exactly
+  `{cluster_ready, all, eq, true, absent}` on
+  `continue-prelock-cluster` — the atom the leg exists to witness.

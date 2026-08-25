@@ -137,8 +137,15 @@ func TestReq137_ResolveOverTheNormalizedFixtureRows(t *testing.T) {
 		// continue-prelock-cluster's `guard.all` eq atom over that optional
 		// owned key is unevaluable — even though continue-prelock is
 		// decidable and a no_match escape row exists.
+		//
+		// `prelock_lens` IS present: that rule writes it, so it is in the
+		// row's RequiresOwned (REQ-77), and the kernel reports owned state
+		// before an undecidable guard (`0007:C7`). Omitting it would refuse
+		// owned_state_unavailable and the guard verdict this leg exists to
+		// witness would never be reached (deviations.md D7).
 		owned := map[string]string{
 			"status": "Draft", "stage": "prelock", "profile": "large", "iter": "1",
+			"prelock_lens": "critique",
 		}
 		res, err := resolve.Resolve(resolve.Input{
 			Flow:       "rdr",
