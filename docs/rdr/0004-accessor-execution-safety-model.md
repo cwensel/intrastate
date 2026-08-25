@@ -6,17 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [all joint decisions answered 2026-08-24 — JDR 0001 §D9
-  (§JD-19), §D11 (§JD-20), §D13 (§JD-22). Citations owed at Stage 8, see
-  `artifacts/deviations.md`. No joint decision is open against this RDR.]
-  [re-locked 2026-08-24 — Gate PASS. JDR 0001 §D5 (§JD-15)
-  landed: `<clear>` is reserved, a clear is a removal, read-back asserts absence,
-  an idempotent clear succeeds, and a read yielding the literal is unreadable
-  (A11, MVV Scenario 9). §D7 (§JD-17) landed: the definition is the
-  capability-table entry, `keys` binds readers and writers alike, read-back is
-  equality, and the "cannot be rebound" sentence is retired — capability is part
-  of the identity. Three records remain Pending (A9, A10, A11), each a property
-  the MVV proves rather than a fixture it consumes, each with a named fallback.]
+- **Status**: Implemented
 - **Type**: Architecture
 - **Profile**: large — one contract: accessor execution safety (capability, refusal classes including read completeness, timeout, write read-back, and clear-as-removal) governing authoritative artifact mutation.
 - **Priority**: High
