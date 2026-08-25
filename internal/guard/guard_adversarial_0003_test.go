@@ -16,6 +16,8 @@ package guard_test
 import (
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -640,23 +642,172 @@ func TestAdv_NarrowIntDomainAtMaxIntTerminates(t *testing.T) {
 					minV, maxV, n, ok, want)
 			}
 
-			got := make(chan []int, 1)
-			go func() { got <- guard.IntDomain(d) }()
-			select {
-			case values := <-got:
-				if len(values) != want {
-					t.Errorf("IntDomain({%d..%d}) enumerated %d values; want %d",
-						minV, maxV, len(values), want)
-				}
-				if len(values) > 0 && values[len(values)-1] != maxV {
-					t.Errorf("IntDomain({%d..%d}) ended at %d; want %d",
-						minV, maxV, values[len(values)-1], maxV)
-				}
-			case <-time.After(5 * time.Second):
-				t.Fatalf("IntDomain({%d..%d}) did not terminate: the loop "+
-					"test `n <= max` cannot fail at MaxInt, so enumerating a "+
-					"one-value dimension runs forever", minV, maxV)
-			}
+			// `IntDomain` is the exported enumerator; `guard.Lint` below
+			// drives the SEPARATE `valueAssignments` loop, so a wrap
+			// reintroduced in either one is caught.
+			assertTerminates(t, fmt.Sprintf("IntDomain({%d..%d})", minV, maxV),
+				func() {
+					values := guard.IntDomain(d)
+					if len(values) != want {
+						t.Errorf("IntDomain({%d..%d}) enumerated %d values; want %d",
+							minV, maxV, len(values), want)
+					}
+					if len(values) > 0 && values[len(values)-1] != maxV {
+						t.Errorf("IntDomain({%d..%d}) ended at %d; want %d",
+							minV, maxV, values[len(values)-1], maxV)
+					}
+				})
+
+			// The production path: `Lint` reaches `valueAssignments`,
+			// whose own loop carried the same unfalsifiable test. A
+			// declaration this narrow is far under the bound, so the
+			// dimension is admitted and genuinely enumerated rather than
+			// refused — which is what makes this cover the loop.
+			m := mustLoadSource(t, wideIntSource(minV, maxV))
+			assertTerminates(t, fmt.Sprintf("Lint over {%d..%d}", minV, maxV),
+				func() {
+					card, ok := guard.Cardinality(m, guard.Groups(m)[0])
+					if !ok || card != want {
+						t.Errorf("Cardinality over {%d..%d} = (%d, %v); want (%d, true)",
+							minV, maxV, card, ok, want)
+					}
+					if reports := guard.Lint(m); len(allFindings(reports)) == 0 &&
+						!hasGreen(reports) {
+						t.Errorf("Lint over {%d..%d} reported neither a finding "+
+							"nor a green certification", minV, maxV)
+					}
+				})
 		})
+	}
+}
+
+// assertTerminates runs `body` under a watchdog and fails if it has not
+// returned within the deadline.
+//
+// The watchdog runs in a SUBPROCESS rather than a goroutine. A goroutine
+// cannot be cancelled from outside, and the enumeration under test takes no
+// cancellation token — deliberately, since D11 keeps these enumerators
+// decided from declaration arithmetic rather than threaded with a context
+// that exists only for a test. Failing the test while abandoning the worker
+// was measured against a reverted tree: the runaway `append` reached 17GB
+// resident in the seconds before the process exited, so "the failure is
+// reported before it consumes the machine" was not true of a goroutine.
+//
+// `Process.Kill` ends the runaway for real: the allocation is reclaimed
+// with the child's address space, and the parent's own test run is never
+// the process holding it. A hard address-space cap would bound the
+// footprint directly but is not portable — Darwin rejects `RLIMIT_AS`
+// outright and ignores `ulimit -v`, and `GOMEMLIMIT` cannot collect a
+// slice the enumeration keeps live — so the deadline is what bounds it.
+//
+// The child therefore signals over a pipe immediately BEFORE entering the
+// body, which splits one deadline into two: a generous allowance for
+// process startup, where nothing is enumerating yet, and a tight one for
+// the body, which is the only window a regressed tree allocates in. A
+// domain of at most two values returns in microseconds, so a body that
+// has not finished in well under a second is not slow but looping.
+//
+// The child re-runs this same test under `-test.run` with
+// `adversarialSubprocessEnv` naming the ONE call it should execute, so a
+// hang is attributed to the call that hung rather than to every call in
+// the test. The parent asserts on the child's exit status.
+const adversarialSubprocessEnv = "GUARD_ADV_SUBPROCESS"
+
+// adversarialReadyFD is where `cmd.ExtraFiles[0]` lands in the child: the
+// three standard descriptors come first.
+const adversarialReadyFD = 3
+
+// Startup is generous because it is bounded by the machine, not by the
+// code under test. The body deadline is the one that matters — it is the
+// window a regressed enumeration allocates in, and the work it covers is
+// microseconds of honest enumeration.
+const (
+	adversarialStartupDeadline = 30 * time.Second
+	adversarialBodyDeadline    = 2 * time.Second
+)
+
+func assertTerminates(t *testing.T, what string, body func()) {
+	t.Helper()
+
+	// Inside the child: signal the parent immediately before entering the
+	// body, then run only the call this child was spawned for — skipping
+	// the others so one hang cannot be blamed on its siblings.
+	if want := os.Getenv(adversarialSubprocessEnv); want != "" {
+		if want == what {
+			if ready := os.NewFile(adversarialReadyFD, "ready"); ready != nil {
+				_, _ = ready.Write([]byte{1})
+				_ = ready.Close()
+			}
+			body()
+		}
+		return
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("could not locate the test binary: %v", err)
+	}
+
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("could not open the readiness pipe: %v", err)
+	}
+	defer pr.Close()
+
+	cmd := exec.Command(self, "-test.run=^"+t.Name()+"$", "-test.v")
+	cmd.Env = append(os.Environ(), adversarialSubprocessEnv+"="+what)
+	cmd.ExtraFiles = []*os.File{pw} // becomes adversarialReadyFD in the child
+	var out strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &out
+
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		t.Fatalf("could not start the watchdog subprocess: %v", err)
+	}
+	pw.Close() // the parent's copy, so the read below sees EOF if the child dies
+
+	ready := make(chan struct{})
+	go func() {
+		defer close(ready)
+		_, _ = pr.Read(make([]byte, 1))
+	}()
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	// Two deadlines, because they bound different things. Process startup
+	// is slow and varies with the machine, so it gets a generous one. The
+	// body itself enumerates a domain of at most two values, so once the
+	// child signals it should return in microseconds — and that is the
+	// window in which a regressed tree allocates. Keeping it tight is what
+	// holds the runaway's footprint down; the startup allowance costs
+	// nothing, since nothing is enumerating yet.
+	select {
+	case <-ready:
+	case err := <-done:
+		if err != nil {
+			t.Errorf("%s failed in the watchdog subprocess: %v\n%s",
+				what, err, out.String())
+		}
+		return
+	case <-time.After(adversarialStartupDeadline):
+		_ = cmd.Process.Kill()
+		<-done
+		t.Fatalf("%s: the watchdog subprocess never reached the body\n%s",
+			what, out.String())
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("%s failed in the watchdog subprocess: %v\n%s",
+				what, err, out.String())
+		}
+	case <-time.After(adversarialBodyDeadline):
+		_ = cmd.Process.Kill()
+		<-done
+		t.Errorf("%s did not terminate: the loop test `n <= max` cannot "+
+			"fail at MaxInt, so enumerating a narrow dimension runs forever",
+			what)
 	}
 }
