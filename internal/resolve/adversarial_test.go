@@ -60,7 +60,7 @@ func TestAdv1_GuardFalseRowsRequiresOwnedMustNotPoisonAnExactOneMatch(t *testing
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"status"},
-				Guard:         "always",
+				Guard:         namedGuard("always"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Final"}},
 				Writes:        []resolve.Tag{{Key: "status", Value: "Final"}},
 			},
@@ -70,7 +70,7 @@ func TestAdv1_GuardFalseRowsRequiresOwnedMustNotPoisonAnExactOneMatch(t *testing
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"never-present"},
-				Guard:         "never",
+				Guard:         namedGuard("never"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Abandoned"}},
 			},
 		},
@@ -122,7 +122,7 @@ func TestAdv1b_AllGuardsFalseIsNoMatchNotOwnedStateUnavailable(t *testing.T) {
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"never-present"},
-				Guard:         "never",
+				Guard:         namedGuard("never"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Abandoned"}},
 			},
 			escapeRow("rdr.escape.nomatch", "flows/rdr.toml:90", resolve.KindNoMatch),
@@ -169,7 +169,7 @@ func TestAdv1b_AllGuardsFalseIsNoMatchNotOwnedStateUnavailable(t *testing.T) {
 func TestAdv2_EscapeEdgeMustNotBypassTheGuardSeam(t *testing.T) {
 	t.Run("guard FALSE must not rescue", func(t *testing.T) {
 		escape := escapeRow("rdr.escape.guarded", "flows/rdr.toml:90", resolve.KindNoMatch)
-		escape.Guard = "never"
+		escape.Guard = namedGuard("never")
 
 		in := noMatchInput()
 		in.Table.Revision = "rev-adv-2-false"
@@ -191,7 +191,7 @@ func TestAdv2_EscapeEdgeMustNotBypassTheGuardSeam(t *testing.T) {
 
 	t.Run("guard UNEVALUABLE must not rescue", func(t *testing.T) {
 		escape := escapeRow("rdr.escape.guarded", "flows/rdr.toml:90", resolve.KindNoMatch)
-		escape.Guard = "unknown-predicate"
+		escape.Guard = namedGuard("unknown-predicate")
 
 		in := noMatchInput()
 		in.Table.Revision = "rev-adv-2-unevaluable"
@@ -255,7 +255,7 @@ func TestAdv2b_EscapeEdgeMustNotBypassTheOwnedStateRequirement(t *testing.T) {
 // and REQ-3 (value-level replay determinism).
 //
 // The trap: the guard loop returns on the FIRST GuardUnevaluable row it
-// meets, so Refusal.Guard and Refusal.Rows name whichever undecidable row
+// meets, so the refusal payload and Refusal.Rows name whichever undecidable row
 // happens to sit earlier in Table.Rows. Two tables that are the same SET of
 // rows — same revision, same tuple, same everything a reviewer would call
 // "the same table" — produce different refusal payloads. Diagnosis then
@@ -270,7 +270,7 @@ func TestAdv3_GuardUnevaluableRefusalMustNotDependOnTableRowOrder(t *testing.T) 
 		Outcome:       "successful",
 		Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 		RequiresOwned: []string{"status"},
-		Guard:         "unknown-a",
+		Guard:         namedGuard("unknown-a"),
 		NextTags:      []resolve.Tag{{Key: "status", Value: "A"}},
 	}
 	rowB := resolve.Row{
@@ -279,7 +279,7 @@ func TestAdv3_GuardUnevaluableRefusalMustNotDependOnTableRowOrder(t *testing.T) 
 		Outcome:       "successful",
 		Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 		RequiresOwned: []string{"status"},
-		Guard:         "unknown-b",
+		Guard:         namedGuard("unknown-b"),
 		NextTags:      []resolve.Tag{{Key: "status", Value: "B"}},
 	}
 
@@ -312,13 +312,13 @@ func TestAdv3_GuardUnevaluableRefusalMustNotDependOnTableRowOrder(t *testing.T) 
 
 	if !reflect.DeepEqual(forward.Refusal, reversed.Refusal) {
 		t.Errorf("refusal payload depends on Table.Rows order.\n"+
-			" rows [a,b] -> guard=%q rows=%v\n"+
-			" rows [b,a] -> guard=%q rows=%v\n"+
+			" rows [a,b] -> undecided=%+v rows=%v\n"+
+			" rows [b,a] -> undecided=%+v rows=%v\n"+
 			"The same tuple and the same table revision must replay the same "+
 			"disposition; row order is a normalization detail RDR 0002 owns and "+
 			"must not reach the reported diagnosis.",
-			forward.Refusal.Guard, forward.Refusal.Rows,
-			reversed.Refusal.Guard, reversed.Refusal.Rows)
+			forward.Refusal.Undecided, forward.Refusal.Rows,
+			reversed.Refusal.Undecided, reversed.Refusal.Rows)
 	}
 }
 

@@ -10,18 +10,18 @@ import (
 // guard-evaluation seam standing in for RDR 0003. Nothing here mocks the
 // unit under test — the kernel itself is always the real Resolve.
 
-// fixtureGuards is a table-driven stand-in for the RDR 0003 guard seam.
-// Predicates it does not know are reported GuardUnevaluable, which is
-// exactly the condition the kernel must answer with guard_unevaluable.
+// fixtureGuards is a table-driven stand-in for the RDR 0003 value seam.
+// It is keyed on the atom's literal, which is how the frozen suite's named
+// predicates survive RDR 0007's reshape: each former guard string becomes
+// one atom over a PRESENT key whose literal carries that name. Atoms it
+// does not know are reported GuardUnevaluable, which is exactly the
+// condition the kernel must answer with guard_unevaluable.
 type fixtureGuards struct {
 	decided map[string]bool
 }
 
-func (g fixtureGuards) Evaluate(guard string, _ resolve.TagSet) resolve.GuardResult {
-	if guard == "" {
-		return resolve.GuardTrue
-	}
-	v, ok := g.decided[guard]
+func (g fixtureGuards) Evaluate(atom resolve.GuardAtom, _ string) resolve.GuardResult {
+	v, ok := g.decided[atom.Literal]
 	if !ok {
 		return resolve.GuardUnevaluable
 	}
@@ -29,6 +29,19 @@ func (g fixtureGuards) Evaluate(guard string, _ resolve.TagSet) resolve.GuardRes
 		return resolve.GuardTrue
 	}
 	return resolve.GuardFalse
+}
+
+// namedGuard builds the atom slice standing in for a frozen fixture's
+// named predicate. The key is `status`, which every fixture view carries,
+// so the kernel's presence step hands the atom to the seam and the seam's
+// verdict — not an absence — is what decides the row.
+func namedGuard(name string) []resolve.GuardAtom {
+	return []resolve.GuardAtom{{
+		Key:      "status",
+		Operator: "eq",
+		Literal:  name,
+		Block:    resolve.BlockAll,
+	}}
 }
 
 // allGuardsTrue decides every named guard as holding.
@@ -158,7 +171,7 @@ func unevaluableGuardTable() resolve.Table {
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"status"},
-				Guard:         "reviews >= quorum",
+				Guard:         namedGuard("reviews >= quorum"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Final"}},
 				Writes:        []resolve.Tag{{Key: "status", Value: "Final"}},
 			},
@@ -180,7 +193,7 @@ func twoRowsOneGuardFalseTable() resolve.Table {
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"status"},
-				Guard:         "is-fast-lane",
+				Guard:         namedGuard("is-fast-lane"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Final"}},
 				Writes:        []resolve.Tag{{Key: "status", Value: "Final"}},
 			},
@@ -190,7 +203,7 @@ func twoRowsOneGuardFalseTable() resolve.Table {
 				Outcome:       "successful",
 				Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 				RequiresOwned: []string{"status"},
-				Guard:         "is-slow-lane",
+				Guard:         namedGuard("is-slow-lane"),
 				NextTags:      []resolve.Tag{{Key: "status", Value: "Review"}},
 				Writes:        []resolve.Tag{{Key: "status", Value: "Review"}},
 			},
@@ -356,6 +369,7 @@ func deepCopyInput(in resolve.Input) resolve.Input {
 			r.Writes = deepCopyTags(r.Writes)
 			r.RequiresOwned = append([]string(nil), r.RequiresOwned...)
 			r.Escape = append([]resolve.RefusalKind(nil), r.Escape...)
+			r.Guard = append([]resolve.GuardAtom(nil), r.Guard...)
 			rows[i] = r
 		}
 		out.Table.Rows = rows

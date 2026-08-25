@@ -1088,7 +1088,7 @@ func TestReq33_UnavailableOwnedStateAndUnevaluableGuardAreValueRefusals(t *testi
 		if r.Kind != resolve.KindGuardUnevaluable {
 			t.Errorf("refusal kind = %q; want %q", r.Kind, resolve.KindGuardUnevaluable)
 		}
-		if r.Guard == "" {
+		if len(r.Undecided) == 0 {
 			t.Error("refusal names no undecidable guard for diagnosis")
 		}
 	})

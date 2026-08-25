@@ -39,9 +39,22 @@ import (
 // the predicate is undecidable, and the kernel cannot know the edge holds.
 // Emitting the escape plan anyway would be REQ-12's "guessed a transition"
 // on the one path where no ordinary edge was available to check it.
+// RE-DECIDED under RDR 0007, not re-encoded (0007 SEAM clause; Testing
+// Strategy preamble). The shipped fixture's guard `iterations >= 3` names
+// a key the fixture view does NOT carry, so after the reshape the KERNEL
+// decides that atom unevaluable on absence and the nil seam is never
+// consulted — the test would go green while testing nothing about the nil
+// seam. The atom moves to the PRESENT key `reviews`, where the nil seam is
+// genuinely what could not compare it, and the reason is `uncomparable`.
+// The verdict this test asserts is unchanged.
 func TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue(t *testing.T) {
 	escape := escapeRow("rdr.escape.nilseam", "flows/rdr.toml:90", resolve.KindNoMatch)
-	escape.Guard = "iterations >= 3"
+	escape.Guard = []resolve.GuardAtom{{
+		Key:      "reviews",
+		Operator: "gte",
+		Literal:  "3",
+		Block:    resolve.BlockAll,
+	}}
 
 	in := noMatchInput()
 	in.Table.Revision = "rev-fixup-1d"
@@ -61,9 +74,25 @@ func TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue(t *testing.T) {
 			"let the escape edge through unevaluated",
 			got.Refusal.Kind, resolve.KindGuardUnevaluable)
 	}
-	if got.Refusal.Guard != escape.Guard {
-		t.Errorf("refusal names guard %q; want %q for diagnosis",
-			got.Refusal.Guard, escape.Guard)
+	var reason resolve.Reason
+	var found bool
+	for _, row := range got.Refusal.Undecided {
+		if row.RuleID != escape.RuleID {
+			continue
+		}
+		for _, a := range row.Atoms {
+			if a.Key == "reviews" {
+				reason, found = a.Reason, true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("refusal payload %+v names no unevaluable atom for the escape "+
+			"row; the payload never omits one", got.Refusal.Undecided)
+	} else if reason != resolve.ReasonUncomparable {
+		t.Errorf("refusal reason = %q; want %q — `reviews` is present in the view, "+
+			"so the nil seam is what could not compare it, and a nil seam is "+
+			"never itself a payload reason", reason, resolve.ReasonUncomparable)
 	}
 }
 
@@ -77,7 +106,7 @@ func TestFixup1d_GuardedEscapeEdgeWithNilSeamMustNotRescue(t *testing.T) {
 func TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate(t *testing.T) {
 	t.Run("guard FALSE must not rescue an ambiguity", func(t *testing.T) {
 		escape := escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99", resolve.KindAmbiguousMatch)
-		escape.Guard = "never"
+		escape.Guard = namedGuard("never")
 
 		in := ambiguousInput()
 		in.Table.Revision = "rev-fixup-1e-false"
@@ -123,7 +152,7 @@ func TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate(t *testing.T) 
 	t.Run("a viable ambiguous-class escape still rescues", func(t *testing.T) {
 		// Control: the gate must prune and refuse, not disable the rescue.
 		escape := escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99", resolve.KindAmbiguousMatch)
-		escape.Guard = "always"
+		escape.Guard = namedGuard("always")
 
 		in := ambiguousInput()
 		in.Table.Revision = "rev-fixup-1e-control"
@@ -258,12 +287,12 @@ func TestFixupGateIsUniformAcrossOrdinaryAndEscapeCandidates(t *testing.T) {
 			want:   resolve.KindOwnedStateUnavailable,
 		},
 		"undecidable guard": {
-			mutate: func(row *resolve.Row) { row.Guard = "unknown-predicate" },
+			mutate: func(row *resolve.Row) { row.Guard = namedGuard("unknown-predicate") },
 			guards: fixtureGuards{},
 			want:   resolve.KindGuardUnevaluable,
 		},
 		"absent guard seam": {
-			mutate: func(row *resolve.Row) { row.Guard = "any-predicate" },
+			mutate: func(row *resolve.Row) { row.Guard = namedGuard("any-predicate") },
 			guards: nil,
 			want:   resolve.KindGuardUnevaluable,
 		},

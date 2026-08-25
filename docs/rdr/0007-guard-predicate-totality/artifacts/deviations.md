@@ -43,3 +43,62 @@ in run 2 and must match it, not redefine it. See
   `BlockMatch` exists in the Phase 1 type; the `contains` contract-test leg is
   written against 0002's JSON-array form; `0007:2182` names 0002 as the
   declarer. Escalate the §D12 fence change as above.
+
+---
+
+## D2 — Phase 1 test-author decisions taken unattended
+
+- **Type**: TEST-FIXTURE / NAMING
+- **Status**: OPEN (for Phase 2 to confirm or correct in one line each)
+- **Source**: Stage 8 Phase 1 (spec tests, red). No human in the loop; each
+  item below would normally be a question and is recorded instead.
+
+1. **Atom type name `GuardAtom`.** `0007:C1` names the atom's four FIELDS
+   normatively but not the type. `0007:347` and A26 (`0007:1111`) both name
+   `GuardAtom` as the proposed exported surface, and A26 clears it against
+   RDR 0001's frozen boundary-symbol tests. The tests are written against
+   `resolve.GuardAtom`. If Phase 2 spells it otherwise, this is a
+   mechanical rename across the four new test files.
+
+2. **`Row.Guard` keeps its NAME, changes its TYPE.** The Technical Design
+   says "`Row.Guard` becomes an atom slice" (`0007:1244`), so the field is
+   `Guard []GuardAtom`, not a renamed field beside a deleted one.
+   `TestReq69_TheGuardTextFieldIsActuallyRemoved` asserts the type changed
+   rather than that the name went away.
+
+3. **`BlockMatch = "match"`** — the byte value §D12 does not spell.
+   Recorded as an ASSUMPTION in `req-list.md`; asserted verbatim by
+   `TestReq6_BlockIsAnExportedNamedStringTypeWithThreeConstants`. No 0007
+   clause reads the `match` block's bytes, so a later respelling is a
+   one-line change. Q1 reading (a) is honoured throughout: `Row`'s match
+   pattern is unchanged, and `TestReq78` asserts that as a NEGATIVE
+   contract.
+
+4. **`TestGuardEvaluatorContract` is inspected, not failed.** REQ-71's
+   behavioural obligation ("unparseable value → unevaluable, never false")
+   would ideally be checked by running the contract test against a
+   non-conforming seam and asserting it FAILS. Go's `testing` propagates a
+   subtest's failure with no supported suppression, so a deliberately
+   failing run would fail the file. The test instead drives the contract
+   test with a CONFORMING seam wrapped in a recorder and asserts on the
+   product it exercised (≥2 operators, ≥2 values against one literal, ≥1
+   unparseable value), plus a satisfiability leg. Verified to reject both
+   a hollow and a one-case contract test.
+
+5. **Frozen-suite migration performed here, not deferred.** REQ-68 assigns
+   fixture migration to Phase 1. Four frozen files break at the COMPILE
+   surface and were adapted mechanically; `fixtures_test.go::namedGuard`
+   renders each former guard string as one atom over the PRESENT key
+   `status` so the seam decides it (never an absence). Fixup-1d is the one
+   RE-DECIDED case (REQ-17). See `coverage.md` for the per-file table. No
+   behavioural assertion outside 0007's surface was weakened.
+
+6. **Escape-row payload (Q2) asserted, not just the kind.** Per the
+   `disposition` mini-check and REQ-40's delegation reading,
+   `TestReq41_EscapeSetScopingBothLegs` asserts the escape set's payload
+   contents. Testing Strategy row 14 pins only the kind; this is the
+   stronger of the two readings and the one `req-list.md` Q2 proceeds on.
+
+- **Check** (Phase 2): each item is confirmed by the implementation
+  compiling against the tests unchanged, or corrected by a one-line edit
+  in the named place.
