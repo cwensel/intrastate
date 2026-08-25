@@ -13,9 +13,8 @@
 // The package performs no I/O and imports no third-party code: it takes an
 // already-loaded `table.Model` and returns values.
 //
-// Phase 1 status: the RDR 0003 test suite in this directory is the spec's
-// enforcement surface and is written against the API this package will
-// export. No implementation has landed yet, so every symbol the tests
-// reference is undefined and each undefined-symbol error names the REQ its
-// test header quotes.
+// The RDR 0003 test suite in this directory is the spec's enforcement
+// surface, and every assertion drives this package directly: the loader
+// (`internal/table`) and the kernel (`internal/resolve`) are real
+// collaborators, never stand-ins.
 package guard
