@@ -94,7 +94,7 @@ func reach(m *table.Model) (nodes []Node, complete bool) {
 			// any other provenance names no node dimension.
 			continue
 		}
-		root.Values[tv.Key] = canonicalValues(tv.Value)
+		root.Values[tv.Key] = heldValues(m, tv.Key, tv.Value)
 	}
 
 	nodes = []Node{root}
@@ -282,7 +282,7 @@ func successor(m *table.Model, src Node, row table.Row) Node {
 		// A write REPLACES: it assigns the tag's whole value and supplants
 		// whatever was held, so the successor's set is the written value
 		// alone rather than a union with the source's (RDR 0002).
-		out.Values[w.Key] = canonicalValues(w.Value)
+		out.Values[w.Key] = heldValues(m, w.Key, w.Value)
 	}
 	return out
 }
@@ -310,6 +310,30 @@ func isClearValue(value []string) bool {
 // stable regardless of authored member order.
 func canonicalValues(value []string) []string {
 	return slices.Compact(slices.Sorted(slices.Values(value)))
+}
+
+// heldValues normalizes a value a node comes to HOLD for a key. A tag whose
+// declaration carries no finite domain — a `scalar`, or an `int` lacking a
+// bound — ranges over {held, absent} rather than over an enumeration, so it
+// is carried as the single opaque value rather than as the concrete string
+// the author happened to write. Retaining the concrete string would let
+// `ownedAtomSatisfiable` PRUNE a value atom over that key, which marks live
+// rows unreachable and skips their blocking checks — the false-green
+// direction REQ-106 forbids.
+//
+// `guard.AssignmentCount` is the one authority on whether a declaration
+// carries a finite domain, so the abstraction is gated on it rather than on
+// the declared kind: an `int` WITH a bound is finite and keeps its concrete
+// value, exactly as an enum does.
+//
+// Only the two sites that INTRODUCE a held value need this — the root and a
+// row's write. `joinNodes` unions sets both of whose sides already came
+// through here, and the opaque value is idempotent under that union.
+func heldValues(m *table.Model, key string, value []string) []string {
+	if _, finite := guard.AssignmentCount(m.Tags[key]); !finite {
+		return []string{OpaqueValue}
+	}
+	return canonicalValues(value)
 }
 
 // matchSatisfiable reports whether the row's match pattern over OWNED tags is

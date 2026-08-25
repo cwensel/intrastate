@@ -432,3 +432,53 @@ target plus the `build` edge on `check`.
   declaration rather than one per node, as before. `graph-dead-end` and
   `graph-terminal-escape` are separate obligations over the same node
   condition and both are emitted, per REQ-83's complete-emission clause.
+
+## D15 — A tag with no finite domain is carried as the opaque value
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-101, REQ-106, REQ-109; D11 precedent.
+- **Finding**: `OpaqueValue` was declared in `reach.go` and READ by
+  `ownedAtomSatisfiable`, but never assigned anywhere — root construction
+  and `successor` both called `canonicalValues`, so a tag with no finite
+  declared domain (a `scalar`, or an `int` lacking `min`/`max`) was carried
+  as the concrete string the author happened to write. A value atom over
+  such a tag was then decided against that one string and PRUNED whenever
+  it named anything else, so the edge behind it was never taken. The
+  user-visible consequence is the same false green D11 recorded on the
+  presence axis: an owned `scalar` initialized to `"start"` gating an edge
+  on `free eq "other"` yields three advisory `graph-unreachable-rule`
+  findings at exit 0, while the duplicate rows behind the gate — a
+  BLOCKING `graph-overlap` — go unchecked. Changing the gate literal to
+  the initial value surfaces `graph-overlap` and `graph-coverage-gap` at
+  exit 2, so the defect was real and only the abstraction hid it.
+- **Evidence**: REQ-101 and REQ-109 both state the abstraction verbatim —
+  a tag with no finite domain abstracts to held/absent — which makes its
+  held half a single representative rather than an enumeration over
+  authored strings. REQ-106 fixes the direction: the traversal
+  over-approximates the runtime, and pruning an edge lint cannot decide is
+  the false-green direction. Nothing adjudicates this away; the string
+  "opaque" appears in no RDR 0006 artifact, so the constant was written to
+  the record's intent and simply never wired up. `ownedAtomSatisfiable`'s
+  `slices.Contains(held, OpaqueValue)` arm already implements the reading
+  and needed no change.
+- **Chosen**: `heldValues` normalizes a value a node comes to HOLD,
+  returning `[]string{OpaqueValue}` when `guard.AssignmentCount` reports no
+  finite domain and `canonicalValues` otherwise. It is called at the two
+  sites that INTRODUCE a held value — the root's initial assignments and a
+  row's writes in `successor`. `guard.AssignmentCount` is the one authority
+  on finiteness, so the abstraction is gated on the DECLARATION rather than
+  on the declared kind: an `int` carrying a bound stays finite and keeps
+  its concrete value, exactly as an enum does. `joinNodes` is deliberately
+  untouched — it unions sets both of whose sides already came through
+  `heldValues`, and the opaque value is idempotent under that union, so a
+  finite tag never mixes with it. `internal/guard` is RDR 0003's surface
+  and was not modified.
+- **Premortem**: the wider relation could swallow a universal finding
+  (`graph-unreachable-rule`, `graph-dead-end`) on a genuinely dead
+  scalar-gated arm. That is the direction REQ-106 mandates and the one
+  `atomAdmitsValue`'s UNEVALUABLE arm already takes; coverage stays honest
+  because `coverage.go`'s `ReasonDimensionNotFinite` arm gates on the very
+  same `guard.AssignmentCount` predicate, so a dimension abstracted here is
+  still reported unprovable there. The REQ-122 census over `models/rdr.toml` remains zero
+  findings after the change.
