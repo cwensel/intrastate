@@ -24,6 +24,14 @@ const (
 	BlockMatch Block = "match"
 )
 
+// isGuardBlock reports whether the verdict formula `0007:C6` names the
+// block as an operand. It names `all` and `unless` and nothing else, so
+// every other block — BlockMatch (JDR 0001 §D12), the zero value, and any
+// future token — is not a guard operand.
+func isGuardBlock(b Block) bool {
+	return b == BlockAll || b == BlockUnless
+}
+
 // The existence operator's token and its two boolean literal forms. The
 // kernel compares an atom's operator and literal against these values
 // verbatim, performing no parsing, case-folding, or coercion of its own
@@ -110,6 +118,28 @@ func evaluateAtoms(atoms []GuardAtom, seam GuardEvaluator, view TagSet) (GuardRe
 
 	var undecided []UndecidedAtom
 	for _, atom := range atoms {
+		if !isGuardBlock(atom.Block) {
+			// Fail CLOSED at the block boundary, the way `0007:C3` makes the
+			// operator boundary fail closed in both directions. `0007:C6`
+			// fences the verdict formula over `all` and `unless` only, so an
+			// atom in any other block contributes NO operand to either
+			// conjunction — the way an omitted `unless` block contributes
+			// none (`0007:C5`) — and is never handed to the seam.
+			//
+			// Sweeping such an atom into `all_result` instead would let it be
+			// DECIDED, and a decided-FALSE one would prune its row along with
+			// the row's owned-state obligation (D8) — reopening the masking
+			// path `0007:C11` ratifies pruning against, whose condition
+			// ("GuardFalse can only arise from decided atoms") is stated over
+			// GUARD atoms. Reachable via BlockMatch (JDR 0001 §D12), the zero
+			// value Block(""), and any future block token.
+			//
+			// It emits no payload entry either: `0007:C8`'s payload names the
+			// atoms that blocked the GUARD verdict, and an atom that
+			// contributes no operand cannot have blocked it.
+			continue
+		}
+
 		verdict, reason, ok := evaluateAtom(atom, seam, view)
 		if !ok {
 			undecided = appendAtom(undecided, atom, reason)
@@ -119,10 +149,7 @@ func evaluateAtoms(atoms []GuardAtom, seam GuardEvaluator, view TagSet) (GuardRe
 		case BlockUnless:
 			sawUnless = true
 			unlessConj = kleeneAnd(unlessConj, verdict)
-		default:
-			// BlockAll, and any other block the kernel does not evaluate,
-			// falls to the conjunctive reading. `0007:C6` fences the
-			// verdict formula over `all` and `unless` only.
+		case BlockAll:
 			allResult = kleeneAnd(allResult, verdict)
 		}
 	}
