@@ -6,7 +6,11 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-9, §JD-19, §JD-20, §JD-21, §JD-22: owned-state assembly for `flow resolve`; gate site and deny semantics; CLI carriage of clear/set writes; `Block` cardinality; set-value encoding]
+- **Status**: Final [all joint decisions answered 2026-08-24 — JDR 0001 §D8 (§JD-9),
+  §D9 (§JD-19), §D11 (§JD-20), §D12 (§JD-21), §D13 (§JD-22). Citations owed at
+  Stage 8, see `artifacts/deviations.md`; §D13 assigns this RDR the normative
+  set-value encoding clause (a landing, not a citation). No joint decision is
+  open against this RDR.]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,

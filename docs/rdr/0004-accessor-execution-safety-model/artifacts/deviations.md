@@ -40,3 +40,26 @@ escalates only if its check contradicts a contract.
 - Note (not a deviation): Prerequisites `0004:841-849` are all unchecked at
   Gate PASS; the Status line discloses A9/A10/A11 Pending. A per-RDR finalize
   question, recorded here so Stage 8's opener sees it.
+
+## D3 — JD-19/20/22 answered: cite §D9, §D11, §D13
+
+- **Type**: TEST-FIXTURE
+- **Status**: OPEN (citation repair pending 0004's next touch)
+- **Source**: JDR 0001 §D9/§D11/§D13 (`d937eec`, settled `5c2b96b`, both
+  2026-08-24) — answered *after* the `0002-0009` iteration-4 gate. Status
+  qualifier and README row corrected 2026-08-24. No joint decision is now open
+  against this RDR.
+- **The answers**: §D9 (§JD-19) — gates run after exact-one selection and
+  before the plan, only the selected row's; `deny` is a **refusal**, not an
+  escape class; deny-overrides with every gate reported. This settles the
+  split this RDR currently shows, which lists `gate denied` once as a refusal
+  (`0004:804`) and once as a typed non-refusal result (`0004:502`); §D9 picks
+  the refusal reading. §D11 (§JD-20) — `--clear <key>`, JSON-array set writes,
+  unbound `--write` keys refused at the CLI **before any accessor runs**, which
+  is the boundary this RDR left unstated. §D13 (§JD-22) — read-back equality is
+  byte equality over RDR 0002's canonical JSON array, which is the "unspecified
+  form" this RDR's read-back assertion rested on.
+- **Check** (Stage 8): `grep -n '§D9\|§D11\|§D13' docs/rdr/0004-*.md` → ≥1
+  each; the `0004:502` non-refusal reading of `gate denied` agrees with §D9 or
+  is repaired. If the `502`/`804` split cannot be reconciled by citation,
+  escalate — §D9 decides it, so a surviving contradiction is a fenced conflict.

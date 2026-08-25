@@ -6,9 +6,10 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-9, §JD-19, §JD-20: code
-  table and carriers; owned-state assembly for `flow resolve`; gate site and deny
-  semantics; CLI carriage of clear/set writes] [re-locked 2026-08-24 — Gate PASS.
+- **Status**: Final [all joint decisions answered 2026-08-24 — JDR 0001 §D10
+  (§JD-8), §D8 (§JD-9), §D9 (§JD-19), §D11 (§JD-20); answers already landed by
+  the re-entry below, no citation owed. No joint decision is open against this
+  RDR.] [re-locked 2026-08-24 — Gate PASS.
   Re-entered from Final on JDR 0001 §D8–§D11 and cites them without restatement:
   `resolve`/`next` assemble owned state (§D8), gates run after selection with `deny`
   a refusal (§D9), the envelope carries one `omitempty` `findings` list under the

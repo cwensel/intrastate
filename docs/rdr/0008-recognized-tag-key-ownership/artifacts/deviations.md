@@ -45,3 +45,24 @@ escalates only if its check contradicts a contract.
 - Also unfenced and stale after §D5: `0008:1772` "`<clear>` sentinel is
   syntactically un-declarable" — it is refused by load category; citation
   repair at 0008's next touch.
+
+## D3 — JD-8/JD-9 answered: cite §D10 and §D8
+
+- **Type**: TEST-FIXTURE
+- **Status**: OPEN (citation repair pending 0008's next touch)
+- **Source**: JDR 0001 §D10/§D8 (`d937eec`, settled `5c2b96b`, both
+  2026-08-24) — answered *after* the `0002-0009` iteration-4 gate. Status
+  qualifier and README row corrected 2026-08-24. **§JD-5 remains open**
+  (precondition precedence vs 0009) and stays in the qualifier.
+- **The answers**: §D10 (§JD-8) — one `Code` per caller-branchable failure,
+  kernel-aligned names, one `omitempty` `findings` field, exit 3 = environment
+  could not be consulted; `reserved_tag_key` gets its constant here. §D8
+  (§JD-9) — `--tag` enters as `Observed` and never satisfies an owned-state
+  dependency; `--tag` on an owned key **or on `recognized`** is a
+  `GroupUserEnv` refusal at the CLI. That is this RDR's reserved-key check
+  given a site and an error group.
+- **Check** (Stage 8): `grep -n '§D10\|§D8\b' docs/rdr/0008-*.md` → ≥1 each;
+  the reserved-key refusal names `GroupUserEnv` and the CLI site. Escalate only
+  if the CLI-site placement contradicts this RDR's `Resolve`-entry check —
+  note that ordering question is §JD-5's, still open, and must not be
+  pre-decided by this citation.

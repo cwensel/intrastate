@@ -6,7 +6,12 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-8, §JD-18, §JD-21, §JD-22: carrier for the per-atom refusal payload; conforming-view enforcer; `Block` cardinality; set-value encoding]
+- **Status**: Final [joint decision → JDR 0001 §JD-18: conforming-view enforcer]
+  [§JD-8, §JD-21, §JD-22 answered 2026-08-24 by §D10, §D12, §D13 — `findings`
+  field with 0007 A19 accepted; `BlockMatch` added in this RDR's Phase 1; set
+  values cross as canonical JSON arrays declared by RDR 0002, which unblocks the
+  `contains` contract-test leg and Testing Strategy scenario 8. Citations owed at
+  Stage 8, see `artifacts/deviations.md`.]
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer at the
   0001↔0003 seam, consumed by RDR 0003's value evaluator and

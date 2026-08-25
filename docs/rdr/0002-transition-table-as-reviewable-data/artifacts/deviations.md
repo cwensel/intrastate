@@ -72,3 +72,30 @@ escalates only if its check contradicts a contract.
   fenced sequence-suffix rule. Artifact of record: `docs/rdr/README.md`.
 - **Check**: `grep -n 'does not yet carry\|has no owner' docs/rdr/0002-*.md`
   → 0, and the `0003 is Draft` sentence at `0002:1229` gone.
+
+## D5 — JD-9/19/20/21/22 answered: land §D13, cite §D8/§D9/§D11/§D12
+
+- **Type**: TEST-FIXTURE
+- **Status**: OPEN (one landing + citations, pending 0002's next touch)
+- **Source**: JDR 0001 §D8–§D13 (`d937eec`, settled `5c2b96b`, both
+  2026-08-24) — answered *after* the `0002-0009` iteration-4 gate recorded
+  JD-9/19/20/21/22 as unanswered. Status qualifier and README row corrected
+  2026-08-24. No joint decision is now open against this RDR.
+- **The landing (§D13, §JD-22)**: this RDR **declares** the set-value
+  encoding — `Tag.Value` stays `string`; a set crosses as its canonical JSON
+  array, members sorted, duplicate-free, compact. Read-back equality is byte
+  equality; it is the same form the CLI accepts in `--write` and emits in
+  `writes` (§D11); no third encoding exists. §D13 is explicit: "Lands in
+  **0002** — one normative clause". This is a *landing*, not a citation, and
+  it is the only one in this sweep.
+- **The citations**: §D8 (§JD-9) `resolve`/`next` assemble `Input.Owned`,
+  `--tag` stays `Observed`; §D9 (§JD-19) gates run after exact-one selection,
+  `deny` is a refusal, `set-state` never gates; §D11 (§JD-20) `--clear <key>`,
+  JSON-array set writes, `--write k=<clear>` refused; §D12 (§JD-21) `Block`
+  gains `BlockMatch`, added in 0007 Phase 1 — this RDR's "tell an implementer
+  to widen" sentence (`0002:923-938`) is satisfied by that, not by a change
+  here.
+- **Check** (Stage 8): the set-value encoding clause exists in a `normative`
+  fence citing §D13; `grep -n '§D1[123]\|§D[89]\b' docs/rdr/0002-*.md` → ≥1 per
+  answered JD. If the §D13 landing cannot be written without contradicting an
+  existing fence, escalate — that is a contract conflict, not a citation.
