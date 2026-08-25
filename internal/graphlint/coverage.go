@@ -33,10 +33,12 @@ var singleValueOperators = []string{"eq", "lt", "lte", "gt", "gte"}
 func (a *analysis) checkCoverage(g guard.Group) {
 	dims := guard.Dimensions(a.model, g)
 	if len(dims) == 0 {
-		// A group over no guard dimension at all makes no exhaustiveness
-		// claim: there is nothing for one to range over. Overlap has
-		// already run — withholding the CLAIM is not withholding every
-		// check.
+		// A group over no guard dimension still has a scoped product — the
+		// empty one, carrying the single empty assignment — so the per-class
+		// arms below are decidable and the claim is not withheld. What is
+		// absent is anything for an unprovable DIMENSION to be found in, so
+		// the two scans are skipped rather than run over nothing.
+		a.emitCoverageArms(g)
 		return
 	}
 
@@ -118,27 +120,32 @@ func (a *analysis) emitUnprovableDimensions(g guard.Group) bool {
 func (a *analysis) unprovableReason(g guard.Group, key string) (string, *table.Atom) {
 	decl := a.model.Tags[key]
 
-	// `0003::A21`: a value atom over a tag not declared single-valued has no
-	// projection. It is reported ahead of the domain arm because its remedy
-	// is the more specific one — add the marker — and a tag carrying a
-	// finite domain without the marker would otherwise read as a
-	// domain-declaration problem it is not.
+	// The DOMAIN arm is decided first. A dimension with no finite declared
+	// domain has nothing for a single-valued marker to range over, so
+	// reporting the marker there would name a remedy that does not fix it:
+	// adding `single_valued` to a `scalar` still leaves lint with no domain
+	// to enumerate. The author must declare the domain, and that is what the
+	// reason says.
+	if _, ok := guard.AssignmentCount(decl); !ok {
+		return ReasonDimensionNotFinite, nil
+	}
+
+	// `0003::A21`: over a FINITE dimension, a value atom on a tag lacking
+	// the single-valued marker is the one that has no projection, and its
+	// remedy is the marker.
+	atoms := a.groupAtomsOver(g, key)
 	if !decl.SingleValued {
-		atoms := a.groupAtomsOver(g, key)
 		for i := range atoms {
 			if slices.Contains(singleValueOperators, atoms[i].Operator) {
 				return ReasonTagNotSingleValued, &atoms[i]
 			}
 		}
 	}
-	if _, ok := guard.AssignmentCount(decl); !ok {
-		return ReasonDimensionNotFinite, nil
-	}
+
 	// A dimension whose declaration is finite can still carry an atom lint
 	// cannot project — an operator the declared kind admits no denotation
 	// for. That is the same unavailable proof as an undeclared domain, and
 	// it takes the same reason.
-	atoms := a.groupAtomsOver(g, key)
 	for i := range atoms {
 		if !guard.Denotation(a.model, key, atoms[i]).Projectable() {
 			return ReasonDimensionNotFinite, &atoms[i]
@@ -263,6 +270,7 @@ func (a *analysis) refusingAtom(row table.Row) *table.Atom {
 // therefore checked only for a group carrying a `graph-overlap` finding, and
 // treated as vacuously closed otherwise.
 func (a *analysis) emitCoverageArms(g guard.Group) {
+	dims := guard.Dimensions(a.model, g)
 	product := guard.Product(a.model, g)
 	if !product.Projectable() {
 		return
@@ -274,25 +282,38 @@ func (a *analysis) emitCoverageArms(g guard.Group) {
 		if class == string(ambiguousMatch) && !overlapping {
 			continue
 		}
-		union := guard.CoverageUnionFor(a.model, g, class)
+		union := a.coverageUnionFor(g, class)
 		if union.Equal(product) {
-			if row := bareEscapeFor(g, class); row != "" && !a.ordinaryClosesAlone(g, product) {
+			// A bare escape row in the closing population is reported
+			// whatever else closed the arm: the clause is that a bare green
+			// MUST NOT satisfy it, so the reader can tell a group carrying a
+			// catch-all from one that does not without inspecting the model.
+			if row := bareEscapeFor(g, class); row != "" {
 				closedBy = row
 			}
 			continue
 		}
-		a.emit(clierr.Finding{
+		// The gap is attributed to the group's ROWS when its own rows leave
+		// assignments uncovered, and to the selection CONTEXT alone when
+		// they do not — the second arm's gap is the absent rescue row, and
+		// there is no authored row to name for a row that was never
+		// written. REQ-127's fallback is what keeps the second arm
+		// actionable: it carries the graph element id instead.
+		gap := clierr.Finding{
 			Code:      CodeCoverageGap,
-			Rule:      firstRuleID(g),
 			Element:   g.Context.String(),
 			Class:     class,
-			Dimension: strings.Join(guard.Dimensions(a.model, g), ","),
+			Dimension: strings.Join(dims, ","),
 			Message: fmt.Sprintf("group %s over rows %v leaves %d of %d "+
 				"assignments in its scoped product uncovered for the %s arm; "+
 				"the coverage union must equal the scoped product",
 				g.Context.String(), ruleIDsOf(g), product.Len()-union.Len(),
 				product.Len(), class),
-		})
+		}
+		if !a.ordinaryClosesAlone(g, product) {
+			gap.Rule = firstRuleID(g)
+		}
+		a.emit(gap)
 	}
 
 	if closedBy == "" {
@@ -309,6 +330,70 @@ func (a *analysis) emitCoverageArms(g guard.Group) {
 			"escape row %q rather than proved over its declared domains",
 			g.Context.String(), closedBy),
 	})
+}
+
+// coverageUnionFor unions the accepted assignments of the rows that close
+// one declared rescuable class's arm. Escape rows contribute their
+// assignments like any other row — there is no separate "an escape row
+// exists" disjunct — but WHICH rows close an arm differs by class, because
+// the two refusals arise from opposite conditions.
+//
+//   - `no_match` arises exactly where NO row accepts the assignment, so an
+//     ordinary row accepting it is what keeps the refusal from occurring at
+//     all. The ordinary population therefore closes this arm, alongside the
+//     escape rows declaring the class.
+//   - `ambiguous_match` arises where the group's ORDINARY rows overlap. The
+//     rows that caused the ambiguity cannot also rescue it — the kernel
+//     reaches `escapeOrRefuse` precisely because none of them was the
+//     exact-one match — so only escape rows declaring the class close this
+//     arm. Counting ordinary rows here would let the very overlap that mints
+//     the refusal certify it rescued.
+func (a *analysis) coverageUnionFor(g guard.Group, class string) guard.AssignmentSet {
+	if class == ambiguousMatch {
+		return a.escapeUnionFor(g, class)
+	}
+	if len(guard.Dimensions(a.model, g)) == 0 {
+		// Over the empty product the union is decided by membership alone: a
+		// row in the closing population denotes the single empty assignment,
+		// and an empty population denotes nothing.
+		for _, row := range g.Rows {
+			if row.Kind() == table.KindEscape && !slices.Contains(row.Escape, class) {
+				continue
+			}
+			return guard.Product(a.model, g)
+		}
+		return guard.AssignmentSet{}
+	}
+	return guard.CoverageUnionFor(a.model, g, class)
+}
+
+// escapeUnionFor unions the accepted assignments of the escape rows
+// declaring class, and nothing else.
+func (a *analysis) escapeUnionFor(g guard.Group, class string) guard.AssignmentSet {
+	product := guard.Product(a.model, g)
+	var union guard.AssignmentSet
+	var seeded bool
+	for _, row := range g.Rows {
+		if row.Kind() != table.KindEscape || !slices.Contains(row.Escape, class) {
+			continue
+		}
+		if len(guard.Dimensions(a.model, g)) == 0 {
+			return product
+		}
+		accepted := guard.AcceptedAssignments(a.model, row)
+		if !accepted.Projectable() {
+			continue
+		}
+		if !seeded {
+			union, seeded = accepted, true
+			continue
+		}
+		union = union.Union(accepted)
+	}
+	if !seeded {
+		return guard.AssignmentSet{}
+	}
+	return union
 }
 
 // ambiguousMatch names the rescuable class whose arm is demanded only where
