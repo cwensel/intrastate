@@ -11,6 +11,7 @@ package accessor_test
 // cost defect the boundary can produce.
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/accessor"
@@ -65,18 +66,148 @@ func TestAdv1_WriteRefusesAPlanNamingANonOwnedTag(t *testing.T) {
 			"recognized tags, and no runtime arm enforces it", keyProfile, got.Written)
 	}
 
-	// The refusal must not be a generic execution failure that happens to
-	// fire for another reason; it must attribute the non-owned key.
-	if class := got.Refusal.Class; class == accessor.ClassReadBackMismatch {
-		t.Errorf("Write refused %q; want a refusal that names the non-owned key rather "+
-			"than one asserting the artifact is wrong", class)
+	// Refusal IDENTITY, not merely refusal existence. Asserting only that
+	// some refusal occurred would pass an executor refusing for an
+	// unrelated reason — a read-back that happened to fail, say — and
+	// would not witness the non-owned arm at all.
+	if got.Refusal.Class != accessor.ClassExecutionFailure {
+		t.Errorf("Write refused %q; want execution_failure — the refusal must be the "+
+			"non-owned-key arm, not one asserting the artifact is wrong or that the "+
+			"verification could not run", got.Refusal.Class)
+	}
+	if !slices.Contains(got.Refusal.Keys, keyProfile) {
+		t.Errorf("Refusal.Keys = %v; want it to name the non-owned key %q — a refusal "+
+			"that does not attribute the offending key leaves the operator unable to "+
+			"tell WHICH tag the accessor had no authority to apply",
+			got.Refusal.Keys, keyProfile)
 	}
 
-	// The authoritative artifact must be untouched for the non-owned tag.
+	// The check runs BEFORE the command: the write must not reach the
+	// artifact at all (deviation D16), so the binding is never invoked.
+	if w.Invocations() != 0 {
+		t.Errorf("write binding invoked %d times; want 0 — the non-owned plan must be "+
+			"refused BEFORE Apply, never applied and then diagnosed", w.Invocations())
+	}
+
+	// The authoritative artifact must be untouched — the non-owned tag the
+	// plan named, AND the owned tag it was smuggled alongside.
 	if v, absent, _ := s.get(keyProfile); absent || v != "large" {
 		t.Errorf("observed tag %q = (%q, absent=%v) after the refused write; want %q "+
 			"unchanged — the write must not reach the artifact at all",
 			keyProfile, v, absent, "large")
+	}
+	if v, absent, _ := s.get(keyStatus); absent || v != "draft" {
+		t.Errorf("owned tag %q = (%q, absent=%v) after the refused write; want %q "+
+			"unchanged — a refused plan applies NONE of its writes, not merely the "+
+			"non-owned ones", keyStatus, v, absent, "draft")
+	}
+}
+
+// ADV-1b — the non-owned arm's DEFINITION condition, in isolation: a
+// planned key that IS an owned tag of the model but is NOT in THIS writer
+// definition's declared `keys`.
+//
+// `nonOwnedPlanKeys` refuses when a planned key fails EITHER conjunct —
+// absent from the definition's `OwnedKeys()`, or absent from
+// `Registry.OwnedTags`. ADV-1 exercises only `profile`, which is absent
+// from BOTH, so it cannot tell the two conditions apart: deleting either
+// half of the `||` leaves it green and neither condition is individually
+// proven. D16's "Consequence, recorded" states the requirement; these two
+// cases are what enforce it.
+//
+// Here `labels` IS in `Registry.OwnedTags`, so only the DEFINITION
+// conjunct catches it: the definition bounds what THIS accessor writes,
+// independent of what is an owned tag of the model at all. ADV-1c covers
+// the converse (`0004:C10`, REQ-40, REQ-41).
+func TestAdv1b_WriteRefusesAnOwnedTagOutsideThisWritersDeclaredKeys(t *testing.T) {
+	// `labels` is an owned tag of the model — registryOf declares
+	// OwnedTags as {status, labels} — but this writer declares only
+	// `status`, so it has no authority over `labels`.
+	s := newStore(map[string]string{keyStatus: "draft", keyLabels: "a", keyProfile: "large"})
+	w := &writeBinding{store: s}
+	r := &readBinding{store: s}
+	e := writeExec(t, s, w, r, keyStatus)
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyStatus, Value: "final"},
+		resolve.Tag{Key: keyLabels, Value: "b"},
+	))
+
+	if !got.Refused() {
+		t.Fatalf("Write applied a plan naming %q and reported SUCCESS (Written=%+v); "+
+			"%q is an owned tag of the MODEL but is not among this writer's declared "+
+			"keys, so this accessor has no authority to apply it",
+			keyLabels, got.Written, keyLabels)
+	}
+	if got.Refusal.Class != accessor.ClassExecutionFailure {
+		t.Errorf("Write refused %q; want execution_failure", got.Refusal.Class)
+	}
+	if !slices.Contains(got.Refusal.Keys, keyLabels) {
+		t.Errorf("Refusal.Keys = %v; want it to name %q — the key this writer may not "+
+			"apply", got.Refusal.Keys, keyLabels)
+	}
+	if w.Invocations() != 0 {
+		t.Errorf("write binding invoked %d times; want 0 — refused BEFORE Apply",
+			w.Invocations())
+	}
+	if v, absent, _ := s.get(keyLabels); absent || v != "a" {
+		t.Errorf("tag %q = (%q, absent=%v) after the refused write; want %q unchanged",
+			keyLabels, v, absent, "a")
+	}
+	if v, absent, _ := s.get(keyStatus); absent || v != "draft" {
+		t.Errorf("owned tag %q = (%q, absent=%v); want %q unchanged — a refused plan "+
+			"applies none of its writes", keyStatus, v, absent, "draft")
+	}
+}
+
+// ADV-1c — the non-owned arm's REGISTRY condition, in isolation: a
+// planned key that IS in this writer definition's declared `keys` but is
+// NOT an owned tag of the model.
+//
+// The converse of ADV-1b. A definition may declare any key; what separates
+// an OWNED tag from an observed or recognized one is `Registry.OwnedTags`,
+// and `0004:C10` forbids writing observed or recognized tags regardless of
+// what a definition claims. Only the `Registry.OwnedTags` conjunct catches
+// this, so without this case that half of the check is unproven.
+//
+// This is also the runtime backstop for the validation arm: a registry
+// whose writer declares a non-owned key is a `write_non_owned_tag` finding,
+// but D16 records that a registry validating clean still applied an
+// observed tag and reported success — so the boundary enforces it at
+// EXECUTION time rather than trusting validation (REQ-40, REQ-41, REQ-80).
+func TestAdv1c_WriteRefusesADeclaredKeyThatIsNotAnOwnedTag(t *testing.T) {
+	// The writer DECLARES `profile`, which registryOf does not carry in
+	// OwnedTags — an observed tag. The declaration does not confer
+	// authority.
+	s := newStore(map[string]string{keyStatus: "draft", keyProfile: "large"})
+	w := &writeBinding{store: s}
+	r := &readBinding{store: s}
+	e := writeExec(t, s, w, r, keyStatus, keyProfile)
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyProfile, Value: "small"},
+	))
+
+	if !got.Refused() {
+		t.Fatalf("Write applied a plan naming %q and reported SUCCESS (Written=%+v); "+
+			"the writer DECLARES %q but the model does not carry it as an owned tag, "+
+			"and a definition's own claim does not make an observed tag writable",
+			keyProfile, got.Written, keyProfile)
+	}
+	if got.Refusal.Class != accessor.ClassExecutionFailure {
+		t.Errorf("Write refused %q; want execution_failure", got.Refusal.Class)
+	}
+	if !slices.Contains(got.Refusal.Keys, keyProfile) {
+		t.Errorf("Refusal.Keys = %v; want it to name the non-owned key %q",
+			got.Refusal.Keys, keyProfile)
+	}
+	if w.Invocations() != 0 {
+		t.Errorf("write binding invoked %d times; want 0 — refused BEFORE Apply",
+			w.Invocations())
+	}
+	if v, absent, _ := s.get(keyProfile); absent || v != "large" {
+		t.Errorf("observed tag %q = (%q, absent=%v) after the refused write; want %q "+
+			"unchanged", keyProfile, v, absent, "large")
 	}
 }
 
