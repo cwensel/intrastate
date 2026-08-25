@@ -86,11 +86,21 @@ const (
 	GuardUnevaluable
 )
 
-// GuardEvaluator is the delegated guard-evaluation seam owned by RDR
+// GuardEvaluator is the delegated value-comparison seam owned by RDR
 // 0003. The kernel calls it; it does not implement operator semantics.
+//
+// It is a single-method interface, not a func type, so a missing seam is
+// a nil interface value and RDR 0003's evaluator satisfies it by
+// declaring the method (`0007:C1`).
 type GuardEvaluator interface {
-	// Evaluate decides guard over the assembled tag-set view.
-	Evaluate(guard string, view TagSet) GuardResult
+	// Evaluate decides one atom against the present value its key holds
+	// in the assembled view. The seam never sees the view: the kernel has
+	// already decided presence, so the seam is only ever asked to compare
+	// a present value against a literal, and it cannot fold absence into
+	// false. It decides true or false under RDR 0003's typed operator
+	// semantics, and may answer unevaluable for a present value it cannot
+	// compare.
+	Evaluate(atom GuardAtom, value string) GuardResult
 }
 
 // TagSet is the assembled evaluation view: owned, observed, and freshly
@@ -177,12 +187,25 @@ type Row struct {
 	Outcome string
 	// Match is the tag pattern the row requires of the evaluation view.
 	Match []Tag
-	// RequiresOwned names owned tag keys the row's evaluation needs.
-	// A key absent from the owned snapshot yields owned_state_unavailable.
+	// RequiresOwned names the owned tag keys the row's POST-GUARD
+	// transition depends on — the keys its Writes require, which per RDR
+	// 0002 includes an authored clear (normalization renders it as a
+	// `<clear>` write). A key absent from the owned snapshot yields
+	// owned_state_unavailable.
+	//
+	// Guard decidability is not this field's job: guard-input coverage is
+	// enforced by the domain rule the atom pipeline implements
+	// (`0007:C9`). Listing a guard-read owned key here remains legal and
+	// yields the more precise owned_state_unavailable diagnosis — and is
+	// the only way a guard over an owned tag is protected from a
+	// caller-supplied observed tag satisfying presence. The guard's key
+	// set is not required to be a subset of this one, because guards
+	// legitimately read observed and recognized tags.
 	RequiresOwned []string
-	// Guard is the predicate handed to the guard seam. Empty means no
-	// guard.
-	Guard string
+	// Guard is the row's predicate as a slice of parsed atoms, the shape
+	// JDR 0001 §D1 fixes. An empty slice is an unguarded row. There is no
+	// opaque guard string and no reconstruction step (`0007:C1`).
+	Guard []GuardAtom
 
 	// NextTags is the next state the row transitions to.
 	NextTags []Tag
@@ -267,9 +290,12 @@ type Refusal struct {
 	// MissingOwned names owned tag keys absent from the snapshot, on
 	// owned_state_unavailable.
 	MissingOwned []string
-	// Guard names the predicate the seam could not decide, on
-	// guard_unevaluable.
-	Guard string
+	// Undecided names what was missing per row and per atom, on
+	// guard_unevaluable: every undecidable row, and for each of its
+	// unevaluable atoms the referenced key, the block, the operator, the
+	// literal, and the reason. Every undecidable row appears, so there is
+	// no representative row to choose (`0007:C8`).
+	Undecided []UndecidedRow
 }
 
 // RowRef is the source identity of one implicated table row.
@@ -303,11 +329,12 @@ func (r Result) Refused() bool { return r.Refusal != nil }
 //     zero-match);
 //  2. candidate rows are the non-escape rows for that outcome whose match
 //     pattern holds over the assembled view;
-//  3. every candidate passes the same viability gate (see viable): a row
-//     the guard seam decides FALSE is pruned outright and contributes
+//  3. every candidate passes the same viability gate (see gate): a row
+//     whose guard is decided FALSE is pruned outright and contributes
 //     nothing; a surviving row missing required owned state yields
-//     owned_state_unavailable; a surviving row whose guard the seam cannot
-//     decide yields guard_unevaluable;
+//     owned_state_unavailable; a surviving row whose guard is undecidable
+//     yields guard_unevaluable. The guard verdict itself is combined in
+//     the kernel from per-atom verdicts (see evaluateAtoms);
 //  4. exactly one viable candidate is the plan; zero is no_match and more
 //     than one is ambiguous_match, each subject to rescue by a modeled
 //     escape edge that is itself viable and matches exactly once.
@@ -368,21 +395,28 @@ func Resolve(in Input) (Result, error) {
 // mask an escapable zero-match condition.
 //
 // Among rows the guard does *not* prune, owned state is reported before an
-// undecidable guard: absent owned state is the more precise diagnosis and is
-// frequently the reason the seam could not decide the predicate. Rows are
-// visited in table order, but every payload the refusal carries is sorted
-// before it is returned, so the disposition stays a function of the tuple
-// rather than of slice position (REQ-1, REQ-10).
+// undecidable guard. The two refusals diagnose independent problems — the
+// owned snapshot is missing artifact state, while an undecidable guard is
+// a predicate the assembled view cannot settle — and this precedence is
+// pinned to shipped behavior, with combined reporting rejected: a row
+// failing both ways yields owned_state_unavailable and the owned payload
+// only (`0007:C7`).
+//
+// Rows are visited in table order, but every payload the refusal carries is
+// sorted before it is returned, so the disposition stays a function of the
+// tuple rather than of slice position (REQ-1, REQ-10).
 func gate(rows []Row, seam GuardEvaluator, view TagSet) (selected []Row, blocked *Refusal) {
 	var survivors []Row
 	verdicts := make([]GuardResult, 0, len(rows))
+	payloads := make([][]UndecidedAtom, 0, len(rows))
 	for _, row := range rows {
-		verdict := evaluateGuard(seam, row.Guard, view)
+		verdict, atoms := evaluateAtoms(row.Guard, seam, view)
 		if verdict == GuardFalse {
 			continue
 		}
 		survivors = append(survivors, row)
 		verdicts = append(verdicts, verdict)
+		payloads = append(payloads, atoms)
 	}
 
 	if missing := missingOwned(survivors, view); len(missing) > 0 {
@@ -394,42 +428,33 @@ func gate(rows []Row, seam GuardEvaluator, view TagSet) (selected []Row, blocked
 	}
 
 	var undecidable []Row
+	var undecided []UndecidedRow
 	for i, row := range survivors {
 		switch verdicts[i] {
 		case GuardTrue:
 			selected = append(selected, row)
 		case GuardUnevaluable:
 			undecidable = append(undecidable, row)
+			undecided = append(undecided, UndecidedRow{
+				RuleID:        row.RuleID,
+				SourceLocator: row.SourceLocator,
+				Atoms:         payloads[i],
+			})
 		case GuardFalse:
 			// Unreachable: pruned above.
 		}
 	}
 
 	if len(undecidable) > 0 {
-		lowest := slices.MinFunc(undecidable, func(a, b Row) int {
-			return compareRefs(refOf(a), refOf(b))
-		})
+		slices.SortFunc(undecided, compareUndecidedRows)
 		return nil, &Refusal{
-			Kind:  KindGuardUnevaluable,
-			Guard: lowest.Guard,
-			Rows:  rowRefs(undecidable),
+			Kind:      KindGuardUnevaluable,
+			Undecided: undecided,
+			Rows:      rowRefs(undecidable),
 		}
 	}
 
 	return selected, nil
-}
-
-// evaluateGuard delegates the predicate to the injected seam (REQ-23). An
-// unguarded row needs no seam; a guarded row with no seam is undecidable,
-// never evaluated by the kernel itself.
-func evaluateGuard(seam GuardEvaluator, guard string, view TagSet) GuardResult {
-	if guard == "" {
-		return GuardTrue
-	}
-	if seam == nil {
-		return GuardUnevaluable
-	}
-	return seam.Evaluate(guard, view)
 }
 
 // missingOwned returns the owned tag keys any candidate requires that the
