@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"reflect"
 	"slices"
 	"sort"
@@ -436,28 +437,117 @@ func TestReq98_RowsSortByTheIdentityTuple(t *testing.T) {
 		}
 	})
 
-	t.Run("the empty suffix sorts before any non-empty one", func(t *testing.T) {
-		// One rule spelled both ways: an unexpanded row and its expanded
-		// siblings under the same rule id.
+	// The suffix leg of the comparator is only ever the DECIDING field for
+	// rows that tie on (model id, rule id) — i.e. expansion siblings of one
+	// rule. A pair drawn from two different rules is decided by the rule id
+	// and says nothing about the suffix.
+	//
+	// Mixed suffix LENGTHS under a single rule id are unreachable by
+	// construction: `expand` emits a suffix element per multi-member
+	// match-block `in`, and that decision is made per ATOM, uniformly across
+	// every row the rule mints — so a rule yields either one empty-suffix row
+	// or N rows all of the same non-empty length. Duplicate rule ids are
+	// refused outright (`CatDuplicateRuleID`), so the two halves cannot be
+	// authored as separate rules either. The empty-vs-non-empty clause is
+	// therefore the DEGENERATE case of the prefix rule, and the reachable
+	// witness for the suffix comparator is element-by-element ordering among
+	// same-rule-id siblings. The degenerate empty-suffix case is pinned by
+	// the sibling subtest below at the level it IS observable.
+	t.Run("expansion siblings sort by the suffix, element by element", func(t *testing.T) {
+		// Give `terminal-archive` a SECOND expanding match atom so its rows
+		// carry a two-element suffix: the pair then ties on (model id, rule
+		// id) AND on the first suffix element, leaving `slices.Compare` at
+		// element 1 as the only discriminator.
 		base := string(readFixture(t, rdrFixture))
 		src := strings.Replace(base,
 			"source = \"rdr:terminal\"\n[rule.match.recognized]\nin = [\"finalized\", \"verdict-flapping\"]",
-			"source = \"rdr:terminal\"\n[rule.match.recognized]\nin = [\"finalized\", \"verdict-flapping\", \"round-clean\"]", 1)
+			"source = \"rdr:terminal\"\n[rule.match.recognized]\nin = [\"finalized\", \"verdict-flapping\"]\n"+
+				"[rule.match.profile]\nin = [\"large\", \"mid\"]", 1)
 		if src == base {
-			t.Fatal("alphabet substitution did not apply")
+			t.Fatal("expansion substitution did not apply")
 		}
 		p, err := table.Load([]byte(src), "suffix-sort.toml")
 		if err != nil {
 			t.Fatalf("refused: %v", err)
 		}
-		ids := rowIdentities(p)
-		// `rdr.reconcile-rewind` carries the empty suffix; it must sort
-		// before every `rdr.terminal-archive#…`.
-		empty := slices.Index(ids, "rdr.reconcile-rewind")
-		for i, id := range ids {
-			if strings.HasPrefix(id, "rdr.terminal-archive#") && i < empty {
-				t.Errorf("%s sorts before the empty-suffix row; the empty suffix "+
-					"sorts first (%v)", id, ids)
+
+		// Collect every rule id that mints more than one row. Those rows tie
+		// on (model id, rule id) by construction, so their relative order is
+		// decided by nothing but the suffix.
+		byRule := map[string][]table.Row{}
+		for _, r := range p.Rows {
+			byRule[r.RuleID] = append(byRule[r.RuleID], r)
+		}
+
+		var checked int
+		for _, id := range slices.Sorted(maps.Keys(byRule)) {
+			sibs := byRule[id]
+			if len(sibs) < 2 {
+				continue
+			}
+			checked++
+			for i := 1; i < len(sibs); i++ {
+				prev, cur := sibs[i-1], sibs[i]
+				// The tie is the whole point: assert it rather than assume it.
+				if prev.ModelID != cur.ModelID || prev.RuleID != cur.RuleID {
+					t.Fatalf("siblings grouped under rule id %q do not tie on the "+
+						"identity prefix: %q vs %q", id, prev.Identity(), cur.Identity())
+				}
+				if slices.Compare(prev.Suffix, cur.Suffix) >= 0 {
+					t.Errorf("rule %s emitted suffix %v before %v; expansion "+
+						"siblings sort by the suffix as a sequence, element by "+
+						"element, byte-lexicographically", id, prev.Suffix, cur.Suffix)
+				}
+			}
+		}
+
+		// Without a multi-row rule the loop above asserts nothing. Fail loudly
+		// rather than pass vacuously — a silently vacuous arm is the defect
+		// this subtest exists to prevent.
+		if checked == 0 {
+			t.Fatal("no rule id minted two or more rows; the suffix comparator " +
+				"was never the deciding field and this subtest asserted nothing")
+		}
+
+		// The two-element expansion must actually have taken effect, or the
+		// arm degrades to comparing single-element suffixes and never reaches
+		// element 1.
+		var deep int
+		for _, r := range byRule["terminal-archive"] {
+			if len(r.Suffix) == 2 {
+				deep++
+			}
+		}
+		if deep < 2 {
+			t.Fatalf("terminal-archive minted %d rows with a two-element suffix; "+
+				"want at least 2, or the comparison never reaches element 1", deep)
+		}
+	})
+
+	// REQ-98's "the empty suffix sorts before any non-empty one" is the
+	// degenerate case of the prefix rule. It cannot be witnessed as a
+	// same-rule-id pair (see above), so it is pinned here at the level it IS
+	// observable: an unexpanded rule's row renders with no `#` segment at
+	// all, and an expanded rule's rows always render with one.
+	t.Run("an unexpanded rule renders with no suffix segment", func(t *testing.T) {
+		empty := rowsByRuleID(m, "reconcile-rewind")
+		if len(empty) != 1 {
+			t.Fatalf("reconcile-rewind minted %d rows; want exactly 1 unexpanded row", len(empty))
+		}
+		if len(empty[0].Suffix) != 0 {
+			t.Errorf("reconcile-rewind carries suffix %v; want the empty sequence", empty[0].Suffix)
+		}
+		if got := empty[0].Identity(); strings.Contains(got, "#") {
+			t.Errorf("identity %q carries a suffix segment; an unexpanded row has none", got)
+		}
+
+		expanded := rowsByRuleID(m, "terminal-archive")
+		if len(expanded) < 2 {
+			t.Fatalf("terminal-archive minted %d rows; want its expanded siblings", len(expanded))
+		}
+		for _, r := range expanded {
+			if len(r.Suffix) == 0 {
+				t.Errorf("expanded row %q carries the empty suffix", r.Identity())
 			}
 		}
 	})
