@@ -213,7 +213,7 @@ func (r Row) KernelRow() resolve.Row {
 		guard = append(guard, resolve.GuardAtom{
 			Key:      a.Key,
 			Operator: a.Operator,
-			Literal:  seamValue(a.Literal, setValuedLiteral(a.Operator) || r.isSet(a.Key)),
+			Literal:  seamValue(a.Literal, setValuedLiteral(a.Operator)),
 			Block:    a.Block,
 		})
 	}
@@ -272,8 +272,11 @@ func setValuedLiteral(operator string) bool {
 // For a tag VALUE — `Tag.Value` on a match tag, a next-state tag, or a
 // write — set-ness is the DECLARED kind, not the member count: a one-member
 // set still crosses as a one-element array, or read-back could not tell
-// `["a"]` from the scalar `a`. For a guard atom LITERAL it is additionally
-// the OPERATOR, per setValuedLiteral above.
+// `["a"]` from the scalar `a`. For a guard atom LITERAL it is the OPERATOR
+// ALONE, per setValuedLiteral above: the kind says what the TAG holds, and
+// the literal is the right-hand side, not the tag. An `exists` literal is a
+// bare bool constant and a comparison bound is a bare single value however
+// the tag is declared, and the kernel compares both verbatim.
 //
 // A non-set value crosses as its single member verbatim, which is what
 // keeps a `<clear>` write the bare sentinel the kernel and RDR 0004 expect.

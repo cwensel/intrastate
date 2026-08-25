@@ -474,3 +474,141 @@ labels = ` + write + `
 		}
 	})
 }
+
+// ------------------------------------------------------------------- R2
+
+// R2 — a guard literal's carriage form is keyed on the OPERATOR ALONE.
+//
+// FAIL-1 above established that a guard atom's literal is a set by its
+// OPERATOR (`in`/`contains` → the §D13 canonical JSON array), while a tag
+// VALUE is a set by its declared KIND. The fix ADDED the operator trigger
+// but left the kind trigger standing beside it, so a guard literal on a
+// `set`-kind tag still array-encoded whatever the operator was.
+//
+// That is a defect for every operator RDR 0003 fences as single-valued.
+// `exists` is the sharpest case because the kernel owns it outright:
+// `internal/resolve/guard.go::evaluateAtom` compares the literal VERBATIM
+// against `resolve.LiteralTrue`/`LiteralFalse` and, per `0007:C3`, a
+// literal matching neither is never decided from presence — it is
+// `GuardUnevaluable` with reason `uncomparable`. An `exists` literal
+// carried as `["true"]` therefore matches neither constant, and RDR 0007's
+// unevaluable-candidate veto turns that undecidable row into a whole-
+// outcome `guard_unevaluable` refusal that poisons its decidable siblings.
+//
+// The atom is legal by construction: `load.go::conform` gives `exists` its
+// own arm that returns before `conformKind`/`conformDomain`, so `exists`
+// on a `set`-kind tag is authorable by design and must resolve.
+func TestR2_GuardLiteralCarriageIsKeyedOnTheOperatorAlone(t *testing.T) {
+	// `labels` is a declared `set`. The guard is `exists`, whose literal is
+	// a bare bool constant regardless of the tag's kind.
+	build := func(literal string) string {
+		return `outcomes = ["done"]
+
+[model]
+id = "m"
+version = 1
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+required = true
+
+[read.r]
+role = "m"
+path = "m"
+keys = ["labels"]
+timeout = "2s"
+
+[write.w]
+role = "m"
+path = "m"
+keys = ["labels"]
+timeout = "2s"
+read_back = true
+
+[[rule]]
+id = "advance"
+[rule.match.recognized]
+eq = "done"
+[rule.guard.all.labels]
+exists = ` + literal + `
+[rule.write]
+labels = ["alpha"]
+`
+	}
+
+	// The carriage form itself, at the seam.
+	t.Run("the literal crosses as the bare constant", func(t *testing.T) {
+		for _, literal := range []string{"true", "false"} {
+			m, err := table.Load([]byte(build(literal)), "r2-carriage.toml")
+			if err != nil {
+				t.Fatalf("exists = %s refused: %v", literal, err)
+			}
+			guard := m.Rows[0].KernelRow().Guard
+			if len(guard) != 1 {
+				t.Fatalf("%d guard atoms; want 1: %+v", len(guard), guard)
+			}
+			if guard[0].Literal != literal {
+				t.Errorf("GuardAtom.Literal = %q; want the bare %q. The "+
+					"kernel compares an `exists` literal verbatim against "+
+					"resolve.LiteralTrue/LiteralFalse (`0007:C3`), so an "+
+					"array-encoded literal matches neither constant",
+					guard[0].Literal, literal)
+			}
+		}
+	})
+
+	// And end to end: the row must reach a DECIDED verdict through the
+	// real kernel, not the veto.
+	t.Run("the row resolves rather than refusing guard_unevaluable", func(t *testing.T) {
+		cases := []struct {
+			literal string
+			owned   map[string]string
+			plan    bool
+		}{
+			// `exists = true` over a present `labels`: the guard is TRUE
+			// and the row is the plan.
+			{literal: "true", owned: map[string]string{"labels": `["alpha"]`}, plan: true},
+			// `exists = false` over a present `labels`: the guard is FALSE
+			// and the row is pruned, so the outcome is a clean `no_match`
+			// — a decided verdict, never `guard_unevaluable`.
+			{literal: "false", owned: map[string]string{"labels": `["alpha"]`}, plan: false},
+		}
+		for _, c := range cases {
+			m, err := table.Load([]byte(build(c.literal)), "r2-resolve.toml")
+			if err != nil {
+				t.Fatalf("exists = %s refused: %v", c.literal, err)
+			}
+			res, err := resolve.Resolve(resolve.Input{
+				Flow:       "f",
+				Table:      m.KernelTable(),
+				Owned:      ownedTags(c.owned),
+				Recognized: "done",
+				Guards:     fixtureGuards{},
+			})
+			if err != nil {
+				t.Fatalf("exists = %s: Resolve errored: %v", c.literal, err)
+			}
+			if res.Refused() && res.Refusal.Kind == resolve.KindGuardUnevaluable {
+				t.Errorf("exists = %s refused guard_unevaluable (%+v); the "+
+					"atom is legal — `conform` gives `exists` its own arm "+
+					"— and the kernel decides presence itself, so the only "+
+					"way it is undecidable is a literal this seam mangled",
+					c.literal, res.Refusal.Undecided)
+				continue
+			}
+			if c.plan && res.Plan == nil {
+				t.Errorf("exists = true over a present tag did not plan: %+v",
+					res.Refusal)
+			}
+			if !c.plan && res.Plan != nil {
+				t.Errorf("exists = false over a present tag planned %+v; the "+
+					"guard is FALSE and the row must be pruned", res.Plan)
+			}
+		}
+	})
+}

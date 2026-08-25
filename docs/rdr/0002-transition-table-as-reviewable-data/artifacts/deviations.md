@@ -330,3 +330,59 @@ Resolutions and the tests that guard them are in
   authored `["small", "mid"]`. Without the sort the assertion could only
   be satisfied by weakening it, which `§scope-discipline` forbids.
 - **Additive surface**: none.
+
+## D11 — `exists` is a third carriage case neither §D13 nor D8 names
+
+- **Type**: SPEC-UNDER
+- **Status**: resolved from evidence (no author decision needed)
+- **Site**: `internal/table/model.go::Row.KernelRow` (the `Literal:`
+  argument), `::seamValue` doc. Filed against triage finding R2.
+- **The gap.** D8 above resolved that a guard atom's literal carriage is
+  keyed on the OPERATOR, and landed that as a new `setValuedLiteral`
+  trigger — but joined with `||` beside the declared-kind trigger it
+  replaced rather than in place of it. The disjunction is not a stated
+  rule anywhere: D8's own resolution says the literal side "is
+  additionally keyed on the operator", and D8's evidence (RDR 0003's
+  single-value fence at `0003:948-960`) splits the operators exhaustively
+  into `in`/`contains` versus `eq` and the integer comparisons. A guard
+  literal on a `set`-kind tag therefore array-encoded whatever the
+  operator was.
+- **Why `exists` is the third case.** RDR 0003's fence is a split over the
+  operators that take a MEMBER — `exists` takes neither a member nor a
+  bound but a bool constant, so it appears in neither half of the quoted
+  passage, and §D13 governs sets, which a bool constant is not. It is the
+  one operator the KERNEL owns outright:
+  `internal/resolve/guard.go::evaluateAtom` compares the literal verbatim
+  against `resolve.LiteralTrue`/`LiteralFalse` and, per `0007:C3`, a
+  literal matching neither "is never decided from presence" — it is
+  `GuardUnevaluable` with reason `uncomparable`. So `exists = true` on a
+  `set`-kind tag crossed as `["true"]`, matched neither constant, and RDR
+  0007's unevaluable-candidate veto turned that row into a whole-outcome
+  `guard_unevaluable` refusal that poisoned its DECIDABLE siblings.
+- **The atom is legal by construction.** `load.go::conform` gives
+  `resolve.OpExists` its own arm that returns before `conformKind` and
+  `conformDomain` ever run, per `0002:C17`'s "`exists` takes a bool
+  literal, never a member". So `exists` on a `set`-kind tag is authorable
+  by design and must resolve.
+- **Wider than `exists`.** The comparisons `lt`/`lte`/`gt`/`gte` take an
+  ordered BOUND (`0002:C17`) and `eq` takes one member (D9), and the
+  shipped contract drives all of them with bare strings
+  (`{"eq","Draft","Draft"}`, `{"gte","3","4"}`). Each array-encoded on a
+  `set`-kind tag too. Dropping the kind disjunct fixes the whole family in
+  one place.
+- **Resolution.** The guard atom's `Literal` is keyed on the operator
+  ALONE: `in`/`contains` cross as the §D13 canonical JSON array,
+  `exists` as its bare bool constant, `eq` and the comparisons as their
+  bare single value. The tag VALUE side (`Tag.Value` on match tags,
+  `NextTags`, `Writes`) is untouched and stays keyed on the declared
+  kind — D8's "two rules answer different questions" is unchanged, and
+  this only removes a leak of the kind rule into the literal side.
+- **Additive surface**: none. One `||` disjunct removed; no exported
+  identifier, signature, or category changed.
+- **Residue for the record.** This extends D8's own recorded residue: not
+  only the operator half of the carriage rule but its EXCLUSIVITY — that
+  the declared kind does not participate in the literal side at all —
+  arguably belongs in RDR 0002's normative clause as §D13's landing
+  document. D8's residue read as an addition, which is how it was
+  implemented; stating it as the whole rule would have foreclosed this
+  finding. RDRs are never amended, so it is noted here.
