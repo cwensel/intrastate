@@ -284,10 +284,20 @@ func gateExec(t *testing.T, b *gateBinding) *accessor.Executor {
 // SEPARATE read binding over the same store. The two are distinct objects
 // on purpose: a re-read that cannot fail independently of the write has
 // nothing to report (CA A10, REQ-125).
+//
+// The read-back reader declares the writer's owned keys PLUS the
+// protected non-owned `profile`. `ReadBinding.Read` resolves exactly the
+// keys it is asked for, so a non-owned tag the reader never declares is
+// invisible at this boundary and `0004:C12`'s protected non-owned
+// identity clause could not be witnessed at all (deviations D14).
 func writeExec(t *testing.T, s *store, w *writeBinding, r *readBinding, owned ...string) *accessor.Executor {
 	t.Helper()
 	wd := writerDef(w, owned...)
-	rd := readerDef(r, owned...)
+	readKeys := slices.Clone(owned)
+	if !slices.Contains(readKeys, keyProfile) {
+		readKeys = append(readKeys, keyProfile)
+	}
+	rd := readerDef(r, readKeys...)
 	return accessor.NewExecutor(registryOf(rd, wd), artifactsOf())
 }
 

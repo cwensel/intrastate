@@ -2,13 +2,6 @@
 // declared-capability executor that invokes read, gate, and write
 // bindings over caller-supplied artifact roles.
 //
-// SKELETON ONLY (Stage 8, Phase 1). Every declaration below is a
-// signature returning a zero value so the RDR 0004 test suite COMPILES
-// and each test fails on its own assertion — naming the REQ its header
-// quotes — rather than the whole package failing with one
-// undefined-symbol error that attributes to no clause. Phase 2 replaces
-// each body. Nothing here implements a check.
-//
 // The boundary this package fixes (`0004:AP`): the executor is NOT a
 // shell runner and NOT a state-machine action callback surface. It
 // invokes typed bindings selected by accessor name and capability,
@@ -19,7 +12,7 @@
 package accessor
 
 import (
-	"context"
+	"slices"
 	"time"
 
 	"github.com/newcoinc/intrastate/internal/resolve"
@@ -45,8 +38,10 @@ const (
 	CapWrite Capability = "write"
 )
 
+var capabilities = []Capability{CapRead, CapGate, CapWrite}
+
 // Capabilities returns the closed three-member capability vocabulary.
-func Capabilities() []Capability { return nil }
+func Capabilities() []Capability { return slices.Clone(capabilities) }
 
 // --- refusal classes -----------------------------------------------------
 
@@ -77,8 +72,19 @@ const (
 	ClassReadBackIncomplete RefusalClass = "read_back_incomplete"
 )
 
+var refusalClasses = []RefusalClass{
+	ClassUnknownAccessor,
+	ClassCapabilityMismatch,
+	ClassTimeout,
+	ClassExecutionFailure,
+	ClassIncompleteRead,
+	ClassGateIndeterminate,
+	ClassReadBackMismatch,
+	ClassReadBackIncomplete,
+}
+
 // RefusalClasses returns the closed accessor refusal-class set.
-func RefusalClasses() []RefusalClass { return nil }
+func RefusalClasses() []RefusalClass { return slices.Clone(refusalClasses) }
 
 // --- validation codes ----------------------------------------------------
 
@@ -108,8 +114,19 @@ const (
 	CodeMissingRequestedKeySet ValidationCode = "missing_requested_key_set"
 )
 
+var validationCodes = []ValidationCode{
+	CodeMissingAccessor,
+	CodeMultiplyBoundAccessor,
+	CodeCapabilityMismatch,
+	CodeMissingOrNonPositiveTimeout,
+	CodeMissingWriteReadBack,
+	CodeAmbientArtifactDiscovery,
+	CodeWriteNonOwnedTag,
+	CodeMissingRequestedKeySet,
+}
+
 // ValidationCodes returns the closed eight-member validation-code set.
-func ValidationCodes() []ValidationCode { return nil }
+func ValidationCodes() []ValidationCode { return slices.Clone(validationCodes) }
 
 // Finding is one validation defect: its own named code plus the identity
 // it attributes to (ORA 1 — each arm asserts its OWN named code, never
@@ -154,11 +171,25 @@ type Definition struct {
 // RequestedKeys returns the reader's validated requested key set, taken
 // from the definition's `keys` metadata and NEVER derived from the keys a
 // read actually resolved (`0004:C5`, LBD Requested key set).
-func (d Definition) RequestedKeys() []string { return nil }
+func (d Definition) RequestedKeys() []string { return slices.Clone(d.Accessor.Keys) }
 
 // OwnedKeys returns the writer's owned key set — the keys it may write or
 // clear, taken from `keys` (LBD, Definition shape).
-func (d Definition) OwnedKeys() []string { return nil }
+func (d Definition) OwnedKeys() []string { return slices.Clone(d.Accessor.Keys) }
+
+// timeout parses the definition's declared timeout metadata. A missing,
+// unparseable, or non-positive value is rejected by Validate before
+// execution (`0004:C16`); at runtime it yields ok = false.
+func (d Definition) timeout() (time.Duration, bool) {
+	if d.Accessor.Timeout == "" {
+		return 0, false
+	}
+	v, err := time.ParseDuration(d.Accessor.Timeout)
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	return v, true
+}
 
 // Registry is the validated set of accessor definitions for one flow.
 type Registry struct {
@@ -169,17 +200,40 @@ type Registry struct {
 	OwnedTags []string
 }
 
-// Validate runs the eight validation arms over the registry and the
-// identities the model references. It returns every finding it can
-// decide, each carrying its own named code. A valid registry returns the
-// EMPTY set — the negative control that fails a validator which rejects
-// everything (ORA 1).
-func Validate(reg Registry, referenced []Identity) []Finding { return nil }
-
 // Lookup selects a binding by capability table and id: an invocation that
 // needs capability X selects only from `[X.<id>]`, never from a same-id
 // entry under another table (LBD, Selection / predicate).
 func (reg Registry) Lookup(name string, capability Capability) (Definition, bool) {
+	for _, d := range reg.Definitions {
+		if d.Identity.Name == name && d.Identity.Capability == capability {
+			return d, true
+		}
+	}
+	return Definition{}, false
+}
+
+// bound reports whether any capability table binds the id at all. It is
+// what separates "not bound" (`unknown_accessor`) from "bound under
+// another capability" (`capability_mismatch`) — two different defects.
+func (reg Registry) bound(name string) bool {
+	for _, d := range reg.Definitions {
+		if d.Identity.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// readerFor selects the read definition serving one artifact role. The
+// read-back re-read goes through it, so the verification is subject to
+// read completeness and can fail independently of the write (`0004:C13`,
+// CA A10).
+func (reg Registry) readerFor(role string) (Definition, bool) {
+	for _, d := range reg.Definitions {
+		if d.Identity.Capability == CapRead && d.Accessor.Role == role {
+			return d, true
+		}
+	}
 	return Definition{}, false
 }
 
@@ -195,63 +249,6 @@ type Artifacts map[string]Artifact
 type Artifact struct {
 	Role string
 	Path string
-}
-
-// --- bindings ------------------------------------------------------------
-
-// KeyValue is one key the binding resolved, with its readability
-// disposition. `Absent` is a VALUE (the binding read the artifact
-// successfully and the key was not there); unreadability is signalled by
-// the binding refusing the key instead (LBD, Absent vs unreadable).
-type KeyValue struct {
-	Key   string
-	Value string
-	// Absent reports that the binding established the key is not carried.
-	// This is the accessor layer's INTERNAL representation; what crosses
-	// the seam omits the key entirely (`0004:C8`).
-	Absent bool
-}
-
-// Binding is the typed invocation seam. It is the only way the executor
-// reaches the outside world: no shell-out, no host callback over
-// transition state (Alternatives 2, 3, 5 rejected).
-//
-// A read or read-back binding implements ReadBinding; a gate binding
-// implements GateBinding; a write binding implements WriteBinding.
-type Binding interface {
-	// Capability reports the capability this binding serves.
-	Capability() Capability
-}
-
-// ReadBinding resolves requested keys from a caller-supplied artifact.
-type ReadBinding interface {
-	Binding
-	// Read resolves each requested key against art. It returns one
-	// KeyValue per key it could read (present or established-absent) and
-	// names in unreadable every requested key it could NOT read. An
-	// error is an execution failure.
-	Read(ctx context.Context, art Artifact, requested []string) (
-		values []KeyValue, unreadable []string, err error)
-}
-
-// GateBinding answers allow, deny, or indeterminate.
-type GateBinding interface {
-	Binding
-	// Gate decides. An error is an execution failure; Indeterminate is
-	// NOT an error, it is the third verdict (`0004:C9`).
-	Gate(ctx context.Context, art Artifact) (Verdict, string, error)
-}
-
-// WriteBinding applies planned owned-tag writes.
-type WriteBinding interface {
-	Binding
-	// Apply performs the mutation. A `<clear>` planned value is a
-	// REMOVAL, not an assignment of the literal (`0004:C11`).
-	Apply(ctx context.Context, art Artifact, planned []resolve.Tag) error
-	// Invocations reports how many times Apply ran, so a test can assert
-	// the accessor layer performed no retry, undo, or re-derivation
-	// (`0004:C14`, ORA 8).
-	Invocations() int
 }
 
 // --- verdicts ------------------------------------------------------------
@@ -271,8 +268,10 @@ const (
 	VerdictIndeterminate Verdict = "indeterminate"
 )
 
+var verdicts = []Verdict{VerdictAllow, VerdictDeny, VerdictIndeterminate}
+
 // Verdicts returns the closed three-member gate verdict vocabulary.
-func Verdicts() []Verdict { return nil }
+func Verdicts() []Verdict { return slices.Clone(verdicts) }
 
 // --- refusals ------------------------------------------------------------
 
@@ -300,6 +299,11 @@ type Refusal struct {
 	// Reason carries a gate's deny reason where the caller mapped a deny
 	// into a refusal. It is never set by this package for a deny.
 	Reason string
+
+	// applied records the post-mutation sense. It is unexported because
+	// only the write path — which knows whether the command already ran —
+	// may set it.
+	applied bool
 }
 
 // Applied reports the post-mutation sense: whether the write command
@@ -308,7 +312,7 @@ type Refusal struct {
 // ran, and those MUST be understood as "the mutation may have been
 // applied and was not verified" — never as a write that did not occur
 // (`0004:C14`).
-func (r Refusal) Applied() bool { return false }
+func (r Refusal) Applied() bool { return r.applied }
 
 // --- results -------------------------------------------------------------
 
@@ -333,7 +337,31 @@ func (r ReadResult) Refused() bool { return r.Refusal != nil }
 // placeholder value — so a required absent key resolves as
 // `owned_state_unavailable` rather than matching a sentinel (`0004:C8`,
 // MVV Scenario 6).
-func (r ReadResult) OwnedSnapshot() []resolve.Tag { return nil }
+func (r ReadResult) OwnedSnapshot() []resolve.Tag {
+	if r.Refusal != nil {
+		return nil
+	}
+	out := make([]resolve.Tag, 0, len(r.Values))
+	for _, v := range r.Values {
+		if v.Absent {
+			// Omission, never a placeholder: a sentinel would make
+			// `TagSet.has` true and silently retire the refusal.
+			continue
+		}
+		out = append(out, resolve.Tag{Key: v.Key, Value: v.Value})
+	}
+	slices.SortFunc(out, func(a, b resolve.Tag) int {
+		switch {
+		case a.Key < b.Key:
+			return -1
+		case a.Key > b.Key:
+			return 1
+		default:
+			return 0
+		}
+	})
+	return out
+}
 
 // GateResult is a gate accessor's disposition. A deny is a typed result
 // carrying a reason (Verdict + Reason); indeterminate, timeout, and
@@ -360,72 +388,6 @@ type WriteResult struct {
 // Refused reports whether the write took the refusal branch.
 func (r WriteResult) Refused() bool { return r.Refusal != nil }
 
-// --- the executor --------------------------------------------------------
-
-// Executor invokes validated accessor definitions against
-// caller-supplied artifacts. It holds no ambient state and performs no
-// scheduling: the caller decides WHEN a gate runs (JDR 0001 §D9 lands the
-// gate SITE in RDR 0005; req-list Q2).
-type Executor struct {
-	Registry  Registry
-	Artifacts Artifacts
-}
-
-// NewExecutor is THE executor constructor.
-func NewExecutor(reg Registry, arts Artifacts) *Executor { return &Executor{} }
-
-// Read invokes the named read accessor. The requested key set comes from
-// the definition's validated metadata, never from the keys the read
-// happened to resolve (`0004:C5`).
-func (e *Executor) Read(ctx context.Context, name string) ReadResult {
-	return ReadResult{}
-}
-
-// Gate invokes the named gate accessor. It REPORTS the verdict and never
-// APPLIES a deny (JDR 0001 §D9; REQ-38).
-func (e *Executor) Gate(ctx context.Context, name string) GateResult {
-	return GateResult{}
-}
-
-// Write invokes the named write accessor for a SUCCESSFUL transition
-// plan, then re-reads the same caller-supplied artifact role named by the
-// write binding and verifies read-back (`0004:C12`).
-//
-// The plan's Writes are the ONLY tags applied; an escaped plan carries an
-// empty write set and no write runs (deviations D1, RDR 0009
-// `0009:1515-1527`).
-func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) WriteResult {
-	return WriteResult{}
-}
-
-// --- replay disposition --------------------------------------------------
-
-// Disposition is the recorded, replay-stable outcome of one invocation.
-// It records artifact role, accessor name, capability, timeout, and the
-// returned tag values — the five the model must record for accessor
-// execution to be deterministic enough for resolver replay (CA A4).
-type Disposition struct {
-	Accessor   string
-	Capability Capability
-	Role       string
-	Timeout    time.Duration
-	// Refusal is the refusal class, empty on success.
-	Refusal RefusalClass
-	// Tags is the returned tag values, rendered deterministically.
-	Tags []resolve.Tag
-	// Verdict is the gate verdict, empty for non-gate invocations.
-	Verdict Verdict
-}
-
-// ReadDisposition renders a read result as a replay-stable disposition.
-func ReadDisposition(def Definition, r ReadResult) Disposition { return Disposition{} }
-
-// GateDisposition renders a gate result as a replay-stable disposition.
-func GateDisposition(def Definition, r GateResult) Disposition { return Disposition{} }
-
-// WriteDisposition renders a write result as a replay-stable disposition.
-func WriteDisposition(def Definition, r WriteResult) Disposition { return Disposition{} }
-
 // --- the reserved clear sentinel -----------------------------------------
 
 // ClearSentinel is the reserved tag value a planned removal takes (JDR
@@ -435,4 +397,4 @@ const ClearSentinel = table.ClearSentinel
 
 // IsClear reports whether a planned tag value is the reserved removal
 // sentinel.
-func IsClear(value string) bool { return false }
+func IsClear(value string) bool { return value == ClearSentinel }
