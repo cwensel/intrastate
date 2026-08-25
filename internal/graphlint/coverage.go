@@ -14,7 +14,7 @@ import (
 // single held value. An atom over a tag NOT declared single-valued has no
 // projection and takes the blocking inability-to-prove outcome
 // (`0003::A21`).
-var singleValueOperators = []string{"eq", "lt", "lte", "gt", "gte"}
+var singleValueOperators = []string{"eq", "in", "lt", "lte", "gt", "gte"}
 
 // checkCoverage runs invariant 4 over one reachable group: the guard
 // exhaustiveness claim, the three withholding triggers, and the per-class
