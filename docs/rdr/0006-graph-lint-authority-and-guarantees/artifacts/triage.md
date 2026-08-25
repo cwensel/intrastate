@@ -52,3 +52,10 @@ recorded as drops with the reason rather than silently discarded:
   produces the described symptom.
 - 6151 #1 and 6155 both reason from deviation state that a later commit had already
   changed (D9→D11; D12's landing commit).
+
+## Fix-commit sweep (bounded, one round)
+
+The FIX-NOW commit `d47d5fb` triggered its own per-commit auto-review, job 6162
+(Low): the `in` classification lacks a behavioural regression test. Per the bounded
+sweep rule a fix-commit finding is **filed, never re-fixed** — kata `dkaw`. Job
+closed. No second round.
