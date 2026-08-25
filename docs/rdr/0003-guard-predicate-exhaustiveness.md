@@ -6,14 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [joint decision → JDR 0001 §JD-18: conforming-view enforcer] [re-locked 2026-08-24 — Gate PASS. Owns the tag declaration
-  model (value kind, finite domain, optionality, single-valuedness, element
-  universe), rehomed from RDR 0002 on 2026-08-21 and ratified by that
-  document's refine. Rejection rules route to RDR 0002's `malformed tag
-  declaration` / `malformed predicate atom` load categories (JDR 0001
-  §D7(iii)); §JD-16 answered by §D6. Four records remain open, none
-  lock-blocking: A18 and A20 close on JDR 0001 §JD-18, and A15 and A21 are
-  discharged by MVV Scenarios 3 and 4 at implementation.]
+- **Status**: Implemented
 - **Type**: Architecture
 - **Profile**: large — locks one guard-predicate contract: symbolic atom grammar plus finite-domain exhaustiveness semantics.
 - **Priority**: High
