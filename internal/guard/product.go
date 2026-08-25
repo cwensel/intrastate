@@ -203,6 +203,110 @@ func Product(m *table.Model, g Group) AssignmentSet {
 	return out
 }
 
+// decidableKeys names the participating keys lint can actually project:
+// each key whose value dimension carries a finite declared domain AND over
+// which no row in the group carries an atom the projection clause refuses
+// to read.
+//
+// Unprojectability belongs to the DIMENSION that carries it, not to the
+// group. A key whose atoms do not project leaves the decidable sub-product;
+// the keys that do project stay in it, so a defect decidable over them
+// alone is still decided. The group's exhaustiveness claim is unaffected —
+// it is withheld either way, and coverage is still compared against the
+// FULL scoped product, never against this restriction.
+func decidableKeys(m *table.Model, g Group) []string {
+	var out []string
+	for _, key := range Dimensions(m, g) {
+		if unprovableDimension(m, g, key) {
+			continue
+		}
+		out = append(out, key)
+	}
+	return out
+}
+
+// unprovableDimension reports whether a participating dimension cannot be
+// proved: it has no finite declared domain, or some row's atom over it does
+// not project.
+func unprovableDimension(m *table.Model, g Group, key string) bool {
+	if _, ok := AssignmentCount(m.Tags[key]); !ok {
+		return true
+	}
+	for _, row := range g.Rows {
+		for _, atom := range guardAtoms(row) {
+			if atom.Key != key {
+				continue
+			}
+			if !Denotation(m, key, atom).Projectable() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// decidableProduct returns the group's scoped product restricted to its
+// decidable dimensions — the product a row constraining only provable keys
+// is expressed over.
+//
+// When every participating dimension is decidable this IS the scoped
+// product, so the provable path computes exactly what it did before. The
+// bound is applied to the restriction on its own terms: a sub-product too
+// large to enumerate is refused here for the same reason the whole product
+// is, and never capped.
+func decidableProduct(m *table.Model, g Group) AssignmentSet {
+	keys := decidableKeys(m, g)
+	if len(keys) == len(Dimensions(m, g)) {
+		return Product(m, g)
+	}
+	return productOver(m, keys)
+}
+
+// productOver builds the cross-product over the named participating keys.
+func productOver(m *table.Model, keys []string) AssignmentSet {
+	card := 1
+	for _, key := range keys {
+		n, ok := AssignmentCount(m.Tags[key])
+		if !ok {
+			return AssignmentSet{}
+		}
+		if card > cardinalityCeiling/max(n, 1) {
+			return AssignmentSet{}
+		}
+		card *= n
+		if card > Bound() {
+			return AssignmentSet{}
+		}
+	}
+
+	var dims []string
+	for _, key := range keys {
+		dims = append(dims, key)
+		if !m.Tags[key].Required {
+			dims = append(dims, presenceDim(key))
+		}
+	}
+	slices.Sort(dims)
+
+	ranges := make([][]string, 0, len(dims))
+	for _, dim := range dims {
+		key, isPresence := valueKeyOf(dim)
+		if isPresence {
+			ranges = append(ranges, []string{string(PresencePresent), string(PresenceAbsent)})
+			continue
+		}
+		values, ok := valueAssignments(m.Tags[key])
+		if !ok {
+			return AssignmentSet{}
+		}
+		ranges = append(ranges, values)
+	}
+
+	out := newSet(dims)
+	cross(dims, ranges, Assignment{}, 0, func(a Assignment) { out.add(a) })
+	return out
+}
+
 // cross enumerates the cross-product of ranges, calling yield once per
 // point. It is the deterministic enumeration the set-valued proof rests on:
 // the same model gives the same points in the same order every run.
@@ -417,6 +521,12 @@ func groupContaining(m *table.Model, row table.Row) Group {
 
 // acceptedIn computes a row's accepted assignments within a known group, so
 // the product it is expressed over is the group's rather than the row's.
+//
+// The product is the group's DECIDABLE sub-product: an atom lint cannot
+// project belongs to the row that carries it, not to every row sharing its
+// group, so one opaque dimension elsewhere in the group does not erase a
+// row that constrains only provable keys. Where every dimension is
+// decidable the sub-product is the scoped product itself.
 func acceptedIn(m *table.Model, g Group, row table.Row) AssignmentSet {
 	if CanRefuse(m.Tags, row) {
 		// The subtraction model is defined over DECIDED atoms. A row that
@@ -428,14 +538,22 @@ func acceptedIn(m *table.Model, g Group, row table.Row) AssignmentSet {
 		return AssignmentSet{}
 	}
 
-	product := Product(m, g)
+	product := decidableProduct(m, g)
 	if !product.Projectable() {
 		return AssignmentSet{}
 	}
+	decidable := decidableKeys(m, g)
 
 	accepted := product
 	var unlessTerms []AssignmentSet
 	for _, atom := range guardAtoms(row) {
+		if !slices.Contains(decidable, atom.Key) {
+			// The row itself carries an atom over an undecidable dimension,
+			// so it has no accepted-assignment set of its own — dropping the
+			// atom and crediting the rest would widen the row past what it
+			// denotes, which is the projection clause's own false-green.
+			return AssignmentSet{}
+		}
 		d := Denotation(m, atom.Key, atom)
 		if !d.Projectable() {
 			return AssignmentSet{}

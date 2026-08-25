@@ -271,15 +271,8 @@ func unprovableReason(m *table.Model, g Group, key string) string {
 	if _, ok := AssignmentCount(m.Tags[key]); !ok {
 		return "no finite declared domain"
 	}
-	for _, row := range g.Rows {
-		for _, atom := range guardAtoms(row) {
-			if atom.Key != key {
-				continue
-			}
-			if !Denotation(m, key, atom).Projectable() {
-				return "unprojectable atom"
-			}
-		}
+	if unprovableDimension(m, g, key) {
+		return "unprojectable atom"
 	}
 	return ""
 }
