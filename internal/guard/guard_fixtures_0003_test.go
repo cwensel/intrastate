@@ -109,6 +109,13 @@ func mustLoadSource(t *testing.T, src string) *table.Model {
 
 // loadCategory loads decls+rule expected to refuse and returns the stable
 // data-level category. The oracle is the category, never message text.
+//
+// The rule carries a write block because RDR 0002 checks rule SHAPE before
+// it parses any atom: without one, every case here would refuse as
+// `malformed rule shape` and the atom defect under test would never be
+// reached. The write block is empty, so it constrains nothing this RDR
+// owns — it only keeps the rule well-formed enough for its guard to be
+// the defect the load reports.
 func loadCategory(t *testing.T, decls, guardBlock string) table.Category {
 	t.Helper()
 
@@ -117,7 +124,8 @@ func loadCategory(t *testing.T, decls, guardBlock string) table.Category {
 id = "r"
 [rule.match.recognized]
 eq = "go"
-` + guardBlock
+` + guardBlock + `[rule.write]
+`
 
 	_, err := table.Load([]byte(src), "fixture.toml")
 	if err == nil {
@@ -257,19 +265,32 @@ func guardRow(ruleID string, atoms ...table.Atom) table.Row {
 	return table.Row{RuleID: ruleID, SourceLocator: "f:1", Atoms: atoms}
 }
 
-// resolveWith runs the real kernel over kt with view supplied as observed
-// tags. It is how a lint claim is checked against the runtime it describes.
+// resolveWith runs the real kernel over kt with view supplied under both
+// tag provenances. It is how a lint claim is checked against the runtime it
+// describes.
+//
+// One evaluation view is exactly what this RDR's `View` is: it carries no
+// provenance, because conformance and the narrowing read the DECLARATION,
+// never a runtime trace. The kernel, though, gates on provenance in two
+// separate places — a row's `RequiresOwned` needs an OWNED-provenance
+// entry, while a guard atom reads whatever the merged view holds — so
+// supplying the view under one provenance alone would refuse
+// `owned_state_unavailable` before any guard was reached, testing the
+// accessor gate rather than the predicate semantics under test. Supplying
+// both is value-identical: `assemble` resolves a key crossing provenances
+// by precedence, never as a conflict.
 func resolveWith(t *testing.T, kt resolve.Table, view guard.View) resolve.Result {
 	t.Helper()
 
-	observed := make([]resolve.Tag, 0, len(view))
+	tags := make([]resolve.Tag, 0, len(view))
 	for _, key := range slices.Sorted(maps.Keys(view)) {
-		observed = append(observed, resolve.Tag{Key: key, Value: view[key]})
+		tags = append(tags, resolve.Tag{Key: key, Value: view[key]})
 	}
 	res, err := resolve.Resolve(resolve.Input{
 		Table:      kt,
 		Recognized: "go",
-		Observed:   observed,
+		Owned:      tags,
+		Observed:   tags,
 		Guards:     guard.Evaluator{},
 	})
 	if err != nil {

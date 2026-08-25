@@ -199,6 +199,14 @@ type View map[string]string
 func Conforms(m *table.Model, v View) error {
 	for _, key := range slices.Sorted(maps.Keys(m.Tags)) {
 		d := m.Tags[key]
+		if d.Provenance == table.ProvenanceRecognized {
+			// The freshly recognized outcome is not a key the view supplies:
+			// the kernel binds it from the recognized outcome itself
+			// (`resolve.go::assemble`). Reading its declaration as an
+			// obligation on the view would make every view non-conforming
+			// and so vacuous every claim conformance is the premise of.
+			continue
+		}
 		held, present := v[key]
 
 		if d.Required && !present {
