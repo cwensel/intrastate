@@ -401,32 +401,38 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		observed[v.Key] = v
 	}
 
-	// `0004:C12`'s PLANNED-OWNED conjunct first, alone: an empty `before`
-	// runs exactly the planned loop and leaves the protected clause
-	// vacuous. This conjunct is baseline-independent, and the re-read that
-	// judges it completed over every compared key — so `0004:C13`'s "the
-	// verification did not run" predicate is false by construction here,
-	// and a demonstrated inequality is `read_back_mismatch` even when the
-	// baseline is unestablished. C13 scopes read completeness to the
-	// RE-READ ("If IT cannot read a key it must compare"), which the three
-	// arms above already enforce; the pre-write baseline is not the
-	// re-read, so it may not swallow a conjunct the re-read did evaluate.
+	// Every conjunct of `0004:C12` that IS evaluable, evaluated BEFORE any
+	// incompleteness refusal: each planned owned tag, and every protected
+	// value the pre-write baseline did establish. `before` holds exactly
+	// the latter — a partial snapshot contributes the keys it read and
+	// omits the rest — so this one call spans the whole verifiable surface
+	// whether the baseline is complete, partial, or wholly unestablished.
 	//
-	// The refusal carries the same shape as the protected-clause mismatch
-	// below. `applied` stays UNSET: `0004:C14` scopes the
-	// applied-but-unverified sense to `read_back_incomplete` and a
-	// post-mutation `timeout`, and a mismatch is not unverified — its
-	// verification ran and found the artifact wrong (REQ-67). No `Keys`
-	// either: `Keys` names what could not be READ, and carrying
-	// `baselineUnread` here would conflate that with "read and wrong".
-	if mismatch := verifyReadBack(planned, nil, observed); mismatch {
+	// The re-read that judges these completed over every compared key, so
+	// `0004:C13`'s "the verification did not run" predicate is false by
+	// construction here and a demonstrated inequality is
+	// `read_back_mismatch`. C13 scopes read completeness to the RE-READ
+	// ("If IT cannot read a key it must compare"), which the three arms
+	// above already enforce; the pre-write baseline is not the re-read, so
+	// it may not swallow a conjunct the re-read did evaluate. Ordering
+	// matters in both directions: a key in `baselineUnread` must not
+	// suppress a mismatch demonstrated on a DIFFERENT key, and REQ-67
+	// forbids collapsing "the artifact is wrong" into "unverified".
+	//
+	// `applied` stays UNSET: `0004:C14` scopes the applied-but-unverified
+	// sense to `read_back_incomplete` and a post-mutation `timeout`, and a
+	// mismatch is not unverified — its verification ran and found the
+	// artifact wrong (REQ-67). No `Keys` either: `Keys` names what could
+	// not be READ, and carrying `baselineUnread` here would conflate that
+	// with "read and wrong".
+	if mismatch := verifyReadBack(planned, before, observed); mismatch {
 		r := refusalOf(def, readTimeout, ClassReadBackMismatch)
 		r.Expected = planned
 		r.Observed = observedTags(observedValues)
 		return WriteResult{Refusal: r}
 	}
 
-	// The planned-owned conjunct held. A protected key with no established
+	// No evaluable conjunct failed. A protected key with no established
 	// pre-write value still cannot be compared, so `0004:C12`'s "unchanged"
 	// clause did not run for it: `read_back_incomplete` — never a mismatch,
 	// which asserts the artifact is wrong, and never success (`0004:C13`,
@@ -436,13 +442,6 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		r.applied = true
 		r.Keys = baselineUnread
 		r.Expected = planned
-		return WriteResult{Refusal: r}
-	}
-
-	if mismatch := verifyReadBack(planned, before, observed); mismatch {
-		r := refusalOf(def, readTimeout, ClassReadBackMismatch)
-		r.Expected = planned
-		r.Observed = observedTags(observedValues)
 		return WriteResult{Refusal: r}
 	}
 

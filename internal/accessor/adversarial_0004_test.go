@@ -713,3 +713,109 @@ func TestAdv7_WhollyFailedBaselineMustNotSuppressThePlannedOwnedReadBack(t *test
 			w.Invocations())
 	}
 }
+
+// --- ADV-8 ---------------------------------------------------------------
+
+// ADV-8 — a PARTIAL pre-write baseline suppresses the read-back of the
+// protected values it DID establish, so a write that clobbers a protected
+// non-owned tag it never owned is reported as "applied, unverified"
+// rather than as a mismatch.
+//
+// Failure mode: with the planned-owned conjunct evaluated first but the
+// PROTECTED conjunct still deferred until after the `baselineUnread` arm,
+// one unread protected key suppresses a mismatch demonstrated on a
+// DIFFERENT, fully established protected key. `Write` returned
+// `read_back_incomplete` naming the unread key while the artifact was
+// provably wrong about the established one.
+//
+// This is the same defect ADV-6 and ADV-7 close, one conjunct further in.
+// `0004:C12` obligates verifying "that observed and recognized tag values
+// present BEFORE the write are unchanged". A key the pre-write snapshot
+// read is exactly such a value: its comparison is fully evaluable, and the
+// completed re-read supplies the other side of it. `0004:C13` scopes
+// incompleteness to keys the RE-READ cannot read — this key was read by
+// both reads — so reporting "the verification did not run" for a
+// comparison that ran and FAILED inverts the class, and REQ-67 forbids
+// collapsing "the artifact is wrong" into "unverified".
+//
+// Requires TWO protected keys, so the executor is built directly rather
+// than through `writeExec`, whose reader keys are `owned + profile`.
+//
+// Defends: `0004:C12` / REQ-50, REQ-56, REQ-62, REQ-67 (mismatch and
+// incomplete stay distinct senses), `0004:C14` / REQ-65, REQ-80.
+func TestAdv8_PartialBaselineMustNotSuppressAnEstablishedProtectedReadBack(t *testing.T) {
+	s := newStore(map[string]string{
+		keyStatus:  "draft",
+		keyProfile: "large",
+		keyLabels:  "alpha",
+	})
+
+	w := &writeBinding{store: s}
+	r := &readBinding{store: s}
+	// The plan writes only `status`, so BOTH `profile` and `labels` are
+	// protected (`protectedKeys` = reader keys minus the plan's own).
+	e := accessor.NewExecutor(
+		registryOf(
+			readerDef(r, keyStatus, keyProfile, keyLabels),
+			writerDef(w, keyStatus),
+		),
+		artifactsOf(),
+	)
+
+	// PARTIAL pre-write snapshot: `labels` is unreadable, so it lands in
+	// `baselineUnread`, while `profile` resolves and is ESTABLISHED in
+	// `before` at "large". `raw.class` stays empty — the gap arrives
+	// solely through `classify`'s `unread` return.
+	s.unreadable[keyLabels] = true
+	// The binding applies its own owned tag CORRECTLY, so the
+	// planned-owned conjunct holds and cannot be what trips the refusal.
+	// It then clobbers the ESTABLISHED protected key it does not own, and
+	// restores `labels` readability so the post-write re-read completes.
+	w.corrupt = func(st *store) {
+		st.tags[keyProfile] = "small"
+		delete(st.unreadable, keyLabels)
+	}
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyStatus, Value: "final"},
+	))
+
+	if !got.Refused() {
+		t.Fatalf("Write reported SUCCESS (Written=%+v) while the write changed "+
+			"protected %q from %q to %q", got.Written, keyProfile, "large", "small")
+	}
+
+	// `profile`'s "unchanged" comparison was FULLY evaluable: the
+	// pre-write read established "large" and the completed re-read
+	// observed "small". `read_back_incomplete` here would report a
+	// demonstrated corruption as merely unverified, on the strength of an
+	// unrelated key's gap.
+	if got.Refusal.Class != accessor.ClassReadBackMismatch {
+		t.Errorf("Write refused %q; want read_back_mismatch — protected %q was "+
+			"ESTABLISHED at %q pre-write and the completed re-read observed %q. "+
+			"`0004:C13` scopes read_back_incomplete to a RE-READ that cannot read a "+
+			"compared key; the baseline gap on the UNRELATED key %q does not excuse "+
+			"`0004:C12`'s unchanged clause for a key both reads resolved",
+			got.Refusal.Class, keyProfile, "large", "small", keyLabels)
+	}
+	// As in ADV-6/ADV-7: a mismatch carries the verified-and-wrong sense,
+	// never the applied-but-unverified one (`0004:C14`, REQ-67).
+	if got.Refusal.Applied() {
+		t.Error("Refusal.Applied() = true on a mismatch; the verification RAN and " +
+			"found the artifact wrong (`0004:C14`, REQ-67)")
+	}
+	if v, ok := seamValueOf(got.Refusal.Observed, keyProfile); !ok || v != "small" {
+		t.Errorf("Refusal.Observed carries %q = (%q, present=%v); want the HELD %q — a "+
+			"mismatch diagnostic that omits the clobbered value cannot be acted on",
+			keyProfile, v, ok, "small")
+	}
+	if len(got.Refusal.Keys) != 0 {
+		t.Errorf("Refusal.Keys = %v on a mismatch; want unset — `Keys` names keys that "+
+			"could not be READ, and carrying the unestablished baseline key here "+
+			"conflates \"could not read\" with \"read and wrong\"", got.Refusal.Keys)
+	}
+	if w.Invocations() != 1 {
+		t.Errorf("write binding invoked %d times; want exactly 1 (`0004:C14`, REQ-65)",
+			w.Invocations())
+	}
+}
