@@ -234,10 +234,21 @@ func TestReq117_OverlapIsDeferredAndNotAssertedHere(t *testing.T) {
 // not be narrowed on promotion, only extended."
 // BOUNDARY
 //
-// Every fixture in the approved iter-2 set is present in testdata. The
-// check is by NAME so a narrowed promotion is caught, and the RDR fixture
-// is additionally compared for its row census (nine rows), which is what
-// "not narrowed" means for its content.
+// Three legs, because a name is not evidence. (1) Every fixture in the
+// approved iter-2 set is present in testdata AT THE SAME RELATIVE PATH: a
+// basename match lets a fixture be relocated out of the directory whose
+// walk drives TestReq119, silently dropping it from the category census.
+// (2) Every promoted negative still refuses with the specific category it
+// was promoted witnessing: a negative rewritten to trip a different (or
+// no) category is a narrowing that neither a name check nor an aggregate
+// census can see. (3) The two positives are compared by normalized row
+// IDENTITY, not by row count: a nine-row fixture with one row swapped for
+// filler keeps its census and loses its coverage.
+//
+// Every leg iterates the SPIKE set and asserts it is covered by what is
+// promoted, never the converse — REQ-118 permits extension, and an
+// equality assertion would fail on every legitimate new fixture until
+// someone loosened it back to basenames.
 func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 	spike := filepath.Join("..", "..", "docs", "rdr",
 		"0002-transition-table-as-reviewable-data", "evidence", "spikes", "iter-2")
@@ -247,15 +258,21 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(path, ".toml") {
-			promoted[filepath.Base(path)] = true
+		if info.IsDir() || !strings.HasSuffix(path, ".toml") {
+			return nil
 		}
+		rel, err := filepath.Rel("testdata", path)
+		if err != nil {
+			return err
+		}
+		promoted[rel] = true
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("walk testdata: %v", err)
 	}
 
+	var spikeNegatives []string
 	err = filepath.Walk(spike, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -263,9 +280,20 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 		if info.IsDir() || !strings.HasSuffix(path, ".toml") {
 			return nil
 		}
-		if !promoted[filepath.Base(path)] {
-			t.Errorf("spike fixture %s is not promoted; the set may be extended, "+
-				"never narrowed", filepath.Base(path))
+		rel, err := filepath.Rel(spike, path)
+		if err != nil {
+			return err
+		}
+		if !promoted[rel] {
+			t.Errorf("spike fixture %s is not promoted at testdata/%s; the set "+
+				"may be extended, never narrowed. Relocating a fixture IS a "+
+				"narrowing under REQ-118 — it drops out of the directory walks "+
+				"that drive the category census — and must be recorded as a "+
+				"deviation, not absorbed by matching on basename", rel, rel)
+			return nil
+		}
+		if filepath.Dir(rel) == "neg" {
+			spikeNegatives = append(spikeNegatives, rel)
 		}
 		return nil
 	})
@@ -273,14 +301,112 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 		t.Fatalf("walk spike: %v", err)
 	}
 
-	t.Run("the RDR fixture's row census is nine", func(t *testing.T) {
-		if got := len(mustLoad(t, rdrFixture).Rows); got != 9 {
-			t.Errorf("%d rows; want 9 — the approved census", got)
+	t.Run("every promoted negative still trips its recorded category", func(t *testing.T) {
+		// The oracle is the stable data-level category, never the message
+		// text (REQ-110, REQ-119) — the same machinery TestReq119 walks
+		// neg/ with, pinned here per fixture instead of counted in
+		// aggregate. A global "the census did not shrink" check does not
+		// bite: rewriting one negative to trip a category some OTHER
+		// negative already witnesses leaves the census whole while that
+		// negative's own coverage is gone. Only a per-fixture pin catches it.
+		//
+		// The categories are recorded here rather than read back from the
+		// spike copies because the spike copies do not load: iter-2 predates
+		// the kind = "string" to "scalar" rename (internal/table/model.go,
+		// declaredKinds), so every spike file refuses at tag declaration
+		// before reaching its intended mutation. Extending the promoted set
+		// does not touch this map; narrowing a promoted negative does.
+		want := map[string]table.Category{
+			"neg/neg-accessor-no-timeout.toml":              "malformed_accessor_declaration",
+			"neg/neg-alphabet-hash.toml":                    "malformed_recognized_outcome_alphabet",
+			"neg/neg-bad-exists.toml":                       "malformed_predicate_atom",
+			"neg/neg-case-folded-tag.toml":                  "unknown_tag",
+			"neg/neg-clear-as-write.toml":                   "reserved_tag_value",
+			"neg/neg-clear-in-initial.toml":                 "reserved_tag_value",
+			"neg/neg-dup-alphabet-member.toml":              "malformed_recognized_outcome_alphabet",
+			"neg/neg-duplicate-rule-id.toml":                "duplicate_rule_id",
+			"neg/neg-empty-alphabet-member.toml":            "malformed_recognized_outcome_alphabet",
+			"neg/neg-escape-with-clear.toml":                "malformed_escape_declaration",
+			"neg/neg-escape-with-gate.toml":                 "malformed_escape_declaration",
+			"neg/neg-escape-with-write.toml":                "malformed_escape_declaration",
+			"neg/neg-gate-is-reader.toml":                   "unknown_accessor",
+			"neg/neg-guard-all-bad-operator.toml":           "malformed_predicate_atom",
+			"neg/neg-guard-all-clear.toml":                  "reserved_tag_value",
+			"neg/neg-guard-unless-bad-operator.toml":        "malformed_predicate_atom",
+			"neg/neg-guard-unless-clear.toml":               "reserved_tag_value",
+			"neg/neg-guard-unless-out-of-domain.toml":       "malformed_predicate_atom",
+			"neg/neg-guard-unless-unknown-tag.toml":         "unknown_tag",
+			"neg/neg-in-member-hash.toml":                   "malformed_predicate_atom",
+			"neg/neg-initial-bad-value.toml":                "malformed_initial_declaration",
+			"neg/neg-initial-int-out-of-range.toml":         "malformed_initial_declaration",
+			"neg/neg-initial-unknown.toml":                  "unknown_tag",
+			"neg/neg-literal-outside-domain.toml":           "malformed_predicate_atom",
+			"neg/neg-match-exists.toml":                     "malformed_predicate_atom",
+			"neg/neg-match-lt.toml":                         "malformed_predicate_atom",
+			"neg/neg-no-write-block.toml":                   "malformed_rule_shape",
+			"neg/neg-outcome-outside.toml":                  "malformed_outcome_binding",
+			"neg/neg-owned-no-reader.toml":                  "malformed_accessor_binding",
+			"neg/neg-owned-two-readers.toml":                "malformed_accessor_binding",
+			"neg/neg-recognized-in-guard.toml":              "malformed_outcome_binding",
+			"neg/neg-recognized-in-keys.toml":               "malformed_accessor_binding",
+			"neg/neg-recognized-misnamed.toml":              "reserved_tag_key",
+			"neg/neg-ruleid-hash.toml":                      "malformed_rule_id",
+			"neg/neg-terminal-unknown.toml":                 "unknown_context",
+			"neg/neg-unknown-context.toml":                  "unknown_context",
+			"neg/neg-unknown-field.toml":                    "unknown_schema_field",
+			"neg/neg-unknown-tag-match.toml":                "unknown_tag",
+			"neg/neg-v2-shaped.toml":                        "unsupported_version",
+			"neg/neg-version.toml":                          "unsupported_version",
+			"neg/neg-write-observed.toml":                   "write_to_non_owned_tag",
+			"neg/probe-a-initial-observed-no-writer.toml":   "malformed_accessor_binding",
+			"neg/probe-b-initial-observed-with-writer.toml": "write_to_non_owned_tag",
+		}
+
+		for _, rel := range spikeNegatives {
+			w, ok := want[filepath.ToSlash(rel)]
+			if !ok {
+				t.Errorf("spike negative %s has no recorded category; a promoted "+
+					"negative must be pinned to the category it witnesses", rel)
+				continue
+			}
+			if got := loadCategory(t, rel); got != w {
+				t.Errorf("%s refuses with category %q; want %q — a negative "+
+					"rewritten to trip a different category is a narrowing under "+
+					"REQ-118 even though the neg/ census stays whole", rel, got, w)
+			}
+		}
+		if len(spikeNegatives) != len(want) {
+			t.Errorf("%d spike negatives walked but %d categories recorded; the "+
+				"pin must cover every promoted negative",
+				len(spikeNegatives), len(want))
 		}
 	})
-	t.Run("the kata fixture's row census is two", func(t *testing.T) {
-		if got := len(mustLoad(t, kataFixture).Rows); got != 2 {
-			t.Errorf("%d rows; want 2 — the approved census", got)
+
+	t.Run("the RDR fixture's row identities are the approved nine", func(t *testing.T) {
+		want := []string{
+			"rdr.continue-prelock#foundational",
+			"rdr.continue-prelock#large",
+			"rdr.continue-prelock-cluster#foundational",
+			"rdr.continue-prelock-cluster#large",
+			"rdr.draft-no-match-escape#reconcile-block",
+			"rdr.draft-no-match-escape#round-clean",
+			"rdr.reconcile-rewind",
+			"rdr.terminal-archive#finalized",
+			"rdr.terminal-archive#verdict-flapping",
+		}
+		if got := rowIdentities(mustLoad(t, rdrFixture)); !reflect.DeepEqual(got, want) {
+			t.Errorf("row identities =\n %v\nwant\n %v — the approved set. A row "+
+				"swapped for filler holds the census and narrows the coverage",
+				got, want)
+		}
+	})
+	t.Run("the kata fixture's row identities are the approved two", func(t *testing.T) {
+		want := []string{
+			"kata.review-accepted",
+			"kata.review-needs-work",
+		}
+		if got := rowIdentities(mustLoad(t, kataFixture)); !reflect.DeepEqual(got, want) {
+			t.Errorf("row identities =\n %v\nwant\n %v — the approved set", got, want)
 		}
 	})
 }
