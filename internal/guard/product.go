@@ -418,6 +418,16 @@ func groupContaining(m *table.Model, row table.Row) Group {
 // acceptedIn computes a row's accepted assignments within a known group, so
 // the product it is expressed over is the group's rather than the row's.
 func acceptedIn(m *table.Model, g Group, row table.Row) AssignmentSet {
+	if CanRefuse(m.Tags, row) {
+		// The subtraction model is defined over DECIDED atoms. A row that
+		// can refuse has no decidable accepted-assignment set to
+		// contribute, so it yields the unprojectable set rather than its
+		// `all`-intersection unsubtracted — crediting it is the false-green
+		// the narrowing forbids, and it is why the surviving overlap check
+		// is scoped to the group's DECIDABLE rows.
+		return AssignmentSet{}
+	}
+
 	product := Product(m, g)
 	if !product.Projectable() {
 		return AssignmentSet{}
