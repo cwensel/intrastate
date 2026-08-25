@@ -213,7 +213,7 @@ func (r Row) KernelRow() resolve.Row {
 		guard = append(guard, resolve.GuardAtom{
 			Key:      a.Key,
 			Operator: a.Operator,
-			Literal:  seamValue(a.Literal, r.isSet(a.Key)),
+			Literal:  seamValue(a.Literal, setValuedLiteral(a.Operator) || r.isSet(a.Key)),
 			Block:    a.Block,
 		})
 	}
@@ -236,6 +236,29 @@ func (r Row) KernelRow() resolve.Row {
 	}
 }
 
+// setValuedLiteral reports whether an operator's right-hand side is a
+// member SET rather than a single value, which decides the literal's
+// carriage form independently of the tag's declared kind.
+//
+// `0002:C17` fixes the split: "`eq`, `in`, and `contains` take members and
+// are domain-checked" — but RDR 0003 fences `eq` and the comparisons as
+// SINGLE-VALUE operators ("the tag's single held value IS the literal"),
+// leaving `in` (membership in a literal set) and `contains` (set
+// containment) as the two whose literal is a set. The shipped cross-RDR
+// contract test agrees byte for byte:
+// `internal/resolve/guardcontract.go` drives `{"in", ["alpha","beta"],
+// "alpha"}` and `{"contains", ["alpha"], ["alpha","beta"]}`, so an `in` or
+// `contains` literal MUST cross as the §D13 array whatever the tag's kind.
+//
+// Getting this from the declared kind alone truncated the literal to
+// `members[0]`, and on the `in` arm that DEADLOCKED rather than refused:
+// RDR 0007's evaluator parses the literal as a JSON array, must answer
+// `GuardUnevaluable` on a bare string, and the unevaluable-candidate veto
+// then blocks decidable siblings.
+func setValuedLiteral(operator string) bool {
+	return operator == "in" || operator == "contains"
+}
+
 // seamValue encodes a member sequence for the kernel seam, where
 // resolve.Tag.Value and GuardAtom.Literal are both `string`.
 //
@@ -243,9 +266,14 @@ func (r Row) KernelRow() resolve.Row {
 // array — members sorted, duplicate-free, compact encoding — and read-back
 // equality (RDR 0004) is byte equality over that array. RDR 0007 already
 // wrote its `contains` leg against §D13, so this is the form it matches
-// rather than a second encoding. Set-ness is the DECLARED kind, not the
-// member count: a one-member set still crosses as a one-element array, or
-// read-back could not tell `["a"]` from the scalar `a`.
+// rather than a second encoding.
+//
+// Two things make a value a set here, and they answer different questions.
+// For a tag VALUE — `Tag.Value` on a match tag, a next-state tag, or a
+// write — set-ness is the DECLARED kind, not the member count: a one-member
+// set still crosses as a one-element array, or read-back could not tell
+// `["a"]` from the scalar `a`. For a guard atom LITERAL it is additionally
+// the OPERATOR, per setValuedLiteral above.
 //
 // A non-set value crosses as its single member verbatim, which is what
 // keeps a `<clear>` write the bare sentinel the kernel and RDR 0004 expect.
@@ -257,6 +285,11 @@ func seamValue(members []string, isSet bool) string {
 		if len(members) == 0 {
 			return ""
 		}
+		// A non-set value is one member by construction: load refuses a
+		// multi-member literal on a single-value operator and a
+		// multi-member value on a non-`set` kind, at every authoring site.
+		// The seam is where a surplus member would vanish unreported, so
+		// the refusals are upstream of it rather than a truncation here.
 		return members[0]
 	}
 	canonical := slices.Compact(slices.Sorted(slices.Values(members)))

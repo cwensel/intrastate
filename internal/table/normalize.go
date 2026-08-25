@@ -112,6 +112,20 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 		if !isBool(raw) {
 			return badAtom("an existence literal is a boolean")
 		}
+	case "eq":
+		// `eq` is a SINGLE-VALUE operator (RDR 0003: "`eq`, `in`, and the
+		// integer comparisons are single-value operators … an atom denotes
+		// the assignments in which the tag's single held value IS the
+		// literal"), so a multi-member literal has no denotation. It is
+		// refused here rather than truncated at the kernel seam: `0002:C3`
+		// makes a malformed authoring a stable refusal, never a silent
+		// reinterpretation, and `0002:C22` lands RDR 0003's rejection
+		// rules in this category. A one-element array stays admitted —
+		// `0002:C13` fixes `eq = "x"` and the one-member spelling as one
+		// spelling of one edge.
+		if isArray(raw) && len(members) != 1 {
+			return badAtom("`eq` is a single-value operator and takes one member")
+		}
 	case "lt", "lte", "gt", "gte":
 		if isArray(raw) {
 			return badAtom("a comparison bound is one value")
@@ -486,6 +500,15 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		// than a delimiter-joined string (`0002:C4`).
 		if decl.Kind == "set" {
 			members = slices.Compact(slices.Sorted(slices.Values(members)))
+		} else if len(members) != 1 {
+			// `0002:C4` gives the array literal a meaning for a `set` kind
+			// only. On any other kind a multi-member value is ill-formed
+			// for the declared kind and is refused rather than truncated
+			// at the seam, where `resolve.Tag.Value` is one string and
+			// RDR 0004's read-back compares it for equality.
+			return nil, nil, fail(CatMalformedTagDeclaration,
+				"rule "+id+" write "+key+": kind "+decl.Kind+
+					" holds one value, not a member sequence")
 		}
 		assignments[key] = members
 	}

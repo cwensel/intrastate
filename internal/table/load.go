@@ -487,6 +487,16 @@ func (l *loader) loadInitial() error {
 		if err := conform(decl, "eq", members); err != nil {
 			return fail(CatMalformedInitialDeclaration, "[initial] "+key+": "+err.Error())
 		}
+		// Well-formedness for the declared kind includes ARITY: only a
+		// `set` kind holds a member sequence, so a multi-member value on
+		// any other kind is ill-formed for that kind. Refusing it here
+		// keeps the seam from truncating it — `resolve.Tag.Value` is one
+		// string, so the surplus members would vanish unreported.
+		if decl.Kind != "set" && len(members) != 1 {
+			return fail(CatMalformedInitialDeclaration,
+				"[initial] "+key+": kind "+decl.Kind+
+					" holds one value, not a member sequence")
+		}
 		// Every [initial] key MUST be a declared OWNED tag. A non-owned key
 		// is caught by the writer binding, which no observed tag can
 		// satisfy without tripping `write to non-owned tag` first.
@@ -534,14 +544,23 @@ func valueMembers(v any) ([]string, error) {
 	case []any:
 		out := make([]string, 0, len(t))
 		for _, item := range t {
+			// A nested array is not a member sequence and the format
+			// admits no such spelling, so it is refused on its SHAPE, not
+			// on its arity. Testing arity instead unwrapped a one-element
+			// nested array and silently reinterpreted `[["a"], "b"]` as
+			// `["a", "b"]`, which defeats `0002:C3`'s governing principle
+			// — a malformed authoring is a stable refusal, never a silent
+			// no-op — and made the same authoring error refuse or succeed
+			// depending on how many elements the inner array happened to
+			// hold.
+			if isArray(item) {
+				return nil, fmt.Errorf("nested array literals are not a member sequence")
+			}
 			members, err := valueMembers(item)
 			if err != nil {
 				return nil, err
 			}
-			if len(members) != 1 {
-				return nil, fmt.Errorf("nested array literals are not a member sequence")
-			}
-			out = append(out, members[0])
+			out = append(out, members...)
 		}
 		return out, nil
 	default:
