@@ -84,7 +84,16 @@ func accessorsFor(decls string) string {
 	for line := range strings.Lines(decls) {
 		line = strings.TrimSpace(line)
 		if name, ok := strings.CutPrefix(line, "[tags."); ok {
+			// A tag name TOML must quote — one carrying `.`, `;`, or any
+			// other bare-key-illegal rune — arrives here still wearing its
+			// quotes. The accessor `keys` list is re-quoted below, so the
+			// authored quotes must come off first or the accessor binds a
+			// tag literally named `"a;b"` and the loader refuses the
+			// fixture for an undeclared tag.
 			key = strings.TrimSuffix(name, "]")
+			if unquoted, err := strconv.Unquote(key); err == nil {
+				key = unquoted
+			}
 			continue
 		}
 		if line == `provenance = "owned"` && key != "" {

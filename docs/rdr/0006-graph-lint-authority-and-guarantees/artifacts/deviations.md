@@ -482,3 +482,155 @@ target plus the `build` edge on `check`.
   same `guard.AssignmentCount` predicate, so a dimension abstracted here is
   still reported unprovable there. The REQ-122 census over `models/rdr.toml` remains zero
   findings after the change.
+
+## D16 — Composite keys escape their fields before joining
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-87, REQ-106, REQ-108, REQ-114; RDR 0002 REQ-126, REQ-127.
+- **Finding**: three composite keys joined authored strings on unescaped
+  structural delimiters, and each collision is false-green. (1)
+  `presenceKey` appended `k + ";"`, so the footprints `{"a;b"}` and
+  `{"a", "b"}` both render `a;b;`. That key is the successor-join group id
+  in `successorsOf`, so two DIFFERENT owned-states land in one group and
+  `joinNodes`'s absence-dominates arm erases every key held on only one
+  side: a fixture declaring owned tags `a;b`, `a`, `b` and two rows writing
+  `{status=b, "a;b"=l}` and `{status=b, a=l, b=l}` yields the reachable set
+  `{status:[a]}, {status:[b]}` — all three owned keys gone, so invariant 6
+  will certify a read of a tag the runtime does hold. (2) `Node.key`
+  appended `k + "=" + join(vals, ",") + ";"`, so `{a: "b;c=d"}` and
+  `{a: "b", c: "d"}` both render `a=b;c=d;`. That key is the `seen`
+  de-duplication identity BOTH terminal walks in `analysis.go` close on and
+  the fixpoint equality in `reach`, so the collision emits ONE
+  `graph-dead-end` where two are owed and can terminate the widening early.
+  (3) `Fingerprint` and `compareAtoms` joined atom fields and set members on
+  `,`/`;`/`|`/`#`, so a guard `in` over `["a,b", "c"]` and one over
+  `["a", "b,c"]` both render `mark|all|in|a,b,c;` — two rows, one finding
+  identity.
+- **Evidence**: reachability is not hypothetical. `internal/table` imposes
+  NO charset on a tag name or a set member — `tagDecl` in
+  `internal/table/load.go` validates provenance, kind, per-kind fields, and
+  bounds only — and a fixture declaring a tag literally named `a;b`
+  (TOML-quoted key `["tags"."a;b"]`) loads clean. RDR 0002 REQ-126/127 name
+  case (3)'s pair verbatim as a MUST: `["a,b", "c"]` and `["a", "b,c"]`
+  "MUST yield two atoms in the normalized set", and the loader's own
+  fixtures already ship them at `internal/table/testdata/delim/`. REQ-114
+  closes the finding-identity tuple on the fingerprint, so (3)'s collision
+  costs determinism as well as separation. REQ-106 fixes the direction for
+  (1) and (2): the traversal over-approximates the runtime, and a rendering
+  that merges two owned-states under-approximates it.
+- **Chosen**: one unexported `escapeField` beside `canonicalValues` in
+  `reach.go`, applied to every field of all three composites — `presenceKey`
+  escapes the tag name, `Node.key` escapes the key and each value,
+  `Fingerprint` escapes key, block, operator, each literal member, and each
+  next-state key and value, and `compareAtoms` escapes through the same
+  `literalKey` the fingerprint writes so the sort key and the rendering can
+  never diverge. The encoding is backslash escaping: `\` → `\\` first, then
+  each of `;` `=` `,` `|` `#`. Canonicalization runs BEFORE escaping, so
+  `canonicalValues` still sorts and compacts the AUTHORED values and the
+  canonical form stays a property of what the author wrote.
+  `internal/table` was not touched: a charset restriction on tag names is a
+  loader decision RDR 0002 owns, and lint must be sound over every model the
+  loader accepts today.
+- **Premortem**: REQ-87 requires the fingerprint be "readable, never a hash,
+  sortable", which is what ruled out the two alternatives. A length prefix
+  is injective but destroys lexicographic sortability outright — `10:` sorts
+  before `2:` — so a sort over fingerprints would stop being meaningful.
+  `encoding/json` is injective and reversible but reorders nothing legibly
+  and needs its own sortability argument. Backslash escaping keeps all
+  three: it is injective (prefix-free and reversible), readable (`a\;b;` is
+  eyeball-distinguishable from `a;b;`), and sort-preserving, because `\`
+  (U+005C) sorts above every delimiter (the highest is `=` at U+003D), so
+  escaping only ever moves a delimiter-bearing member LATER and never
+  transposes two members already correctly ordered. The risk that remains is
+  a fourth renderer added later that joins without escaping; `escapeField`
+  and `escapeJoin` are the one escape in the package precisely so a sort key
+  and the composite it orders cannot diverge. The REQ-122 census over
+  `models/rdr.toml` remains zero findings after the change, and REQ-85's
+  order-independence assertion is unaffected — no value in that fixture
+  carries a delimiter, so every escaped rendering is byte-identical to the
+  old one.
+
+## D17 — The escape carries injectivity; `compareAtoms` carries the order
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-87, REQ-106, REQ-108, REQ-114; RDR 0002 REQ-126, REQ-127,
+  `0002:C19`.
+- **Finding**: two defects in D16's encoding, both found by review of that
+  record's own premortem.
+
+  (1) D16's premortem claims backslash escaping is sort-preserving because
+  `\` (U+005C) sorts above every structural delimiter, so escaping "only
+  ever moves a delimiter-bearing member LATER". That reasoning compares the
+  escape against the delimiter it replaces, but a sort compares against
+  whatever the NEIGHBOUR carries at that position. `["a,b"]` precedes
+  `["a0"]` as authored — `,` (U+002C) < `0` (U+0030) — and follows it once
+  escaped, because the inserted `\` (U+005C) now occupies that position and
+  U+005C > U+0030. The two transpose. `compareAtoms` had been changed to
+  sort on `literalKey`, the escaped rendering, so a row's atoms were ordered
+  by an artifact of the encoding rather than by RDR 0002's canonical order —
+  which is precisely the order REQ-87 names as the one the fingerprint must
+  be in.
+
+  (2) `escapeJoin` joined members on the separator, which is not injective
+  over member-sequence CARDINALITY: `[]` and `[""]` both render the empty
+  string, so `k=;` stood for two different states. Both are authorable — a
+  `set` declaring no `elements` constrains no member (`conformDomain` guards
+  on `len(d.Elements) > 0`), and `conform` loops zero times over an empty
+  member sequence, so `write = { k = [] }` and `write = { k = [""] }` both
+  load. They are not the same state: `[]` satisfies no value atom while
+  `[""]` satisfies `eq ""`.
+
+- **Decision**: separate the two concerns D16 had conflated onto the escape.
+  `escapeField`'s contract is INJECTIVITY only, and its doc comment now says
+  so rather than claiming an order guarantee it does not have.
+  `compareAtoms` compares the literal element by element over the canonical
+  AUTHORED members — `slices.Compare(canonicalValues(a.Literal), ...)` —
+  which is what `internal/table.compareAtoms` does and what `0002:C19`
+  defines as normative. The atoms are therefore ordered BEFORE any escaping,
+  and the escape is an encoding applied after the order is fixed.
+  `escapeJoin` TERMINATES each member with the separator instead of joining
+  on it, so `[]` renders `` and `[""]` renders `,`.
+- **Premortem**: the terminator keeps everything REQ-87 asks. It stays
+  readable — `a,b,` is as legible as `a,b`, and the written value is still
+  eyeball-visible in the next-state half — and it is never a hash. It is
+  injective over cardinality as well as content, because every member is
+  followed by its terminator, so no member sequence's rendering is a prefix
+  of a different one's. Sortability is no longer asked of the encoding at
+  all, which is the point: the sort is over authored members and cannot be
+  perturbed by a later change to the escape.
+
+  The reachability of the two arms differs, and the fix is scoped to the one
+  that is live. `Reach` abstracts an unconstrained `set` to `OpaqueValue`
+  under D15 — a `set` with no `elements` carries no finite domain — so the
+  `[]`/`[""]` pair never reaches `Node.key` or `presenceKey`; and a `set`
+  WITH `elements` is finite but cannot admit `""`, which `conformDomain`
+  refuses. `Fingerprint` has no such abstraction between the authored value
+  and the rendering: it closes over the row's raw `NextTags`, so that is
+  where the collision was reachable and where the regression test pins it.
+
+  Both regression tests were checked against the pre-fix code and both fail
+  there, so neither is vacuous. The REQ-122 census over `models/rdr.toml`
+  remains zero findings. One existing assertion in
+  `TestReq87_FingerprintIsACanonicalSortableSerializationNeverAHash` moved
+  from `status=c;` to `status=c,;`: it asserts the written value is READABLE
+  and not a hash, which the terminator preserves — the expected substring
+  had incidentally encoded the old infix-join form.
+
+  **Scope of the order guarantee.** REQ-87's "canonical sortable
+  serialization" is about the atoms WITHIN one fingerprint, and that is
+  what `compareAtoms` now delivers. It is NOT a claim that two fingerprints
+  sort against each other in authored-literal collation: `identityKey`
+  sorts findings on the fingerprint STRING, so two identities differing by
+  the transposing pair (`a,b` vs `a0`) still compare in escaped order. No
+  requirement asks otherwise. REQ-86 orders findings by the REQ-114 tuple —
+  model id, invariant code, rule/context or element id, THEN fingerprint —
+  where the fingerprint is the final tie-break and what is required of it
+  is injectivity and determinism, both of which hold. REQ-89 asks for
+  determinism asserted as full-list golden equality, not a collation
+  property, and REQ-88's cross-finding clause is about identity NAMESPACES
+  rather than literals. Making the emitted order track authored collation
+  would mean either the encodings D16 already rejected on REQ-87, or
+  sorting on a structured key that is not the readable fingerprint — which
+  would weaken "never a hash" with no clause demanding it.

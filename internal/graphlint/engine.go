@@ -119,29 +119,51 @@ func identityKey(f clierr.Finding) string {
 // tags in the same canonical set-literal form. The atom content stays
 // READABLE, so a reviewer can tell two fingerprints apart by eye and a sort
 // over them is meaningful rather than an arbitrary permutation.
+//
+// Every field is escaped before it is written, which is what makes the
+// serialization INJECTIVE: nothing upstream forbids an authored key or set
+// member carrying one of the delimiters this joins on.
+//
+// Sortability is carried by `compareAtoms`, which orders the atoms by RDR
+// 0002's canonical order over the AUTHORED members before any of them are
+// rendered — the escape is an encoding applied after the order is fixed,
+// and is deliberately not relied on to preserve it.
 func Fingerprint(row table.Row) string {
 	atoms := slices.Clone(row.Atoms)
 	slices.SortFunc(atoms, compareAtoms)
 
 	var b strings.Builder
 	for _, a := range atoms {
-		b.WriteString(a.Key)
+		b.WriteString(escapeField(a.Key))
 		b.WriteString("|")
-		b.WriteString(string(a.Block))
+		b.WriteString(escapeField(string(a.Block)))
 		b.WriteString("|")
-		b.WriteString(a.Operator)
+		b.WriteString(escapeField(a.Operator))
 		b.WriteString("|")
-		b.WriteString(strings.Join(canonicalValues(a.Literal), ","))
+		b.WriteString(literalKey(a.Literal))
 		b.WriteString(";")
 	}
 	b.WriteString("#")
 	for _, t := range canonicalTags(row.NextTags) {
-		b.WriteString(t.Key)
+		b.WriteString(escapeField(t.Key))
 		b.WriteString("=")
-		b.WriteString(strings.Join(canonicalValues(t.Value), ","))
+		b.WriteString(literalKey(t.Value))
 		b.WriteString(";")
 	}
 	return b.String()
+}
+
+// literalKey renders a member sequence as one field of a composite key:
+// canonicalized first, so the ordering is a property of the AUTHORED
+// values, then escaped, so `["a,b", "c"]` and `["a", "b,c"]` render
+// `a\,b,c` and `a,b\,c` rather than colliding on `a,b,c`.
+//
+// RDR 0002 REQ-126/127 name that pair verbatim and require it yield TWO
+// atoms in the normalized set; the fingerprint closes the finding-identity
+// tuple (REQ-114), so a collision here gives two distinct rows one identity
+// and leaves the emitted set's order undetermined by the tuple.
+func literalKey(members []string) string {
+	return escapeJoin(canonicalValues(members), ",")
 }
 
 // compareAtoms is RDR 0002's canonical atom sort: key, then block, then
@@ -156,9 +178,19 @@ func compareAtoms(a, b table.Atom) int {
 	if c := strings.Compare(a.Operator, b.Operator); c != 0 {
 		return c
 	}
-	return strings.Compare(
-		strings.Join(canonicalValues(a.Literal), ","),
-		strings.Join(canonicalValues(b.Literal), ","))
+	// The literal is compared as a MEMBER SEQUENCE, element by element,
+	// over the canonical AUTHORED members — `internal/table.compareAtoms`
+	// (`0002:C19`) is the normative order and REQ-87 names it as the sort
+	// the fingerprint must be in.
+	//
+	// Comparing the escaped rendering instead would NOT reproduce it. The
+	// escape is not order-preserving against an arbitrary neighbour: it
+	// inserts `\` (U+005C) at the delimiter's position, so `["a,b"]` and
+	// `["a0"]` compare `,` (U+002C) < `0` (U+0030) as authored but
+	// `\` (U+005C) > `0` after escaping — the two transpose. Sorting on
+	// the encoding would order the row's atoms by an artifact of the
+	// encoding rather than by the authored content REQ-87 points at.
+	return slices.Compare(canonicalValues(a.Literal), canonicalValues(b.Literal))
 }
 
 // canonicalTags sorts a tag-value sequence by key so the fingerprint's

@@ -30,13 +30,21 @@ const OpaqueValue = "<opaque>"
 // key renders a node's canonical identity. Keys and values are both sorted
 // at construction, so the rendering is stable and two nodes standing for
 // the same owned-state render identically.
+//
+// Every field is escaped, so the rendering is also INJECTIVE: two nodes
+// standing for DIFFERENT owned-states never render identically. That
+// matters twice over — this key is the `seen` de-duplication identity both
+// terminal walks in `analysis.go` close on, where a collision suppresses a
+// finding outright, and it is the fixpoint equality in `reach`, where a
+// collision can terminate the widening early. Both are the false-green
+// direction REQ-106 forbids.
 func (n Node) key() string {
 	keys := slices.Sorted(maps.Keys(n.Values))
 	var b strings.Builder
 	for _, k := range keys {
-		b.WriteString(k)
+		b.WriteString(escapeField(k))
 		b.WriteString("=")
-		b.WriteString(strings.Join(n.Values[k], ","))
+		b.WriteString(escapeJoin(n.Values[k], ","))
 		b.WriteString(";")
 	}
 	return b.String()
@@ -203,10 +211,19 @@ func successorsOf(m *table.Model, src Node) []Node {
 // tags it holds, with no value sets. It is the successor identity the join
 // groups on — two nodes sharing it stand for the same abstract owned-state
 // up to the widening REQ-108 licenses.
+//
+// The tag names are escaped, because nothing upstream forbids a tag name
+// carrying the `;` this joins on: `internal/table` validates a tag
+// declaration's provenance, kind, per-kind fields, and bounds, and imposes
+// no charset. Unescaped, the footprints {"a;b"} and {"a", "b"} both render
+// `a;b;`, two DIFFERENT owned-states land in one join group, and
+// `joinNodes`'s absence-dominates arm erases every key held on only one
+// side — a reachable owned-state lint can no longer see, against REQ-106's
+// over-approximation contract.
 func presenceKey(n Node) string {
 	var b strings.Builder
 	for _, k := range slices.Sorted(maps.Keys(n.Values)) {
-		b.WriteString(k)
+		b.WriteString(escapeField(k))
 		b.WriteString(";")
 	}
 	return b.String()
@@ -310,6 +327,78 @@ func isClearValue(value []string) bool {
 // stable regardless of authored member order.
 func canonicalValues(value []string) []string {
 	return slices.Compact(slices.Sorted(slices.Values(value)))
+}
+
+// structuralDelimiters are the runes the composite keys in this package and
+// in `engine.go` join on. A field carrying one of them, written raw, would
+// let two different composites render identically.
+const structuralDelimiters = ";=,|#"
+
+// escapeField makes one authored string safe to write into a
+// delimiter-joined composite key. It is the ONE escape in the package, so
+// no renderer can diverge from another: a sort key and the composite it
+// orders must escape identically or the order stops matching the rendering.
+//
+// The encoding is backslash escaping — `\` first, then each structural
+// delimiter — which is injective because the escape is prefix-free and
+// reversible. Two alternatives were rejected on REQ-87, which requires the
+// fingerprint be "readable, never a hash, sortable": a length prefix
+// destroys lexicographic sortability outright (`10:` sorts before `2:`),
+// and JSON re-encodes into a form no longer readable at a glance.
+//
+// Escaping is NOT order-preserving against an arbitrary neighbour, and no
+// caller may assume it is. It inserts `\` (U+005C) at the delimiter's
+// position, so `"a,b"` sorts before `"a0"` as authored (`,` U+002C < `0`
+// U+0030) but after it once escaped (`\` U+005C > `0`). Where RDR 0002's
+// canonical order is what matters — `compareAtoms` — the comparison is
+// therefore over the canonical AUTHORED members, never over this encoding.
+// This function's contract is injectivity, not order.
+//
+// Callers escape AFTER canonicalization — `canonicalValues` sorts and
+// compacts the AUTHORED values, so the canonical form stays a property of
+// what the author wrote rather than of the encoding.
+func escapeField(s string) string {
+	if !strings.ContainsAny(s, "\\"+structuralDelimiters) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for _, r := range s {
+		if r == '\\' || strings.ContainsRune(structuralDelimiters, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// escapeJoin escapes each member and TERMINATES it with sep, rather than
+// joining members on sep. The members are already canonical; escaping here
+// is the last step before they become part of a composite key.
+//
+// The terminator, not an infix join, is what makes the rendering injective
+// over CARDINALITY as well as content. An infix join renders the empty
+// sequence and the one-element sequence holding the empty string
+// identically — `[]` and `[""]` both give `""`, so `k=;` stands for two
+// different owned-states. Both are authorable: a `set` tag declaring no
+// `elements` constrains no member, `conform` loops zero times over an empty
+// member sequence, and `write = { k = [] }` and `write = { k = [""] }` both
+// load. They are not the same owned-state — `[]` satisfies no value atom
+// while `[""]` satisfies `eq ""` — so collapsing them lets the `seen` maps
+// and the fixpoint equality treat a reachable state as already visited,
+// the false-green direction REQ-106 forbids.
+//
+// Terminating preserves what D16 bought. The form stays readable (`a,b,`),
+// and it stays sortable for the same reason the escape does: every member
+// is followed by its terminator, so no member's rendering is a prefix of a
+// different member sequence's.
+func escapeJoin(values []string, sep string) string {
+	var b strings.Builder
+	for _, v := range values {
+		b.WriteString(escapeField(v))
+		b.WriteString(sep)
+	}
+	return b.String()
 }
 
 // heldValues normalizes a value a node comes to HOLD for a key. A tag whose

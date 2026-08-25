@@ -981,7 +981,11 @@ status = "c"
 		t.Fatalf("the fingerprint %q has no `#` separator, so the predicate "+
 			"and next-state halves cannot be told apart", fpC)
 	}
-	if !strings.Contains(writes, "status=c;") {
+	// Each member is TERMINATED by the member separator rather than joined
+	// on it, so the one-member value `c` renders `c,` -- that terminator is
+	// what keeps the empty member sequence distinct from `[""]`. The
+	// written value is still legible, which is what REQ-87 asks.
+	if !strings.Contains(writes, "status=c,;") {
 		t.Errorf("the next-state half %q of fingerprint %q does not carry the "+
 			"written tag `status=c`; a canonical sortable serialization is "+
 			"not a hash", writes, fpC)
