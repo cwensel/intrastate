@@ -442,10 +442,21 @@ labels = ["a"]
 // The merge key is exercised by the delimiter-parameterized control in
 // REQ-46; here the SORT is exercised, since a joined sort key orders
 // differently from an element-by-element one.
+//
+// The sort only reaches the literal when (key, block, operator) TIE, since
+// the literal is the tuple's LAST element. Two atoms differing in block —
+// one under `guard.all`, one under `guard.unless` — are already ordered by
+// block, so the literal is never consulted and a joined key passes. This
+// control therefore ties all three leading fields: two `[context]` blocks
+// each author a match `in` on the SAME tag, which merge into one row's
+// match block as two atoms agreeing on (labels, match, in).
+//
+// The observable is the EXPANSION SUFFIX element order, which `expand`
+// takes in the atoms' sort order. Element-by-element, ["a","z"] < ["a!q","b"]
+// (first members "a" < "a!q" by prefix). Comma-joined, "a!q,b" < "a,z"
+// ('!' 0x21 < ',' 0x2c at the second byte) — the opposite order. So a
+// joined sort key transposes every suffix.
 func TestReq58_LiteralComparesAsAMemberSequenceNotAJoinedString(t *testing.T) {
-	// ["a", "b"] vs ["a,b"]: element-by-element, ["a","b"] sorts first
-	// (shorter prefix "a" == "a", then length decides via the second
-	// element). A comma-joined key makes both "a,b" and they collide.
 	src := `outcomes = ["done"]
 
 [model]
@@ -455,7 +466,7 @@ version = 1
 [tags.labels]
 provenance = "owned"
 kind = "set"
-elements = ["a", "b", "a,b"]
+elements = ["a", "b", "z", "a!q"]
 
 [tags.recognized]
 provenance = "recognized"
@@ -478,13 +489,15 @@ read_back = true
 [context.c1.match.recognized]
 eq = "done"
 
+[context.seq-a.match.labels]
+in = ["a", "z"]
+
+[context.seq-b.match.labels]
+in = ["a!q", "b"]
+
 [[rule]]
 id = "r"
-use = ["c1"]
-[rule.guard.all.labels]
-contains = ["a", "b"]
-[rule.guard.unless.labels]
-contains = ["a,b"]
+use = ["c1", "seq-a", "seq-b"]
 [rule.write]
 labels = ["a"]
 `
@@ -493,17 +506,26 @@ labels = ["a"]
 		t.Fatalf("refused: %v", err)
 	}
 
-	if len(m.Rows) == 0 {
-		t.Fatal("the sequence-identity fixture normalized to no rows")
+	// The two same-key match atoms tie on (key, block, operator) and merge
+	// over the FULL identity (REQ-46), so both survive: 2x2 members.
+	if len(m.Rows) != 4 {
+		t.Fatalf("%d rows; want 4 — the two same-block `in` atoms must both "+
+			"survive the merge and expand as a product", len(m.Rows))
 	}
-	got := atomsOn(m.Rows[0], "labels")
-	if len(got) != 2 {
-		t.Fatalf("%d atoms on labels; want 2 — a joined identity collapses "+
-			"[\"a\",\"b\"] and [\"a,b\"]: %+v", len(got), got)
+
+	// seq-a's member leads every suffix, because ["a","z"] sorts before
+	// ["a!q","b"] element by element. A comma-joined sort key reverses it.
+	var got []string
+	for _, r := range m.Rows {
+		if len(r.Suffix) != 2 {
+			t.Fatalf("suffix %v carries %d elements; want 2", r.Suffix, len(r.Suffix))
+		}
+		got = append(got, strings.Join(r.Suffix, "|"))
 	}
-	lits := [][]string{got[0].Literal, got[1].Literal}
-	if reflect.DeepEqual(lits[0], lits[1]) {
-		t.Errorf("both atoms carry literal %v; the two spellings are distinct", lits[0])
+	want := []string{"a|a!q", "a|b", "z|a!q", "z|b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("expansion suffixes = %v; want %v — the literal must be "+
+			"compared as a member sequence, not as a joined string", got, want)
 	}
 }
 

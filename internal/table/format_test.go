@@ -182,21 +182,36 @@ func TestReq4_DescriptionAndSourceAreAdmittedAndCarried(t *testing.T) {
 // REQ-5: "No other root key or table is admitted (strict decoding,
 // below)."
 // ADVERSARIAL
+//
+// A bare scalar key is scoped by whatever table header precedes it, so an
+// APPENDED `flavor = "vanilla"` lands under the fixture's trailing `[dump]`
+// table and decodes as `dump.flavor` — an unknown sub-key, not the unknown
+// ROOT key this clause names. Only a table header re-scopes wherever it is
+// placed. The root-key case is therefore PREPENDED, ahead of the first
+// header, and the two table cases stay appended.
 func TestReq5_NoOtherRootKeyOrTableIsAdmitted(t *testing.T) {
 	base := readFixture(t, rdrFixture)
 
-	cases := map[string]string{
-		"unknown root key":       "\nflavor = \"vanilla\"\n",
-		"unknown root table":     "\n[accessors.rdr-status]\nrole = \"rdr\"\n",
-		"unknown model sub-key":  "", // handled below by the promoted fixture
-		"unknown tags sub-table": "\n[tags.status.extra]\nnope = 1\n",
+	cases := map[string]struct {
+		mutation string
+		prepend  bool
+	}{
+		"unknown root key":       {"flavor = \"vanilla\"\n", true},
+		"unknown root table":     {"\n[accessors.rdr-status]\nrole = \"rdr\"\n", false},
+		"unknown model sub-key":  {"", false}, // handled below by the promoted fixture
+		"unknown tags sub-table": {"\n[tags.status.extra]\nnope = 1\n", false},
 	}
-	for name, suffix := range cases {
-		if suffix == "" {
+	for name, tc := range cases {
+		if tc.mutation == "" {
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
-			src := append(append([]byte{}, base...), []byte(suffix)...)
+			var src []byte
+			if tc.prepend {
+				src = append(append([]byte{}, []byte(tc.mutation)...), base...)
+			} else {
+				src = append(append([]byte{}, base...), []byte(tc.mutation)...)
+			}
 			_, err := table.Load(src, rdrFixture)
 			if err == nil {
 				t.Fatalf("a document carrying an %s loaded clean", name)
@@ -572,7 +587,12 @@ func TestReq15_FixedPrecedenceOrdering(t *testing.T) {
 	t.Run("malformed TOML precedes the version gate", func(t *testing.T) {
 		// version = 2 AND a syntax error: the syntax error wins, because a
 		// document that does not parse has no readable version.
-		src := []byte("version = 2\nid = \"m\nnope")
+		//
+		// The version MUST sit under `[model]`: the gate reads
+		// `probe.Model.Version`, so a root-level `version` arms no version
+		// arm at all and the control would witness only that a syntax
+		// error refuses.
+		src := []byte("[model]\nversion = 2\nid = \"m\nnope")
 		_, err := table.Load(src, "toml-before-version.toml")
 		if err == nil {
 			t.Fatal("a document that is not TOML loaded clean")
