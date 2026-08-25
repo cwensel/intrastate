@@ -321,6 +321,26 @@ func planWriting(writes ...resolve.Tag) resolve.Plan {
 	}
 }
 
+// planAdvancing builds a plan whose NEXT-state tags and WRITE set differ.
+//
+// `planWriting` mirrors the two, which is the ordinary case the kernel
+// produces, and no oracle built on it can tell the two fields apart: an
+// executor applying `NextTags` passes every such test. RDR 0009's
+// obligation (`0009:1515-1527`, carried here as deviations D1, Type
+// TEST-FIXTURE) is that only `Writes` reaches the write binding —
+// `NextTags` names the state the row transitions TO, which is the
+// resolver's record, not an instruction to mutate the artifact
+// (REQ-40, REQ-43).
+func planAdvancing(writes, nextTags []resolve.Tag) resolve.Plan {
+	return resolve.Plan{
+		RuleID:        "rdr.advance",
+		SourceLocator: statePath + ":10",
+		Revision:      "rev-0004",
+		Writes:        slices.Clone(writes),
+		NextTags:      slices.Clone(nextTags),
+	}
+}
+
 func escapedPlan() resolve.Plan {
 	return resolve.Plan{
 		RuleID:        "rdr.escape",
@@ -433,7 +453,27 @@ func hasCode(fs []accessor.Finding, code accessor.ValidationCode) bool {
 
 var errBindingFailed = errors.New("fixture binding failed")
 
+// callerCtxKey types the sentinel `ctxOf` plants in every fixture
+// context. Its own type makes the key unforgeable: nothing but `ctxOf`
+// can put this value in a context, so a binding that reads it back has
+// necessarily been handed a context DESCENDED from the caller's.
+type callerCtxKey struct{}
+
+// callerCtxValue is what `ctxOf` plants and `ctxWitnessReadBinding`
+// looks for.
+const callerCtxValue = "rdr-0004-caller-context"
+
+// ctxOf is the caller context every fixture invocation passes in.
+//
+// It carries a sentinel value rather than being a bare `Background()`:
+// "the invocation is context-bound" means the CALLER'S context reaches
+// the binding, and an executor that discarded it and built a fresh
+// `context.WithTimeout(context.Background(), timeout)` would still hand
+// the binding a non-nil context carrying a deadline. Only a value that
+// could have come from nowhere else distinguishes the two, and it is
+// what makes a caller-side cancellation observable at the seam
+// (REQ-92 / IP Phase 2).
 func ctxOf(t *testing.T) context.Context {
 	t.Helper()
-	return context.Background()
+	return context.WithValue(context.Background(), callerCtxKey{}, callerCtxValue)
 }

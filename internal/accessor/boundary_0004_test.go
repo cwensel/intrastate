@@ -23,11 +23,22 @@ import (
 // throughput target is set.
 // BOUNDARY
 //
-// The oracle is that a binding which blocks forever does not hang the
-// test: each invocation returns within a bound derived from the
-// definition's declared timeout, not from the test's patience.
+// The oracle is that a binding which blocks forever returns within a
+// bound derived from the DEFINITION'S DECLARED TIMEOUT, not from the
+// test's patience and not merely from the blocking delay. Comparing
+// `elapsed` against `blockFor` would pass a deadline wrong by five
+// orders of magnitude — the bound must be a margin on `fixtureTimeout`,
+// which is what the definitions declare.
 func TestReq68_EveryInvocationIsBounded(t *testing.T) {
+	// The binding blocks effectively forever, so nothing but the
+	// declared timeout can end the invocation.
 	const blockFor = time.Hour
+	// The bound the assertions judge against: generous enough for a
+	// loaded machine to schedule the timer and unwind, and still four
+	// orders of magnitude below `blockFor`. Not tight enough to pin the
+	// implementation's exact deadline arithmetic — REQ-68 requires a
+	// bound derived from the declared timeout, not a specific one.
+	const boundedBy = 20 * fixtureTimeout
 
 	t.Run("read", func(t *testing.T) {
 		s := newStore(map[string]string{keyStatus: "Draft"})
@@ -39,9 +50,10 @@ func TestReq68_EveryInvocationIsBounded(t *testing.T) {
 		elapsed := time.Since(start)
 
 		mustReadRefuse(t, got, accessor.ClassTimeout)
-		if elapsed >= blockFor {
+		if elapsed >= boundedBy {
 			t.Errorf("the read took %v; the invocation is bounded by the "+
-				"definition's declared timeout", elapsed)
+				"definition's declared timeout %v, not by the binding's %v delay",
+				elapsed, fixtureTimeout, blockFor)
 		}
 	})
 
@@ -55,8 +67,10 @@ func TestReq68_EveryInvocationIsBounded(t *testing.T) {
 		if !got.Refused() || got.Refusal.Class != accessor.ClassTimeout {
 			t.Fatalf("gate result = %+v; want a %q refusal", got, accessor.ClassTimeout)
 		}
-		if elapsed >= blockFor {
-			t.Errorf("the gate took %v; the invocation is bounded", elapsed)
+		if elapsed >= boundedBy {
+			t.Errorf("the gate took %v; the invocation is bounded by the "+
+				"definition's declared timeout %v, not by the binding's %v delay",
+				elapsed, fixtureTimeout, blockFor)
 		}
 	})
 
@@ -71,8 +85,10 @@ func TestReq68_EveryInvocationIsBounded(t *testing.T) {
 		elapsed := time.Since(start)
 
 		mustWriteRefuse(t, got, accessor.ClassTimeout)
-		if elapsed >= blockFor {
-			t.Errorf("the write took %v; the invocation is bounded", elapsed)
+		if elapsed >= boundedBy {
+			t.Errorf("the write took %v; the invocation is bounded by the "+
+				"definition's declared timeout %v, not by the binding's %v delay",
+				elapsed, fixtureTimeout, blockFor)
 		}
 	})
 
@@ -90,12 +106,17 @@ func TestReq68_EveryInvocationIsBounded(t *testing.T) {
 			planWriting(resolve.Tag{Key: keyStatus, Value: "Final"}))
 		elapsed := time.Since(start)
 
-		if !got.Refused() {
-			t.Fatal("the write reported success while its read-back never returned")
-		}
-		if elapsed >= blockFor {
-			t.Errorf("the read-back took %v; every accessor invocation is "+
-				"bounded, the re-read included", elapsed)
+		// The CLASS, not merely a refusal: the re-read expired against
+		// its own deadline, so `timeout` is what the boundary reports.
+		// Accepting any refusal would pass an executor that classified
+		// the blocked re-read as an execution failure or as read-back
+		// incomplete, which says the verification could not run rather
+		// than that its invocation was bounded (REQ-68, REQ-69).
+		mustWriteRefuse(t, got, accessor.ClassTimeout)
+		if elapsed >= boundedBy {
+			t.Errorf("the read-back took %v; every accessor invocation is bounded "+
+				"by its declared timeout %v — the re-read included — not by the "+
+				"binding's %v delay", elapsed, fixtureTimeout, blockFor)
 		}
 	})
 }

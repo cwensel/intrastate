@@ -391,6 +391,59 @@ func TestReq42_NoWriteRunsWithoutASuccessfulPlansWrites(t *testing.T) {
 		}
 	})
 
+	t.Run("only_the_plans_writes_are_applied_never_its_next_tags", func(t *testing.T) {
+		// The plan's WRITES are the only tags applied. `NextTags` names
+		// the state the matched row transitions TO — the resolver's
+		// record of the advance — and is not an instruction to mutate
+		// the artifact (deviations D1 carrying RDR 0009's obligation at
+		// `0009:1515-1527`, Type TEST-FIXTURE; REQ-40, REQ-43).
+		//
+		// Every other plan in this suite comes from `planWriting`, which
+		// mirrors the two fields, so an executor applying `NextTags`
+		// instead of `Writes` is indistinguishable there. Here the two
+		// DIFFER: `labels` is named by `NextTags` alone.
+		//
+		// `labels` is an owned tag of the model AND among this writer's
+		// declared keys, so it is a key the accessor MAY write — the
+		// refusal arms cannot account for it being left alone. Only the
+		// Writes/NextTags distinction can.
+		s := newStore(map[string]string{keyStatus: "Draft", keyLabels: `["alpha"]`})
+		w := &writeBinding{store: s}
+		e := writeExec(t, s, w, &readBinding{store: s}, keyStatus, keyLabels)
+
+		plan := planAdvancing(
+			[]resolve.Tag{{Key: keyStatus, Value: "Final"}},
+			[]resolve.Tag{
+				{Key: keyStatus, Value: "Final"},
+				{Key: keyLabels, Value: `["beta"]`},
+			},
+		)
+
+		got := e.Write(ctxOf(t), writerName, plan)
+
+		mustWriteSucceed(t, got)
+
+		// The artifact: the NextTags-only key is untouched.
+		if s.tags[keyLabels] != `["alpha"]` {
+			t.Errorf("artifact %q = %q after the write; want %q unchanged — %q is "+
+				"named by the plan's NextTags and NOT by its Writes, and only "+
+				"planned WRITES are applied", keyLabels, s.tags[keyLabels],
+				`["alpha"]`, keyLabels)
+		}
+		if s.tags[keyStatus] != "Final" {
+			t.Errorf("artifact %q = %q; want %q — the planned write must still land",
+				keyStatus, s.tags[keyStatus], "Final")
+		}
+
+		// The record: `Written` names exactly the planned writes. A
+		// success record naming a key the plan did not write reports the
+		// accessor as having established state it never planned.
+		if k := tagKeysOf(got.Written); !slices.Equal(k, []string{keyStatus}) {
+			t.Errorf("Written names %v; want exactly %v — the write record is the "+
+				"plan's Writes, never its NextTags", k, []string{keyStatus})
+		}
+	})
+
 	t.Run("empty_write_set_writes_nothing", func(t *testing.T) {
 		s := newStore(map[string]string{keyStatus: "Draft"})
 		w := &writeBinding{store: s}

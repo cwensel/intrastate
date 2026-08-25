@@ -75,11 +75,18 @@ func TestAdv1_WriteRefusesAPlanNamingANonOwnedTag(t *testing.T) {
 			"non-owned-key arm, not one asserting the artifact is wrong or that the "+
 			"verification could not run", got.Refusal.Class)
 	}
-	if !slices.Contains(got.Refusal.Keys, keyProfile) {
-		t.Errorf("Refusal.Keys = %v; want it to name the non-owned key %q — a refusal "+
-			"that does not attribute the offending key leaves the operator unable to "+
-			"tell WHICH tag the accessor had no authority to apply",
-			got.Refusal.Keys, keyProfile)
+	// EXACTLY the offending key. Mere containment would pass an
+	// implementation returning every planned key, which names the owned
+	// `status` as unauthorized alongside the one that actually was —
+	// telling the operator the accessor had no authority over a tag it
+	// owns, and leaving the true offender indistinguishable from the
+	// noise around it.
+	if k := sorted(got.Refusal.Keys); !slices.Equal(k, []string{keyProfile}) {
+		t.Errorf("Refusal.Keys = %v; want exactly %v — a refusal that does not "+
+			"attribute the offending key, or that over-attributes to keys this "+
+			"accessor DOES own, leaves the operator unable to tell WHICH tag the "+
+			"accessor had no authority to apply", got.Refusal.Keys,
+			[]string{keyProfile})
 	}
 
 	// The check runs BEFORE the command: the write must not reach the
@@ -142,9 +149,11 @@ func TestAdv1b_WriteRefusesAnOwnedTagOutsideThisWritersDeclaredKeys(t *testing.T
 	if got.Refusal.Class != accessor.ClassExecutionFailure {
 		t.Errorf("Write refused %q; want execution_failure", got.Refusal.Class)
 	}
-	if !slices.Contains(got.Refusal.Keys, keyLabels) {
-		t.Errorf("Refusal.Keys = %v; want it to name %q — the key this writer may not "+
-			"apply", got.Refusal.Keys, keyLabels)
+	if k := sorted(got.Refusal.Keys); !slices.Equal(k, []string{keyLabels}) {
+		t.Errorf("Refusal.Keys = %v; want exactly %v — the key this writer may not "+
+			"apply, and ONLY that key: naming the owned %q too would report a tag "+
+			"this accessor does own as unauthorized",
+			got.Refusal.Keys, []string{keyLabels}, keyStatus)
 	}
 	if w.Invocations() != 0 {
 		t.Errorf("write binding invoked %d times; want 0 — refused BEFORE Apply",
@@ -197,9 +206,13 @@ func TestAdv1c_WriteRefusesADeclaredKeyThatIsNotAnOwnedTag(t *testing.T) {
 	if got.Refusal.Class != accessor.ClassExecutionFailure {
 		t.Errorf("Write refused %q; want execution_failure", got.Refusal.Class)
 	}
-	if !slices.Contains(got.Refusal.Keys, keyProfile) {
-		t.Errorf("Refusal.Keys = %v; want it to name the non-owned key %q",
-			got.Refusal.Keys, keyProfile)
+	// This plan names only the one key, so exactness here does not
+	// discriminate over-attribution the way ADV-1 and ADV-1b do; it is
+	// asserted for the same reason all the same — `Keys` is the
+	// offending set, not a set that happens to include it.
+	if k := sorted(got.Refusal.Keys); !slices.Equal(k, []string{keyProfile}) {
+		t.Errorf("Refusal.Keys = %v; want exactly the non-owned key %v",
+			got.Refusal.Keys, []string{keyProfile})
 	}
 	if w.Invocations() != 0 {
 		t.Errorf("write binding invoked %d times; want 0 — refused BEFORE Apply",

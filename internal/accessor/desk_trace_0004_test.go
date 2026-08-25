@@ -118,10 +118,25 @@ func TestReq101_DeskTraceStep2AssertionsHoldSimultaneously(t *testing.T) {
 		r := e.Read(ctxOf(t), readerName)
 		elapsed := time.Since(start)
 
-		if elapsed >= time.Hour {
-			t.Fatalf("the read took %v; the invocation is bounded", elapsed)
+		// Bounded by the DECLARED timeout, not by the binding's delay:
+		// comparing against `time.Hour` would pass a deadline wrong by
+		// five orders of magnitude and assert nothing about REQ-68.
+		if elapsed >= 20*fixtureTimeout {
+			t.Fatalf("the read took %v; the invocation is bounded by the "+
+				"definition's declared timeout %v", elapsed, fixtureTimeout)
 		}
 		mustReadRefuse(t, r, accessor.ClassTimeout)
+
+		// The two classes were true AT ONCE: the binding MET the
+		// unreadable key and only then ran past its deadline. Without
+		// this, an executor whose read timed out before ever reaching
+		// the unreadable key passes — and REQ-101's whole claim is that
+		// the assertions hold simultaneously on ONE invocation, so a
+		// non-overlapping fixture witnesses nothing here (REQ-27).
+		if !ob.sawUnreadable {
+			t.Fatal("the fixture did not make both classes true at once; the " +
+				"unreadable key must be met BEFORE the deadline expires")
+		}
 	})
 }
 
@@ -245,6 +260,18 @@ func TestReq92_ThePhaseDeliverablesAreOneReachableSurface(t *testing.T) {
 		if !b.sawDeadline {
 			t.Error("the context carried no deadline; every accessor invocation " +
 				"is bounded by its declared timeout")
+		}
+		// The CALLER'S context, not merely SOME context. `sawContext`
+		// and `sawDeadline` are both satisfied by an executor that
+		// DISCARDS what the caller passed and builds a fresh
+		// `context.WithTimeout(context.Background(), timeout)` — under
+		// which a caller-side cancellation is not observable at the seam
+		// at all, which is the property this subtest names.
+		if !b.sawCallerValue {
+			t.Error("the binding's context does not descend from the caller's; " +
+				"the invocation must be bound to the CALLER'S context, so a " +
+				"caller-side cancellation is observable at the seam alongside " +
+				"the per-accessor timeout")
 		}
 	})
 
@@ -385,11 +412,13 @@ func sorted(in []string) []string {
 }
 
 // ctxWitnessReadBinding records whether the executor handed it a context
-// carrying a deadline.
+// carrying a deadline, and whether that context DESCENDS from the
+// caller's rather than being a fresh one built over `Background()`.
 type ctxWitnessReadBinding struct {
-	store       *store
-	sawContext  bool
-	sawDeadline bool
+	store          *store
+	sawContext     bool
+	sawDeadline    bool
+	sawCallerValue bool
 }
 
 func (b *ctxWitnessReadBinding) Capability() accessor.Capability { return accessor.CapRead }
@@ -400,6 +429,7 @@ func (b *ctxWitnessReadBinding) Read(
 	b.sawContext = ctx != nil
 	if ctx != nil {
 		_, b.sawDeadline = ctx.Deadline()
+		b.sawCallerValue = ctx.Value(callerCtxKey{}) == callerCtxValue
 	}
 	inner := &readBinding{store: b.store}
 	return inner.Read(ctx, art, requested)
