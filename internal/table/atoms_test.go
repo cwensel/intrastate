@@ -675,6 +675,52 @@ func TestReq61_ClearSentinelIsReservedAtEveryAuthoringSite(t *testing.T) {
 		}
 	})
 
+	// The sentinel must also outrank the two gates that guard the operator
+	// TOKEN rather than the operator/kind pair: the closed-set membership
+	// check (`0002:C16`) and the match block's `eq`/`in` restriction. The
+	// `<clear>` ban "binds every atom regardless of operator" (`0002:C17`),
+	// so neither may preempt the stable `reserved_tag_value` category RDR
+	// 0005's envelope routes on.
+	t.Run("sentinel outranks an unknown operator", func(t *testing.T) {
+		base := string(readFixture(t, "neg/neg-guard-all-clear.toml"))
+		src := strings.Replace(base,
+			"[rule.guard.all.cluster_ready]\neq = \"<clear>\"",
+			"[rule.guard.all.cluster_ready]\nfrobnicate = \"<clear>\"", 1)
+		if src == base {
+			t.Fatal("guard atom substitution did not apply")
+		}
+		_, err := table.Load([]byte(src), "clear-with-unknown-operator.toml")
+		if err == nil {
+			t.Fatal("a <clear> literal under an unknown operator loaded clean")
+		}
+		if cat, _ := table.CategoryOf(err); cat != table.CatReservedTagValue {
+			t.Errorf("category = %q; want %q — the unknown-operator gate "+
+				"preempted the sentinel ban, so a reserved value reports as "+
+				"a malformed atom and RDR 0005's envelope routes it wrong",
+				cat, table.CatReservedTagValue)
+		}
+	})
+
+	t.Run("sentinel outranks the match-block operator restriction", func(t *testing.T) {
+		base := string(readFixture(t, "neg/neg-guard-all-clear.toml"))
+		src := strings.Replace(base,
+			"[rule.guard.all.cluster_ready]\neq = \"<clear>\"",
+			"[rule.match.finalized_at]\ncontains = [\"<clear>\"]", 1)
+		if src == base {
+			t.Fatal("match atom substitution did not apply")
+		}
+		_, err := table.Load([]byte(src), "clear-in-match-bad-operator.toml")
+		if err == nil {
+			t.Fatal("a <clear> literal under a match-illegal operator loaded clean")
+		}
+		if cat, _ := table.CategoryOf(err); cat != table.CatReservedTagValue {
+			t.Errorf("category = %q; want %q — the match-block operator gate "+
+				"preempted the sentinel ban, so a reserved value reports as "+
+				"a malformed atom and RDR 0005's envelope routes it wrong",
+				cat, table.CatReservedTagValue)
+		}
+	})
+
 	t.Run("the sentinel string is exactly <clear>", func(t *testing.T) {
 		if table.ClearSentinel != "<clear>" {
 			t.Errorf("ClearSentinel = %q; want %q", table.ClearSentinel, "<clear>")

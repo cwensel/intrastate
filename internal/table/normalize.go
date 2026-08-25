@@ -46,6 +46,26 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 		return Atom{}, fail(CatMalformedPredicateAtom, where+": "+detail)
 	}
 
+	// The `<clear>` ban binds every atom regardless of operator or block
+	// (`0002:C17`), and outranks kind conformance so a sentinel authored on
+	// a bool or int tag still reports as the reserved value it is. It is
+	// therefore tested before every operator, block, and kind gate below:
+	// an atom pairing the sentinel with an unadmitted operator token, an
+	// operator a match block refuses, or a matrix-illegal operator/kind
+	// pair (say `contains` on a `scalar`) must still report the stable
+	// `reserved_tag_value` category RDR 0005's envelope routes on, not the
+	// `malformed_predicate_atom` those gates would return first. Neither
+	// `where` nor `valueMembers` needs a validated operator, so the check
+	// can lead. `valueMembers`' own two shape refusals stay ahead of it
+	// because a member cannot be observed at all until they pass.
+	members, err := valueMembers(raw)
+	if err != nil {
+		return badAtom(err.Error())
+	}
+	if slices.Contains(members, ClearSentinel) {
+		return Atom{}, fail(CatReservedTagValue, where+" authors the reserved value "+ClearSentinel)
+	}
+
 	// The admitted operator set, guard blocks included, is RDR 0003's
 	// closed eight. This RDR mints none and widens it nowhere (`0002:C16`).
 	if !slices.Contains(operators, operator) {
@@ -71,23 +91,6 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	// deliberately: "Match keys are not product dimensions … a separate
 	// field from its guard". A match block's own operator restriction is
 	// `eq`/`in` above, and its member semantics are RDR 0002's.
-	members, err := valueMembers(raw)
-	if err != nil {
-		return badAtom(err.Error())
-	}
-
-	// The `<clear>` ban binds every atom regardless of operator or block
-	// (`0002:C17`), and outranks kind conformance so a sentinel authored on
-	// a bool or int tag still reports as the reserved value it is. It is
-	// therefore tested BEFORE the operator/kind matrix below: an atom
-	// pairing the sentinel with a matrix-illegal operator/kind (say
-	// `contains` on a `scalar`) must still report the stable
-	// `reserved_tag_value` category RDR 0005's envelope routes on, not the
-	// `malformed_predicate_atom` the matrix would return first.
-	if slices.Contains(members, ClearSentinel) {
-		return Atom{}, fail(CatReservedTagValue, where+" authors the reserved value "+ClearSentinel)
-	}
-
 	if b != BlockMatch && !operatorAcceptsKind(operator, decl.Kind) {
 		return badAtom("operator " + operator + " does not accept kind " + decl.Kind)
 	}
