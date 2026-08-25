@@ -699,6 +699,11 @@ func TestReq130_HandoffRoutingIsTotalAndDisjoint(t *testing.T) {
 						"%+v", mt, matchAtoms)
 				}
 			}
+
+			// Symmetrically on the guard side, and BIJECTIVELY: |Guard|
+			// matching |guardAtoms| above admits one atom emitted twice
+			// while another is dropped.
+			assertGuardBijection(t, row, kr.Guard)
 		})
 	}
 }

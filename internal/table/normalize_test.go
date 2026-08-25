@@ -710,10 +710,6 @@ func TestReq85_HandoffRoutesByBlockNeverByOperator(t *testing.T) {
 						"exhaustive and disjoint (atoms = %+v)",
 						row.Identity(), got, len(row.Atoms), row.Atoms)
 				}
-				matchKeys := map[string]bool{}
-				for _, mt := range kr.Match {
-					matchKeys[mt.Key] = true
-				}
 				for _, g := range kr.Guard {
 					if g.Block == resolve.BlockMatch {
 						t.Errorf("%s: a BlockMatch atom %+v reached the guard",
@@ -730,6 +726,9 @@ func TestReq85_HandoffRoutesByBlockNeverByOperator(t *testing.T) {
 							row.Identity(), mt)
 					}
 				}
+				// And every Guard entry traces back to a DISTINCT
+				// all/unless atom, which cardinality alone does not carry.
+				assertGuardBijection(t, row, kr.Guard)
 			}
 		}
 	})
