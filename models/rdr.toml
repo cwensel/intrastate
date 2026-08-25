@@ -1,0 +1,359 @@
+# The RDR lifecycle as a transition model, authored to the JDR 0001 §D7
+# closed layout and linted by the `graph-lint` CI job.
+#
+# This is the acceptance gate's SUBJECT: RDR 0006 fixes that a model with
+# any blocking lint finding must not land, and the job that enforces it
+# lints this document. A deliberate defect here fails that job.
+#
+# The stages mirror `docs/rdr/` Stage 1-8: a record is seeded, proposed,
+# refined, its assumptions resolved, pre-lock reviewed, reconciled,
+# finalized, and implemented.
+
+outcomes = ["advance", "revise", "abandon"]
+terminal = ["landed", "abandoned"]
+
+[model]
+id = "rdr"
+version = 1
+description = "The RDR record lifecycle, Stage 1 through Stage 8."
+
+[model.metadata]
+owner = "rdr"
+source = "docs/rdr/README.md"
+
+# --- the owned state -----------------------------------------------------
+
+# `stage` is the record's position in the lifecycle. Every value is a
+# declared member, so the dead-end check has a finite lattice to walk.
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = [
+  "seeded",
+  "proposed",
+  "refined",
+  "resolved",
+  "prelocked",
+  "reconciled",
+  "final",
+  "implemented",
+  "dropped",
+]
+single_valued = true
+required = true
+
+# `status` is the record's Draft/Final/Implemented disposition, carried
+# alongside the stage so a terminal is a predicate over both.
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final", "implemented", "abandoned"]
+single_valued = true
+required = true
+
+# `gate_passed` records whether the Finalization Gate has returned PASS. It
+# is always-present so the guard atoms over it can never refuse
+# `guard_unevaluable`, which is what keeps the finalize group provable.
+[tags.gate_passed]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+
+# The reserved recognized declaration. The freshly recognized outcome takes
+# this key.
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+# --- accessors -----------------------------------------------------------
+
+[read.rdr-status]
+role = "rdr"
+path = "rdr.status"
+keys = ["stage", "status", "gate_passed"]
+timeout = "5s"
+
+[write.rdr-status]
+role = "rdr"
+path = "rdr.status"
+keys = ["stage", "status", "gate_passed"]
+timeout = "5s"
+read_back = true
+
+# --- the root ------------------------------------------------------------
+
+# Every always-present owned key is established here. A key declared
+# always-present that `[initial]` omits is absent at the root and takes
+# `graph-always-present-owned` against this table.
+[initial]
+stage = "seeded"
+status = "draft"
+gate_passed = "false"
+
+# --- terminal contexts ---------------------------------------------------
+
+# Terminals are tag PREDICATES over owned keys, never state names.
+[context.landed]
+[context.landed.match.status]
+eq = "implemented"
+
+[context.abandoned]
+[context.abandoned.match.status]
+eq = "abandoned"
+
+# --- Stage 2: seeded -> proposed -----------------------------------------
+
+[[rule]]
+id = "propose"
+source = "rdr-propose"
+[rule.match.stage]
+eq = "seeded"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "proposed"
+
+[[rule]]
+id = "seed-abandon"
+source = "rdr-seed-triage"
+[rule.match.stage]
+eq = "seeded"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+[[rule]]
+id = "seed-revise"
+source = "rdr-seed"
+[rule.match.stage]
+eq = "seeded"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "seeded"
+
+# --- Stage 3: proposed -> refined ----------------------------------------
+
+[[rule]]
+id = "refine"
+source = "rdr-refine"
+[rule.match.stage]
+eq = "proposed"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "refined"
+
+[[rule]]
+id = "propose-again"
+source = "rdr-propose"
+[rule.match.stage]
+eq = "proposed"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "seeded"
+
+[[rule]]
+id = "propose-abandon"
+source = "rdr-propose"
+[rule.match.stage]
+eq = "proposed"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+# --- Stage 4: refined -> resolved ----------------------------------------
+
+[[rule]]
+id = "resolve-assumptions"
+source = "rdr-resolve"
+[rule.match.stage]
+eq = "refined"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "resolved"
+
+[[rule]]
+id = "refine-again"
+source = "rdr-refine"
+[rule.match.stage]
+eq = "refined"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "proposed"
+
+[[rule]]
+id = "refine-abandon"
+source = "rdr-refine"
+[rule.match.stage]
+eq = "refined"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+# --- Stage 5: resolved -> prelocked --------------------------------------
+
+[[rule]]
+id = "prelock"
+source = "rdr-prelock"
+[rule.match.stage]
+eq = "resolved"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "prelocked"
+
+[[rule]]
+id = "resolve-route-back"
+source = "rdr-resolve"
+[rule.match.stage]
+eq = "resolved"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "refined"
+
+[[rule]]
+id = "resolve-abandon"
+source = "rdr-resolve"
+[rule.match.stage]
+eq = "resolved"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+# --- Stage 6: prelocked -> reconciled ------------------------------------
+
+[[rule]]
+id = "reconcile"
+source = "rdr-reconcile"
+[rule.match.stage]
+eq = "prelocked"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "reconciled"
+
+[[rule]]
+id = "prelock-route-back"
+source = "rdr-prelock"
+[rule.match.stage]
+eq = "prelocked"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "resolved"
+
+[[rule]]
+id = "prelock-abandon"
+source = "rdr-prelock"
+[rule.match.stage]
+eq = "prelocked"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+# --- Stage 7: reconciled -> final, gated ---------------------------------
+#
+# The two rows below partition the `gate_passed` dimension, so the group's
+# coverage union equals its scoped product and the exhaustiveness claim is
+# proved rather than withheld. `gate_passed` is declared always-present, so
+# neither atom can refuse `guard_unevaluable`.
+
+[[rule]]
+id = "finalize-pass"
+source = "rdr-finalize"
+[rule.match.stage]
+eq = "reconciled"
+[rule.match.recognized]
+eq = "advance"
+[rule.guard.all.gate_passed]
+eq = "true"
+[rule.write]
+stage = "final"
+status = "final"
+
+[[rule]]
+id = "finalize-blocked"
+source = "rdr-finalize"
+[rule.match.stage]
+eq = "reconciled"
+[rule.match.recognized]
+eq = "advance"
+[rule.guard.all.gate_passed]
+eq = "false"
+[rule.write]
+stage = "prelocked"
+
+[[rule]]
+id = "reconcile-route-back"
+source = "rdr-reconcile"
+[rule.match.stage]
+eq = "reconciled"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "prelocked"
+
+[[rule]]
+id = "reconcile-abandon"
+source = "rdr-reconcile"
+[rule.match.stage]
+eq = "reconciled"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"
+
+# --- Stage 8: final -> implemented ---------------------------------------
+
+[[rule]]
+id = "implement"
+source = "rdr-implement"
+[rule.match.stage]
+eq = "final"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "implemented"
+status = "implemented"
+
+[[rule]]
+id = "final-route-back"
+source = "rdr-implement"
+[rule.match.stage]
+eq = "final"
+[rule.match.recognized]
+eq = "revise"
+[rule.write]
+stage = "reconciled"
+status = "draft"
+gate_passed = "false"
+
+[[rule]]
+id = "final-abandon"
+source = "rdr-implement"
+[rule.match.stage]
+eq = "final"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "dropped"
+status = "abandoned"

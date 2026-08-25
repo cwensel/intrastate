@@ -57,3 +57,34 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
+
+  # The graph-lint acceptance gate (RDR 0006). It is deliberately NOT the
+  # `lint` job above — that one is golangci-lint and stays untouched. This
+  # job builds the production binary and runs the shipped `lint` verb over
+  # the checked-in transition model, so an illegal model cannot land.
+  graph-lint:
+    name: Graph lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: make build
+
+      # The oracle is the JSON `code` field, not the exit integer alone: a
+      # non-zero exit could come from an unreadable file or a schema
+      # refusal, and the gate must distinguish those from a lint verdict.
+      - name: Lint the checked-in transition model
+        run: |
+          set -o pipefail
+          out=$(./bin/intrastate lint --model models/rdr.toml --as=json) || true
+          echo "$out"
+          code=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("code",""))')
+          if [ -n "$code" ]; then
+            echo "graph lint refused the model with code: $code" >&2
+            exit 1
+          fi

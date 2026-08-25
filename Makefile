@@ -20,14 +20,18 @@ LDFLAGS := -s -w \
 	-X github.com/newcoinc/intrastate/internal/version.commit=$(COMMIT) \
 	-X github.com/newcoinc/intrastate/internal/version.date=$(DATE)
 
-.PHONY: all check fmt fmt-check vet lint test test-ci vuln tools tidy clean \
-	build install uninstall hooks
+.PHONY: all check fmt fmt-check vet lint graph-lint test test-ci vuln tools \
+	tidy clean build install uninstall hooks
 
 all: check
 
 # Local mirror of the checks CI runs (govulncheck lives in its own CI
 # job; run `make vuln` to mirror it locally).
-check: fmt-check vet lint test
+#
+# `build` is a prerequisite because `graph-lint` runs the BUILT command,
+# the same one the CI graph-lint job runs — local parity means the same
+# binary over the same model, not a second code path.
+check: fmt-check vet lint build graph-lint test
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -56,6 +60,14 @@ vet:
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...
+
+# The graph-lint acceptance gate (RDR 0006), local half. It is a separate
+# target from `lint` above, which is golangci-lint: the two gates check
+# different things and neither is reusable for the other.
+MODEL ?= models/rdr.toml
+
+graph-lint: build
+	$(BIN) lint --model $(MODEL) --as=json
 
 test:
 	$(GO) test -race -covermode=atomic -coverprofile=coverage.out ./...
