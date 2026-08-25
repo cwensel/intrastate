@@ -245,6 +245,14 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 	// test passes while the questions it asked stay observable. Running it
 	// against a non-conforming seam is not an option: Go propagates a
 	// subtest's failure, so a deliberately failing run would fail this file.
+	//
+	// The recorder cannot see the contract test's own `want` column — that
+	// lives in its local case table and is consumed by its own t.Errorf. It
+	// does not have to: a conforming seam's answer to a triple is a TOTAL
+	// FUNCTION of that triple, so the verdict axis is derivable here from
+	// the recorded (operator, literal, value) alone. What follows asserts
+	// the matrix of verdict CLASSES the contract owes per operator, not the
+	// incidental shape of today's case table.
 	rec := &recordingSeam{inner: conformingContractSeam{}}
 	resolve.TestGuardEvaluatorContract(t, rec)
 
@@ -261,19 +269,27 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 	}
 
-	// The product's operator axis: more than one operator is exercised.
-	ops := map[string]bool{}
+	// The product's operator axis. RDR 0003's operator/kind matrix is the
+	// contract's subject, so each typed operator must be exercised BY NAME:
+	// a floor of "at least two operators" is discharged by an eq+in harness
+	// that never asks the parsing operators anything.
+	asked := map[string]bool{}
 	for _, c := range rec.calls {
-		ops[c.Operator] = true
+		asked[c.Operator] = true
 	}
-	if len(ops) < 2 {
-		t.Errorf("the contract test exercises only %v; the contract is over the "+
-			"present value × literal × OPERATOR product", ops)
+	for _, op := range []string{opEq, opGte, opIn, opContains} {
+		if !asked[op] {
+			t.Errorf("the contract test never exercises operator %q; the contract is "+
+				"over the present value × literal × OPERATOR product, and %q is in "+
+				"RDR 0003's operator matrix", op, op)
+		}
 	}
 
-	// The product's value axis: for at least one operator, two different
-	// values are compared against one literal, so the harness cannot pass
-	// by asking a single question.
+	// The product's value axis, PER OPERATOR: for each operator, some one
+	// literal must be compared against two distinct values. A global "some
+	// operator varied" flag is discharged by a harness that asks every
+	// other operator exactly one question, which cannot distinguish that
+	// operator's decided verdict from a constant.
 	byAtom := map[string]map[string]bool{}
 	for _, c := range rec.calls {
 		k := c.Operator + "\x00" + c.Literal
@@ -282,30 +298,76 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 		byAtom[k][c.Value] = true
 	}
-	varied := false
-	for _, values := range byAtom {
+	varied := map[string]bool{}
+	for k, values := range byAtom {
 		if len(values) > 1 {
-			varied = true
+			varied[k[:strings.Index(k, "\x00")]] = true
 		}
 	}
-	if !varied {
-		t.Error("the contract test never compares two different values against one " +
-			"literal; a single question cannot distinguish a decided verdict " +
-			"from a constant")
+	for _, op := range []string{opEq, opGte, opIn, opContains} {
+		if asked[op] && !varied[op] {
+			t.Errorf("the contract test never compares two different values against "+
+				"one literal under %q; a single question cannot distinguish that "+
+				"operator's decided verdict from a constant", op)
+		}
 	}
 
-	// The unparseable-value leg the contract exists to enforce: at least
-	// one value must be one no typed operator can parse.
-	unparseable := false
+	// The unparseable-value leg the contract exists to enforce. "Cannot
+	// parse" is a property of an operator's OWN parse rule, so it is
+	// classified per operator against that rule — `gte` parses an integer,
+	// `contains` parses a §D13 set on both sides. A global heuristic over
+	// all calls is vacuous: `in`'s shipped non-member value "gamma" is a
+	// perfectly VALID `in` value, and would discharge the leg with no
+	// genuinely unparseable case present anywhere in the table. `in` is
+	// therefore deliberately excluded — a non-member string is a decided
+	// FALSE for `in`, not an unevaluable.
+	unparseableValue := map[string]bool{}
+	parseableValue := map[string]bool{}
+	unparseableLiteral := map[string]bool{}
 	for _, c := range rec.calls {
-		if _, ok := parseInt(c.Value); !ok && !hasText(c.Value, "[") && c.Operator != opEq {
-			unparseable = true
+		var valueOK, literalOK bool
+		switch c.Operator {
+		case opGte:
+			_, valueOK = parseInt(c.Value)
+			_, literalOK = parseInt(c.Literal)
+		case opContains:
+			_, valueOK = parseD13Set(c.Value)
+			_, literalOK = parseD13Set(c.Literal)
+		default:
+			continue
+		}
+		if valueOK {
+			parseableValue[c.Operator] = true
+		} else {
+			unparseableValue[c.Operator] = true
+		}
+		if !literalOK {
+			unparseableLiteral[c.Operator] = true
 		}
 	}
-	if !unparseable {
-		t.Error("the contract test never offers an unparseable value to a typed " +
-			"operator; `unparseable value → unevaluable, never false` is the " +
-			"obligation it exists to enforce")
+	for _, op := range []string{opGte, opContains} {
+		if !asked[op] {
+			continue
+		}
+		if !unparseableValue[op] {
+			t.Errorf("the contract test never offers %q a value its own parse rule "+
+				"rejects; `unparseable value → unevaluable, never false` is the "+
+				"obligation the seam exists to carry", op)
+		}
+		if !parseableValue[op] {
+			t.Errorf("the contract test offers %q no value it CAN parse; the "+
+				"unparseable leg is only meaningful beside a decided one", op)
+		}
+	}
+
+	// The mirror obligation on the literal side: `gte` cannot compare
+	// against a bound it cannot parse either, and the contract ships that
+	// case. Asserted only for `gte`, whose literal is a bare integer; a
+	// §D13 set literal has no comparable one-sided form.
+	if asked[opGte] && !unparseableLiteral[opGte] {
+		t.Errorf("the contract test never offers %q an unparseable LITERAL; a bound "+
+			"the operator cannot parse is unevaluable on the same grounds as a "+
+			"value it cannot parse", opGte)
 	}
 }
 
