@@ -508,15 +508,43 @@ func TestReq43_RowKindIsDerivedNotAField(t *testing.T) {
 // The dump renders the kind column, and the normalized value must be
 // unchanged by rendering it. A view feeding back is caught by comparing
 // the row set across a dump.
+//
+// Both halves are load-bearing only if they can fail. The snapshot is a
+// DEEP clone (cloneRows), because a shallow `copy` of a struct of slice
+// headers leaves every nested slice aliasing the original and cannot see
+// an in-place mutation — an in-place sort over `row.Atoms` during
+// rendering being the most plausible feedback regression. And the kind
+// witness is read off the ESCAPE ROW'S OWN dump line, because
+// `KindEscape` is the byte string "escape" and every dump line already
+// ends in a literal `escape=[...]` column: a whole-output
+// `strings.Contains(out, "escape")` passes on any dump at all, including
+// one rendering no kind column.
 func TestReq44_RenderedKindDoesNotFeedBackIntoTheNormalizedValue(t *testing.T) {
+	assertCloneRowsCoversEverySliceField(t)
+
 	m := mustLoad(t, rdrFixture)
 
-	before := make([]table.Row, len(m.Rows))
-	copy(before, m.Rows)
+	before := cloneRows(m.Rows)
 
 	out := table.Dump(m)
-	if !strings.Contains(out, string(table.KindEscape)) {
-		t.Errorf("dump does not render the derived kind column:\n%s", out)
+
+	// The derived kind column must be rendered, and must be rendered ON
+	// THE ROW IT DESCRIBES: an escape row spells `escape`, a transition
+	// row spells `transition`. Reading the column off the row's own line
+	// via dumpColumn splits on the closed column vocabulary, so a value
+	// borrowed from a neighbouring column cannot satisfy it.
+	for _, w := range []struct {
+		identity string
+		want     table.Kind
+	}{
+		{"rdr.draft-no-match-escape#round-clean", table.KindEscape},
+		{"rdr.reconcile-rewind", table.KindTransition},
+	} {
+		got := dumpColumn(t, dumpLine(t, out, w.identity), "kind")
+		if got != string(w.want) {
+			t.Errorf("%s: dumped kind column = %q; want %q\n%s",
+				w.identity, got, w.want, out)
+		}
 	}
 
 	if !reflect.DeepEqual(before, m.Rows) {

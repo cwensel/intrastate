@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -228,5 +229,98 @@ func assertGuardBijection(t *testing.T, row table.Row, guard []resolve.GuardAtom
 			t.Errorf("%s: all/unless atom %+v reached no guard entry; the routing "+
 				"is not exhaustive (guard = %+v)", row.Identity(), a, guard)
 		}
+	}
+}
+
+// cloneRows snapshots a row sequence so that NO backing array is shared
+// with the source — not the outer slice, not any nested slice field, and
+// not the inner arrays inside Atom.Literal and TagValue.Value.
+//
+// A shallow `copy` is not a snapshot: `table.Row` is a struct of slice
+// headers, so `copy(before, m.Rows)` leaves every nested slice aliasing
+// the original. An in-place mutation during rendering — an in-place sort
+// over `row.Atoms` being the most plausible feedback regression — would
+// then be invisible to a `reflect.DeepEqual(before, m.Rows)` oracle, which
+// is exactly the defect this helper exists to close (REQ-44).
+//
+// The row is assigned wholesale first so that unexported fields (setKeys)
+// travel, then every slice field named by `Row` is replaced with a
+// detached copy. assertCloneRowsCoversEverySliceField pins the field list
+// so that a slice field added to `Row` fails loudly rather than silently
+// reopening the aliasing hole.
+func cloneRows(in []table.Row) []table.Row {
+	out := make([]table.Row, len(in))
+	for i, r := range in {
+		r.Suffix = slices.Clone(r.Suffix)
+		r.Atoms = cloneAtoms(r.Atoms)
+		r.Gate = slices.Clone(r.Gate)
+		r.NextTags = cloneTagValues(r.NextTags)
+		r.Writes = cloneTagValues(r.Writes)
+		r.RequiresOwned = slices.Clone(r.RequiresOwned)
+		r.Escape = slices.Clone(r.Escape)
+		out[i] = r
+	}
+	return out
+}
+
+// cloneTagValues wraps deepCloneTagValues so a nil field stays nil.
+//
+// deepCloneTagValues allocates unconditionally, which is right where it is
+// used (REQ-82 mutates the result) but wrong for a snapshot compared with
+// reflect.DeepEqual: DeepEqual separates a nil slice from an empty one, so
+// promoting nil to empty would report every row carrying no writes as
+// MUTATED by the dump and make the oracle fail on correct code. The same
+// reasoning applies to cloneAtoms; slices.Clone already preserves nil.
+func cloneTagValues(in []table.TagValue) []table.TagValue {
+	if in == nil {
+		return nil
+	}
+	return deepCloneTagValues(in)
+}
+
+// cloneAtoms detaches an atom sequence, including each atom's literal
+// member sequence — the literal is a []string and aliases like any other.
+// A nil sequence stays nil, per cloneTagValues' reasoning.
+func cloneAtoms(in []table.Atom) []table.Atom {
+	if in == nil {
+		return nil
+	}
+	out := make([]table.Atom, len(in))
+	for i, a := range in {
+		a.Literal = slices.Clone(a.Literal)
+		out[i] = a
+	}
+	return out
+}
+
+// clonedRowSliceFields names every EXPORTED slice-typed field of
+// table.Row that cloneRows detaches. Row's unexported slice field
+// (setKeys) is derived from the model's declarations and is neither
+// reachable nor comparable from this package, so it is excluded by name.
+var clonedRowSliceFields = []string{
+	"Suffix", "Atoms", "Gate", "NextTags", "Writes", "RequiresOwned", "Escape",
+}
+
+// assertCloneRowsCoversEverySliceField fails if table.Row grows an
+// exported slice field that cloneRows does not detach. Without this,
+// adding a field would silently restore the aliasing that REQ-44's oracle
+// depends on being absent.
+func assertCloneRowsCoversEverySliceField(t *testing.T) {
+	t.Helper()
+
+	rt := reflect.TypeOf(table.Row{})
+	var have []string
+	for i := range rt.NumField() {
+		f := rt.Field(i)
+		if f.IsExported() && f.Type.Kind() == reflect.Slice {
+			have = append(have, f.Name)
+		}
+	}
+	slices.Sort(have)
+	want := slices.Sorted(slices.Values(clonedRowSliceFields))
+	if !slices.Equal(have, want) {
+		t.Fatalf("table.Row's exported slice fields = %v; cloneRows detaches %v. "+
+			"Every slice field must be cloned or the snapshot aliases the source.",
+			have, want)
 	}
 }
