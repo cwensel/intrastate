@@ -338,6 +338,34 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 	}
 
+	// The PRESENT VALUE axis proper, which the pinned-operand rule above
+	// does not carry on its own: when the fixed operand is the value, the
+	// literal did all the discriminating, so that rule alone would admit an
+	// operator whose value never moved. The contract is over the present
+	// value × literal × operator product, so every operator must be offered
+	// at least two distinct values somewhere.
+	//
+	// Stated per operator over values rather than as a per-operator
+	// orientation table, so it holds for any operator the matrix later
+	// grows. The shipped table satisfies it on both shapes: `eq`, `gte` and
+	// `in` vary the value against a fixed literal, and `contains` varies it
+	// between its set value and its unparseable one.
+	valuesSeen := map[string]map[string]bool{}
+	for _, c := range rec.calls {
+		if valuesSeen[c.Operator] == nil {
+			valuesSeen[c.Operator] = map[string]bool{}
+		}
+		valuesSeen[c.Operator][c.Value] = true
+	}
+	for _, op := range []string{opEq, opGte, opIn, opContains} {
+		if asked[op] && len(valuesSeen[op]) < 2 {
+			t.Errorf("the contract test offers %q only the value(s) %v; the contract "+
+				"is over the PRESENT VALUE × literal × operator product, and an "+
+				"operator asked about a single value never exercises the value axis",
+				op, valuesSeen[op])
+		}
+	}
+
 	// The unparseable-value leg the contract exists to enforce. "Cannot
 	// parse" is a property of an operator's OWN parse rule, so it is
 	// classified per operator against that rule — `gte` parses an integer,
