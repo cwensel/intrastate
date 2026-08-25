@@ -226,3 +226,80 @@ MVV carries no `X∘Y = identity` fidelity obligation.
 | `guard_mvv_0003_test.go` | Testing Strategy scenarios and the MVV (REQ-124, REQ-126 … REQ-140, `REQ-MVV`) |
 | `guard_fixtures_0003_test.go` | Shared fixture builders and lint-result inspection. Declares no tests. |
 
+## REQ-MVV run — actual output
+
+Recorded at Stage 8 implementation. Command:
+
+```
+go test ./internal/guard/ -run TestMVV_GuardPredicateExhaustiveness -v
+```
+
+Result:
+
+```
+=== RUN   TestMVV_GuardPredicateExhaustiveness
+=== RUN   TestMVV_GuardPredicateExhaustiveness/1-two-flow-slices-over-the-full-vocabulary
+=== RUN   TestMVV_GuardPredicateExhaustiveness/2-one-group-proved-exhaustive-and-mutually-exclusive
+=== RUN   TestMVV_GuardPredicateExhaustiveness/3-gap-and-overlap-from-one-run-with-source-ids
+=== RUN   TestMVV_GuardPredicateExhaustiveness/4-positive-blocking-finding-names-the-row-and-the-atom
+=== RUN   TestMVV_GuardPredicateExhaustiveness/5-negative-control-certifies-green
+--- PASS: TestMVV_GuardPredicateExhaustiveness (0.00s)
+    --- PASS: TestMVV_GuardPredicateExhaustiveness/1-two-flow-slices-over-the-full-vocabulary (0.00s)
+    --- PASS: TestMVV_GuardPredicateExhaustiveness/2-one-group-proved-exhaustive-and-mutually-exclusive (0.00s)
+    --- PASS: TestMVV_GuardPredicateExhaustiveness/3-gap-and-overlap-from-one-run-with-source-ids (0.00s)
+    --- PASS: TestMVV_GuardPredicateExhaustiveness/4-positive-blocking-finding-names-the-row-and-the-atom (0.00s)
+    --- PASS: TestMVV_GuardPredicateExhaustiveness/5-negative-control-certifies-green (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/internal/guard	0.200s
+```
+
+`PASS` alone does not show WHAT lint decided, and obligation 4 turns on a
+run that emits nothing failing the test. The lint result the two MVV
+slices actually produce is therefore recorded too — one line per scoped
+row group, then its findings:
+
+```
+[rdr] group "rdr/round-clean stage.eq=prelock"  rules=[gap-a gap-b]                    verdict=gap        green=false card=8  union=6
+[rdr]     graph-coverage-gap  rules=[gap-a gap-b] class="no_match"        witness=map[prelock_iterations:3 profile:large]
+[rdr]     graph-coverage-gap  rules=[gap-a gap-b] class="ambiguous_match" witness=map[prelock_iterations:3 profile:large]
+[rdr] group "rdr/round-clean stage.eq=propose"  rules=[partition-large partition-small] verdict=exhaustive green=true  card=2  union=2
+[rdr] group "rdr/round-clean stage.eq=resolve"  rules=[ov-a ov-b]                       verdict=gap        green=false card=16 union=12
+[rdr]     graph-vacuous-exists rules=[ov-b] dim="cluster_eligible" atom="cluster_eligible.exists"
+[rdr]     graph-overlap        rules=[ov-a ov-b]
+[rdr]     graph-coverage-gap   rules=[ov-a ov-b] class="no_match"        witness=map[cluster_eligible:true lens:["critique"] rewind_target:approach]
+[rdr]     graph-coverage-gap   rules=[ov-a ov-b] class="ambiguous_match" witness=map[cluster_eligible:true lens:["critique"] rewind_target:approach]
+[kata] group "kata/accepted phase.eq=review"    rules=[kata-absent-key kata-absent-key-peer] verdict=withheld   green=false card=0 union=0
+[kata]     graph-unprovable-coverage rules=[kata-absent-key]      dim="assignee" atom="assignee.eq" blocking=true
+[kata]     graph-unprovable-coverage rules=[kata-absent-key-peer] dim="assignee" atom="assignee.eq" blocking=true
+[kata] group "kata/accepted phase.eq=ship"      rules=[kata-control-a kata-control-b]        verdict=exhaustive green=true  card=2 union=2
+```
+
+Reading the five obligations off that output:
+
+1. Both slices normalize and lint; the vocabulary check is
+   `TestReq124_…`, which passes over the same two slices.
+2. `stage.eq=propose` is the one green group: `union == card == 2`, and
+   its two rows have an empty pairwise intersection.
+3. `stage.eq=prelock` carries the 2-D gap and `stage.eq=resolve` the 2-D
+   overlap, both emitted from ONE `Lint` call, each naming its rule ids
+   and — for the gap — a concrete uncovered assignment naming two or more
+   dimensions.
+4. The kata `phase.eq=review` group emits two BLOCKING
+   `graph-unprovable-coverage` findings, one per refusing row, each
+   naming the row and the refusing atom over `assignee`. The finding set
+   is non-empty, so a run that emitted nothing would fail here.
+5. The kata `phase.eq=ship` control — the same shape over an
+   always-present key — certifies green, so the narrowing is tight rather
+   than blanket.
+
+A gap appears once per unclosed rescuable class (REQ-77: the coverage
+union is computed per group × declared rescuable class), which is why the
+two gap groups each show a `no_match` and an `ambiguous_match` finding
+carrying one witness.
+
+## Published cardinality bound
+
+`guard.Bound()` returns **2048**. REQ-131 constructs its equal-cardinality
+shape pair relative to B, and the two shapes reach one cardinality only
+when `2B` and `B/2` are both even powers of two; 2048 satisfies that, so
+the pair builds at 4096 (over) and 1024 (under).
