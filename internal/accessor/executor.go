@@ -312,8 +312,20 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	}
 
 	// --- the write command ---------------------------------------------
+	// The binding gets its OWN copy. `planned` is the expectation the
+	// read-back oracle judges the artifact against, and it is also every
+	// refusal's `Expected` and the success record's `Written`. Handing the
+	// binding the same backing array would let it rewrite the expectation
+	// it is judged against: `verifyReadBack` would compare the artifact to
+	// whatever the binding chose, and `Written` would report the mutated
+	// value as verified — a self-referential oracle, defeatable by the very
+	// component it verifies. Bindings are not trusted at this boundary
+	// (`0004:465-474`, `0004:801`); D16 already enforces the caller-supplied
+	// plan at runtime rather than trusting validation, and this is the same
+	// failure shape one hop later. `resolve.Tag` is a value struct of
+	// strings, so a shallow clone fully severs the aliasing.
 	applyCtx, cancelApply := context.WithTimeout(ctx, timeout)
-	err := binding.Apply(applyCtx, art, planned)
+	err := binding.Apply(applyCtx, art, slices.Clone(planned))
 	appliedDeadline := errors.Is(applyCtx.Err(), context.DeadlineExceeded)
 	cancelApply()
 

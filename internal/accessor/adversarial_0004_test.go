@@ -322,3 +322,85 @@ func TestAdv4Control_CompletePreWriteSnapshotStillSucceeds(t *testing.T) {
 			keyProfile, v, absent, "large")
 	}
 }
+
+// --- ADV-5 ---------------------------------------------------------------
+
+// ADV-5 — the write binding MUTATES the planned slice it was handed, and
+// the read-back oracle therefore judges the artifact against the value the
+// binding itself chose.
+//
+// Failure mode: `executor.go::Write` clones `plan.Writes` ONCE into
+// `planned`. That single backing array is simultaneously the argument to
+// `WriteBinding.Apply`, the expectation `verifyReadBack` compares the
+// re-read artifact against, the `Expected` field on every typed refusal,
+// and the source of the success record `verifiedWritten(planned)`. A
+// binding that assigns to `planned[i].Value` before applying it rewrites
+// the expectation it is about to be judged against: read-back compares the
+// artifact to what the binding wrote, finds them equal, and `Written`
+// reports the binding's substituted value as VERIFIED.
+//
+// That is a self-referential oracle — the verification is defeatable by the
+// very component it verifies — and it produces the RDR's own definition of
+// a silent failure: a success-shaped result over authoritative artifact
+// state the accessor did not establish (`0004:FM`, REQ-80). Bindings are
+// not trusted at this boundary: `0004:465-474` makes the binding's own
+// reporting the thing the contract polices and `0004:801` names accessor
+// bindings a risk surface. Deviation D16 already adjudicated the sibling
+// case one hop earlier — the caller-supplied plan is enforced at RUNTIME
+// rather than trusted from validation.
+//
+// The expectation must be immutable with respect to the binding: the
+// artifact holds what the binding actually wrote, which differs from the
+// plan, so this is `read_back_mismatch` (`0004:C12`, REQ-53).
+//
+// Defends: `0004:C12` / REQ-53, REQ-80.
+func TestAdv5_BindingMutatingItsPlanMustNotRewriteTheReadBackExpectation(t *testing.T) {
+	s := newStore(map[string]string{keyStatus: "draft", keyProfile: "large"})
+
+	// The binding substitutes its own value for the planned one, in place,
+	// then applies the rewritten plan. Both the artifact and — under
+	// aliasing — the expectation end up holding "hijacked".
+	w := &writeBinding{store: s, rewritePlan: func(planned []resolve.Tag) {
+		for i := range planned {
+			if planned[i].Key == keyStatus {
+				planned[i].Value = "hijacked"
+			}
+		}
+	}}
+	r := &readBinding{store: s}
+	e := writeExec(t, s, w, r, keyStatus)
+
+	got := e.Write(ctxOf(t), writerName, planWriting(
+		resolve.Tag{Key: keyStatus, Value: "final"},
+	))
+
+	// Control: the binding really did write its own value, not the plan's.
+	if v, _, _ := s.get(keyStatus); v != "hijacked" {
+		t.Fatalf("artifact holds %q for %q; the fixture did not substitute its own "+
+			"value, so this probe is testing the wrong thing", v, keyStatus)
+	}
+
+	if !got.Refused() {
+		t.Fatalf("Write reported SUCCESS (Written=%+v) after the binding rewrote the "+
+			"planned value from %q to %q in place; read-back compared the artifact "+
+			"against the binding's OWN choice rather than the plan — the oracle is "+
+			"self-referential", got.Written, "final", "hijacked")
+	}
+	if got.Refusal.Class != accessor.ClassReadBackMismatch {
+		t.Errorf("Write refused %q; want read_back_mismatch — the artifact demonstrably "+
+			"holds %q where the plan said %q", got.Refusal.Class, "hijacked", "final")
+	}
+
+	// The refusal's own diagnostic must report the PLAN, not the binding's
+	// substitution: `Expected` is what the caller asked for.
+	if v, ok := seamValueOf(got.Refusal.Expected, keyStatus); !ok || v != "final" {
+		t.Errorf("Refusal.Expected carries %q = (%q, present=%v); want the PLANNED "+
+			"value %q — a diagnostic echoing the binding's substitution reports the "+
+			"mismatch as no mismatch at all", keyStatus, v, ok, "final")
+	}
+
+	// Nothing may be reported as verified.
+	if len(got.Written) != 0 {
+		t.Errorf("WriteResult.Written = %+v on a refusal; want empty", got.Written)
+	}
+}

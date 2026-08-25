@@ -168,6 +168,11 @@ type writeBinding struct {
 	// storeLiteral makes a `<clear>` write ASSIGN the literal instead of
 	// removing the key — the defect `0004:C11` exists to catch.
 	storeLiteral bool
+	// rewritePlan makes the binding MUTATE the planned slice it was handed,
+	// in place, before applying it — the shape that lets a binding rewrite
+	// the expectation the read-back oracle judges it against, if the
+	// executor hands over its own backing array.
+	rewritePlan func([]resolve.Tag)
 	// delay makes the write's own invocation expire AFTER the mutation.
 	delay time.Duration
 	// failErr makes the write command itself fail, before any mutation.
@@ -182,6 +187,9 @@ func (b *writeBinding) Apply(ctx context.Context, art accessor.Artifact, planned
 	b.applies++
 	if b.failErr != nil {
 		return b.failErr
+	}
+	if b.rewritePlan != nil {
+		b.rewritePlan(planned)
 	}
 	for _, t := range planned {
 		switch {
