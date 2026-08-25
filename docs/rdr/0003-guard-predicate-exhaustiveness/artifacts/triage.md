@@ -83,3 +83,35 @@ deliberately red; Phase 3c fixes them) and cosmetic large-cardinality
 complaints that D6's published bound of 2048 already adjudicates. Two
 DROPs (12, 13) were superseded by work that landed later in the same
 window.
+
+## Fix-commit review sweep (bounded, one round)
+
+The three FIX-NOW commits each triggered a fresh per-commit auto-review;
+all three were swept once and closed.
+
+| Job | Commit | Result |
+|---|---|---|
+| 6100 | `072c7a0` | no issues found |
+| 6102 | `8e8ca08` | no issues found |
+| 6103 | `5aef90e` | one Low finding → kata `0x69` |
+
+Job 6103 observed that the `<clear>` reorder fixed the operator/kind gate
+but left two EARLIER operator gates (unknown-operator, match-block-operator)
+still able to preempt the sentinel — verified accurate against the source.
+Per the bounded-sweep rule, a finding raised on a FIX-NOW commit is FILED,
+never re-fixed, so the fix-then-review cycle cannot become a loop.
+
+Jobs 6098 (D15 retirement commit) and 6099 (range review) were also
+closed: 6098 found no issues, and every 6099 finding deduped onto the
+spine.
+
+## Outcome
+
+- **fixed-now:** 3 (`072c7a0`, `8e8ca08`, `5aef90e`) — all mutation-verified
+- **kata-bug:** 6 (`x0fp` p1/high, `cq5p`, `x2bp`, `fyf4`, `9yeq`, `0x69`)
+- **rdr-seed:** 2 (`r5ja` ★, `ge67` ★)
+- **dropped:** 10 (6 `n/a-not-a-defect`, 2 `superseded-at-HEAD`, 2 `rdr-adjudicated`)
+- **jobs closed:** 14 of 14 in-window
+
+Suite at the triage tip: 150 guard tests + full tree green, race-clean,
+`golangci-lint` 0 issues.
