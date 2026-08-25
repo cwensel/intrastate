@@ -247,6 +247,7 @@ holds. Each would go red if the prohibition were violated.
 | REQ-41 | `TestReq41_MergedNodeWithTwoValuesIsNotASingleValuedViolation` | ADVERSARIAL | `internal/graphlint/invariants_0006_test.go` | RED |
 | REQ-42 | `TestReq42_OwnedSetBeforeMatchRequiresTheKeyHeldAtEveryMatchingNode` | HAPPY PATH | `internal/graphlint/invariants_0006_test.go` | RED |
 | REQ-43 | `TestReq43_RelianceOnAnImpliedTerminalIsGraphTerminalEscape` | ADVERSARIAL | `internal/graphlint/invariants_0006_test.go` | RED |
+| REQ-43 | `TestReq43_ImpliedTerminalIsMintedInAModelDeclaringOtherTerminals` | ADVERSARIAL | `internal/graphlint/invariants_0006_test.go` | RED (Phase 3c) |
 | REQ-44 | `TestReq44_AbsentRootIsBlockingNeverAnEmptyReachableSetGreen` | ADVERSARIAL | `internal/graphlint/invariants_0006_test.go` | RED |
 | REQ-45 | `TestReq45And46_NonFiniteDimensionTakesUnprovableCoverage` | DOMAIN EDGE | `internal/graphlint/coverage_0006_test.go` | RED |
 | REQ-45 | `TestReq45_OptionalityAndSingleValuednessComeFromTheDeclarationModel` | BOUNDARY | `internal/graphlint/soundness_0006_test.go` | green |
@@ -440,3 +441,35 @@ RDR's own — 4096 merged nodes — since no peer bounds the traversal.
    check`'s missing `build` edge. *Disposition: done. The model lints
    clean — SC-23's false-positive census is zero — and dropping its
    `[initial]` table fails the same command. `D4` is discharged.*
+
+## Phase 3c — coverage added by the fixup pass
+
+One REQ gained coverage; the REQ-MVV recorded output above is unchanged and
+was re-run green after every fix.
+
+- **REQ-43** gained
+  `TestReq43_ImpliedTerminalIsMintedInAModelDeclaringOtherTerminals`
+  (`internal/graphlint/invariants_0006_test.go`). The pre-existing REQ-43
+  test drives only the degenerate model that declares NO terminal at all,
+  which is the sole shape the old global gate
+  (`if len(a.model.Terminal) > 0 { return }`) could mint the code for. The
+  new test drives the shape the record actually prescribes — "a fixture is
+  authored by omitting the declaration the model depends on", i.e. omitting
+  ONE terminal — and was verified to fail against the old gate before the
+  fix landed. It also asserts `graph-dead-end` is emitted alongside, which
+  is REQ-83's complete-emission clause over two invariants that share a
+  node condition.
+
+Two adversarial tests changed shape rather than coverage, each recorded as a
+`TEST-FIXTURE` deviation with RDR evidence (D11, D12):
+
+- `TestReq110And112_OwnedSetBeforeMatchReadsMergedFixpointNodes` now counts
+  nodes per owned-state identity instead of per `status` value. The REQ-112
+  obligation it exists for — invariant 6 reads merged fixpoint nodes and
+  names the row — is asserted unchanged and still passes.
+- `TestAdvDeadEndExistentialOnMergedNode` now pins invariant 2's accepted
+  miss to REQ-37's bound and adds a positive arm asserting the bounded split
+  still catches a dead half on a terminal-participating key.
+
+`models/rdr.toml` lints clean after all four fixes, so SC-23's
+false-positive census (REQ-122) remains zero.

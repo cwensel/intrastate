@@ -383,3 +383,148 @@ ADV-2, and ADV-3 above, which is corroboration from a separate starting point.
 **BLOCK** — four FAIL entries (FAIL-1 … FAIL-4). FAIL-1 is new to this phase;
 FAIL-2, FAIL-3, and FAIL-4 independently corroborate Phase 3b's ADV-1, ADV-2, and
 ADV-3.
+
+---
+
+## Phase 3c — Fixup
+
+Four defects addressed. FAIL-2/3/4 and ADV-1/2/3 are the same three found
+independently, fixed once each and verified against both the 3a-described
+symptom and the 3b failing test. Every fix was committed as its own green
+increment.
+
+Suite state at close: `go test -race ./...` green across every package,
+`gofmt` clean, `go vet ./...` clean, `golangci-lint run` reports 0 issues,
+and `intrastate lint --model models/rdr.toml --as=json` returns
+`{"type":"ok","data":{"findings":[]}}` — REQ-122's census stays zero.
+
+### FAIL-1 (REQ-43) — invariant 7 was decided per model, not per node
+
+- **Fixed**: `internal/graphlint/analysis.go::checkTerminalEscape` opened
+  with `if len(a.model.Terminal) > 0 { return }`, a global emptiness gate
+  where REQ-43 states a per-node condition ("no terminal declaration
+  **covering it**"). The code could fire only on a model declaring no
+  terminal at all.
+- **Change**: the check walks per-node terminal coverage, testing the SPLIT
+  node for the same reason invariant 2 splits (REQ-36) — terminal
+  satisfaction is universal over a node's per-tag value sets.
+  `satisfiesSomeTerminal` is false for an empty terminal list, so the
+  no-terminal-at-all case is unchanged.
+- **Regression test** (this defect had none):
+  `TestReq43_ImpliedTerminalIsMintedInAModelDeclaringOtherTerminals` in
+  `internal/graphlint/invariants_0006_test.go`, driving FAIL-1's `p17`
+  shape — `terminal = ["fin"]` covering `stage = x`, with `r-y` reaching an
+  uncovered `stage = y`. **Verified to fail against the old gate** (the
+  gate was temporarily restored and the test reproduced FAIL-1's exact
+  symptom) and to pass against the fix. It also asserts `graph-dead-end` is
+  emitted alongside per REQ-83, and carries a control that clears the
+  finding by declaring the missing terminal.
+- **State**: RESOLVED. Recorded as D14.
+
+### FAIL-2 / ADV-1 (REQ-101, REQ-108) — the successor join collapsed divergent edges
+
+- **Fixed**: `internal/graphlint/reach.go::successorOf` folded EVERY edge
+  leaving a node into one successor, and `joinNodes` drops a key absent on
+  either side, so two rows writing different owned keys annihilated each
+  other. Confirmed as an under-approximation of presence, against REQ-106's
+  over-approximation contract and REQ-110's superset premise.
+- **Change**: `successorsOf` groups a source node's edges by their
+  successor's PRESENCE FOOTPRINT before joining. REQ-108 licenses the join
+  only between "two edges reaching the same successor", and REQ-101 makes
+  "absent" a value of a tag's dimension, so the footprint is the successor
+  identity and the per-tag value sets are what the widening unions over it.
+  Edges writing different values to the same tag still converge on one node
+  (REQ-108's merged fixpoint); edges establishing different tags stay
+  distinct. The traversal remains a fixpoint over merged nodes and never
+  path-sensitive, and the lattice stays finite so termination is unchanged.
+- **Regression test**: `TestAdvSuccessorJoinCollapsesDivergentEdges` (3b,
+  pre-existing) now passes both sub-assertions — the reachable set retains
+  a node holding each divergent key, and no live row takes
+  `graph-unreachable-rule`. `TestReq108_TraversalMergesConvergingEdgesIntoOneNode`
+  and `TestReq41_MergedNodeWithTwoValuesIsNotASingleValuedViolation` pin
+  the merging direction and both stay green.
+- **Fixture corrected**:
+  `TestReq110And112_OwnedSetBeforeMatchReadsMergedFixpointNodes` asserted
+  `mids == 1` over nodes carrying `status = mid`, which encoded D9's
+  functional-successor reading — the reading this defect disproves. It now
+  counts nodes per owned-state identity, the actual
+  merged-versus-path-sensitive distinction, and asserts the `opt`-absent
+  node exists. The REQ-112 obligation it exists for is untouched: the
+  `graph-owned-before-write` finding naming `reads-opt` still fires, which
+  is the outcome the record's scenario 10 requires.
+- **State**: RESOLVED. Recorded as D11, superseding D9.
+
+### FAIL-3 / ADV-2 (REQ-84) — a withheld claim suppressed the group's overlap
+
+- **Fixed**: `internal/graphlint/groups.go::emitOverlaps` skipped any row
+  whose accepted-assignment set is not projectable, so one optional-key
+  atom per row made a genuine finite-domain overlap vanish.
+- **Change**: `decidableAccepted` re-expresses a non-projectable row by
+  intersecting its projectable atom denotations (`guard.Denotation`) into
+  the group's scoped product — RDR 0003's own move one level down, since
+  `acceptedIn` already computes over the group's decidable sub-product.
+  Where a row projects whole it is `guard.AcceptedAssignments` unchanged.
+  Scoped to overlap and sound only because overlap is existential
+  (REQ-110): dropping an undecidable conjunct widens the row, giving false
+  positives at worst (REQ-117), never a missed defect. Deliberately NOT
+  reused for coverage, which is universal; an `unless` block is left
+  undecided rather than partially subtracted. `internal/guard` (RDR 0003's
+  surface) was not modified.
+- **Regression test**: `TestAdvWithholdingSuppressesOverlap` (3b,
+  table-driven) — both arms now pass, the control and the attack, and the
+  attack's finding names the pair `(r1, r2)` exactly once.
+- **State**: RESOLVED. Recorded as D13.
+
+### FAIL-4 / ADV-3 (REQ-34, REQ-36, REQ-111) — dead end's outgoing-row test
+
+- **Investigated and NOT fixed as recommended.** The reported miss is real:
+  a node multi-valued on a key participating in no terminal is rescued
+  whole by an exit serving only one of its values. But the recommended fix
+  conflicts with the spec, so per the brief the spec is followed and the
+  reason recorded.
+- **Why**: REQ-37 bounds the split as a MUST — "by the declared domains of
+  terminal-participating keys only, **never the whole lattice**." The wider
+  quantifier was implemented and MEASURED rather than argued away: ranging
+  the outgoing-row test over match-participating keys manufactures views
+  the merged node never correlated. In `models/rdr.toml` every
+  `stage = "dropped"` write also writes `status = "abandoned"` (seven rows,
+  verified), but the merge decorrelates the keys, so the cross product
+  invents `{stage=dropped, status=draft}` and mints NINE false
+  `graph-dead-end` findings on the model REQ-122 requires lint clean. The
+  record anticipates this exactly: "a check against it can accuse a path
+  the runtime never walks. A path-sensitive reading would be exponential
+  and is rejected."
+- **Not separable**: the ADV-3 node and the conforming model's node are
+  structurally identical after the terminal split — one singleton terminal
+  key beside one multi-valued non-terminal key — so no local rule
+  distinguishes the true positive from the false positives. The separation
+  needs the correlation tracking the record rejects.
+- **Change**: none to the quantifier. `hasOutgoingOrdinaryRow` keeps
+  REQ-37's bound, with the reasoning and the accepted miss documented at
+  the call site so it is not silently rediscovered.
+- **Fixture corrected**: `TestAdvDeadEndExistentialOnMergedNode` now PINS
+  the accepted miss — any later widening of the split fails there and
+  forces the REQ-122 census to be re-run before the widening is accepted —
+  and adds a positive arm asserting the bounded split still catches a dead
+  half living on a terminal-participating key, so the fixture keeps
+  exercising invariant 2.
+- **State**: DEFERRED to the author. Recorded as **D12** with
+  `Status: needs author decision`. This is the only entry from this phase
+  that needs one; the suite is green and the census is zero on the reading
+  implemented.
+
+### Scope note
+
+Edits are confined to RDR 0006's surface: `internal/graphlint/`
+(`reach.go`, `analysis.go`, `groups.go`) and its test files, plus the
+artifacts. `internal/guard`, `internal/cli`, `internal/resolve`,
+`internal/table`, and `models/rdr.toml` were not modified. No test was
+weakened, skipped, or deleted: the two fixtures whose shape changed are
+recorded as `TEST-FIXTURE` deviations with RDR evidence (D11, D12), each
+keeps asserting the obligation it exists for, and D12's fixture gained an
+assertion rather than losing one.
+
+### Verdict
+
+**OK** — all four defects dispositioned, suite green, `models/rdr.toml`
+census zero. D12 carries `Status: needs author decision` and does not block.

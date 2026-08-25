@@ -261,3 +261,174 @@ reaches it — the entry stays OPEN on RDR 0002's terms, not on this one's.
 Discharged. `models/rdr.toml` is authored and homed, `.github/workflows/ci.yml`
 carries the `graph-lint` job, and the `Makefile` carries the `graph-lint`
 target plus the `build` edge on `check`.
+
+## D11 — The successor join groups on the presence footprint, superseding D9
+
+- **Type**: TEST-FIXTURE
+- **Status**: mechanical translation
+- **REQ**: REQ-101, REQ-106, REQ-108, REQ-110, REQ-112; supersedes D9.
+- **Finding**: D9 chose a FUNCTIONAL successor relation — every edge
+  leaving one node folds into ONE successor — reading "never
+  path-sensitive" as making a path-sensitive enumeration unrepresentable.
+  Phase 3a's FAIL-2 and Phase 3b's ADV-1 independently showed that reading
+  unsound. `joinNodes` drops a key absent on either side ("absence
+  dominates"), so two rows out of one node writing DIFFERENT owned keys
+  annihilate each other: the relation loses both keys and stands for a
+  concrete view no path produces. That UNDER-approximates presence, against
+  REQ-106's over-approximation contract and REQ-110's premise that a merged
+  node admits a SUPERSET of concrete views. The user-visible consequence is
+  a false green — live downstream rows are reported `graph-unreachable-rule`
+  (advisory), so `checkGroups` skips `checkCoverage` for their groups and a
+  whole arm of the model goes unproven at exit 0.
+- **Evidence**: REQ-108 licenses the join only between "two edges reaching
+  **the same successor**"; a fold across edges that reach DIFFERENT
+  successors is not the widening the clause describes. REQ-101 defines a
+  node as an abstract owned-state "per owned tag: **absent**, or held with
+  its set of possible declared values", which makes the presence footprint
+  constitutive of a node's identity rather than incidental to it.
+- **Chosen**: group a source node's edges by their successor's PRESENCE
+  FOOTPRINT before joining. Edges producing the same held-key set are one
+  successor and their per-tag value sets union (REQ-108's merged fixpoint,
+  and the shape `TestReq108_...` asserts); edges establishing different
+  keys are different successors and stay distinct. Within a group every key
+  is held on both sides, so absence-dominates never fires and no reachable
+  key is erased. This is still a fixpoint over merged nodes and never
+  path-sensitive: a node is keyed by its owned-state, not by the path that
+  reached it, so every path arriving at one owned-state arrives at one
+  node, and the lattice stays finite so the widening still terminates.
+  Successor multiplicity is a property of the transition relation, not of
+  path sensitivity — a DFA state has many successors and enumerates no
+  paths.
+- **Fixture corrected**:
+  `TestReq110And112_OwnedSetBeforeMatchReadsMergedFixpointNodes` asserted
+  `mids == 1`, counting reachable nodes carrying `status = mid`. Its two
+  edges write `{status=mid, opt=p}` and `{status=mid}`, two distinct
+  footprints, so the assertion encoded D9's functional reading as its
+  oracle. It now counts nodes per OWNED-STATE IDENTITY — the actual
+  merged-versus-path-sensitive distinction — and additionally asserts the
+  `opt`-absent node exists, since that is the node invariant 6 reads. The
+  REQ-112 obligation the test exists for is untouched and still passes: the
+  `graph-owned-before-write` finding naming `reads-opt` fires from the
+  `{status=mid}` node the `skips-opt` edge genuinely produces. The record's
+  own scenario 10 requires exactly that finding and states no node count,
+  calling the result "an accepted false positive whose cure is an explicit
+  write, clear, or terminal declaration on the model".
+
+## D12 — Invariant 2's outgoing-row test stays bounded by REQ-37
+
+- **Type**: TEST-FIXTURE
+- **Status**: needs author decision (implemented on the most defensible
+  reading; the suite is green and the REQ-122 census is zero)
+- **REQ**: REQ-34, REQ-36, REQ-37, REQ-111, REQ-117, REQ-122.
+- **Finding**: Phase 3a's FAIL-4 and Phase 3b's ADV-3 report that
+  `checkDeadEnd` splits on terminal-participating keys and then tests
+  outgoing rows EXISTENTIALLY on the merged node, so a node multi-valued on
+  a key participating in NO terminal is rescued whole by an exit serving
+  only one of its values. The miss is real: in the ADV-3 fixture
+  `{status=b, phase=q}` satisfies no terminal, has no exit, and lint says
+  nothing.
+- **Evidence — why the reporters' fix is not available**: REQ-37 states the
+  bound as a MUST — "The split is bounded by the declared domains of
+  terminal-participating keys only, **never the whole lattice**." The wider
+  quantifier was implemented and MEASURED rather than argued away. Ranging
+  the outgoing-row test over match-participating keys manufactures concrete
+  views the merged node never correlated: in `models/rdr.toml` every
+  `stage = "dropped"` write also writes `status = "abandoned"` (seven
+  rows, verified), but the merge decorrelates the two keys, so the cross
+  product invents `{stage=dropped, status=draft}` and mints NINE false
+  `graph-dead-end` findings on the model REQ-122 requires lint clean. The
+  record anticipates exactly this: "A merged node holds every value some
+  path brings, so a check against it can accuse a path the runtime never
+  walks. **A path-sensitive reading would be exponential and is rejected**"
+  (LBD, *Join rule and termination*). The ADV-3 node and the conforming
+  model's node are structurally identical after the terminal split — one
+  singleton terminal key beside one multi-valued non-terminal key — so no
+  local rule separates the true positive from the false positives; the
+  separation needs the correlation tracking the record rejects.
+- **The genuine tension**: REQ-111 ("universal checks must not [read merged
+  nodes]") and REQ-117 ("the cure is a clearer model, never a weaker lint")
+  favour closing the miss; REQ-37's explicit bound and REQ-122's
+  zero-blocking census on the conforming model forbid the only available
+  way of closing it. Both readings have record support and the record does
+  not rank them.
+- **Chosen**: honour REQ-37's explicit bound. It is a stated MUST, whereas
+  the wider quantifier is an inference from REQ-111's general principle,
+  and adopting it demonstrably breaks REQ-122 on the checked-in model.
+  `hasOutgoingOrdinaryRow` keeps its existing scope, with the quantifier
+  reasoning and the accepted miss documented at the call site.
+- **Fixture corrected**: `TestAdvDeadEndExistentialOnMergedNode` asserted
+  the finding must fire. It now PINS the accepted miss — so any later
+  widening of the split fails here and forces the REQ-122 census to be
+  re-run against `models/rdr.toml` before the widening is accepted — and
+  adds a positive arm asserting the bounded split still catches a dead half
+  living on a terminal-participating key, so the fixture continues to
+  exercise invariant 2 rather than merely recording an absence.
+- **For the author**: if invariant 2 should be exact over non-terminal
+  keys, the record needs a successor clause that either relaxes REQ-37's
+  bound and accepts the false positives on `models/rdr.toml` (re-running
+  SC-23's census), or adopts the correlation tracking it currently rejects
+  as exponential. This entry is the trigger.
+
+## D13 — Overlap is decided on the projectable dimensions
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-25, REQ-27, REQ-83, REQ-84, REQ-85, REQ-110, REQ-117.
+- **Finding**: `emitOverlaps` skipped any row whose accepted-assignment set
+  is not projectable. A row carrying one value atom over an OPTIONAL key can
+  refuse `guard_unevaluable`, so RDR 0003 gives it no accepted set at all —
+  and adding one such atom to each of two genuinely-overlapping rows made
+  the `graph-overlap` finding vanish, while the same two rows overlap
+  loudly without it (Phase 3a FAIL-3, Phase 3b ADV-2).
+- **Evidence**: REQ-84 is explicit — "Withholding a group's exhaustiveness
+  claim MUST NOT suppress overlap, coverage, or further withholding
+  findings for that group" — and REQ-85 makes them independent findings:
+  "each unprovable dimension, each refusing row, each overlapping pair …
+  is its own finding". RDR 0003 already makes the same move one level down:
+  `acceptedIn` computes over the group's DECIDABLE sub-product because "an
+  atom lint cannot project belongs to the row that carries it, not to every
+  row sharing its group".
+- **Chosen**: `decidableAccepted` re-expresses a non-projectable row by
+  intersecting its projectable atom denotations (`guard.Denotation`) into
+  the group's scoped product. Where a row projects whole this is
+  `guard.AcceptedAssignments` unchanged, so the provable path is untouched.
+  The relaxation is scoped to OVERLAP and sound only because overlap is
+  EXISTENTIAL (REQ-110): dropping an undecidable conjunct WIDENS the row,
+  so a witness found here may be separated by the dropped dimension at
+  runtime — a false positive, never a missed defect, which is the direction
+  REQ-117 accepts. It is deliberately NOT reused for coverage, which is
+  universal and where a widened union is the false-green direction;
+  coverage still compares the full product against `guard.CoverageUnion`.
+  A row carrying an `unless` block is left undecided rather than decided
+  wrongly, since the block matches as ONE conjunction and cannot be
+  partially subtracted. `internal/guard` is RDR 0003's surface and was not
+  modified.
+
+## D14 — Invariant 7 is decided per node
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **REQ**: REQ-43, REQ-36, REQ-83; REQ-MVV.
+- **Finding**: `checkTerminalEscape` opened with
+  `if len(a.model.Terminal) > 0 { return }`, so `graph-terminal-escape`
+  could fire only on a model declaring no terminal WHATSOEVER. Every model
+  declaring even one terminal was exempt, however many of its reachable
+  nodes relied on an inferred one (Phase 3a FAIL-1, which had no test).
+- **Evidence**: REQ-43 states the condition per NODE — "a reachable
+  non-terminal node with no outgoing non-escape row and **no terminal
+  declaration covering it** (an implied terminal)" — a per-node coverage
+  test, not a per-model emptiness test. The record also prescribes the
+  fixture shape: "a fixture is authored by omitting the declaration the
+  model depends on", i.e. omitting ONE terminal. Under the global gate that
+  fixture could not mint the code, and REQ-MVV's illegal matrix entry was
+  satisfiable only by the degenerate no-terminal model.
+- **Chosen**: walk per-node terminal coverage, testing the SPLIT node for
+  the same reason invariant 2 splits (REQ-36) — terminal satisfaction is
+  universal over a node's per-tag value sets, so a merged node is
+  anti-monotone in it and would accuse converging flows.
+  `satisfiesSomeTerminal` returns false for an empty terminal list, so the
+  no-terminal-at-all case is unchanged and the pre-existing REQ-43 test
+  still passes. The reliance stays ONE finding against the missing
+  declaration rather than one per node, as before. `graph-dead-end` and
+  `graph-terminal-escape` are separate obligations over the same node
+  condition and both are emitted, per REQ-83's complete-emission clause.
