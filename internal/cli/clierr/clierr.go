@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -173,14 +174,49 @@ func EmitText(out io.Writer, e *CLIError) {
 // EmitFindingsText renders one finding per line as "  <code>: <message>",
 // with the identity fields the finding carries appended so a reader can act
 // on it without re-running in JSON mode.
+//
+// Identity values reach here from author TOML (`Literal` is the joined atom
+// literal), and nothing on the load path rejects a newline or a `) (` in one.
+// They are therefore quoted, so no authored value can split a finding across
+// lines or forge a second finding's identity suffix — one finding is one line.
 func EmitFindingsText(out io.Writer, findings []Finding) {
 	for _, f := range findings {
-		_, _ = fmt.Fprintf(out, "  %s: %s%s\n", f.Code, f.Message, f.identitySuffix())
+		_, _ = fmt.Fprintf(out, "  %s: %s%s\n",
+			f.Code, sanitizeLine(f.Message), f.identitySuffix())
 	}
 }
 
+// sanitizeLine folds every line-affecting character in producer-generated
+// prose to a space so one finding stays one line. Messages embed
+// author-controlled tag names and values — `nodeElement` composes `Node.key()`
+// into a message with `%s`, not `%q`, so such a character reaches the line
+// unescaped. Unlike identity values a message is prose meant to read unquoted,
+// and it is asserted on as a plain substring, so it is flattened rather than
+// quoted.
+//
+// CR and LF are folded as a pair first so a CRLF becomes one space rather than
+// two. The rest are folded individually: VT and FF advance a line on a
+// terminal, and NEL (U+0085), LS (U+2028) and PS (U+2029) are line breaks to
+// Unicode-aware consumers.
+func sanitizeLine(s string) string {
+	if !strings.ContainsAny(s, "\r\n\v\f\u0085\u2028\u2029") {
+		return s
+	}
+	return strings.NewReplacer(
+		"\r\n", " ",
+		"\r", " ",
+		"\n", " ",
+		"\v", " ",
+		"\f", " ",
+		"\u0085", " ",
+		"\u2028", " ",
+		"\u2029", " ",
+	).Replace(s)
+}
+
 // identitySuffix renders the finding's identity fields as a trailing
-// parenthesised list, or "" when it carries none.
+// parenthesised list of quoted values, or "" when it carries none. Quoting is
+// what keeps the list unforgeable by an authored value; see EmitFindingsText.
 func (f Finding) identitySuffix() string {
 	var parts []string
 	for _, p := range [][2]string{
@@ -196,7 +232,7 @@ func (f Finding) identitySuffix() string {
 		{"class", f.Class},
 	} {
 		if p[1] != "" {
-			parts = append(parts, p[0]+"="+p[1])
+			parts = append(parts, p[0]+"="+strconv.Quote(p[1]))
 		}
 	}
 	if len(parts) == 0 {
