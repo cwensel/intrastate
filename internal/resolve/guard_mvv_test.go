@@ -248,11 +248,11 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 	//
 	// The recorder cannot see the contract test's own `want` column — that
 	// lives in its local case table and is consumed by its own t.Errorf. It
-	// does not have to: a conforming seam's answer to a triple is a TOTAL
-	// FUNCTION of that triple, so the verdict axis is derivable here from
-	// the recorded (operator, literal, value) alone. What follows asserts
-	// the matrix of verdict CLASSES the contract owes per operator, not the
-	// incidental shape of today's case table.
+	// does not have to: the contract test passed against a CONFORMING seam
+	// above, so that seam's answers are the `want` column, and the recorder
+	// captures them beside each question. What follows asserts the matrix of
+	// verdict CLASSES the contract owes per operator, not the incidental
+	// shape of today's case table.
 	rec := &recordingSeam{inner: conformingContractSeam{}}
 	resolve.TestGuardEvaluatorContract(t, rec)
 
@@ -285,30 +285,33 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		}
 	}
 
-	// The product's value axis, PER OPERATOR: for each operator, some one
-	// literal must be compared against two distinct values. A global "some
-	// operator varied" flag is discharged by a harness that asks every
-	// other operator exactly one question, which cannot distinguish that
-	// operator's decided verdict from a constant.
-	byAtom := map[string]map[string]bool{}
-	for _, c := range rec.calls {
-		k := c.Operator + "\x00" + c.Literal
-		if byAtom[k] == nil {
-			byAtom[k] = map[string]bool{}
+	// The product's value axis, PER OPERATOR — asserted on the VERDICT
+	// CLASS, not on value distinctness. Two distinct values are only a
+	// proxy for a decided-both-ways operator, and an unsound one: `gte`
+	// against literal "3" with values "4" and "3" varies the value while
+	// answering TRUE to both, so a seam constant-TRUE for every parseable
+	// `gte` would still pass a contract table that had lost its FALSE leg.
+	// Requiring both classes is what `guardcontract.go` already says it is
+	// doing ("decided both ways against one literal, so a constant-
+	// answering seam cannot pass"); this asserts that obligation directly
+	// and survives any case-table rewrite that keeps it.
+	decided := map[string]map[resolve.GuardResult]bool{}
+	for i, c := range rec.calls {
+		if decided[c.Operator] == nil {
+			decided[c.Operator] = map[resolve.GuardResult]bool{}
 		}
-		byAtom[k][c.Value] = true
-	}
-	varied := map[string]bool{}
-	for k, values := range byAtom {
-		if len(values) > 1 {
-			varied[k[:strings.Index(k, "\x00")]] = true
-		}
+		decided[c.Operator][rec.verdicts[i]] = true
 	}
 	for _, op := range []string{opEq, opGte, opIn, opContains} {
-		if asked[op] && !varied[op] {
-			t.Errorf("the contract test never compares two different values against "+
-				"one literal under %q; a single question cannot distinguish that "+
-				"operator's decided verdict from a constant", op)
+		if !asked[op] {
+			continue
+		}
+		for _, want := range []resolve.GuardResult{resolve.GuardTrue, resolve.GuardFalse} {
+			if !decided[op][want] {
+				t.Errorf("the contract test never drives %q to %v; an operator "+
+					"decided only one way cannot distinguish a conforming seam "+
+					"from one that answers that verdict constantly", op, want)
+			}
 		}
 	}
 
@@ -324,7 +327,7 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 	unparseableValue := map[string]bool{}
 	parseableValue := map[string]bool{}
 	unparseableLiteral := map[string]bool{}
-	for _, c := range rec.calls {
+	for i, c := range rec.calls {
 		var valueOK, literalOK bool
 		switch c.Operator {
 		case opGte:
@@ -336,10 +339,19 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 		default:
 			continue
 		}
-		if valueOK {
+		switch {
+		case !valueOK:
+			// The obligation is `unparseable value → unevaluable, never
+			// false`, so the leg only counts when the seam actually
+			// answered unevaluable to it.
+			if rec.verdicts[i] == resolve.GuardUnevaluable {
+				unparseableValue[c.Operator] = true
+			}
+		case literalOK:
+			// A case counts as one the operator CAN parse only when both
+			// operands parse: `gte`'s unparseable-literal leg carries a
+			// parseable value but is not a decided case.
 			parseableValue[c.Operator] = true
-		} else {
-			unparseableValue[c.Operator] = true
 		}
 		if !literalOK {
 			unparseableLiteral[c.Operator] = true
@@ -381,14 +393,22 @@ func TestReq71_AConformingValueSeamSatisfiesTheContractTest(t *testing.T) {
 // recordingSeam delegates to a conforming seam and records what it was
 // asked, so the contract test's own coverage is observable while the
 // contract test itself still passes.
+//
+// It records the conforming seam's ANSWER beside each question. The
+// verdict class is the property the contract owes, and here it is
+// observed rather than re-derived: `seamCall` is a shared fixture key
+// type, so the verdicts ride in a parallel slice indexed alike.
 type recordingSeam struct {
-	inner resolve.GuardEvaluator
-	calls []seamCall
+	inner    resolve.GuardEvaluator
+	calls    []seamCall
+	verdicts []resolve.GuardResult
 }
 
 func (s *recordingSeam) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
+	got := s.inner.Evaluate(atom, value)
 	s.calls = append(s.calls, callOf(atom, value))
-	return s.inner.Evaluate(atom, value)
+	s.verdicts = append(s.verdicts, got)
+	return got
 }
 
 // conformingContractSeam implements RDR 0003's typed semantics narrowly
