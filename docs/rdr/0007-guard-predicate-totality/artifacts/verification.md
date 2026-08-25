@@ -120,3 +120,125 @@ atom, which the kernel MUST NOT report twice" makes row identity a
 guarantees `(RuleID, SourceLocator)` uniqueness is not stated in 0007, and
 `0007:C8` places the obligation on the kernel unconditionally.
 
+
+## Phase 3b — adversarial failure-mode review (independent)
+
+Independently derived; the reviewer did not read the `FAIL-N` entries above.
+Anchored to `## Trade-offs > ### Failure Modes` of the record, read through the
+projector. Tests live in `internal/resolve/guard_adversarial_0007_test.go`. No
+existing test was modified or weakened — the file is additive.
+
+Method note: the per-clause suite (`guard_totality_test.go`,
+`guard_atoms_test.go`, `guard_mvv_test.go`) is green and genuinely strong. The
+K3 matrix is exhaustive across `all`, `unless`, and cross-block; payload sorting
+survives 300 permuted runs at scale under `-race`; §D13 set bytes cross the seam
+verbatim and unparsed; operator-token drift (`"Exists"`, `"EXISTS"`, a future
+token) fails closed exactly as `0007:C3` requires. Nine further probe vectors
+(escape-path payload completeness, pruned-escape owned obligations, out-of-range
+seam verdicts, typed-nil seams, contract-test strength against a folding seam,
+duplicate row identity) all passed and are recorded here as closed. The three
+findings below are the composition cases that survived.
+
+### ADV-1 — a `match`-block atom is evaluated as a guard operand
+
+- **Failure mode**: `0007:F4` — "The domain rule is scoped to guards, so the
+  match pattern still folds absence into non-match … predicate PLACEMENT decides
+  whether an absent key refuses non-escapably or escapes."
+- **Also implicates**: `0007:C6` (verdict formula fenced over `all` and
+  `unless` only), `0007:C8` (payload names what blocked the GUARD verdict).
+- **What breaks**: §D12 put `BlockMatch` on the same `Block` type — "one type,
+  no separate slice on `Row`" — which makes a match atom *representable* in
+  `Row.Guard`. `guard.go::evaluateAtoms` has no `match` case: its `default:`
+  arm folds every block it does not name into `allResult`. A match atom over an
+  absent key therefore refuses `guard_unevaluable` — the NON-escapable kind —
+  where F4 states that match-pattern absence yields the escapable `no_match`.
+  The match atom also appears in the guard payload with `Block:match`, naming a
+  key that was never a guard input.
+- **Test**: `TestAdv0007_1_MatchBlockAtomIsNotAGuardOperand` (2 subtests).
+- **Status against current implementation**: **FAILS** (both subtests).
+- **Suggested resolution**: give `evaluateAtoms` an explicit `case BlockMatch`
+  that contributes no operand (the way `0007:C5` drops the omitted `unless`
+  term) and emits no payload entry.
+
+### ADV-2 — the `Block` boundary fails OPEN, reopening the `xg7p` masking path
+
+- **Failure mode**: `0007:F8` — "Evaluator/grammar version skew … the seam
+  answers unevaluable" — read against `0007:C3`'s fail-closed drift rule and
+  `0007:C11`'s ratification of D8.
+- **What breaks**: `0007:C3` makes OPERATOR drift fail closed in both
+  directions, and the kernel honours that exactly. The BLOCK boundary has no
+  equivalent rule and fails OPEN: `default:` sweeps any unrecognized block into
+  `allResult`, so an atom there can be DECIDED, and a decided-FALSE one PRUNES
+  its row. `0007:C11` ratifies pruning "conditional on the domain rule: pruning
+  is safe exactly because GuardFalse can only arise from decided atoms" — a
+  condition stated over *guard* atoms, which an atom in an unfenced block is
+  not. The consequence is the Background probe verbatim: FALSE guard + absent
+  `RequiresOwned` key + modeled `no_match` escape → `Escaped:true`, missing
+  artifact state masked. This is kata `xg7p`, reproduced on the post-RDR kernel
+  through a boundary the fail-closed clause never reached.
+- **Reachable via**: `BlockMatch` (§D12), the zero value `Block("")` (an unset
+  field on a producer-built atom), and any future block token.
+- **Test**: `TestAdv0007_2_UnfencedBlockFailsOpenAndReopensTheMaskingPath`
+  (3 subtests).
+- **Status against current implementation**: **FAILS** (all three legs; each
+  emits `Escaped:true` where `owned_state_unavailable` naming `gate` is owed).
+- **Suggested resolution**: state the block-boundary drift rule the way
+  `0007:C3` states the operator one, and make the kernel fail closed —
+  an atom whose block the verdict formula does not name must never DECIDE a
+  row. Same edit as ADV-1 if the `default:` arm is replaced by explicit cases
+  plus a fail-closed fallback.
+
+### ADV-3 — a duplicated tag key makes the guard verdict positional
+
+- **Failure mode**: `0007:F6` — "Refusal defeated by caller-supplied state
+  (A13) … an operator can supply the missing key as an observed tag."
+- **Also implicates**: `0007:C8` ("MUST sort the payload so it is a function of
+  the input tuple … never of atom or row order") and RDR 0001 REQ-1.
+- **What breaks**: `0007:C8` closes atom order and row order. It does not reach
+  the third ordering the kernel is exposed to — the caller's TAG slices.
+  `resolve.go::assemble` resolves a key repeated within one provenance by "last
+  tag wins", and its doc comment then claims "the merge is order-insensitive
+  across provenances, which is what value-level replay determinism requires
+  (REQ-3)". That claim holds only while no key repeats, and A13 leaves
+  caller-supplied `Observed` unconstrained. The two orderings of ONE duplicated
+  observed key give opposite guard verdicts, which under D8 is the difference
+  between a pruned row and a survivor — and therefore between the masking plan
+  and the honest refusal. Observed: `[gate=open, gate=closed]` → `Escaped:true`
+  plan routing around absent owned `audit`; `[gate=closed, gate=open]` →
+  `owned_state_unavailable`. Same tag multiset, opposite disposition. A
+  duplicated OWNED key is equally positional (a producer defect, but the kernel
+  is the component that must not let slice order decide a verdict).
+  `0007:F6` accepts that an operator can SUPPLY a missing key; it does not
+  extend to an operator flipping the disposition by REORDERING tags they
+  already supplied.
+- **Note on scope**: `assemble` is RDR 0001 code, but the defect surfaces
+  through `0007:C4` key identity and `0007:C8` determinism, and its observable
+  consequence is this RDR's own masking probe. Recorded here rather than
+  edited.
+- **Test**: `TestAdv0007_3_DuplicateKeyMakesTheVerdictAFunctionOfSlicePosition`
+  (3 subtests).
+- **Status against current implementation**: **FAILS** (all three subtests).
+- **Suggested resolution**: make a duplicated key resolve by a rule that is a
+  function of the tuple — reject it as a malformed input tuple, or make the
+  collision itself unevaluable. Either way the two orderings must agree.
+
+### Vectors probed and found CLOSED (no test added)
+
+| Vector | Anchor | Result |
+| --- | --- | --- |
+| K3 matrix across `all`, `unless`, and cross-block, incl. `¬U = U` | `0007:C6` | correct in all 9×3 cells |
+| `F ∧ U = F` with the FALSE arriving from either block | `0007:C6`, `0007:C11` | correct |
+| Payload determinism: 300 permuted runs, 6 rows × 5 atoms, `-race`, `-count=3` | `0007:C8` | stable |
+| §D13 set bytes — non-canonical value crosses the seam verbatim, unparsed | JDR 0001 §D13 | correct |
+| Two `in` atoms differing only in member order are distinct payload entries | `0007:C8` REQ-56 | correct |
+| Operator drift: `"Exists"`, `"EXISTS"`, `""`, a future token, over an absent key | `0007:C3` | all fail closed, reason `absent`, seam never consulted |
+| Escape-path payload completeness — no short-circuit on a decided block | `0007:C7`, `0007:C8` | correct |
+| Pruned escape row's owned obligation does not leak | `0007:C11` D8 | correct |
+| Escape row both unevaluable and missing owned state | `0007:C7` | owned reported first, `Rows` correctly scoped |
+| Escape-set aggregation veto (one TRUE escape, one UNEVALUABLE) | `0007:C10` | vetoes correctly |
+| Escape row declaring `guard_unevaluable` in its `Escape` list | `0007:C8` REQ-44 | inert; cannot rescue |
+| Out-of-range `GuardResult` from the seam | `0007:C1` | mapped to unevaluable |
+| Cross-provenance key collision — owned wins the value, presence is blind | `0007:C4` | correct |
+| `MissingOwned` union, deduped and sorted, under permuted rows | `0007:C10` REQ-65 | correct |
+| Duplicate row identity in the table | `0007:C8` | payload consistent with `Rows` |
+| `TestGuardEvaluatorContract` against a seam folding unparseable → FALSE | `0007:C1` | contract test correctly fails it |
