@@ -6,11 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-06-19
-- **Status**: Final [all joint decisions answered 2026-08-24 — JDR 0001 §D8 (§JD-9),
-  §D9 (§JD-19), §D11 (§JD-20), §D12 (§JD-21), §D13 (§JD-22). Citations owed at
-  Stage 8, see `artifacts/deviations.md`; §D13 assigns this RDR the normative
-  set-value encoding clause (a landing, not a citation). No joint decision is
-  open against this RDR.]
+- **Status**: Implemented
 - **Type**: Architecture
 - **Profile**: foundational — cross-RDR producer: the sparse TOML wire format,
   the normalization semantics that mint kernel rows (outcome binding,
