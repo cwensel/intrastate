@@ -1317,12 +1317,18 @@ eq = "go"
 // twoPopulationSource carries two overlapping ordinary rows AND two
 // overlapping escape rows for one class, so both populations are exercised
 // and the cross-population pairing can be shown absent.
+//
+// The domain carries a third value the ORDINARY rows do not reach, so the
+// escape rows contribute an assignment their guarded peers do not. Without
+// it the ordinary rows close coverage on their own and "the escape rows
+// were excluded from coverage" becomes untestable — the two unions agree
+// whether the escape rows were counted or dropped.
 func twoPopulationSource() string {
 	return declBlock(`
 [tags.profile]
 provenance = "owned"
 kind = "enum"
-domain = ["small", "large"]
+domain = ["small", "mid", "large"]
 single_valued = true
 required = true
 `) + `
@@ -1341,7 +1347,7 @@ source = "t:ob"
 [rule.match.recognized]
 eq = "go"
 [rule.guard.all.profile]
-in = ["small", "large"]
+in = ["small", "mid"]
 [rule.write]
 
 [[rule]]
@@ -1360,7 +1366,7 @@ escape = ["no_match"]
 [rule.match.recognized]
 eq = "go"
 [rule.guard.all.profile]
-in = ["small", "large"]
+in = ["small", "mid", "large"]
 `
 }
 
