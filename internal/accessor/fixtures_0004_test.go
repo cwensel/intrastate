@@ -12,8 +12,9 @@ package accessor_test
 //  2. the spike holds absence as an in-map sentinel `<absent>`. Here
 //     absence is a typed KeyValue.Absent flag and the seam OMITS the key.
 //  3. the spike sleeps before its key loop so timeout and truncation
-//     never overlap. `newTimeoutDuringReadBinding` makes both true at
-//     once (REQ-27).
+//     never overlap. `overlapReadBinding` meets the unreadable key AND
+//     runs past the deadline in one invocation, so both classes are true
+//     at once (REQ-27).
 //  4. the spike re-reads by cloning the tag map without going through
 //     `read`. Here the write binding and the read-back READER are
 //     separate objects, so the re-read can fail independently of the
@@ -91,6 +92,10 @@ type readBinding struct {
 	// reads counts invocations, so a test can assert the re-read is a
 	// SECOND, independently-failing invocation.
 	reads int
+	// lastRequested records the key set the executor asked for, so a
+	// test can assert it came from the DEFINITION rather than from the
+	// artifact's contents.
+	lastRequested []string
 }
 
 func (b *readBinding) Capability() accessor.Capability { return accessor.CapRead }
@@ -99,6 +104,7 @@ func (b *readBinding) Read(ctx context.Context, art accessor.Artifact, requested
 	[]accessor.KeyValue, []string, error,
 ) {
 	b.reads++
+	b.lastRequested = slices.Clone(requested)
 	if b.failWith != nil {
 		return nil, nil, b.failWith
 	}
