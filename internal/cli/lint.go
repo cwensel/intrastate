@@ -27,6 +27,10 @@ type lintPayload struct {
 	Findings []clierr.Finding `json:"findings"`
 }
 
+// LintFindings satisfies respond.FindingCarrier so the text branch
+// enumerates every non-blocking finding rather than dropping the payload.
+func (p lintPayload) LintFindings() []clierr.Finding { return p.Findings }
+
 func newLintCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint",

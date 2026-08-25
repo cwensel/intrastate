@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // ErrorGroup classifies a CLIError for exit-code mapping. The numeric
@@ -147,7 +148,14 @@ func EmitJSON(out io.Writer, e *CLIError) {
 }
 
 // EmitText writes a human-readable "error: <code>: <message>" line,
-// followed by indented detail and hint lines when present.
+// followed by indented detail and hint lines when present, and then EVERY
+// carried finding's code and message.
+//
+// Text mode enumerates every finding rather than summarising: the set of
+// finding codes in text output must equal the set in JSON output for the
+// same input, so a renderer that drops one has dropped a defect the author
+// needs to see. Layout and wrapping are free; completeness is not
+// (`0006:C14`).
 func EmitText(out io.Writer, e *CLIError) {
 	if e == nil {
 		return
@@ -159,6 +167,42 @@ func EmitText(out io.Writer, e *CLIError) {
 	if e.Hint != "" {
 		_, _ = fmt.Fprintf(out, "  hint: %s\n", e.Hint)
 	}
+	EmitFindingsText(out, e.Findings)
+}
+
+// EmitFindingsText renders one finding per line as "  <code>: <message>",
+// with the identity fields the finding carries appended so a reader can act
+// on it without re-running in JSON mode.
+func EmitFindingsText(out io.Writer, findings []Finding) {
+	for _, f := range findings {
+		_, _ = fmt.Fprintf(out, "  %s: %s%s\n", f.Code, f.Message, f.identitySuffix())
+	}
+}
+
+// identitySuffix renders the finding's identity fields as a trailing
+// parenthesised list, or "" when it carries none.
+func (f Finding) identitySuffix() string {
+	var parts []string
+	for _, p := range [][2]string{
+		{"rule", f.Rule},
+		{"span", f.Span},
+		{"element", f.Element},
+		{"reason", f.Reason},
+		{"dimension", f.Dimension},
+		{"key", f.Key},
+		{"operator", f.Operator},
+		{"literal", f.Literal},
+		{"block", f.Block},
+		{"class", f.Class},
+	} {
+		if p[1] != "" {
+			parts = append(parts, p[0]+"="+p[1])
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, " ") + ")"
 }
 
 // --- graph-lint findings (RDR 0006) --------------------------------------

@@ -56,6 +56,19 @@ type Success struct {
 	Data     any        `json:"data,omitempty"`
 }
 
+// FindingCarrier is the interface a verb's Data payload satisfies when it
+// carries structured findings the text branch must enumerate.
+//
+// It is an interface rather than a field on Success so the gateway gains no
+// dependency on any producing subsystem: `clierr.Finding` is
+// subsystem-agnostic by construction, and a payload that carries none simply
+// does not implement this.
+type FindingCarrier interface {
+	// LintFindings returns the findings the text branch renders. The JSON
+	// branch never calls it — the payload marshals itself.
+	LintFindings() []clierr.Finding
+}
+
 // Advisory is one structured non-fatal note. Code is the stable
 // machine-readable identifier; Message is the human phrasing.
 type Advisory struct {
@@ -121,6 +134,13 @@ func OK(cmd *cobra.Command, s Success) error {
 		}
 		for _, w := range s.Warnings {
 			writeTextWarning(stderr, w)
+		}
+		// The text branch renders Notes and Warnings, and — for a payload
+		// that carries them — every structured finding. Dropping Data
+		// wholesale would make the two modes disagree about which findings a
+		// run reported, which the output contract forbids (`0006:C14`).
+		if carrier, ok := s.Data.(FindingCarrier); ok {
+			clierr.EmitFindingsText(cmd.OutOrStdout(), carrier.LintFindings())
 		}
 		return nil
 	}
