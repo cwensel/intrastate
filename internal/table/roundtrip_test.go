@@ -238,12 +238,12 @@ func TestReq117_OverlapIsDeferredAndNotAssertedHere(t *testing.T) {
 // approved iter-2 set is present in testdata AT THE SAME RELATIVE PATH: a
 // basename match lets a fixture be relocated out of the directory whose
 // walk drives TestReq119, silently dropping it from the category census.
-// (2) Every promoted negative still refuses with the specific category it
-// was promoted witnessing: a negative rewritten to trip a different (or
-// no) category is a narrowing that neither a name check nor an aggregate
-// census can see. (3) The two positives are compared by normalized row
-// IDENTITY, not by row count: a nine-row fixture with one row swapped for
-// filler keeps its census and loses its coverage.
+// (2) Every promoted fixture retains the spike's content, apart from the
+// recorded string-to-scalar kind rename. This pins each negative's specific
+// mutation and every positive's behavior. (3) The two primary positives are
+// also compared by normalized row IDENTITY, not by row count: a nine-row
+// fixture with one row swapped for filler keeps its census and loses its
+// coverage.
 //
 // Every leg iterates the SPIKE set and asserts it is covered by what is
 // promoted, never the converse — REQ-118 permits extension, and an
@@ -272,6 +272,7 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 		t.Fatalf("walk testdata: %v", err)
 	}
 
+	var spikeFixtures []string
 	var spikeNegatives []string
 	err = filepath.Walk(spike, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -292,6 +293,7 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 				"deviation, not absorbed by matching on basename", rel, rel)
 			return nil
 		}
+		spikeFixtures = append(spikeFixtures, rel)
 		if filepath.Dir(rel) == "neg" {
 			spikeNegatives = append(spikeNegatives, rel)
 		}
@@ -300,6 +302,19 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walk spike: %v", err)
 	}
+
+	t.Run("every promoted fixture retains its approved content", func(t *testing.T) {
+		for _, rel := range spikeFixtures {
+			spikeData, err := os.ReadFile(filepath.Join(spike, rel))
+			if err != nil {
+				t.Fatalf("read spike fixture %s: %v", rel, err)
+			}
+			want := strings.ReplaceAll(string(spikeData), `kind = "string"`, `kind = "scalar"`)
+			if got := string(readFixture(t, rel)); got != want {
+				t.Errorf("promoted fixture %s differs from its approved spike content", rel)
+			}
+		}
+	})
 
 	t.Run("every promoted negative still trips its recorded category", func(t *testing.T) {
 		// The oracle is the stable data-level category, never the message
