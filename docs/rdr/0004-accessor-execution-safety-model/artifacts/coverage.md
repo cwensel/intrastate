@@ -322,3 +322,124 @@ appends four, none needing an author decision:
   D3 does not escalate.
 - **D12** — Q2: the gate SITE is RDR 0005's. Phase 1 ships invocation
   semantics only, no scheduling and no aggregation.
+
+---
+
+# Phase 2 — implementation
+
+Stage 8, **Phase 2** (implementation). The Phase 1 skeleton is replaced by
+a real executor; every test above is GREEN and the whole repository suite
+is green.
+
+## Status
+
+| | |
+| --- | --- |
+| `go test ./internal/accessor/` | **ok** (`-race -count=3` clean) |
+| `go test ./...` | **ok** — accessor, cli, clierr, graphlint, guard, resolve, table |
+| `gofmt -l ./internal/accessor` | no output |
+| `go vet ./internal/accessor/` | clean |
+| Top-level test functions | 80, all passing |
+| Deviations appended at Phase 2 | D14, D15 — neither needs an author decision |
+
+## Source files
+
+`skeleton.go` is gone; its declarations are reorganized as the design
+warranted:
+
+| File | Owns |
+| --- | --- |
+| `internal/accessor/model.go` | the four vocabularies (capability, refusal class, validation code, verdict), `Definition`/`Registry`/`Identity`, the artifact seam, `Refusal`, the three result types, `OwnedSnapshot`, `ClearSentinel`/`IsClear` |
+| `internal/accessor/binding.go` | the typed invocation seam — `Binding`, `ReadBinding`, `GateBinding`, `WriteBinding`, `KeyValue` |
+| `internal/accessor/validate.go` | `Validate` — the eight arms, each minting its own named code |
+| `internal/accessor/executor.go` | `Executor.Read` / `.Gate` / `.Write`, bounded invocation, read completeness, the pre-write snapshot, read-back verification |
+| `internal/accessor/disposition.go` | the replay-stable `Disposition` and its three renderers |
+
+## REQ-MVV — actual output
+
+`go test ./internal/accessor/ -run '^TestMVV_AccessorExecutionSafetyModel$' -v -count=1`
+
+```
+--- PASS: TestMVV_AccessorExecutionSafetyModel (0.11s)
+    --- PASS: .../1_unsafe_definition_validation_eight_arms (0.00s)
+        --- PASS: .../missing_accessor (0.00s)
+        --- PASS: .../multiply_bound_accessor (0.00s)
+        --- PASS: .../capability_mismatch (0.00s)
+        --- PASS: .../missing_or_non_positive_timeout (0.00s)
+        --- PASS: .../missing_write_read_back (0.00s)
+        --- PASS: .../ambient_artifact_discovery (0.00s)
+        --- PASS: .../write_non_owned_tag (0.00s)
+        --- PASS: .../missing_requested_key_set (0.00s)
+    --- PASS: .../2_read_and_gate_dispositions (0.05s)
+        --- PASS: .../complete_read_returns_exactly_the_requested_keys (0.00s)
+        --- PASS: .../incomplete_read_refuses_with_no_values_and_names_the_keys (0.00s)
+        --- PASS: .../genuine_absence_is_a_value_not_a_refusal (0.00s)
+        --- PASS: .../execution_failure (0.00s)
+        --- PASS: .../timeout (0.05s)
+        --- PASS: .../capability_mismatch (0.00s)
+        --- PASS: .../gate_allow_and_deny_are_typed_results (0.00s)
+        --- PASS: .../gate_indeterminate_is_a_refusal (0.00s)
+    --- PASS: .../3_write_read_back_round_trip_invariant (0.00s)
+        --- PASS: .../owned_tag_value_identity_and_non_owned_identity (0.00s)
+        --- PASS: .../owned_mismatch_control (0.00s)
+        --- PASS: .../non_owned_mismatch_control (0.00s)
+        --- PASS: .../read_back_incomplete_neither_success_nor_mismatch (0.00s)
+    --- PASS: .../4_replay_stability (0.00s)
+    --- PASS: .../5_no_package_prints (0.00s)
+    --- PASS: .../6_absence_reaches_the_resolver (0.00s)
+    --- PASS: .../7_timeout_outranks_incomplete_read (0.05s)
+    --- PASS: .../8_post_mutation_reporting_and_no_compensation (0.00s)
+    --- PASS: .../9_clearing_write (0.00s)
+        --- PASS: .../clear_a_held_key_re_read_shows_it_absent (0.00s)
+        --- PASS: .../clear_a_key_the_artifact_does_not_hold_succeeds (0.00s)
+        --- PASS: .../clear_whose_re_read_still_holds_the_key_is_mismatch (0.00s)
+        --- PASS: .../read_holding_the_literal_clear_refuses_incomplete_read (0.00s)
+        --- PASS: .../control_the_assignment_fixture_still_asserts_presence_and_equality (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/internal/accessor	0.281s
+```
+
+All nine numbered scenarios pass **with their named negative controls**:
+the valid validation fixture returns the empty set, the truncation refusal
+carries no values, the non-owned mismatch arm differs from the owned one
+in which tag moved, the injected refusal is compared for equality, the
+capture control can fail, a carried key resolves normally, truncation
+alone still reports `incomplete_read`, `read_back_mismatch` still reports
+`Applied() == false`, and the assignment fixture still asserts presence
+and equality.
+
+## Pending-assumption discharge — result
+
+| Property | Named scenario | Result |
+| --- | --- | --- |
+| A9 rule 1 — missing/empty requested key set | Scenario 1's eighth arm | **verified** — `CodeMissingRequestedKeySet` minted before execution |
+| A9 rule 2 — absence reaches the resolver | Scenario 6 | **verified** — omitted key ⇒ `owned_state_unavailable` naming it, control resolves to a plan |
+| A9 rule 3 — timeout outranks incomplete | Scenario 7 | **verified** — both classes true at once, `timeout` reported; truncation alone still `incomplete_read` |
+| A9 rule 4 — read-back incomplete | Scenario 3 | **verified** — neither success nor mismatch |
+| A10 — post-mutation reporting, no compensation | Scenario 8 | **verified** — `Applied() == true`, exactly one write invocation, mutation left in place |
+| A11 — clear is a removal, verified by absence | Scenario 9 | **verified** — all four cases plus the assignment control |
+
+None of the three Pending assumptions was refuted; each retires per-rule
+as CA A9's note on bundling directs.
+
+## The five forbidden spike shapes — as implemented
+
+| Spike shape | Where the implementation forbids it |
+| --- | --- |
+| derives the key set from the artifact | `Executor.Read` requests `Definition.RequestedKeys()`, which reads `table.Accessor.Keys` only |
+| holds absence as an in-map sentinel | absence is `KeyValue.Absent`; `ReadResult.OwnedSnapshot` OMITS those keys |
+| sleeps before the key loop so timeout and truncation never overlap | `invokeRead` checks the bounded context's deadline BEFORE classifying unread keys, so `timeout` outranks |
+| re-reads by cloning the tag map | the read-back calls `invokeRead` through `Registry.readerFor(role)`, the same read path |
+| a re-read that cannot fail independently of the write | the read-back reader is a separate definition from the write binding |
+
+## Deviations appended at Phase 2
+
+- **D14** — the protected non-owned comparison is bounded by the reader's
+  declared `keys` (DEPENDENCY-LIMIT of Phase 1's `ReadBinding` seam);
+  `writeExec`'s read-back reader now declares `profile` so `0004:C12`'s
+  non-owned identity clause is observable at all.
+- **D15** — the pre-write snapshot runs only when the protected key set is
+  non-empty (which is what reconciles REQ-90's `[write read]` ordering
+  with REQ-53's pre-write record); the `<clear>`-literal-is-unreadable
+  rule applies on the read path and not inside the read-back comparison
+  (which is what reconciles REQ-48 with REQ-46).

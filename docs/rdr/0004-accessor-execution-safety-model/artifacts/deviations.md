@@ -189,3 +189,90 @@ refusal/non-refusal split (D3 below). See
   `no_match` as the SHIPPED kernel decides it
   (probed against `resolve.Resolve` directly), and pins that the
   accessor layer must not "fix" it by synthesizing a value.
+
+## D14 — the protected non-owned comparison is bounded by the reader's declared `keys`
+
+- **Type**: DEPENDENCY-LIMIT
+- **Status**: mechanical translation (fixture wiring corrected at Phase 2;
+  no author decision needed)
+- **Source**: Stage 8 Phase 2. `0004:C12` ("verify … that observed and
+  recognized tag values present before the write are unchanged"), TD
+  ("Before the write, the executor records the same caller-supplied
+  artifact role's observed and recognized tag values"), REQ-53, REQ-57,
+  ORA 3, and the Disposition Table row "Write succeeds, non-owned tag
+  changed → `read_back_mismatch`".
+- **The limit**: Phase 1's `ReadBinding.Read(ctx, art, requested)` seam
+  resolves **exactly the keys it is asked for**. There is no
+  "read every tag this role carries" affordance anywhere on the binding
+  interface, and none of RDR 0002's carried metadata names a non-owned
+  key. The executor therefore cannot observe a non-owned tag that no read
+  definition declares in its `keys`.
+- **Evidence weighed**: `internal/accessor/fixtures_0004_test.go::readBinding.Read`
+  loops over `requested` alone, as do every other fixture read binding
+  (`overlapReadBinding`, `silentDropReadBinding`, `readBackFailure`,
+  `roleRoutedReadBinding`, `witnessReadBinding`, `ctxWitnessReadBinding`).
+  `registryOf` declares `OwnedTags = {status, labels}`; `profile` appears
+  in no definition's `keys` and in no registry field. So with the original
+  `writeExec` (read-back reader keys = the writer's owned keys),
+  `TestReq55_…/non_owned_tag_changed_alongside` and MVV 3's
+  `non_owned_mismatch_control` asserted a refusal over a mutation the
+  boundary is structurally blind to.
+- **Disposition**: `writeExec` now declares the protected non-owned
+  `profile` on the read-back reader. This is fixture WIRING, not a
+  weakening: both arms still assert exactly what ORA 3 names — the owned
+  tag landed as planned, a non-owned tag moved, and the write refuses
+  `read_back_mismatch`. A read-back scoped to owned tags only still fails
+  both, which is the mutant ORA 3 exists to kill.
+- **Implementation rule derived**: the pre-write snapshot's key set is the
+  role's read definition's declared `keys` MINUS the plan's own owned keys
+  (`internal/accessor/executor.go::protectedKeys`). The exclusion is
+  FID's, stated verbatim: "the write binding's own planned owned tags are
+  excluded from this comparison by construction". Keys the pre-write read
+  reports absent or unreadable are left unconstrained, per FID's "tags
+  absent before the write are unconstrained".
+- **Consequence, recorded**: this RDR's protected-non-owned guarantee is
+  as wide as the role's reader declares and no wider. A real binding whose
+  reader declares every tag it cares about gets the full clause; a tag no
+  reader names is outside what this boundary can observe. That is a
+  property of the declared-metadata discipline (`0004:C5` — the requested
+  set is never derived from what a read resolved), not a weakening of
+  `0004:C12`.
+
+## D15 — the pre-write snapshot read, and the `<clear>` literal in read-back
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation (grounded in the record; recorded
+  because it fixes future interpretation)
+- **Source**: Stage 8 Phase 2; REQ-90, REQ-53, REQ-94, REQ-46, REQ-48,
+  REQ-61.
+- **(a) When the pre-write read runs.** REQ-90 fixes the illustrative
+  order as "normative **only in its ordering of write-then-read-back**",
+  and `TestReq90_WriteThenReadBackIsTheNormativeOrdering` asserts the
+  observed step sequence is exactly `[write read]`. TD and REQ-53/REQ-94
+  simultaneously require a pre-write record of the protected non-owned
+  values. Both hold because the pre-write read runs **only when the
+  protected key set is non-empty** — reader keys minus planned owned keys.
+  In `TestReq90`'s fixture the reader declares exactly the planned key, so
+  the protected set is empty, no pre-write read is issued, and the
+  sequence is `[write read]`. Where a protected key exists the snapshot
+  runs first; write-then-read-back is unaffected either way.
+- **(b) The `<clear>` literal is unreadable on the READ path only.**
+  REQ-28/REQ-48: a read yielding the reserved literal treats that key as
+  unreadable and refuses `incomplete_read`. REQ-46: a clear's re-read that
+  still holds the key "including as the literal string `<clear>`" is
+  `read_back_mismatch` — NOT `read_back_incomplete`. The two are jointly
+  satisfiable only if the rule is applied where the values cross to a
+  consumer and not inside the read-back comparison, where the literal's
+  *presence* is precisely the defect being detected. `Executor.Read`
+  therefore applies the rule; the read-back comparison does not
+  (`readOutcome.classify`'s `clearIsUnreadable` argument). REQ-61's "the
+  read-back re-read is subject to read completeness" is honoured: the
+  re-read still goes through the read path and a key the binding cannot
+  read is still `read_back_incomplete`
+  (`TestReq61_…`, `TestReq123_…/A9_rule_4_read_back_incomplete`).
+- **(c) A post-mutation timeout on the re-read is `timeout`, not
+  `read_back_incomplete`.** `0004:C15` makes timeout its own class,
+  distinct from every other; the Disposition Table's post-mutation
+  `timeout` row carries the applied-but-unverified sense, which
+  `Refusal.Applied()` reports on both post-mutation classes alike
+  (`0004:C14`).
