@@ -202,24 +202,30 @@ contains = ["e00"]
 // every guard atom, so the enumeration the mitigation forbids runs on the
 // refusal path itself.
 //
-// Cost measured against this implementation: n=16 → 33k assignments in
-// ~160ms; n=20 → 524k in ~2.3s; n=22 → 2.1M in ~10s. That is a factor of
-// 1024 above `Bound()` already materialized in memory, from an authored
-// model of twenty-odd element names. The bound is documented as "the
-// largest product this implementation's enumerating proof representation
-// completes over within its budget" — a claim this path contradicts.
+// Historical motivation, measured against the unfixed implementation:
+// n=16 → 33k assignments in ~160ms; n=20 → 524k in ~2.3s; n=22 → 2.1M in
+// ~10s. That is a factor of 1024 above `Bound()` already materialized in
+// memory, from an authored model of twenty-odd element names. The bound is
+// documented as "the largest product this implementation's enumerating
+// proof representation completes over within its budget" — a claim that
+// path contradicted. Those numbers explain why the defect mattered; they
+// are NOT the oracle below.
 //
-// The test asserts the mitigation, not a wall-clock number: lint over a
-// refused product must not scale with the product's size. Two universes
-// four elements apart both refuse, so a bounded implementation spends
-// comparable time on each; a naively enumerating one spends 16x.
+// The oracle is STRUCTURAL, on the deterministic D11 seam rather than on a
+// clock. `valueAssignments` decides from declaration arithmetic — `if n, ok
+// := domainSize(d); !ok || n > Bound() { return nil, false }` — and
+// DECLINES the dimension before any enumeration, so the atom's denotation
+// is unprojectable. A wall-clock ratio could not tell a bounded
+// implementation from fast hardware, and preemption or a GC pause could
+// fail a correct one; an unprojectable denotation can only be produced by
+// the early return, and only the enumerating regression makes it project.
 //
 // ADVERSARIAL
 func TestAdv2_OverLargeSetProductIsRefusedWithoutEnumeratingIt(t *testing.T) {
 	const small, large = 14, 18
 
 	// Both products are far past the bound, so BOTH must be refused. That
-	// is the premise: this test is about the cost of the refusal, never
+	// is the premise: this test is about HOW the refusal is reached, never
 	// about the verdict, which the suite already pins.
 	for _, n := range []int{small, large} {
 		m := mustLoadSource(t, adv2BigSetSource(n))
@@ -232,44 +238,70 @@ func TestAdv2_OverLargeSetProductIsRefusedWithoutEnumeratingIt(t *testing.T) {
 		}
 	}
 
-	measure := func(n int) time.Duration {
-		m := mustLoadSource(t, adv2BigSetSource(n))
-		start := time.Now()
-		reports := guard.Lint(m)
-		elapsed := time.Since(start)
-		if hasGreen(reports) {
-			t.Fatalf("a %d-element set universe certified green; its product "+
-				"is past the published bound and MUST be refused", n)
+	m := mustLoadSource(t, adv2BigSetSource(large))
+	row := rowByID(t, m, "adv2-row")
+
+	// The `contains` atom over `caps` is the dimension the record forbids
+	// enumerating. Its denotation must be WITHHELD, not computed: a
+	// projectable denotation over a 2^18 powerset means `valueAssignments`
+	// ran the enumeration and `Denotation` materialized the result.
+	var found bool
+	for _, atom := range row.Atoms {
+		if atom.Key != "caps" || atom.Operator == resolve.OpExists {
+			continue
 		}
-		return elapsed
+		found = true
+		if d := guard.Denotation(m, atom.Key, atom); d.Projectable() {
+			t.Errorf("the `%s` atom over a %d-element set universe has a "+
+				"PROJECTABLE denotation carrying %d assignments. Its value "+
+				"dimension is 2^%d, which is past the published bound %d, "+
+				"so `valueAssignments` MUST decline it from declaration "+
+				"arithmetic before enumerating anything. A projectable "+
+				"denotation here means the naive powerset enumeration the "+
+				"record's mitigation forbids ran on the refusal path "+
+				"itself.", atom.Operator, large, d.Len(), large, guard.Bound())
+		}
+	}
+	if !found {
+		t.Fatalf("the fixture's premise is gone: `adv2-row` carries no " +
+			"value atom over `caps`, so nothing here exercises the " +
+			"over-large value dimension")
 	}
 
-	// Warm the loader and any lazily-built state so the comparison measures
-	// the proof representation rather than first-call overhead.
-	measure(small)
+	// The row-level surface agrees, and it is the one lint reads.
+	if accepted := guard.AcceptedAssignments(m, row); accepted.Projectable() {
+		t.Errorf("`adv2-row` was credited with %d accepted assignments over "+
+			"a 2^%d value dimension; a dimension past the published bound "+
+			"%d carries no enumerable assignment set to accept from",
+			accepted.Len(), large, guard.Bound())
+	}
 
-	smallCost := measure(small)
-	largeCost := measure(large)
+	// And the verdict stays pinned: the refusal is still emitted, so this
+	// cannot be mistaken for a fix that simply drops the group from lint.
+	if reports := guard.Lint(m); hasGreen(reports) {
+		t.Errorf("a %d-element set universe certified green; its product "+
+			"is past the published bound and MUST be refused. reports=%s",
+			large, renderReports(reports))
+	}
+}
 
-	// A bounded (symbolic or bitset-equivalent) refusal decides both from
-	// declaration arithmetic, so the two costs sit within a small constant
-	// factor. Naive powerset enumeration makes the ratio 2^(large-small) =
-	// 16x. Eight is a deliberately slack threshold: it clears any plausible
-	// constant-factor difference while still catching the doubling.
-	const tolerance = 8
-	if largeCost > smallCost*tolerance && largeCost > 50*time.Millisecond {
-		t.Errorf("lint over a REFUSED set product scales with the product's "+
-			"size: a %d-element universe cost %v and an %d-element one cost "+
-			"%v (%.1fx for a %dx larger powerset). Both products are past "+
-			"the published bound %d and both are refused, so a refusal that "+
-			"stays bounded would cost about the same for each. The "+
-			"enumeration happens in Denotation, which consults no bound "+
-			"before calling valueAssignments — so the naive powerset "+
-			"enumeration the record's mitigation forbids runs on the "+
-			"refusal path itself.",
-			small, smallCost, large, largeCost,
-			float64(largeCost)/float64(max(smallCost, 1)), 1<<(large-small),
-			guard.Bound())
+// BenchmarkAdv2RefusalCost keeps the cost signal ADV-2's original oracle
+// chased, without asserting on it. A bounded refusal decides both sizes
+// from declaration arithmetic, so the two costs sit within a small constant
+// factor; naive powerset enumeration makes the ratio 2^(18-14) = 16x. Run
+// it by hand when changing the proof representation.
+func BenchmarkAdv2RefusalCost(b *testing.B) {
+	for _, n := range []int{14, 18} {
+		b.Run(fmt.Sprintf("n%02d", n), func(b *testing.B) {
+			m, err := table.Load([]byte(adv2BigSetSource(n)), "fixture.toml")
+			if err != nil {
+				b.Fatalf("fixture must load clean; refused: %v", err)
+			}
+			b.ResetTimer()
+			for b.Loop() {
+				guard.Lint(m)
+			}
+		})
 	}
 }
 

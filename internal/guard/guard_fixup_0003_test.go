@@ -120,11 +120,25 @@ func TestFail1_CanRefuseRowContributesNoAcceptedAssignments(t *testing.T) {
 	// REQ-43, second half: nothing the refusing row would accept reaches
 	// the union. `opt=x` is the refuser's own denotation; no decidable row
 	// in the group constrains `opt` at all.
+	//
+	// The projectability of the union is part of the claim, not a
+	// precondition on it: `coverageUnion` returns a ZERO `AssignmentSet{}`
+	// when the group's product is unprojectable, and `Equal` is false
+	// whenever either side is unprojectable. Guarding the comparison on
+	// `union.Projectable()` would therefore let that early return — the
+	// regression this test exists to catch — pass as a non-finding.
 	union := guard.CoverageUnion(m, g)
-	if union.Projectable() && !dec.Equal(union) {
-		t.Errorf("the coverage union (%d) is not the union of the group's "+
-			"DECIDABLE rows alone (%d); a can-refuse row contributed "+
-			"assignments to it", union.Len(), dec.Len())
+	if !union.Projectable() || !dec.Equal(union) {
+		t.Errorf("the coverage union (projectable=%v len=%d) is not the "+
+			"union of the group's DECIDABLE rows alone (len=%d). An "+
+			"UNPROJECTABLE union is itself the regression: `coverageUnion` "+
+			"yields the zero `AssignmentSet{}` when the group's product "+
+			"does not project, and this group's product does — so a "+
+			"withheld union here means the narrowing withdrew the whole "+
+			"group rather than the refusing row's contribution. A "+
+			"projectable union unequal to `dec` means a can-refuse row "+
+			"contributed assignments to it",
+			union.Projectable(), union.Len(), dec.Len())
 	}
 
 	// REQ-44: the surviving overlap check is scoped to the group's
