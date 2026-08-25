@@ -152,11 +152,19 @@ func (s TagSet) has(key string, prov Provenance) bool {
 }
 
 // matches reports whether every tag in want is present in the view with
-// the same value.
+// the same value. A CONFLICTED key never matches: the view carries no
+// single value for it (see assemble), so comparing the last-merged one
+// would make candidate selection a function of slice position rather than
+// of the input tuple, which `0007:C8` determinism and deviations D9
+// forbid. This mirrors guard.go::evaluateAtom's `ReasonUncomparable`
+// posture at the match seam — the key is present, and its value was not
+// compared to a verdict. Non-match is the conservative reading: it can
+// only turn a plan into a refusal, never the reverse, and it mints no new
+// refusal kind (REQ-7 pins the set at five).
 func (s TagSet) matches(want []Tag) bool {
 	for _, w := range want {
 		tv, ok := s.tags[w.Key]
-		if !ok || tv.value != w.Value {
+		if !ok || tv.conflicted || tv.value != w.Value {
 			return false
 		}
 	}
@@ -191,6 +199,13 @@ func (s TagSet) matches(want []Tag) bool {
 // precedence above, which is a property of the tuple, not of slice order.
 // The merge's control flow, and RDR 0001's non-duplicate merge semantics,
 // are otherwise unchanged.
+//
+// The mark is consumed on BOTH paths that read a value out of the view: the
+// GUARD path, where evaluateAtom answers unevaluable with reason
+// `uncomparable` rather than consulting the seam, and the MATCH path, where
+// matches treats the key as non-matching rather than comparing the retained
+// value. Fixing only the guard path leaves `Row.Match` selection positional,
+// which is the same defect one filter earlier.
 func assemble(in Input) TagSet {
 	view := TagSet{tags: make(map[string]taggedValue, len(in.Owned)+len(in.Observed)+1)}
 
