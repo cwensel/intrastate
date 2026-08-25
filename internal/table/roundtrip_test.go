@@ -234,14 +234,22 @@ func TestReq117_OverlapIsDeferredAndNotAssertedHere(t *testing.T) {
 // not be narrowed on promotion, only extended."
 // BOUNDARY
 //
-// Three legs, because a name is not evidence. (1) Every fixture in the
+// Four legs, because a name is not evidence. (1) Every fixture in the
 // approved iter-2 set is present in testdata AT THE SAME RELATIVE PATH: a
 // basename match lets a fixture be relocated out of the directory whose
 // walk drives TestReq119, silently dropping it from the category census.
 // (2) Every promoted fixture retains the spike's content, apart from the
-// recorded string-to-scalar kind rename. This pins each negative's specific
-// mutation and every positive's behavior. (3) The two primary positives are
-// also compared by normalized row IDENTITY, not by row count: a nine-row
+// recorded string-to-scalar kind rename (deviations.md D1). This is the
+// broadest pin: it holds each negative's specific MUTATION, not merely the
+// category that mutation happens to trip, so swapping one negative for
+// another that refuses alike is caught. It also covers the promoted
+// non-negatives that no other test loads (merge-delim-atom, write-delim-a,
+// write-delim-b). (3) Every promoted negative still refuses with the
+// specific category it was promoted witnessing. Leg 2 subsumes this for a
+// byte edit, but leg 3 is the one that survives a LOADER change: if a
+// refactor reroutes a fixture to a different category the bytes are
+// untouched and only the category pin bites. (4) The two primary positives
+// are compared by normalized row IDENTITY, not by row count: a nine-row
 // fixture with one row swapped for filler keeps its census and loses its
 // coverage.
 //
