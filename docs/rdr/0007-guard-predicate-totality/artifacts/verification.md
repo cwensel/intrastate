@@ -242,3 +242,122 @@ findings below are the composition cases that survived.
 | `MissingOwned` union, deduped and sorted, under permuted rows | `0007:C10` REQ-65 | correct |
 | Duplicate row identity in the table | `0007:C8` | payload consistent with `Rows` |
 | `TestGuardEvaluatorContract` against a seam folding unparseable → FALSE | `0007:C1` | contract test correctly fails it |
+
+
+## Phase 3c — fixup dispositions
+
+Every Phase 3a `FAIL-N` and Phase 3b `ADV-N` above is **RESOLVED**. The
+probed-and-CLOSED vector table needed no action and was not revisited.
+Full suite green: `go build ./...`, `go test ./...`,
+`go test -race ./internal/resolve/`, `golangci-lint run` (0 issues). Each of
+the three commits builds independently.
+
+No test was weakened. The three Phase 3b adversarial tests were left
+byte-for-byte as written and now pass; two regression files' worth of new
+coverage was added for the Phase 3a findings, which had none.
+
+| Finding | Status | Fix | Commit | Regression test |
+| --- | --- | --- | --- | --- |
+| FAIL-1 | **RESOLVED** | fail-closed block boundary | `433f364` | `TestFix0007Fail1_MatchBlockAtomContributesNoOperand` |
+| FAIL-2 | **RESOLVED** | total payload sort | `6047b09` | `TestFix0007Fail2_PayloadSortIsTotalOverRowsTyingOnIdentity` |
+| ADV-1 | **RESOLVED** | fail-closed block boundary | `433f364` | `TestAdv0007_1_MatchBlockAtomIsNotAGuardOperand` (as written, now green) |
+| ADV-2 | **RESOLVED** | fail-closed block boundary | `433f364` | `TestAdv0007_2_UnfencedBlockFailsOpenAndReopensTheMaskingPath` (as written, now green) |
+| ADV-3 | **RESOLVED** | duplicated key is unevaluable | `a87fc9e` | `TestAdv0007_3_DuplicateKeyMakesTheVerdictAFunctionOfSlicePosition` (as written, now green) |
+
+### FAIL-1 + ADV-1 + ADV-2 — RESOLVED (one root cause)
+
+**Fix** (`guard.go::evaluateAtoms`, `guard.go::isGuardBlock`): the unfenced
+`default:` arm is replaced by explicit `BlockAll` and `BlockUnless` cases
+plus a fail-closed fallback. An atom whose block `0007:C6`'s verdict formula
+does not name contributes **no operand** to either conjunction — the way an
+omitted `unless` block contributes none (`0007:C5`) — emits **no payload
+entry** (`0007:C8`'s payload names the atoms that blocked the GUARD verdict,
+and an atom contributing no operand cannot have blocked it), and is **never
+handed to the seam**. This is the posture `0007:C3` already sets for
+operator-token drift: the operator boundary fails closed, so the block
+boundary does too.
+
+**What now happens on each reported vector.** The FAIL-1 vector verbatim
+(`exists ok = true` in `all` beside a `BlockMatch eq` atom over absent
+`gone`) yields a PLAN naming `M`, `Escaped:false`. A lone seam-decided-FALSE
+`BlockMatch` atom no longer prunes its row. All three ADV-2 legs
+(`BlockMatch`, `Block("")`, `Block("any")`) refuse
+`owned_state_unavailable` naming `gate` — the honest disposition, not the
+`Escaped:true` plan. No payload entry carries a non-guard block. Q1 reading
+(a) is unchanged: `BlockMatch` is still a constant on the `Block` type and
+`Row`'s match pattern is untouched (`TestReq78` still holds).
+
+Recorded as deviation **D7** (SPEC-UNDER) with its evidence: `0007:C6`'s
+exhaustive verdict formula, `0007:C5`'s "no operand, not a neutral one",
+`0007:C11`'s pruning condition stated over GUARD atoms, `0007:C3`'s
+fail-closed posture, and JDR 0001 §D12's own "harmless, since match atoms
+are never unevaluable" — a claim that only holds under this fix.
+
+### FAIL-2 — RESOLVED
+
+**Fix** (`guard.go::compareUndecidedRows`): the row comparator breaks an
+identity tie on the atom half, entry by entry over each row's already-sorted
+atom list, then by atom count — making the sort key total over payload
+entries as `0007:C8` fences it, with row identity a COMPONENT of the entry
+key rather than a partition boundary. `Reason` is compared alongside each
+atom because it is part of the emitted entry, though it is not one of
+REQ-55's six ordering fields.
+
+**Verified with permuted-input runs**, not a single ordering: the CoVe
+vector verbatim (14 rows sharing `RuleID`/`SourceLocator`, one distinct
+absent-key atom each, forward and reversed) now yields identical
+`Refusal.Undecided` on the candidate set AND on the escape set, which
+reaches the same `gate` by delegation. A third leg permutes rows that tie on
+identity AND on atom key, so they differ only in block/operator/literal.
+
+Recorded as deviation **D8** (IMPL-DECISION, mechanical translation).
+
+### ADV-3 — RESOLVED (fixed at the kernel boundary only)
+
+**Fix** (`resolve.go::assemble`, `resolve.go::merge`,
+`resolve.go::TagSet.conflicting`, `guard.go::evaluateAtom`): a key supplied
+more than once WITHIN one provenance with differing values is marked
+**conflicted**. It stays PRESENT — presence is provenance-blind and
+non-positional (`0007:C4`), and an existence atom still decides from
+presence alone, because a collision is about the VALUE, not about whether
+the key arrived — but the view carries no single value for it, so a
+value-comparing atom over it is `GuardUnevaluable` with reason
+`uncomparable`: "the key was present and its value was not compared to a
+verdict" (`0007:C8`). The seam is never handed one of the colliding values.
+
+**The two orderings now agree.** `[gate=open, gate=closed]` and
+`[gate=closed, gate=open]` both refuse `owned_state_unavailable` naming the
+absent owned `audit` — neither masks it behind an `Escaped:true` plan. The
+duplicated-OWNED-key leg agrees the same way.
+
+**RDR 0001's merge semantics are not rewritten.** Identical repeats are not
+conflicts; cross-provenance precedence (owned > observed > recognized) is
+untouched and is a property of the tuple, not of slice order; and a permuted
+NON-duplicate input assembles a byte-identical view, so REQ-3 replay
+determinism for the non-duplicate case is unchanged. Verified by direct
+probe over `assemble` before it was removed.
+
+**Why unevaluable rather than rejection**, grounded before the choice: RDR
+0001 reserves the Go error return for programmer mistakes, and A13 makes a
+duplicated observed tag caller INPUT rather than a programmer mistake; a
+sixth refusal kind is closed by REQ-7 and by `0007:C7`'s refusal to reopen
+the taxonomy for a better-motivated case. Unevaluable is the RDR's own
+posture — `0007:C2` ("never to false and never to true"), RDR 0004 A8
+("Indeterminate MUST be a refusal-class result"), SCXML §5.9.1 and SQL:2003
+strict routines — and `0007:C8`'s closed reason set already carries the
+exact word. Full argument and citations on deviation **D9** (SPEC-UNDER).
+
+### New public surface
+
+**None.** Every symbol this phase adds is unexported: `isGuardBlock`,
+`TagSet.conflicting`, `TagSet.merge`, and the `taggedValue.conflicted`
+field. `TagSet.Lookup`'s exported three-value shape, fenced by `0007:C1`'s
+presence test, is unchanged, as is every other exported symbol D6
+enumerates. No SPEC-UNDER entry is owed on the ADDITIVE-IS-NOT-EXEMPT gate
+for new surface; D7 and D9 are SPEC-UNDER for the contract gaps they close,
+not for surface.
+
+### Open author decisions
+
+**None.** Both contract-level gaps (D7, D9) are resolved by the spec's own
+evidence base, with the evidence recorded on each entry.

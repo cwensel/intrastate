@@ -219,3 +219,182 @@ in run 2 and must match it, not redefine it. See
   `evaluateGuard` and `gate`'s `slices.MinFunc` call are removed, not
   re-typed (REQ-52).
 - No **SPEC-UNDER** entry is owed.
+
+---
+
+## D7 — The block boundary needed a fail-closed rule the RDR states only for operators
+
+- **Type**: SPEC-UNDER
+- **Status**: CLOSED by Phase 3c. The evidence base resolves it; no author
+  decision is owed.
+- **The gap.** `0007:C3` states the drift rule for the OPERATOR boundary and
+  makes it fail closed in both directions ("an existence atom carrying a
+  foreign TOKEN is a value atom to the kernel"; "A foreign LITERAL … is
+  UNEVALUABLE"). `0007:C6` fences the row verdict over `all` and `unless`
+  only. Neither clause states what the kernel does with an atom in a THIRD
+  block — and JDR 0001 §D12 made a third block representable in `Row.Guard`
+  by putting `BlockMatch` on the same `Block` type ("one type, no separate
+  slice on `Row`"). The zero value `Block("")` and any future token are
+  equally representable.
+- **What the implementation did before the fix.** `evaluateAtoms` routed
+  `BlockUnless` explicitly and folded everything else into `all_result`, so
+  the block boundary failed OPEN where the operator boundary fails closed.
+  Phase 3a FAIL-1 and Phase 3b ADV-1/ADV-2 are the two consequences: a
+  `BlockMatch` atom over an absent key refused the NON-escapable
+  `guard_unevaluable` where `0007:F4` requires the escapable `no_match`; and
+  a decided-FALSE atom in an unrecognized block pruned its row with its
+  owned-state obligation (D8) while a modeled escape rescued `Escaped:true`
+  — kata `xg7p`'s masking probe, this RDR's own originating defect,
+  reproduced on the post-RDR kernel.
+- **Evidence** (`{RDR_RESOURCES}` → design docs; the RDR's own fences):
+  1. `0007:C6` (`docs/rdr/0007-guard-predicate-totality.md:1447-1449`) —
+     "The row verdict is `all_result ∧ ¬(unless_conj)`, where `unless_conj`
+     is the conjunction of the `unless` block's atoms." An atom in a third
+     block is an operand of neither term. The formula is the fence, and it
+     is exhaustive over what an operand can be.
+  2. `0007:C5` supplies the shape for "contributes nothing": an omitted
+     `unless` block "contributes no operand, not a neutral one". The same
+     construction applies one level down, at the atom.
+  3. `0007:C11` ratifies pruning "conditional on the domain rule: pruning is
+     safe exactly because GuardFalse can only arise from decided atoms" — a
+     condition stated over GUARD atoms. An atom in an unfenced block is not
+     one, so folding it into `all_result` voids the condition D8 rests on.
+  4. `0007:C3`'s posture generalizes: drift at a kernel boundary fails
+     CLOSED. The operator boundary fails closed in both directions; a block
+     boundary that failed open would be the one boundary in the kernel where
+     an unrecognized token can DECIDE a row.
+  5. JDR 0001 §D12 (`docs/jdr/0001-resolve-kernel-seam.md:640-652`) — "0007's
+     per-atom payload may therefore carry `match`, which no refusal names —
+     **harmless, since match atoms are never unevaluable**." §D12's own
+     harmlessness claim only holds while a match atom contributes no
+     operand; folding it in made it drive refusals, which is what §D12
+     asserts cannot happen.
+- **Resolution.** `evaluateAtoms` replaces the `default:` arm with explicit
+  `BlockAll` and `BlockUnless` cases plus a fail-closed fallback
+  (`isGuardBlock`) that contributes no operand to either conjunction, emits
+  no payload entry, and never consults the seam. Q1 reading (a) is
+  unchanged: `BlockMatch` remains a constant on the `Block` type and `Row`'s
+  match pattern is untouched.
+- **Why SPEC-UNDER and not SPEC-DEFECT.** No clause is wrong. The RDR states
+  the fail-closed posture for one boundary and the verdict formula for the
+  other, and the composition of the two — what happens to an atom the
+  formula does not name — is unstated. §D12 opened the case after 0007
+  locked.
+- **New public surface**: none. `isGuardBlock` is unexported.
+- **Escalation**: none.
+
+---
+
+## D8 — The payload sort key was total over atoms but not over rows
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation — the RDR states the rule; the
+  implementation under-applied it. Recorded because the correction changes
+  a comparator's contract.
+- **The gap.** `0007:C8` fences the ordering as "the tuple `(RuleID,
+  SourceLocator, key, block, operator token, literal)`, compared field by
+  field in that order" and states "**The sort key MUST be TOTAL over payload
+  entries.**" The implementation split that one tuple across two
+  comparators: `compareUndecidedAtoms` over the atom half, and
+  `compareUndecidedRows` over `(RuleID, SourceLocator)` alone. Since
+  `slices.SortFunc` is not stable, two undecidable rows tying on identity
+  retained `Table.Rows` position — reproduced by Phase 3a FAIL-2 on both the
+  candidate set and the escape set.
+- **Evidence** (the RDR's own fence,
+  `docs/rdr/0007-guard-predicate-totality.md`, `0007:C8`): the clause names
+  the failure mode it exists to close — "Two entries would then tie … leaving
+  the order to an unstable tie-break — the atom-order dependence this clause
+  exists to forbid, **one level below the row order ADV-3 already freezes**."
+  It fences totality over ENTRIES, and REQ-55's "two entries equal on all six
+  name the same atom" makes row identity a COMPONENT of the entry key rather
+  than a partition boundary. Whether RDR 0002 guarantees `(RuleID,
+  SourceLocator)` uniqueness is not stated in 0007, and `0007:C8` places the
+  obligation on the kernel unconditionally.
+- **Resolution.** `compareUndecidedRows` breaks an identity tie on the atom
+  half, entry by entry over each row's already-sorted atom list, then by
+  atom count. Two rows equal under it carry the same identity and the same
+  entries, so their relative order is unobservable in the emitted payload —
+  which is what "a function of the input tuple" requires. `Reason` is
+  compared alongside each atom for the same reason: it is part of the emitted
+  entry even though it is not one of REQ-55's six ordering fields.
+- **New public surface**: none.
+- **Escalation**: none.
+
+---
+
+## D9 — A duplicated tag key resolves to UNEVALUABLE, not to a positional value
+
+- **Type**: SPEC-UNDER
+- **Status**: CLOSED by Phase 3c. The evidence base resolves the choice; no
+  author decision is owed.
+- **The gap.** `0007:C8` requires the disposition to be "a function of the
+  input tuple (RDR 0001 REQ-1), **never of atom or row order**". It closes
+  atom order and row order. It does not reach the third ordering the kernel
+  is exposed to — the order of the caller's TAG slices. `resolve.go::assemble`
+  resolved a key repeated WITHIN one provenance by "last tag wins", and A13
+  leaves caller-supplied `Observed` unconstrained, so two orderings of ONE
+  duplicated observed key assembled different values. Phase 3b ADV-3
+  observed `[gate=open, gate=closed]` → `Escaped:true` plan routing around
+  an absent owned key, and `[gate=closed, gate=open]` →
+  `owned_state_unavailable`: same tag multiset, opposite disposition. Under
+  D8 that is the difference between a pruned row and a survivor, and
+  therefore between the masking plan and the honest refusal.
+- **Scope ruling.** `assemble` is RDR 0001 code, but `0007:C8` is 0007's own
+  contract and its guarantee is exactly what a positional duplicate-key
+  resolution breaks. Shipping as-is ships a `0007:C8` that does not hold.
+  Fixed at the kernel boundary only: RDR 0001's merge semantics for the
+  NON-duplicate case, and its REQ-3 replay determinism, are byte-for-byte
+  unchanged (verified: identical repeats are not conflicts, cross-provenance
+  precedence is untouched, and a permuted non-duplicate input assembles an
+  identical view).
+- **The two candidate rules, and why unevaluable wins.** `0007:F6`'s own
+  suggested resolutions are "reject it as a malformed input tuple, or make
+  the collision itself unevaluable."
+  1. **Rejection is refused.** RDR 0001 reserves the Go error return for
+     programmer mistakes: `Resolve`'s contract is "A modeled refusal travels
+     the `Result` value with a nil error; the error return is reserved for
+     programmer mistakes, not for modeled refusals." A duplicated
+     caller-supplied observed tag is caller INPUT that A13 explicitly leaves
+     unconstrained, not a programmer mistake, so routing it to the error
+     channel would put unconstrained caller input on the panic-adjacent
+     path. A new refusal kind is equally refused — REQ-7 pins the kind set at
+     exactly five, and `0007:C7` already rejects reopening that taxonomy for
+     a strictly better-motivated case (combined reporting).
+  2. **Unevaluable is the RDR's own posture, stated four times.**
+     `0007:C2` — a value-comparing atom that cannot be decided "MUST evaluate
+     to unevaluable — never to false and never to true". The Research
+     Findings' in-repo house rule, RDR 0004 A8: "Indeterminate MUST be a
+     refusal-class result, not a false allow and not a false deny." The
+     external anchors carry the same shape: SCXML §5.9.1 folds unevaluable
+     into false only with a mandated observable error on a second channel,
+     and the kernel has one channel; SQL:2003 strict routines make the HOST
+     refuse to invoke the routine on an argument outside its domain rather
+     than let the routine invent an answer — which is precisely "do not hand
+     the seam one of the colliding values".
+  3. `0007:C8`'s reason set supplies the exact word: `uncomparable` is "the
+     key was present and its value was not compared to a verdict". A
+     conflicted key is present and its value was not compared. No third
+     reason is minted, and the closed two-member set holds.
+- **Resolution.** `assemble` marks a key repeated within one provenance with
+  DIFFERING values as conflicted. Presence stays provenance-blind and
+  non-positional (`0007:C4`), so an existence atom still decides from
+  presence alone — a collision is about the VALUE, not about whether the key
+  arrived. A value-comparing atom over a conflicted key returns
+  `GuardUnevaluable` / `ReasonUncomparable` and the seam is not consulted.
+  Both orderings then agree, and neither can mask absent owned state: the
+  row stays a SURVIVOR (`0007:C10`), so its `RequiresOwned` obligation is
+  still raised.
+- **Two narrowings, both deliberate.** A repeat carrying the SAME value is
+  not a conflict — either resolution is the same value, so the result is
+  already a function of the tuple. A key crossing PROVENANCES is resolved by
+  the owned > observed > recognized precedence, which is a property of the
+  tuple and not of slice order, and is left untouched.
+- **New public surface**: none. `taggedValue.conflicted` and
+  `TagSet.conflicting` / `TagSet.merge` are unexported; `TagSet.Lookup`'s
+  exported three-value shape, fenced by `0007:C1`'s presence test, is
+  unchanged.
+- **Why SPEC-UNDER and not SPEC-DEFECT.** `0007:C8` is not wrong; it
+  enumerates the orderings it had in view (atom, row) and A13 admits a third
+  the clause never names. Per the BUILD-ORDER standing rule this is
+  fix-now, not rdr-seed.
+- **Escalation**: none.

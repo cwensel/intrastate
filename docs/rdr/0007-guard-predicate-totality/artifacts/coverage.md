@@ -265,3 +265,70 @@ Reading each against `0007:MVV`:
 The MVV's own oracle control (same table, key present, value decided
 TRUE ⇒ the guarded row plans) passes, so scenario 1's refusal is
 discriminating rather than an absence-of-success.
+
+## Phase 3c — regression coverage for the Phase 3 findings
+
+**The REQ × test map above is UNCHANGED.** No REQ gained or lost a test, and
+no existing test was edited or weakened — the Phase 3a and 3b findings were
+gaps in the kernel, not gaps in the REQ mapping. What Phase 3c adds is one
+regression file for the two Phase 3a (CoVe) findings, which had no test at
+all; the three Phase 3b adversarial tests already covered ADV-1/2/3 and were
+left byte-for-byte as written.
+
+New test file: `internal/resolve/guard_fixup_0007_test.go` (package
+`resolve_test`, stdlib `testing`, reusing `guard_fixtures_test.go`'s
+builders — no new fixture helper was minted).
+
+| Finding | Regression test | Legs | File |
+| --- | --- | --- | --- |
+| FAIL-1 | `TestFix0007Fail1_MatchBlockAtomContributesNoOperand` | 4 | fixup-0007 |
+| FAIL-2 | `TestFix0007Fail2_PayloadSortIsTotalOverRowsTyingOnIdentity` | 3 | fixup-0007 |
+| ADV-1 | `TestAdv0007_1_MatchBlockAtomIsNotAGuardOperand` | 2 | adversarial-0007 |
+| ADV-2 | `TestAdv0007_2_UnfencedBlockFailsOpenAndReopensTheMaskingPath` | 3 | adversarial-0007 |
+| ADV-3 | `TestAdv0007_3_DuplicateKeyMakesTheVerdictAFunctionOfSlicePosition` | 4 | adversarial-0007 |
+
+FAIL-1's four legs are the CoVe vector verbatim (absent-key `BlockMatch`
+atom must not refuse), its second reported case (a seam-decided-FALSE
+`BlockMatch` atom must not prune), payload exclusion, and the seam never
+being consulted for a non-guard atom. FAIL-2's three legs are the CoVe
+vector verbatim on the candidate set, the same on the ESCAPE set (which
+reaches the same `gate` by delegation, `0007:C7`), and rows tying on
+identity AND on atom key so they differ only in block/operator/literal —
+each run forward and permuted, per the finding's "verify with permuted-input
+runs, not just a single ordering".
+
+The nearest existing test, `TestReq55_PayloadIsSortedOnTheTotalSixFieldTuple`,
+permutes rows with DISTINCT identities and atoms within one row; the
+identity-tie case FAIL-2 reports is the gap it left, and is not duplicated
+back into it.
+
+### Orphans — Phase 3c tests citing no REQ
+
+The seven new legs cite findings (`FAIL-N`) rather than REQs, which is the
+regression-test convention: each pins one recorded defect at its exact
+reported vector. Their REQ anchors are named in the file's doc comments —
+FAIL-1 to `0007:C6` / `0007:C1` (REQ-33/35, REQ-1) and JDR 0001 §D12, FAIL-2
+to `0007:C8` (REQ-54, REQ-55) — all of which already carry per-clause tests
+in the map above. No new helper was added, so the helper list above is
+unchanged.
+
+### Suite state — after Phase 3c
+
+`go build ./... && go test ./... && go test -race ./internal/resolve/ &&
+golangci-lint run` — all clean. Each of the three fix commits builds
+independently.
+
+| Measure | Phase 2 | After Phase 3c |
+| --- | --- | --- |
+| Top-level tests in `internal/resolve` | 134 pass, 0 fail | **139 pass, 0 fail** |
+| Including subtests | 334 pass, 0 fail | **408 pass, 0 fail** |
+| RDR 0007 tests (`TestReq*` + `TestMVV*`) | 121 top-level | 121 top-level, all pass |
+| `gofmt -l .` | empty | empty |
+| `golangci-lint run` | 0 issues | 0 issues |
+| `go test -race ./internal/resolve/` | — | ok |
+
+The five top-level tests added since Phase 2 are the three Phase 3b
+adversarial tests and the two Phase 3c regression tests. The frozen RDR 0001
+suite still passes in full, and the 121 RDR 0007 per-clause tests are
+unchanged and green — the fixes closed contract gaps without disturbing a
+single clause test.
