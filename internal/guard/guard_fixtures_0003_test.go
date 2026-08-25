@@ -288,7 +288,7 @@ func resolveWith(t *testing.T, kt resolve.Table, view guard.View) resolve.Result
 	}
 	res, err := resolve.Resolve(resolve.Input{
 		Table:      kt,
-		Recognized: "go",
+		Recognized: recognizedFor(kt),
 		Owned:      tags,
 		Observed:   tags,
 		Guards:     guard.Evaluator{},
@@ -297,6 +297,22 @@ func resolveWith(t *testing.T, kt resolve.Table, view guard.View) resolve.Result
 		t.Fatalf("Resolve: %v", err)
 	}
 	return res
+}
+
+// recognizedFor picks the recognized outcome to resolve under: the
+// fixtures' `go`, or — for a slice declaring its own alphabet, as the MVV's
+// two do — that alphabet's first member. An outcome outside the table's
+// declared alphabet refuses `unmodeled_outcome` before any row is
+// considered, which would test RDR 0001's alphabet gate rather than this
+// RDR's predicate semantics.
+func recognizedFor(kt resolve.Table) string {
+	if slices.Contains(kt.Outcomes, "go") {
+		return "go"
+	}
+	if len(kt.Outcomes) == 0 {
+		return "go"
+	}
+	return kt.Outcomes[0]
 }
 
 // describe renders a disposition for a failure message.

@@ -172,6 +172,17 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 	r.Findings = append(r.Findings, ownedBeforeWriteFindings(m, g, written)...)
 	r.Findings = append(r.Findings, vacuousExistsFindings(m, g)...)
 
+	if len(Dimensions(m, g)) == 0 {
+		// A group over no guard dimension at all makes no exhaustiveness
+		// claim: the claim is default-on for every group "whose
+		// participating dimensions are all finitely declared", and there
+		// is nothing here for a claim to range over. Certifying it green
+		// would put a proof beside groups that carry one, and the reader
+		// could not tell the two apart.
+		r.CoverageUnion = newSet(nil)
+		return r
+	}
+
 	unprovable := unprovableFindings(m, g)
 	refusing := withholdingFindings(m, g)
 	r.Findings = append(r.Findings, unprovable...)

@@ -271,11 +271,11 @@ func ProofCompletes(m *table.Model, g Group) bool {
 // per-group, or configurable per run, and never discovered by exhausting a
 // resource.
 //
-// 4096 is the largest product this implementation's enumerating proof
+// 2048 is the largest product this implementation's enumerating proof
 // representation completes over within its budget. Another conforming
 // implementation MAY publish a different bound; what both MUST do is return
 // the same verdict for the same model and report which bound they applied.
-const bound = 4096
+const bound = 2048
 
 // Bound returns the single integer cardinality bound this implementation
 // publishes.
