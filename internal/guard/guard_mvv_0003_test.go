@@ -10,9 +10,11 @@ package guard_test
 // tight rather than blanket.
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/newcoinc/intrastate/internal/guard"
 	"github.com/newcoinc/intrastate/internal/resolve"
@@ -398,26 +400,172 @@ func TestReq132_ScenarioThreeExpectationsIncludingEqualCardinalityAgreement(t *t
 // completes within the implementation's own resource budget, and compare
 // that to the verdict the bound gave. A15 is refuted when the bound says
 // provable and the representation does not complete, or vice versa"
+//
+// The observation must come from somewhere OTHER than the bound. Asking
+// `guard.ProofCompletes` is not an observation at all: it is defined as
+// `card <= Bound()`, so comparing it to a recomputed `card <= Bound()`
+// compares the bound to itself and can never fail — A15 would read as
+// discharged without a single measurement. A15's Status is `Pending` and
+// its Method is `MVV Test`, and this test IS that method, so the tautology
+// left the assumption untested rather than merely untidy.
+//
+// What is recorded instead is whether the enumerating representation
+// actually RETURNS within a wall-clock budget. Two surfaces are measured
+// because the shapes reach the enumeration by two different routes:
+//
+//   - `guard.Product` for the four `shapePairSource` shapes, whose `int`
+//     and `bool` dimensions are each far under the bound, so the verdict
+//     turns on the ASSEMBLED product's cardinality.
+//   - `guard.Denotation` for a set dimension whose powerset alone exceeds
+//     the bound. `Product` declines such a group on cardinality before
+//     reaching any enumerator, so it observes nothing about how the
+//     refusal was reached; `Denotation` is the surface that runs
+//     `valueAssignments` for real, and is therefore where an
+//     enumerate-then-check regression — materializing the powerset BEFORE
+//     consulting the bound — actually costs anything.
+//
+// Known limit, and it is a real one: an enumerate-then-check regression
+// returns the SAME verdict as the bounded implementation, because the
+// bound is still consulted before the value is returned. Only its cost
+// differs. ADV-2 covers that defect structurally, on the deterministic
+// D11 seam — an unprojectable denotation can only come from the early
+// return — and its comment records why a wall-clock oracle was rejected
+// there: it cannot tell a bounded implementation from fast hardware.
+// This test is therefore the COMPLETION half of REQ-133 and ADV-2 is the
+// no-enumeration half; neither subsumes the other, and the deadline here
+// is deliberately generous so it fails only on a representation that does
+// not return at all.
 // ADVERSARIAL
 func TestReq133_TheBoundsVerdictAgreesWithWhetherTheProofCompletes(t *testing.T) {
+	type shape struct {
+		name   string
+		source string
+		rule   string
+		// completes observes, independently of the bound, whether the
+		// enumerating representation returns for this shape.
+		completes func(*table.Model, guard.Group) bool
+	}
+
+	var shapes []shape
 	for _, over := range []bool{true, false} {
 		for _, wide := range []bool{true, false} {
-			m := mustLoadSource(t, shapePairSource(wide, over))
-			g := groupOf(t, m, "shaped")
+			shapes = append(shapes, shape{
+				name:      fmt.Sprintf("wide=%v/over=%v", wide, over),
+				source:    shapePairSource(wide, over),
+				rule:      "shaped",
+				completes: productCompletes,
+			})
+		}
+	}
+	shapes = append(shapes, shape{
+		name:      "one over-large set dimension",
+		source:    adv2BigSetSource(18),
+		rule:      "adv2-row",
+		completes: denotationCompletes,
+	})
+
+	for _, sh := range shapes {
+		t.Run(sh.name, func(t *testing.T) {
+			m := mustLoadSource(t, sh.source)
+			g := groupOf(t, m, sh.rule)
 
 			card, ok := guard.Cardinality(m, g)
 			if !ok {
-				t.Fatalf("wide=%v over=%v: no cardinality", wide, over)
+				t.Fatalf("no cardinality")
 			}
 			boundSaysProvable := card <= guard.Bound()
 
-			completed := guard.ProofCompletes(m, g)
+			completed := sh.completes(m, g)
 			if boundSaysProvable != completed {
-				t.Errorf("wide=%v over=%v: the bound says provable=%v while "+
+				t.Errorf("the bound says provable=%v (card=%d, bound=%d) while "+
 					"the proof representation completes=%v; A15 is refuted "+
-					"when they disagree", wide, over, boundSaysProvable, completed)
+					"when they disagree",
+					boundSaysProvable, card, guard.Bound(), completed)
+			}
+		})
+	}
+}
+
+// proofCompletionDeadline bounds each observation. Every shape that
+// completes honestly does so in microseconds — the largest admitted
+// product is the published bound itself, and a declined dimension returns
+// from declaration arithmetic — so seconds of headroom distinguishes
+// "returned" from "did not return" without failing a correct
+// implementation on a slow or loaded machine.
+const proofCompletionDeadline = 10 * time.Second
+
+// productCompletes observes whether assembling the group's scoped product
+// returns a projectable product.
+func productCompletes(m *table.Model, g guard.Group) bool {
+	return completesWithin(func() bool { return guard.Product(m, g).Projectable() })
+}
+
+// denotationCompletes observes whether every value atom in the group has a
+// denotation the implementation can produce at all.
+//
+// `Denotation` is the surface that calls `valueAssignments`, so it is the
+// one that runs — or declines to run — the enumeration. A bounded
+// implementation returns an UNPROJECTABLE denotation promptly: not
+// completing the enumeration is exactly how it refuses, so "returned at
+// all" is the completion signal, and whether the result projects is what
+// the bound's verdict is compared against.
+func denotationCompletes(m *table.Model, g guard.Group) bool {
+	for _, row := range g.Rows {
+		for _, atom := range row.Atoms {
+			if atom.Operator == resolve.OpExists {
+				continue
+			}
+			key, at := atom.Key, atom
+			projectable := completesWithin(func() bool {
+				return guard.Denotation(m, key, at).Projectable()
+			})
+			if !projectable {
+				return false
 			}
 		}
+	}
+	return true
+}
+
+// completesWithin runs `observe` under a deadline and reports its result,
+// or false when it does not return in time.
+//
+// A representation that DECLINES returns promptly with an unprojectable
+// result; one that tries to enumerate something too large to enumerate does
+// not return at all. Both are "did not complete", which is a legitimate
+// observation rather than a test error — so the timeout resolves to false
+// and lets the caller compare it against the bound's verdict.
+//
+// The worker is abandoned rather than cancelled: these enumerators take no
+// cancellation token by design, since D11 keeps them decided from
+// declaration arithmetic rather than threaded with a context that exists
+// only for a test. Unlike the ADV-4c watchdog, which fences a genuinely
+// non-terminating loop in a subprocess, every call here is bounded by its
+// fixture, so an abandoned goroutine finishes on its own.
+//
+// The select drains an already-ready result BEFORE consulting the timer.
+// Go picks at random among ready cases, so a worker that finished just as
+// the deadline elapsed would otherwise be reported as non-completing at
+// random — the same flake the ADV-4c harness fixed by making its signals
+// authoritative over process exit.
+func completesWithin(observe func() bool) bool {
+	done := make(chan bool, 1)
+	go func() { done <- observe() }()
+
+	timer := time.NewTimer(proofCompletionDeadline)
+	defer timer.Stop()
+
+	select {
+	case result := <-done:
+		return result
+	case <-timer.C:
+	}
+
+	select {
+	case result := <-done:
+		return result
+	default:
+		return false // the representation did not complete
 	}
 }
 
