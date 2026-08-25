@@ -1,27 +1,32 @@
 # Coverage — RDR 0006 Graph Lint Authority And Guarantees
 
-Phase 1 artifact. Every REQ in [`req-list.md`](req-list.md) maps to at
-least one test, and every test in the RDR 0006 suite cites at least one
-REQ. Both orphan directions are checked mechanically below and both are
-empty.
+Phase 1 artifact, updated at Phase 2 close. Every REQ in
+[`req-list.md`](req-list.md) maps to at least one test, and every test in
+the RDR 0006 suite cites at least one REQ. Both orphan directions are
+checked mechanically below and both are empty.
 
-**Status: RED.** No implementation has landed. `internal/graphlint/skeleton.go`
-declares signatures only — every body returns a zero value — so the suite
-compiles and each test fails on its own assertion, naming the REQ its
-header quotes, rather than the whole package failing with one
-undefined-symbol error that attributes to no clause.
+**Status at Phase 1: RED. Status at Phase 2: GREEN.** The `Status` column
+in the map below records each test's PHASE 1 state — the red-before-green
+evidence — and is deliberately left as authored. At Phase 2 close every one
+of the 104 tests passes, and no test was edited to make it do so.
 
-94 of the 104 top-level RDR 0006 tests are red. The 10
-that are green are **prohibition and structural clauses whose correct
-Phase-1 state is green**: a violation of each would be an *added* symbol,
-an *added* import, or an *added* command registration, so they are
-regression guards from the moment they are written rather than
-implementation drivers. They are listed explicitly under *Green at Phase 1*
-below so Phase 2 does not mistake them for coverage of behaviour.
+At Phase 1, 94 of the 104 top-level RDR 0006 tests were red. The 10 that
+were green are **prohibition and structural clauses whose correct Phase-1
+state is green**: a violation of each would be an *added* symbol, an
+*added* import, or an *added* command registration, so they are regression
+guards from the moment they are written rather than implementation drivers.
+They are listed explicitly under *Green at Phase 1* below so Phase 2 does
+not mistake them for coverage of behaviour.
 
-No pre-existing test was weakened, skipped, or deleted. `internal/table`,
-`internal/guard`, and `internal/resolve` remain green, as do the shipped
-`internal/cli` version tests.
+Phase 2 replaced `internal/graphlint/skeleton.go` with the working engine
+(`taxonomy.go`, `reach.go`, `engine.go`, `analysis.go`, `groups.go`,
+`coverage.go`), extended `clierr` and `respond` for the text surface, and
+authored the repository gate. `go test ./...` passes and `golangci-lint
+run ./...` reports 0 issues.
+
+No pre-existing test was weakened, skipped, or deleted, at either phase.
+`internal/table`, `internal/guard`, and `internal/resolve` remain green, as
+do the shipped `internal/cli` version tests.
 
 ## Totals
 
@@ -32,13 +37,146 @@ No pre-existing test was weakened, skipped, or deleted. `internal/table`,
 | REQs with no test | 0 |
 | Tests citing no REQ | 0 |
 | Tests carrying no label | 0 |
-| Tests currently red | 94 |
+| Tests currently red | 0 (94 at Phase 1; all green at Phase 2) |
 | Tests green at Phase 1 (prohibition/structural) | 10 |
 | Pre-existing tests broken | 0 |
+| Full suite at Phase 2 close | `go test ./...` PASS, `golangci-lint run` 0 issues |
 
 ## REQ-MVV output
 
-_Phase 2 records the actual output here._
+Recorded by Phase 2. `TestMVV_GraphLintAuthorityAndGuarantees` PASSES, all
+five sub-scenarios and all eleven illegal-matrix arms:
+
+```
+--- PASS: TestMVV_GraphLintAuthorityAndGuarantees (0.01s)
+    --- PASS: .../legal_model_passes
+    --- PASS: .../illegal_matrix
+        --- PASS: .../dangling-edge/missing-root
+        --- PASS: .../dead-end
+        --- PASS: .../overlap/ordinary-pair
+        --- PASS: .../overlap/escape-pair-shared-class
+        --- PASS: .../coverage-gap
+        --- PASS: .../unprovable/non-finite-dimension
+        --- PASS: .../unprovable/withheld-claim
+        --- PASS: .../always-present-owned
+        --- PASS: .../owned-before-write
+        --- PASS: .../terminal-escape
+        --- PASS: .../product-too-large
+    --- PASS: .../multi-defect_group
+    --- PASS: .../legal_advisory_matrix
+    --- PASS: .../findings_key_always_emitted
+ok  github.com/newcoinc/intrastate/internal/cli
+```
+
+### The matrix, as the shipped command actually answers it
+
+Every row below is one `intrastate lint --model <fixture> --as=json`
+invocation through `ExecuteAndEmit` — the production Cobra path and the
+production output gateway, per ASSUMPTION-7. `aggregate` is the
+`CLIError.Code`; `findings` counts the emitted list.
+
+| Fixture | exit | aggregate | findings | codes emitted |
+| --- | --- | --- | --- | --- |
+| `legalModel` | 0 | — | 0 | (empty list) |
+| `mvvNoRoot` | 2 | `graph-lint-failed` | 1 | `graph-dangling-edge` |
+| `mvvDeadEnd` | 2 | `graph-lint-failed` | 1 | `graph-dead-end` |
+| `mvvOrdinaryOverlap` | 2 | `graph-lint-failed` | 2 | `graph-coverage-gap` `graph-overlap` |
+| `mvvEscapeOverlap` | 2 | `graph-lint-failed` | 1 | `graph-overlap` |
+| `mvvCoverageGap` | 2 | `graph-lint-failed` | 1 | `graph-coverage-gap` |
+| `mvvNonFinite` | 2 | `graph-lint-failed` | 1 | `graph-unprovable-coverage` |
+| `mvvWithheld` | 2 | `graph-lint-failed` | 1 | `graph-unprovable-coverage` |
+| `mvvAlwaysPresentOwned` | 2 | `graph-lint-failed` | 1 | `graph-always-present-owned` |
+| `mvvOwnedBeforeWrite` | 2 | `graph-lint-failed` | 3 | `graph-always-present-owned` `graph-coverage-gap` `graph-owned-before-write` |
+| `mvvTerminalEscape` | 2 | `graph-lint-failed` | 1 | `graph-terminal-escape` |
+| `mvvProductTooLarge` | 2 | `graph-lint-failed` | 1 | `graph-product-too-large` |
+| `mvvMultiDefect` | 2 | `graph-lint-failed` | 6 | `graph-always-present-owned` `graph-coverage-gap` `graph-overlap` `graph-owned-before-write` `graph-unprovable-coverage` |
+| `mvvLegalAdvisory` | 0 | — | 3 | `graph-coverage-closed-by-escape` `graph-redundant-row` `graph-unreachable-rule` |
+
+`graph-single-valued-state` is the one blocking class the matrix cannot
+drive: RDR 0002's loader refuses every authorable spelling before
+normalization (deviations `D3`). The check is implemented as a total
+function over its input and the class is asserted present in the taxonomy.
+
+The multi-defect run emits **five distinct codes across six findings from
+one invocation**, so a first-failure engine cannot pass it, and exactly one
+`graph-overlap` finding names both rows of the one overlapping pair.
+
+### The three envelopes, verbatim
+
+**Clean model — the empty list IS the receipt** (`data.findings` present,
+`[]` not `null`, and `data` itself present despite `json:"data,omitempty"`):
+
+```json
+{"type":"ok","data":{"findings":[]}}
+```
+
+**A withheld claim — one aggregate `CLIError`, `findings` a TOP-LEVEL
+sibling of `code`, no `error` wrapper and no `type` discriminator**, with
+the reason discriminator and all four atom fields:
+
+```json
+{
+  "code": "graph-lint-failed",
+  "message": "the model carries blocking graph-lint findings",
+  "findings": [
+    {
+      "code": "graph-unprovable-coverage",
+      "model": "lintfix",
+      "severity": "blocking",
+      "message": "coverage claim withheld for row \"can-refuse\": the tag \"opt\" is declared optional, so the atom can refuse `guard_unevaluable` at runtime and lint declines to promise exhaustiveness the runtime does not deliver",
+      "rule": "can-refuse",
+      "span": "lintfix:can-refuse",
+      "reason": "row-can-refuse",
+      "dimension": "opt",
+      "key": "opt",
+      "operator": "eq",
+      "literal": "p",
+      "block": "all",
+      "fingerprint": "opt|all|eq|p;status|match|eq|a;#status=b;"
+    }
+  ]
+}
+```
+
+The message says the claim is **withheld** and names no authoring fault:
+`row-can-refuse` is an honest withholding, not a model defect (REQ-81).
+
+**The legal advisory matrix — all three advisory codes on SUCCESS**, at
+`data.findings`, none of which changes the disposition:
+
+```json
+{"type":"ok","data":{"findings":[
+  {"code":"graph-coverage-closed-by-escape","model":"lintfix","severity":"info",
+   "message":"the coverage of group lintfix/stop status.eq=a is closed by the bare escape row \"bare-rescue\" rather than proved over its declared domains",
+   "rule":"bare-rescue","element":"lintfix/stop status.eq=a"},
+  {"code":"graph-redundant-row","model":"lintfix","severity":"info",
+   "message":"row \"narrow\" accepts a proper subset of row \"wide\"'s assignments, so it can never be the exact-one match",
+   "rule":"narrow","span":"lintfix:narrow","element":"wide",
+   "fingerprint":"flag|all|eq|true;status|match|eq|a;#status=b;"},
+  {"code":"graph-unreachable-rule","model":"lintfix","severity":"info",
+   "message":"no reachable owned-state satisfies the selection context of row \"orphaned\", so the row can never be a candidate",
+   "rule":"orphaned","span":"lintfix:orphaned",
+   "fingerprint":"status|match|eq|orphan;#status=b;"}
+]}}
+```
+
+### The repository gate (REQ-119..REQ-122), also green
+
+`models/rdr.toml` is authored and homed, and lints clean in its accepted
+state — the SC-23 false-positive census is **zero blocking findings**:
+
+```
+$ make graph-lint
+bin/intrastate lint --model models/rdr.toml --as=json
+{"type":"ok","data":{"findings":[]}}
+```
+
+Dropping its `[initial]` table — the deliberate defect REQ-120 authors —
+fails the same command with the aggregate code, so the gate bites:
+
+```
+code=[graph-lint-failed]
+```
 
 ## Green at Phase 1
 
@@ -242,23 +380,42 @@ directions.
 | `internal/graphlint/soundness_0006_test.go` | Existential vs universal checks over merged nodes, and the accepted false positives SC-10 buys. |
 | `internal/cli/lint_0006_test.go` | The CLI surface and output envelope, driven through `ExecuteAndEmit`. |
 | `internal/cli/lint_fixtures_0006_test.go` | The MVV fixture corpus. All 16 models verified to load clean through the RDR 0002 loader. |
+| `models/rdr.toml` | The checked-in transition model the repository gate lints (A8). Authored at Phase 2. |
 | `internal/cli/lint_mvv_0006_test.go` | `REQ-MVV`, the runnable end-to-end validation. |
 | `internal/cli/lint_gate_0006_test.go` | The repository acceptance gate: the CI job, `make check`, and the false-positive census. |
 
-## Skeleton surface (Phase 2 replaces every body)
+## Implementation surface (Phase 2)
+
+The Phase 1 skeleton was one file of zero-value signatures. Phase 2
+replaced it with the working engine, split by concern; every symbol keeps
+the name and shape the tests were written against.
 
 | Symbol | File |
 | --- | --- |
-| `graphlint.Run`, `graphlint.NewRequest`, `Request`, `Report` | `internal/graphlint/skeleton.go` |
-| `graphlint.Reach`, `graphlint.Node`, `graphlint.Fingerprint` | `internal/graphlint/skeleton.go` |
-| The 10 blocking + 4 advisory codes, 3 reasons, 2 severities | `internal/graphlint/skeleton.go` |
-| `graphlint.ProductBound`, `graphlint.NodeCeiling` | `internal/graphlint/skeleton.go` |
-| `clierr.Finding`, `CLIError.Findings` (non-`omitempty`) | `internal/cli/clierr/clierr.go` |
-| root `lint` verb | `internal/cli/lint.go` |
+| The 10 blocking + 4 advisory codes, 3 reasons, 2 severities, `IsBlocking`, `ProductBound`, `NodeCeiling` | `internal/graphlint/taxonomy.go` |
+| `graphlint.Reach`, `graphlint.Node`, the fixpoint successor relation and its join | `internal/graphlint/reach.go` |
+| `graphlint.Run`, `NewRequest`, `Request`, `Report`, `Fingerprint`, the finding-identity ordering | `internal/graphlint/engine.go` |
+| Invariants 1, 2, 5, 7, the always-present owned check, the node ceiling, the unreachable-rule advisory | `internal/graphlint/analysis.go` |
+| Invariants 3 and 6, the redundant-row and vacuous-atom advisories | `internal/graphlint/groups.go` |
+| Invariant 4: the exhaustiveness claim, the three withholding triggers, the per-class coverage arms | `internal/graphlint/coverage.go` |
+| `clierr.Finding`, `CLIError.Findings` (non-`omitempty`), `EmitText`/`EmitFindingsText` | `internal/cli/clierr/clierr.go` |
+| `respond.FindingCarrier` and the `OK` text branch (deviation `D5`) | `internal/cli/respond/respond.go` |
+| root `lint` verb, `lintPayload` | `internal/cli/lint.go` |
+| The checked-in transition model the gate lints | `models/rdr.toml` |
+| The `graph-lint` CI job / `make graph-lint` + `check`'s `build` edge | `.github/workflows/ci.yml`, `Makefile` |
 
-## Notes for Phase 2
+`ProductBound()` returns RDR 0003's published bound (`guard.Bound()`, 2048)
+rather than a second constant: the proof representation lint declines over
+IS `internal/guard`'s enumerating one, so a bound of its own would name a
+threshold nothing applies and the two would drift. `NodeCeiling()` is this
+RDR's own — 4096 merged nodes — since no peer bounds the traversal.
+
+## Notes for Phase 2 (dispositions recorded inline)
 
 1. **`graph-single-valued-state` has no authorable input surface today.**
+   *Disposition: implemented as a total function
+   (`analysis.go::checkSingleValuedState`) and left undriven; `D3` stays
+   open on RDR 0002's terms.*
    RDR 0002's loader refuses every TOML spelling of a single-valued tag
    written two values before normalization: `kind <k> holds one value, not
    a member sequence` for `enum`/`int`/`bool`/`scalar`, and `kind set
@@ -272,9 +429,14 @@ directions.
    RDR 0002 load refusals. The arms of `graph-dangling-edge` that reach
    lint are the missing `[initial]` declaration (REQ-44) and the terminal
    context reading a non-owned tag (REQ-129), both of which load clean.
+   *Disposition: both implemented; the second takes `graph-dangling-edge`
+   per ASSUMPTION-1, naming the terminal context index and the non-owned
+   key.*
 
 3. **REQ-119..REQ-122 depend on A8.** No transition model is checked in
    today. Per ASSUMPTION-9 it is authored during this implementation and
    homed at `models/rdr.toml`, which is the path the gate tests assert.
    Phase 2 authors it, adds the `graph-lint` CI job, and wires `make
-   check`'s missing `build` edge.
+   check`'s missing `build` edge. *Disposition: done. The model lints
+   clean — SC-23's false-positive census is zero — and dropping its
+   `[initial]` table fails the same command. `D4` is discharged.*
