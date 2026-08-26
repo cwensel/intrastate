@@ -160,7 +160,17 @@ func (l *loader) loadTags() error {
 	// RDR 0008 `0008:C3` — each violation carries the three-field payload:
 	// the offending name as authored, the direction's remedy name, and the
 	// direction's stable rule identifier.
-	for key, decl := range decls {
+	//
+	// The scan runs over SORTED keys, not Go map order. The two directions
+	// prescribe opposite remedies ("rename to `recognized`" vs "rename away
+	// from it"), so a model breaching both at once must not report a payload
+	// chosen by the map seed: identical bytes would yield contradictory
+	// advice across runs, and `0008:C3`'s rule identifier is a token a golden
+	// test asserts byte-for-byte and a consumer uses for remediation lookup.
+	// Which of two SAME-direction declarations is named stays unspecified
+	// (`0008:TS-5`); sorting only makes that choice reproducible.
+	for _, key := range slices.Sorted(maps.Keys(decls)) {
+		decl := decls[key]
 		if decl.Provenance == ProvenanceRecognized && key != RecognizedTagKey {
 			// Rename TO the reserved key: the remedy names it.
 			return &Failure{
