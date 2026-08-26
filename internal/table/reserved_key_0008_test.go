@@ -564,6 +564,9 @@ func TestReq58And59And60And80_DisjunctiveNearMissTriggerAndTheTargetedControl(t 
 		"trimming alone (\" recognized\")": {
 			fixture: "pos-near-miss-space.toml", authored: " recognized", want: true,
 		},
+		"both together (\" Recognized\")": {
+			fixture: "pos-near-miss-both.toml", authored: " Recognized", want: true,
+		},
 		"neither (result) — the targeted control": {
 			fixture: "pos-not-near-miss.toml", authored: "result", want: false,
 		},
@@ -622,6 +625,7 @@ func TestReq61And62And63And81_AdvisoryIsNonBlockingCategorylessAndByteExact(t *t
 		"pos-near-miss-folded.toml": "Recognized",
 		"pos-near-miss-upper.toml":  "RECOGNIZED",
 		"pos-near-miss-space.toml":  " recognized",
+		"pos-near-miss-both.toml":   " Recognized",
 	}
 
 	for fixture, authored := range fixtures {
