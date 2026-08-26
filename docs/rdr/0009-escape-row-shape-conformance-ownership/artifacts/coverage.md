@@ -430,3 +430,127 @@ and no assertion in that 0005 test was weakened or touched.
 None. No pre-existing test was edited, weakened, or deleted; no non-test
 source file was modified. `git diff --stat` against the launch base touches
 only the five new test files and this artifact.
+
+---
+
+## REQ-MVV run record (Phase 2)
+
+`REQ-70` / `0009:MVV`, runner
+`TestMVV0009_EscapeRowShapeConformanceIsOwnedByTheKernel`, run at the Phase 2
+implementation commit. A green exit is not the evidence; the ACTUAL observed
+values are recorded below.
+
+```
+$ go test ./internal/resolve/ -run TestMVV0009_EscapeRowShapeConformanceIsOwnedByTheKernel -v
+=== RUN   TestMVV0009_EscapeRowShapeConformanceIsOwnedByTheKernel
+--- PASS: TestMVV0009_EscapeRowShapeConformanceIsOwnedByTheKernel (0.00s)
+    --- PASS: .../1_breaching_table_errors_naming_the_row (0.00s)
+    --- PASS: .../2_conformed_table_resolves_value_for_value (0.00s)
+    --- PASS: .../3_conformed_tables_still_escape_and_still_refuse (0.00s)
+    --- PASS: .../4_validator_and_entry_check_are_one_predicate (0.00s)
+ok  	github.com/newcoinc/intrastate/internal/resolve	0.243s
+```
+
+Observed values, printed from the same fixtures the runner asserts on:
+
+```
+LEG1 Result={Plan:<nil> Refusal:<nil>} Refused=false err!=nil=true
+LEG1 errors.As Ref={RuleID:rdr.escape.needsowned SourceLocator:flows/rdr.toml:90} Count=1
+LEG1 errors.Is(ErrEscapeShapeBreach)=true
+LEG1 aggregate Unwrap() []error len=1
+LEG1 Error()=resolve: escape row "rdr.escape.needsowned" at "flows/rdr.toml:90" carries writes (1 breaching row); an escape row must carry no writes
+LEG2 err=<nil> Plan={RuleID:rdr.escape.needsowned SourceLocator:flows/rdr.toml:90 NextTags:[{Key:status Value:Blocked}] Writes:[] Revision:rev-nomatch Escaped:true} Refusal=<nil>
+PRED breaching CheckValid!=nil=true conforming CheckValid=<nil>
+```
+
+Reading each of the MVV's four obligations against that output:
+
+1. **The breaching table errors, naming the row, with no disposition.**
+   `Result{Plan:<nil> Refusal:<nil>}` is the zero `Result`; `err != nil`;
+   `errors.As` recovers `RowRef{"rdr.escape.needsowned",
+   "flows/rdr.toml:90"}` — the record's normative fixture identity —
+   structurally, with `Count == 1`; `errors.Is` classifies the aggregate as
+   `ErrEscapeShapeBreach`; and the `errors.Join` wrapper is present even at
+   cardinality 1 (`Unwrap() []error` has length 1).
+2. **The same table with the writes removed resolves, value for value.**
+   `err` is nil and the plan is
+   `{rdr.escape.needsowned, flows/rdr.toml:90, NextTags:[status=Blocked],
+   Writes:[], rev-nomatch, Escaped:true}` — the escape row's own plan, with
+   no writes and `Escaped` set.
+3. **The conformed table still escapes and still refuses.** `Escaped:true`
+   above; and every shipped refusal fixture still travels the `Result` value
+   with a nil error (subtest 3, PASS).
+4. **One predicate, two call sites.** `CheckValid` is non-nil on the
+   breaching table and plain `nil` on the conforming one, matching
+   `Resolve`'s verdict at both.
+
+### C7 CLI surfacing — actual wire output (REQ-58 … REQ-69, REQ-109)
+
+Emitted through the real `clierr.EmitJSON` over the real
+`kernelResolveFailure` classifier, fed a real kernel breach:
+
+```
+exit=2
+{"code":"escape-row-shape-breach","message":"the transition table carries an escape row that also carries writes; an escape row describes no owned-state mutation","hint":"fix the table producer: an escape row must carry no writes","findings":[{"code":"escape-row-shape-breach","message":"this escape row carries writes","locator":"flows/rdr.toml:90","hint":"fix the table producer: an escape row must carry no writes","rule":"rdr.escape.needsowned","count":1}]}
+```
+
+And the degenerate producer — three breaching rows sharing `RowRef{"",""}` —
+collapsing to ONE finding whose `count` is the only diagnostic content left:
+
+```
+{"code":"escape-row-shape-breach","message":"the transition table carries an escape row that also carries writes; an escape row describes no owned-state mutation","hint":"fix the table producer: an escape row must carry no writes","findings":[{"code":"escape-row-shape-breach","message":"this escape row carries writes","hint":"fix the table producer: an escape row must carry no writes","count":3}]}
+```
+
+`cause` is absent from both envelopes (it is `json:"-"`), `detail` carries no
+identity, and the identities and count reach the wire only through
+`findings[]`.
+
+## Deviations recorded by Phase 2
+
+- **D3** — `clierr.Finding` gains `Count int json:"count,omitempty"`.
+  SPEC-UNDER, `needs author decision`, proceeding under the unattended
+  override on Q-B's reading (a). See `deviations.md`.
+
+No Phase 1 test was edited, weakened, or deleted. The only pre-existing test
+files touched are the three REQ-93 names — `fixtures_test.go`,
+`adversarial_test.go`, `fixup_test.go` — where the RDR's own Phase 2 plan
+mandates dropping `Writes` from the escape-row builder and its two call-site
+overrides; each edit removes a fixture value the RDR forbids, and no
+assertion in those tests was changed.
+
+## Mutation check run record (REQ-80 … REQ-82, TS scenario 6)
+
+Executed as the recorded build procedure the ASSUMPTIONS section describes
+(revert, run, restore) rather than as a shipped source-mutating test. Both
+mutants were run with this RDR's own new tests **excluded from the oracle**:
+the five `*_0009_test.go` files were held out of `internal/resolve` for both
+runs, so the oracle is exactly the pre-existing frozen suite.
+
+**Mutant A** — `Table.CheckValid` returns `nil` unconditionally
+(`return nil` inserted as its first statement), fixtures conformed.
+
+```
+$ go test ./internal/resolve/
+ok  	github.com/newcoinc/intrastate/internal/resolve	0.316s
+```
+
+The frozen suite still passes, as REQ-81 expects: every pre-existing fixture
+conforms, so replacing the check with `return nil` changes none of their
+answers and the two mutants stay isolated.
+
+**Mutant B** — the real `CheckValid` restored, the breach re-introduced into
+the fixtures by restoring `Writes` on `fixtures_test.go::escapeRow`.
+
+```
+$ go test ./internal/resolve/ 2>&1 | grep -c '^--- FAIL'
+9
+FAIL	github.com/newcoinc/intrastate/internal/resolve	0.235s
+```
+
+The frozen suite fails in nine tests, as REQ-82 expects: the entry check is
+wired into the real evaluation path and is not dead code — a
+callable-but-unwired predicate would have left the suite green here.
+
+Both mutations were reverted; `git status --porcelain` showed only this
+artifact and `deviations.md` modified afterwards, and the restored suite is
+green.
