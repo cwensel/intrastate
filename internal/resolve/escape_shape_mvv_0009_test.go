@@ -269,6 +269,8 @@ func TestReq73_DormantRowStillErrors(t *testing.T) {
 // nil-ness"
 // INPUT EDGE — TS scenario 3
 func TestReq74_EmptyNotNilWritesConforms(t *testing.T) {
+	nonVacuityGate(t)
+
 	in := emptyNotNilEscapeInput()
 
 	got, err := resolve.Resolve(in)
@@ -306,6 +308,8 @@ func TestReq74_EmptyNotNilWritesConforms(t *testing.T) {
 // fixture that had drifted to nil would make REQ-74 vacuous — and THAT state
 // is what yields no error.
 func TestReq75_TheDiscriminatingAssertionIsOnTheInputRow(t *testing.T) {
+	nonVacuityGate(t)
+
 	in := emptyNotNilEscapeInput()
 
 	var escape *resolve.Row
@@ -435,6 +439,8 @@ func TestReq77_TheFrozenSuitesEscapeFixturesConform(t *testing.T) {
 // every disposition must still be produced without the Go error path — the
 // outcome set is identical, and no fixture migrated onto the error channel.
 func TestReq78_ThePreExistingFixtureSetProducesAnIdenticalOutcomeSet(t *testing.T) {
+	nonVacuityGate(t)
+
 	type outcome struct {
 		planned bool
 		kind    resolve.RefusalKind
@@ -489,6 +495,8 @@ func TestReq78_ThePreExistingFixtureSetProducesAnIdenticalOutcomeSet(t *testing.
 // disposition that depended on run order or on iteration order would break
 // this and make the oracle un-regenerable.
 func TestReq79_TheOutcomeSetIsRegenerableRatherThanFrozenToAnArtifact(t *testing.T) {
+	nonVacuityGate(t)
+
 	derive := func() map[string]string {
 		out := map[string]string{}
 		for name, in := range allDispositionInputs() {
@@ -541,6 +549,8 @@ func TestReq80_TheCheckIsNonVacuous(t *testing.T) {
 // Asserted here: every pre-existing disposition fixture passes CheckValid, so
 // replacing the check with `return nil` cannot change any of their answers.
 func TestReq81_TheFrozenFixturesAreInsensitiveToTheCheck(t *testing.T) {
+	nonVacuityGate(t)
+
 	for name, in := range allDispositionInputs() {
 		if err := in.Table.CheckValid(); err != nil {
 			t.Errorf("%s: a frozen-suite fixture breaches the check (%v); "+
@@ -588,6 +598,8 @@ func TestReq82_RestoringTheWritesMakesResolveFail(t *testing.T) {
 // The three scenario tables, with the record's own definition of "identical"
 // — extracted identities and counts in order, never DeepEqual over errors.
 func TestReq83_TheExportedPredicateMatchesTheEntryCheckOnScenarios1To3(t *testing.T) {
+	nonVacuityGate(t)
+
 	scenarios := map[string]resolve.Input{
 		"scenario_1_breach":        breachingNoMatchInput(),
 		"scenario_2_dormant":       dormantBreachInput(),

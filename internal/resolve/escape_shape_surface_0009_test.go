@@ -309,6 +309,8 @@ func TestReq51_CheckValidsDocNamesTheOnePropertyAndItsLimits(t *testing.T) {
 // call-site override that survived would show up as a breaching disposition
 // fixture below.
 func TestReq93_TheWriteBearingEscapeFixturesAreConformed(t *testing.T) {
+	nonVacuityGate(t)
+
 	built := escapeRow(breachRuleID, breachLocator, resolve.KindNoMatch)
 	if len(built.Writes) != 0 {
 		t.Errorf("the shared escapeRow builder still carries %d writes",
@@ -330,6 +332,8 @@ func TestReq93_TheWriteBearingEscapeFixturesAreConformed(t *testing.T) {
 // its NextTags would silently weaken every escape fixture that depends on the
 // escaped plan carrying a next state.
 func TestReq94_NextTagsStaysOnTheEscapeRowBuilder(t *testing.T) {
+	nonVacuityGate(t)
+
 	built := escapeRow(breachRuleID, breachLocator, resolve.KindNoMatch)
 	if len(built.NextTags) == 0 {
 		t.Errorf("the escapeRow builder lost its NextTags; A4 did not " +
@@ -429,6 +433,8 @@ func TestReq99_ThePreconditionIsOneLinearPassOverTheRows(t *testing.T) {
 // Asserted with the allocation counter, which is the only non-tautological
 // oracle for this clause: the conforming scan allocates nothing.
 func TestReq100_TheConformingScanIsAllocationFree(t *testing.T) {
+	nonVacuityGate(t)
+
 	tbl := conformingNoMatchInput().Table
 
 	allocs := testing.AllocsPerRun(100, func() {
@@ -626,6 +632,8 @@ func TestReq106_TheDormantMalformedRowErrorsOnEveryResolve(t *testing.T) {
 // must satisfy the precondition; supersedes the "Noted, not filed" cleanup"
 // BOUNDARY
 func TestReq107_EveryEscapeFixtureSiteSatisfiesThePrecondition(t *testing.T) {
+	nonVacuityGate(t)
+
 	// The builder itself.
 	row := escapeRow("r", "l", resolve.KindNoMatch)
 	if len(row.Escape) != 0 && len(row.Writes) != 0 {

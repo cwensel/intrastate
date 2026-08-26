@@ -119,6 +119,8 @@ func TestReq2_ANormalizedClearOnAnEscapeRowIsTheSameBreach(t *testing.T) {
 // NextTags and NO Writes conforms — widening the predicate to NextTags would
 // break this.
 func TestReq3_ThePredicateDoesNotExtendToNextTags(t *testing.T) {
+	nonVacuityGate(t)
+
 	tbl := resolve.Table{
 		Revision: "rev-req3",
 		Outcomes: []string{"successful"},
@@ -192,6 +194,8 @@ func TestReq4_TheBreachPredicateIsTheLengthConjunction(t *testing.T) {
 // not, in BOTH directions (an empty Escape with real writes is equally
 // conforming).
 func TestReq5_NilAndEmptySlicesAreIndistinguishableToThePredicate(t *testing.T) {
+	nonVacuityGate(t)
+
 	cases := []struct {
 		name   string
 		escape []resolve.RefusalKind
@@ -309,6 +313,8 @@ func TestReq7_TheEscapeDiscriminatorIsTheReusedNonEmptyEscapeSignal(t *testing.T
 // untouched, plus the escaped plan reporting the row's own (empty) writes
 // rather than a sanitized nil that hides a producer breach.
 func TestReq8_PlanOfStaysUnconditionalAndAddsNoStrippingLogic(t *testing.T) {
+	nonVacuityGate(t)
+
 	// Ordinary path: writes copied through unchanged.
 	ordinary := mustResolve(t, legalInput())
 	if ordinary.Plan == nil {
@@ -344,6 +350,8 @@ func TestReq8_PlanOfStaysUnconditionalAndAddsNoStrippingLogic(t *testing.T) {
 // every shipped disposition fixture: adding the precondition must alter no
 // conforming table's answer.
 func TestReq9_DataFlowIsUnchangedForEveryConformingTable(t *testing.T) {
+	nonVacuityGate(t)
+
 	for name, in := range allDispositionInputs() {
 		t.Run(name, func(t *testing.T) {
 			got, err := resolve.Resolve(in)
@@ -1212,6 +1220,8 @@ func TestReq46_TheReportIsAggregateSortedAndCollapsed(t *testing.T) {
 // "Same function" is asserted as verdict identity across every fixture in
 // this suite: both nil, or both non-nil with equal identities and counts.
 func TestReq47_OnePredicateTwoCallSitesNeverDrift(t *testing.T) {
+	nonVacuityGate(t)
+
 	fixtures := map[string]resolve.Input{
 		"breaching":     breachingNoMatchInput(),
 		"conforming":    conformingNoMatchInput(),
@@ -1273,6 +1283,8 @@ func TestReq48_CheckValidIsAMethodOnTableTakingNoArguments(t *testing.T) {
 // Both halves: the single `error` result, and the absence of a bool-returning
 // spelling that would signal the convention was ignored.
 func TestReq49_ThePredicateReturnsErrorAndNotABoolPredicate(t *testing.T) {
+	nonVacuityGate(t)
+
 	mt, _ := reflect.TypeOf(resolve.Table{}).MethodByName("CheckValid")
 	if mt.Type.NumOut() != 1 {
 		t.Fatalf("CheckValid returns %d values; want exactly one",
@@ -1309,6 +1321,8 @@ func TestReq49_ThePredicateReturnsErrorAndNotABoolPredicate(t *testing.T) {
 // Both the nil and the empty spelling, at both call sites — a `errors.Join()`
 // of nothing must come back as an untyped nil, not a non-nil empty aggregate.
 func TestReq52_ARowlessTableConformsVacuously(t *testing.T) {
+	nonVacuityGate(t)
+
 	cases := map[string][]resolve.Row{
 		"nil_rows":   nil,
 		"empty_rows": {},
@@ -1388,4 +1402,21 @@ func resolveErr(t *testing.T, in resolve.Input) error {
 		t.Fatalf("Resolve returned no error for a breaching table: %+v", got)
 	}
 	return err
+}
+
+// nonVacuityGate is the shared guard every "both call sites agree" test
+// installs first. A predicate that answers nil to EVERYTHING makes any
+// agreement assertion trivially true, so each such test first requires the
+// predicate to actually reject the canonical breach.
+func nonVacuityGate(t *testing.T) {
+	t.Helper()
+
+	if err := breachingNoMatchInput().Table.CheckValid(); err == nil {
+		t.Fatalf("CheckValid accepts the canonical breaching table; every " +
+			"agreement assertion below would then hold vacuously")
+	}
+	if _, err := resolve.Resolve(breachingNoMatchInput()); err == nil {
+		t.Fatalf("Resolve accepts the canonical breaching table; every " +
+			"agreement assertion below would then hold vacuously")
+	}
 }
