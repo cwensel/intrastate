@@ -2130,11 +2130,24 @@ precondition and would be classed a programmer mistake. A8's
 yet. Whether a user typing the reserved key is a user-input
 refusal (0005's adjacent `flow-tag-*` codes are `GroupUserEnv`)
 or a producer programmer mistake is a cross-RDR call neither
-RDR may take alone; it is JDR 0001 §JD-9, open, and it is
+RDR may take alone; it is JDR 0001 §JD-9, and it is
 where the repair lands. Nothing in this RDR's naming rules,
 category, payload, or predicate depends on the answer — what
 depended on it was this paragraph's blast-radius claim, now
 scoped to what A10 actually proves.
+
+**§JD-9 answered 2026-08-24 by JDR 0001 §D8.** The call went
+the user-input way: `--tag` enters as `Observed` and never
+satisfies an owned-state dependency, and `--tag` on an owned
+key **or on `recognized`** is refused at the **CLI**, in the
+`GroupUserEnv` group, before any accessor runs — not as this
+block's producer programmer mistake. That gives this RDR's
+reserved-key check on the data channel a site and an error
+group for the one reachable *user* path, while the Go error
+path described above continues to govern non-CLI producers of
+kernel `Input`. This citation records the answer only; it does
+not pre-decide §JD-5 (precondition precedence against RDR
+0009), which stays open in the Status qualifier.
 
 Silent, residual — narrowed by Final RDR 0002: an author who
 declares an *observed* tag under an innocent name (`result`,
@@ -2191,12 +2204,23 @@ pointer to this RDR.
       0001 §JD-10, answered). The gate existed because no
       engine mechanism carries a later RDR's `Overrides` to a
       `Final` peer's implementation (A12).
-- [ ] **The payload and advisory carrier close at JDR 0001
+- [x] **The payload and advisory carrier close at JDR 0001
       §JD-8** — 0002 absorbed the category and the name rule
       but not block 3's three failure-payload fields nor the
       near-miss advisory channel (Load-Bearing Decisions /
       Identity); that carrier rides §JD-8 and must close before
       scenarios 4 and 7 can go green on 0002's side.
+      **Closed 2026-08-24 by JDR 0001 §D10** (answering §JD-8):
+      one `Code` per caller-branchable failure over
+      kernel-aligned names, plus a single `omitempty`
+      `findings` field — `Finding{Code, Message, Param,
+      Locator, Hint}` — which is where `reserved_tag_key` gets
+      its constant and where the near-miss advisory rides, in
+      `hint`. §D10 fixes the *carrier*; which user-facing verb
+      surfaces it, and under which exit code, remains RDR
+      0005's mapping decision per Approach item 3, and the
+      clean-load channel a near-miss needs is 0006's
+      `data.findings` — see `artifacts/deviations.md` D5/D9.
 
 ### Minimum Viable Validation
 
