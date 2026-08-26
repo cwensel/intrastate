@@ -46,7 +46,7 @@ The system-internal requirement is a single decision on the candidate predicate 
 - **A4 The 0005 `flow next` tests move rather than rewrite: every oracle that asserts on a named candidate seeds the owned key its rows match on (`status=draft` in `flowMVVModel` / `flowGatedNextModel`), and the alphabet, gate-handling, reader-narrowing, and non-mutation oracles do not depend on a match-excluded row being reported.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1(b) leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**.
+  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1(b) leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts, **against C1's candidate predicate**: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**. This classification is predicate-scoped and does NOT clear the suite for the build as a whole: the `unresolved` → `unknown` payload change is an independent edit that mechanically breaks 6 assertions in the same suite (C3 names them).
   - **If wrong**: the 0005 suite splits into default / `--all` variants beyond the moves C3 names, and Testing Strategy must enumerate them.
 - **A5 Over 0010's decision-table class, `flow next` with no `--tag` reports every ordinary rule and exits 0, each rule's observed match keys appearing in the candidate's undecided list — with the exception of a row whose only match atom is `recognized`, whose list is empty by construction — so `0010:A11` and 0010's MVV step 5 hold under C1; and a partial `--tag` set narrows the list to the rows whose supplied keys hold, a supplied-but-mismatched key dropping its row.**
   - **Status**: Verified
@@ -58,6 +58,12 @@ The system-internal requirement is a single decision on the candidate predicate 
   - **Method**: Spike
   - **Evidence**: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/spikes/a6-rdr-toml-narrowing.md`. Live against the current build, artifact `{"stage":"resolved","status":"draft","gate_passed":"false"}`: 22 `[[rule]]` blocks, 22 non-escape normalized rows, **21 candidates** — the one excluded row is `finalize-pass`, pruned on its `[rule.guard.all.gate_passed] eq = "true"`, so the 21 is a property of `gate_passed=false`, not of `stage=resolved`. A prototype of C1's probe over the same model returns **3** candidates; cross-checked by `grep -n 'eq = "resolved"' models/rdr.toml` → exactly three `[rule.match.stage]` hits (lines 212/222/232). Every rule carries a `[rule.match.stage]` block and `stage` is `required = true` and served by the invoked `rdr-status` reader, so C1's absent-key provision never fires for this model. The `recognized` sub-claim is dropped as vacuous: `internal/table/normalize.go` lifts `match.recognized` into `Row.Outcome`, leaving **0** such atoms in `Row.Atoms`; the probe's `Recognized` binding instead serves the kernel's `row.Outcome != in.Recognized` filter and keeps the probe from refusing `unmodeled_outcome` (A1).
   - **If wrong**: the observed defect is not closed by a match predicate and the problem statement's diagnosis (match stripped) is incomplete.
+
+- **A7 Extending the three-valued verdict to the kernel's escape-edge selection (`internal/resolve/resolve.go::escapeOrRefuse`) changes `flow resolve`'s rescue behaviour only where an escape edge's own match pattern is undecidable, and the shipped `internal/resolve` escape oracles either keep passing or are the ones this RDR knowingly retires.**
+  - **Status**: Pending
+  - **Method**: Source Search + MVV Test
+  - **Evidence**: To verify at Stage 6 — enumerate the `internal/resolve` escape oracles (`match_conflicted_test.go`, `escape_shape_0009_test.go`, `escape_shape_mvv_0009_test.go`, `guard_atoms_test.go`) and classify each against the widened escape predicate, as A4 did for the 0005 `next` suite; the site itself is confirmed (`escapeOrRefuse` filters on `!view.matches(row.Match)`, and `guard_fixtures_test.go::conformingEscapeRow` carries `Match: status=Draft`, so escape rows do carry match blocks).
+  - **If wrong**: the escape site keeps the two-valued fold and C1's uniformity clause narrows to ordinary candidate selection, leaving the seam forked per call site — which is the shape rejecting `resolve.Candidates` was meant to avoid, so the rejection would need revisiting.
 
 ## Proposed Solution
 
@@ -77,7 +83,7 @@ Data flow, per ordinary row: `table.Row` → `Row.KernelRow()` (match/guard spli
 
 Selection semantics stay wholly in the kernel: the CLI hands over the row and reads the answer, deciding neither presence nor equality. Match-block `in` atoms are already expanded into per-member `eq` rows at normalization (`0002:C13`) and set-kinded literals canonicalized by `internal/table/model.go::seamValue`, so every match atom reaching the kernel is an independent single-key equality — the three-valued rule is per-atom with no cross-atom interaction, and a row whose match pattern is empty matches unconditionally as it does today.
 
-The kernel change is confined to the match seam: `TagSet.matches`' `bool` becomes a three-valued verdict plus the atoms that could not be decided, computed from the data `TagSet` already carries (`!ok` ⇒ `absent`; `tv.conflicted` ⇒ `uncomparable`; `tv.value != w.Value` ⇒ `no-match`). `Resolve`'s candidate loop excludes only on `no-match`, so `flow resolve`'s behaviour is unchanged in every case where the CLI supplies a complete, unconflicted view — and where it does not, an undecidable match atom now surfaces as a named fact instead of an escapable `no_match`, which is the same correction `0007:C8` made on the guard path.
+The kernel change is confined to the match seam: `TagSet.matches`' `bool` becomes a three-valued verdict plus the atoms that could not be decided, computed from the data `TagSet` already carries (`!ok` ⇒ `absent`; `tv.conflicted` ⇒ `uncomparable`; `tv.value != w.Value` ⇒ `no-match`). Both of the kernel's match call sites exclude only on `no-match` — `Resolve`'s ordinary candidate loop and `escapeOrRefuse`'s escape-edge selection (`internal/resolve/resolve.go::escapeOrRefuse` filters on `!view.matches(row.Match)` too, and shipped escape rows do carry match blocks) — so `flow resolve`'s behaviour is unchanged in every case where the CLI supplies a complete, unconflicted view — and where it does not, an undecidable match atom now surfaces as a named fact instead of an escapable `no_match`, which is the same correction `0007:C8` made on the guard path.
 
 #### Normative Contracts
 
@@ -98,6 +104,16 @@ owns — `absent` (the key was not in the view) or `uncomparable` (the key
 was present and its value was not compared to a verdict). This mints no
 sixth `RefusalKind` (`0007:REQ-79`); it closes the match-seam gap
 `0007:REQ-78` deferred.
+
+The verdict is the SEAM's, so it MUST apply at every site that asks it. The
+kernel evaluates a row's match pattern at two: ordinary candidate selection,
+and escape-edge selection during rescue. An escape edge whose own match
+verdict is `indeterminate` MUST NOT be silently disqualified from rescuing —
+it stays an escape candidate and its undecided atoms ride the refusal's
+undecidable-row facts, the same way an ordinary row's do. Only `no-match`
+disqualifies an escape edge, exactly as for an ordinary row. A build that
+leaves either site two-valued has forked the seam per caller, which is what
+rejecting a separate `resolve.Candidates` entry point was meant to prevent.
 
 flow next MUST report as a candidate exactly each non-escape row of the
 requested model whose match verdict is not `no-match` and whose guard the
@@ -155,6 +171,17 @@ non-mutation; an assertion that depended on a match-excluded row being
 reported MUST be re-homed under --all, not deleted, and the file's header
 comment MUST name this RDR as the source of the default.
 
+Renaming the candidate's flat `unresolved` list to the `{key, reason}`
+`unknown` list is a payload change independent of the candidate predicate,
+and it breaks assertions the predicate leaves untouched. The build MUST
+mechanically re-home every shipped read of the `unresolved` key to `unknown`
+and its element type from string to `{key, reason}` — six on this build:
+`internal/cli/flow_next_0005_test.go` (4, at the presence check and the
+gate-id assertions), `internal/cli/flow_adversarial_0005_test.go` (1), and
+`internal/cli/flow_mvv_0005_test.go` (1). These are mechanical re-homings,
+NOT the `--all` moves above, and MUST NOT be counted against or excused by
+A4's predicate-scoped BREAKS-0 result.
+
 Because no shipped 0005 fixture contains a row whose match key is present
 and unequal, the 0005 suite cannot by itself distinguish this predicate
 from the stripped-match one it replaces. The build MUST therefore add
@@ -167,6 +194,70 @@ contract was implemented.
 ```
 
 ⇒ the override is visible where a reader meets it — help text and the test file — not only in this record.
+
+#### Mini-checks
+
+Fired by cue at Stage 5 (grounding pass). Cues absent: round-trip / fidelity —
+this RDR defines no import/export, parse/deparse, or serialize inverse.
+
+**`authority` — source-authority census.** Cue: the match verdict moves from a
+CLI-derived decision to a kernel one, with two kernel arms and a CLI reporting arm.
+
+| input/decision | writer (canonical) | readers | call sites | sibling arms |
+| --- | --- | --- | --- | --- |
+| match verdict (3-valued) | **kernel** `resolve.go::TagSet.matches` | `Resolve`, `escapeOrRefuse` | `resolve.go:472` (candidates), `resolve.go:614` (escape rescue) | none — C1 forbids a per-caller fork |
+| conflictedness | **kernel** `TagSet.merge` → `tv.conflicted` | `matches` | `resolve.go` only | `assembledView` has no conflicted concept; NOT an arm, it is why the verdict is kernel-side |
+| guard verdict | **kernel** `guard.go::evaluateAtom` | `gate` | `resolve.go:518` | unchanged by this RDR |
+| assembled view | kernel `assemble` (injects `recognized`) | `matches`, `gate` | `resolve.go` | CLI `flow_next.go::assembledView` (does NOT inject `recognized`; harmless — normalize lifts it into `Row.Outcome`) |
+| candidate `unknown` list | **CLI** `flow_next.go::summarize` | payload consumers | `flow_next.go:168` | folds three sources: kernel indeterminate atoms, absent owned keys, un-run gate ids |
+
+**`oracle` — test-discriminability.** Cue: C3 states outright that a green 0005
+suite is not evidence the contract shipped.
+
+| MVV / scenario | fails if X is wrong because Y | negative control |
+| --- | --- | --- |
+| MVV 2–3 / S1 | 21→3 narrowing: a stripped-match build reports 21, so the count discriminates | `--all` (MVV 4) must still report 21 |
+| MVV 5 / S2 | the added row's `match.status` ≠ `draft` must be absent by default | same row present under `--all` |
+| MVV 6 / S3 present-unequal | row excluded AND its gates do not run under `--evaluate-gates` | present-equal row: candidate, gates run |
+| MVV 6 / S3 absent | candidate with `{key, absent}` | supplying `--tag key=<v>` moves it out of `unknown` |
+| MVV 6 / S3 conflicted | candidate with `{key, uncomparable}`, NOT excluded — the case the pre-Stage-4 design got wrong | a single `--tag` for the same key: candidate, `unknown` empty |
+| MVV 7 | `unknown` present as `[]`, not omitted | absent-key candidate: `unknown` non-empty |
+| S5 escape (A7) | an `indeterminate` escape edge still rescues | a `no-match` escape edge still does not |
+| S6 | **anti-oracle**: the 0005 suite passing is NOT evidence for C1 — it cannot distinguish the predicates (A4) | S2/S3 are the discriminating oracles |
+
+**`disposition` — input class × outcome.** Cue: C1 sorts match input classes to
+reported-vs-excluded and to exit semantics.
+
+| input class | candidate? | `unknown` entry | gates run under `--evaluate-gates` | exit |
+| --- | --- | --- | --- | --- |
+| match key present, equal | yes | none | yes | 0 |
+| match key present, unequal | **no** (excluded) | n/a — not reported | **no** | 0 |
+| match key absent from view | yes | `{key, absent}` | yes | 0 |
+| match key present, conflicted | yes | `{key, uncomparable}` | yes | 0 |
+| empty match pattern | yes (matches unconditionally) | none | yes | 0 |
+| only match atom is `recognized` | yes | none — lifted into `Row.Outcome` at normalize | yes | 0 |
+| guard decided false | **no** (excluded) | n/a | no | 0 |
+| guard undecidable | yes | guard fact named | yes | 0 |
+| owned key no reader established | yes | `{key, absent}` | yes | 0 |
+| any of the above, under `--all` | match takes no part; guard rules alone decide | no match entry, whatever the key's presence | per guard | 0 |
+
+**`trace` — desk trace over the MVV.** Cue: C1, C2, C3 plus S1–S6 all bear on one
+output surface (the candidate payload). Witnesses from the A6 spike.
+
+| step | assertions in force | witness |
+| --- | --- | --- |
+| 1. build with C1 default + `--all` | C2 (flag exists, default false); C2 (`--all` rejected by `resolve`/`read-state`/`set-state`) | flag name free: no `"all"` in `internal/cli` |
+| 2. seed artifact `stage=resolved` | A6 | `{"stage":"resolved","status":"draft","gate_passed":"false"}` |
+| 3. `flow next … --as=json` | C1 (candidates = match-not-no-match ∧ guard-not-false); C1 (`outcomes` full alphabet) | 3 candidates `prelock`, `resolve-route-back`, `resolve-abandon`; `match.stage eq "resolved"` at `models/rdr.toml:212/222/232` |
+| 4. re-run `--all` | C2 (predicate = 0005's); C1 (`outcomes` unchanged) | 21 of 22; `finalize-pass` guard-excluded on `gate_passed` — guard, not match, so it stays excluded in BOTH modes |
+| 5. `flowMVVModel` ± `--all` | C3 (added discriminating row); C1(b) guard exclusions untouched | `gated-excluded` absent in both — guard-excluded |
+| 6. four match classes | C1 (three-valued); `disposition` table above | conflicted row is a candidate, not an exclusion |
+| 7. `unknown` as `[]` | C2 (identical payload shape both modes) | one consumer struct parses either |
+| 8. `make check` + suites | C3 (6 mechanical re-homings); S5/A7 (escape site); S6 (anti-oracle) | `TestReq78` retires at `guard_atoms_test.go:930` |
+
+No CONTRADICTION row: step 4's `finalize-pass` is guard-excluded in both modes,
+which is consistent — C1(b) leaves guard exclusions untouched and C2 changes only
+match's participation.
 
 #### Load-Bearing Decisions
 
@@ -210,7 +301,7 @@ intrastate flow next --model table.toml --as=json
 
 ### Decision Rationale
 
-The caller's question is "what can I do from here", and every peer that answers it conditions the answer on the current state: stateless's `PermittedTriggers` returns only triggers whose guards are met in the current state; xstate v5 removed the unconditioned `nextEvents` and kept the conditioned `can()`; pytransitions keeps the declared form (`get_triggers`) but as a separate operator from the evaluated one (`may_*`); SCXML's `cond` gates enablement (Investigation). 0005's predicate was the declared-shape answer; in this table model the analogue of "current state" is the match block, so a state-conditioned `next` is a match-conditioned one. The mechanism is chosen to put the decision where the deciding information is. `excluded`'s own doc already states the posture for guards — "treating 'unknown' as 'false' would silently drop rows the caller is entitled to see" — and the fix generalizes it to match, which is the last two-valued seam in a system that is three-valued at the gate (`0004:C9`) and guard (`0007:C6`, `0007:C8`) seams. Alternative 1 (strict kernel match) was rejected because it empties the list for any caller that supplies partial state, including 0010's no-tag decision table (A5), and contradicts that posture at the same function. Alternative 2 (keep 0005's default, opt-in flag) was rejected because the defect is the default and the instance read says the conditioned form is the primary one. Alternative 3 (a CLI-side presence pre-strip, this RDR's own recommendation until Stage 4) was rejected on evidence: conflictedness lives behind the kernel's unexported `TagSet.conflicting` and has no representation in `assembledView`, so a presence-only test retains a conflicted atom and the row is excluded as `no_match` with nothing reported — the masking P1 forbids, reachable by a caller who repeats a `--tag` key. Placing the verdict in the kernel also fixes it once for `flow resolve` rather than per caller, closes the deferral `0007:REQ-78` recorded, and follows JDR 0001 §D12's own precedent of widening a kernel vocabulary rather than forking a second one at the CLI. The cost is a larger blast radius than the Stage-2 estimate — recorded in the `large` Profile — bought with `internal/resolve`'s single non-test consumer and P7's pre-release licence.
+The caller's question is "what can I do from here", and every peer that answers it conditions the answer on the current state: stateless's `PermittedTriggers` returns only triggers whose guards are met in the current state; xstate v5 removed the unconditioned `nextEvents` and kept the conditioned `can()`; pytransitions keeps the declared form (`get_triggers`) but as a separate operator from the evaluated one (`may_*`); SCXML's `cond` gates enablement (Investigation). 0005's predicate was the declared-shape answer; in this table model the analogue of "current state" is the match block, so a state-conditioned `next` is a match-conditioned one. The mechanism is chosen to put the decision where the deciding information is. `excluded`'s own doc already states the posture for guards — "treating 'unknown' as 'false' would silently drop rows the caller is entitled to see" — and the fix generalizes it to match, which is the last two-valued seam in a system that is three-valued at the gate (`0004:C9`) and guard (`0007:C6`, `0007:C8`) seams. Alternative 1 (strict kernel match) was rejected because it empties the list for any caller that supplies partial state, including 0010's no-tag decision table (A5), and contradicts that posture at the same function. Alternative 2 (keep 0005's default, opt-in flag) was rejected because the defect is the default and the instance read says the conditioned form is the primary one. Alternative 3 (a CLI-side presence pre-strip, this RDR's own recommendation until Stage 4) was rejected on evidence: conflictedness lives behind the kernel's unexported `TagSet.conflicting` and has no representation in `assembledView`, so a presence-only test retains a conflicted atom and the row is excluded as `no_match` with nothing reported — the masking P1 forbids, reachable by a caller who repeats a `--tag` key. Placing the verdict in the kernel also fixes it once for `flow resolve` rather than per caller, closes the deferral `0007:REQ-78` recorded, and follows JDR 0001 §D12's own precedent of widening a kernel vocabulary rather than forking a second one at the CLI. The cost is a larger blast radius than the Stage-2 estimate — recorded in the `large` Profile — bought with the seam's containment and P7's pre-release licence: `TagSet` and `matches` are both unexported, so the signature change cannot leave `internal/resolve`, and `resolve.Resolve`, the entry point whose behaviour changes, has three non-test call sites — `internal/cli/flow_next.go` (the probe) and two in `internal/cli/flow_resolve.go`. (The package as a whole is imported by 16 non-test files across `internal/{accessor,cli,graphlint,guard,table}`; they consume its types, not the match verdict.)
 
 Premortem (paragraph): this shipped, and a skill driving a model whose rows match on an owned key its reader does not serve (a typo'd `keys` list) saw every row listed as a candidate with the key under `unknown` — the same wall-of-candidates symptom as before, now with a hint. A second failure: a caller who scripted against 0005's list found candidates missing and no flag in the error, because there is no error — the list is just shorter. Both are answered by the design rather than forcing a switch: the first is the intended three-valued behaviour and the `unknown` entry, carrying reason `absent`, is the diagnostic (the alternative, silently dropping the row, is the worse failure); the second is the override's cost, mitigated by C3's help text, the test-file header, and `--all`. Neither shows a case the chosen predicate cannot answer.
 Premortem: survived (paragraph)
@@ -311,6 +402,7 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 - Positive: `absent` and `uncomparable` have different remedies (bind a reader or supply the tag; deduplicate the input), and the payload names which, so the caller is told what to do rather than only that something is unknown.
 - Negative: an override of a locked 0005 clause — callers scripted against the enumeration must add `--all`.
 - Negative: a candidate can still be listed that `resolve` would refuse (an undecidable match key) — the same relationship `next` already has with `guard_unevaluable`.
+- Negative: the escape path widens too — an escape edge whose own match verdict is `indeterminate` now rescues where it previously did not, so a refusal that used to surface can become an escaped plan (A7). This is the seam's rule applied uniformly, not a `flow next` effect: `flow next` strips the escape list from its probe and never reaches the site.
 - Negative: the RDR grew from one contract to three and from a CLI-local change to a kernel-seam one; `TestReq78` retires and the `internal/resolve` suite gains the three-valued oracles.
 
 ### Risks and Mitigations
@@ -348,7 +440,7 @@ End-state: `flow next` answers "what is legal from here" with the rows the suppl
 
 ### Phase 1: Three-Valued Match Seam (kernel)
 
-Intent: give `internal/resolve`'s match comparison a three-valued verdict plus the atoms it could not decide, computed from what `TagSet` already carries (`!ok` ⇒ `absent`, `tv.conflicted` ⇒ `uncomparable`, unequal ⇒ `no-match`), reusing `0007:C8`'s `Reason` vocabulary. `Resolve`'s candidate loop excludes only on `no-match`. Retire `TestReq78` and replace it with the three-valued oracles; mint no sixth `RefusalKind`.
+Intent: give `internal/resolve`'s match comparison a three-valued verdict plus the atoms it could not decide, computed from what `TagSet` already carries (`!ok` ⇒ `absent`, `tv.conflicted` ⇒ `uncomparable`, unequal ⇒ `no-match`), reusing `0007:C8`'s `Reason` vocabulary. `Resolve`'s candidate loop and `escapeOrRefuse`'s escape-edge filter both exclude only on `no-match`. Retire `TestReq78` and replace it with the three-valued oracles; mint no sixth `RefusalKind`.
 
 ### Phase 2: Probe and Reporting (CLI)
 
@@ -360,7 +452,7 @@ Intent: register `--all` on `next` only, route it to a probe with the match patt
 
 ### Phase 4: Fixtures and Docs
 
-Intent: add C3's discriminating fixtures (present-unequal, absent, conflicted), the default/`--all` pair, and the `recognized`-only and empty-match rows; update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
+Intent: add C3's discriminating fixtures (present-unequal, absent, conflicted), the default/`--all` pair, and the `recognized`-only and empty-match rows; re-home the 6 shipped reads of the `unresolved` key to `unknown` (C3); update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
 
 ## Validation
 
@@ -375,9 +467,9 @@ Intent: add C3's discriminating fixtures (present-unequal, absent, conflicted), 
 4. **Scenario**: S4 — a row whose only match atom is `recognized`, and a row with an empty match pattern (A5's fixture B).
    **Expected**: both are candidates with `unknown` empty of match facts — `recognized` is lifted into `Row.Outcome` at normalization and is never an undecided fact, and an empty match pattern matches unconditionally.
 5. **Scenario**: S5 — `flow resolve` over the same seam change (C1's kernel half).
-   **Expected**: every case with a complete, unconflicted view resolves exactly as before; an undecidable match atom surfaces as a named fact rather than an escapable `no_match`. The frozen `internal/resolve` suite passes, with `TestReq78_MatchPatternStillFoldsAbsenceIntoNonMatch` retired and replaced by the three-valued oracles — `0007:REQ-78` scoped that behaviour out of 0007's build, and this RDR closes it.
+   **Expected**: every case with a complete, unconflicted view resolves exactly as before; an undecidable match atom surfaces as a named fact rather than an escapable `no_match`. The frozen `internal/resolve` suite passes, with `TestReq78_MatchPatternStillFoldsAbsenceIntoNonMatch` retired and replaced by the three-valued oracles — `0007:REQ-78` scoped that behaviour out of 0007's build, and this RDR closes it. The escape site is asserted separately (A7): an escape edge whose own match verdict is `indeterminate` still rescues, and one whose verdict is `no-match` still does not. `TestAdv0007_3_EscapeNotNamingTheConflictedKeyStillRescues` (`internal/resolve/match_conflicted_test.go`) keeps passing, and gains the sibling case it does not cover — an escape row whose Match names the conflicted key.
 6. **Scenario**: S6 — the 0005 `next` suite after the default flips (A4, C3).
-   **Expected**: all 28 oracles pass unchanged (A4 enumerated them; the MOVES and BREAKS classes are both empty); file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are.
+   **Expected**: all 28 oracles pass, none re-homed under `--all` (A4's MOVES and BREAKS classes are both empty against the predicate); the 6 reads of the `unresolved` key are mechanically re-homed to `unknown` per C3 and pass on the new shape; file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are.
 
 Done: S1–S6 green and `make check` passes.
 
