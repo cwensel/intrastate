@@ -100,3 +100,74 @@ this RDR's and 0009's `Resolve`-entry checks is written. See
 - **Resolution proceeded under**: the payload binds `reserved_tag_key`
   failures only. The `unknown tag` arm is unreachable given 0002 as
   implemented, so asserting it would test a path the predecessor forecloses.
+
+---
+
+## Stage 8 Phase 1 (test authoring) dispositions — 2026-08-26
+
+### D1 — DISCHARGED, no SPEC-DEFECT
+
+D1's check was run. Scenario 3 is written against RDR 0007's per-atom seam in
+`internal/resolve/reserved_key_sameview_0008_test.go`
+(`TestReq76And77And78_GuardSeamAndMatcherReadTheSameRecognizedBinding`), using
+`valueSeam` — the per-atom stand-in with a call recorder already present at
+`internal/resolve/guard_fixtures_test.go:64`. That is a NEW seam alongside
+`fixtureGuards`, not a change to it, which is REQ-76's own requirement.
+
+The test captures the `value` handed to the guard atom over `recognized` and
+asserts it equals `in.Recognized`, while a `Match` on the same key selects the
+row in the same resolve. Provenance is read as `(in.Recognized,
+ProvenanceRecognized)` on the package-internal path over the identical `Input`,
+because `0007:C1` fences `Evaluate` from the view.
+
+**The same-view property IS assertable at that seam** — the test passes against
+the shipped kernel. D1's escalation branch ("if the same-view property cannot
+be asserted at that seam, escalate as SPEC-DEFECT") therefore does not fire.
+
+### D5 — applied as written
+
+The near-miss advisory is asserted at the `internal/table` boundary as a list
+returned separately from the error, via a net-new
+`LoadWithAdvisories(src, sourceID) (*Model, []Advisory, error)`. `Load`'s
+existing signature is untouched, so no caller changes. No CLI surface is added;
+REQ-102 pins only that §D10's `Finding.Hint` carrier already exists.
+
+### D6 — applied as written
+
+REQ-26's `unknown tag` arm is not asserted. Confirmed empirically against HEAD:
+`neg/neg-no-recognized-decl.toml` refuses `malformed_model_declaration` at
+`internal/table/load.go:169-171`, before any `unknown tag` failure can carry the
+reserved key. The three-field payload binds `reserved_tag_key` failures only,
+pinned by `TestReq15And16_TheMissingDeclarationLowerBoundStaysOutsideReservedTagKey`.
+
+### D3 — citation half carried forward
+
+The record-side half of D3 (`grep -n '§D10\|§D8\b' docs/rdr/0008-*.md` must hit
+a body clause, not only the Status line) is a documentation edit, not a test.
+It is unaddressed by this Phase and is flagged as the sole REQ-side orphan in
+`coverage.md`.
+
+### New surface the tests pin (implementation contract)
+
+Phase 1 chose the names the tests bind, within the latitude REQ-34/64/70 grant:
+
+- `resolve.CheckInput(in Input) error` — the one exported predicate
+  (`0008:C4`). Not named `Final` (REQ-40/70). `Resolve` must call this exact
+  function at entry, not a second independently-written check (REQ-68, pinned
+  by a two-site agreement test that fails when the predicate exists but
+  `Resolve` does not call it).
+- `table.Failure` gains `Offending`, `Remedy`, `Rule string` — block 3's three
+  distinct machine-readable fields.
+- `table.Advisory{Authored, Reserved, Rule string}` plus
+  `table.LoadWithAdvisories` — the near-miss advisory's separate channel.
+- Rule identifier literals, asserted byte-for-byte:
+  `reserved-tag-key/kernel-owned`, `reserved-tag-key/author-must-rename`,
+  `reserved-tag-key/near-miss`.
+- A doc comment on `internal/resolve/resolve.go::recognizedTagKey` citing
+  RDR 0008 (Phase 1's IP deliverable, REQ-9).
+
+`internal/resolve/export_0008_test.go` is a `package resolve` test file adding
+`ResolveBypassingPreconditionForTest`, `AssembledBindingForTest`, and
+`AssembledLenForTest`. It exists only in the test binary and adds no production
+surface; it is what keeps blocks 5 and 6's "documented residual" executable once
+the entry precondition makes those paths unreachable through `Resolve`.

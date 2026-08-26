@@ -77,7 +77,41 @@ func Categories() []Category {
 type Failure struct {
 	Category Category
 	Detail   string
+
+	// RDR 0008 `0008:C3` — the three-field payload every `reserved_tag_key`
+	// failure carries at the data level. The guidance travels here, in the
+	// failure data, not in the renderer: a consumer that does not know the
+	// category still reads all three.
+	//
+	// PHASE 1 DECLARATION ONLY. Nothing populates these yet; the RDR 0008
+	// conformance suite is red against them by design and Phase 2 fills them
+	// in at the two `fail(CatReservedTagKey, …)` sites in load.go.
+
+	// Offending is the offending declaration name exactly as authored.
+	Offending string
+	// Remedy is the name the author must use. For a recognized-provenance
+	// declaration under a wrong name it is the literal `recognized`; for an
+	// owned or observed declaration named `recognized` it is the EMPTY
+	// STRING, because the remedy there is "choose any other name" and a
+	// renderer must not present the reserved key as the required name.
+	Remedy string
+	// Rule is the stable, comparable rule identifier naming which rule within
+	// the category fired — RuleKernelOwned or RuleAuthorMustRename. It is for
+	// golden assertions and remediation lookup, never for category dispatch.
+	Rule string
 }
+
+// The two direction-specific rule identifiers `0008:C3` fixes. Both sit inside
+// the one `reserved_tag_key` category; they are not alternatives to the
+// category discriminator and a consumer must not choose between them.
+const (
+	// RuleKernelOwned: a recognized-provenance declaration must be renamed TO
+	// the reserved key.
+	RuleKernelOwned = "reserved-tag-key/kernel-owned"
+	// RuleAuthorMustRename: an owned or observed declaration must be renamed
+	// AWAY FROM the reserved key.
+	RuleAuthorMustRename = "reserved-tag-key/author-must-rename"
+)
 
 func (f *Failure) Error() string {
 	if f.Detail == "" {
