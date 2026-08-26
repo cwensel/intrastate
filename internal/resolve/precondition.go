@@ -1,6 +1,9 @@
 package resolve
 
-import "errors"
+import (
+	"errors"
+	"slices"
+)
 
 // RDR 0008 `0008:C4` / `0008:C5` — the reserved-key producer precondition.
 
@@ -32,10 +35,8 @@ func CheckInput(in Input) error {
 		}
 	}
 	for _, row := range in.Table.Rows {
-		for _, key := range row.RequiresOwned {
-			if key == recognizedTagKey {
-				return errReservedRequiresOwned
-			}
+		if slices.Contains(row.RequiresOwned, recognizedTagKey) {
+			return errReservedRequiresOwned
 		}
 	}
 	return nil
