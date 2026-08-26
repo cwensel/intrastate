@@ -1061,3 +1061,96 @@ func TestReq67_OutcomeAlphabetIsNonEmptyDuplicateFreeAndHasNoEmptyMember(t *test
 		}
 	})
 }
+
+// `ConformValue` is the RUNTIME counterpart of the load-time conformance
+// this file already exercises through the loader: it holds one
+// caller-supplied member to the same declaration a rule's authored literal
+// is held to, so the CLI cannot persist what a rule may not author.
+//
+// The oracle is per KIND, and every kind pairs a conforming member with a
+// violating one — a function that refused everything, or accepted
+// everything, fails on one half of each pair.
+func TestConformValueHoldsACallerMemberToItsDeclaration(t *testing.T) {
+	zero, nine := 0, 9
+
+	for _, tc := range []struct {
+		name string
+		decl table.TagDecl
+		ok   []string
+		bad  []string
+	}{
+		{
+			name: "enum with a domain",
+			decl: table.TagDecl{Kind: "enum", Domain: []string{"draft", "final"}},
+			ok:   []string{"draft", "final"},
+			bad:  []string{"notARealState", "", "Draft"},
+		},
+		{
+			// An enum with no declared domain constrains nothing: the
+			// `recognized` declaration is exactly this shape, and refusing
+			// its members would break every outcome.
+			name: "enum with no domain constrains nothing",
+			decl: table.TagDecl{Kind: "enum"},
+			ok:   []string{"draft", "anything", ""},
+		},
+		{
+			name: "int within its bounds",
+			decl: table.TagDecl{Kind: "int", Min: &zero, Max: &nine},
+			ok:   []string{"0", "5", "9"},
+			bad:  []string{"-1", "10", "seven", ""},
+		},
+		{
+			name: "int with no bounds is still an int",
+			decl: table.TagDecl{Kind: "int"},
+			ok:   []string{"-4000", "0", "12345"},
+			bad:  []string{"seven", "1.5"},
+		},
+		{
+			name: "bool takes exactly two literals",
+			decl: table.TagDecl{Kind: "bool"},
+			ok:   []string{"true", "false"},
+			bad:  []string{"yes", "TRUE", "1", ""},
+		},
+		{
+			name: "set member within its elements",
+			decl: table.TagDecl{Kind: "set", Elements: []string{"alpha", "beta"}},
+			ok:   []string{"alpha", "beta"},
+			bad:  []string{"gamma", ""},
+		},
+		{
+			name: "set with no elements constrains nothing",
+			decl: table.TagDecl{Kind: "set"},
+			ok:   []string{"alpha", "anything at all"},
+		},
+		{
+			name: "scalar declares no domain",
+			decl: table.TagDecl{Kind: "scalar"},
+			ok:   []string{"", "anything at all $%^"},
+		},
+		{
+			// The zero declaration is what an UNDECLARED key yields from a
+			// map lookup. It must conform everything, which is what lets a
+			// caller pass observed context the model never modelled.
+			name: "the zero declaration conforms everything",
+			decl: table.TagDecl{},
+			ok:   []string{"", "anything", "10"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, m := range tc.ok {
+				if err := table.ConformValue(tc.decl, m); err != nil {
+					t.Errorf("ConformValue(%+v, %q) = %v; the declaration "+
+						"ADMITS this member", tc.decl, m, err)
+				}
+			}
+			for _, m := range tc.bad {
+				if err := table.ConformValue(tc.decl, m); err == nil {
+					t.Errorf("ConformValue(%+v, %q) = nil; the declaration "+
+						"does NOT admit this member, and accepting it here "+
+						"is what lets the CLI persist what a rule may not "+
+						"author", tc.decl, m)
+				}
+			}
+		})
+	}
+}

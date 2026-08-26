@@ -587,6 +587,29 @@ func isBool(v any) bool {
 	return ok
 }
 
+// ConformValue checks one CALLER-supplied member against a tag's declared
+// type model — its kind first, then its domain: an enum's `domain`, an
+// int's `min`/`max`, or a set's `elements`.
+//
+// It is the runtime counterpart of the load-time `conform`, exported so the
+// CLI can hold a `--write` or `--tag` value to the same declaration a rule's
+// authored literal is already held to. Letting a caller write what a rule
+// may not author would make a declaration advisory.
+//
+// There is no operator here: a caller supplies a VALUE, not a predicate, so
+// the `exists` and comparison-bound arms `conform` carries have no analogue.
+// A member is one scalar; a set's members are conformed one at a time by the
+// caller, so the refusal can name the offending member as it was authored.
+//
+// A zero TagDecl conforms everything: an undeclared kind has no domain to
+// violate, which is what keeps an undeclared `--tag` key shape-only.
+func ConformValue(decl TagDecl, member string) error {
+	if err := conformKind(decl, member); err != nil {
+		return err
+	}
+	return conformDomain(decl, member)
+}
+
 // conform checks one literal against a tag's declared type model.
 //
 // Conformance is PER OPERATOR, not per literal: `eq`, `in`, and `contains`
