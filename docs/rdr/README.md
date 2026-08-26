@@ -19,6 +19,7 @@ engine README — this file is only the per-project index.
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Implemented | Medium |
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Implemented | Medium |
 | [0010](0010-stateless-decision-tables.md) | Owned state is optional: stateless decision tables are first-class | Draft | High |
+| [0011](0011-flow-next-match-conditioned-candidates.md) | flow next selects by match; --all enumerates the alphabet | Draft | High |
 
 ## Implementing
 
