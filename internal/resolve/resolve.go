@@ -122,6 +122,14 @@ type taggedValue struct {
 // recognizedTagKey is the tag key the freshly recognized outcome takes in
 // the assembled evaluation view, so a table row can match on it directly
 // (REQ-17).
+//
+// RDR 0008 `0008:C1` reserves this key as a kernel keyword: table authors
+// conform to it and MUST NOT rebind it. The reservation holds unconditionally
+// — the key is reserved whether or not a given resolve binds it — while the
+// binding obligation is scoped to resolves carrying an outcome, since assemble
+// injects only for a non-empty Input.Recognized. Producers may not supply an
+// owned or observed tag on this key, nor name it in a row's RequiresOwned;
+// CheckInput enforces both, and Resolve applies it at entry.
 const recognizedTagKey = "recognized"
 
 // Lookup returns the value and provenance for key.
