@@ -11,46 +11,44 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-26
-- **Status**: Draft [route-back from Stage 5 critique 2026-08-26; re-verify A3, A7, A8, A9, A10 — the kernel-placement justification, the `Refusal.Undecided` carrier, and the `0007:C10` aggregation question must be re-decided before the lens row resumes]
+- **Status**: Draft [re-proposed 2026-08-26 after the Stage 5 critique route-back; the kernel-seam design was withdrawn — re-verify A3, A11–A14 at Stage 4 before the lens row resumes]
 - **Type**: Feature
-- **Profile**: large — three independent contracts: the three-valued match verdict at the kernel seam (C1, a semantics change consumed by `flow resolve` as well as `flow next`), the `--all` enumeration surface (C2), and the `unknown` reporting shape plus its discriminating fixtures (C3)
+- **Profile**: large — three contracts: the match-conditioned candidate predicate (C1), the `--all` enumeration surface (C2), and the `unknown` reporting shape plus its discriminating fixtures (C3); the kernel seam left the scope at this re-propose, so Resolve may recount, but the lens row never shrinks
 - **Priority**: High
 - **Related Issues**: kata `1mv1` (defect tracker); umbrella rdr#thsc; consumer model rdr#tmxk
 - **Predecessors**: 0005-skill-integration-cli-contract
-- **Overrides**: `0005:C1`, the `flow next` candidate clause — "flow next MUST return the legal recognized-outcome alphabet for the supplied state, plus candidate summaries …" read as guard-conditioned, and its stated ground "because next enumerates rather than selects" — narrowed to the match-conditioned predicate of C1 below; 0005's enumeration becomes `--all` (C2). Every other `0005:C1` obligation on `flow next` is unchanged. `internal/cli/flow_next_0005_test.go` assertions that relied on a match-excluded row being reported move under `--all` — verified in Stage 4 (A4) to be an empty set over the shipped fixtures, so the clause is a forward guard and C3 owes the discriminating fixtures instead. Also closes `0007:REQ-78`, which scoped the match seam out of RDR 0007's build rather than settling it, and corrects the harmlessness claim JDR 0001's Block-cardinality decision rests on (that a match atom is never unevaluable), since a conflicted key makes one unevaluable in exactly `0007:C8`'s `uncomparable` sense. Widens `0007:C8`'s `Refusal.Undecided` payload to admit match-block atoms (A8) and extends `guard_unevaluable` to cover an undecidable MATCH predicate at the kernel's two selection sites — a `flow resolve` behaviour change that retires `guard_atoms_test.go::TestReq78` and re-expects three `internal/resolve/match_conflicted_test.go` oracles (S5). Adds the reason token `not-evaluated` for un-run gate ids on the CLI's `unknown` list only; `0007:C8`'s seam vocabulary stays at `absent`/`uncomparable`.
-- **Seam Lineage**: `internal/resolve` match-seam semantics — one prior deferral, `0007:REQ-78` ("the match pattern still folds absence into non-match … NOT closed by this RDR"), which this RDR closes. Below the ≥2 accretion floor; the profile above is set by the contract count, not by the floor.
+- **Overrides**: `0005:C1`, the `flow next` candidate clause — "flow next MUST return the legal recognized-outcome alphabet for the supplied state, plus candidate summaries …" read as guard-conditioned, and its stated ground "because next enumerates rather than selects" — narrowed to the match-conditioned predicate of C1 below; 0005's enumeration becomes `--all` (C2). Every other `0005:C1` obligation on `flow next` is unchanged. `internal/cli/flow_next_0005_test.go` assertions that relied on a match-excluded row being reported move under `--all` — verified in Stage 4 (A4) to be an empty set over the shipped fixtures, so the clause is a forward guard and C3 owes the discriminating fixtures instead. Renames the candidate's `unresolved` list to `unknown` and types its entries `{key, reason}`; adds the reason token `not-evaluated` for un-run gate ids on that CLI list only — `0007:C8`'s seam vocabulary stays at `absent`/`uncomparable` and its payload is not widened. Touches no clause of RDR 0007 or JDR 0001: `0007:REQ-78` (the two-valued match seam) is left deferred, with the reason recorded in Decision Rationale.
+- **Seam Lineage**: `flow next`'s probe shape, `internal/cli/flow_next.go::excluded` — no prior point-fix at this locus. The adjacent `internal/resolve` match seam carries one deferral, `0007:REQ-78`, which this RDR leaves in place. Below the ≥2 accretion floor; the profile above is set by the contract count, not by the floor.
 
 ## Problem Statement
 
 A skill author (or the human driving one) runs `flow next --model <model> --artifact <state>` to ask "what is legal from here?" so the next action can be chosen without re-deriving the transition table by hand. Today the answer is wrong for that question: RDR 0005 made `next` enumerate rather than select, stripping each row's `match` (and `escape`) before probing, so every row not pruned by a guard is reported as a candidate — 21 of the 22 rules on `models/rdr.toml` at `stage=resolved`. The caller discovers this when the candidate list is the whole alphabet regardless of the supplied state, and cannot constrain a skill's next step from it (0005's own premortem, "next omits enough condition detail to constrain a skill", materialized).
 
-The system-internal requirement is a single decision on the candidate predicate of `flow next`: whether "the legal recognized-outcome alphabet for the supplied state" means guard-conditioned (0005's predicate: candidate = not guard-excluded, match is the kernel's selection pattern and `next` must not select) or match-conditioned (candidate = match holds AND not guard-excluded, evaluated by handing the kernel the row with its match intact so selection semantics stay in the kernel); which of the two is the default and which rides `--all`; and whether guard verdicts on match-excluded rows are still reported. A sub-question inside the same contract, sharpened by Stage 4 into the load-bearing one: what a match atom means when its key cannot be compared — absent from the supplied state, or carrying two differing values within one provenance (two invoked readers writing the same owned key; a repeated `--tag` is refused upstream). Today `internal/resolve/resolve.go::TagSet.matches` folds absent, conflicted, and unequal into a single `false`, so any of them excludes a row identically and silently; `0007:REQ-78` recorded that as deferred rather than settled. `--all` is the same contract's second surface, not a second contract. Help text follows the decision.
+The system-internal requirement is a single decision on the candidate predicate of `flow next`: whether "the legal recognized-outcome alphabet for the supplied state" means guard-conditioned (0005's predicate: candidate = not guard-excluded, match is the kernel's selection pattern and `next` must not select) or match-conditioned (candidate = match holds AND not guard-excluded); which of the two is the default and which rides `--all`; and whether guard verdicts on match-excluded rows are still reported. A sub-question inside the same contract: what a match atom means when its key is ABSENT from the supplied state — neither owned by an invoked reader nor supplied as a `--tag`. The kernel's `internal/resolve/resolve.go::TagSet.matches` folds an absent key into non-match, and `0007:REQ-78` recorded that fold as deferred; whether `flow next` inherits the fold (an absent key excludes) or reports it (the row stays a candidate and names the key) is the decision. The present-but-conflicted key the Stage-4 draft also weighed is unreachable from the CLI over any model that loads (A3) and is therefore not a case this RDR has to sort. `--all` is the same contract's second surface, not a second contract. Help text follows the decision.
 
-**What "constrained" means here, and where the outcome lands.** The outcome is a candidate list narrowed to what the supplied state can take — NOT a single next action. `flow next` still never selects (`0005:D-selection-predicate`, unchanged); choosing among survivors is `flow resolve`'s, and a caller facing several candidates is being told the state genuinely admits several. Success is therefore "no row is listed that the supplied state excludes", not a target cardinality. The narrowing is real only to the extent the match keys are DECIDABLE from the invoked readers plus supplied tags: where a match key is owned and served by a reader (`models/rdr.toml`'s `stage`, A6) the list narrows 21→3; where it is observed and unsupplied (0010's decision-table class with no `--tag`, A5) every row remains a candidate and each names the undecided key under `unknown`. That second case is the old symptom's shape with a diagnosis attached, and it is the intended behaviour, not a residual defect — the alternative, dropping those rows, is Alternative 1, which this RDR rejects for emptying the list on partial state. The caller's remedy is named in the payload (bind the reader, supply the tag); the RDR does not promise narrowing where the state was never supplied.
+**What "constrained" means here, and where the outcome lands.** The outcome is a candidate list narrowed to what the supplied state can take — NOT a single next action. `flow next` still never selects (`0005:D-selection-predicate`, unchanged); choosing among survivors is `flow resolve`'s, and a caller facing several candidates is being told the state genuinely admits several. Success is therefore "no row is listed that the supplied state excludes, and every row listed that the supplied state could not decide names the undecided key", not a target cardinality. The narrowing is real only to the extent the match keys are DECIDABLE from the invoked readers plus supplied tags: where a match key is owned and served by a reader (`models/rdr.toml`'s `stage`, A6) the list narrows 21→3; where it is observed and unsupplied (0010's decision-table class with no `--tag`, A5) every row remains a candidate and each names the undecided key under `unknown`. That second case is the old symptom's shape with a diagnosis attached, and it is the intended behaviour, not a residual defect — the alternative, dropping those rows, is Alternative 1, which this RDR rejects for emptying the list on partial state. The caller's remedy is named in the payload (bind the reader, supply the tag); the RDR does not promise narrowing where the state was never supplied.
 
 ## Critical Assumptions
 
-- **A1 A one-row probe table handed to the kernel with the row's match atoms retained can only yield a plan, `no_match`, `owned_state_unavailable`, or `guard_unevaluable`; `ambiguous_match` cannot arise, so the sub-question "does `ambiguous_match` leave the row a candidate" is vacuous on a probe.**
+- **A1 A one-row probe table handed to the kernel with the row's present-key match atoms retained can only yield a plan, `no_match`, `owned_state_unavailable`, or `guard_unevaluable`; `ambiguous_match` cannot arise, so the sub-question "does `ambiguous_match` leave the row a candidate" is vacuous on a probe.**
   - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/resolve/resolve.go::RefusalKinds` closes the set at five. `ambiguous_match` is produced only under the `default:` arm of `switch len(selected)` in `internal/resolve/resolve.go::Resolve` and of `switch len(viable)` in `internal/resolve/resolve.go::escapeOrRefuse`, both requiring ≥2; a one-row table makes `len(candidates) ≤ 1`, and the stripped escape list leaves `escapeOrRefuse` no rescue row, so it passes the original refusal through. `internal/resolve/resolve.go::gate` returns `owned_state_unavailable` then `guard_unevaluable` before that count. The fifth kind, `unmodeled_outcome`, is unreachable **by probe construction, not by one-row-ness**: `internal/cli/flow_next.go::excluded` binds `Outcomes: []string{row.Outcome}` alongside `Recognized: row.Outcome`, so `Table.models` holds trivially — C1's probe builder MUST preserve that pairing. The two non-refusal error returns (`internal/resolve/resolve.go::Table.CheckValid`, `internal/resolve/precondition.go::CheckInput`) are vacuous on the probe (escape stripped; no reserved `recognized` key in owned/observed/`RequiresOwned`) and the CLI already treats `err != nil` as non-excluding.
   - **If wrong**: a match-retained row could be dropped as "ambiguous" and vanish from the candidate list with nothing in `unknown` explaining it.
-  - **Scope note (3amigo)**: this enumeration is unchanged by C1's selection-site rule — an indeterminate match now lands in `guard_unevaluable`, already a member of the list, which is precisely why the probe needs no new disposition and `Plan` needs no new field. The vacuity of `ambiguous_match` is a property of the ONE-ROW probe only; on a real multi-row table `flow resolve` can reach it, which is why C1 states explicitly that an indeterminate row does not count toward `len(selected)`.
-- **A2 The CLI already reports an absent match key: `internal/cli/flow_next.go::summarize` walks `Row.Atoms` — which carries match-block atoms alongside guard atoms (`internal/table/model.go::Row.KernelRow` routes them by `Block`) — against `internal/cli/flow_next.go::assembledView`, so a match key the view lacks lands in the candidate's undecided list today. It does NOT hold the test C1 needs: `assembledView` cannot distinguish a conflicted key from a settled one, which is why the verdict is the kernel's (Alternative 3).**
+- **A2 The CLI already reports an absent match key: `internal/cli/flow_next.go::summarize` walks `Row.Atoms` — which carries match-block atoms alongside guard atoms (`internal/table/model.go::Row.KernelRow` routes them by `Block`) — against `internal/cli/flow_next.go::assembledView`, so a match key the view lacks lands in the candidate's undecided list today. That same presence test is the one C1's probe builder uses to decide which match atoms to hand the kernel.**
   - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/table/model.go::Row.Atoms` is documented as the one unified predicate set with each atom's authored block retained ("the Match/guard split is applied at the kernel handoff, never stored here", `0002:C16`) — there is no separate match field or pattern map on `table.Row`. `internal/table/model.go::Row.KernelRow` routes that same field by `a.Block == BlockMatch`, and `internal/cli/flow_next.go::summarize`'s loop `for _, atom := range row.Atoms { if _, known := view[atom.Key]; known { continue } … }` carries no `Block` test, so a match-block atom over a view-absent key lands in `unresolved` today (the loop's own comment says "guard atom", narrower than the code). Note `internal/cli/flow_next.go::assembledView` does **not** inject `recognized`, unlike the kernel's `assemble`; this is harmless because `internal/table/normalize.go` lifts the `recognized` atom out of the predicate set into `Row.Outcome`, so no `recognized`-keyed atom reaches `Row.Atoms` at all.
   - **If wrong**: an absent match key silently drops out of the report and C1's `unknown` clause needs new code in the CLI rather than the existing atom walk.
-- **A3 The kernel's match seam folds THREE distinct cases into one `false` — `internal/resolve/resolve.go::TagSet.matches` returns false when `!ok || tv.conflicted || tv.value != w.Value` — so the distinction C1 needs cannot be recovered by any caller and must be made inside that function. A CLI-side presence pre-strip cannot substitute: a conflicted key is present-yet-uncomparable, so a bare presence test retains its atom and the row is excluded as `no_match` with nothing reported.**
+- **A3 A PRESENT-but-CONFLICTED match key — one key carrying two differing values within one provenance, the case `internal/resolve/resolve.go::TagSet.matches` folds into `false` beside absence — is unreachable from the CLI over any model that loads, so the CLI's presence test is a sound stand-in for the kernel's undecidable-match case and the kernel's fold can never fire on a CLI-built probe.**
   - **Status**: Pending
-  - **Method**: Source Search
-  - **REFUTED at Stage 5 (critique), 2026-08-26 — the reachability half only.** `internal/table/load.go::checkAccessorBindings` refuses at MODEL LOAD any model where an owned tag is served by `!= 1` readers (`owned tag %s is served by %d readers; want exactly one`), and because it counts key OCCURRENCES a single reader declaring `keys = ["k","k"]` is refused by the same test (probed live). `internal/accessor` classifies a reader's output against its declared keys, so a reader cannot emit an undeclared repeat. `TagSet.merge` conflicts only WITHIN one provenance (`prior.provenance == prov`), and the observed route is refused by `parseTags` as `flow-tag-duplicate` — which this RDR already states. Therefore PRESENT-but-CONFLICTED is **unreachable from the CLI over any model that loads**. The seam-shape half of this assumption (that `matches` folds three cases into one `bool`) stands and is unaffected. What falls is the reachability claim the Approach's fact (i), `D-placement`, and the Alternative 3 rejection ("the failure is real, not theoretical") all rest on. Re-verify what remains: whether SINGLE-SOURCING the match rule — not CLI incapacity — still justifies kernel placement, given that `flow_next.go::summarize` already distinguishes an ABSENT key by comma-ok today.
-  - **Prior evidence (superseded)**: `internal/resolve/resolve.go::TagSet.matches` is `if !ok || tv.conflicted || tv.value != w.Value { return false }` — a three-legged disjunction collapsing to one `bool`, whose only callers (candidate selection and escape selection in `internal/resolve/resolve.go::Resolve` / `::escapeOrRefuse`) `continue` on false with no record of why; the guard seam by contrast does carry the distinction (`internal/resolve/guard.go::evaluateAtom` returns `ReasonAbsent` vs `ReasonUncomparable`). Atom independence holds: `matches` is a plain all-must-hold loop with no accumulator; match-block `in` atoms are expanded into per-member `eq` rows at normalization (`internal/table/normalize.go`, `0002:C13`) and set-kinded literals are canonicalized to one opaque string by `internal/table/model.go::seamValue`, so every match atom reaching the kernel is an independent single-key equality and `matches(nil)` is `true`. The conflicted exception is real and user-reachable: `internal/resolve/resolve.go::TagSet.merge` marks a key repeated within one provenance with differing values as `conflicted` while KEEPING it present in `s.tags`. The reachable producer is the OWNED provenance — `internal/cli/flow_exec.go::flowRequest.runReaders` appends each invoked reader's `OwnedSnapshot()` into one slice with no dedup, so two readers writing the same key with differing values conflicts it. It is NOT a repeated `--tag`: `internal/cli/flow_input.go::parseTags` refuses that with `flow-tag-duplicate` before `kernelTags` is reached (corrected at 3amigo; the earlier wording named `kernelTags`, which passes a repeat through only because the refusal already happened upstream). `internal/cli/flow_next.go::assembledView` has no conflicted concept at all (zero occurrences of `conflicted` in `internal/cli`), so the CLI cannot currently detect the condition. `matches`'s own doc names the posture it mirrors: "`ReasonUncomparable` … the key is present, and its value was not compared to a verdict" (`0007:C8`).
-  - **If wrong**: the kernel already carries an undecided match verdict, and C1's Phase 1 is a reporting change rather than a semantics change.
+  - **Method**: Source Search + MVV Test
+  - **Evidence**: recorded at Stage 5 (critique, 2026-08-26) and re-verified here by reading: `internal/table/load.go::checkAccessorBindings` refuses at MODEL LOAD any model where an owned tag is served by `!= 1` readers (`owned tag %s is served by %d readers; want exactly one`), and because it counts key OCCURRENCES a single reader declaring `keys = ["k","k"]` is refused by the same test (probed live in `evidence/critique/critique.md`). `internal/accessor` classifies a reader's output against its declared keys, so a reader cannot emit an undeclared repeat. `internal/resolve/resolve.go::TagSet.merge` conflicts only WITHIN one provenance (`prior.provenance == prov`), and the observed route is refused by `internal/cli/flow_input.go::parseTags` as `flow-tag-duplicate`. The CROSS-provenance case (premortem P-1) — an observed `--tag` on a key an invoked reader owns — is not a conflict in the kernel (`merge` resolves it by provenance precedence, owned over observed) and is refused before that anyway: `parseTags` returns `flow-tag-owned` for any key in `flowbind.OwnedTags(m)`. Stage 4 owes the three pins C3 names — an oracle on the load refusal and one on the `--tag` refusal — so the invariant the presence test rests on is asserted, not assumed. The seam-shape half (that `matches` folds three cases into one `bool`) stands and is why the kernel, not the CLI, keeps deciding equality.
+  - **If wrong**: a conflicted key would reach the kernel through the CLI, `matches` would exclude its row as `no_match`, and C1 would report nothing for it — the silent drop P1 forbids. The recorded upgrade path is the exported per-atom verdict in Briefly Rejected, and `checkAccessorBindings` is the invariant a future relaxation must re-examine.
 - **A4 The 0005 `flow next` tests move rather than rewrite: every oracle that asserts on a named candidate seeds the owned key its rows match on (`status=draft` in `flowMVVModel` / `flowGatedNextModel`), and the alphabet, gate-handling, reader-narrowing, and non-mutation oracles do not depend on a match-excluded row being reported.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1(b) leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts, **against C1's candidate predicate**: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**. This classification is predicate-scoped and does NOT clear the suite for the build as a whole: the `unresolved` → `unknown` payload change is an independent edit that mechanically breaks 6 assertions in the same suite (C3 names them).
+  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1 leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts, **against C1's candidate predicate**: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**. This classification is predicate-scoped and does NOT clear the suite for the build as a whole: the `unresolved` → `unknown` payload change is an independent edit that mechanically breaks 6 assertions in the same suite (C3 names them).
   - **If wrong**: the 0005 suite splits into default / `--all` variants beyond the moves C3 names, and Testing Strategy must enumerate them.
 - **A5 Over 0010's decision-table class, `flow next` with no `--tag` reports every ordinary rule and exits 0, each rule's observed match keys appearing in the candidate's undecided list — with the exception of a row whose only match atom is `recognized`, whose list is empty by construction — so `0010:A11` and 0010's MVV step 5 hold under C1; and a partial `--tag` set narrows the list to the rows whose supplied keys hold, a supplied-but-mismatched key dropping its row.**
   - **Status**: Verified
@@ -60,185 +58,119 @@ The system-internal requirement is a single decision on the candidate predicate 
 - **A6 `models/rdr.toml` at `stage=resolved` narrows from 21 reported rules to exactly the 3 rows whose `match.stage` holds over the artifact's owned `stage` — `prelock`, `resolve-route-back`, `resolve-abandon`, one per declared outcome. The 22nd row's absence from the baseline 21 is guard-driven, not stage-driven.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/spikes/a6-rdr-toml-narrowing.md`. Live against the current build, artifact `{"stage":"resolved","status":"draft","gate_passed":"false"}`: 22 `[[rule]]` blocks, 22 non-escape normalized rows, **21 candidates** — the one excluded row is `finalize-pass`, pruned on its `[rule.guard.all.gate_passed] eq = "true"`, so the 21 is a property of `gate_passed=false`, not of `stage=resolved`. A prototype of C1's probe over the same model returns **3** candidates; cross-checked by `grep -n 'eq = "resolved"' models/rdr.toml` → exactly three `[rule.match.stage]` hits (lines 212/222/232). Every rule carries a `[rule.match.stage]` block and `stage` is `required = true` and served by the invoked `rdr-status` reader, so C1's absent-key provision never fires for this model. The `recognized` sub-claim is dropped as vacuous: `internal/table/normalize.go` lifts `match.recognized` into `Row.Outcome`, leaving **0** such atoms in `Row.Atoms`; the probe's `Recognized` binding instead serves the kernel's `row.Outcome != in.Recognized` filter and keeps the probe from refusing `unmodeled_outcome` (A1).
+  - **Evidence**: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/spikes/a6-rdr-toml-narrowing.md`. Live against the current build, artifact `{"stage":"resolved","status":"draft","gate_passed":"false"}`: 22 `[[rule]]` blocks, 22 non-escape normalized rows, **21 candidates** — the one excluded row is `finalize-pass`, pruned on its `[rule.guard.all.gate_passed] eq = "true"`, so the 21 is a property of `gate_passed=false`, not of `stage=resolved`. A prototype of C1's probe over the same model — "probe carries the row's match atoms over keys PRESENT in the assembled view, drops match atoms over absent keys, drops the escape list, and binds `Recognized: row.Outcome`", i.e. exactly the shape C1 now fixes — returns **3** candidates; cross-checked by `grep -n 'eq = "resolved"' models/rdr.toml` → exactly three `[rule.match.stage]` hits (lines 212/222/232). Every rule carries a `[rule.match.stage]` block and `stage` is `required = true` and served by the invoked `rdr-status` reader, so C1's absent-key provision never fires for this model. The `recognized` sub-claim is dropped as vacuous: `internal/table/normalize.go` lifts `match.recognized` into `Row.Outcome`, leaving **0** such atoms in `Row.Atoms`; the probe's `Recognized` binding instead serves the kernel's `row.Outcome != in.Recognized` filter and keeps the probe from refusing `unmodeled_outcome` (A1).
   - **If wrong**: the observed defect is not closed by a match predicate and the problem statement's diagnosis (match stripped) is incomplete.
-
-- **A7 Applying the three-valued verdict at BOTH kernel selection sites — `internal/resolve/resolve.go::Resolve`'s ordinary candidate loop and `::escapeOrRefuse`'s escape-edge filter — changes `flow resolve`'s disposition on exactly the five shipped `internal/resolve` oracles S5 names, and no others.**
+- **A11 CLI presence agrees with kernel presence for every key a row's match atom can name: `internal/cli/flow_next.go::assembledView` (owned ∪ observed, last write wins) and `internal/resolve/resolve.go::assemble` (owned ∪ observed ∪ `recognized`, provenance-precedenced) hold the same key SET over the inputs `flow next` passes, so a match atom the CLI keeps because its key is present is never over a key the kernel's view lacks, and vice versa.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: To verify at Stage 4. By reading: both views are built from the same `owned` slice (`flowRequest.runReaders`) and the same observed tags (`kernelTags(req.observed)` is a type conversion, not a filter); the kernel additionally injects `recognized`, which `internal/table/normalize.go` lifts out of `Row.Atoms`, so no atom can name it. Value disagreement is irrelevant — the CLI compares no value.
+  - **If wrong**: a match atom over a key the CLI sees but the kernel does not would reach the kernel and be folded into `no_match`, dropping the row silently; the fix is to build the probe's key set from the kernel's view, which would need an exported presence query.
+- **A12 Omitting the absent-key match atoms from a one-row probe changes only whether the row reaches `gate`: the kernel filters on `matches` before `gate`, and `gate` evaluates `row.Guard` (`evaluateAtoms(row.Guard, seam, view)`) and `RequiresOwned` independently of `row.Match`, so the probe's guard verdict and owned-state disposition are the same as they would be for the row inside a full-table `flow resolve` whose view held those keys.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: To verify at Stage 4 against `internal/resolve/resolve.go::Resolve` (the `!view.matches(row.Match)` `continue` precedes `gate(candidates, …)`) and `::gate`'s signature. Two sub-claims the omission rests on (premortem P-2, P-14): a row ALL of whose match atoms are omitted is an ordinary row with an empty match pattern, which `TagSet.matches` (an all-must-hold loop) accepts unconditionally — the kernel neither errors on nor reclassifies it; and every match atom is an equality — `[rule.match.<key>]` admits `eq` and `in` only, and `internal/table/normalize.go` expands `in` into per-member `eq` rows (`0002:C13`) — so omitting an absent-key atom relaxes the row rather than inverting a negation. There is no negated or absence-testing match atom whose omission would change meaning.
+  - **If wrong**: a reported candidate's guard facts could differ from what `flow resolve` would see for the same row, and `next` would mis-diagnose.
+- **A13 Reading `Refusal.Undecided` off the probe's `guard_unevaluable` refusal names every GUARD atom the kernel could not decide, with the kernel's own reason (`absent` / `uncomparable`), and adds exactly one fact class the CLI's view walk cannot see today: a guard atom over a PRESENT key the seam answered unevaluable. Every `absent` entry it carries duplicates one the walk already produces, so the merge is a set union on `{key, reason}`.**
   - **Status**: Pending
   - **Method**: Source Search + MVV Test
-  - **Evidence**: To verify at Stage 6 — enumerate the `internal/resolve` oracles across BOTH selection sites and classify each against the selection predicate, as A4 did for the 0005 `next` suite. The census MUST cover every file in the package that builds a row with a `Match` block, not only the escape-shaped ones: `match_conflicted_test.go`, `guard_atoms_test.go`, `reserved_key_0008_test.go`, `escape_shape_0009_test.go`, `escape_shape_mvv_0009_test.go`, `guard_fixtures_test.go`. The five identified by inspection (3amigo iter-1 + iter-2) are the claim's floor, not its verified extent; the assumption is the exhaustiveness of "and no others", and iter-2 already moved that floor from four to five by finding a match-block oracle in a file the first census scoped out — which is the specific way this assumption fails. Both sites are confirmed: `Resolve` filters on `!view.matches(row.Match)` before `gate`, `escapeOrRefuse` on the same call, and `guard_fixtures_test.go::conformingEscapeRow` carries `Match: status=Draft`, so escape rows do carry match blocks. Note the absent-key arm reaches further than conflicted keys: `assemble` omits `recognized` when `Input.Recognized` is empty, so any oracle matching on a key the view may lack is in scope.
-  - **Census under-scoped at Stage 5 (critique), 2026-08-26.** The six files named above are not the population. Nine files in `internal/resolve` build rows carrying a `Match` block; the census omits `adversarial_test.go`, `fixup_test.go`, `reserved_key_sameview_0008_test.go`, `escape_shape_adv_0009_test.go`, and `resolve_test.go`. Two further oracles go red through A8's refuted mechanism rather than through the selection predicate — `guard_fixup_0007_test.go` and `guard_adversarial_0007_test.go` — and neither is in scope of this assumption as worded. The "and no others" clause is therefore unverified over the true population, while S5, MVV step 8, and Consequences all state its conclusion as settled fact.
-  - **If wrong**: the blast radius on `flow resolve` is wider than five oracles and the Consequences understate it; if it is wider in KIND (a case where refusing `guard_unevaluable` is wrong), the site-class split in C1 needs revisiting.
-
-- **A9 Routing an `indeterminate`-match row into the `guard_unevaluable` class is compatible with `0007:C10`'s resolution-level aggregation — i.e. `flow resolve` does not refuse a whole table because one unrelated row's match key was unbound.**
+  - **Evidence**: To verify at Stage 4. `internal/resolve/guard.go::evaluateAtom` returns `ReasonAbsent` on `!present` and `ReasonUncomparable` on conflicted / nil seam / seam-unevaluable; `internal/resolve/guard.go::evaluateAtoms` returns the payload only when the row verdict is `GuardUnevaluable` and `internal/resolve/resolve.go::gate` attaches it to the `guard_unevaluable` refusal. Today `internal/cli/flow_next.go::excluded` discards the `Result`, so that payload never reaches `summarize`. Payload shape as `0007:C8` fixes it (premortem P-5): `Refusal.Undecided []UndecidedRow`, each `{RuleID, SourceLocator, Atoms []UndecidedAtom{Key, Block, Operator, Literal, Reason}}`, every unevaluable atom of the row (no short-circuit), sorted; on a one-row probe at most one `UndecidedRow`. `summarize` projects each atom to `{Key, Reason}` and unions with the walk's entries on that pair, so a guard atom over an absent key yields one `{key, absent}`, never a second reason.
+  - **If wrong**: `uncomparable` never appears on the CLI's list and the `{key, reason}` shape carries one live reason fewer; the shape still stands on `absent` vs `not-evaluated`.
+- **A14 Non-registration of `--all` on `flow resolve` / `flow read-state` / `flow set-state` yields a deterministic error class and exit code through cobra's unknown-flag path as `internal/cli/root.go` maps it, so C2's negative is assertable on that class rather than on a `flow-*` code.**
   - **Status**: Pending
-  - **Method**: Source Search + MVV Test
-  - **REFUTED as worded at Stage 5 (critique), 2026-08-26; booked so the redesign must answer it.** `0007:C10` is normative and this RDR cites it **zero** times (`0007:C11`, the pruning clause, is cited five times): "Aggregation is resolution-level: if any surviving candidate row's guard is GuardUnevaluable, the resolution MUST refuse `guard_unevaluable`; a decided-GuardTrue sibling MUST NOT be selected while an unevaluable candidate exists. This veto is the cost the RDR accepts: one unreadable row refuses a table whose other rows decide cleanly." Shipped `gate` implements exactly that — `if len(undecidable) > 0 { return nil, &Refusal{...} }` discards the accumulated `selected`. Its partition is `{GuardFalse → pruned, GuardTrue → selected, GuardUnevaluable → veto}`, with no channel for C1's "survives into `gate` as a non-selectable row". Measured blast radius: all 22 rules in `models/rdr.toml` carry a `[rule.match.stage]` block, so a single unbound `stage` would make every row indeterminate and refuse the entire table — where today the rows drop out and an escape row rescues. Verify by deciding, explicitly, one of: a row-scoped disposition distinct from `GuardUnevaluable`; or an accepted, stated decision that match-indeterminacy is table-fatal.
-  - **If wrong**: `flow resolve` gains a whole-table refusal the Consequences never name, and the "same relationship `next` already has with `guard_unevaluable`" framing is wrong — that relationship is a table-wide veto, not a per-row one.
-
-- **A10 `JC1`'s one-way-coupling disposition holds: C1 cannot turn a 0010 acceptance into a refusal.**
-  - **Status**: Pending
-  - **Method**: Source Search + MVV Test
-  - **REFUTED as worded at Stage 5 (critique), 2026-08-26.** `internal/resolve/resolve.go::Resolve` returns on `if blocked != nil { return refuse(in, *blocked), nil }` — **above** the `switch len(selected)` that is the only path to `escapeOrRefuse`. A `guard_unevaluable` refusal is therefore unreachable by any escape row. `0010:A9` makes the decision table's "otherwise" row an escape row rescuing `no_match`, so under C1 a partially-supplied tag set on a 0010 table stops firing its catch-all and refuses instead. JC1 states the opposite ("strictly widens what a zero-owned decision table can report and cannot turn a 0010 acceptance into a refusal"). Re-run the joint check against the redesigned selection rule.
-  - **If wrong**: 0010's headline default-row feature regresses, and its shipped MVV was written against the old behaviour.
-
-- **A8 The `Refusal.Undecided` payload can carry match-block atoms without breaking the guard-path invariants `0007:C8` fixed: widening `guard.go::isGuardBlock`'s filter and the non-`GuardUnevaluable` payload discard admits `BlockMatch` entries while leaving every existing guard payload byte-identical.**
-  - **Status**: Pending
-  - **Method**: Source Search + MVV Test
-  - **REFUTED at Stage 5 (critique), 2026-08-26 — the stated mechanism does not exist.** Three independent legs: (i) `internal/resolve/resolve.go::gate` calls `evaluateAtoms(row.Guard, ...)` — the GUARD field — so a match atom never reaches `isGuardBlock` at all; widening that filter admits nothing, because the exclusion happens one level up, by field selection. (ii) The payload cannot hold a match atom: `Row.Match` is `[]Tag{Key,Value}` while `UndecidedAtom` is `{Key,Block,Operator,Literal,Reason}`, so `Operator`/`Literal` must be SYNTHESIZED — and `compareUndecidedAtoms` sorts on `(Key,Block,Operator,Literal)`, making those synthesized values load-bearing on `0007:C8`'s pinned ordering. That contradicts "leaves every existing guard payload byte-identical" precisely because C1 requires match atoms to join a row's existing `Undecided` entry. (iii) `isGuardBlock`'s own comment forbids the edit, naming `BlockMatch` as the vector: sweeping such an atom in "would let it be DECIDED, and a decided-FALSE one would prune its row along with the row's owned-state obligation (D8) — reopening the masking path `0007:C11` ratifies pruning against". Were it widened anyway, a match atom over a PRESENT-and-EQUAL key would reach `seam.Evaluate`, whose `default` arm returns `GuardUnevaluable`/`uncomparable`, so a correctly-matching row would report a spurious undecided atom. Two shipped oracles go red, neither named in S5: `guard_fixup_0007_test.go:115` ("a match atom is never handed to the seam") and `guard_adversarial_0007_test.go:180` (the `"§D12 match block"` arm).
-  - **Also refuted — the carrier itself.** `Refusal.Undecided` is `[]UndecidedRow`, not `[]UndecidedAtom`, and `evaluateAtoms` returns a `nil` payload early for any row whose GUARD verdict is decided. So a guard-free row with an indeterminate match produces **no `UndecidedRow` at all**, and its match facts have no carrier — exactly the row class this RDR exists to diagnose. C1's "no new field on `Plan` is required" does not follow from it.
-  - **Prior evidence (superseded)**: To verify at Stage 6. The two sites are confirmed by inspection: `internal/resolve/guard.go` `if !isGuardBlock(atom.Block)` skips match atoms when collecting payload entries, and `if verdict != GuardUnevaluable { return verdict, nil }` discards payloads for decided rows.
-  - **If wrong**: match facts need a separate `Refusal` field rather than sharing `Undecided`, and C1's carrier clause plus `D-undecided-reporting-shape` change with it.
+  - **Method**: MVV Test
+  - **Evidence**: To verify at Stage 4 by running each verb with `--all` and asserting the error class and exit code the output contract maps for a usage error. Conditions the negative rests on (premortem P-13), each to be confirmed by reading `internal/cli/root.go` / `flow.go`: no persistent `--all`/`-a` on `flow` or root; no `FParseErrWhitelist.UnknownFlags`; no `DisableFlagParsing`; `TraverseChildren` unset. One oracle per verb turns the claim into a fact and guards a future persistent flag.
+  - **If wrong**: C2 owes a typed refusal for the flag on the other verbs, which is the flag-surface negative `evidence/critique/Charted.md` item 1 routes to a successor.
 
 ## Proposed Solution
 
 ### Approach
 
-`flow next` keeps asking the kernel one question per row, but stops taking the row's match pattern out of the question — and the kernel stops answering that question in two values. The match seam becomes three-valued, the way every other seam in this system already is: a match atom is `match` (its key is present and its value equal), `no-match` (present and unequal), or `indeterminate` (its key is absent from the view, or present but conflicted so no single value can be compared). Only `no-match` excludes a row from REPORTING. An `indeterminate` atom leaves the row a candidate of `flow next` and its key rides the candidate's `unknown` list carrying the reason — `absent` or `uncomparable` — that `0007:C8` already spells for the guard seam. At the kernel's SELECTION sites the same verdict means the opposite thing: `flow resolve` MUST NOT commit a plan (and its `Writes`) on a precondition it could not decide, so an `indeterminate` match refuses `guard_unevaluable` — the non-escapable class `0007:C8` reserves for exactly this — rather than selecting. Reporting shows the caller an undecided row; committing on one would be the masking `0007:C8` forbids. The verb still never chooses among the rows that survive, never turns a gate deny into a refusal, and still returns the model's full declared `outcomes` alphabet: it narrows the **candidate list** to rows the supplied state can actually take, which is what "for the supplied state" meant to the caller.
+`flow next` keeps asking the kernel one question per row, but stops taking the whole match pattern out of the question. It hands the kernel the row's match atoms over the keys the supplied state actually carries — owned tags from the invoked readers plus `--tag` observed tags — and lets the kernel decide equality on them. A match atom over a key the state does NOT carry is not handed over: the CLI cannot ask a question the kernel would answer with a fold (`TagSet.matches` returns `false` for an absent key exactly as for an unequal one, and `flow next`'s caller is entitled to the difference), so that atom is instead reported on the candidate under `unknown` as `{key, absent}`. The kernel's `no_match` — now reachable only for a present-and-unequal key — excludes the row; `guard_unevaluable` and `owned_state_unavailable` leave it a candidate with their facts reported, as today. The CLI decides PRESENCE only, which it already decides for reporting (A2); EQUALITY stays the kernel's. The verb still never chooses among the rows that survive, never turns a gate deny into a refusal, and still returns the model's full declared `outcomes` alphabet: it narrows the **candidate list** to rows the supplied state can actually take, which is what "for the supplied state" meant to the caller.
 
 `--all` restores 0005's enumeration — the match pattern ignored entirely — for the caller who wants the guard-conditioned alphabet rather than the state-conditioned one. The two modes differ only in whether match participates; reader narrowing, gate opt-in, the payload shape, and exit semantics are the same in both.
 
-The change lands in the **kernel**, not as a CLI probe reshaping. Three facts force that placement. (i) The CLI cannot implement the rule: conflictedness is `internal/resolve`'s `TagSet.conflicted`, reachable only through the unexported `conflicting()`, and `internal/cli/flow_next.go::assembledView` is a last-write-wins `map[string]string` with no conflicted concept at all (zero occurrences of `conflicted` in `internal/cli`) — a CLI-side presence test would retain a conflicted atom and the kernel would exclude the row as `no_match` with nothing in `unknown`, which is the masking `P1` forbids. (ii) `resolve.go::TagSet.matches` folds absent, conflicted, and unequal into one `bool`, so the distinction cannot be reported from outside it; JDR 0001 §D12's precedent is to widen a kernel vocabulary rather than fork a second one at the CLI. (iii) `0007:REQ-78` recorded the match seam's two-valuedness as a scope boundary on that build — "NOT closed by this RDR" — not as a settled exception; this RDR closes it. ⇒ a three-valued match result in `internal/resolve`, the `unknown` payload field on the candidate, a flag, and help text; no new refusal kind (`0007:REQ-79` pins the set at five).
+The change lands in the **CLI**, and `internal/resolve` is not touched. Two facts settle that placement, and the third — the one the Stage-4 draft rested on — turned out false. (i) The only match case the CLI cannot distinguish from the kernel's fold is a PRESENT-but-CONFLICTED key, and that case cannot reach the kernel from the CLI: `internal/table/load.go::checkAccessorBindings` refuses a model at load when an owned tag is served by other than exactly one reader (`owned tag %s is served by %d readers; want exactly one`), and `internal/cli/flow_input.go::parseTags` refuses a repeated `--tag` key as `flow-tag-duplicate` (A3) ⇒ over any model that loads, "present" and "comparable" coincide, so a presence test is exact, not approximate. (ii) Making the kernel's match seam three-valued cannot stop at reporting: the kernel's undecidable class, `guard_unevaluable`, is a RESOLUTION-level veto under `0007:C10` — "if any surviving candidate row's guard is GuardUnevaluable, the resolution MUST refuse `guard_unevaluable`; a decided-GuardTrue sibling MUST NOT be selected while an unevaluable candidate exists" — and `internal/resolve/resolve.go::Resolve` returns on `if blocked != nil { return refuse(in, *blocked), nil }` ABOVE the `switch len(selected)` that reaches `escapeOrRefuse`, so routing an undecidable match there would refuse a whole table on one unbound key (every rule in `models/rdr.toml` matches on `stage`) and would make the refusal unreachable by the escape row 0010's decision tables rescue through ⇒ the kernel's disposition for an undecidable match is a `flow resolve` design decision with a locked-peer collision, not a by-product of fixing `flow next`, and this RDR leaves it where `0007:REQ-78` left it. (iii) The Stage-4 ground — that the CLI cannot implement the rule because conflictedness is kernel-only — is true of the kernel's data and false of the CLI's inputs (A3), so it forces nothing. ⇒ a probe-shape change in `internal/cli/flow_next.go::excluded`, the `unknown` payload field on the candidate, a flag, and help text; no kernel change, no new refusal kind, no widening of `0007:C8`'s payload.
 
-Sibling-path check (step 5): searched `internal/cli` and `internal/resolve` for an existing "absent key ⇒ undecided" site at the match seam — none exists. The nearest is the GUARD seam's `internal/resolve/guard.go::evaluateAtom`, which already returns exactly this triple (`GuardUnevaluable` with `ReasonAbsent` / `ReasonUncomparable`), and whose reason vocabulary this RDR reuses rather than mints.
+Sibling-path check (step 5): the presence decision C1 adds already exists at this locus — `internal/cli/flow_next.go::summarize`'s `if _, known := view[atom.Key]; known` over `assembledView` is the CLI's one presence test, and C1's probe builder reuses it rather than adding a second; searched `internal/cli` for any other view-presence test, none. The nearest kernel-side signal is the GUARD seam's `internal/resolve/guard.go::evaluateAtom` (`ReasonAbsent` / `ReasonUncomparable`), whose reason vocabulary the `unknown` list reuses for the guard facts it reads off the probe's payload rather than minting.
 
 ### Technical Design
 
-Data flow, per ordinary row: `table.Row` → `Row.KernelRow()` (match/guard split by block) → probe in `excluded` (escape stripped; `Recognized = row.Outcome`; match carried in full by default, omitted under `--all`) → `resolve.Resolve` over the one-row table → the kernel evaluates each match atom three-valued: `no-match` ⇒ the probe refuses `no_match`; `indeterminate` ⇒ the probe refuses `guard_unevaluable` carrying the undecided match atoms in `Refusal.Undecided`; otherwise ⇒ a `Plan` → `no_match` ⇒ excluded, `guard_unevaluable` / `owned_state_unavailable` / `Plan` ⇒ candidate → `summarize` reads the kernel's indeterminate match atoms off the refusal payload and folds them in beside missing owned keys and un-run gate ids → gates under `--evaluate-gates` for reported candidates only → payload. The alphabet `outcomes` is copied from the model in both modes (0005's DEV-4 reading stands: the alphabet is what may be requested; the candidates are what varies with state).
+Data flow, per ordinary row: `table.Row` → `Row.KernelRow()` (match/guard split by block) → probe in `excluded` (escape stripped; `Recognized = row.Outcome`; match atoms restricted to keys present in `assembledView` by default, omitted entirely under `--all`) → `resolve.Resolve` over the one-row table → `no_match` ⇒ excluded; `guard_unevaluable` / `owned_state_unavailable` / `Plan` ⇒ candidate → `summarize` builds `unknown` from three sources: the row's match-block atoms over view-absent keys and its owned keys the view lacks (the existing atom walk, reason `absent`); the guard atoms the kernel could not decide, read off a `guard_unevaluable` refusal's `Refusal.Undecided` (reasons as the kernel reports them, `absent` / `uncomparable`); and, absent `--evaluate-gates`, the row's gate ids (reason `not-evaluated`) → gates under `--evaluate-gates` for reported candidates only → payload. The alphabet `outcomes` is copied from the model in both modes (0005's DEV-4 reading stands: the alphabet is what may be requested; the candidates are what varies with state).
 
-Selection semantics stay wholly in the kernel: the CLI hands over the row and reads the answer, deciding neither presence nor equality. Match-block `in` atoms are already expanded into per-member `eq` rows at normalization (`0002:C13`) and set-kinded literals canonicalized by `internal/table/model.go::seamValue`, so every match atom reaching the kernel is an independent single-key equality — the three-valued rule is per-atom with no cross-atom interaction, and a row whose match pattern is empty matches unconditionally as it does today.
+Equality stays wholly in the kernel: the CLI hands over the atoms whose keys the state carries and reads the answer. Match-block `in` atoms are already expanded into per-member `eq` rows at normalization (`0002:C13`) and set-kinded literals canonicalized by `internal/table/model.go::seamValue`, so every match atom reaching the kernel is an independent single-key equality — restricting the set by key presence is per-atom with no cross-atom interaction, and a row whose retained match pattern is empty matches unconditionally as it does today. `excluded` must return the kernel's `Result` (not a `bool`) so `summarize` can read the `guard_unevaluable` payload; this is the one signature change in the file, and the reason the probe result is kept rather than discarded.
 
-The kernel change is confined to the match seam: `TagSet.matches`' `bool` becomes a three-valued verdict plus the atoms that could not be decided, computed from the data `TagSet` already carries (`!ok` ⇒ `absent`; `tv.conflicted` ⇒ `uncomparable`; `tv.value != w.Value` ⇒ `no-match`). Both of the kernel's match call sites — `Resolve`'s ordinary candidate loop and `escapeOrRefuse`'s escape-edge selection (`internal/resolve/resolve.go::escapeOrRefuse` filters on `!view.matches(row.Match)` too, and shipped escape rows do carry match blocks) — are SELECTION sites, so at both an `indeterminate` row is excluded from selection and refuses `guard_unevaluable` with its undecided atoms named. `flow resolve`'s behaviour is unchanged in every case where the CLI supplies a complete, unconflicted view; where it does not, an undecidable match atom now surfaces as a named non-escapable fact instead of an escapable `no_match`, which is the same correction `0007:C8` made on the guard path. The reporting relaxation ("`indeterminate` does not exclude") is `flow next`'s alone, and `flow next` reaches it by reading the refusal's payload, not by selecting the row.
+The kernel is unchanged. `flow resolve` therefore still folds an absent match key into `no_match` at both selection sites — escapable, so a decision table's "otherwise" row (`0010:A9`) keeps rescuing — and `flow next` reports the same row as a candidate naming the key. That is the intended relationship between the two verbs (`next` reports; `resolve` selects) and is the same relationship they already have for `guard_unevaluable`, in the escapable direction rather than the vetoing one. Whether the kernel should ever distinguish the absent case at selection is `0007:REQ-78`'s open question; this RDR records why the answer is not free (Decision Rationale) and does not take it.
 
 #### Normative Contracts
 
 **C1**
 
 ```normative
-The kernel MUST evaluate a match atom three-valued against the assembled
-view: `match` when the atom's key is present, unconflicted, and its value
-equal; `no-match` when the key is present, unconflicted, and its value
-unequal; `indeterminate` when the key is ABSENT from the view, or PRESENT
-but conflicted so the view carries no single value to compare. A row's
-match verdict is `no-match` if any atom is `no-match`, otherwise
-`indeterminate` if any atom is `indeterminate`, otherwise `match`. Only
-`no-match` excludes unconditionally. `indeterminate` MUST NOT be folded
-into the escapable `no_match` refusal; what it DOES exclude from is
-site-dependent, and the next paragraph is normative on that split. Each undecided atom MUST be
-named by its key and a reason drawn from the closed set `0007:C8` already
-owns — `absent` (the key was not in the view) or `uncomparable` (the key
-was present and its value was not compared to a verdict). This mints no
-sixth `RefusalKind` (`0007:REQ-79`); it closes the match-seam gap
-`0007:REQ-78` deferred.
-
-The VERDICT is the seam's and MUST be computed identically wherever a match
-pattern is evaluated. What a site DOES with `indeterminate` is the site's,
-and the two kinds of site differ: a REPORTING site (`flow next`) MUST NOT
-exclude on it, because the caller is entitled to see the row and the reason;
-a SELECTION site (`flow resolve`, which commits a transition and its
-`Writes`) MUST NOT select on it, because an undecidable precondition is
-exactly what `0007:C8` forbids masking — "missing artifact state MUST NOT be
-maskable behind an escapable refusal class" — and what JDR 0001's P2 settles
-for the kernel generally: the kernel refuses rather than guesses, so
-"Indeterminate MUST be a refusal-class result, not a false allow and not a
-false deny" (`0004:C9`). Selecting a plan on an undecidable match would be
-the false allow. A build that computes the
-verdict two ways has forked the seam; a build that treats reporting and
-committing alike has masked an undecidable precondition behind a write.
-
-At the kernel's two selection sites the rule is therefore: an ordinary row
-whose match verdict is `indeterminate` MUST NOT be selected as a plan, and
-MUST NOT count toward the `len(selected)` that yields `ambiguous_match`
-against a row that genuinely matched. It instead refuses
-`guard_unevaluable`, the non-escapable class `0007:C8` already reserves for
-an undecidable predicate, carrying its undecided atoms in
-`Refusal.Undecided` — the same payload, now admitting `BlockMatch` entries
-(this widens `0007:C8`'s payload to the match block; it mints no sixth
-`RefusalKind`, `0007:REQ-79`).
-
-The two verdicts are NOT applied at the same place, and the split is forced
-by `0007:C11`. A `no-match` row MUST be pruned where match is filtered
-today, before `gate` — pruning is safe there exactly because, in
-`0007:C11`'s words, exclusion "can only arise from decided atoms", and
-`no-match` is decided (the key is present and unequal). An `indeterminate`
-row MUST NOT be pruned there: it is by definition undecided, so dropping it
-upstream would take its owned-state obligation with it (D8) and reopen the
-masking path `0007:C11` ratifies pruning against. An `indeterminate` row
-therefore SURVIVES into `gate` as a non-selectable row, is carried
-alongside the guard-undecidable rows, and its match atoms join that row's
-`Undecided` entry. One consequence is normative: because
-`internal/resolve/resolve.go::gate` returns `owned_state_unavailable`
-before it collects the `guard_unevaluable` payload, a row that is BOTH
-indeterminate-on-match AND missing an owned key refuses
-`owned_state_unavailable` — the existing precedence is preserved, not
-reordered, and `MissingOwned` carries the actionable fact. The match facts
-for such a row are then NOT on the refusal, which C1's reporting clause
-accounts for below. An escape edge whose own match verdict is
-`indeterminate` is likewise NOT a viable rescuer: rescuing through an
-undecidable match is the "operator rescues the positional plan through the
-kernel's most permissive path" defect
-`internal/resolve/match_conflicted_test.go::TestAdv0007_3_ConflictedKeyIsNotEscapableByNamingIt`
-was written to close, and this RDR does not reopen it. Only `no-match` and
-`indeterminate` disqualify an escape edge; only `no-match` and
-`indeterminate` disqualify an ordinary row from selection. The distinction
-this RDR adds at the selection sites is not WHETHER an undecidable match
-excludes — it is that the exclusion is now REPORTED (a named
-`guard_unevaluable` fact) instead of silently folded into an escapable
-`no_match`.
-
 flow next MUST report as a candidate exactly each non-escape row of the
-requested model whose match verdict is not `no-match` and whose guard the
-kernel does not decide false. Both verdicts MUST be the kernel's, asked
-over a one-row probe table carrying the row's match atoms, no escape list,
-and `Recognized` bound to the row's own outcome — the binding that keeps
-the probe modelling its own outcome, so `unmodeled_outcome` is unreachable.
-Because an indeterminate match now refuses `guard_unevaluable` at the
-selection site, the probe's disposition for such a row is that refusal, and
-its `Refusal.Undecided` payload is the CARRIER: the CLI reads the match
-facts off it exactly as it reads guard facts today, and no new field on
-`Plan` is required. A row whose probe returns a `Plan` has a fully decided
-match by construction, so it contributes no match facts.
+requested model whose match atoms over keys PRESENT in the assembled view
+all hold and whose guard the kernel does not decide false. Both verdicts
+MUST be the kernel's, asked over a one-row probe table that carries the
+row's match atoms RESTRICTED to keys present in the CLI's assembled view
+(owned tags from the invoked readers plus observed --tag tags), no escape
+list, and `Recognized` bound to the row's own outcome — the binding that
+keeps the probe modelling its own outcome, so `unmodeled_outcome` is
+unreachable. The CLI decides PRESENCE only, by the same view-presence test
+`summarize` already applies; it MUST NOT compare a match value. A build
+that decides equality in the CLI has forked the seam.
 
-One disposition carries only part of the row's facts. When the probe
-refuses `owned_state_unavailable` — which `gate` returns BEFORE collecting
-the `guard_unevaluable` payload — the refusal carries `MissingOwned` and an
-empty `Undecided`, so a row that is both indeterminate-on-match and
-missing an owned key yields no match facts on the wire. For that row the
-`unknown` list MUST carry the missing owned keys from `MissingOwned` plus
-the row's match-block atoms over keys ABSENT from the assembled view,
-which the CLI derives from its own `Row.Atoms` walk (A2) without needing
-the kernel. The one fact class genuinely unavailable in this case is a
-CONFLICTED match key on a row that is also missing owned state, because
-conflictedness is kernel-only (A3): such a key MUST be reported with
-reason `absent` rather than omitted, since the view carries no value the
-CLI can distinguish, and the missing owned key is the actionable remedy
-the caller acts on first. This is a reporting-fidelity limit of the
-compound case, not a silent drop, and it is the ONLY case in which
-`unknown` does not distinguish `uncomparable` from `absent`.
+A match atom whose key is ABSENT from the assembled view MUST be omitted
+from the probe and MUST NOT exclude the row; it MUST appear in the
+candidate's `unknown` list as `{key, absent}`. A match atom whose key is
+present and whose value the kernel finds unequal yields `no_match`, and
+`no_match` is the ONLY probe disposition that excludes: such a row MUST
+NOT be reported, and under --evaluate-gates its gates MUST NOT run.
+`guard_unevaluable` and `owned_state_unavailable` MUST leave the row a
+candidate with their facts reported. A row ALL of whose match atoms are
+omitted is probed with an empty match pattern, which matches
+unconditionally; it is a candidate and every omitted key is listed
+`absent`. The presence test is exact, not approximate, because a
+PRESENT-but-CONFLICTED key cannot reach the kernel from the CLI over any
+model that loads (A3; C3 pins the three refusals that make it so — two
+readers on one owned key at load, a repeated --tag, and a --tag on an
+owned key) — the only case in which the kernel's own `matches` would
+return false for a present key without comparing it. The invoked reader
+set and the assembled view are fixed ONCE per invocation, before the row
+loop, and are the same under --all; `unknown` is never a function of row
+order or of the flag.
 
-Every `indeterminate` match atom, every guard fact the kernel could not
+This contract changes nothing in `internal/resolve`: the kernel's match
+seam stays two-valued and `flow resolve`'s dispositions are unchanged in
+every case. `0007:REQ-78` stays deferred, `0007:C8`'s payload is not
+widened, and no sixth `RefusalKind` is minted (`0007:REQ-79`).
+
+Every match atom over an absent key, every guard atom the kernel could not
 decide, every owned key no invoked reader established, and (absent
 --evaluate-gates) every gate id MUST appear in that candidate's `unknown`
-list as a `{key, reason}` pair. The reason token is drawn from `0007:C8`'s
-closed set for the first three classes. A gate id un-run because
---evaluate-gates was not passed is NOT one of them — it is neither `absent`
-(the gate is declared and its id is reported) nor `uncomparable` (a gate id
-is not a view key with a value) — so it carries the reason `not-evaluated`,
-which this RDR mints for the gate class ONLY and which never appears on a
-match or owned-key entry. `0007:C8`'s two-member set is unchanged for the
-seam it governs; `unknown` is a CLI reporting surface that spans three
-sources and needs the third token to stay total. Entries are deduplicated
-by `{key, reason}` pair, not by key, so a key that is both an undecided
-match atom and an unestablished owned key reports once per distinct reason.
-`guard_unevaluable` and `owned_state_unavailable` MUST leave the row a
-candidate with those facts reported. A row excluded by `no-match` is not a
-candidate: it MUST NOT be reported, and under --evaluate-gates its gates
-MUST NOT run. `outcomes` MUST remain the model's full declared alphabet in
-every mode. flow next MUST NOT choose among the candidates it reports and
-MUST NOT turn a gate deny into a refusal.
+list as a `{key, reason}` pair. Match atoms over absent keys and
+unestablished owned keys carry `absent`, derived from the CLI's own view
+walk. Undecided guard atoms carry the reason the kernel reports — `absent`
+or `uncomparable`, `0007:C8`'s closed set — read off the probe's
+`guard_unevaluable` refusal payload (`Refusal.Undecided`); a guard atom
+over an absent key therefore appears once, the walk and the payload
+agreeing on `{key, absent}`. A gate id un-run because --evaluate-gates was
+not passed is neither `absent` (the gate is declared and its id is
+reported) nor `uncomparable` (a gate id is not a view key with a value),
+so it carries `not-evaluated`, which this RDR mints for the gate class
+ONLY and which never appears on a match, guard, or owned-key entry.
+Entries are deduplicated by `{key, reason}` pair, not by key, and sorted by
+`(key, reason)`. One fidelity limit is stated rather than hidden: when the
+probe refuses `owned_state_unavailable`, `gate` returns before it collects
+the guard payload, so an `uncomparable` guard atom on that row is not on
+the wire and is not reported; every `absent` fact on the row still is,
+from the walk, and the missing owned key is the remedy the caller acts on
+first.
+
+`outcomes` MUST remain the model's full declared alphabet in every mode.
+flow next MUST NOT choose among the candidates it reports and MUST NOT
+turn a gate deny into a refusal.
 ```
 
-⇒ this is the clause that overrides `0005:C1`'s candidate reading; the exclusion mechanism (kernel probe, decided-false-only) is 0005's, extended from guard-only to match-and-guard, and the match seam is brought to the three-valued posture the gate seam (`0004:C9` `indeterminate`) and the guard seam (`0007:C6` strong-Kleene, `0007:C8` `absent`/`uncomparable`) already hold. Prior art for the seam itself: PTaCL's atomic target evaluates `1T`/`0T`/`⊥T` and "can distinguish between a non-matching value for an attribute and a missing attribute"; SAML 2.0 §2.5.1 requires `Indeterminate` where a condition "cannot be evaluated"; SQL's `col = NULL` yields UNKNOWN, not false.
+⇒ this is the clause that overrides `0005:C1`'s candidate reading; the exclusion mechanism (kernel probe, decided-false-only) is 0005's, extended from guard-only to match-and-guard, and the absent-key disposition follows the posture `excluded`'s own doc already states for guards ("treating 'unknown' as 'false' would silently drop rows the caller is entitled to see"). Prior art for distinguishing absent from unequal at a selection seam: PTaCL's atomic target evaluates `1T`/`0T`/`⊥T` with absence tested before inequality and "can distinguish between a non-matching value for an attribute and a missing attribute"; SQL's `col = NULL` yields UNKNOWN, not false. Prior art for leaving the kernel's SELECTION fold alone: SQL at statement scope — a `WHERE` clause evaluating to UNKNOWN does not qualify the row and the statement proceeds — which `0007:C10` itself names as the counter-example to its veto.
 
 **C2**
 
@@ -269,8 +201,8 @@ consumer struct parses either mode. --all is part of request identity.
 --all MUST NOT be accepted by flow resolve, flow read-state, or flow
 set-state — satisfied by NON-REGISTRATION (registered on next only, not on
 the shared registerSelectionFlags), so cobra's shipped unknown-flag path
-supplies the error and exit code. This contract mints no new refusal code
-for it.
+supplies the error and exit code (A14). This contract mints no new refusal
+code for it.
 ```
 
 ⇒ 0005's behaviour is preserved one flag away, so a caller that wanted the enumeration loses nothing and the 0005 oracles for it move rather than die.
@@ -279,16 +211,19 @@ for it.
 
 ```normative
 The command's Short and Long help MUST state that flow next reports the
-candidates the supplied state can take (match and guard both undecided or
-holding), that a match or guard key that is unsupplied — or supplied more
-than once with differing values — leaves a row a candidate with the key
-listed under `unknown` and its reason named, and that --all reports every
-row the guards do not exclude regardless of match. The 0005 flow next tests
-in internal/cli/flow_next_0005_test.go MUST keep passing unchanged where
-they assert the alphabet, gate handling, reader narrowing, determinism, and
-non-mutation; an assertion that depended on a match-excluded row being
-reported MUST be re-homed under --all, not deleted, and the file's header
-comment MUST name this RDR as the source of the default.
+candidates the supplied state can take (match and guard both holding or
+undecided), that a match or guard key the state does not carry leaves a
+row a candidate with the key listed under `unknown` and its reason named,
+and that --all reports every row the guards do not exclude regardless of
+match. The help MUST also state that a candidate is a row the supplied
+state does NOT EXCLUDE, not a row flow resolve will select: a candidate
+carrying an `unknown` entry may still be refused by flow resolve over the
+same state, and the entry names what to supply. The 0005 flow next tests in internal/cli/flow_next_0005_test.go
+MUST keep passing unchanged where they assert the alphabet, gate handling,
+reader narrowing, determinism, and non-mutation; an assertion that
+depended on a match-excluded row being reported MUST be re-homed under
+--all, not deleted, and the file's header comment MUST name this RDR as
+the source of the default.
 
 Renaming the candidate's flat `unresolved` list to the `{key, reason}`
 `unknown` list is a payload change independent of the candidate predicate,
@@ -306,43 +241,46 @@ none of which the six counts. These are mechanical re-homings, NOT the
 `--all` moves above, and MUST NOT be counted against or excused by A4's
 predicate-scoped BREAKS-0 result. The gate-id reads re-home to the
 `not-evaluated` reason C1 names; a re-homing that has to invent a reason
-token is not mechanical and is a defect.
+token is not mechanical and is a defect. Two of the six discard the
+comma-ok of a helper that returns `nil,false` on a non-string element and
+one of those is a NEGATIVE assertion that passes vacuously on the empty
+slice, so a re-homed read MUST assert the ok bool, and a green suite MUST
+NOT be cited as evidence that this contract was implemented.
 
 Because no shipped 0005 fixture contains a row whose match key is present
 and unequal, the 0005 suite cannot by itself distinguish this predicate
 from the stripped-match one it replaces. The build MUST therefore add
 fixtures that discriminate: a row whose match key is present and UNEQUAL
-(excluded by default, reported under --all), a row whose match key is
-ABSENT (candidate in both, reason `absent`), and a row whose match key is
-CONFLICTED (candidate in both, reason `uncomparable`). The conflicted
-fixture MUST be built from two invoked readers writing the same owned key
-with differing values; a repeated --tag cannot reach the kernel
-(flow_input.go::parseTags refuses it as flow-tag-duplicate), so a fixture
-written that way tests the CLI's duplicate refusal instead of the match
-verdict and MUST NOT be accepted as this fixture. A green 0005 suite MUST
-NOT be cited as evidence that this contract was implemented.
+(excluded by default, reported under --all; under --evaluate-gates its
+gates do not run), and a row whose match key is ABSENT (candidate in both
+modes, `{key, absent}` by default and no match entry under --all). It MUST
+also add the three pins that license C1's presence test: a model declaring
+one owned key served by two readers is refused at load
+(`internal/table/load.go::checkAccessorBindings`); a repeated --tag key is
+refused `flow-tag-duplicate`; and a --tag on a key the model declares
+owned is refused `flow-tag-owned` — all before any probe is built. There is no
+conflicted-key fixture for flow next: the case is unreachable (A3), and a
+fixture that reaches the kernel's conflicted fold by constructing a
+`TagSet` in-package tests `internal/resolve`, which this RDR does not
+change.
 ```
 
 ⇒ the override is visible where a reader meets it — help text and the test file — not only in this record.
 
 #### Mini-checks
 
-Fired by cue at Stage 5 (grounding pass). Cues absent: round-trip / fidelity —
-this RDR defines no import/export, parse/deparse, or serialize inverse.
+Fired by cue at Stage 5 (grounding pass); rewritten at re-propose to the CLI-side design. Cues absent: round-trip / fidelity — this RDR defines no import/export, parse/deparse, or serialize inverse.
 
-**`authority` — source-authority census.** Cue: the match verdict moves from a
-CLI-derived decision to a kernel one, with two kernel arms and a CLI reporting arm.
+**`authority` — source-authority census.** Cue: the candidate verdict is split across a CLI presence decision and a kernel equality decision.
 
 | input/decision | writer (canonical) | readers | call sites | sibling arms |
 | --- | --- | --- | --- | --- |
-| match verdict (3-valued) | **kernel** `resolve.go::TagSet.matches` | `Resolve`, `escapeOrRefuse` | `resolve.go:472` (candidates), `resolve.go:614` (escape rescue) | the VERDICT has none — C1 forbids a per-caller fork. Its USE has exactly two arms: selection sites (both call sites above) exclude on `indeterminate` and refuse `guard_unevaluable`; the reporting site (`flow next`) does not exclude |
-| conflictedness | **kernel** `TagSet.merge` → `tv.conflicted` | `matches` | `resolve.go` only | `assembledView` has no conflicted concept; NOT an arm, it is why the verdict is kernel-side |
-| guard verdict | **kernel** `guard.go::evaluateAtom` | `gate` | `resolve.go:518` | unchanged by this RDR |
-| assembled view | kernel `assemble` (injects `recognized`) | `matches`, `gate` | `resolve.go` | CLI `flow_next.go::assembledView` (does NOT inject `recognized`; harmless — normalize lifts it into `Row.Outcome`) |
-| candidate `unknown` list | **CLI** `flow_next.go::summarize` | payload consumers | `flow_next.go:168` | folds three sources: kernel indeterminate atoms (read off `Refusal.Undecided`, reasons `absent`/`uncomparable`), absent owned keys (`absent`), un-run gate ids (`not-evaluated`). Dedup key is the `{key, reason}` pair, not the key |
+| match-key PRESENCE (which atoms the probe carries) | **CLI** `flow_next.go::excluded` over `assembledView` | the probe builder; `summarize` (same test, for `absent` entries) | `flow_next.go::excluded`, `::summarize` | one test, two uses — C1 forbids a second presence vocabulary; the kernel's `assemble` presence agrees on key set (A11) |
+| match EQUALITY | **kernel** `resolve.go::TagSet.matches` | `Resolve`, `escapeOrRefuse` | unchanged | the CLI compares no value (C1) |
+| guard verdict + undecided payload | **kernel** `guard.go::evaluateAtoms` | `gate`; now also `summarize` via `Refusal.Undecided` | unchanged in the kernel | `excluded` returns the `Result` instead of a `bool` (A13) |
+| candidate `unknown` list | **CLI** `flow_next.go::summarize` | payload consumers | `flow_next.go` | three sources — walk (`absent`), payload (`absent`/`uncomparable`), gate ids (`not-evaluated`); dedup on the `{key, reason}` pair |
 
-**`oracle` — test-discriminability.** Cue: C3 states outright that a green 0005
-suite is not evidence the contract shipped.
+**`oracle` — test-discriminability.** Cue: C3 states outright that a green 0005 suite is not evidence the contract shipped.
 
 | MVV / scenario | fails if X is wrong because Y | negative control |
 | --- | --- | --- |
@@ -350,58 +288,52 @@ suite is not evidence the contract shipped.
 | MVV 5 / S2 | the added row's `match.status` ≠ `draft` must be absent by default | same row present under `--all` |
 | MVV 6 / S3 present-unequal | row excluded AND its gates do not run under `--evaluate-gates` | present-equal row: candidate, gates run |
 | MVV 6 / S3 absent | candidate with `{key, absent}` | supplying `--tag key=<v>` moves it out of `unknown` |
-| MVV 6 / S3 conflicted | candidate with `{key, uncomparable}`, NOT excluded from REPORTING — the case the pre-Stage-4 design got wrong. Reached by two readers writing the same owned key with differing values, NOT by a repeated `--tag` (`flow_input.go::parseTags` refuses that first) | a single-valued key: candidate, `unknown` empty |
+| S5 pins | the two-reader model is refused at load; the repeated `--tag` is refused `flow-tag-duplicate`; a `--tag` on an owned key is refused `flow-tag-owned` — the invariants C1's presence test rests on | a one-reader model loads; a single observed `--tag` parses |
+| S5 kernel | `go test ./internal/resolve` passes with NO test changed — the kernel is untouched | a kernel diff in the build is a defect, not an expected inversion |
+| S7 guard `uncomparable` | a guard atom over a present key the seam cannot decide appears as `{key, uncomparable}` — only reachable through the payload read (A13) | the same atom over an absent key: `{key, absent}` once, not twice |
 | MVV 7 | `unknown` present as `[]`, not omitted | absent-key candidate: `unknown` non-empty |
-| S5 escape (A7) | an `indeterminate` escape edge does NOT rescue (it is not a viable rescuer) and the refusal names its undecided atoms | a fully-matching escape edge still rescues |
-| S5 census (A7) | five named oracles change disposition and no others — the enumeration is the oracle, since "suite green" is the wrong criterion | any UNLISTED `internal/resolve` oracle going red is a defect, not an expected inversion |
-| S7 compound | indeterminate match + missing owned key ⇒ `owned_state_unavailable` (precedence preserved), `Undecided` empty, row still a candidate | either fault alone: `guard_unevaluable` / plain missing-owned |
 | S6 | **anti-oracle**: the 0005 suite passing is NOT evidence for C1 — it cannot distinguish the predicates (A4) | S2/S3 are the discriminating oracles |
 
-**`disposition` — input class × outcome.** Cue: C1 sorts match input classes to
-reported-vs-excluded and to exit semantics.
+**`disposition` — input class × outcome.** Cue: C1 sorts match input classes to reported-vs-excluded and to exit semantics.
 
 | input class | candidate? | `unknown` entry | gates run under `--evaluate-gates` | exit |
 | --- | --- | --- | --- | --- |
 | match key present, equal | yes | none | yes | 0 |
 | match key present, unequal | **no** (excluded) | n/a — not reported | **no** | 0 |
 | match key absent from view | yes | `{key, absent}` | yes | 0 |
-| match key present, conflicted | yes | `{key, uncomparable}` | yes | 0 |
+| match key present, conflicted | unreachable from the CLI (A3) — refused at load or at `--tag` parse before any probe | n/a | n/a | load / usage error |
 | gate id, `--evaluate-gates` not passed | yes | `{gate-id, not-evaluated}` | no | 0 |
 | empty match pattern | yes (matches unconditionally) | none | yes | 0 |
 | only match atom is `recognized` | yes | none — lifted into `Row.Outcome` at normalize | yes | 0 |
 | guard decided false | **no** (excluded) | n/a | no | 0 |
-| guard undecidable | yes | guard fact named | yes | 0 |
-| owned key no reader established | yes | `{key, absent}` | yes | 0 |
-| **compound**: match indeterminate AND owned key missing | yes | missing owned key(s) from `MissingOwned`, plus absent match keys from the CLI's own atom walk; a CONFLICTED match key reports `{key, absent}` (the one case `uncomparable` is not recoverable — probe refuses `owned_state_unavailable`, whose `Undecided` is empty) | yes | 0 |
+| guard atom over absent key | yes | `{key, absent}` (walk and payload agree) | yes | 0 |
+| guard atom over present key, seam unevaluable | yes | `{key, uncomparable}` (payload only) | yes | 0 |
+| owned key no reader established | yes | `{key, absent}`; an `uncomparable` guard atom on the same row is not reported (precedence limit) | yes | 0 |
 | any of the above, under `--all` | match takes no part; guard rules alone decide | no match entry, whatever the key's presence | per guard | 0 |
 
-**`trace` — desk trace over the MVV.** Cue: C1, C2, C3 plus S1–S7 all bear on one
-output surface (the candidate payload). Witnesses from the A6 spike.
+**`trace` — desk trace over the MVV.** Cue: C1, C2, C3 plus S1–S7 all bear on one output surface (the candidate payload). Witnesses from the A6 spike.
 
 | step | assertions in force | witness |
 | --- | --- | --- |
-| 1. build with C1 default + `--all` | C2 (flag exists, default false); C2 (`--all` rejected by `resolve`/`read-state`/`set-state` — by NON-REGISTRATION, so cobra's shipped unknown-flag converter at `internal/cli/root.go` supplies the error and exit code; no new typed refusal) | flag name free: no `"all"` in `internal/cli` |
+| 1. build with C1 default + `--all` | C2 (flag exists, default false); C2 (`--all` rejected by `resolve`/`read-state`/`set-state` by NON-REGISTRATION, A14) | flag name free: no `"all"` in `internal/cli` |
 | 2. seed artifact `stage=resolved` | A6 | `{"stage":"resolved","status":"draft","gate_passed":"false"}` |
-| 3. `flow next … --as=json` | C1 (candidates = match-not-no-match ∧ guard-not-false); C1 (`outcomes` full alphabet) | 3 candidates `prelock`, `resolve-route-back`, `resolve-abandon`; `match.stage eq "resolved"` at `models/rdr.toml:212/222/232` |
+| 3. `flow next … --as=json` | C1 (candidates = present-key match holds ∧ guard-not-false); C1 (`outcomes` full alphabet) | 3 candidates `prelock`, `resolve-route-back`, `resolve-abandon`; `match.stage eq "resolved"` at `models/rdr.toml:212/222/232` |
 | 4. re-run `--all` | C2 (predicate = 0005's); C1 (`outcomes` unchanged) | 21 of 22; `finalize-pass` guard-excluded on `gate_passed` — guard, not match, so it stays excluded in BOTH modes |
-| 5. `flowMVVModel` ± `--all` | C3 (added discriminating row); C1(b) guard exclusions untouched | `gated-excluded` absent in both — guard-excluded |
-| 6. four match classes | C1 (three-valued); `disposition` table above | conflicted row is a candidate, not an exclusion |
+| 5. `flowMVVModel` ± `--all` | C3 (added discriminating row); C1 guard exclusions untouched | `gated-excluded` absent in both — guard-excluded |
+| 6. three match classes + the three pins | C1; `disposition` table above; C3 pins | the conflicted row is refused before a probe exists |
 | 7. `unknown` as `[]` | C2 (identical payload shape both modes) | one consumer struct parses either |
-| 8. `make check` + suites | C3 (6 mechanical re-homings); S5/A7 (both kernel selection sites); S6 (anti-oracle) | `TestReq78` retires at `guard_atoms_test.go:930`; the five oracles S5 enumerates (`TestReq78` retired, three in `match_conflicted_test.go`, one in `reserved_key_0008_test.go`) are re-expected, not silently red |
+| 8. `make check` + suites | C3 (6 mechanical re-homings, ok-bool asserted); S5 (kernel suite unchanged); S6 (anti-oracle) | `git diff --stat internal/resolve` empty |
 
-No CONTRADICTION row: step 4's `finalize-pass` is guard-excluded in both modes,
-which is consistent — C1(b) leaves guard exclusions untouched and C2 changes only
-match's participation.
+No CONTRADICTION row: step 4's `finalize-pass` is guard-excluded in both modes, which is consistent — C1 leaves guard exclusions untouched and C2 changes only match's participation.
 
 #### Load-Bearing Decisions
 
 - **Identity** — a `flow next` request is identified as `0005:D-identity` says, plus the `--all` bit; the same request in the same mode over the same model revision and artifact contents reports the same candidate set.
 - **Naming** — the flag is `--all`, boolean. Precedent for exactly this meaning (widen past a conditioned default): `docker ps -a` "Show all containers (default shows just running)", `git branch -a`, `gh workflow list --all` "Include disabled workflows" (`langref/gh-cli/pkg/cmd/workflow/list/list.go`), `beads --all` "Include closed issues", `ps -A`. Rejected: `--enumerate` (describes 0005's verb, not the caller's intent, and has no precedent in the surveyed CLIs); `--ignore-match` / `--no-match` (names the mechanism rather than the result, and collides with the kernel refusal spelling); flipping the sense (`--select` / `--match` on a 0005 default) because the defect is the default and every skill would carry the flag (Alternative 2). Rejected: an enum (`--state=all|applicable`), because the axis has exactly two members — surveyed enums (`gh pr list --state open|closed|merged|all`) exist where a third value already does, and inventing one forces a value for the common case. If a third mode ever appears the migration is `gh`'s own (`--include-forks false|true|only`): promote to a `StringEnumFlag` and keep `--all` as the widest member.
-- **Undecided reporting shape** — the per-candidate field is `unknown`, a list of `{key, reason}`. Rejected: keeping the flat `[]string` `unresolved`, which cannot carry the remedy. Precedent for the word and the shape: terraform/opentofu emits `after_unknown` in plan JSON as a structural sibling of `after` (`internal/command/jsonplan/plan.go`) and carries `"unknown"` as a first-class check status distinct from `"error"` (`internal/command/jsonchecks/status.go`), reserving the human-only rendering `(known after apply)` for text mode; kubectl's conditions use `True`/`False`/`Unknown` for the same "could not determine" sense. `unknown` is emitted as `[]` rather than omitted so one consumer struct parses both modes (C2). Ordering: entries are sorted by `(key, reason)`, so the merge of kernel-supplied and CLI-computed facts is stable across builds — `D-identity` requires only set equality, but an unstable order would churn any golden payload a consumer diffs. Text mode (`--as=text`) renders the same pairs as `key (reason)` on the candidate; the reason vocabulary carries the whole remedy story, so suppressing it in the human-facing mode would leave the text caller with the symptom and no diagnosis — terraform's precedent cited above splits the RENDERING, not the information.
-- **Selection / predicate** — default: candidate ⇔ row match verdict ≠ `no-match` ∧ guard not decided false (C1). `--all`: candidate ⇔ guard not decided false (C2). In both modes `next` reports all survivors and chooses none; exactly-one selection and refusal remain `flow resolve`'s (`0005:D-selection-predicate`).
-- **Placement** — the three-valued match verdict is the KERNEL's, not a CLI probe reshaping. Rejected: the CLI-side pre-strip (Alternative 3), because conflictedness is not visible to the CLI and a presence-only test silently excludes a conflicted row. Rejected: a separate `resolve.Candidates` entry point, because it would leave `TagSet.matches` two-valued for `flow resolve` and fork the semantics per caller — the verdict is a property of the seam, not of who asks.
-- **Verdict use, by site class** — the shared verdict does NOT imply a shared disposition. A selection site (`Resolve`, `escapeOrRefuse`) commits a transition and its `Writes`, so it MUST NOT act on an undecidable precondition: `indeterminate` refuses `guard_unevaluable`, the non-escapable class `0007:C8` reserves for exactly that, on the same "MUST NOT be maskable behind an escapable refusal class" ground. A reporting site (`flow next`) commits nothing, so it reports the row and the reason instead. Rejected: `indeterminate` never excludes anywhere — that lets `flow resolve` emit an unescaped write-performing plan whose match precondition was never checked, and reopens the escapability defect `TestAdv0007_3_ConflictedKeyIsNotEscapableByNamingIt` closes. Rejected: `indeterminate` always excludes — that is Alternative 1, which empties the list for any partial-state caller. The carrier follows from this: the probe's refusal payload already reaches the CLI, so no new field on `Plan` is needed.
-- **Undecided vocabulary** — reuses `0007:C8`'s closed reason set (`absent`, `uncomparable`) for every fact that comes off the SEAM, rather than minting one there. `absent` and `uncomparable` have different remedies (bind a reader or supply the tag; fix the overlapping readers), so the payload names which. The CLI's `unknown` list spans a third class the seam never sees — a gate id un-run because `--evaluate-gates` was not passed — which is neither `absent` (the id is declared and reported) nor `uncomparable` (a gate id is not a view key with a value). That class carries `not-evaluated`, minted here for the gate class only. `0007:C8`'s set stays at two members for the seam it governs; the split is that `0007:C8` types a REFUSAL payload while `unknown` is a CLI reporting surface with one more source. Rejected: overloading `absent` for un-run gates, which would tell the caller to supply something they cannot; rejected: a single opaque `unresolved` key list, which loses the remedy; rejected: a sixth `RefusalKind`, which `0007:REQ-79` forbids.
+- **Undecided reporting shape** — the per-candidate field is `unknown`, a list of `{key, reason}`. Rejected: keeping the flat `[]string` `unresolved`, which cannot carry the remedy. Precedent for the word and the shape: terraform/opentofu emits `after_unknown` in plan JSON as a structural sibling of `after` (`internal/command/jsonplan/plan.go`) and carries `"unknown"` as a first-class check status distinct from `"error"` (`internal/command/jsonchecks/status.go`), reserving the human-only rendering `(known after apply)` for text mode; kubectl's conditions use `True`/`False`/`Unknown` for the same "could not determine" sense. `unknown` is emitted as `[]` rather than omitted so one consumer struct parses both modes (C2). Ordering: entries are sorted by `(key, reason)`, so the merge of walk-derived, payload-derived, and gate-id facts is stable across builds — `D-identity` requires only set equality, but an unstable order would churn any golden payload a consumer diffs. Text mode (`--as=text`) renders the same pairs as `key (reason)` on the candidate; the reason vocabulary carries the whole remedy story, so suppressing it in the human-facing mode would leave the text caller with the symptom and no diagnosis — terraform's precedent cited above splits the RENDERING, not the information.
+- **Selection / predicate** — default: candidate ⇔ every match atom over a present key holds (kernel) ∧ guard not decided false (kernel); an absent match key neither excludes nor decides, it is reported (C1). `--all`: candidate ⇔ guard not decided false (C2). In both modes `next` reports all survivors and chooses none; exactly-one selection and refusal remain `flow resolve`'s (`0005:D-selection-predicate`).
+- **Placement** — PRESENCE is decided in the CLI, EQUALITY in the kernel, and `internal/resolve` is not modified. The split is exact because the only present-key case the kernel would fold without comparing — a conflicted key — is refused before a probe exists (A3), and the CLI already owns the presence test (A2). Rejected: a kernel three-valued match verdict with `flow resolve` refusing on `indeterminate` (Alternative 4, this RDR's own recommendation from Stage 4 until the Stage 5 critique), because `guard_unevaluable` is a resolution-level veto under `0007:C10`, is unreachable by escape rows, and has no carrier for match facts. Rejected: a kernel-side report of undecided match atoms on `no_match` with selection unchanged (Alternative 5), because it changes a kernel payload to carry a fact the CLI already holds. The recorded upgrade path if A3's invariant ever relaxes is the exported per-atom verdict in Briefly Rejected — not a silent CLI comparison.
+- **Undecided vocabulary** — reuses `0007:C8`'s closed reason set (`absent`, `uncomparable`) for every fact that comes off the kernel's guard payload, rather than minting one there; the CLI's own walk emits only `absent`. `absent` and `uncomparable` have different remedies (bind a reader or supply the tag; fix the value or the atom's literal), so the payload names which. The CLI's `unknown` list spans a third class the seam never sees — a gate id un-run because `--evaluate-gates` was not passed — which is neither `absent` (the id is declared and reported) nor `uncomparable` (a gate id is not a view key with a value). That class carries `not-evaluated`, minted here for the gate class only. `0007:C8`'s set stays at two members for the seam it governs; the split is that `0007:C8` types a REFUSAL payload while `unknown` is a CLI reporting surface with one more source. Rejected: overloading `absent` for un-run gates, which would tell the caller to supply something they cannot; rejected: a single opaque `unresolved` key list, which loses the remedy; rejected: a sixth `RefusalKind`, which `0007:REQ-79` forbids.
 
 #### Illustrative Code
 
@@ -416,7 +348,7 @@ intrastate flow next --model models/rdr.toml --artifact rdr=./0011.md --as=json
 intrastate flow next --model models/rdr.toml --artifact rdr=./0011.md --all --as=json
 
 # A decision table with no tags: every rule is a candidate; each observed
-# match key is listed under `unknown`. Supplying --tag a=x narrows it.
+# match key is listed under `unknown` as absent. Supplying --tag a=x narrows it.
 intrastate flow next --model table.toml --as=json
 ```
 
@@ -424,25 +356,42 @@ intrastate flow next --model table.toml --as=json
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| Per-row kernel probe | `internal/cli/flow_next.go::excluded` | strips every match atom (`probe.Match = nil`) | Extend | probe carries the row's match pattern by default; omits it under `--all` |
-| Three-valued verdict + reason vocabulary | `internal/resolve/guard.go::evaluateAtom`, `::Reason`, `::UndecidedAtom` | scoped to guard blocks (`0007:REQ-78`) | Reuse | C1 reuses `absent` / `uncomparable` verbatim at the seam; mints `not-evaluated` for the CLI's un-run-gate class only |
-| Undecided payload carrier | `internal/resolve/resolve.go::Refusal.Undecided`, `guard.go::isGuardBlock`, `::evaluateAtoms` | documented and populated on `guard_unevaluable` only; `isGuardBlock` filters `BlockMatch` out; non-`GuardUnevaluable` payloads discarded | **Extend** | admits `BlockMatch` entries so an indeterminate match refuses `guard_unevaluable` with its atoms named (C1, A8); this is the kernel→CLI carrier, so `Plan` gains no field |
-| Match comparison | `internal/resolve/resolve.go::TagSet.matches` | folds absent, conflicted, and unequal into one `bool` | **Extend** | returns a three-valued verdict plus undecided atoms (C1) |
-| Conflicted-key detection | `internal/resolve/resolve.go::TagSet.conflicting`, `::merge` | unexported; no CLI equivalent | Reuse | the reason the verdict is computed kernel-side, not in the CLI |
-| Candidate reporting | `internal/cli/flow_next.go::summarize` over `assembledView` | flat `[]string`, no reason, no `Block` filter | Extend | `unknown` carries `{key, reason}` (C1), sourced from the probe's refusal payload for match facts; dedup on the pair; the `--all` branch filters `BlockMatch` atoms out (C2) |
+| Per-row kernel probe | `internal/cli/flow_next.go::excluded` | strips every match atom (`probe.Match = nil`); returns `bool`, discarding the `Result` | Extend | probe carries the row's match atoms over view-present keys by default, none under `--all`; returns the `Result` so `summarize` can read the guard payload |
+| View presence test | `internal/cli/flow_next.go::summarize` over `::assembledView` | applied for reporting only; no `Block` filter | Reuse | the same test selects which match atoms the probe carries (C1) and which land in `unknown` as `absent` |
+| Undecided reason vocabulary | `internal/resolve/guard.go::Reason` (`absent`, `uncomparable`), `::UndecidedAtom` | guard blocks only (`0007:REQ-78`) | Reuse | reused verbatim for the guard facts read off the payload; `not-evaluated` minted for the CLI's un-run-gate class only |
+| Undecided payload carrier | `internal/resolve/resolve.go::Refusal.Undecided` on `guard_unevaluable` | guard atoms only; empty on `owned_state_unavailable` | Reuse | read by `summarize` for guard facts (A13); not widened |
+| Match comparison | `internal/resolve/resolve.go::TagSet.matches` | folds absent and conflicted into `false` | Reuse (unchanged) | the CLI never hands it an absent key; conflicted cannot arise (A3) |
+| Conflicted-key exclusion | `internal/table/load.go::checkAccessorBindings`; `internal/cli/flow_input.go::parseTags` (`flow-tag-duplicate`, `flow-tag-owned`) | none | Reuse | the three invariants C1's presence test rests on; C3 pins all three |
+| Candidate reporting | `internal/cli/flow_next.go::summarize` | flat `[]string`, no reason | Extend | `unknown` carries `{key, reason}` from three sources (C1); dedup on the pair; the `--all` branch filters `BlockMatch` atoms out (C2) |
 | Match/guard split on the probe row | `internal/table/model.go::Row.KernelRow` | none | Reuse | no table change |
-| Refusal kind set | `internal/resolve/resolve.go::RefusalKinds` | pinned at five (`0007:REQ-79`) | Reuse | no sixth kind; the facts ride a payload field |
+| Refusal kind set | `internal/resolve/resolve.go::RefusalKinds` | pinned at five (`0007:REQ-79`) | Reuse | no sixth kind |
 | Flag registration | `internal/cli/flow.go::registerSelectionFlags` + per-verb `cmd.Flags()` | none | Reuse | `--all` registered on `next` only (C2) |
 | Reader narrowing | `internal/cli/flow_exec.go::invokedReaders` | union over all rows for `next` | Reuse | unchanged in both modes |
 
 ### Decision Rationale
 
-The caller's question is "what can I do from here", and every peer that answers it conditions the answer on the current state: stateless's `PermittedTriggers` returns only triggers whose guards are met in the current state; xstate v5 removed the unconditioned `nextEvents` and kept the conditioned `can()`; pytransitions keeps the declared form (`get_triggers`) but as a separate operator from the evaluated one (`may_*`); SCXML's `cond` gates enablement (Investigation). 0005's predicate was the declared-shape answer; in this table model the analogue of "current state" is the match block, so a state-conditioned `next` is a match-conditioned one. The mechanism is chosen to put the decision where the deciding information is. `excluded`'s own doc already states the posture for guards — "treating 'unknown' as 'false' would silently drop rows the caller is entitled to see" — and the fix generalizes it to match, which is the last two-valued seam in a system that is three-valued at the gate (`0004:C9`) and guard (`0007:C6`, `0007:C8`) seams. Alternative 1 (strict kernel match) was rejected because it empties the list for any caller that supplies partial state, including 0010's no-tag decision table (A5), and contradicts that posture at the same function. Alternative 2 (keep 0005's default, opt-in flag) was rejected because the defect is the default and the instance read says the conditioned form is the primary one. Alternative 3 (a CLI-side presence pre-strip, this RDR's own recommendation until Stage 4) was rejected on evidence: conflictedness lives behind the kernel's unexported `TagSet.conflicting` and has no representation in `assembledView`, so a presence-only test retains a conflicted atom and the row is excluded as `no_match` with nothing reported — the masking P1 forbids, reachable by a caller who repeats a `--tag` key. Placing the verdict in the kernel also fixes it once for `flow resolve` rather than per caller, closes the deferral `0007:REQ-78` recorded, and follows JDR 0001 §D12's own precedent of widening a kernel vocabulary rather than forking a second one at the CLI. The cost is a larger blast radius than the Stage-2 estimate — recorded in the `large` Profile — bought with the seam's containment and P7's pre-release licence: `TagSet` and `matches` are both unexported, so the signature change cannot leave `internal/resolve`, and `resolve.Resolve`, the entry point whose behaviour changes, has three non-test call sites — `internal/cli/flow_next.go` (the probe) and two in `internal/cli/flow_resolve.go`. (The package as a whole is imported by 16 non-test files across `internal/{accessor,cli,graphlint,guard,table}`; they consume its types, not the match verdict.)
+The caller's question is "what can I do from here", and every peer that answers it conditions the answer on the current state: stateless's `PermittedTriggers` returns only triggers whose guards are met in the current state; xstate v5 removed the unconditioned `nextEvents` and kept the conditioned `can()`; pytransitions keeps the declared form (`get_triggers`) but as a separate operator from the evaluated one (`may_*`); SCXML's `cond` gates enablement (Investigation). 0005's predicate was the declared-shape answer; in this table model the analogue of "current state" is the match block, so a state-conditioned `next` is a match-conditioned one. That settles the predicate. What this re-propose re-decided is WHERE the absent-key case is sorted, after the Stage 5 critique refuted the ground the kernel placement stood on.
 
-Premortem (paragraph): this shipped, and a skill driving a model whose rows match on an owned key its reader does not serve (a typo'd `keys` list) saw every row listed as a candidate with the key under `unknown` — the same wall-of-candidates symptom as before, now with a hint. A second failure: a caller who scripted against 0005's list found candidates missing and no flag in the error, because there is no error — the list is just shorter. Both are answered by the design rather than forcing a switch: the first is the intended three-valued behaviour and the `unknown` entry, carrying reason `absent`, is the diagnostic (the alternative, silently dropping the row, is the worse failure); the second is the override's cost, mitigated by C3's help text, the test-file header, and `--all`. Neither shows a case the chosen predicate cannot answer.
-Premortem: survived (paragraph)
-Ground-sweep: clean (24 anchors). Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/grounding-sweep/sweep.md`.
-Joint-check: fired → 0010; disposition 2026-08-26: cite-don't-restate — C1 is the sole normative home of the `flow next` predicate; `0010:A11` cites it and 0010 restates nothing. Open peers at depth 1 with Status Draft/Final: cli/0010 only (0001–0009 are `Implemented`). Shared modify-anchor: `internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both). Shared literals: `no_match` (0010: its "otherwise" row's escape class, `0010:A9`; here: the excluding kernel refusal in C1) and `flow next` — the coupling is real (A5). Absence arm: this RDR narrows a reported set rather than converting a refusal into an acceptance; no `Final` peer exists, and the `Implemented` predecessor 0005's reliance on the enumeration is named under `Overrides` and rides to 7.1. Bridge sub-check: n/a — neither plan retires a surface the other introduces (0010 stays out of `flow_next.go`; this RDR stays out of `resolvePayload`, `normalizeRule`, `reach`, `checkGroups`). **Re-run 2026-08-26 after Stage 4 relocated the verdict into the kernel:** the shared surface widens from `flow next` to `internal/resolve/resolve.go::TagSet.matches`, which 0010's decision-table class reaches through `Resolve`. The disposition is unchanged and the coupling stays one-way — C1 makes an undecidable match atom a named fact instead of an escapable `no_match`, which strictly widens what a zero-owned decision table can report and cannot turn a 0010 acceptance into a refusal. `0010:A11` already pre-commits to re-verification "against cli/0011's candidate predicate once 0011 locks", and A5 records the one limit it cannot discharge here: a genuine zero-owned decision table is unloadable on this build, so `0010:A11`'s "empty `required`" half is downstream of 0010 shipping, not of this contract.
+Questions-Options-Criteria. Options: **O1** strict kernel match, absent excludes (Alternative 1); **O2** keep 0005's default, opt-in flag (Alternative 2); **O3** CLI presence-split, kernel untouched (chosen); **O4** kernel three-valued match, selection refuses `guard_unevaluable` (Alternative 4, the Stage-4 design); **O5** kernel reports undecided match atoms on `no_match`, selection unchanged (Alternative 5). Cells are one clause; the deciding rows are marked.
+
+| criterion | O1 strict | O2 opt-in | **O3 CLI split** | O4 kernel refuse | O5 kernel report |
+| --- | --- | --- | --- | --- | --- |
+| answers the user's question by default | no — partial state yields an empty list | no — the alphabet stays the default | **yes** — narrows where state is supplied, names the key where it is not | yes at `next` | yes at `next` |
+| prior-art alignment (absent ≠ unequal; conditioned default) | contradicts PTaCL/SQL | contradicts the instance read | **aligned** — distinguishes at the atom, folds only at selection, as SQL does at statement scope | aligned at the atom; no precedent for the veto (0007:C10 says so of itself) | aligned |
+| **peer-contract compatibility (0007:C10, 0010:A9) — deciding** | compatible | compatible | **compatible — kernel unchanged** | **collides**: whole-table refusal on one unbound key; escape rows cannot rescue `guard_unevaluable` | compatible — selection unchanged |
+| **mechanism exists in the code — deciding** | yes | yes | **yes** — presence test (A2), load refusal (A3), payload carrier for guard facts (A13) | **no** — no "survives but non-selectable" partition; `Refusal.Undecided` is guard-only | needs a new payload field on `no_match` |
+| blast radius | one function | one flag | **`internal/cli/flow_next.go` + fixtures**; `internal/resolve` diff empty | kernel seam, both selection sites, ≥7 kernel oracles, two callers of `Resolve` | kernel payload + CLI |
+| reversibility | trivial | trivial | **trivial** — `--all` restores the set; the upgrade path if A3 relaxes is named | poor — a `flow resolve` semantics change with a locked-peer dependency | moderate |
+| cost | lowest | lowest | **low** | highest | medium |
+
+O3 wins on the two deciding rows and ties or leads on the rest. O4 — the design this RDR carried from Stage 4 to Stage 5 — loses on both deciding rows: it needs a kernel partition that does not exist, and where it would land, `0007:C10` makes it a table-wide veto. O5 is compatible but buys nothing: the only match fact the CLI cannot see for itself is the conflicted case, and that case is refused before a probe exists. Alternative 1 (strict kernel match) was rejected because it empties the list for any caller that supplies partial state, including 0010's no-tag decision table (A5), and contradicts the "undecided is not false" posture `excluded` already takes for guards. Alternative 2 (keep 0005's default, opt-in flag) was rejected because the defect is the default and the instance read says the conditioned form is the primary one.
+
+Why `0007:REQ-78` stays deferred rather than closed: closing it means deciding what `flow resolve` does with an undecidable match, and the only non-escapable class the kernel has for "undecidable" is a resolution-level veto by locked contract. Taking that on is a `flow resolve` design decision — with a counter-example in SQL's statement-scope fold and a direct dependency on 0010's default-row rescue — that no caller has asked for and this RDR's user does not need. The cost is recorded honestly in Consequences: `next` and `resolve` disagree on an absent-key row, in the escapable direction.
+
+Premortem (hardened): one draft-free critic, briefed on the approach, its load-bearing claims, the rejection reasons, and the two `2-propose` ledger rows; ledger at `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/propose-premortem/critic.md`, 15 findings, verdict PASS with mitigations. Folded: P-1 (an observed `--tag` on an owned key — refused upstream as `flow-tag-owned`, and not a kernel conflict across provenances; now the third pin in C3 and named in A3); P-2/P-14 (a row whose every match atom is omitted, and equality-only match atoms — stated in C1 and A12); P-3/P-4 (presence defined identically, view fixed once per invocation — A11, C1); P-5 (payload shape and the `{key, reason}` merge rule — A13); P-9 (under `--all` no match entry, whatever the key's presence — C2, unchanged); P-10 (help states a candidate is "not excluded", not "will be selected" — C3); P-13 (cobra conditions the `--all` negative rests on — A14); P-7/P-8 (the 21→3 result is pinned as a rule-id set in MVV 3; the 0010 coupling is re-checked against its row shapes in the Joint-check below). Not folded, by design: P-6 (a count/golden assertion breaking beyond the six reads — A4's enumeration found none; S6 states the checkable form); P-12 (an escape hatch for reopening Alternative 4 — its first and second legs stand on `0007:C10` and `Resolve`'s control flow regardless of the carrier).
+Premortem: survived (hardened)
+Ground-sweep: clean (58 anchors) — 28 `path::Symbol`, 18 source-quoted behaviours, 12 peer-RDR passages, all CONFIRMED by a draft-free checker on `main` (2026-08-26). Note carried forward: `0007:REQ-78` / `0007:REQ-79` are entries in RDR 0007's req-list artifact (`docs/rdr/0007-guard-predicate-totality/artifacts/req-list.md`), not projector-inspectable elements; the text cited is verbatim from that artifact.
+Joint-check: fired → 0010 (home: cli/0011:C1). Re-run 2026-08-26 on the re-proposed design. Open peers at depth 1 with Status Draft/Final: cli/0010 only (0001–0009 are `Implemented`). Shared modify-anchor: `internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both). Shared literals: `no_match` (0010: its "otherwise" row's escape class, `0010:A9`; here: the excluding probe disposition in C1) and `flow next`; 0010's `unknown` hits are the phrase "unknown tag", not this RDR's payload field. Disposition unchanged from the first run and already answered by the user — cite-don't-restate: C1 is the sole normative home of the `flow next` predicate, `0010:A11` cites it, and 0010's own `Joint-check:` line records the same fire and home, so symmetry holds without a peer edit. What the re-run changes is the coupling's direction, which the Stage 5 critique showed the prior design had wrong: this proposal leaves `internal/resolve` untouched, so `0010:A9`'s escape row keeps rescuing `no_match` on a partially-supplied decision table — the regression Alternative 4 would have caused is structurally impossible here. Checked against 0010's actual row shapes (premortem P-8): the "otherwise" row is an ESCAPE row (`0010:A9`), and `flow next` never lists escape rows (`runFlowNext` skips `len(row.Escape) != 0`), so the catch-all is never offered as a candidate; the ordinary rows carry observed match keys, each reported `absent` with no `--tag` (A5). Absence arm: this RDR narrows a reported set and converts no refusal into an acceptance; no `Final` peer exists, and the `Implemented` predecessor 0005's reliance on the enumeration is named under `Overrides` and rides to 7.1. Bridge sub-check: n/a — neither plan retires a surface the other introduces (0010 stays out of `flow_next.go`; this RDR stays out of `resolvePayload`, `normalizeRule`, `reach`, `checkGroups`, and now out of `internal/resolve` entirely). Not paused: the fork was answered at the first run and its home is unchanged; re-recorded here so a later session can tell the gate ran.
 
 ## Alternatives Considered
 
@@ -476,56 +425,73 @@ Joint-check: fired → 0010; disposition 2026-08-26: cite-don't-restate — C1 i
 
 **Reason for rejection**: fixes the symptom for callers who know about the flag and leaves the observed defect in place for everyone else.
 
-### Alternative 3: CLI-side presence pre-strip (no kernel change)
+### Alternative 4: Kernel three-valued match; selection refuses `guard_unevaluable` on an undecidable match
 
-**Description**: Leave `TagSet.matches` two-valued and reshape the probe in `internal/cli/flow_next.go::excluded` instead — carry the row's match atoms over keys the assembled view holds, drop the atoms over keys it lacks, and read `no_match` as the sole exclusion. This was this RDR's own recommendation until Stage 4.
+**Description**: Make `internal/resolve/resolve.go::TagSet.matches` return `match` / `no-match` / `indeterminate`; at both selection sites (`Resolve`, `escapeOrRefuse`) an `indeterminate` row is not selected and the resolution refuses `guard_unevaluable` carrying the undecided match atoms in `Refusal.Undecided`; `flow next` reads them off the probe's refusal. This was this RDR's recommendation from Stage 4 until the Stage 5 critique.
 
 **Pros**:
 
-- No kernel change; the diff is one function, a flag, and help text.
-- The presence lookup already exists in the CLI for `unresolved` reporting and compares no value.
+- One verdict for every caller of the seam; closes `0007:REQ-78`; `flow resolve` stops folding an undecidable match into an escapable `no_match`.
 
 **Cons**:
 
-- **The CLI cannot implement the rule correctly.** Conflictedness lives in `internal/resolve`'s unexported `TagSet.conflicting`, and `assembledView` is a last-write-wins `map[string]string` with no conflicted concept (zero occurrences of `conflicted` in `internal/cli`). A bare presence test retains a conflicted atom; `TagSet.matches` then returns false on `tv.conflicted` and the row is excluded as `no_match` with NOTHING in the candidate's undecided list — the silent drop `P1` forbids, reached through a different door than the one A1's "If wrong" watches.
-- It forks a second presence vocabulary at the CLI beside the kernel's, which JDR 0001 §D12 widened `resolve.Block` specifically to avoid.
-- It leaves `0007:REQ-78`'s deferred match-seam gap open, and leaves `flow resolve` still folding an undecidable match atom into an escapable `no_match`.
+- `guard_unevaluable` is a RESOLUTION-level veto: `0007:C10` — "if any surviving candidate row's guard is GuardUnevaluable, the resolution MUST refuse `guard_unevaluable`; a decided-GuardTrue sibling MUST NOT be selected while an unevaluable candidate exists" — and shipped `gate` discards `selected` on `len(undecidable) > 0`. Every rule in `models/rdr.toml` matches on `stage`, so one unbound key refuses the whole table where today the rows drop out and an escape row rescues.
+- `Resolve` returns on `blocked != nil` above the `switch len(selected)` that reaches `escapeOrRefuse`, so the refusal is unreachable by any escape row — 0010's "otherwise" row (`0010:A9`, an escape rescuing `no_match`) stops rescuing on a partially-supplied decision table.
+- The carrier does not exist: `Refusal.Undecided` is emitted only for rows whose GUARD verdict is `GuardUnevaluable` (`evaluateAtoms` returns `nil` for a decided guard), `gate` passes `row.Guard` — not `row.Atoms` — to it, and `Row.Match` is `[]Tag{Key,Value}` while `UndecidedAtom` needs `{Key,Block,Operator,Literal,Reason}` on `0007:C8`'s pinned sort key.
+- Its justification rested on the conflicted case being user-reachable, which A3 refutes.
 
-**Reason for rejection**: it buys a smaller diff by putting the decision where the deciding information is not. Verified in Stage 4 (A3): the conflicted-key case is user-reachable — `internal/cli/flow_exec.go::flowRequest.runReaders` appends each invoked reader's `OwnedSnapshot()` with no dedup, so two readers writing one key with differing values conflicts it — so the failure is real, not theoretical.
+**Reason for rejection**: it needs a kernel partition ("survives into `gate` as a non-selectable row") the code does not have, and where it would land it collides with a locked peer contract and regresses 0010 — a `flow resolve` design decision smuggled in as a `flow next` fix. Recorded in `docs/rdr/0011-flow-next-match-conditioned-candidates-postmortem.md`.
+
+### Alternative 5: Kernel reports undecided match atoms on `no_match`; selection unchanged
+
+**Description**: Leave selection two-valued, but have `matches` also return the atoms it folded (absent / conflicted), carried on the `no_match` refusal in a new payload field, so `flow next` reads the distinction off the kernel without the CLI testing presence.
+
+**Pros**:
+
+- Single-sources the absent-vs-unequal distinction in the kernel; no locked-peer collision; escape rescue unchanged.
+
+**Cons**:
+
+- A kernel payload change (a new field on `Refusal`, or `Undecided` populated on a second kind against `0007:C8`'s wording) to carry a fact the CLI already has: absence is CLI-visible (A2) and the conflicted case cannot reach the kernel from the CLI (A3).
+- Widens `flow resolve`'s `no_match` payload for every caller to serve one.
+
+**Reason for rejection**: correct but unearned — it pays a kernel surface change for a distinction the CLI can make exactly over any model that loads.
 
 ### Briefly Rejected
 
 - **Filter `outcomes` to outcomes with a surviving candidate**: 0005 already refused this reading (DEV-4 in `runFlowNext`); the alphabet is what may be requested.
 - **A separate verb (`flow candidates`)**: two verbs for one question; 0005's four-verb closure stands.
 - **Report match-excluded rows with an `excluded_by` field instead of dropping them**: grows the payload for the same information `--all` already yields.
+- **An exported per-atom match verdict (`resolve.MatchVerdict(view, atom)`) the CLI calls instead of testing presence**: exports a seam helper for a case (conflicted) no CLI caller can reach. Named here as the UPGRADE PATH: if `checkAccessorBindings` or `parseTags` ever relax and a conflicted key becomes reachable, this is the change — not a CLI-side value comparison.
 
 ## Context
 
 ### Background
 
-Observed 2026-08-26 while driving the consumer model (rdr#tmxk): `flow next --model models/rdr.toml --artifact rdr=<state with stage=resolved>` lists 21 of the 22 rules. The cause is by design in RDR 0005: `internal/cli/flow_next.go::excluded` nils `probe.Match` / `probe.Escape` before probing, under the comment "dropping a row whose match pattern the supplied facts do not satisfy would be a selection this verb was not asked to make" — the sentence this RDR revisits. 0005 rationale `0005:A3` holds that `next` exposes the alphabet without owning guard evaluation; selection (gate-then-count, exact-one survivor) belongs to the kernel. 0005's Briefly Rejected list also refused exit-code-only output because it "cannot carry legal outcome alphabets, conditional summaries" — the conditional summary is the surface this RDR sharpens. Constraints: RDRs are never amended in content (this is a new RDR that overrides 0005's clause); intrastate stays generic — no consumer (RDR-process) knowledge in code, docs, or fixtures; `make check` must pass. Not a facet of kata `zdat` / cli/0010 (owned-state optionality is a model-class decision; this is a verb-predicate decision) — cross-cite only; 0010 leaves `flow next` to this RDR (`0010:C4`, `0010:A11`).
+Observed 2026-08-26 while driving the consumer model (rdr#tmxk): `flow next --model models/rdr.toml --artifact rdr=<state with stage=resolved>` lists 21 of the 22 rules. The cause is by design in RDR 0005: `internal/cli/flow_next.go::excluded` nils `probe.Match` / `probe.Escape` before probing, under the comment "dropping a row whose match pattern the supplied facts do not satisfy would be a selection this verb was not asked to make" — the sentence this RDR revisits. 0005 rationale `0005:A3` holds that `next` exposes the alphabet without owning guard evaluation; selection (gate-then-count, exact-one survivor) belongs to the kernel. 0005's Briefly Rejected list also refused exit-code-only output because it "cannot carry legal outcome alphabets, conditional summaries" — the conditional summary is the surface this RDR sharpens. Constraints: RDRs are never amended in content (this is a new RDR that overrides 0005's clause); intrastate stays generic — no consumer (RDR-process) knowledge in code, docs, or fixtures; `make check` must pass. Not a facet of kata `zdat` / cli/0010 (owned-state optionality is a model-class decision; this is a verb-predicate decision) — cross-cite only; 0010 leaves `flow next` to this RDR (`0010:C4`, `0010:A11`). Stage history: the Stage-4 draft relocated the verdict into the kernel on a reachability claim the Stage 5 critique refuted; the route-back returned the RDR here, and this proposal withdraws the kernel change (ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates-postmortem.md`).
 
 ### Technical Environment
 
-Go CLI (`bin/intrastate`); `internal/cli/flow_next.go` (`excluded`, `summarize`, `assembledView`, candidate/guard reporting), kernel probe API `internal/resolve/resolve.go::Resolve` that today receives rows with match stripped, `internal/cli/flow_next_0005_test.go`. Conventions in `AGENTS.md` (respond gateway, CLIError codes, SilenceUsage). Design history: `docs/rdr/0001–0010`, `docs/jdr/0001`.
+Go CLI (`bin/intrastate`); `internal/cli/flow_next.go` (`excluded`, `summarize`, `assembledView`, candidate/guard reporting), kernel probe API `internal/resolve/resolve.go::Resolve` that today receives rows with match stripped, `internal/table/load.go` load-time accessor-binding checks, `internal/cli/flow_next_0005_test.go`. Conventions in `AGENTS.md` (respond gateway, CLIError codes, SilenceUsage). Design history: `docs/rdr/0001–0010`, `docs/jdr/0001`.
 
 ## Research Findings
 
 ### Investigation
 
-Prior art was read first, class and instance. Class (StateMachineRes corpus, three queries, ledger in `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/prior-art.md`): the "what next" operator exists in every peer that has a current state, and is conditioned on it. Instance: qmuntal-stateless's README "Introspection" — "a list of the triggers that can be successfully fired within the current state via the `StateMachine.PermittedTriggers` property" — implemented in `states.go::stateRepresentation.PermittedTriggers` as triggers with `len(tb.UnmetGuardConditions(...)) == 0` ⇒ state- and guard-conditioned, the conditioned form is the only form. pytransitions `transitions/core.py::Machine.get_triggers` returns triggers declared from the given states without evaluating conditions, while `Machine._can_trigger` (the `may_*` family) evaluates them ⇒ the declared-shape enumeration exists but as a distinct operator, which is what `--all` is here. xstate's `packages/core/CHANGELOG.md` records "Removed `MachineSnapshot['nextEvents']`" and `packages/core/src/State.ts::machineSnapshotCan` keeps the guard-evaluated `can(event)` ⇒ when forced to keep one, the peer kept the conditioned query. scxmlcc `doc/user-manual.md` (`cond`): "The transition is only executed if the condition evaluates to true" ⇒ enablement is event- and condition-conditioned. The state-machine peers gave no coverage for distinguishing an *absent* state key from a mismatching one — every peer assumes a current state is always present — so Stage 4 searched the access-control and query literature, where partial input is the normal case, and found the seam formalized. **PTaCL** (policy target algebra) models a *target*: a set of key/value equalities selecting which rules apply, evaluated before the rule body — structurally this codebase's match block. Its atomic target is three-valued, `⟦(n, v)⟧(q) = 1T if (n, v′) ∈ q and v = v′; ⊥T if (n, v′) ∉ q; 0T otherwise` — absence tested *before* inequality — and the paper states the point outright: "PTaCL can distinguish between a non-matching value for an attribute and a missing attribute." **SAML 2.0 Core** §2.5.1 covers the uncomparable case: where a condition "is encountered that is not understood, the status of the condition cannot be evaluated and the validity status of the assertion MUST be considered to be Indeterminate." **XACML** is the ancestor of both, contributing the `Indeterminate` vocabulary. **SQL** is the mass-adoption instance: a comparison against NULL yields UNKNOWN, "even (NULL = NULL) is UNKNOWN", under an explicit three-valued logic. ⇒ no surveyed system folds present-but-uncomparable into a silent non-match; that is the one disposition the literature does not take, and it is the one the pre-Stage-4 draft of C1 took. Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/three-valued-match.md`.
+Prior art was read first, class and instance, and re-read at this re-propose from the two ledgers rather than re-searched. Class (StateMachineRes corpus, three queries, ledger `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/prior-art.md`): the "what next" operator exists in every peer that has a current state, and is conditioned on it. Instance: qmuntal-stateless's README "Introspection" — "a list of the triggers that can be successfully fired within the current state via the `StateMachine.PermittedTriggers` property" — implemented in `states.go::stateRepresentation.PermittedTriggers` as triggers with `len(tb.UnmetGuardConditions(...)) == 0` ⇒ state- and guard-conditioned, the conditioned form is the only form. pytransitions `transitions/core.py::Machine.get_triggers` returns triggers declared from the given states without evaluating conditions, while `Machine._can_trigger` (the `may_*` family) evaluates them ⇒ the declared-shape enumeration exists but as a distinct operator, which is what `--all` is here. xstate's `packages/core/CHANGELOG.md` records "Removed `MachineSnapshot['nextEvents']`" and `packages/core/src/State.ts::machineSnapshotCan` keeps the guard-evaluated `can(event)` ⇒ when forced to keep one, the peer kept the conditioned query. scxmlcc `doc/user-manual.md` (`cond`): "The transition is only executed if the condition evaluates to true" ⇒ enablement is event- and condition-conditioned. The state-machine peers gave no coverage for distinguishing an *absent* state key from a mismatching one — every peer assumes a current state is always present — so Stage 4 searched the access-control and query literature, where partial input is the normal case (ledger `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/three-valued-match.md`). **PTaCL** (via Griesmayer & Morisset, ATRAP §2.1–2.2) models a *target* — key/value equalities selecting which rules apply — with a three-valued atomic evaluation, `⟦(n, v)⟧(q) = 1T if (n, v′) ∈ q and v = v′; ⊥T if (n, v′) ∉ q; 0T otherwise`, absence tested *before* inequality, and states outright: "PTaCL can distinguish between a non-matching value for an attribute and a missing attribute" ⇒ absent ≠ unequal at a selection seam is an established shape, which C1's reporting adopts. **SQL** is the mass-adoption instance and cuts both ways, which is what decides placement: at the atom, "When a NULL is involved in a comparison operation, the result is considered to be UNKNOWN" (Elmasri & Navathe §5.1) ⇒ do not fold absent into false where the caller can see it; at statement scope a `WHERE` clause evaluating to UNKNOWN does not qualify the row and the statement proceeds — the reading `0007:C10` itself gives as the counter-example to its own veto ⇒ leaving the kernel's selection fold in place has precedent, and replacing it with a veto (Alternative 4) has none. **SAML 2.0 Core** §2.5.1 ("the validity status … MUST be considered to be Indeterminate") and **XACML**'s `Indeterminate` cover the uncomparable case, which A3 shows the CLI cannot produce. ⇒ the literature supports distinguishing at the reporting surface and does not support a selection-scope veto; the chosen placement follows both halves.
 
 ### Key Discoveries
 
 - **Documented** — `internal/cli/flow_next.go::excluded` strips `Match` and `Escape` from the probe and excludes only on `resolve.KindNoMatch`; its doc gives the "unknown is not false" rule this RDR extends to match. ⇒ the change is a probe-shape change in one function.
-- **Documented** — `internal/resolve/resolve.go::TagSet.matches` collapses three distinct cases into one `false`: absent (`!ok`), conflicted (`tv.conflicted`), and unequal. ⇒ the distinction cannot be recovered outside the function, so the three-valued verdict is computed there (C1, A3).
-- **Documented** — the codebase is three-valued at every other seam: gates return `allow` / `deny` / `indeterminate`, where "Indeterminate MUST be a refusal-class result, not a false allow and not a false deny" (`0004:C9`); guards combine under strong-Kleene with normative truth tables (`0007:C6`) and name each undecided atom by key and a reason from a closed set (`0007:C8`). ⇒ the match seam is the sole two-valued holdout, and C1 reuses `absent` / `uncomparable` rather than minting a vocabulary.
-- **Documented** — `0007:REQ-78` records the match seam's two-valuedness as a scope boundary on that build ("This is deliberate … and NOT closed by this RDR"), and JDR 0001 §D12 waved the case through as "harmless, since match atoms are never unevaluable". ⇒ the premise is false — a conflicted key makes a match atom unevaluable in exactly `0007:C8`'s `uncomparable` sense — so this is an open deferral, not a settled exception (Alternative 3).
-- **Documented** — JDR 0001 rejected folding an undecidable or distinct condition into the escapable `no_match` three times (§D2 gate-then-count, §D6 block-keyed routing, §D9 gates-after-selection), under principles P1 "missing artifact state is never masked", P2 "the kernel refuses rather than guesses", P4 "a refusal names what was missing", and P7 "pre-release, prefer the clean shape". ⇒ the same principles decide this seam the same way.
-- **Documented** — `internal/cli/flow_next.go::summarize` walks every `Row.Atoms` entry, match-block atoms included, against the view. ⇒ an absent match key is already an `unresolved` entry (A2).
+- **Documented** — `internal/resolve/resolve.go::TagSet.matches` collapses three cases into one `false`: absent (`!ok`), conflicted (`tv.conflicted`), and unequal. ⇒ the CLI must not hand it an absent key if the caller is to see the difference; it never hands it a conflicted one (A3).
+- **Documented** — `internal/table/load.go::checkAccessorBindings` refuses a model whose owned tag is served by other than exactly one reader; `internal/cli/flow_input.go::parseTags` refuses a repeated `--tag` as `flow-tag-duplicate`. ⇒ over any model that loads, a present key is a comparable key; the CLI's presence test is exact (A3).
+- **Documented** — `0007:C10` makes `guard_unevaluable` a resolution-level veto ("a decided-GuardTrue sibling MUST NOT be selected while an unevaluable candidate exists"), and `internal/resolve/resolve.go::Resolve` returns on `blocked != nil` above the escape switch. ⇒ routing an undecidable match into that class refuses whole tables and defeats escape rescue; the kernel is left untouched (Alternative 4).
+- **Documented** — `internal/resolve/resolve.go::gate` calls `evaluateAtoms(row.Guard, seam, view)`; `Refusal.Undecided` is populated only for guard-undecidable rows. ⇒ the payload carries guard facts, which `summarize` can read (A13); it is not a carrier for match facts.
+- **Documented** — the codebase is three-valued at the gate (`0004:C9`) and guard (`0007:C6`, `0007:C8`) seams and two-valued at the match seam by `0007:REQ-78`'s explicit deferral. ⇒ the reporting surface reuses `absent` / `uncomparable`; the seam's own posture is left as deferred.
+- **Documented** — `internal/cli/flow_next.go::summarize` walks every `Row.Atoms` entry, match-block atoms included, against the view. ⇒ an absent match key is already an `unresolved` entry (A2), and the same test picks the probe's atoms.
 - **Documented** — 0005 Decision Rationale premortem: "`next` omits enough condition detail to constrain a skill". ⇒ 0005 foresaw this failure and answered it with candidate *summaries*; the summaries were not enough because the *set* was unconditioned.
-- **Documented** — `0010:C4`: "`flow next`, `flow read-state`, and `flow set-state` are unchanged by this RDR"; `0010:A11` defers the decision-table `next` behaviour to this RDR's predicate. ⇒ the absent-key rule must serve a no-tag decision table (A5).
-- **Documented** — prior art (Investigation). ⇒ conditioned is the default, enumeration is the secondary surface.
+- **Documented** — `0010:C4`: "`flow next`, `flow read-state`, and `flow set-state` are unchanged by this RDR"; `0010:A11` defers the decision-table `next` behaviour to this RDR's predicate; `0010:A9` makes the "otherwise" row an escape rescuing `no_match`. ⇒ the absent-key rule must serve a no-tag decision table (A5), and the kernel's `no_match` fold must stay escapable.
+- **Documented** — prior art (Investigation). ⇒ conditioned is the default, enumeration is the secondary surface; distinguish at the atom, do not veto at selection.
 - **Assumed** — every 0005 `next` oracle seeds the owned key its named rows match on (A4).
 
 ## Trade-offs
@@ -533,35 +499,36 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 ### Consequences
 
 - Positive: a skill can read the next step from the candidate list at `stage=resolved` (A6) instead of the whole table.
-- Positive: no table change and no new refusal code; the kernel diff is confined to the match seam, and the reason vocabulary is `0007:C8`'s, already shipped and tested.
-- Positive: `flow resolve` stops folding an undecidable match atom into an escapable `no_match`, closing `0007:REQ-78` and correcting JDR 0001 §D12's false premise — a defect neither RDR had a caller for until now.
-- Positive: `absent` and `uncomparable` have different remedies (bind a reader or supply the tag; deduplicate the input), and the payload names which, so the caller is told what to do rather than only that something is unknown.
+- Positive: no table change, no kernel change, no new refusal code; the diff is `internal/cli/flow_next.go`, a flag, help text, and fixtures, and the reason vocabulary is `0007:C8`'s, already shipped and tested.
+- Positive: `absent` and `uncomparable` have different remedies (bind a reader or supply the tag; fix the value or the atom), and the payload names which, so the caller is told what to do rather than only that something is unknown. Guard atoms the seam could not decide over a present key become visible on `next` for the first time (A13).
 - Negative: an override of a locked 0005 clause — callers scripted against the enumeration must add `--all`. `--all` restores the candidate SET, not the payload SHAPE: the per-candidate `unresolved` (`[]string`) becomes `unknown` (`[{key, reason}]`) in BOTH modes, so an out-of-repo consumer parsing the old field must change even if it adopts `--all`. The two migrations are independent and a caller may owe both. `docs/cli-output-contract.md` pins the envelope, not per-command payload fields, so this is a documented-surface change without a contract-doc edit; C3's help text and the test-file header are where a reader meets it.
-- Negative: a candidate can still be listed that `resolve` would refuse (an undecidable match key) — the same relationship `next` already has with `guard_unevaluable`.
-- Negative: `flow resolve` gains a refusal where it previously produced a plan. A row whose match is undecidable (an absent or conflicted match key) previously dropped out silently and let an escape row rescue; it now refuses `guard_unevaluable` naming the undecided atoms, and `guard_unevaluable` is not escapable. Five shipped `internal/resolve` oracles change disposition as a result and are re-expected by name in S5 — this is the largest behaviour change in the RDR, and it lands on `flow resolve`, not `flow next`.
-- Negative: a row with an indeterminate match no longer participates in `len(selected)`, so it can neither be selected alone nor create an `ambiguous_match` against a row that genuinely matched. That is the intended reading — an undecidable row is not evidence of ambiguity — but it means a table whose rows overlap only under undecidability resolves where a naive reading might expect a refusal.
-- Neutral: `flow next` is unaffected by the selection-site rule. It strips the escape list from its probe, and it reads the refusal payload rather than selecting, so an indeterminate row is still reported as a candidate with its reason.
-- Negative: the RDR grew from one contract to three and from a CLI-local change to a kernel-seam one; `TestReq78` retires and the `internal/resolve` suite gains the three-valued oracles.
+- Negative: `flow next` and `flow resolve` disagree on a row whose match key is absent: `next` lists it as a candidate naming the key; `resolve` folds it into `no_match` (escapable, so a default row may rescue). This is the same report-vs-select relationship the verbs already have for `guard_unevaluable`, in the escapable direction, and `0007:REQ-78` stays open — closing it is a `flow resolve` decision with a locked-peer collision (Decision Rationale).
+- Negative: the presence test's exactness rests on three load/parse invariants outside `flow_next.go` (A3); C3 pins them so a relaxation fails a named oracle rather than silently reopening the fold. The upgrade path is recorded (Briefly Rejected).
+- Negative: a candidate can still be listed that `resolve` would refuse (an undecidable guard, a missing owned key) — unchanged from 0005.
 
 ### Risks and Mitigations
 
 - **Risk**: an absent match key makes the list look like the old wall of candidates.
   **Mitigation**: the key is named under `unknown` with reason `absent` on every such candidate (C1); the fix is on the caller's side (bind the reader / supply the tag) and is visible.
 - **Risk**: a 0005 oracle silently passes for the wrong reason after the default flips.
-  **Mitigation**: A4's run plus C3's explicit re-homing rule; Testing Strategy S2 pairs default and `--all` on the MVV fixture.
+  **Mitigation**: A4's run plus C3's explicit re-homing rule with the ok-bool asserted; Testing Strategy S2 pairs default and `--all` on the MVV fixture.
+- **Risk**: a future relaxation of `checkAccessorBindings` or `parseTags` lets a conflicted key reach the probe, and `matches` folds it into a silent `no_match`.
+  **Mitigation**: C3's three pins fail first; the recorded upgrade is the exported per-atom verdict (Briefly Rejected), never a CLI value comparison.
 
 ### Failure Modes
 
 - **Visible**: a candidate the caller expected is absent. Diagnose with `--all`: if it appears there, a match atom over a supplied key failed (compare the row's `match` block in `dump` against `owned`/`observed` in the payload).
 - **Visible**: every row is a candidate with the same key under `unknown`, reason `absent` — the match key is neither owned by an invoked reader nor supplied; bind or supply it.
-- **Visible**: a key carrying two differing values within one provenance leaves every affected row a candidate carrying `{key, uncomparable}` under `flow next`, and refuses `guard_unevaluable` under `flow resolve`. The reachable producer is two invoked READERS writing the same owned key with differing values — `flowRequest.runReaders` appends each reader's `OwnedSnapshot()` with no dedup. It is NOT a repeated `--tag`: `internal/cli/flow_input.go::parseTags` refuses that first with `flow-tag-duplicate`. The remedy is to fix the overlapping readers, and the reason names it. (Before this RDR's Stage-4 revision the design excluded such a row silently; that failure mode is what C1's three-valued verdict removes.)
+- **Visible**: a candidate carries `{key, uncomparable}` — a guard atom over a present key the seam could not decide (a literal the operator cannot compare against the value); fix the value or the atom. Only guard atoms can carry this reason on `next`.
+- **Visible**: a model whose owned key is served by two readers does not load; a repeated `--tag` is refused `flow-tag-duplicate`. Both precede any probe, which is why `next` never has to sort a conflicted key.
 - **Recovery**: none needed — `next` is effect-free in both modes; re-run with the corrected inputs.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [x] All Critical Assumptions verified at Stage 4 (A1–A6). A3 relocated the verdict into the kernel; A4 found the 0005 suite cannot discriminate the new predicate, which C3 now answers with named fixtures.
+- [x] A1, A2, A4, A5, A6 verified at Stage 4 (first pass). A6's prototype is the probe shape C1 now fixes.
+- [ ] A3, A11, A12, A13, A14 verified at Stage 4 (re-entry) — the reachability invariant, the presence agreement, the probe independence, the guard-payload read, and the `--all` negative.
 
 ### Minimum Viable Validation
 
@@ -570,63 +537,44 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 3. Assert: `candidates[]` is exactly `prelock`, `resolve-route-back`, `resolve-abandon` (3 rows, one per outcome), and no rule whose `match.stage` names another value; `outcomes[]` is still the model's full alphabet.
 4. Re-run with `--all`; assert `candidates[]` has the 21 rows the baseline reported (the 22nd, `finalize-pass`, is guard-excluded on `gate_passed`, not match-excluded) and the same `outcomes[]`.
 5. Run over the 0005 MVV fixture (`flowMVVModel`, `status=draft`) with and without `--all`; assert the `gated-excluded` row is absent in both (guard-excluded), and that the row C3 adds — whose `match.status` names a value other than `draft` — is absent by default and present under `--all`.
-6. Run over a model exercising all four match cases: present-and-equal (candidate, nothing in `unknown`), present-and-unequal (excluded; gates do not run under `--evaluate-gates`), absent (candidate, `{key, absent}`), and a key carrying two differing values from two invoked readers (candidate, `{key, uncomparable}` — NOT excluded; a repeated `--tag` cannot produce this, `parseTags` refuses it first). Then add `--tag key=<value>` and assert the list narrows to the rows whose match holds.
-6b. Assert the selection-site half in `internal/resolve`: the same undecidable match atom refuses `guard_unevaluable` (not `no_match`, not a plan) and names the atom in `Refusal.Undecided`; an escape edge whose own match is indeterminate does not rescue.
-6c. Assert the compound row (S7): indeterminate match AND a missing owned key refuses `owned_state_unavailable` with an empty `Undecided`; the CLI still reports the row as a candidate carrying the missing owned key plus its view-absent match keys, and a conflicted match key on that row reports `{key, absent}`.
-7. Assert `unknown` is present as `[]` rather than omitted on a candidate with nothing undecided, in both modes, so one consumer struct parses either.
-8. `make check` passes; the `internal/resolve` suite passes with `TestReq78` retired and the five oracles re-expected per S5 (`TestReq78` retired, three in `match_conflicted_test.go`, one in `reserved_key_0008_test.go`) — no OTHER oracle in that package changes disposition; the 0005 `next` suite passes with only C3's six mechanical `unresolved`→`unknown` re-homings, and the file header names this RDR.
+6. Run over a model exercising the three reachable match cases: present-and-equal (candidate, nothing in `unknown`), present-and-unequal (excluded; gates do not run under `--evaluate-gates`), absent (candidate, `{key, absent}`). Then add `--tag key=<value>` and assert the list narrows to the rows whose match holds. Assert the three pins: a model declaring one owned key served by two readers is refused at load; a repeated `--tag` is refused `flow-tag-duplicate`; a `--tag` on an owned key is refused `flow-tag-owned`.
+7. Assert `unknown` is present as `[]` rather than omitted on a candidate with nothing undecided, in both modes; assert a guard atom the seam cannot decide over a present key reports `{key, uncomparable}` (A13).
+8. `make check` passes; `go test ./internal/resolve` passes with no test changed and `git diff --stat internal/resolve` empty; the 0005 `next` suite passes with only C3's six mechanical `unresolved`→`unknown` re-homings (ok-bool asserted), and the file header names this RDR.
 
-End-state: `flow next` answers "what is legal from here" with the rows the supplied state can take, `--all` yields 0005's enumeration, and every 0005 obligation other than the candidate predicate is unchanged.
+End-state: `flow next` answers "what is legal from here" with the rows the supplied state can take, `--all` yields 0005's enumeration, every 0005 obligation other than the candidate predicate is unchanged, and the kernel is untouched.
 
-### Phase 1: Three-Valued Match Seam (kernel)
+### Phase 1: Probe and Reporting (CLI)
 
-Intent: give `internal/resolve`'s match comparison a three-valued verdict plus the atoms it could not decide, computed from what `TagSet` already carries (`!ok` ⇒ `absent`, `tv.conflicted` ⇒ `uncomparable`, unequal ⇒ `no-match`), reusing `0007:C8`'s `Reason` vocabulary. `Resolve`'s candidate loop and `escapeOrRefuse`'s escape-edge filter are both SELECTION sites: neither may SELECT an `indeterminate` row. The two verdicts land at different places, per `0007:C11`: `no-match` prunes in the match filter as today (safe — a decided atom), while an `indeterminate` row survives that filter into `gate` as a non-selectable row so its owned-state obligation is not dropped with it (D8), where it joins the guard-undecidable set. `owned_state_unavailable` keeps its existing precedence over the undecidable payload. An `indeterminate` exclusion refuses `guard_unevaluable` carrying the undecided match atoms in `Refusal.Undecided` (widening that payload to admit `BlockMatch` entries — `guard.go::isGuardBlock` currently filters them out, and `evaluateAtoms` discards payloads for non-`GuardUnevaluable` verdicts, so both need the match-block path). Mint no sixth `RefusalKind`. Retire `TestReq78` and re-expect the four remaining oracles S5 names (three in `match_conflicted_test.go`, one in `reserved_key_0008_test.go`) — five in total with the retirement.
+Intent: in `excluded`, carry the row's match atoms over view-present keys instead of stripping them, and return the kernel's `Result`; in `summarize`, build `unknown` as `{key, reason}` from the view walk (`absent`), the `guard_unevaluable` payload (`absent`/`uncomparable`), and un-run gate ids (`not-evaluated`); emit `unknown` as `[]` rather than omitting it.
 
-### Phase 2: Probe and Reporting (CLI)
+### Phase 2: `--all` and Help
 
-Intent: stop stripping `probe.Match` in `excluded` so the kernel sees the row's match pattern; carry the kernel's undecided match atoms into the candidate's `unknown` as `{key, reason}` pairs beside the existing absent-owned-key and un-run-gate facts; emit `unknown` as `[]` rather than omitting it.
+Intent: register `--all` on `next` only, route it to a probe with the match pattern omitted and the `BlockMatch` atoms filtered out of `unknown`, and rewrite Short/Long help per C3.
 
-### Phase 3: `--all` and Help
+### Phase 3: Fixtures and Docs
 
-Intent: register `--all` on `next` only, route it to a probe with the match pattern omitted, and rewrite Short/Long help per C3.
-
-### Phase 4: Fixtures and Docs
-
-Intent: add C3's discriminating fixtures (present-unequal, absent, conflicted), the default/`--all` pair, and the `recognized`-only and empty-match rows; re-home the 6 shipped reads of the `unresolved` key to `unknown` (C3); update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
+Intent: add C3's discriminating fixtures (present-unequal, absent), the three invariant pins, the default/`--all` pair, the `recognized`-only and empty-match rows, and the guard-`uncomparable` row; re-home the 6 shipped reads of the `unresolved` key to `unknown` (C3); update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
 
 ## Validation
 
 ### Testing Strategy
 
-1. **Scenario**: S1 — `models/rdr.toml` at owned `stage=resolved`, default mode (MVV 2–3). Backed by the A6 spike, which ran the baseline live and prototyped the predicate.
-   **Expected**: `candidates[]` is exactly `prelock`, `resolve-route-back`, `resolve-abandon` — the three rules whose `match.stage` admits `resolved`, one per declared outcome — down from the 21 the baseline reports; `outcomes[]` is the full three-member alphabet. Normative fixture: `evidence/spikes/a6-rdr-toml-narrowing.md`.
+Spine only — Resolve re-tightens after A3, A11–A14 are verified.
+
+1. **Scenario**: S1 — `models/rdr.toml` at owned `stage=resolved`, default mode (MVV 2–3). Backed by the A6 spike, which ran the baseline live and prototyped exactly this probe shape.
+   **Expected**: `candidates[]` is exactly `prelock`, `resolve-route-back`, `resolve-abandon`; `outcomes[]` is the full alphabet. Normative fixture: `evidence/spikes/a6-rdr-toml-narrowing.md`.
 2. **Scenario**: S2 — `flowMVVModel` (`status=draft`) with and without `--all` (MVV 4–5), plus the discriminating row C3 requires.
-   **Expected**: `gated-excluded` absent in both (guard-excluded, untouched by C1); the added row whose `match.status` names a value other than `draft` is absent by default and present under `--all`; `unknown` present as `[]` in both modes on a fully-resolved candidate; under `--all`, a row with an absent match key reports NO match entry in `unknown` (the C2 departure — it does today), while the same row by default reports `{key, absent}`; `--all` rejected by `resolve` / `read-state` / `set-state` via cobra's unknown-flag error, asserted on that error class and exit code rather than a `flow-*` code.
-3. **Scenario**: S3 — the three-valued match verdict, one row per value (MVV 6). Backed by the A5 spike's fixture shape.
-   **Expected**, at the REPORTING site (`flow next`): a match key PRESENT and equal ⇒ candidate, key absent from `unknown`; PRESENT and unequal ⇒ row excluded and, under `--evaluate-gates`, its gates do not run; ABSENT ⇒ candidate with `{key, absent}` in `unknown`; carrying two differing values within one provenance ⇒ candidate with `{key, uncomparable}` in `unknown`, NOT excluded. `--tag key=<v>` narrows the list to the rows whose match holds. The fourth row is the one the pre-Stage-4 design got wrong and MUST be asserted.
-
-   The conflicted fixture MUST be built from two invoked readers writing the same owned key with differing values (`flow_exec.go::runReaders` appends each `OwnedSnapshot()` with no dedup). A repeated `--tag` CANNOT produce it — `flow_input.go::parseTags` refuses with `flow-tag-duplicate` before the kernel is reached — so a fixture written that way asserts the wrong thing and passes for the wrong reason. The kernel-level arm of the same case is asserted directly in `internal/resolve` over a `TagSet` built in-package (S5), which is where the `guard_unevaluable` selection disposition is checked.
+   **Expected**: `gated-excluded` absent in both; the added row absent by default and present under `--all`; `unknown` present as `[]` in both modes on a fully-resolved candidate; under `--all` a row with an absent match key reports NO match entry (the C2 departure) while by default it reports `{key, absent}`; `--all` rejected by the other three verbs via cobra's unknown-flag error (A14).
+3. **Scenario**: S3 — the three reachable match cases, one row each (MVV 6). Backed by the A5 spike's fixture shape.
+   **Expected**: present-equal ⇒ candidate, key absent from `unknown`; present-unequal ⇒ excluded and its gates do not run under `--evaluate-gates`; absent ⇒ candidate with `{key, absent}`. `--tag key=<v>` narrows the list to the rows whose match holds.
 4. **Scenario**: S4 — a row whose only match atom is `recognized`, and a row with an empty match pattern (A5's fixture B).
-   **Expected**: both are candidates with `unknown` empty of match facts — `recognized` is lifted into `Row.Outcome` at normalization and is never an undecided fact, and an empty match pattern matches unconditionally.
-5. **Scenario**: S5 — `flow resolve` over the same seam change (C1's kernel half).
-   **Expected**: every case with a complete, unconflicted view resolves exactly as before; an undecidable match atom refuses `guard_unevaluable` naming the atom, rather than dropping the row into an escapable `no_match`.
-
-   The `internal/resolve` suite does NOT pass unchanged, and "green" is the wrong pass criterion. Five shipped oracles change disposition under C1, and the build MUST re-expect each by name — any OTHER oracle going red is a defect, which is the discrimination this scenario provides:
-   - `guard_atoms_test.go::TestReq78_MatchPatternStillFoldsAbsenceIntoNonMatch` — **retired**. It asserts an absent match key yields the escapable `no_match`; C1 closes `0007:REQ-78`.
-   - `match_conflicted_test.go::TestAdv0007_3_EscapeNotNamingTheConflictedKeyStillRescues` — **re-expected**. Its ordinary row `A` is guard-free with `Match: [status=Draft, gate=closed]` over a conflicted `gate`, so under C1 row `A` refuses `guard_unevaluable` instead of dropping out, and the clean escape is never reached (`guard_unevaluable` is not escapable). The new expectation is that refusal, naming `gate` `uncomparable`.
-   - `match_conflicted_test.go::TestAdv0007_3_DuplicateKeyMakesRowSelectionAFunctionOfSlicePosition` — **re-expected**: refusal kind moves from `no_match` to `guard_unevaluable`. Its point (order-independence) is preserved and MUST still be asserted.
-   - `match_conflicted_test.go::TestAdv0007_3_ConflictedKeyIsNotEscapableByNamingIt` — **kept, strengthened**. Its stated contract — an operator must not rescue a positional plan through the kernel's most permissive path — is what C1's selection rule preserves; the refusal kind moves to `guard_unevaluable`, which is non-escapable, so the property holds a fortiori.
-
-   - `reserved_key_0008_test.go::TestReq3_AbsentOutcomeYieldsAViewWithNoRecognizedKey` — **re-expected**: refusal kind moves from `no_match` to `guard_unevaluable`. With `Input.Recognized == ""`, `resolve.go::assemble` skips the `recognized` binding entirely, so the row's `recognized` match atom names a key ABSENT from the view — `indeterminate` under C1, not `no-match`. Its actual subject (the kernel must not inject an empty binding, so the row is not selected) is PRESERVED and MUST still be asserted: `got.Plan` stays nil. Only the refusal kind changes.
-
-   `TestAdv0007_3_MatchNarrowingsHold` and every other `internal/resolve` oracle MUST keep passing unchanged.
+   **Expected**: both are candidates with `unknown` empty of match facts.
+5. **Scenario**: S5 — the invariants C1's presence test rests on, and the kernel left untouched.
+   **Expected**: a model with one owned key served by two readers fails to load on `checkAccessorBindings`' message; `flow next --tag k=a --tag k=b` is refused `flow-tag-duplicate` and `--tag <owned-key>=v` is refused `flow-tag-owned`, with no probe built; `go test ./internal/resolve` passes with no test file changed — `TestReq78_MatchPatternStillFoldsAbsenceIntoNonMatch` and the `match_conflicted_test.go` oracles stay green as shipped.
 6. **Scenario**: S6 — the 0005 `next` suite after the default flips (A4, C3).
-   **Expected**: the `flow next` oracles pass, none re-homed under `--all` (A4's MOVES and BREAKS classes are both empty against the predicate); the 6 test reads of the `unresolved` key are mechanically re-homed to `unknown` per C3 and pass on the new shape; file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are.
-
-   The "28 oracles" figure A4 reports is a classification count, not a checkable pass criterion: the enumeration behind it was never written down, so the build cannot verify "28" or "none re-homed" against a list. The build MUST either (a) emit the enumeration as an artifact when it re-runs the classification, or (b) assert the weaker checkable form — `go test ./internal/cli` green except C3's six named re-homings, with no test re-homed under `--all`. Treat the number as provenance for A4's verdict, not as an oracle.
-
-7. **Scenario**: S7 — the compound row: match verdict `indeterminate` AND an owned key no invoked reader established (C1's precedence clause).
-   **Expected**: at the kernel, the probe refuses `owned_state_unavailable`, not `guard_unevaluable` — `gate` returns the missing-owned refusal before it collects the undecidable payload, and this RDR preserves that precedence rather than reordering it; `Refusal.Undecided` is empty on that disposition. At the CLI, the row is still a candidate and its `unknown` carries the missing owned key(s) from `MissingOwned` plus its view-absent match keys from the CLI's own atom walk. A match key that is present-but-CONFLICTED on such a row reports `{key, absent}` — the single case where `uncomparable` is not recoverable, asserted explicitly so the limit is pinned rather than discovered. Also assert the pruning split: a `no-match` row is excluded before `gate` and contributes no owned-state obligation, while an `indeterminate` row survives into `gate` and keeps its `RequiresOwned` obligation (`0007:C11`'s condition — pruning is safe only on decided atoms).
+   **Expected**: the `flow next` oracles pass, none re-homed under `--all`; the 6 test reads of `unresolved` are re-homed to `unknown` with the ok-bool asserted; file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are. The "28 oracles" figure A4 reports is provenance for A4's verdict, not an oracle: the build asserts the checkable form (`go test ./internal/cli` green except C3's six named re-homings, none re-homed under `--all`).
+7. **Scenario**: S7 — the guard-payload read (A13) and its one precedence limit.
+   **Expected**: a guard atom over a present key the seam cannot decide appears as `{key, uncomparable}`; the same atom over an absent key appears once as `{key, absent}` (walk and payload agree, dedup on the pair); on a row that also lacks an owned key the probe refuses `owned_state_unavailable`, the row is still a candidate carrying the missing owned key and its `absent` facts, and the `uncomparable` guard atom is not reported — asserted so the limit is pinned rather than discovered.
 
 Done: S1–S7 green and `make check` passes.
 
@@ -732,11 +680,11 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- RDR 0005 `0005:C1` (the overridden clause), `0005:A3`, `0005:A7`, `0005:D-selection-predicate`, Decision Rationale premortem; RDR 0010 `0010:C4`, `0010:A11`; RDR 0007 `0007:C8`; JDR 0001 §D2.
-- Source reviewed: `internal/cli/flow_next.go`, `internal/cli/flow_exec.go`, `internal/cli/flow.go`, `internal/table/model.go`, `internal/resolve/resolve.go`, `internal/cli/flow_next_0005_test.go`, `internal/cli/flow_fixtures_0005_test.go`, `docs/cli-output-contract.md`.
+- RDR 0005 `0005:C1` (the overridden clause), `0005:A3`, `0005:A7`, `0005:D-selection-predicate`, Decision Rationale premortem; RDR 0010 `0010:C4`, `0010:A9`, `0010:A11`; RDR 0007 `0007:C8`, `0007:C10`, `0007:C11`, `0007:REQ-78`, `0007:REQ-79`; JDR 0001 §D2, §D12.
+- Source reviewed: `internal/cli/flow_next.go`, `internal/cli/flow_exec.go`, `internal/cli/flow_input.go`, `internal/cli/flow.go`, `internal/table/model.go`, `internal/table/load.go`, `internal/resolve/resolve.go`, `internal/resolve/guard.go`, `internal/cli/flow_next_0005_test.go`, `internal/cli/flow_fixtures_0005_test.go`, `docs/cli-output-contract.md`.
 - Prior art, state machines (sibling checkouts under `../state-machines`): `repos/qmuntal-stateless` (`README.md` Introspection; `statemachine.go`, `states.go`), `study/transitions` (`transitions/core.py`), `repos/xstate` (`packages/core/CHANGELOG.md`, `packages/core/src/State.ts`), `repos/scxmlcc` (`doc/user-manual.md`). Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/prior-art.md`.
 - Prior art, three-valued selection seams: PTaCL via Griesmayer & Morisset "ATRAP" §2.1–2.2 and Table 1; SAML 2.0 Core §2.5.1; Cedar (Cutler et al. 2024) §Related Work; Elmasri & Navathe *Fundamentals of Database Systems* §4.1, §5.1 Table 5.1; Celko *SQL Database Programmers Handbook* §"The Null of It All". Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/three-valued-match.md`.
 - Prior art, CLI shape: `langref/gh-cli` (`pkg/cmd/workflow/list/list.go`, `pkg/cmd/pr/list/list.go`, `pkg/cmd/search/repos/repos.go`), `langref/helm` (`pkg/cmd/list.go`), `langref/beads` (`cmd/bd/query.go`), `langref/opentofu` (`internal/command/jsonplan/plan.go`, `internal/command/jsonchecks/status.go`); `docker ps`, `git branch`, `ps` man pages.
-- Internal precedent: JDR 0001 principles P1/P2/P4/P7 and §D2, §D6, §D9, §D12; `0004:C9` (`indeterminate`); `0007:C6` (strong-Kleene), `0007:C8` (`absent`/`uncomparable`), `0007:REQ-78` (the deferred match seam), `0007:REQ-79` (five refusal kinds).
-- Spike evidence: `evidence/spikes/a6-rdr-toml-narrowing.md`, `evidence/spikes/a5-decision-table-no-tag.md`.
+- Internal precedent: JDR 0001 principles P1/P2/P4/P7 and §D2, §D6, §D9, §D12; `0004:C9` (`indeterminate`); `0007:C6` (strong-Kleene), `0007:C8` (`absent`/`uncomparable`), `0007:C10` (resolution-level veto), `0007:REQ-78` (the deferred match seam), `0007:REQ-79` (five refusal kinds).
+- Spike and lens evidence: `evidence/spikes/a6-rdr-toml-narrowing.md`, `evidence/spikes/a5-decision-table-no-tag.md`, `evidence/critique/diff.md` (the route-back), `docs/rdr/0011-flow-next-match-conditioned-candidates-postmortem.md` (escaped-defect ledger).
 - kata `1mv1`; rdr#thsc; rdr#tmxk.
