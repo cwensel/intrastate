@@ -101,6 +101,20 @@ func flowSuccessInvocations(t *testing.T) []flowInvocation {
 // flowRefusalInvocations returns one invocation per refusal FAMILY the
 // stable-code table names, each with the exact code and exit it must carry.
 // Every entry is reachable from the CLI surface alone.
+//
+// The table spans BOTH exit groups on purpose. A table of exit-2 entries
+// alone cannot discriminate REQ-20's closure claim — "the exit-3 population
+// is exactly those five classes" — in the direction that matters: it proves
+// no request error leaks INTO exit 3, and says nothing about whether the
+// five environment classes actually REACH it. Consumers that switch on the
+// expected group (`flow_exit_0005_test.go`) would carry a dead arm, so a
+// class that silently migrated OUT of exit 3 — telling a caller its
+// environment fault is an input to repair — would pass unnoticed.
+//
+// So all five exit-3 codes appear below, each provoked through the ordinary
+// CLI surface with no production seam: an unreachable gate locator, an
+// unreachable read-back locator, the sealed artifact such a write leaves
+// behind, and a model whose declared timeouts have already expired.
 func flowRefusalInvocations(t *testing.T) []flowInvocation {
 	t.Helper()
 
@@ -110,6 +124,48 @@ func flowRefusalInvocations(t *testing.T) []flowInvocation {
 	art := seedArtifact(t, model, "status=draft")
 	stateBind := artifactBinding(flowStateRole, art)
 	ambigArt := seedArtifact(t, ambiguous, "status=draft")
+
+	// --- the exit-3 provocations, all through declared model surface ---
+
+	// A gate whose declared locator cannot be reached: the gate could not be
+	// CONSULTED, which is an accessor execution failure, never a deny.
+	gateFail := writeFlowModel(t, flowGateFailModel)
+	gateFailBind := artifactBinding(
+		flowStateRole, seedArtifact(t, gateFail, "status=draft"))
+
+	// A writer whose read-back locator cannot be reached. Its artifact is
+	// FRESH rather than seeded: `set-state` establishes what it plans, so
+	// the write lands and only the verifying re-read fails.
+	readBackFail := writeFlowModel(t, flowReadBackFailModel)
+	readBackFailBind := artifactBinding(
+		flowStateRole, newFlowArtifact(t, "readback-fail.artifact"))
+
+	// The SEALED artifact such a write leaves behind. The seal is
+	// established here, in the constructor, by driving the production write
+	// path once — the same way `seedArtifact` establishes ordinary state,
+	// and never by writing a file this test claims to understand.
+	//
+	// Nothing writes to it afterwards: the entry below only READS it. That
+	// matters beyond tidiness — the seal marks "the last write went
+	// unverified", so a later reachable write is entitled to clear it, and
+	// an entry that re-established state between the seal and the read
+	// would be asserting on a disposition the artifact no longer holds.
+	sealed := newFlowArtifact(t, "sealed.artifact")
+	sealedBind := artifactBinding(flowStateRole, sealed)
+	if _, _, err := runCmd(t, "flow", "set-state", "--model", readBackFail,
+		"--artifact", sealedBind, "--write", "status=final", "--as=json",
+	); err == nil {
+		t.Fatal("sealing the fixture artifact SUCCEEDED; the write whose " +
+			"read-back cannot complete must refuse, and without the seal " +
+			"the incomplete-read entry below proves nothing")
+	}
+
+	// A model whose declared timeouts have already expired when the
+	// accessor is invoked. One model serves both timeout classes: the read
+	// leg under `next`, the post-mutation read-back leg under `set-state`.
+	expired := writeFlowModel(t, flowExpiredTimeoutModel)
+	expiredBind := artifactBinding(
+		flowStateRole, newFlowArtifact(t, "expired.artifact"))
 
 	return []flowInvocation{
 		{
@@ -202,6 +258,42 @@ func flowRefusalInvocations(t *testing.T) []flowInvocation {
 			args: []string{"flow", "set-state", "--model", model,
 				"--artifact", stateBind, "--clear", "note"},
 			code: "flow-clear-unbound", exit: 2,
+		},
+
+		// --- the five exit-3 classes (REQ-19, REQ-20) ------------------
+		//
+		// Each names ONE class, so a code that migrated out of exit 3 fails
+		// against the entry that names it and not merely against a set.
+
+		{
+			name: "accessor-failed",
+			args: []string{"flow", "resolve", "--model", gateFail,
+				"--artifact", gateFailBind, "--outcome", "advance"},
+			code: "flow-accessor-failed", exit: 3,
+		},
+		{
+			name: "write-readback-incomplete",
+			args: []string{"flow", "set-state", "--model", readBackFail,
+				"--artifact", readBackFailBind, "--write", "status=final"},
+			code: "flow-write-readback-incomplete", exit: 3,
+		},
+		{
+			name: "read-incomplete",
+			args: []string{"flow", "next", "--model", model,
+				"--artifact", sealedBind},
+			code: "flow-read-incomplete", exit: 3,
+		},
+		{
+			name: "accessor-timeout",
+			args: []string{"flow", "next", "--model", expired,
+				"--artifact", expiredBind},
+			code: "flow-accessor-timeout", exit: 3,
+		},
+		{
+			name: "write-readback-timeout",
+			args: []string{"flow", "set-state", "--model", expired,
+				"--artifact", expiredBind, "--write", "status=final"},
+			code: "flow-write-readback-timeout", exit: 3,
 		},
 	}
 }

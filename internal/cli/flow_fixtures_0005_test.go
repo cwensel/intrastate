@@ -21,6 +21,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -875,3 +876,21 @@ eq = "advance"
 [rule.write]
 status = "final"
 `
+
+// flowExpiredTimeoutModel is `flowMVVModel` with every declared accessor
+// timeout narrowed from `2s` to `1ns`.
+//
+// `1ns` is a LEGAL declared value, not a test backdoor: the loader accepts
+// any positive Go duration (`internal/table/load.go`), so this model is one
+// a caller could write. It is the observable surface through which the two
+// TIMEOUT classes are reachable — `flow-accessor-timeout` on a read and
+// `flow-write-readback-timeout` on the post-mutation read-back — and
+// without it those two of the five exit-3 codes have no CLI-reachable
+// provocation at all.
+//
+// It is deterministic rather than racy: `context.WithTimeout(ctx, 1ns)` is
+// already expired before the binding returns, and the executor checks the
+// deadline BEFORE it inspects the binding's result
+// (`internal/accessor/executor.go`, `invokeRead`), so `timeout` is reported
+// on every run rather than winning a race some of the time.
+var flowExpiredTimeoutModel = strings.ReplaceAll(flowMVVModel, `timeout = "2s"`, `timeout = "1ns"`)
