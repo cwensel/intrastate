@@ -12,6 +12,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"slices"
 	"strconv"
@@ -133,6 +134,24 @@ func selectModel(cmd *cobra.Command) (*table.Model, string, *clierr.CLIError) {
 // the finding's file:line — the position the loader attributes the defect
 // to — which is why REQ-14 needed a field the shipped record did not carry.
 func loadFailure(path string, err error) *clierr.CLIError {
+	return &clierr.CLIError{
+		Code:     codeModelInvalid,
+		Message:  "the selected model could not be loaded",
+		Group:    clierr.GroupUserEnv,
+		Findings: loadFindings(path, err),
+	}
+}
+
+// loadFindings renders a loader refusal as the findings list every CLI verb
+// that loads a model carries (REQ-91, JDR 0001 §D10 item 3). It is shared by
+// `flow`'s selectModel and by `lint` so the two surfaces cannot drift: one
+// structured field, the category slug as the inner discriminator, and the
+// per-category payload the loader populated.
+//
+// `locator` is `file:1`: the loader attributes no line, and a reader still
+// needs the file to act on. When lint gains source positions, both call sites
+// improve together.
+func loadFindings(path string, err error) []clierr.Finding {
 	category, ok := table.CategoryOf(err)
 	if !ok {
 		// A loader error carrying no category still refuses under this
@@ -140,16 +159,38 @@ func loadFailure(path string, err error) *clierr.CLIError {
 		// second code for it would break the one-code rule.
 		category = "unknown"
 	}
-	return &clierr.CLIError{
-		Code:    codeModelInvalid,
-		Message: "the selected model could not be loaded",
-		Group:   clierr.GroupUserEnv,
-		Findings: []clierr.Finding{{
-			Code:    string(category),
-			Message: err.Error(),
-			Locator: path + ":1",
-		}},
+	finding := clierr.Finding{
+		Code:    string(category),
+		Message: err.Error(),
+		Locator: path + ":1",
 	}
+
+	// RDR 0008 `0008:C3` — the three-field `reserved_tag_key` payload rides
+	// the same record rather than a category-specific envelope: `Rule` is the
+	// direction identifier a consumer branches on, `Param` the offending name
+	// as authored, `Hint` the remedy.
+	//
+	// The rename hint is gated on `Rule`, not on the errors.As alone: every
+	// load category is a `*table.Failure`, but only this one carries a
+	// per-key payload, and "rename the declaration" is nonsense advice on a
+	// malformed-TOML refusal.
+	var f *table.Failure
+	if errors.As(err, &f) && f.Rule != "" {
+		finding.Rule = f.Rule
+		finding.Param = f.Offending
+		// The empty `Remedy` is documented, not missing: for
+		// RuleAuthorMustRename the remedy is "choose any other name", and
+		// REQ-30 forbids a renderer presenting the reserved key as the
+		// required one. The offending name already travels on `param`, so
+		// the hint names NO name at all rather than echoing the reserved key
+		// back as if it were the answer.
+		if f.Remedy != "" {
+			finding.Hint = "rename the declaration to `" + f.Remedy + "`"
+		} else {
+			finding.Hint = "rename the declaration to any other name"
+		}
+	}
+	return []clierr.Finding{finding}
 }
 
 // --- artifact bindings ---------------------------------------------------
