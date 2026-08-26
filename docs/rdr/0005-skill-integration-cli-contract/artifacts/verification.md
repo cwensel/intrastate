@@ -195,8 +195,21 @@ refusal, including `GroupInternal`.
 **Gate disposition (REQ-43, REQ-46, REQ-50, REQ-51, REQ-116).** Deny
 overrides indeterminate on `resolve` (deny + allow + indeterminate on one row
 yielded `flow-gate-denied`, not `flow-gate-indeterminate`).
-`flow-gate-indeterminate` fired only with no deny present. On `flow next
---evaluate-gates` a deny rides the candidate and the command still exits 0.
+`flow-gate-indeterminate` fired only with no deny present.
+
+**CORRECTION (scope review, 2026-08-26).** The original entry also claimed
+"on `flow next --evaluate-gates` a deny rides the candidate and the command
+still exits 0". The exit-0 half is verified, but the DENY half was not: the
+probe used `flowGatedNextModel`, whose gate declares
+`path = "flow.gate.reported"`. `flowbind::verdictFor` switches on the suffix
+after `flow.gate` and its **default arm returns `VerdictAllow`** — `reported`
+is not `deny`, `indeterminate`, or `unreachable`, so that fixture's gate
+ALLOWS. What was actually verified is that a gate result rides the candidate
+and `next` exits 0; that it was a *deny* is unsupported. A real deny under
+`next` is reachable through the shipped `flowGateDenyModel`, and tracked as
+kata `r2ba`, whose fix repoints the oracle and proves the leg for real. The
+same false premise sits in `flow_next_0005_test.go`'s comment ("The artifact
+is seeded so the gate DENIES"), which r2ba also removes.
 A gate could not be laundered into an escape: RDR 0002 refuses an escape rule
 carrying a gate list at load (`malformed_escape_declaration`), so the
 deny→`no_match`→rescue path is structurally closed.
