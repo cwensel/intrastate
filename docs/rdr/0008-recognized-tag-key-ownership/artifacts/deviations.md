@@ -70,3 +70,33 @@ this RDR's and 0009's `Resolve`-entry checks is written. See
   if the CLI-site placement contradicts this RDR's `Resolve`-entry check —
   note that ordering question is §JD-5's, still open, and must not be
   pre-decided by this citation.
+
+---
+
+## D5 — Near-miss advisory has no settled delivery channel (Phase 0 Q1)
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation (unattended run: recorded, proceeding
+  under the Phase 0 auditor's reading; not escalated to the author)
+- **Source**: Phase 0 spec audit QUESTIONS Q1, `req-list.md`.
+- **Gap**: §D10 places the near-miss advisory in `Finding.Hint`, but
+  `Findings` rides `CLIError` (the failure envelope) while a near-miss by
+  definition loads *clean*. No contract names the clean-load carrier.
+- **Resolution proceeded under**: table-side advisory list returned
+  separately from the error; CLI delivery deferred to RDR 0005/0006, which
+  own the CLI output contract. This keeps 0008's surface at the table/kernel
+  boundary the RDR actually claims and adds no new CLI public surface.
+
+## D6 — Block 3's payload requirement over `unknown tag` is vacuous (Phase 0 Q2)
+
+- **Type**: TEST-FIXTURE
+- **Status**: mechanical translation (unattended run: recorded, proceeding
+  under the Phase 0 auditor's reading)
+- **Source**: Phase 0 spec audit QUESTIONS Q2, `req-list.md`.
+- **Gap**: block 3 requires the three-field payload on `unknown tag`
+  failures over the reserved key, but implemented RDR 0002 trips
+  `CatMalformedModelDeclaration` ("no [tags.recognized] declaration")
+  before any `unknown tag` can fire on the reserved key.
+- **Resolution proceeded under**: the payload binds `reserved_tag_key`
+  failures only. The `unknown tag` arm is unreachable given 0002 as
+  implemented, so asserting it would test a path the predecessor forecloses.
