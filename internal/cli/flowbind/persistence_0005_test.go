@@ -79,3 +79,73 @@ func TestReq104_AnUnreachableReadBackKeepsTheMutation(t *testing.T) {
 			"applied-but-unverified rather than a mismatch")
 	}
 }
+
+// The seal names the LAST write's read-back locator, not any past one.
+// Both `sealedKey`'s doc and `Reader.Read`'s short-circuit comment say
+// "the LAST write to this artifact declared an unreachable read-back
+// locator", so a subsequent REACHABLE write must clear it.
+//
+// DOMAIN EDGE — a monotonic seal has no repair path: an author who typos a
+// writer's locator, takes the exit-3 refusal, then corrects the model, is
+// left with an artifact `Reader.Read` reports wholly UNREADABLE forever.
+// This is the regression that guards that.
+func TestReq104_AReachableWriteClearsTheReadBackSeal(t *testing.T) {
+	dir := t.TempDir()
+	art := accessor.Artifact{Role: "state", Path: filepath.Join(dir, "a.json")}
+
+	reachable := &Writer{Path: "flow.state"}
+	if err := reachable.Apply(context.Background(), art, []resolve.Tag{
+		{Key: "status", Value: "draft"},
+	}); err != nil {
+		t.Fatalf("seeding through a reachable writer failed: %v", err)
+	}
+
+	// Poison the artifact exactly as a mistyped locator would.
+	sealed := &Writer{Path: "flow.state.readback-unreachable"}
+	if err := sealed.Apply(context.Background(), art, []resolve.Tag{
+		{Key: "status", Value: "draft"},
+	}); err != nil {
+		t.Fatalf("the sealing write failed: %v", err)
+	}
+	if s, err := load(art.Path); err != nil {
+		t.Fatalf("the artifact is unreadable after the sealing write: %v", err)
+	} else if _, sealedNow := s[sealedKey]; !sealedNow {
+		t.Fatal("the sealing write left no seal; this case cannot show a " +
+			"LATER write removing one that was never there")
+	}
+
+	// The correction: the author fixes the locator and writes again.
+	if err := reachable.Apply(context.Background(), art, []resolve.Tag{
+		{Key: "status", Value: "final"},
+	}); err != nil {
+		t.Fatalf("the repairing write failed: %v", err)
+	}
+
+	s, err := load(art.Path)
+	if err != nil {
+		t.Fatalf("the artifact is unreadable after the repairing write: %v", err)
+	}
+	if _, stillSealed := s[sealedKey]; stillSealed {
+		t.Error("the artifact is STILL sealed after a REACHABLE write; the " +
+			"seal names the LAST write's read-back locator, and a " +
+			"monotonic seal leaves the artifact permanently unreadable " +
+			"with no repair path through the CLI")
+	}
+
+	values, unreadable, err := Reader{Path: "flow.state"}.Read(
+		context.Background(), art, []string{"status"})
+	if err != nil {
+		t.Fatalf("Read returned %v; a reachable reader over a repaired "+
+			"artifact must resolve", err)
+	}
+	if len(unreadable) != 0 {
+		t.Errorf("unreadable = %v, want none; after a reachable write the "+
+			"verifying re-read completes, so `read-state` reports the value "+
+			"rather than `incomplete_read`", unreadable)
+	}
+	if len(values) != 1 || values[0].Key != "status" ||
+		values[0].Absent || values[0].Value != "final" {
+		t.Errorf("values = %#v; want status=%q present — the repairing "+
+			"write's own value must be what reads back", values, "final")
+	}
+}

@@ -268,6 +268,16 @@ func (w *Writer) Apply(_ context.Context, art accessor.Artifact, planned []resol
 		// an artifact that really was mutated, so a seal that discarded the
 		// mutation would make the refusal's own detail false.
 		s[sealedKey] = sealedMarker
+	} else {
+		// This write's read-back CAN complete, so the artifact is no longer
+		// unverifiable and the seal must go — in the same atomic save, for
+		// the same reason. The seal names the LAST write's locator, not any
+		// past one: a monotonic seal would leave an artifact whose author
+		// corrected a mistyped locator permanently unreadable, with no
+		// repair path through the CLI. REQ-104's disposition is about the
+		// invocation that refused, and REQ-110 fixes identity over CURRENT
+		// artifact contents, so nothing makes that refusal sticky.
+		delete(s, sealedKey)
 	}
 	return save(art.Path, s)
 }
