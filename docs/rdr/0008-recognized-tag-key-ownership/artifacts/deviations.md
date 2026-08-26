@@ -231,3 +231,104 @@ D1, D5 and D6 were honoured as Phase 1 settled them; none reopened.
   only. Carried forward as the sole open item; also flagged in `coverage.md`.
 
 **No `needs author decision` entry was recorded in this Phase.**
+
+---
+
+## Stage 8 Phase 3c (fixup) dispositions — 2026-08-26
+
+Phase 3a returned PASS with no `FAIL-N`. Phase 3b returned BLOCK with three
+added tests (ADV-1/2/3). The two verifiers converged on the same three seams
+and disagreed on whether they violate *this* RDR. This Phase adjudicates.
+
+### ADV-3 / 3a's S1 — FIXED (no deviation)
+
+Both verifiers agreed independently, so no adjudication was needed. The scan at
+`internal/table/load.go` ranged a Go map, so a model breaching **both** naming
+directions returned one of two **contradictory** remedies at random (measured
+161/39 over 200 loads). Fixed by scanning `slices.Sorted(maps.Keys(decls))`.
+
+REQ-82 (TS-5) licenses an unspecified choice between two **same-direction**
+declarations; it does not license a coin-flip between opposite edits, and
+REQ-27/33 make the rule identifier a token a golden test asserts byte-for-byte
+and a consumer uses for remediation lookup. Sorting satisfies both readings and
+narrows no latitude. `TestAdv0008_DoublyBreachingModelReportsOneStableDirection`
+is green across repeated runs.
+
+### D9 — the reserved-key payload and near-miss advisory stop at the table boundary
+
+- **Type**: SPEC-UNDER
+- **Status**: mechanical translation (unattended run: adjudicated against the
+  record; not escalated to the author). Supersedes nothing; extends D5.
+- **Site**: `internal/cli/lint.go` (`model-invalid`, zero findings) and
+  `internal/cli/flow_input.go::loadFailure` (`Param`/`Hint` unpopulated).
+- **The seams** (3b's ADV-2 and ADV-1, 3a's S3 and S2). Both confirmed real by
+  both verifiers: the three-field payload and the near-miss advisory are
+  complete and correct on `table.Failure` / `table.LoadWithAdvisories`, and
+  neither reaches a user-observable CLI surface.
+
+**Adjudicated as belonging to RDR 0005/0006, not this RDR.** The evidence:
+
+1. **The RDR disclaims the surface in its own Approach** (item 3, unfenced but
+   scope-setting): this RDR "guarantees the failure *exists and carries its
+   guidance* at load/lint; which user-facing command surfaces it, and under
+   which exit code, is RDR 0005's mapping decision and is **not settled
+   here**." The same sentence appears for the advisory in the AP item 3 note.
+2. **The normative fence binds the data level, not the wire.** `0008:C3`:
+   the three fields MUST be carried "**at the data level**", and "the guidance
+   travels in the failure data, not the renderer." `table.Failure` carries all
+   three; verified by Phase 3a's T3–T6/G8 and re-asserted by this Phase.
+3. **REQ-93 is explicit**: "The consumer is a test stub, **not RDR 0005's
+   exit-code map**: this RDR asserts the payload contract, and 0005 owns
+   whatever mapping it later adds."
+4. **D5 already settled the advisory half** unattended at Phase 0: "a
+   table-side advisory list returned separately from the error; CLI delivery
+   left to 0005/0006." Reversing that here would relitigate a settled entry on
+   no new evidence — 3b's finding is the *predicted consequence* of D5, not a
+   discovery that contradicts it.
+5. **The carriers are other RDRs' surfaces, already Implemented.** BUILD-ORDER
+   puts 0006 at run 4 and 0005 at run 6, both ahead of 0008 at run 7, and both
+   are `Status: Implemented`. `internal/cli/flow_input.go` is headed "RDR 0005";
+   `internal/cli/lint.go`'s bare `model-invalid` block traces to RDR 0006's own
+   skeleton commit `d0194d9` and was never touched by 0008.
+6. **The gap is already forbidden by its owner's contract.** RDR 0006's REQ-91:
+   blocking findings "MUST remain machine-readable in JSON mode through an
+   append-only typed `findings` field owned by `clierr`, not through a
+   verb-local wrapper or a **text-only `Detail` string**." `lint.go` does
+   exactly the latter for *every* load category — 0002's twenty-odd categories
+   included, not just `reserved_tag_key`. It is one pre-existing defect on
+   0006's surface with a whole-category blast radius, not a 0008 omission.
+7. **`Finding.Rule` is 0006's field, not 0008's.** `clierr.go` documents it as
+   "the source rule/context id when the normalized model can provide one";
+   3b's test repurposed it for 0008's rule identifier. Binding 0008's token to
+   a field another RDR defines differently would itself need a joint decision.
+
+**Why not fix it anyway.** Routing the payload and advisory through
+`clierr.Finding` means adding CLI public surface — a new advisory carrier on
+the *success* path (a near-miss loads clean, so `CLIError.Findings` cannot hold
+it; §D10's own reconciliation note puts the success payload on 0006's
+`data.findings`) — that **0008's Normative Contracts do not name**. That is the
+"ADDITIVE IS NOT EXEMPT" `SPEC-UNDER` violation precisely: a plausible,
+useful-looking extension outside the record's fenced surface, taken
+unilaterally by the run that noticed it. Q1 recorded this trap at Phase 0 and
+chose reading (b) for exactly this reason.
+
+**Weighed against**: REQ-58's "normative, not deferred". The reading applied is
+that "not deferred" scopes the *decision* — the advisory's trigger, values, and
+separateness are settled now rather than left to a later RDR — not the delivery
+surface the same document twice disclaims. REQ-63's ban on the advisory altering
+the load/lint verdict independently rules out the failure envelope as its
+carrier, which leaves no carrier this RDR owns.
+
+**Disposition.** No CLI surface added. 3b's two tests are **retained, not
+deleted and not weakened**: each now asserts unconditionally the half RDR 0008
+owns (the three payload fields on `table.Failure`; the advisory's two spellings
+and rule identifier, plus the clean verdict) and then `t.Skip`s the wire half
+with the owning RDR named in the skip reason. Both retained assertions were
+mutation-checked — flipping `Failure.Remedy` fails the test — so neither is
+vacuous.
+
+**Handoff.** The delivery gap is real and reaches no author until 0005/0006
+close it. It is recorded here as the named successor obligation rather than
+silently absorbed. Worth a follow-up kata against RDR 0006's `lint.go` carrier,
+whose REQ-91 the current `Detail`-string collapse already violates for every
+load category.
