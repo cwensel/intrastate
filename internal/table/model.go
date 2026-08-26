@@ -323,12 +323,23 @@ func seamValue(members []string, isSet bool) string {
 		return members[0]
 	}
 	canonical := slices.Compact(slices.Sorted(slices.Values(members)))
-	b, err := json.Marshal(canonical)
-	if err != nil {
-		// json.Marshal of a []string cannot fail.
+
+	// HTML escaping is DISABLED, so `<`, `>`, and `&` serialize as
+	// themselves. Bare `json.Marshal` escapes them, which would make this
+	// seam spell a set value differently from every other site that emits or
+	// compares one — and §D13 read-back equality is BYTE equality, so a
+	// member carrying `&` would fail to match the request that wrote it
+	// (JDR 0001 §D13; RDR 0005 REQ-70/REQ-71/REQ-72 requires one encoder on
+	// every path a set value crosses).
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(canonical); err != nil {
+		// Encoding a []string cannot fail.
 		return ""
 	}
-	return string(b)
+	// Encode appends a newline; the seam value carries none.
+	return strings.TrimRight(buf.String(), "\n")
 }
 
 func (r Row) seamTags(in []TagValue) []resolve.Tag {

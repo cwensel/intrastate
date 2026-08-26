@@ -60,13 +60,18 @@ type CLIError struct {
 	Hint string `json:"hint,omitempty"`
 
 	// Findings carries the individual structured findings an aggregate
-	// failure reports. It is the ONE exception to this envelope's
-	// `omitempty` habit: the key must serialize even when the list is
-	// empty, because an empty list is the proof's receipt (`0006:C14`).
-	// It is a top-level SIBLING of `code` on the marshalled CLIError —
-	// EmitJSON marshals the *CLIError itself, so there is no `error`
-	// wrapper to nest under.
-	Findings []Finding `json:"findings"`
+	// failure reports. It is a top-level SIBLING of `code` on the
+	// marshalled CLIError — EmitJSON marshals the *CLIError itself, so
+	// there is no `error` wrapper to nest under.
+	//
+	// It is `omitempty` (`0005:C1`, REQ-8/REQ-16): this envelope's ONE new
+	// structured field, and a refusal naming a single subject carries that
+	// subject in `Param` rather than an empty list. That does NOT weaken
+	// `0006:C14`'s "an empty list is the receipt", which binds the SUCCESS
+	// payload's own non-omitempty `data.findings` — a different field on a
+	// different envelope. Every graph-lint FAILURE names at least one
+	// finding, so the key never elides on a path 0006 asserts.
+	Findings []Finding `json:"findings,omitempty"`
 
 	// Group selects the exit code; not serialized.
 	Group ErrorGroup `json:"-"`
@@ -143,9 +148,28 @@ func EmitJSON(out io.Writer, e *CLIError) {
 	if e == nil {
 		return
 	}
-	if buf, err := json.Marshal(e); err == nil {
-		_, _ = fmt.Fprintln(out, string(buf))
-	}
+	_ = WriteJSONLine(out, e)
+}
+
+// WriteJSONLine is THE JSON emit helper every CLI wire site routes through
+// (`0005:C1`, REQ-71/REQ-72). It writes v as one NDJSON line with HTML
+// escaping DISABLED, so `<`, `>`, and `&` serialize as themselves rather
+// than as `<`, `>`, and `&`.
+//
+// That is not cosmetic. JDR 0001 §D13 makes a set value's canonical JSON
+// array its wire identity, and RDR 0004's read-back verification is BYTE
+// equality over it. Under bare `json.Marshal` a set member carrying `&`
+// emits differently than the request that produced it, so plan-to-request
+// copy-through and read-back equality would both fail on values a model is
+// entitled to declare. One encoder at every site is what makes those
+// comparisons byte comparisons.
+//
+// `json.Encoder.Encode` appends the trailing newline itself, so this writes
+// exactly one line and never double-writes it.
+func WriteJSONLine(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetEscapeHTML(false)
+	return enc.Encode(v)
 }
 
 // EmitText writes a human-readable "error: <code>: <message>" line,
@@ -220,6 +244,13 @@ func sanitizeLine(s string) string {
 func (f Finding) identitySuffix() string {
 	var parts []string
 	for _, p := range [][2]string{
+		// This RDR's own identity fields come first: a model-load finding's
+		// `locator` is the file:line a reader acts on, and dropping it would
+		// make text output unactionable for the whole load-category family
+		// (`0005:C1`, REQ-11/REQ-18).
+		{"param", f.Param},
+		{"locator", f.Locator},
+		{"hint", f.Hint},
 		{"rule", f.Rule},
 		{"span", f.Span},
 		{"element", f.Element},
@@ -255,10 +286,29 @@ func (f Finding) identitySuffix() string {
 // Finding is one graph-lint finding as it crosses the wire. It is
 // subsystem-agnostic by construction.
 type Finding struct {
-	Code     string `json:"code"`
-	Model    string `json:"model"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+
+	// Model and Severity are RDR 0006's. They are `omitempty` like every
+	// other optional field: REQ-14 fixes the record as "one flat record
+	// with omitempty optional fields", and only Code and Message are
+	// required of every producer. This is the same reconciliation
+	// `CLIError.Findings` takes — `0006:C14`'s non-omitempty rule binds the
+	// SUCCESS payload's `data.findings`, not a field on this record — and
+	// every graph-lint finding populates both, so no 0006 assertion elides.
+	Model    string `json:"model,omitempty"`
+	Severity string `json:"severity,omitempty"`
+
+	// Param and Locator are RDR 0005's (`0005:C1`, REQ-14/REQ-18): Param
+	// names the offending flag or argument on a finding this CLI produced,
+	// and Locator is the `file:line` a model-load category attributes to.
+	// Locator is NOT Span or Element — those are 0006's normalized-model
+	// fallbacks; this one is the source position the loader saw.
+	Param   string `json:"param,omitempty"`
+	Locator string `json:"locator,omitempty"`
+
+	// Hint is an optional one-line remedy carried per finding.
+	Hint string `json:"hint,omitempty"`
 
 	// Rule names the source rule/context id when the normalized model can
 	// provide one; Span and Element carry the fallbacks.

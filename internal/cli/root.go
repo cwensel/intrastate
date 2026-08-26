@@ -56,6 +56,9 @@ func NewRootCmd() *cobra.Command {
 	// Root `lint` is the authoritative graph-acceptance surface
 	// (`0006:C19`), deliberately not under RDR 0005's `flow` group.
 	cmd.AddCommand(newLintCmd())
+	// The `flow` group is RDR 0005's skill-integration surface. `lint`
+	// stays at ROOT and is deliberately NOT absorbed into it (`0005:C1`).
+	cmd.AddCommand(newFlowCmd())
 
 	return cmd
 }

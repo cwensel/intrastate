@@ -25,7 +25,6 @@
 package respond
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -141,7 +140,12 @@ func OK(cmd *cobra.Command, s Success) error {
 		// run reported, which the output contract forbids (`0006:C14`).
 		if carrier, ok := s.Data.(FindingCarrier); ok {
 			clierr.EmitFindingsText(cmd.OutOrStdout(), carrier.LintFindings())
+			return nil
 		}
+		// Any other payload is rendered field-for-field from the SAME value
+		// the JSON branch marshals, so the two modes cannot disagree about
+		// what the run reported (RDR 0005 REQ-7/REQ-9/REQ-11/REQ-120).
+		writeTextPayload(cmd.OutOrStdout(), s.Data)
 		return nil
 	}
 }
@@ -199,13 +203,11 @@ func lookupAs(cmd *cobra.Command) *pflag.Flag {
 	return root.PersistentFlags().Lookup(FlagName)
 }
 
+// writeJSONLine routes through the ONE shared non-HTML-escaping encoder
+// `clierr` owns, so this success site and the failure site render a
+// canonical set literal identically (`0005:C1`, REQ-71/REQ-72).
 func writeJSONLine(out io.Writer, v any) error {
-	buf, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, string(buf))
-	return err
+	return clierr.WriteJSONLine(out, v)
 }
 
 func writeTextWarning(out io.Writer, w Warning) {
