@@ -98,7 +98,7 @@ map to the existing CLI output contract.
   checks over normalized rows, declared tags/domains, declared terminals, and
   predecessor/write reachability.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 Normalized rows expose every graph edge, guard constraint, write, source
   rule id, and source locator needed for lint diagnostics.**
@@ -108,7 +108,7 @@ map to the existing CLI output contract.
     rows with source locator, predicates, and writes; RDR 0002 `Normative
     Contracts` require each candidate row to retain source rule id and source
     locator, and require tag declarations, explicit writes/clears, accessor
-    references, and deterministic candidate-row dumps. RDR 0003 A5 confirms
+    references, and deterministic candidate-row dumps. RDR 0003:A5 confirms
     normalized predicates retain source identity for diagnostics.
   - **If wrong**: Lint may find a graph defect but fail to locate the authored
     rule or may need to parse sparse source through a parallel model.
@@ -116,7 +116,7 @@ map to the existing CLI output contract.
   this graph claims exhaustive.**
   - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: RDR 0003 A2 derives coverage as
+  - **Evidence**: RDR 0003:A2 derives coverage as
     `union(row_i accepted assignments) == scoped product` and overlap as any
     non-empty row intersection over finite enum/boolean, declared set-universe,
     and bounded-int domains; its `Normative Contracts` require finite domains
@@ -148,7 +148,7 @@ map to the existing CLI output contract.
   - **Method**: Peer RDR
   - **Evidence**: RDR 0002 `Normative Contracts` require every matched or
     written tag to declare provenance (`owned`, `observed`, `recognized`) and
-    preserve explicit writes/clears in normalized candidate rows. RDR 0003 A6
+    preserve explicit writes/clears in normalized candidate rows. RDR 0003:A6
     verifies provenance labels are available to predicate lint, and its
     owned-tag clause rejects rows that match owned tags unless every reachable
     predecessor sets or preserves them — quantifying over the reachability
@@ -278,7 +278,7 @@ map to the existing CLI output contract.
     as a clean model. The MVV's fixtures declare their own roots and terminals,
     so the invariants are provable before the peer clause lands.
 - **A7 Invariant 5 plus `graph-always-present-owned` discharge the owned half of
-  RDR 0003 A18's conformance premise; the observed/recognized half stays
+  RDR 0003:A18's conformance premise; the observed/recognized half stays
   unowned.**
   - **Status**: Pending
   - **Method**: Peer RDR
@@ -298,7 +298,7 @@ map to the existing CLI output contract.
     value*; an always-present observed or recognized key is not model-decidable,
     since those arrive from accessors and the caller and `assemble` reads no
     declaration. The discharge is therefore partial by construction, not by
-    omission. It flips to `Verified` when RDR 0003 A18 records this RDR's two
+    omission. It flips to `Verified` when RDR 0003:A18 records this RDR's two
     codes as its model-level producer and records the observed/recognized
     residue as still open. RDR 0003 is `Final [locked 2026-08-22]`, so that edit
     is a route-back on a locked peer, not a Draft amendment — booked here rather
@@ -310,7 +310,7 @@ map to the existing CLI output contract.
     view can still reach the kernel — lint's green means the *model* conforms,
     never that every assembled view will.
   - **Stage 6 disposition — DOWNGRADED.** The peer's own record settles the
-    routing: RDR 0003 A18 is `Status: Pending` and was itself **DOWNGRADED at
+    routing: RDR 0003:A18 is `Status: Pending` and was itself **DOWNGRADED at
     RDR 0003's Stage 6** as *not lock-blocking*, with its venue named as "RDR
     0007's next touch ... and/or RDR 0006's refine — either discharges it, both
     is better". RDR 0003's own `Status` line lists A18 among eight open records,
@@ -614,7 +614,7 @@ The mandatory invariant set is:
    key; lint reports the omission against the `initial` declaration rather than
    against an arbitrary downstream node, so the diagnostic names the authored
    site. The observed/recognized half stays
-   unowned, so this RDR discharges RDR 0003 A18 **in part, not on its own**, and
+   unowned, so this RDR discharges RDR 0003:A18 **in part, not on its own**, and
    must not assume a view-level check runs — RDR 0007 states no conformance
    obligation and `assemble` performs none (A7).
 6. **Owned-set-before-match** — a row that reads an owned tag (match key or
@@ -792,7 +792,7 @@ package owns the vocabulary and MUST populate them from its own typed values;
 `clierr` only transports and serializes. This is a deliberate trade — the type
 system does not enforce the "MUST carry" clause, so the MVV does (scenario 8
 asserts the exact atom fields on a `graph-unprovable-coverage` finding), and
-RDR 0003 A20's carrier is that field set, not a shared enum.
+RDR 0003:A20's carrier is that field set, not a shared enum.
 
 Disposition of every model class lint can meet:
 
@@ -816,6 +816,7 @@ Disposition of every model class lint can meet:
 
 #### Normative Contracts
 
+**C1**
 ```normative
 Graph lint MUST be a blocking acceptance gate over the normalized transition
 model. A model with any blocking lint finding MUST NOT be accepted for CI
@@ -828,23 +829,27 @@ on the runtime path, which this RDR's authority split rejects; RDR 0001's
 stateless refusal is what protects that path instead.
 ```
 
+**C2**
 ```normative
 Graph lint MUST consume the normalized candidate-row graph from the transition
 model contract. It MUST NOT define a second sparse-source parser or a parallel
 transition semantics.
 ```
 
+**C3**
 ```normative
 Graph lint MUST check at least these blocking invariant classes: dangling edge,
 dead end, determinism/overlap, guard exhaustiveness/gap, single-valued state,
 owned-set-before-match, and declared terminal/escape handling.
 ```
 
+**C4**
 ```normative
 Graph lint MUST reject ambiguity instead of relying on source order,
 rendered-row order, or first-match priority to choose between enabled rows.
 ```
 
+**C5**
 ```normative
 Coverage, overlap, and withholding MUST be decided per scoped row group as RDR
 0003 defines it (`0003::Technical Design`, row-group paragraph; `0003::Normative
@@ -853,6 +858,7 @@ predicate; it supplies only which selection contexts are reachable, per the
 reachability relation in `Load-Bearing Decisions`.
 ```
 
+**C6**
 ```normative
 Graph lint MAY claim exhaustiveness only over finite declared domains supplied
 by RDR 0003's tag declaration model, and MUST read finite domain, optionality,
@@ -867,6 +873,7 @@ drop `exists` atoms from the product"); lint MUST NOT certify a group
 exhaustive while ignoring that dimension's `{absent}` assignment.
 ```
 
+**C7**
 ```normative
 Coverage is a universal claim, so it MUST be computed from the group's authored
 rows and their declared guard domains alone — never from a reachability node.
@@ -881,6 +888,7 @@ is proven at all; it never enters the coverage computation. See
 `Load-Bearing Decisions`, *Soundness direction is per invariant*.
 ```
 
+**C8**
 ```normative
 Graph lint's exhaustiveness promise is narrowed exactly as RDR 0003's narrowing
 clause states (`0003::Normative Contracts`, "An exhaustiveness claim MUST NOT be
@@ -891,6 +899,7 @@ row and the refusing atom. This RDR cites that clause and MUST NOT restate it,
 mint a second code for it, or carry it in a non-blocking tier.
 ```
 
+**C9**
 ```normative
 Escape rows MUST participate in the coverage union and MUST be overlap-checked
 in one population per declared failure class, never against ordinary rows, as
@@ -900,6 +909,7 @@ closed by a bare escape row MUST emit `graph-coverage-closed-by-escape` naming
 that row; a bare green MUST NOT satisfy this clause.
 ```
 
+**C10**
 ```normative
 An escape row closes coverage only for the failure classes it declares. RDR 0003
 fixes that an escape row cannot rescue `guard_unevaluable` or
@@ -925,6 +935,7 @@ invariant 6's `graph-owned-before-write` is the design-time check whose runtime
 counterpart it is, and the two MUST NOT be conflated.
 ```
 
+**C11**
 ```normative
 An owned key declared always-present MUST be held in every reachable owned-state
 node; a violation is `graph-always-present-owned`. Lint MUST NOT extend this
@@ -933,6 +944,7 @@ check to observed or recognized keys — those arrive at runtime and
 discharges only the owned half of RDR 0003's conformance premise.
 ```
 
+**C12**
 ```normative
 Lint MUST publish the model-independent product bound above which it declines to
 prove coverage, and MUST emit `graph-product-too-large` for a group whose
@@ -941,6 +953,7 @@ over a tag not declared single-valued has no projection and MUST take
 `graph-unprovable-coverage` (`0003::A21`).
 ```
 
+**C13**
 ```normative
 Every blocking finding MUST carry a stable code, model identity, severity,
 human-readable message, and the source rule/context id or source span when the
@@ -949,6 +962,7 @@ carry that atom's `Key`, `Operator`, `Literal`, and `Block`; a finding scoped to
 an escape population MUST carry the failure class.
 ```
 
+**C14**
 ```normative
 Graph lint failure MUST return one aggregate `CLIError` with code
 `graph-lint-failed` and `GroupUserEnv`; the individual blocking findings MUST
@@ -971,6 +985,7 @@ requires extending `clierr.EmitText` (failure) and the `respond.OK` text branch
 are booked edits, not reuse.
 ```
 
+**C15**
 ```normative
 Graph lint findings MUST be emitted in deterministic order by finding identity:
 model id, invariant code, source rule/context id or graph element id, then
@@ -984,6 +999,7 @@ next-state tags, with RDR 0003's canonical set-literal form. When one run mixes
 identity namespaces, a source rule/context id sorts before any graph element id.
 ```
 
+**C16**
 ```normative
 Graph lint MUST report every defect it can decide in one pass over a row group,
 not the first it encounters, exactly as RDR 0003's reporting clause states
@@ -994,6 +1010,7 @@ overlapping across several shared failure classes MUST yield one finding per
 shared class.
 ```
 
+**C17**
 ```normative
 The advisory tier is closed at `graph-coverage-closed-by-escape`,
 `graph-redundant-row`, `graph-unreachable-rule`, and `graph-vacuous-atom`. A
@@ -1005,12 +1022,14 @@ well-formed-but-vacuous rather than rejected. Advisory findings MUST NOT change
 the success disposition.
 ```
 
+**C18**
 ```normative
 A model that declares no initial owned state MUST be rejected with a blocking
 finding; lint MUST NOT treat an absent root as an empty reachable set and report
 a clean model.
 ```
 
+**C19**
 ```normative
 The authoritative CLI surface for graph acceptance MUST be the root command
 `intrastate lint` or a same-engine CI invocation of that command. Pre-commit
@@ -1018,6 +1037,7 @@ hooks, aliases, and resolver-local validation flags MAY call that engine, but
 MUST NOT define different acceptance rules.
 ```
 
+**C20**
 ```normative
 Lint command success and failure MUST route through `respond.OK`,
 `respond.Fail`, and `CLIError`; the command MUST NOT write directly to stdout

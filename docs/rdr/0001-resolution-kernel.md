@@ -198,6 +198,7 @@ kernel only exposes structured success/refusal values that the CLI can map.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 Resolver kernel contract:
 Given the same flow identity, transition table revision, accessor-produced owned

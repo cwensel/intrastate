@@ -305,7 +305,7 @@ at the same `area:internal-resolve` seam.
   *mechanism* is rejected under Load-Bearing Decisions /
   Naming.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 RDR 0002's data-level validation-category list is
   additively extensible without reopening its Final
@@ -1280,6 +1280,7 @@ So the ≥2 split signal is **not** tripped;
 `foundational` is earned on the cross-RDR axis (this RDR
 binds 0001's carrier to 0002's model), not on contract count.
 
+**C1**
 ```normative
 When a resolve carries a freshly recognized outcome, the
 assembled evaluation view MUST bind it under exactly the tag
@@ -1308,6 +1309,7 @@ it — an empty-string outcome is degenerate for reasons that
 are not this RDR's to rule on.
 ```
 
+**C2**
 ```normative
 A tag declaration with provenance `recognized` MUST be named
 `recognized`. A tag declaration with provenance `owned` or
@@ -1417,6 +1419,7 @@ quantifiers, distinct subjects. Whichever way JD-10 settles,
 the naming rules above are unchanged: totality bears on
 satisfiability and lint, never on which name the key may take.
 
+**C3**
 ```normative
 Every `reserved_tag_key` failure — and any undeclared-tag
 failure whose offending key is the reserved name — MUST
@@ -1480,6 +1483,7 @@ pre-existing `unknown tag` failure; that extension is
 authored by this RDR and lands in 0002's implementation.
 ```
 
+**C4**
 ```normative
 Producers of kernel `Input` MUST NOT supply an owned or
 observed tag keyed `recognized`; the reserved key enters the
@@ -1578,6 +1582,7 @@ The empty-outcome variant is pinned as expected by scenario 6
 for that reason, not by symmetry with block 1's prose.
 ```
 
+**C5**
 ```normative
 A normalized row's `Row.RequiresOwned` MUST NOT name
 `recognized`. This is a name reservation only: what
@@ -1634,6 +1639,7 @@ residual on that narrowed path, consistent with the
 non-conforming-input posture blocks 4 and 6 take.
 ```
 
+**C6**
 ```normative
 Kernel disposition is unchanged by this RDR for conforming
 input: no new `RefusalKind`, no change to RDR 0001 D3's

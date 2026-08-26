@@ -312,7 +312,7 @@ structural check on `Table.Rows` before evaluation).
   the implementation. A6 restated accordingly; the choice
   never rested on it and is unchanged.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 The kernel's Go error return is currently unused by
   `Resolve` for any disposition (it always returns nil
@@ -819,6 +819,7 @@ signal, reused.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 Escape-row shape conformance — an escape row carries no
 owned-state mutation — is a PRODUCER obligation on every
@@ -833,6 +834,7 @@ only through a write accessor, which RDR 0004 scopes to
 cannot mutate owned state.
 ```
 
+**C2**
 ```normative
 On the authored-table path, RDR 0002's normalizer/lint is the
 enforcing implementation: an authored escape rule carrying a
@@ -851,6 +853,7 @@ MUST render write-free. This RDR binds that duty with a
 conformance fixture set; RDR 0002's grammar is unchanged.
 ```
 
+**C3**
 ```normative
 The kernel enforces the same obligation as an entry
 precondition of Resolve. Resolve's signature is UNCHANGED —
@@ -876,6 +879,7 @@ refusal kind, and MUST NOT alter any disposition of a
 conforming table.
 ```
 
+**C4**
 ```normative
 The breach error MUST be a TYPED error carrying the offending
 row identity as the kernel's existing RowRef value, inspectable
@@ -929,6 +933,7 @@ Unwrap() error at the outermost level and break the flat
 traversal this clause guarantees.
 ```
 
+**C5**
 ```normative
 When a table carries MORE THAN ONE breaching row, the
 precondition MUST report every one of them in a single pass —
@@ -991,6 +996,7 @@ rejected branch, since per-row entries reintroduce the ordering
 defect REQ-2/REQ-10 forbid.
 ```
 
+**C6**
 ```normative
 The conformance predicate MUST be exported by the kernel
 package as a construction-time check callable by any table
@@ -1027,6 +1033,7 @@ empty-input region reaches it — and a nil return there is the
 vacuous truth, never a signal that validation was skipped.
 ```
 
+**C7**
 ```normative
 When a breach reaches the CLI, the verb MUST wrap it into a
 *clierr.CLIError carrying a stable Code, Group GroupInternal
@@ -1076,6 +1083,7 @@ are a separate, explicitly extensible surface ("Add new
 codes as needed", AGENTS.md).
 ```
 
+**C8**
 ```normative
 The shared resolve.Row type keeps its single shape: escape
 identity remains discriminated solely by a non-empty Escape

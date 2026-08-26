@@ -114,9 +114,9 @@ wanted.
 
 The system-internal requirement: the model grammar, lint, and resolve
 currently assume every model is a state machine. Every ordinary rule must
-carry a write block (RDR 0002 C4, `internal/table/normalize.go::normalizeRule`
+carry a write block (RDR 0002:C4, `internal/table/normalize.go::normalizeRule`
 → `CatMalformedRuleShape`); a missing `[initial]` is reported as a dangling
-edge (RDR 0006 C18, `internal/graphlint/analysis.go::checkDanglingEdge`); and
+edge (RDR 0006:C18, `internal/graphlint/analysis.go::checkDanglingEdge`); and
 resolve demands the write target as owned state (RDR 0005 DEV-8,
 `internal/cli/flow_exec.go::invokedReaders` demand set = RequiresOwned ∪
 guard keys). The design question is whether a model with zero owned tags is a

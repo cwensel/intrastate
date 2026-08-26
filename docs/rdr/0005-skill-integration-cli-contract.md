@@ -557,6 +557,7 @@ unchanged and does not redefine it for the `flow` group.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 The CLI MUST expose one command group for skill integration with these verbs:
 next, resolve, read-state, and set-state. Other command groups (lint, dump,

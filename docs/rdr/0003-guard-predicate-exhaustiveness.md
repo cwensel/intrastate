@@ -117,7 +117,7 @@ parallel guard model.
   bounded integer tags such as cap counters can be proven, while unbounded
   values can be evaluated but cannot carry an exhaustiveness guarantee.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 The target RDR and kata flows fit a closed typed predicate vocabulary.**
   - **Status**: Verified
@@ -769,11 +769,13 @@ predecessor write before a row may match them.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 A guard predicate MUST be a symbolic atom over a declared tag, not a host
 language callback and not a free-form expression string.
 ```
 
+**C2**
 ```normative
 This RDR owns the **tag declaration model** — the typed alphabet every guard
 atom is written against. A tag declaration MUST carry a value kind, and — as its
@@ -795,6 +797,7 @@ normalization; this RDR owns what a declaration means. Neither document restates
 the other (JDR 0001 P6).
 ```
 
+**C3**
 ```normative
 A finite domain MUST be declarable for any kind an exhaustiveness claim can
 range over: an `enum` declares its value set, a `bool` is finite by
@@ -809,6 +812,7 @@ dimension over it cannot carry an exhaustiveness claim, and lint MUST take the
 blocking inability-to-prove outcome for that dimension.
 ```
 
+**C4**
 ```normative
 A tag declaration MUST be able to state whether the key may be absent. A
 declaration carrying **no optionality marker declares the key optional** — the
@@ -853,6 +857,7 @@ of scope. Naming the owner is not the same as the check existing: JDR 0001
 §JD-18 decides the producer, and **A18** books it.
 ```
 
+**C5**
 ```normative
 A tag declaration MUST be able to state that the tag is **single-valued**: at
 most one of its declared domain values holds in any conforming evaluation view.
@@ -883,6 +888,7 @@ and RDR 0006 reconciles its invariant as "the model-level half of RDR 0003's
 single-valued conformance conjunct".
 ```
 
+**C6**
 ```normative
 A declared domain MUST agree with its value kind. Each kind admits exactly
 these fields, and any other combination is a declaration error that MUST be
@@ -918,12 +924,14 @@ both onto the envelope under JDR 0001 §JD-8. The predicate semantic kinds this
 RDR owns (A4) name *which* rule fired within those categories.
 ```
 
+**C7**
 ```normative
 The initial operator vocabulary MUST be closed and typed: equality,
 membership, bounded integer comparison, existence, and set containment. Unknown
 operators MUST be rejected during parse or lint before resolution.
 ```
 
+**C8**
 ```normative
 Each operator MUST declare which tag value kinds it accepts. A predicate whose
 literal cannot be parsed as the declared tag kind MUST be rejected before
@@ -951,6 +959,7 @@ the same model, which the published-bound clause forbids. An author who wants
 co-occurring membership declares the tag `set` and uses `contains`.
 ```
 
+**C9**
 ```normative
 This RDR's guard evaluator MUST decide value semantics over a present value
 only. Key presence, existence atoms, absent-key unevaluability, and the
@@ -958,23 +967,27 @@ combination of per-atom verdicts belong to the kernel (JDR 0001 §D4, normative
 in RDR 0007); the evaluator MUST NOT read the tag view.
 ```
 
+**C10**
 ```normative
 Positive guard atoms MUST live in `all`; negative guard atoms MUST live in
 `unless`. Successful row matching MUST NOT depend on source order or
 first-match priority.
 ```
 
+**C11**
 ```normative
 Lint MAY claim guard exhaustiveness only for finite declared domains: enum
 values, booleans, declared set element universes, or bounded integer ranges.
 ```
 
+**C12**
 ```normative
 If a guard dimension lacks a finite declared domain, lint MUST refuse or
 downgrade an exhaustiveness claim for that dimension rather than treating the
 covered examples as complete.
 ```
 
+**C13**
 ```normative
 Coverage and overlap checks MUST be scoped to a normalized row group supplied by
 the transition/lint model, and MUST evaluate the participating guard dimensions
@@ -1011,6 +1024,7 @@ differently, and two implementations would then build different products — the
 same cross-implementation divergence the published bound exists to prevent.
 ```
 
+**C14**
 ```normative
 An `exists` atom projects onto the scoped product as a **per-key presence
 dimension**: a two-valued dimension `{present, absent}` for that key, alongside
@@ -1030,6 +1044,7 @@ certifying it exhaustive while ignoring the presence dimension is the
 false-green this RDR's narrowing forbids.
 ```
 
+**C15**
 ```normative
 A declared escape row participates in the coverage identity like any other row:
 its accepted assignments are computed from its guard atoms and unioned with its
@@ -1111,6 +1126,7 @@ naming the row (A19); what this RDR fixes is that the distinction MUST be
 visible and MUST NOT depend on the reader inspecting the model by hand.
 ```
 
+**C16**
 ```normative
 An exhaustiveness claim MUST NOT be stronger than the runtime it describes: lint
 MUST NOT certify a row group exhaustive when a participating row can refuse
@@ -1132,6 +1148,7 @@ exempt from the veto. The two-population reading applies to overlap only; readin
 it into the narrowing would certify green exactly the group the runtime refuses.
 ```
 
+**C17**
 ```normative
 **`unless` is subtracted two-valued only when its atoms are decided.** The
 excluded-intersection subtraction this RDR states for lint is a set operation
@@ -1162,6 +1179,7 @@ present. Overlap findings among the group's decidable rows are unaffected and
 still MUST be emitted.
 ```
 
+**C18**
 ```normative
 A withheld exhaustiveness claim MUST be observable, not silent. It takes the
 same blocking inability-to-prove form an unprovable dimension already takes —
@@ -1185,6 +1203,7 @@ exit code alone cannot distinguish a withheld claim from a proved one.
 > surfaces, the atom half at runtime is not. Booked as **A20** (JDR 0001
 > §JD-18) rather than left standing as a MUST no producer can meet.
 
+**C19**
 ```normative
 Lint MUST report every defect it can decide in one pass over a row group, not
 the first one it encounters. Withholding a group's exhaustiveness claim MUST NOT
@@ -1198,6 +1217,7 @@ MAY be emitted together; what MUST NOT be emitted is a green exhaustiveness
 result alongside any withholding reason.
 ```
 
+**C20**
 ```normative
 "Refuse" and "downgrade" are one outcome, not an author's choice: every case
 this RDR sends to refuse-or-downgrade — a non-finite dimension, a finite
@@ -1212,6 +1232,7 @@ the same blocking outcome as "refuse" on both sides of the seam, and never a
 silent or advisory one.
 ```
 
+**C21**
 ```normative
 A row "can refuse" when the row carries a value atom over a key **declared
 optional** **in either block** — `all` or `unless`, since an unevaluable atom
@@ -1230,6 +1251,7 @@ clause is decidable today and does not wait on A12: a declaration-only test is
 what makes it total.
 ```
 
+**C22**
 ```normative
 A set literal — the right-hand side of `in` and of `contains` — has one
 canonical spelling: an unordered set of typed elements, duplicate-free, and
@@ -1241,6 +1263,7 @@ enters the identity tuple, so reordering a set literal cannot change a
 diagnostic — the source-order independence MVV Scenario 6 requires.
 ```
 
+**C23**
 ```normative
 Set-valued guard domains MUST be proved with a deterministic symbolic or
 bitset-equivalent representation. If the finite product is too large for that
@@ -1248,6 +1271,7 @@ proof, lint MUST refuse or downgrade the exhaustiveness claim rather than
 silently capping enumeration.
 ```
 
+**C24**
 ```normative
 "Too large to prove" MUST be a declared, model-independent bound, not an
 implementation's incidental limit: the implementation MUST publish the bound it
@@ -1309,6 +1333,7 @@ does not exist. This is not short-circuiting between the classes; it is the
 size-bearing diagnostic being unavailable when its quantity is undefined.
 ```
 
+**C25**
 ```normative
 Overlap and coverage diagnostics MUST name the source rule id or context id
 that contributed each predicate involved in the finding.
@@ -1321,6 +1346,7 @@ combination no row accepts. Naming the group without a witness assignment MUST
 NOT satisfy this clause.
 ```
 
+**C26**
 ```normative
 Predicate lint MUST distinguish owned, observed, and recognized tags. A row
 that matches an owned tag MUST be rejected unless every reachable predecessor
@@ -1438,7 +1464,7 @@ the grouping context here rather than a dimension.
   handle would contradict this RDR's own source-order independence: the same
   tuple must identify the same atom under the reordering MVV Scenario 6
   requires. The tuple is total precisely because one row may carry two atoms
-  over one key (RDR 0007 A5's conjoined value row), which `(key, block)` alone
+  over one key (RDR 0007:A5's conjoined value row), which `(key, block)` alone
   cannot separate. Semantic equality is `(tag, operator, literal)`.
   **Which equality each operation uses is fixed, not left to the implementer**:
   diagnostics, deduplication, and any "same atom" claim use the **identity
@@ -1838,7 +1864,7 @@ every exactness claim tied to A2 and the MVV fixture.
 - [x] **A7** — the presence-dimension projection is stated as a normative
   clause, on the derivation in
   `evidence/research/iter-2-projection-derivation.md`; its optionality input
-  is this RDR's own declaration. RDR 0007 A12 routes the question here and it
+  is this RDR's own declaration. RDR 0007:A12 routes the question here and it
   is answered here.
 - [x] **A8** — JDR 0001 §JD-4 (closed 2026-08-22) names this RDR the recording
   document for the narrowing; RDR 0006 cites the clause, reuses

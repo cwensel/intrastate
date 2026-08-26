@@ -251,7 +251,7 @@ existing one.
   (A17); and the kernel can recognize the existence operator
   by one token the normalizer emits (A16).
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 RDR 0003's closed operator vocabulary needs no new
   operator for this rule: `exists` is the only operator
@@ -1247,6 +1247,7 @@ migrate from text-keyed verdicts to atoms.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 SEAM. A candidate row carries its guard as a slice of parsed
 atoms — key, operator token, literal, block ∈ {all, unless}
@@ -1322,6 +1323,7 @@ nil-seam rule the fixture needs a value atom over a PRESENT
 key (e.g. `reviews >= 3`).
 ```
 
+**C2**
 ```normative
 Value-comparing guard operators (equality, membership,
 bounded integer comparison, set containment) are PARTIAL
@@ -1333,6 +1335,7 @@ set-valued tag MUST be treated as unevaluable under set
 containment, NOT as the empty set.
 ```
 
+**C3**
 ```normative
 The existence operator is the sole TOTAL operator: it MUST
 decide true or false from presence or absence of its
@@ -1376,6 +1379,7 @@ not, not a duplicate of it: load rejection is upstream and
 can yield a plan from absence.
 ```
 
+**C4**
 ```normative
 PRESENCE IS PROVENANCE-BLIND. "Present in the assembled
 view" means the key is in the view under ANY provenance —
@@ -1392,6 +1396,7 @@ decidability takes the broader test. The two MUST NOT be
 conflated.
 ```
 
+**C5**
 ```normative
 A row with no atoms is decided TRUE without consulting the
 view (shipped: `evaluateGuard`'s empty-guard branch). Empty
@@ -1408,6 +1413,7 @@ verdict, not on `unless_conj`, because a conjunction over
 zero atoms has no value to state here.
 ```
 
+**C6**
 ```normative
 Atom verdicts combine in the KERNEL under strong-Kleene
 three-valued logic. Conjunction is `min` under the TRUTH
@@ -1447,6 +1453,7 @@ atom — this is what makes D8 sound. The tables are
 normative; the evaluator holds no part of them.
 ```
 
+**C7**
 ```normative
 GATE, THEN COUNT (JDR 0001 §D2, stated as the kernel's
 ordering). Over the candidate set: guard-FALSE rows prune
@@ -1491,6 +1498,7 @@ one refusal, one kind.
 Authoring docs MUST NOT repeat the superseded rationale.
 ```
 
+**C8**
 ```normative
 The kernel maps GuardUnevaluable to `guard_unevaluable`,
 which RDR 0002 excludes from escape lists. Missing artifact
@@ -1609,6 +1617,7 @@ from absence," not "every absence reported"; an absence is
 named exactly when it blocked a verdict.
 ```
 
+**C9**
 ```normative
 Row.RequiresOwned names the owned tag keys the row's
 post-guard transition depends on — the keys its `Writes`
@@ -1627,6 +1636,7 @@ empty (RDR 0009), RequiresOwned is therefore empty (A21). Who
 populates the field is RDR 0002's (JDR 0001 §JD-3).
 ```
 
+**C10**
 ```normative
 SURVIVOR MEMBERSHIP. A row whose guard is GuardTrue or
 GuardUnevaluable is a SURVIVOR; only GuardFalse rows are
@@ -1670,6 +1680,7 @@ clause away and could otherwise be read as covering both
 levels.
 ```
 
+**C11**
 ```normative
 Deviation D8 (guard-FALSE prunes first; a pruned row
 contributes neither candidacy nor an owned-state obligation)

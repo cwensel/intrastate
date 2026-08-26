@@ -87,7 +87,7 @@ accessor safety contract and reuses existing CLI failure plumbing later.
 - **Verified** — read-back verification can prove the expected owned-tag effect
   for initial write accessors without needing a full undo log.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 The target RDR and kata flows only need declared read, gate, and write
   accessors over caller-supplied artifact roles.**
@@ -283,34 +283,40 @@ Large-profile Q-O-C matrix:
 
 #### Normative Contracts
 
+**C1**
 ```normative
 Every accessor definition MUST declare exactly one capability: read, gate, or
 write. Runtime execution MUST reject any attempt to use an accessor for a
 different capability than the one declared.
 ```
 
+**C2**
 ```normative
 Within one flow, each `(flow id, accessor name, capability)` identity MUST
 resolve to exactly one accessor binding. Missing and multiply-bound identities
 MUST fail validation before resolution.
 ```
 
+**C3**
 ```normative
 Accessors MUST operate on caller-supplied artifact roles. The accessor executor
 MUST NOT discover authoritative artifacts from ambient process state.
 ```
 
+**C4**
 ```normative
 A read accessor MUST return typed tag values or a typed refusal. It MUST NOT
 mutate authoritative artifacts.
 ```
 
+**C5**
 ```normative
 Every read accessor definition MUST declare the requested key set as validated
 metadata. The set MUST NOT be derived from the keys a read actually resolved. A
 missing or empty requested key set MUST fail validation before execution.
 ```
 
+**C6**
 ```normative
 The typed-tag-values branch carries a completeness guarantee: a read accessor
 MUST return the tag set for exactly the keys it was asked for — no requested key
@@ -321,6 +327,7 @@ unreadability is a refusal. One unreadable requested key MUST refuse the whole
 read; the executor MUST NOT return the keys that did resolve.
 ```
 
+**C7**
 ```normative
 A read that cannot resolve every requested key MUST be reported as
 `incomplete_read`, its own refusal class, distinct from execution failure and
@@ -329,6 +336,7 @@ read exceeds its timeout before resolving every requested key, `timeout` takes
 precedence over `incomplete_read`.
 ```
 
+**C8**
 ```normative
 A requested key the artifact genuinely does not carry MUST NOT be presented to
 the resolver as a present owned tag. The accessor layer MAY represent absence
@@ -337,16 +345,19 @@ absent from the owned snapshot, so that a required absent key resolves as
 `owned_state_unavailable` rather than matching against a placeholder value.
 ```
 
+**C9**
 ```normative
 A gate accessor MUST return allow, deny, or indeterminate. Indeterminate MUST be
 a refusal-class result, not a false allow and not a false deny.
 ```
 
+**C10**
 ```normative
 A write accessor MUST apply only planned owned-tag writes produced by a
 successful transition. It MUST NOT write observed or recognized tags.
 ```
 
+**C11**
 ```normative
 `<clear>` is a reserved tag value (JDR 0001 §D5). A planned write of `<clear>`
 MUST remove the key from the artifact, and its read-back MUST assert the key is
@@ -356,6 +367,7 @@ MUST succeed. A read that yields `<clear>` as a value MUST treat that key as
 unreadable and refuse `incomplete_read`.
 ```
 
+**C12**
 ```normative
 After a write accessor reports command-level success, the executor MUST re-read
 the same caller-supplied artifact role named by the write binding and verify
@@ -366,6 +378,7 @@ discovering an ambient artifact or by reading an unrelated role. A read-back
 mismatch MUST be reported as a write failure.
 ```
 
+**C13**
 ```normative
 The read-back re-read is subject to read completeness. If it cannot read a key
 it must compare, the write MUST be reported as `read_back_incomplete` — the
@@ -373,6 +386,7 @@ verification did not run — and MUST NOT be reported as `read_back_mismatch`,
 which asserts the artifact is wrong, nor as success.
 ```
 
+**C14**
 ```normative
 `read_back_incomplete` and a post-mutation `timeout` are reported after the write
 command already ran. The refusal MUST be understood as "the mutation may have
@@ -382,16 +396,19 @@ does not retry the write, does not undo it, and does not re-derive the artifact'
 state. Recovery is the caller's, and its safe move is to re-read before acting.
 ```
 
+**C15**
 ```normative
 Every accessor invocation MUST have a bounded timeout. Timeout MUST be reported
 as its own refusal class, distinct from execution failure and read-back
 mismatch.
 ```
 
+**C16**
 ```normative
 Missing or non-positive timeout metadata MUST fail validation before execution.
 ```
 
+**C17**
 ```normative
 The accessor package MUST return structured success/refusal values and MUST NOT
 write to stdout or stderr directly.

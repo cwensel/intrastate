@@ -93,7 +93,7 @@ factor common context instead of enumerating every Cartesian row.
   are enough factoring to avoid RDR's status/profile/prelock Cartesian explosion
   without importing a full statechart runtime.
 
-### Critical Assumptions
+## Critical Assumptions
 
 - **A1 TOML can represent sparse transition rules with nested match predicates,
   multi-tag writes, per-capability accessor tables with `keys` bindings, root
@@ -598,11 +598,13 @@ accessor diagnostic on one, so it imposes no constraint here.
 
 #### Normative Contracts
 
+**C1**
 ```normative
 The transition model MUST be authored as sparse TOML data, not generated code
 and not a fully expanded Cartesian-product table.
 ```
 
+**C2**
 ```normative
 The source schema is the closed layout JDR 0001 §D7 fixes: root `outcomes`,
 root `terminal`, `[model]` (with the free-form sub-table `[model.metadata]`),
@@ -748,6 +750,7 @@ contract. Whether a model *omits* `[initial]` or
 lint refuses to certify the graph without a root or stop set.
 ```
 
+**C3**
 ```normative
 `[model]` MUST contain `id` and `version`. Version `1` is the only version this
 RDR accepts; any other version MUST be refused before normalization.
@@ -822,6 +825,7 @@ lost it would retire the `unknown schema field` category without any contract
 appearing to change.
 ```
 
+**C4**
 ```normative
 Rule ids MUST be unique within a model, compared by exact byte equality; a
 duplicate rule id is a load failure. Row identity, and therefore the dump's
@@ -852,6 +856,7 @@ identity of the literals clause reached through the write field, and the
 Round-Trip invariant compares writes, so it must compare them as sequences.
 ```
 
+**C5**
 ```normative
 An `escape` list MUST contain only resolver failure classes that RDR 0001
 allows the table to model: `no_match` and `ambiguous_match`. Normalization MUST
@@ -883,6 +888,7 @@ normalized value or the kernel row — the discriminator stays the escape class
 list, and no code may branch on a stored kind.
 ```
 
+**C6**
 ```normative
 Shared contexts MAY inherit from other contexts, but inheritance MUST normalize
 to an explicit predicate set before lint or resolution.
@@ -920,6 +926,7 @@ answer is a successor RDR on context composition, not an override bolted onto
 this merge.
 ```
 
+**C7**
 ```normative
 Guard predicates MUST be represented as positive `all` predicates and negative
 `unless` predicates. Normalization MUST combine the match atoms and both guard
@@ -946,6 +953,7 @@ that dropped one block would turn an authoring mistake into a rule that
 matches, which is the more dangerous failure.
 ```
 
+**C8**
 ```normative
 For an existence atom the normalizer MUST emit the kernel's exported constants
 verbatim — operator token `OpExists` and literal `LiteralTrue` or
@@ -956,6 +964,7 @@ and a foreign literal as unevaluable; this load rejection is upstream of that
 fail-closed backstop, not a substitute for it.
 ```
 
+**C9**
 ```normative
 Tag-key identity is exact byte equality on the post-parse key string at every
 stage — declaration lookup, context and rule predicate references, write and
@@ -972,6 +981,7 @@ raw map lookup with no folding, and the repo's only `strings.ToLower` is on the
 `--as` flag value in `internal/cli/respond/respond.go::ModeOf`.
 ```
 
+**C10**
 ```normative
 **Literals carry the same byte-exact identity as keys, and a set literal is a
 sequence, not a joined string.** A set-valued literal MUST normalize to an
@@ -1033,6 +1043,7 @@ joined to 0003's canonical set form (`0006-graph-lint-authority-and-guarantees.m
 is the same display/identity split drawn above.
 ```
 
+**C11**
 ```normative
 **Rule ids, outcome literals, and the members of any match-block `in` literal
 MUST NOT contain the expansion-suffix separator `#`.** The identity tuple
@@ -1061,6 +1072,7 @@ rather than admitted as a dead atom because no view can ever hold it and a
 silent dead rule is the more dangerous failure.
 ```
 
+**C12**
 ```normative
 A tag declaration with provenance `recognized` MUST be named `recognized`, and
 no owned or observed declaration may take that name; violations fail in RDR
@@ -1078,6 +1090,7 @@ atom in both `all` and `unless`, or two non-identical `eq` atoms on one key
 accumulated through inheritance (the contexts clause).
 ```
 
+**C13**
 ```normative
 Every rule — ordinary or escape — MUST bind exactly one outcome. **Outcome
 binding reads the match blocks only** — the rule's local `match` block plus the
@@ -1121,6 +1134,7 @@ one spelling of one edge and cannot mint two identities. A suffix is
 non-empty exactly when the rule produced more than one row.
 ```
 
+**C14**
 ```normative
 `Row.RequiresOwned` has no authored form. The normalizer MUST derive it for
 every row as the sorted, duplicate-free set of tag keys named by the rule's
@@ -1142,6 +1156,7 @@ What the field means is RDR 0007's (post-guard write dependencies); this RDR is
 its producer (JDR 0001 §JD-3) and does not add guard-read keys to it.
 ```
 
+**C15**
 ```normative
 The kernel row carries the next state and the accessor-facing writes as two
 distinct fields, and both have this RDR as their producer. Normalization MUST
@@ -1165,6 +1180,7 @@ the rule and MUST NOT populate one by aliasing the other — an alias would make
 that future divergence a silent behavior change rather than a compile-time one.
 ```
 
+**C16**
 ```normative
 **The unified predicate set splits across the kernel's two predicate fields by
 authored block (JDR 0001 §D6), and this RDR owns the split — at the kernel
@@ -1233,6 +1249,7 @@ these eight tokens; `:154` restates the closed set), and 0003's revision reason
 (rejection-rule routing, §JD-18) does not touch the operator vocabulary.
 ```
 
+**C17**
 ```normative
 **Atom-level validation is block-agnostic.** Every rule this RDR states about an
 authored atom — operator membership (above), the `<clear>` reserved value,
@@ -1271,12 +1288,14 @@ Implementation promotes them; scenario 3 continues to owe one negative control
 per rule **per block** for any rule added later.
 ```
 
+**C18**
 ```normative
 The tool MUST normalize the sparse source into deterministic candidate rows for
 lint, resolver lookup, diagnostics, and table dumps. Each candidate row MUST
 retain its source rule id and source locator.
 ```
 
+**C19**
 ```normative
 The expanded table dump MUST be derived from the normalized candidate-row value
 and MUST carry every field of it: row identity, source locator, outcome,
@@ -1357,6 +1376,7 @@ iteration order is deliberately randomized, and encoder guarantees vary:
 explicit option, and TOML encoders may sort only within key groups.
 ```
 
+**C20**
 ```normative
 Source order and rendered-row order MUST NOT decide a successful transition.
 This is this RDR's clause: the normalized row set is unordered as far as
@@ -1375,11 +1395,13 @@ for that class, are consequences of that procedure this RDR relies on rather
 than defines.
 ```
 
+**C21**
 ```normative
 The model MUST declare every tag it matches or writes, including each tag's
 provenance: owned, observed, or recognized.
 ```
 
+**C22**
 ```normative
 A tag declaration also carries its **type model**, spelled as the wire keys
 `kind`, `domain`, `min`, `max`, `elements`, `single_valued`, and `required`
@@ -1397,12 +1419,14 @@ through to the normalized model without loss, so lint (RDR 0006) and the guard
 proof (RDR 0003) read the same declaration the author wrote.
 ```
 
+**C23**
 ```normative
 Clearing a tag MUST be represented by an explicit rule-level `clear` entry that
 normalization renders as a `<clear>` write. Absence from both the write block and
 the clear list MUST NOT imply deletion.
 ```
 
+**C24**
 ```normative
 Load-time validation failures MUST retain stable data-level categories before
 CLI mapping, including at minimum malformed TOML, unknown schema field, missing
@@ -1764,7 +1788,7 @@ eq = "round-clean"
 | Fixed predicate operators and tag type model | RDR 0003 | Pending | This RDR names predicate slots and carries declarations but does not own the operator grammar or declaration semantics. |
 | Accessor execution and safe read-back | RDR 0004 | Pending | This RDR authors the capability tables, the `keys` binding, and rule-level gate references, and validates the bindings; RDR 0004 owns execution, `role`/`timeout`/`read_back` semantics, and what a `<clear>` write and its read-back mean. |
 | CLI parse/lint output | RDR 0005 plus existing respond gateway | Pending | Failures must map to the CLI output contract. |
-| Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks, including the declared `[initial]` root and `terminal` stop set (RDR 0006 A6). |
+| Graph lint over normalized rows | RDR 0006 | Pending | This RDR must expose enough structure for determinism and reachability checks, including the declared `[initial]` root and `terminal` stop set (RDR 0006:A6). |
 | Guard seam, atom shape, existence constants, gate ordering | RDR 0007 | Final, kernel reshape unimplemented | Normalizer emits per-atom block and the kernel's `OpExists`/`LiteralTrue`/`LiteralFalse`; derives `RequiresOwned`. The constants and the atom-shaped row do not exist in `internal/resolve` yet, so Phases 2–3 sequence behind that reshape (Prerequisites). |
 | Reserved recognized tag key | RDR 0008 | Final | Declaration named `recognized`; `reserved_tag_key` joins this RDR's category set. |
 | Escape-row shape conformance | RDR 0009 | Final | Escape rules carry no write block or clear list; normalized escape rows render write-free. |
