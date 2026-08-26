@@ -1420,3 +1420,55 @@ func nonVacuityGate(t *testing.T) {
 			"agreement assertion below would then hold vacuously")
 	}
 }
+
+// REQ-22: "*Placement* — the call is `Resolve`'s first statement,
+// `in.Table.CheckValid()`, above the existing `view := assemble(in)`, so a
+// breaching table costs no view assembly. This is a **cheapness preference,
+// not an observable contract**"
+// DOMAIN EDGE
+//
+// The record itself makes placement UNOBSERVABLE, so no test asserts that
+// `assemble` was not called (see coverage.md's ASSUMPTIONS). What IS
+// observable — and what a placement regression would break — is that a
+// breaching table errors regardless of any input that would make view
+// assembly meaningful. Asserted across inputs that vary every channel
+// `assemble` reads: owned, observed, and recognized.
+func TestReq22_TheBreachErrorsWhateverTheAssembledViewWouldHold(t *testing.T) {
+	nonVacuityGate(t)
+
+	base := breachingNoMatchInput()
+
+	variants := map[string]func(resolve.Input) resolve.Input{
+		"as_supplied": func(in resolve.Input) resolve.Input { return in },
+		"no_owned": func(in resolve.Input) resolve.Input {
+			in.Owned = nil
+			return in
+		},
+		"no_observed": func(in resolve.Input) resolve.Input {
+			in.Observed = nil
+			return in
+		},
+		"empty_recognized": func(in resolve.Input) resolve.Input {
+			in.Recognized = ""
+			return in
+		},
+		"nil_guard_seam": func(in resolve.Input) resolve.Input {
+			in.Guards = nil
+			return in
+		},
+	}
+
+	for name, mutate := range variants {
+		t.Run(name, func(t *testing.T) {
+			got, err := resolve.Resolve(mutate(deepCopyInput(base)))
+			if err == nil {
+				t.Fatalf("the breach did not error: %+v — a malformed table "+
+					"is malformed as a VALUE, independent of the input "+
+					"tuple the view would be assembled from", got)
+			}
+			if got.Plan != nil || got.Refusal != nil {
+				t.Errorf("a disposition accompanied the breach: %+v", got)
+			}
+		})
+	}
+}
