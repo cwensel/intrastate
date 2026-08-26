@@ -292,10 +292,15 @@ func kernelResolveFailure(err error) *clierr.CLIError {
 // in the kernel's order. The traversal is one level deep, matching the flat
 // shape `0009:C4` guarantees; a bare (unjoined) breach is handled too, so
 // the verb does not depend on the aggregate's cardinality.
+//
+// Reaching the aggregate walks the single-unwrap chain the way errors.As
+// does, rather than asserting on the outermost error alone: REQ-36 forbids
+// the kernel from wrapping its own join, but a bare assertion would silently
+// reduce an N-breach report to its first breach under any wrap a caller adds.
 func escapeShapeBreaches(err error) []*resolve.EscapeShapeBreachError {
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+	if joined := joinedBreaches(err); joined != nil {
 		var out []*resolve.EscapeShapeBreachError
-		for _, elem := range joined.Unwrap() {
+		for _, elem := range joined {
 			var breach *resolve.EscapeShapeBreachError
 			if errors.As(elem, &breach) {
 				out = append(out, breach)
@@ -306,6 +311,24 @@ func escapeShapeBreaches(err error) []*resolve.EscapeShapeBreachError {
 	var breach *resolve.EscapeShapeBreachError
 	if errors.As(err, &breach) {
 		return []*resolve.EscapeShapeBreachError{breach}
+	}
+	return nil
+}
+
+// joinedBreaches returns the elements of the first `Unwrap() []error`
+// aggregate on err's single-unwrap chain, or nil if the chain holds none.
+// The chain walk mirrors errors.As; the aggregate itself is not descended
+// into, keeping the element traversal exactly one level deep (REQ-35).
+func joinedBreaches(err error) []error {
+	for err != nil {
+		if joined, ok := err.(interface{ Unwrap() []error }); ok {
+			return joined.Unwrap()
+		}
+		unwrapped, ok := err.(interface{ Unwrap() error })
+		if !ok {
+			return nil
+		}
+		err = unwrapped.Unwrap()
 	}
 	return nil
 }

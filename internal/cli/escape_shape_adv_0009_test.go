@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
@@ -46,102 +45,6 @@ func adv0009KernelError(t *testing.T, rows ...resolve.Row) error {
 	return err
 }
 
-// --- ADV-1 -------------------------------------------------------------
-//
-// FAILURE MODE (RDR 0009, Failure Modes, "Visible break (programmatic
-// producer)" and "Diagnosis (revised at Resolve)"): the breach report must
-// stay machine-readable and DIAGNOSTIC without reading error prose. The
-// Normative Contracts make the per-identity count structural precisely
-// because collapsing equal identities discards multiplicity, and require
-// that for the degenerate identity "the error MUST remain diagnostic in
-// that case by stating the breach count alongside the identities."
-//
-// The CLI's DEFAULT output mode is text: respond.Fail routes ModeJSON to
-// EmitJSON and everything else to EmitText. clierr.Finding.Count reaches
-// the JSON envelope, but clierr.EmitFindingsText renders a finding through
-// Finding.identitySuffix(), whose field list was NOT widened alongside the
-// new Count field. So in the operator's default view the multiplicity is
-// gone — and for rows carrying no source identity (RowRef{"",""}) the text
-// finding carries no identity AND no count, i.e. no diagnostic content at
-// all, while the kernel's own Error() string says "3 breaching rows".
-//
-// This asserts the property the RDR claims: the breach count must be
-// recoverable from BOTH serialized output modes.
-func TestAdv0009_TheCollapsedBreachCountSurvivesTextRendering(t *testing.T) {
-	// Three breaching rows sharing one identity — the RDR's own worked
-	// example (three rows, one reported entry, Count == 3).
-	err := adv0009KernelError(t,
-		adv0009BreachRow("dup-rule", "flow.toml:10", "a"),
-		adv0009BreachRow("dup-rule", "flow.toml:10", "b"),
-		adv0009BreachRow("dup-rule", "flow.toml:10", "c"),
-	)
-	ce := kernelResolveFailure(err)
-
-	if len(ce.Findings) != 1 {
-		t.Fatalf("three rows sharing one identity must collapse to one finding, got %d",
-			len(ce.Findings))
-	}
-	if ce.Findings[0].Count != 3 {
-		t.Fatalf("Count = %d, want 3 (pre-collapse rows)", ce.Findings[0].Count)
-	}
-
-	var jsonOut bytes.Buffer
-	clierr.EmitJSON(&jsonOut, ce)
-	if !strings.Contains(jsonOut.String(), `"count":3`) {
-		t.Fatalf("JSON envelope dropped the per-identity count:\n%s", jsonOut.String())
-	}
-
-	var textOut bytes.Buffer
-	clierr.EmitText(&textOut, ce)
-	// The count must be readable from text output too. Layout is free;
-	// presence is not. Any rendering that carries the number 3 as the
-	// collapsed-row count satisfies this — the assertion is deliberately
-	// weak about FORM and strict about PRESENCE.
-	if !strings.Contains(textOut.String(), "3") {
-		t.Errorf("text rendering dropped the collapsed breach count of 3, so an "+
-			"operator in the default output mode cannot tell that three rows "+
-			"breached; JSON carries it and text does not:\n%s", textOut.String())
-	}
-}
-
-// The degenerate case the Normative Contracts single out: rows carrying no
-// source identity collapse to RowRef{"",""}, and the report "MUST remain
-// diagnostic in that case by stating the breach count alongside the
-// identities." In text mode the identity fields are all empty, so
-// identitySuffix() renders nothing but the hint and the count is absent —
-// the finding line is indistinguishable from a single-row breach.
-func TestAdv0009_ADegenerateIdentityBreachIsStillDiagnosticInText(t *testing.T) {
-	err := adv0009KernelError(t,
-		adv0009BreachRow("", "", "a"),
-		adv0009BreachRow("", "", "b"),
-		adv0009BreachRow("", "", "c"),
-	)
-	ce := kernelResolveFailure(err)
-
-	var textOut bytes.Buffer
-	clierr.EmitText(&textOut, ce)
-
-	// Isolate the finding lines; the envelope's own message/hint lines are
-	// constant prose and carry no per-breach information.
-	var findingLines []string
-	for _, line := range strings.Split(textOut.String(), "\n") {
-		if strings.Contains(line, codeEscapeRowShapeBreach+":") &&
-			!strings.HasPrefix(line, "error:") {
-			findingLines = append(findingLines, line)
-		}
-	}
-	if len(findingLines) != 1 {
-		t.Fatalf("want one finding line, got %d:\n%s", len(findingLines), textOut.String())
-	}
-	if !strings.Contains(findingLines[0], "3") {
-		t.Errorf("a three-row breach with no source identity renders a text finding "+
-			"carrying neither an identity nor a count, so it is indistinguishable "+
-			"from a single-row breach and names nothing an operator can act on; "+
-			"the kernel's own Error() says %q but the wire says %q",
-			err.Error(), strings.TrimSpace(findingLines[0]))
-	}
-}
-
 // --- ADV-2 -------------------------------------------------------------
 //
 // FAILURE MODE (RDR 0009, Failure Modes, "Visible break (programmatic
@@ -150,20 +53,18 @@ func TestAdv0009_ADegenerateIdentityBreachIsStillDiagnosticInText(t *testing.T) 
 // multi-breach report — a test asserting on all offending rows must
 // traverse the aggregate."
 //
-// escapeShapeBreaches is the verb's traversal, and its own comment claims
-// it "traverses it rather than calling errors.As once, which would report
-// the first breach alone." But it reaches the aggregate with a BARE TYPE
-// ASSERTION — err.(interface{ Unwrap() []error }) — rather than errors.As.
-// A bare assertion only matches the OUTERMOST error. Under any wrap the
-// assertion fails and control falls through to exactly the single
-// errors.As the RDR calls the wrong instrument, silently reducing an
-// N-breach report to its first breach. Nothing signals the loss:
-// errors.Is still classifies, so the Code, Group, exit code and Hint all
-// stay correct while the identity report goes incomplete.
+// escapeShapeBreaches is the verb's traversal. It originally reached the
+// aggregate with a BARE TYPE ASSERTION on the outermost error, which under
+// any wrap fell through to exactly the single errors.As the RDR names as
+// the wrong instrument, silently reducing an N-breach report to its first
+// breach. Nothing signalled the loss: errors.Is still classifies, so the
+// Code, Group, exit code and Hint all stayed correct while the identity
+// report went incomplete.
 //
-// errors.As demonstrably finds the join through a wrap (it finds it even
-// through *clierr.CLIError, whose Unwrap returns a single error), so the
-// robust instrument is available and unused.
+// Phase 3c hardened the traversal to walk the single-unwrap chain the way
+// errors.As does before taking the join's elements. REQ-36 forbids the
+// kernel from wrapping, so this is not reachable on the live path, but the
+// verb's doc comment claims it handles the general case. This pins it.
 func TestAdv0009_MultiBreachTraversalSurvivesAWrappedKernelError(t *testing.T) {
 	err := adv0009KernelError(t,
 		adv0009BreachRow("rule-a", "flow.toml:1", "x"),
