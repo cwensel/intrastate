@@ -460,10 +460,13 @@ is `flow_input.go`'s typed-code vocabulary (`codeTagInvalid`,
   Strengthened by HEAD: the field is not even added — it already ships — so
   nothing in the envelope changes at all.
 
-- [REQ-109] "A breach surfaced through the CLI. **Expected**: exit 2 via
-  `CLIError{Group: GroupInternal}` carrying `Code: "escape-row-shape-breach"`,
-  the offending row identity, and the remedy `Hint`" — (TS 11, restated as an
-  executable C7 obligation)
+- [REQ-109] "A breach surfaced
+  through the CLI.
+  **Expected**: exit 2 via `CLIError{Group: GroupInternal}`
+  carrying `Code: "escape-row-shape-breach"`, the offending
+  row identity, and the remedy `Hint` "fix the table
+  producer: an escape row must carry no writes" — asserted
+  on the `Code`" — (TS 11, restated as an executable C7 obligation)
   The record defers *scenario 11* by name (REQ-91), but C7's clauses are
   normative and executable, so the CLI assertion lands here instead: an
   end-to-end `flow` test asserting the `Code`, the `Findings` identities, and
