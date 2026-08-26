@@ -522,3 +522,83 @@ kernel's half of RDR 0009 withstood every attack made on it. The
 remedies are small and local: widen `identitySuffix()` to render `Count`
 (closes ADV-1 and ADV-3), and swap the bare type assertion in
 `escapeShapeBreaches` for `errors.As` (closes ADV-2).
+
+---
+
+## Phase 3c — adjudication of the Phase 3b findings
+
+Phase 3a (CoVe, spec-derived probing) returned **OK — zero FAIL-N** across
+~90 executed inputs. Phase 3b (adversarial) returned **BLOCK** with four
+failing test functions across three findings. Each was adjudicated against
+the REQ set. Prior entries stand unedited; this is the disposition record.
+
+### ADV-2 — ACCEPTED. Implementation fixed.
+
+`escapeShapeBreaches` (`internal/cli/flow_resolve.go`) reached the join's
+elements with a bare type assertion on the OUTERMOST error
+(`err.(interface{ Unwrap() []error })`). A bare assertion matches only the
+outermost error, so a single `%w` wrap around the kernel's aggregate made it
+fall through to the single `errors.As` read — silently collapsing an N-breach
+report to its first breach while `Code`, `Group`, `Hint` and the exit code all
+stayed correct, leaving nothing to signal the loss.
+
+REQ-36 forbids the kernel from wrapping its own join, so this was not
+reachable on the live path. It is nonetheless a real defect in defensive
+consumer-side code whose own doc comment claims it handles the general case.
+
+**Fix**: the aggregate is now located by walking the single-unwrap chain the
+way `errors.As` does (`joinedBreaches`), then taking that join's elements.
+The element traversal stays **exactly one level deep** (REQ-35 requires flat,
+never nested — the aggregate is not descended into), the kernel's ordering is
+preserved, and both the bare-breach and normal-join paths behave as before.
+`TestAdv0009_MultiBreachTraversalSurvivesAWrappedKernelError` is kept as the
+regression guard and now passes.
+
+### ADV-1 and ADV-3 — REJECTED. Tests deleted.
+
+Both assert that the **shared text renderer** must render `Finding.Count`.
+The REQ set contains no such obligation, and forbids the evidence the tests
+rely on:
+
+- **REQ-44** (`0009:C5`) reads: "The count is carried STRUCTURALLY, as the
+  Count field on each per-identity `*EscapeShapeBreachError` — never **only**
+  in formatted prose". That forbids prose-**only** carriage. It mandates no
+  text-mode rendering whatsoever; the structural `count` key on the
+  serialized finding already discharges it, and D3 records that carrier.
+- **REQ-43**'s "MUST remain diagnostic … by stating the breach count
+  alongside the identities" is a requirement on the kernel's
+  `*EscapeShapeBreachError` message, which does state it — the ADV-1
+  degenerate test's own failure output quotes the kernel saying
+  `(3 breaching rows)`. It is not a requirement on the CLI renderer.
+- The `req-list.md` **ASSUMPTION (REQ-96)** is explicit that the error
+  message text "is unspecified by this RDR … **No test may assert on it
+  (REQ-27, REQ-44, REQ-89)**." Both ADV-1 tests and the ADV-3 renderer test
+  assert on rendered message prose, which the REQ set puts off-limits.
+
+Phase 3a independently reached the same conclusion: it could not locate the
+asserted obligation anywhere in the REQ set.
+
+Implementing text-mode `Count` rendering was therefore **declined**: it would
+add a new unspecified public output surface (ADDITIVE IS NOT EXEMPT) on a
+renderer RDRs 0005/0006/0008 co-own, on the strength of a requirement no REQ
+states.
+
+**Deleted:**
+
+- `TestAdv0009_TheCollapsedBreachCountSurvivesTextRendering`
+  (`internal/cli/escape_shape_adv_0009_test.go`)
+- `TestAdv0009_ADegenerateIdentityBreachIsStillDiagnosticInText`
+  (`internal/cli/escape_shape_adv_0009_test.go`)
+- `TestAdv0009_SharedTextRendererCarriesTheWidenedCountField`
+  (`internal/cli/clierr/finding_count_adv_0009_test.go`)
+
+Every passing regression guard Phase 3b added is **kept and still passing**:
+collapse determinism under row permutation, flat-aggregate `errors.Is`/
+`errors.As` fidelity, zero disposition change for conforming tables, breach
+precedence, RDR 0008 non-recoding, the `Count` JSON round-trip, and the
+widening's invisibility to producers that do not set it.
+
+### Verdict
+
+**OK.** `go test ./...` fully green; `golangci-lint run` 0 issues; gofmt
+clean. No Phase 1 test and no predecessor RDR's test was weakened.

@@ -137,3 +137,38 @@ run at the Phase 2 implementation commit.
 - **Recommendation**: close D2 at the record's next authored revision, or
   retire it as a permanent known-residue of the locked text. It blocks
   nothing in the implementation.
+
+---
+
+## D4 — `escapeShapeBreaches` locates the join by chain walk, not by a bare assertion (Phase 3c)
+
+- **Type**: IMPL-DECISION
+- **Status**: CLOSED (no author decision needed)
+- **REQs**: REQ-35 (the aggregate is exactly one level deep, never nested),
+  REQ-36 (the kernel does not wrap its own join), REQ-42/REQ-45 (one reported
+  entry per identity, `Count` pre-collapse).
+- **The finding** (Phase 3b ADV-2, adjudicated ACCEPTED in
+  `verification.md` § Phase 3c): the CLI's traversal reached the join with a
+  bare type assertion on the outermost error. Under any `%w` wrap the
+  assertion fails and control falls through to the single `errors.As` read
+  the RDR names as the wrong instrument for a multi-breach report, reducing
+  an N-breach envelope to one finding with nothing to signal the loss —
+  `errors.Is` still classifies, so `Code`, `Group`, `Hint` and the exit code
+  all stay correct.
+- **Reachability**: NOT reachable on the live path. REQ-36 forbids the
+  kernel from wrapping, and `kernelResolveFailure` is the only caller. The
+  defect is in defensive consumer-side code whose own doc comment claims it
+  handles the general (possibly-wrapped, possibly-unjoined) case.
+- **Resolution taken**: added the unexported helper `joinedBreaches`, which
+  walks the single-unwrap chain the way `errors.As` does and returns the
+  first `Unwrap() []error` aggregate's elements. The element loop is
+  unchanged and still exactly one level deep — the aggregate is not
+  descended into, so REQ-35's flat shape is preserved and a hypothetical
+  nested join would not be flattened. Ordering, the bare-breach fallback,
+  and the normal-join path are all behaviour-preserving; no shipped test
+  changed disposition.
+- **Why not `errors.As` directly**: `errors.As` requires its target to
+  implement `error`, and `interface{ Unwrap() []error }` does not, so the
+  chain walk is written out rather than delegated.
+- **No new public surface.** The helper is unexported and the CLI's
+  serialized output is byte-identical on every reachable input.
