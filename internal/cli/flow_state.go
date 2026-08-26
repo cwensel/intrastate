@@ -20,6 +20,7 @@ package cli
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/newcoinc/intrastate/internal/accessor"
@@ -311,14 +312,33 @@ func parseWrites(cmd *cobra.Command, m *table.Model) ([]resolve.Tag, []string, *
 // writer — `note` in the MVV fixture is exactly that. Refusing on ownership
 // alone would report the wrong reason, and refusing later would let the
 // request reach an accessor it has no authority to invoke.
+//
+// "No single" is a COUNT, not an existence check: two writers naming one key
+// is as unbound as none. Returning on the first match would leave
+// `groupByWriter` to pick the lexicographically first of the candidates, and
+// the read-back would confirm the value through that same writer — so an
+// arbitrary write destination would surface nowhere. Both spellings reuse
+// the published code; RDR 0005's refusal table is closed, and REQ-86 /
+// REQ-87's "served by no single `[write.<id>].keys`" already covers the
+// two-writer case.
 func writerFor(m *table.Model, key, code string) *clierr.CLIError {
+	n := 0
 	for _, acc := range m.Writers {
 		if slices.Contains(acc.Keys, key) {
-			return nil
+			n++
 		}
 	}
-	return userErr(code, key,
-		"no declared write accessor's `keys` list names the tag `"+key+"`")
+	switch {
+	case n == 1:
+		return nil
+	case n == 0:
+		return userErr(code, key,
+			"no declared write accessor's `keys` list names the tag `"+key+"`")
+	default:
+		return userErr(code, key,
+			"the tag `"+key+"` is named by "+strconv.Itoa(n)+
+				" write accessors; want exactly one")
+	}
 }
 
 // groupByWriter assigns each planned mutation to the writer whose declared
