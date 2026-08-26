@@ -259,11 +259,14 @@ func TestReq42And46_OnlyReportedCandidatesGatesRunAndResultsRideTheCandidate(t *
 // `0005:MVV`: "a deny there still exits 0".
 // ADVERSARIAL — the single sharpest separation between `next` and `resolve`.
 func TestReq43And46_ADenyUnderNextIsReportedAndStillExitsZero(t *testing.T) {
-	model := writeFlowModel(t, flowGatedNextModel)
-	// The artifact is seeded so the gate DENIES. How a fixture gate is made
-	// to deny is the implementation's binding concern; the contract is that
-	// whatever the verdict, `next` exits 0 and reports it.
-	art := seedArtifact(t, model, "status=draft", "flag=true")
+	// `flowGateDenyModel` is the fixture whose gate accessors actually
+	// answer deny and indeterminate: `deny-row` carries the denying gate,
+	// and `both-row` carries the denying AND the indeterminate one. Under
+	// `resolve` that same pair is what becomes `flow-gate-denied`; under
+	// `next` both must ride the candidate as reported RESULTS and the
+	// command must still exit 0. That is the separation REQ-43 fixes.
+	model := writeFlowModel(t, flowGateDenyModel)
+	art := seedArtifact(t, model, "status=draft")
 
 	stdout, _, err := runCmd(t, "flow", "next", "--model", model,
 		"--artifact", artifactBinding(flowStateRole, art),
@@ -280,6 +283,86 @@ func TestReq43And46_ADenyUnderNextIsReportedAndStillExitsZero(t *testing.T) {
 	if !ok || len(candidates) == 0 {
 		t.Fatalf("`candidates` is empty or malformed: %#v", data["candidates"])
 	}
+
+	// gatesOf returns the gate results the named candidate carries, failing
+	// the test when that candidate was not enumerated at all: `next`
+	// enumerates every reachable row, so a missing one is a real failure
+	// and not a reason to skip the verdict assertion.
+	gatesOf := func(rule string) []map[string]any {
+		t.Helper()
+
+		for _, c := range candidates {
+			if c["rule"] != rule {
+				continue
+			}
+			gates, ok := objectsAt(c, "gates")
+			if !ok || len(gates) == 0 {
+				t.Fatalf("candidate %q carries no gate results under "+
+					"--evaluate-gates: %#v", rule, c["gates"])
+			}
+			return gates
+		}
+		t.Fatalf("candidate %q was not enumerated; `next` reports every "+
+			"reachable row. candidates = %#v", rule, candidates)
+		return nil
+	}
+
+	// `deny-row`: the deny is reported VERBATIM as the verdict. A verdict
+	// coerced to `allow` on its way to the payload is the silent failure
+	// this oracle exists to catch — a caller reading the payload would
+	// proceed on a gate that in fact refused.
+	var sawDeny bool
+	for _, g := range gatesOf("deny-row") {
+		if g["id"] != "deny" {
+			t.Errorf("candidate `deny-row` carries a result for gate %#v; "+
+				"its only declared gate is `deny`", g["id"])
+			continue
+		}
+		sawDeny = true
+		if g["result"] != "deny" {
+			t.Errorf("the gate `deny` on candidate `deny-row` reports "+
+				"result %#v; the gate DENIED and `next` MUST report that "+
+				"verdict, never a weaker one", g["result"])
+		}
+		if reason, _ := g["reason"].(string); reason == "" {
+			t.Errorf("the deny on candidate `deny-row` carries no `reason`; "+
+				"a reported deny that says nothing about why leaves the "+
+				"caller unable to act on it. got %#v", g["reason"])
+		}
+	}
+	if !sawDeny {
+		t.Error("candidate `deny-row` reports no result for its gate `deny`")
+	}
+
+	// `both-row`: deny and indeterminate COEXIST as reported results. Under
+	// `resolve` this row is a single `flow-gate-denied` because deny
+	// overrides indeterminate; under `next` neither disposition is folded
+	// away, because enumeration reports what the gates said.
+	var sawBothDeny, sawBothIndeterminate bool
+	for _, g := range gatesOf("both-row") {
+		switch g["id"] {
+		case "deny":
+			sawBothDeny = true
+			if g["result"] != "deny" {
+				t.Errorf("the gate `deny` on candidate `both-row` reports "+
+					"result %#v; want %q", g["result"], "deny")
+			}
+		case "indeterminate":
+			sawBothIndeterminate = true
+			if g["result"] != "indeterminate" {
+				t.Errorf("the gate `indeterminate` on candidate `both-row` "+
+					"reports result %#v; want %q", g["result"],
+					"indeterminate")
+			}
+		}
+	}
+	if !sawBothDeny || !sawBothIndeterminate {
+		t.Errorf("candidate `both-row` does not report BOTH its deny and "+
+			"its indeterminate gate (deny reported = %t, indeterminate "+
+			"reported = %t); `next` folds neither disposition away — that "+
+			"folding is `resolve`'s job", sawBothDeny, sawBothIndeterminate)
+	}
+
 	// No refusal code leaked onto the success payload.
 	for _, c := range candidates {
 		gates, _ := objectsAt(c, "gates")
