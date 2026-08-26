@@ -171,3 +171,63 @@ Phase 1 chose the names the tests bind, within the latitude REQ-34/64/70 grant:
 `AssembledLenForTest`. It exists only in the test binary and adds no production
 surface; it is what keeps blocks 5 and 6's "documented residual" executable once
 the entry precondition makes those paths unreachable through `Resolve`.
+
+---
+
+## Stage 8 Phase 2 (implementation) dispositions — 2026-08-26
+
+All 23 net-new tests are green with no new deviation of contract type. Phase 1's
+§"New surface the tests pin" was followed exactly: `resolve.CheckInput` (the one
+exported `Input` predicate, called by `Resolve` at entry), `Failure.Offending`
+/ `.Remedy` / `.Rule`, and `table.Advisory` / `table.LoadWithAdvisories`. No
+name was renamed, no field reshaped, and no new public surface beyond those
+three items was added.
+
+D1, D5 and D6 were honoured as Phase 1 settled them; none reopened.
+
+### D7 — the advisory scan reads the source bytes, not the loaded model
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **Site**: `internal/table/advisory.go::nearMissAdvisories`
+- **The latitude**: REQ-64 leaves the carrier's Go type and field names to the
+  implementer, and REQ-63 pins only that the advisory channel is *separate*
+  from the validation-failure list and never alters the verdict.
+- **The choice**: `nearMissAdvisories` re-decodes the source bytes with a
+  permissive `map[string]any` probe over `[tags]` alone rather than reading
+  `Model.Tags`. `Load` is fail-fast (`0002:C3`), so a document that refuses
+  returns a nil model and would carry no key set to advise on; reading the
+  source keeps the two channels genuinely independent, which is what
+  `TestReq64_TheAdvisoryChannelIsSeparateFromTheFailureChannel` asserts by
+  loading a *failing* fixture through `LoadWithAdvisories`.
+- **Recorded because** it affects future interpretation: an implementer who
+  later moves the scan onto the normalized model would couple the advisory to
+  the load verdict and silently break REQ-63's separateness on refusing
+  documents, even though the fixtures in the current suite would stay green.
+- Advisory order is sorted by authored spelling. Nothing in the RDR fixes an
+  order; the sort exists only so the channel is reproducible for a golden
+  consumer, and no test asserts it.
+
+### D8 — the near-miss fold is `strings.EqualFold` over the trimmed key
+
+- **Type**: IMPL-DECISION
+- **Status**: mechanical translation
+- **Site**: `internal/table/advisory.go::isNearMiss`
+- Implements REQ-59/REQ-60's disjunction as
+  `key != "recognized" && strings.EqualFold(strings.TrimSpace(key), "recognized")`.
+  A single expression covers folding-alone, trimming-alone, and both-together,
+  which is exactly the disjunctive trigger REQ-60 requires and what
+  ASSUMPTION-7 already anticipated (Go's `EqualFold` is simple folding).
+  Recorded only so the disjunction's single-expression form is legible as
+  deliberate rather than as an accidental conjunction.
+
+### Still open, unchanged by this Phase
+
+- **D2** — its check is `TestReq106_NoAccessorKeysEntryMayNameTheReservedKey`,
+  green against the predecessor at `internal/table/load.go`. No escalation.
+- **D3** — the record-citation half (`grep -n '§D10\|§D8\b'` must hit a body
+  clause of `docs/rdr/0008-*.md`, not only the Status line) remains owed. It is
+  a documentation edit on the record, and this Phase writes implementation
+  only. Carried forward as the sole open item; also flagged in `coverage.md`.
+
+**No `needs author decision` entry was recorded in this Phase.**

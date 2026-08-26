@@ -305,3 +305,58 @@ each is nonetheless given an executable witness so over-implementation fails:
 | 49, 52, 98 | a `reserved_tag_key` failure for a `RequiresOwned` entry | `TestReq49And52And98_…` |
 | 65 | a sigil-guarded canonical name | `TestReq65_…` |
 | 95 | testing A5's unreachability half | `TestReq95_…` asserts only that the path stays constructible |
+
+---
+
+## Stage 8 Phase 2 (implementation) — REQ-MVV actual output, 2026-08-26
+
+All 23 net-new tests are green. `go test ./...`, `go vet ./...`, and
+`golangci-lint run` (0 issues) are clean across the repository; no
+predecessor test was weakened, and no unrelated test changed.
+
+`go test ./internal/table/ -run TestMVV0008_ReservedKeyOwnershipEndToEnd -v`:
+
+```
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/1_normalizer_half_clean_load_under_the_reserved_name
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload/declaration_renamed_away_from_the_reserved_key
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload/owned_declaration_taking_the_reserved_key
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/3_kernel_half_a_row_matching_the_reserved_key_fires
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/4_kernel_half_the_recognized_outcome_is_readable_at_the_reserved_key
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/owned_tag_keyed_recognized
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/observed_tag_keyed_recognized
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/row_naming_it_in_RequiresOwned
+=== RUN   TestMVV0008_ReservedKeyOwnershipEndToEnd/6_the_two_halves_agree_on_the_spelling
+--- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/1_normalizer_half_clean_load_under_the_reserved_name (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload (0.00s)
+        --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload/declaration_renamed_away_from_the_reserved_key (0.00s)
+        --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/2_normalizer_half_both_directions_fail_with_their_payload/owned_declaration_taking_the_reserved_key (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/3_kernel_half_a_row_matching_the_reserved_key_fires (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/4_kernel_half_the_recognized_outcome_is_readable_at_the_reserved_key (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites (0.00s)
+        --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/owned_tag_keyed_recognized (0.00s)
+        --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/observed_tag_keyed_recognized (0.00s)
+        --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/row_naming_it_in_RequiresOwned (0.00s)
+    --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/6_the_two_halves_agree_on_the_spelling (0.00s)
+PASS
+ok  	github.com/newcoinc/intrastate/internal/table	0.198s
+```
+
+Both MVV halves are executed: the normalizer half (clean load plus both
+failure directions with their payloads) and the kernel half (the reserved-key
+match fires; all three breach channels are rejected at both call sites).
+
+### Implementation sites
+
+| Surface | Site |
+| --- | --- |
+| `resolve.CheckInput` + `Resolve` entry call | `internal/resolve/precondition.go`, `internal/resolve/resolve.go` |
+| `Failure.Offending` / `.Remedy` / `.Rule` population | `internal/table/load.go` (`loadTags`) |
+| `table.Advisory` / `LoadWithAdvisories` near-miss scan | `internal/table/advisory.go` |
+| REQ-9 doc pointer | `internal/resolve/resolve.go::recognizedTagKey` |
+
+The D3 record-citation orphan above is unchanged by this Phase: it remains a
+documentation edit on `docs/rdr/0008-*.md`, still owed.
