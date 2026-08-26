@@ -289,12 +289,30 @@ func TestReq74_EmptyNotNilWritesConforms(t *testing.T) {
 	}
 
 	// Identical to the conformed baseline: same disposition, value for value.
+	// REQ-74 requires the table resolve, escape, and refuse "identically to
+	// the A3 baseline", so the comparison is a whole-Plan equality, not a
+	// sample of fields — SourceLocator, NextTags, and Revision regressions
+	// must not slip through. The ONLY permitted difference is the
+	// nil-versus-empty `Writes` distinction the scenario exists to admit, so
+	// that one field is normalized away first ("asserted on length, never on
+	// nil-ness"); the discriminating length assertion above still stands.
 	baseline := mustResolve(t, conformingNoMatchInput())
-	if !reflect.DeepEqual(got.Plan.RuleID, baseline.Plan.RuleID) ||
-		got.Plan.Escaped != baseline.Plan.Escaped ||
-		len(got.Plan.Writes) != len(baseline.Plan.Writes) {
+	if got.Plan == nil || baseline.Plan == nil {
+		t.Fatalf("both plans must be non-nil to compare: got=%v baseline=%v",
+			got.Plan, baseline.Plan)
+	}
+	// Copy the pointees before normalizing: Plan is a *Plan, so zeroing
+	// Writes through the pointer would mutate the resolver's own value.
+	gotPlan, basePlan := *got.Plan, *baseline.Plan
+	if len(gotPlan.Writes) == 0 {
+		gotPlan.Writes = nil
+	}
+	if len(basePlan.Writes) == 0 {
+		basePlan.Writes = nil
+	}
+	if !reflect.DeepEqual(gotPlan, basePlan) {
 		t.Errorf("the empty-slice table's disposition differs from the "+
-			"conformed baseline: %+v vs %+v", got.Plan, baseline.Plan)
+			"conformed baseline: %+v vs %+v", gotPlan, basePlan)
 	}
 }
 
