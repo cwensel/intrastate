@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-26
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: large — one independent contract, the `flow next` candidate predicate (C1), locking the `unknown` payload shape and its reason vocabulary; C2 (`--all`) is that predicate's second surface and C3 pins its wording and fixtures, so neither is separately held. The demand-set term C1 carries changes `flow resolve` too (A15), but through one function in one module with `internal/resolve` untouched — one seam, not a module span
 - **Priority**: High
@@ -794,103 +794,63 @@ Done: S1–S8 green and `make check` passes.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace this section's body with the
-> one-line pointer to gate.md — responses are never
-> inlined. The sub-sections below spec gate.md's
-> content.
-
-### Contradiction Check
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: `0011-flow-next-match-conditioned-candidates/artifacts/gate.md` (Gate PASS 2026-08-26)
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+- **Canonical-form / determinism** — this RDR claims a stable payload, so the
+  determinism checklist applies and is answered in-record rather than deferred.
+  C1 fixes the `unknown` list's ORDER (sorted by `(key, reason)`) and its
+  DEDUP (on the `{key, reason}` pair, applied last, after C2's `--all` filter
+  runs at emission), and `D-identity` requires only set equality — the sort
+  exists so a consumer diffing a golden payload sees no churn. The invoked
+  reader set and the assembled view are fixed ONCE per invocation, before the
+  row loop, and are mode-independent, so `unknown` is never a function of row
+  order or of the flag. Empty/absent distinguishability is explicit: `unknown`
+  is emitted as `[]` rather than omitted, so one consumer struct parses either
+  mode (C2), and a reader-reported-absent key is `{key, absent}` rather than a
+  silent omission (C1). No hash, no content-addressed identity, and no
+  replay-stable hash is claimed, so the pre-image / hash-library / case-folding
+  half of the checklist does not apply. Set-kinded match literals are
+  canonicalized by `internal/table/model.go::seamValue` (sorted, compacted
+  JSON, `SetEscapeHTML(false)`) — the RDR does not re-specify that encoding, it
+  requires the probe filter run AFTER `KernelRow()` so the encoding is never
+  reimplemented CLI-side (C1), with S3's set-kinded fixture as the oracle.
+  Version marker: none minted — the payload field rename `unresolved` →
+  `unknown` IS the break, and it is stated as a migration in Consequences.
+- **Incremental adoption** — an override of a locked peer clause changes a
+  shipped default, so the migration path is the concern. `--all` restores
+  0005's candidate SET one flag away, so a caller scripted against the
+  enumeration is not stranded. It does NOT restore the payload SHAPE: the
+  per-candidate `unresolved` (`[]string`) becomes `unknown` (`[{key, reason}]`)
+  in BOTH modes, so an out-of-repo consumer owes that migration even if it
+  adopts `--all`. The two migrations are independent and a caller may owe both;
+  Consequences states this rather than implying `--all` is a complete
+  compatibility answer. In-repo, C3's five-read census plus the prose sweep is
+  the mechanical migration, and its ok-bool rule exists so a green suite cannot
+  hide a re-homing that silently reads nothing.
+- **Character encoding** — applies narrowly and is delegated, not answered
+  here. Match equality is the kernel's (`TagSet.matches`); the CLI compares no
+  value, so no case folding, normalization, or collation decision is taken by
+  this RDR. Set literals go through `seamValue`'s existing canonicalization.
+  The one encoding-adjacent choice is that `not-evaluated` is minted as a
+  reason token for the gate class only, joining `0007:C8`'s closed
+  `absent`/`uncomparable` set on the CLI reporting surface without widening the
+  seam's own vocabulary — `0007:C8` stays at two members for the seam it
+  governs.
+- **Concurrency model** — no concern of this RDR's own, recorded because the
+  demand-set term changes which readers are invoked. Accessor execution safety
+  is `0004`'s policy and this RDR conforms to it unchanged: the term adds keys
+  to a demand set computed once per invocation, before any probe, and invokes
+  readers through the existing `internal/cli/flow_exec.go::runReaders` path with
+  its shipped refusal arms (`codeArtifactMissing` exit 2, `accessorFailure`
+  exit 3). No new execution path, no new concurrency surface, and `flow next`
+  stays effect-free in both modes.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+Versioning, build-tool compatibility, licensing, deployment model, IDE
+compatibility, secret/credential lifecycle, and memory management do not apply
+to a CLI predicate change confined to `internal/cli`.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
 
 ## References
 
