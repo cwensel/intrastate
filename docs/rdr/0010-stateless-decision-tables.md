@@ -544,7 +544,7 @@ quotes, 4 external prior-art quotes; two cosmetic corrections folded (the
 `[dump]` fixture count in A4; the refusal categories for a declared
 non-owned `[initial]` key in C2). Ledger:
 `docs/rdr/0010-stateless-decision-tables/evidence/grounding-sweep/sweep.md`.
-Joint-check: fired → 0011 (home: cli/0011:C1). Open peers at depth 1 with
+Joint-check: fired → 0011 (home: cli/0011:C1; disposition 2026-08-26: cite-don't-restate — 0011:C1 is the sole normative home, this RDR cites it via A11/C4 and adds no class clause). Open peers at depth 1 with
 Status Draft/Final: cli/0011 only (0001–0009 are `Implemented`). Recorded
 `clear` while 0011 was unwritten; re-run against 0011's written proposal
 (2026-08-26) it fires: shared modify-anchor
