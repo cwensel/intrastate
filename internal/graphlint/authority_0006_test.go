@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/newcoinc/intrastate/internal/guard"
 	"github.com/newcoinc/intrastate/internal/table"
 )
 
@@ -528,4 +529,30 @@ func rowByRuleID(t *testing.T, m *table.Model, ruleID string) table.Row {
 	}
 	t.Fatalf("model carries no row with rule id %q", ruleID)
 	return table.Row{}
+}
+
+// RDR 0003's req-list ASSUMPTION: "this RDR ships no lint finding *codes* of
+// its own — it states the semantics and RDR 0006 mints the codes". This RDR
+// owns the taxonomy, so the check belongs here: every code `internal/guard`
+// emits MUST be a member of one of this RDR's two tiers. A guard-side code
+// outside the taxonomy is one RDR 0003 minted in a space it disclaimed, and
+// a consumer reading the machine-readable output would receive an unknown
+// code. `graph-vacuous-exists` was exactly that (kata `fyf4`).
+func TestGuardEmitsOnlyCodesThisTaxonomyMints(t *testing.T) {
+	minted := map[string]bool{}
+	for _, c := range graphlint.BlockingCodes() {
+		minted[c] = true
+	}
+	for _, c := range graphlint.AdvisoryCodes() {
+		minted[c] = true
+	}
+
+	for _, c := range guard.Codes() {
+		if !minted[string(c)] {
+			t.Errorf("`internal/guard` emits %q, which this RDR's taxonomy "+
+				"does not mint; RDR 0003 ships no codes of its own, so every "+
+				"code it emits must be a member of the blocking or advisory "+
+				"tier", c)
+		}
+	}
 }

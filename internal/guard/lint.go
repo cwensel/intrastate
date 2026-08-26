@@ -9,7 +9,11 @@ import (
 
 // Code is one of RDR 0006's lint finding codes this RDR's semantics emit.
 // This RDR mints none of its own: it states the semantics and RDR 0006
-// owns the codes.
+// owns the codes. The set below is the req-list ASSUMPTION's enumeration
+// verbatim, plus `graph-vacuous-atom` — RDR 0006's advisory-tier name for
+// the vacuity case RDR 0003 requires be reported rather than rejected
+// (`0006:722`, `0006:739`). A code outside RDR 0006's taxonomy would be one
+// this RDR minted in a space it disclaimed owning.
 type Code string
 
 // The finding codes this RDR's clauses name.
@@ -20,7 +24,7 @@ const (
 	CodeOverlap                Code = "graph-overlap"
 	CodeCoverageClosedByEscape Code = "graph-coverage-closed-by-escape"
 	CodeOwnedBeforeWrite       Code = "graph-owned-before-write"
-	CodeVacuousExists          Code = "graph-vacuous-exists"
+	CodeVacuousAtom            Code = "graph-vacuous-atom"
 )
 
 var codes = []Code{
@@ -30,15 +34,30 @@ var codes = []Code{
 	CodeOverlap,
 	CodeCoverageClosedByEscape,
 	CodeOwnedBeforeWrite,
-	CodeVacuousExists,
+	CodeVacuousAtom,
 }
 
 // Codes returns the finding codes this RDR's semantics emit.
 func Codes() []Code { return slices.Clone(codes) }
 
-// IsBlocking reports whether a code carries the blocking outcome. The two
-// inability-to-prove carriers are blocking; the rest report a defect or an
-// observation without refusing a claim that was never made.
+// IsBlocking reports whether a code carries THIS RDR's inability-to-prove
+// outcome. The two inability-to-prove carriers are blocking; the rest report
+// a defect or an observation without refusing a claim that was never made.
+//
+// This is DELIBERATELY NARROWER than RDR 0006's blocking tier, and is not a
+// mirror of it. RDR 0006's taxonomy also classifies `graph-coverage-gap`,
+// `graph-overlap`, and `graph-owned-before-write` as blocking; the authority
+// for that classification is `graphlint`'s own table (`0006:C8`, `0006:C17`),
+// which every consumer of the lint's machine-readable output reads. This
+// predicate answers a different question: which codes carry REQ-65's
+// refuse-or-downgrade outcome, the one this RDR states is a SINGLE blocking
+// outcome with no non-blocking warning category (`0003:C20`). Widening it to
+// RDR 0006's tier would erase that distinction and contradict REQ-66, whose
+// test asserts this package's severity vocabulary has no advisory tier at
+// all — the opposite of RDR 0006's two-tier taxonomy.
+//
+// The two predicates share a name and answer different questions. Consumers
+// wanting RDR 0006's tier MUST read `graphlint`, not this.
 func IsBlocking(c Code) bool {
 	return c == CodeUnprovableCoverage || c == CodeProductTooLarge
 }
@@ -80,7 +99,12 @@ type Finding struct {
 	// group whose product has no cardinality.
 	ComputedSize int
 	Bound        int
-	Blocking     bool
+	// Blocking marks THIS RDR's inability-to-prove outcome, matching
+	// IsBlocking — not RDR 0006's blocking tier, which is wider and whose
+	// authority is `graphlint`'s taxonomy. A gap or overlap finding here
+	// leaves it false while RDR 0006 classifies those codes blocking; that
+	// is the deliberate narrowing REQ-65/REQ-66 state, not an unset flag.
+	Blocking bool
 }
 
 // Verdict is a group's exhaustiveness verdict.
@@ -559,7 +583,7 @@ func vacuousExistsFindings(m *table.Model, g Group) []Finding {
 				continue
 			}
 			out = append(out, Finding{
-				Code:      CodeVacuousExists,
+				Code:      CodeVacuousAtom,
 				Context:   g.Context.String(),
 				RuleIDs:   []string{row.RuleID},
 				Locators:  []string{row.SourceLocator},

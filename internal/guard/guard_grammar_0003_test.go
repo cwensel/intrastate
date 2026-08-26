@@ -215,7 +215,7 @@ profile = "large"
 	}
 
 	if !anyFinding(reports, func(f guard.Finding) bool {
-		return f.Code == guard.CodeVacuousExists &&
+		return f.Code == guard.CodeVacuousAtom &&
 			f.Dimension == "profile" &&
 			slices.Contains(f.RuleIDs, "vacuous-exists")
 	}) {
