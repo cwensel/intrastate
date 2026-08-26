@@ -11,10 +11,7 @@ instance body). -->
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-5: precondition precedence]
-  [§JD-8, §JD-9 answered 2026-08-24 by §D10, §D8 — code table and the `findings`
-  field; `--tag` stays `Observed` and `--tag recognized=` is a `GroupUserEnv`
-  refusal at the CLI. Citations owed at Stage 8, see `artifacts/deviations.md`.]
+- **Status**: Implemented
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real
