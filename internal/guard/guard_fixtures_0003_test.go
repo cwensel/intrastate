@@ -1270,6 +1270,49 @@ eq = "go"
 `
 }
 
+// overlappingOrdinaryBareEscapeSource is REQ-77's witness: its ordinary
+// population OVERLAPS — so the `ambiguous_match` arm is reachable per RDR
+// 0006's reachability precondition — while its bare escape row declares only
+// `no_match`. The two arms therefore compute different unions AND the
+// undeclared arm draws its gap finding, which is what REQ-77 claims. An
+// overlap-free population cannot witness the clause: 0006 treats the
+// `ambiguous_match` arm as vacuously closed there.
+func overlappingOrdinaryBareEscapeSource() string {
+	return declBlock(`
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large"]
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "ov-a"
+source = "t:oa"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "ov-b"
+source = "t:ob"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "bare-escape"
+source = "t:bare"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "go"
+`
+}
+
 // guardedEscapePartialSource carries a GUARDED escape row, whose accepted
 // assignments are its own rather than the whole product.
 func guardedEscapePartialSource() string {

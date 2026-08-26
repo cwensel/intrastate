@@ -255,8 +255,9 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 	// projection scan ran. Reaching here means the product is finite, under
 	// the bound, and fully projectable.
 	r.CoverageUnion = CoverageUnion(m, g)
-	r.Findings = append(r.Findings, overlapFindings(m, g)...)
-	gaps, closedBy := coverageFindings(m, g)
+	overlaps := overlapFindings(m, g)
+	r.Findings = append(r.Findings, overlaps...)
+	gaps, closedBy := coverageFindings(m, g, ordinaryOverlaps(overlaps))
 	r.Findings = append(r.Findings, gaps...)
 	r.ClosedByEscape = closedBy
 
@@ -351,6 +352,17 @@ func withholdingFindings(m *table.Model, g Group) []Finding {
 // over-reports two rows sharing no class, and a per-row partition
 // under-reports two rows colliding on one shared class of several. A pair
 // overlapping in more than one class is one finding per class.
+// ordinaryOverlaps reports whether the group's ORDINARY population carries an
+// overlap — the precondition that makes the `ambiguous_match` arm reachable.
+// Escape-population overlaps carry a class and do not count: the kernel
+// reaches ambiguity from the ordinary rows, so only their pairwise overlap
+// makes an `ambiguous_match` rescue row reachable.
+func ordinaryOverlaps(findings []Finding) bool {
+	return slices.ContainsFunc(findings, func(f Finding) bool {
+		return f.Code == CodeOverlap && f.Class == ""
+	})
+}
+
 func overlapFindings(m *table.Model, g Group) []Finding {
 	var ordinary, escape []table.Row
 	for _, row := range g.Rows {
@@ -417,21 +429,25 @@ func pairwiseOverlaps(m *table.Model, g Group, rows []table.Row, class string) [
 // has no contributing predicate — it is an ABSENCE — so it is attributed by
 // the selection context, EVERY source rule id in the group, and at least
 // one concrete uncovered assignment from the product.
-func coverageFindings(m *table.Model, g Group) ([]Finding, string) {
+// The `ambiguous_match` arm is checked only where it is REACHABLE — for a
+// group whose ordinary population carries an overlap — and is treated as
+// vacuously closed otherwise. RDR 0006 states the arm mechanics
+// (`0006::Normative Contracts`, the per-class coverage clause) and REQ-77
+// (`0003:C15`) cites them rather than restating them, so 0006's reachability
+// precondition governs emission here. Demanding a rescue row for an arm the
+// kernel can never reach would mint a row `graph-unreachable-rule` then
+// flags. REQ-77's own clause — that the union is per (group x declared
+// class), and that a row declaring one class does not close another's arm —
+// is unaffected: the two unions stay distinct either way.
+func coverageFindings(m *table.Model, g Group, ordinaryOverlap bool) ([]Finding, string) {
 	product := Product(m, g)
 	var out []Finding
 	var closedBy string
 
-	// NOTE: RDR 0006 requires the `ambiguous_match` arm be treated as
-	// vacuously closed for a group whose ordinary population is
-	// overlap-free, checking it only where a `graph-overlap` finding makes
-	// it reachable. This implementation does NOT do that, deliberately:
-	// REQ-77 (`0003:C15`) requires the unclosed arm draw its gap finding
-	// per (group x declared class), and its own test fixture is
-	// overlap-free — so the two locked records prescribe opposite outcomes
-	// on the same model. Picking a side here would silently overrule one of
-	// them, so the conflict is recorded for adjudication instead.
 	for _, class := range RescuableClasses() {
+		if class == string(resolve.KindAmbiguousMatch) && !ordinaryOverlap {
+			continue
+		}
 		union := CoverageUnionFor(m, g, class)
 		if union.Equal(product) {
 			if row := bareEscapeFor(g, class); row != "" && !ordinaryClosesAlone(m, g, product) {

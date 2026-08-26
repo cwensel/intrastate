@@ -95,6 +95,8 @@ func TestReq76_EscapeClosesOnlyItsDeclaredRescuableClasses(t *testing.T) {
 // close the group's other arm"
 // DOMAIN EDGE
 func TestReq77_CoverageUnionIsPerGroupTimesDeclaredRescuableClass(t *testing.T) {
+	// The union is per (group × declared class) whatever the population:
+	// this holds on an overlap-free group too, and is REQ-77's own clause.
 	m := mustLoadSource(t, bareEscapeClosesGapSource())
 	g := groupOf(t, m, "partial")
 
@@ -105,12 +107,29 @@ func TestReq77_CoverageUnionIsPerGroupTimesDeclaredRescuableClass(t *testing.T) 
 			"declared rescuable class)")
 	}
 
-	// The unclosed arm draws its gap finding.
-	if !anyFinding(guard.Lint(m), func(f guard.Finding) bool {
+	// The unclosed arm draws its gap finding — witnessed on a group whose
+	// ordinary population OVERLAPS, so the `ambiguous_match` arm is
+	// reachable. RDR 0006 states the arm mechanics and REQ-77 cites them
+	// (`0003:C15`), so an overlap-free group is not a witness for this half:
+	// there the arm is vacuously closed and drawing a gap would demand a
+	// rescue row `graph-unreachable-rule` then flags.
+	reach := mustLoadSource(t, overlappingOrdinaryBareEscapeSource())
+	if !anyFinding(guard.Lint(reach), func(f guard.Finding) bool {
 		return f.Code == guard.CodeCoverageGap && f.Class == string(resolve.KindAmbiguousMatch)
 	}) {
 		t.Errorf("the arm the escape row does not declare produced no gap "+
-			"finding; findings=%v", allFindings(guard.Lint(m)))
+			"finding; findings=%v", allFindings(guard.Lint(reach)))
+	}
+
+	// And the arm is NOT demanded where it cannot be reached: the same bare
+	// escape row over an overlap-free population draws no `ambiguous_match`
+	// gap at all.
+	if anyFinding(guard.Lint(m), func(f guard.Finding) bool {
+		return f.Code == guard.CodeCoverageGap && f.Class == string(resolve.KindAmbiguousMatch)
+	}) {
+		t.Errorf("an overlap-free group drew an `ambiguous_match` gap; that "+
+			"arm is vacuously closed where it is unreachable; findings=%v",
+			allFindings(guard.Lint(m)))
 	}
 }
 
