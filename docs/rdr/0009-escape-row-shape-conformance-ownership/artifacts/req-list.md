@@ -22,14 +22,48 @@ Element ids are carried where the REQ derives from a labelled contract
 - `TS` = Validation / Testing Strategy
 - `PE` = Validation / Performance Expectations
 
-**Scope note carried from the record (TS, "Scope of this RDR's Done criteria"):**
-scenarios 1–7, 7b, 9, 10, 10b execute in this implementation; **scenario 8**
-(REQ-59) binds RDR 0002's build and **scenario 11** (REQ-60) binds the future
-`flow` verb. Both are **DEFERRED** — specified so the obligation is inherited,
-not run here. REQs marked *(DEFERRED)* are not build-blocking for this RDR.
-Likewise the C7 CLI-wrap clause (REQ-40 … REQ-48) is specified against a verb
-that does not exist at HEAD (A2/A5); its REQs are marked *(DEFERRED — no `flow`
-verb at HEAD)* except where they bind an artifact this RDR can actually touch.
+**HEAD-state correction (Phase 0, amended).** The record's A2/A5 evidence
+("no `flow` verb exists at HEAD"; RDR 0002 "Final, not yet implemented") is
+**stale at this commit** and does not govern executability. Verified in this
+worktree:
+
+- The `flow` verb **ships** — `internal/cli/flow.go`, `flow_exec.go`,
+  `flow_resolve.go`, `flow_next.go`, `flow_input.go`, `flow_state.go`, with the
+  RDR-0005 suites `flow_*_0005_test.go` and a typed-code vocabulary
+  (`codeTagInvalid = "flow-tag-invalid"` …, `flow_input.go:34-59`).
+- `internal/cli/flow_resolve.go:105-116` **already calls `resolve.Resolve`** and
+  already has a live error branch — today it re-codes the kernel error as
+  `codeAccessorFailed` and folds it into prose via `err.Error()`. That is the
+  exact call site C7 binds, and it is editable now.
+- The serialized carrier C7 calls "a NEW omitempty field" **already ships** as
+  `clierr.CLIError.Findings []Finding` (`json:"findings,omitempty"`) with the
+  `Finding` record (`Code`, `Message`, `Param`, `Locator`, `Hint`, …). It was
+  landed by RDR 0008 per JDR 0001 §D10 and is pinned by
+  `internal/cli/reserved_key_0008_test.go::TestReq102_TheFindingCarrierHasTheFiveFieldsIncludingHint`.
+  This is what `deviations.md` D1 anticipated ("one `omitempty` `findings` list
+  on the envelope, which is the carrier for this RDR's row identities").
+- **RDR 0002 is `Implemented`** (record Status line; launch `status.md` state
+  `COMPLETE`), surface at `internal/table/`.
+
+**Scope note (what is actually deferred, and why).** Scenarios 1–7, 7b, 9, 10,
+10b execute. The C7 CLI block (Section H) is **executable and in scope** — the
+false "no verb at HEAD" premise is withdrawn. Exactly two deferrals remain, and
+both are mandated by the **record's own** TS "Scope of this RDR's Done criteria"
+note, not by HEAD's state:
+
+- **REQ-90 (TS scenario 8)** — the record says it "binds RDR 0002's build" and
+  places it out of this RDR's Done criteria. RDR 0002 being implemented does
+  **not** un-defer it: the record defers it by *ownership*, not by readiness.
+  Its authored-path obligation is discharged here as Phase 3's shared fixture
+  set (REQ-97/REQ-98), which is what the record asks this RDR to ship.
+- **REQ-91 (TS scenario 11)** — the record marks it verbatim "**DEFERRED: not
+  executable by this RDR**". Its stated *reason* ("no `flow` verb exists at
+  HEAD") is now false, but the deferral is the record's own scope decision and
+  is honored. Its substance is not lost: C7's own clauses (REQ-58 … REQ-69) are
+  executable and carry the same obligations, so the CLI surface is covered by
+  contract REQs even though the record's scenario 11 is not run as written.
+
+No other REQ is deferred.
 
 **Standing obligations from `deviations.md` (D1, D2)** are citation/consistency
 repairs, not REQs; they are checked at their own phase and are not restated
@@ -318,43 +352,88 @@ below.
   it checks vs still assumes — so partial validation cannot be
   read as general kernel ownership." — (IP, Phase 1)
 
-## H. CLI surfacing (C7) — *(DEFERRED — no `flow` verb at HEAD)*
+## H. CLI surfacing (C7) — **EXECUTABLE** (the `flow` verb ships)
+
+Every REQ in this section was previously marked DEFERRED on the false premise
+that no `flow` verb existed at HEAD. The premise is withdrawn; all of H is
+in scope. Numbers are unchanged.
+
+**Grounding — the call site and the carrier both already exist.**
+`internal/cli/flow_resolve.go:105` calls `resolve.Resolve`, and its `err != nil`
+branch today reads:
+
+```go
+return respond.Fail(cmd, internalErr(codeAccessorFailed,
+    "the resolution kernel reported a programmer error: "+err.Error()))
+```
+
+That branch is the C7 defect in the concrete: one generic code for every kernel
+error, and the row identities reachable only by re-parsing `err.Error()` prose —
+the re-parse this RDR forbids everywhere else. C7's obligation is to
+discriminate the breach out of that branch. The established pattern to model on
+is `flow_input.go`'s typed-code vocabulary (`codeTagInvalid`,
+`codeWriteInvalid`, …) plus the `Findings` carrier RDR 0008 already uses.
 
 - [REQ-58] `0009:C7` "When a breach reaches the CLI, the verb MUST wrap it into a
   *clierr.CLIError carrying a stable Code, Group GroupInternal
   (exit 2), the offending row identity, and a Hint stating the
-  remedy" — (NC) *(DEFERRED)*
+  remedy" — (NC)
+  *Site*: `internal/cli/flow_resolve.go`'s post-`Resolve` error branch, which
+  must classify the breach (`errors.Is(err, resolve.ErrEscapeShapeBreach)`)
+  before falling through to `codeAccessorFailed`.
 
 - [REQ-59] `0009:C7` "Because clierr.CLIError.Cause is
   json:"-", the Go error chain that carries the RowRef values
   is NOT wire-visible: the offending row identities MUST reach
-  the envelope through a serialized field." — (NC) *(DEFERRED)*
+  the envelope through a serialized field." — (NC)
+  *Confirmed at HEAD*: `CLIError.Cause` is `json:"-"`; `EmitJSON` marshals the
+  `*CLIError` with no custom `MarshalJSON`.
 
 - [REQ-60] `0009:C7` "The chosen carrier is a
   NEW omitempty field added under the type's own "Extend with
   new optional fields as needed" allowance — NOT the existing
-  Detail" — (NC) *(DEFERRED)*
+  Detail" — (NC)
+  **Already satisfied at HEAD, do not re-add.** The carrier ships as
+  `clierr.CLIError.Findings []Finding` (`json:"findings,omitempty"`), landed by
+  RDR 0008 per JDR 0001 §D10 — which `deviations.md` D1 names as "the carrier
+  for this RDR's row identities". The obligation this REQ still binds is to
+  **use** `Findings`, not `Detail`, and not to mint a second parallel field.
 
 - [REQ-61] `0009:C7` "The clause binds the carrier CLASS only; the
-  field's NAME stays the implementer's." — (NC) *(DEFERRED)*
+  field's NAME stays the implementer's." — (NC)
+  Resolved by HEAD: the name is `Findings`, already fixed by the shipped type.
 
 - [REQ-62] `0009:C7` "the field's type MUST be a clierr-local
   representation (plain strings or a small row-identity struct
   declared in clierr) and MUST NOT be resolve.RowRef, keeping
   clierr a leaf that does not import internal/resolve — the CLI
   verb layer, which already imports both, does the conversion" — (NC)
-  *(DEFERRED)*
+  *Satisfied in shape by HEAD*: `clierr.Finding` is clierr-local and its fields
+  are plain strings. The live obligation is the mapping — the verb layer
+  converts each `*EscapeShapeBreachError`'s `RowRef{RuleID, SourceLocator}` into
+  a `Finding` (`Rule`/`Param` for the rule id, `Locator` for the source
+  locator), and `clierr` must gain no `internal/resolve` import.
 
 - [REQ-63] `0009:C7` "the per-identity Count MUST serialize alongside the
-  identities" — (NC) *(DEFERRED)*
+  identities" — (NC)
+  `Finding` carries no `Count` field at HEAD. See **Q1** — the count must reach
+  the wire on the `Finding` record without a prose re-parse.
 
 - [REQ-64] `0009:C7` "The stable
-  Code is "escape-row-shape-breach"." — (NC) *(DEFERRED)*
+  Code is "escape-row-shape-breach"." — (NC)
+  Note the spelling is fixed by the contract and is **not** `flow`-prefixed,
+  unlike `flow_input.go`'s existing vocabulary. The contract's literal wins.
 
 - [REQ-65] `0009:C7` "the Cause comment's now-stale second clause MUST be
   amended in the same change (a Prerequisite; amending a stale
   code comment is not reopening RDR 0005's envelope contract)." — (NC)
-  *(DEFERRED — rides the field addition; PRE restates it, see REQ-66)*
+  **Pre-existing deviation, not this RDR's to introduce**: the `Cause` comment
+  at `internal/cli/clierr/clierr.go` still reads "the wire-visible cause surface
+  is Detail" while `Findings` already ships beside it, so the sentence is
+  *already* false at HEAD. This RDR does not create the staleness; it inherits
+  it. Repair is in scope per REQ-66. If a phase judges the repair to belong to
+  RDR 0008's landing rather than here, that is a recorded deviation, not an
+  edit dropped silently.
 
 - [REQ-66] "The same change that adds the `omitempty` identity
   field to `clierr.CLIError` amends the now-stale second
@@ -362,10 +441,15 @@ below.
   doc comment ("Not serialized — the wire-visible cause
   surface is Detail"), which the addition makes false, and
   updates `docs/cli-output-contract.md`'s error-envelope
-  field list alongside." — (PRE) *(DEFERRED)*
+  field list alongside." — (PRE)
+  `docs/cli-output-contract.md` already documents `findings` (its "Structured
+  findings" section), so the doc half is largely discharged; the `Cause` comment
+  half is not.
 
 - [REQ-67] `0009:C7` "conformance MUST be
-  asserted on the Code, never on the exit code alone." — (NC) *(DEFERRED)*
+  asserted on the Code, never on the exit code alone." — (NC)
+  Directly testable now, in the manner of the RDR-0005 `flow_*` suites and
+  `internal/cli/reserved_key_0008_test.go`.
 
 - [REQ-68] `0009:C7` "Adding this
   Code does NOT open RDR 0001's refusal taxonomy: the five
@@ -373,6 +457,18 @@ below.
 
 - [REQ-69] "This is an additive envelope change, not a change to RDR
   0005's refusal-to-exit-code mapping" — `0009:C7` (NC)
+  Strengthened by HEAD: the field is not even added — it already ships — so
+  nothing in the envelope changes at all.
+
+- [REQ-109] "A breach surfaced through the CLI. **Expected**: exit 2 via
+  `CLIError{Group: GroupInternal}` carrying `Code: "escape-row-shape-breach"`,
+  the offending row identity, and the remedy `Hint`" — (TS 11, restated as an
+  executable C7 obligation)
+  The record defers *scenario 11* by name (REQ-91), but C7's clauses are
+  normative and executable, so the CLI assertion lands here instead: an
+  end-to-end `flow` test asserting the `Code`, the `Findings` identities, and
+  the `Hint`, in the style of the existing `flow_*_0005_test.go` suites. This is
+  the only REQ minted by this amendment.
 
 ## I. Executable test scenarios
 
@@ -523,7 +619,12 @@ below.
   carrying an *empty* write block (`writes = []`).
   **Expected**: All three rejected at load under "malformed
   escape declaration," naming the source rule; normalized
-  escape rows render write-free." — (TS 8) *(DEFERRED — binds RDR 0002)*
+  escape rows render write-free." — (TS 8)
+  *(DEFERRED by the record's own TS scope note, which places scenario 8 outside
+  this RDR's Done criteria as binding "RDR 0002's build". Note RDR 0002 is
+  `Implemented` at HEAD (`internal/table/`), so the deferral is one of
+  OWNERSHIP, not readiness — the record assigns the assertion to 0002's build,
+  and this RDR discharges its side as the Phase 3 shared fixtures, REQ-97/98.)*
 
 - [REQ-91] `0009:S11` "— **DEFERRED: not executable by this RDR**
   (binds the future verb that first calls `Resolve`; no
@@ -532,7 +633,12 @@ below.
   **Expected**: exit 2 via `CLIError{Group: GroupInternal}`
   carrying `Code: "escape-row-shape-breach"`, the offending
   row identity, and the remedy `Hint` "fix the table
-  producer: an escape row must carry no writes"" — (TS 11) *(DEFERRED)*
+  producer: an escape row must carry no writes"" — (TS 11)
+  *(DEFERRED because the record itself marks this scenario "not executable by
+  this RDR". Its stated reason — "no `flow` verb exists at HEAD" — is FALSE at
+  this commit, but the deferral is the record's scope decision and RDRs are
+  never amended. The substance is not lost: C7's clauses REQ-58 … REQ-69 are
+  executable and REQ-109 carries the CLI assertion.)*
 
 - [REQ-92] "Done means, in user terms: **an escape row can no longer carry
   an owned-tag write to the accessor layer, so no tag value can
@@ -666,11 +772,15 @@ below.
   outcome is recorded in the phase artifact — not shipped as a permanent test
   that mutates the source.
 
-- **ASSUMPTION (Section H):** the C7 REQs are recorded but **not built** in
-  this RDR, because no `flow` verb exists at HEAD (A2, A5, TS scenario 11's
-  own "DEFERRED: not executable by this RDR"). The deviations file's D1 check
-  (`grep -n '§D10' docs/rdr/0009-*.md`) is a citation obligation on the
-  record, run at its own phase.
+- **ASSUMPTION (Section H) — CORRECTED:** the C7 REQs **are built** in this
+  RDR. The earlier reading (not built, no verb at HEAD) rested on the record's
+  stale A2/A5 evidence and is withdrawn. `internal/cli/flow_resolve.go` calls
+  `resolve.Resolve` today and its error branch is editable, so every C7 clause
+  has a live site. The deviations file's D1 check
+  (`grep -n '§D10' docs/rdr/0009-*.md`) remains a citation obligation on the
+  record, run at its own phase; its substantive half — "row identities are
+  carried in `findings`" — is REQ-60/REQ-62 here and is satisfiable, since
+  `Findings` ships.
 
 - **ASSUMPTION (REQ-22):** because placement is explicitly "a cheapness
   preference, not an observable contract", no test asserts that `assemble`
@@ -679,23 +789,60 @@ below.
 
 - **ASSUMPTION (REQ-90 / REQ-97 / REQ-98):** Phase 3's fixture set is a
   data/spec artifact under this RDR's tree (a named fixture file plus its
-  expectations), not executing Go tests against an unimplemented normalizer.
-  REQ-14 calls it "a conformance fixture set" and the Consequences say
-  "Phase 3 ships the binding fixtures, not the enforcement."
+  expectations). REQ-14 calls it "a conformance fixture set" and the
+  Consequences say "Phase 3 ships the binding fixtures, not the enforcement."
+  **Note the record's stated reason is stale**: RDR 0002 is `Implemented` at
+  HEAD (`internal/table/`), so a fixture set *could* be executed against the
+  real normalizer. The record nonetheless scopes Phase 3 to shipping the
+  fixtures and defers the assertion to 0002's build (REQ-90). Proceeding on the
+  record's scoping; if a later phase finds executing them against
+  `internal/table/` is free, running them is a strengthening, not a scope
+  breach.
 
 ---
 
 ## QUESTIONS
 
-- **Q1 — Does the `Count` field serialize only through the deferred CLI
-  field, or must the kernel error also expose it via an accessor?**
-  C4 pins `Count int` as an exported struct field on
-  `*EscapeShapeBreachError`, and REQ-89 asserts it is "read off the struct
-  field". C7/REQ-63 requires it to serialize at the wire — but that is
-  DEFERRED. **Proceeding**: the exported field alone satisfies every
-  executable REQ in this RDR; no accessor method is added. Recorded only
-  because a later `flow`-verb build must not discover it needs one.
-  *(Not materially ambiguous for this build; recorded for the successor.)*
+- **Q1 — RE-EVALUATED (was: "does `Count` serialize only through the deferred
+  CLI field?"). How does the per-identity `Count` reach the wire, given
+  `clierr.Finding` carries no `Count` field at HEAD?**
+  The original reading deferred this to a successor build. That is withdrawn:
+  the `flow` verb ships, so REQ-63 ("the per-identity Count MUST serialize
+  alongside the identities") is executable **now** and must be answered here.
+  The kernel side is settled — C4 pins `Count int` as an exported field on
+  `*EscapeShapeBreachError` and REQ-89 reads it off the struct. The wire side
+  is genuinely open, because `Finding` (`internal/cli/clierr/clierr.go`) has
+  `Code, Message, Model, Severity, Param, Locator, Hint, Rule, Span, Element,
+  Reason, Dimension, Key, Operator, Literal, Block, Class, Fingerprint` — and
+  no count. Three readings:
+  (a) add a `Count int json:"count,omitempty"` field to `clierr.Finding`;
+  (b) emit `Count` per-row by repeating the `Finding` N times;
+  (c) render the count into the `Finding`'s `Message`/`Hint` prose.
+  **Proceeding under (a).** (c) is excluded outright — REQ-44 says the count is
+  carried "never only in formatted prose", and REQ-27/REQ-86 forbid recovering
+  structured data from message text. (b) is excluded by REQ-42: equal
+  identities collapse to ONE reported entry, and repeating the record
+  reintroduces the per-row multiplicity collapsing exists to remove. (a) is
+  additive under the same `CLIError`/`Finding` "omitempty" allowance A9 cites
+  and that `Findings` itself landed under, and `Count == 1` for the ordinary
+  single-breach case means the key elides on every non-degenerate path.
+  **Residual risk**: `Finding` is a shared record owned jointly by RDRs
+  0005/0006/0008; adding a field touches a surface those RDRs pin. The
+  0008 test that pins it
+  (`reserved_key_0008_test.go::TestReq102_TheFindingCarrierHasTheFiveFieldsIncludingHint`)
+  asserts the *presence* of five named fields, not an exact field set, so an
+  addition does not break it — but a phase that finds an exact-set assertion
+  elsewhere should record a deviation rather than weaken that test.
+
+- **Q4 — Does the breach get its own `Code` constant in `flow_input.go`'s
+  vocabulary, and does the `flow`-prefix convention apply?**
+  Every shipped code is `flow`-prefixed (`flow-tag-invalid`,
+  `flow-write-invalid`, …), but REQ-64 fixes this one literally as
+  `"escape-row-shape-breach"`, unprefixed. **Proceeding on the contract's
+  literal** — C7 pins the exact string and REQ-67 makes the `Code` the
+  conformance oracle, so a prefixed variant would fail the contract. Recorded
+  because the inconsistency with the neighbouring vocabulary is visible and a
+  reviewer may read it as a typo; it is not.
 
 - **Q2 — Are `errors` and `fmt` both required imports, given no test may read
   message prose?** REQ-96 says the package gains "`errors` (and `fmt` for the
