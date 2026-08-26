@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/newcoinc/intrastate/internal/table"
 )
 
 // --- A. The producer obligation (the single rule) ------------------------
@@ -94,7 +95,7 @@ func TestReq2_ANormalizedClearOnAnEscapeRowIsTheSameBreach(t *testing.T) {
 			Escape:        []resolve.RefusalKind{resolve.KindNoMatch},
 			// The `<clear>` sentinel RDR 0002 normalizes an authored clear
 			// into. It is a write like any other at this boundary.
-			Writes: []resolve.Tag{{Key: "status", Value: "<clear>"}},
+			Writes: []resolve.Tag{{Key: "status", Value: table.ClearSentinel}},
 		}},
 	}
 

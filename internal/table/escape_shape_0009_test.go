@@ -18,6 +18,7 @@ package table_test
 // cannot drift.
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -193,14 +194,17 @@ func TestReq11_AnAuthoredEscapeRuleCarryingWritesOrClearsIsRejectedAtLoad(t *tes
 // clause a length-based reading would break, so it is pinned for both the
 // empty write block and the empty clear list.
 func TestReq12_AnEmptyWriteBlockOnAnEscapeRuleIsRejectedToo(t *testing.T) {
-	cases := map[string]string{
-		"empty_write_block": escapeWithEmptyWriteBlock,
-		"empty_clear_list":  escapeWithEmptyClearList,
+	cases := map[string]struct {
+		fragment string
+		ruleID   string
+	}{
+		"empty_write_block": {escapeWithEmptyWriteBlock, "escape-with-empty-write"},
+		"empty_clear_list":  {escapeWithEmptyClearList, "escape-with-empty-clear"},
 	}
 
-	for name, fragment := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			m, err := loadEscapeShape(t, fragment)
+			m, err := loadEscapeShape(t, tc.fragment)
 			if err == nil {
 				t.Fatalf("an escape rule carrying an EMPTY block loaded "+
 					"clean (%d rows); rejection keys on the PRESENCE of the "+
@@ -209,6 +213,14 @@ func TestReq12_AnEmptyWriteBlockOnAnEscapeRuleIsRejectedToo(t *testing.T) {
 			if cat, _ := table.CategoryOf(err); cat != table.CatMalformedEscapeDeclaration {
 				t.Errorf("category = %q; want %q", cat,
 					table.CatMalformedEscapeDeclaration)
+			}
+			// Like REQ-11's rejection, the refusal on a present-but-empty
+			// block stays diagnosable to the SOURCE RULE: an operator must
+			// be able to find which rule was refused, not merely that one
+			// was.
+			if !strings.Contains(err.Error(), tc.ruleID) {
+				t.Errorf("the refusal does not name the source rule %q: %v",
+					tc.ruleID, err)
 			}
 		})
 	}
@@ -404,44 +416,93 @@ func TestReq98_TheCanonicalAuthoredClearPinsTheSentinelRepresentation(t *testing
 			"case")
 	}
 
+	// The expectation both halves below assert against is carried by the
+	// fixture itself, so the normalizer half and the kernel half cannot
+	// drift onto two independently written literals.
+	if canonical.ClearRuleID == "" || canonical.ClearKey == "" {
+		t.Fatalf("the canonical authored-clear fixture carries no pinned "+
+			"expectation (rule %q, key %q); the two halves would then have "+
+			"no shared source of truth",
+			canonical.ClearRuleID, canonical.ClearKey)
+	}
+
 	m, err := loadEscapeShape(t, canonical.Rule)
 	if err != nil {
 		t.Fatalf("the canonical authored-clear fixture was refused: %v", err)
 	}
 
-	// Normalizer side: the clear is rendered as a write carrying the
-	// `<clear>` sentinel VALUE.
-	var found bool
-	for _, row := range m.Rows {
-		for _, w := range row.Writes {
-			for _, member := range w.Value {
-				if member == table.ClearSentinel {
-					found = true
-				}
-			}
-		}
+	// Normalizer side: on the identified row, the clear is rendered as the
+	// row's SOLE write, on the cleared key, whose value is exactly the
+	// one-member `<clear>` sentinel. A prefixed, multi-member, differently
+	// keyed, or differently placed rendering is a different representation.
+	row := onlyRowWithRuleID(t, m.Rows,
+		func(r table.Row) string { return r.RuleID },
+		canonical.ClearRuleID)
+	if len(row.Writes) != 1 {
+		t.Fatalf("normalized row %q renders %d writes; the authored clear "+
+			"overwrites the rule's write block and is the row's sole write",
+			canonical.ClearRuleID, len(row.Writes))
 	}
-	if !found {
-		t.Errorf("the normalizer did not render the authored clear as a "+
-			"%q-sentinel write; the two enforcers read one representation",
-			table.ClearSentinel)
+	if row.Writes[0].Key != canonical.ClearKey {
+		t.Errorf("normalized row %q renders its clear on key %q; want %q",
+			canonical.ClearRuleID, row.Writes[0].Key, canonical.ClearKey)
+	}
+	if want := []string{table.ClearSentinel}; !slices.Equal(row.Writes[0].Value, want) {
+		t.Errorf("normalized row %q renders %q = %q; want exactly %q — the "+
+			"two enforcers read ONE representation, not merely a value that "+
+			"contains the sentinel",
+			canonical.ClearRuleID, row.Writes[0].Key, row.Writes[0].Value, want)
 	}
 
-	// Kernel side: the SAME sentinel survives the handoff, which is what
-	// makes the kernel's Writes-only predicate cover clears (REQ-2).
-	var kernelFound bool
-	for _, row := range m.KernelTable().Rows {
-		for _, w := range row.Writes {
-			if strings.Contains(w.Value, table.ClearSentinel) {
-				kernelFound = true
-			}
+	// Kernel side: the SAME representation survives the handoff, which is
+	// what makes the kernel's Writes-only predicate cover clears (REQ-2).
+	// `resolve.Tag.Value` is one string, so the sentinel must be the WHOLE
+	// value — a value merely containing it would leave the predicate
+	// covering something other than a clear.
+	kernelRow := onlyRowWithRuleID(t, m.KernelTable().Rows,
+		func(r resolve.Row) string { return r.RuleID },
+		canonical.ClearRuleID)
+	if len(kernelRow.Writes) != 1 {
+		t.Fatalf("kernel row %q carries %d writes; want the single clear "+
+			"write", canonical.ClearRuleID, len(kernelRow.Writes))
+	}
+	if kernelRow.Writes[0].Key != canonical.ClearKey {
+		t.Errorf("kernel row %q carries its clear on key %q; want %q",
+			canonical.ClearRuleID, kernelRow.Writes[0].Key, canonical.ClearKey)
+	}
+	if kernelRow.Writes[0].Value != table.ClearSentinel {
+		t.Errorf("kernel row %q carries %q = %q; want exactly %q — the "+
+			"kernel suite and the normalizer suite would otherwise pin "+
+			"different representations of one invariant",
+			canonical.ClearRuleID, kernelRow.Writes[0].Key,
+			kernelRow.Writes[0].Value, table.ClearSentinel)
+	}
+}
+
+// onlyRowWithRuleID returns the single row in rows whose rule id is want,
+// failing the test if none or more than one matches. Selecting by identity
+// is what keeps the REQ-98 expectation pinned to ONE row rather than to
+// "somewhere in the table".
+func onlyRowWithRuleID[R any](t *testing.T, rows []R, ruleID func(R) string, want string) R {
+	t.Helper()
+
+	var found []R
+	for _, row := range rows {
+		if ruleID(row) == want {
+			found = append(found, row)
 		}
 	}
-	if !kernelFound {
-		t.Errorf("the %q sentinel did not survive the kernel handoff; the "+
-			"kernel suite and the normalizer suite would then pin different "+
-			"representations of one invariant", table.ClearSentinel)
+	switch len(found) {
+	case 1:
+		return found[0]
+	case 0:
+		t.Fatalf("no row carries the rule id %q; the fixture no longer "+
+			"normalizes to the row the expectation names", want)
+	default:
+		t.Fatalf("%d rows carry the rule id %q; the expectation names one "+
+			"row", len(found), want)
 	}
+	panic("unreachable")
 }
 
 // --- the shared fixture set itself ---------------------------------------
@@ -454,6 +515,14 @@ type EscapeShapeFixture struct {
 	Name         string
 	Rule         string
 	WantCategory table.Category
+	// ClearRuleID and ClearKey carry the canonical authored-clear
+	// expectation — which normalized row bears the `<clear>` sentinel, and
+	// on which tag key. They are the ONE source of truth REQ-98 asks for:
+	// the normalizer half and the kernel half both read them, so neither
+	// can be relaxed without relaxing the other. Empty on every case but
+	// the canonical authored clear.
+	ClearRuleID string
+	ClearKey    string
 	// Why records what the case binds, so a successor build reading the set
 	// does not have to re-derive the intent.
 	Why string
@@ -490,7 +559,9 @@ func EscapeShapeConformanceFixtures() []EscapeShapeFixture {
 			Why:  "a conforming escape rule normalizes write-free (REQ-14)",
 		},
 		{
-			Name: "authored-clear-canonical",
+			Name:        "authored-clear-canonical",
+			ClearRuleID: "ordinary-clear",
+			ClearKey:    "status",
 			Rule: `
 [[rule]]
 id = "ordinary-clear"
