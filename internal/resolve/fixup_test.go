@@ -129,7 +129,6 @@ func TestFixup1e_AmbiguousClassEscapeIsGatedLikeAnyOtherCandidate(t *testing.T) 
 	t.Run("missing owned state must not rescue an ambiguity", func(t *testing.T) {
 		escape := escapeRow("rdr.escape.ambiguous", "flows/rdr.toml:99", resolve.KindAmbiguousMatch)
 		escape.RequiresOwned = []string{"never-present"}
-		escape.Writes = []resolve.Tag{{Key: "status", Value: "Escaped"}}
 
 		in := ambiguousInput()
 		in.Table.Revision = "rev-fixup-1e-owned"

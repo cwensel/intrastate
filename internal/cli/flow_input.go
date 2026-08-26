@@ -54,6 +54,16 @@ const (
 	codeCapabilityMismat = "flow-accessor-capability-mismatch"
 	codeWriteNonOwned    = "flow-write-non-owned"
 
+	// codeEscapeRowShapeBreach is RDR 0009 `0009:C7`'s stable code for a
+	// kernel escape-row shape breach. Note it is deliberately NOT
+	// `flow`-prefixed like its neighbours: the contract fixes the literal
+	// and REQ-67 makes the Code the conformance oracle, so a prefixed
+	// variant would fail the contract. It is not a typo.
+	codeEscapeRowShapeBreach = "escape-row-shape-breach"
+	// hintEscapeRowShapeBreach is the remedy the record fixes verbatim.
+	hintEscapeRowShapeBreach = "fix the table producer: an escape row must " +
+		"carry no writes"
+
 	codeReadBackMismatch   = "flow-write-readback-mismatch"
 	codeReadBackIncomplete = "flow-write-readback-incomplete"
 	codeReadBackTimeout    = "flow-write-readback-timeout"

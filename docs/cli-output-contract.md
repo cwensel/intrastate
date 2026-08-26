@@ -72,6 +72,7 @@ field that is present is one its producer populated:
 | `fingerprint` | the canonical sortable predicate/write serialization used in finding identity |
 | `key`, `operator`, `literal`, `block` | a guard atom's fields, flat — never nested under an `atom` object |
 | `class` | a declared failure class |
+| `count` | how many underlying subjects collapsed into this one finding, when the producer collapses equal identities — the record's one number; absent when it is zero |
 
 No producer nests its own fields in a sub-object, and each populates only
 the fields it owns.

@@ -77,8 +77,13 @@ type CLIError struct {
 	Group ErrorGroup `json:"-"`
 
 	// Cause preserves the underlying Go error for errors.Is/errors.As
-	// traversal. Not serialized — the wire-visible cause surface is
-	// Detail.
+	// traversal. Not serialized — a consumer reads the cause off the
+	// wire-visible surfaces instead: `detail` for hard facts about a
+	// single failure, and `findings` for the structured, per-subject
+	// records an aggregate failure carries. Anything the Go chain holds
+	// that a caller must act on is converted onto one of those by the
+	// producing verb; nothing is recoverable from `cause` itself
+	// (`0009:C7`).
 	Cause error `json:"-"`
 }
 
@@ -333,4 +338,15 @@ type Finding struct {
 	// Fingerprint is the canonical sortable predicate/write serialization
 	// the finding-identity tuple closes on.
 	Fingerprint string `json:"fingerprint,omitempty"`
+
+	// Count is how many underlying subjects collapsed into this one
+	// finding, for a producer whose report collapses equal identities.
+	// `0009:C7` requires the per-identity count to serialize alongside the
+	// identities rather than only in prose. It is the record's one
+	// non-string field; `omitempty` elides it at zero, and a producer that
+	// reports one subject per finding never sets it.
+	//
+	// This field is new public surface on a record RDRs 0005/0006/0008
+	// co-own; see RDR 0009 deviations D3.
+	Count int `json:"count,omitempty"`
 }

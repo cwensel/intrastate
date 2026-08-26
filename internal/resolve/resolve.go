@@ -11,6 +11,8 @@
 package resolve
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -243,6 +245,14 @@ func (s TagSet) merge(tags []Tag, prov Provenance) {
 // Row is one normalized candidate edge from the reviewable transition
 // table. RDR 0002 owns normalization; the kernel consumes the normalized
 // shape and retains each row's source identity for diagnosis.
+//
+// PRODUCER OBLIGATION (`0009:C1`): an escape row carries no owned-state
+// mutation. A Row with a non-empty Escape list MUST have an empty Writes
+// slice — no writes and, since an authored clear normalizes to a `<clear>`
+// write, no clears. This binds every constructor of Row values, not only
+// RDR 0002's normalizer, and Table.CheckValid is the predicate that reports
+// a breach. The obligation does not extend to NextTags: owned state is
+// reachable only through a write accessor.
 type Row struct {
 	// RuleID and SourceLocator are the source identity RDR 0002 requires
 	// every normalized row to retain. The kernel carries them into an
@@ -371,8 +381,13 @@ type RowRef struct {
 	SourceLocator string
 }
 
-// Result is the kernel disposition: exactly one transition plan or
-// exactly one typed refusal, never both and never neither.
+// Result is the kernel disposition. WHEN RESOLVE RETURNS A NIL ERROR it
+// carries exactly one transition plan or exactly one typed refusal, never
+// both and never neither. On a non-nil error — a producer/programmer
+// contract breach, never a modeled condition — Resolve returns the ZERO
+// Result, which is neither (`0009:C3`). Callers therefore check the error
+// before reading the disposition: the zero Result reports Refused() ==
+// false on a call that did not succeed.
 type Result struct {
 	// Plan is non-nil exactly when the resolution succeeded.
 	Plan *Plan
@@ -383,14 +398,20 @@ type Result struct {
 // Refused reports whether the disposition is a modeled refusal.
 func (r Result) Refused() bool { return r.Refusal != nil }
 
-// Resolve is the kernel's single pure entry point. It returns exactly one
-// disposition for the input tuple. A modeled refusal travels the Result
-// value with a nil error; the error return is reserved for programmer
-// mistakes, not for modeled refusals.
+// Resolve is the kernel's single pure entry point. WHEN IT RETURNS A NIL
+// ERROR it returns exactly one disposition for the input tuple. A modeled
+// refusal travels the Result value with a nil error; the error return is
+// reserved for programmer mistakes, not for modeled refusals, and carries
+// the zero Result — neither disposition (`0009:C3`).
 //
 // Evaluation order is fixed so the same tuple always replays the same
 // disposition (REQ-1):
 //
+//  0. the whole table must satisfy escape-row shape conformance —
+//     in.Table.CheckValid() — evaluated over every row before any
+//     evaluation step, so a breach surfaces even when no resolution path
+//     reaches the offending row and precedes every modeled disposition,
+//     unmodeled_outcome included (`0009:C3`);
 //  1. the recognized outcome must be in the table's declared alphabet,
 //     otherwise unmodeled_outcome (which therefore outranks a mere
 //     zero-match);
@@ -410,6 +431,20 @@ func (r Result) Refused() bool { return r.Refusal != nil }
 // escape candidates, so an escape edge can never reach a plan on terms an
 // ordinary edge would be refused on (REQ-5, REQ-15, REQ-23).
 func Resolve(in Input) (Result, error) {
+	// RDR 0009 `0009:C3` — the escape-row shape precondition, applied at
+	// entry over the WHOLE table. One definition, two call sites: this is
+	// the same CheckValid a producer may call at construction time. The
+	// error is returned VERBATIM, never wrapped, so the aggregate's flat
+	// Unwrap() []error traversal is what the caller sees (`0009:C4`).
+	//
+	// It runs above the RDR 0008 check by `0009:D-selection-predicate`'s
+	// placement preference — a cheapness preference, not an observable
+	// contract. JDR 0001 §JD-5 leaves the relative order of the two
+	// preconditions open; no assertion in either suite depends on it.
+	if err := in.Table.CheckValid(); err != nil {
+		return Result{}, err
+	}
+
 	// RDR 0008 `0008:C4` — the reserved-key producer precondition, applied at
 	// entry. One definition, two call sites: this is the same CheckInput a
 	// producer may call at construction time, never a second independent
@@ -673,4 +708,116 @@ func copyTags(in []Tag) []Tag {
 	out := make([]Tag, len(in))
 	copy(out, in)
 	return out
+}
+
+// RDR 0009 `0009:C1` … `0009:C6` — escape-row shape conformance.
+//
+// One rule: an escape row carries no owned-state mutation. This file holds
+// the kernel's half — the exported predicate, the typed error, and the
+// sentinel. RDR 0002's normalizer is the authored-path enforcer, and it is
+// deliberately stricter (it keys on the PRESENCE of a write block, where
+// this predicate keys on length).
+
+// ErrEscapeShapeBreach is the package-level sentinel naming the breach
+// category, so errors.Is can classify a breach without inspecting message
+// text (`0009:C4`). Every *EscapeShapeBreachError unwraps to it.
+var ErrEscapeShapeBreach = errors.New(
+	"resolve: escape-row shape breach: an escape row carries writes")
+
+// EscapeShapeBreachError is the typed breach error for ONE row identity.
+// It carries the offending identity as the kernel's existing RowRef value,
+// so errors.As / errors.AsType recovers it without parsing prose
+// (`0009:C4`).
+//
+// Count is PER-IDENTITY and counts PRE-COLLAPSE ROWS: breaching rows
+// sharing one RowRef collapse to one reported error whose Count is how
+// many rows shared that identity. A single-row breach carries Count == 1,
+// so the field is uniform rather than present only in the degenerate case
+// (`0009:C5`).
+type EscapeShapeBreachError struct {
+	// Ref is the offending row's source identity.
+	Ref RowRef
+	// Count is how many breaching rows carried Ref.
+	Count int
+}
+
+// Error renders the breach diagnostically: the identity and the count. No
+// caller reads structure back out of this string — Ref and Count are the
+// structured channel (`0009:C4`, `0009:C5`).
+func (e *EscapeShapeBreachError) Error() string {
+	return fmt.Sprintf(
+		"resolve: escape row %q at %q carries writes (%d breaching %s); "+
+			"an escape row must carry no writes",
+		e.Ref.RuleID, e.Ref.SourceLocator, e.Count, rowsWord(e.Count))
+}
+
+// Unwrap returns the sentinel, so errors.Is classifies EVERY per-row
+// element and not only the errors.Join aggregate (`0009:C4`).
+func (e *EscapeShapeBreachError) Unwrap() error { return ErrEscapeShapeBreach }
+
+func rowsWord(n int) string {
+	if n == 1 {
+		return "row"
+	}
+	return "rows"
+}
+
+// CheckValid returns nil if t is valid, or else an error describing a
+// problem.
+//
+// The ONE property checked is escape-row shape conformance: a row with a
+// non-empty Escape list must have an empty Writes slice. The predicate is
+// length-based, so a non-nil but empty Writes slice conforms, and it does
+// not extend to NextTags — RDR 0004 scopes owned-state mutation to planned
+// owned-tag writes. An authored clear normalizes to a `<clear>` write per
+// RDR 0002, so this one predicate carries both "no writes" and "no clears"
+// at the kernel boundary.
+//
+// NOTHING ELSE is checked. In particular it does not check the
+// Escape-class restriction to no_match/ambiguous_match that Row's doc
+// records for RDR 0002, nor any other well-formedness property, so a nil
+// return is never general table validity. A table with no rows conforms
+// vacuously.
+//
+// Resolve applies this same predicate at entry: one predicate, two call
+// sites, so a producer building a table by hand can fail at construction
+// time and the two enforcement points cannot drift (`0009:C6`).
+//
+// Every breaching row is reported in one pass, combined with errors.Join,
+// ordered by RowRef identity and collapsed so equal identities contribute
+// one reported error carrying the pre-collapse row count. Because
+// errors.Join wraps even a single error, callers classify and extract with
+// errors.Is / errors.As rather than a direct type assertion.
+func (t Table) CheckValid() error {
+	// The conforming scan reads two lengths per row and allocates nothing
+	// (`0009:PE`). Only a breach reaches the recording pass below.
+	breached := false
+	for _, row := range t.Rows {
+		if len(row.Escape) != 0 && len(row.Writes) != 0 {
+			breached = true
+			break
+		}
+	}
+	if !breached {
+		return nil
+	}
+
+	counts := map[RowRef]int{}
+	for _, row := range t.Rows {
+		if len(row.Escape) != 0 && len(row.Writes) != 0 {
+			counts[refOf(row)]++
+		}
+	}
+
+	refs := make([]RowRef, 0, len(counts))
+	for ref := range counts {
+		refs = append(refs, ref)
+	}
+	slices.SortFunc(refs, compareRefs)
+
+	errs := make([]error, 0, len(refs))
+	for _, ref := range refs {
+		errs = append(errs, &EscapeShapeBreachError{Ref: ref, Count: counts[ref]})
+	}
+	return errors.Join(errs...)
 }

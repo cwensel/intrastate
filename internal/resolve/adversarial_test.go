@@ -226,7 +226,6 @@ func TestAdv2_EscapeEdgeMustNotBypassTheGuardSeam(t *testing.T) {
 func TestAdv2b_EscapeEdgeMustNotBypassTheOwnedStateRequirement(t *testing.T) {
 	escape := escapeRow("rdr.escape.needsowned", "flows/rdr.toml:90", resolve.KindNoMatch)
 	escape.RequiresOwned = []string{"never-present"}
-	escape.Writes = []resolve.Tag{{Key: "status", Value: "Escaped"}}
 
 	in := noMatchInput()
 	in.Table.Revision = "rev-adv-2b"

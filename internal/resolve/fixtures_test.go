@@ -259,6 +259,11 @@ func recognizedTagSensitiveTable() resolve.Table {
 
 // escapeRow builds a row modeled as an escape for the given failure class.
 // It matches the base tag-set so it is a genuine escape candidate.
+//
+// It carries NO Writes: RDR 0009 `0009:C1` makes escape-row shape
+// conformance a producer obligation, and a write-bearing escape row now
+// fails `Resolve`'s entry precondition. NextTags stays — the predicate is
+// Writes-only (REQ-93, REQ-94).
 func escapeRow(ruleID, locator string, class resolve.RefusalKind) resolve.Row {
 	return resolve.Row{
 		RuleID:        ruleID,
@@ -267,7 +272,6 @@ func escapeRow(ruleID, locator string, class resolve.RefusalKind) resolve.Row {
 		Match:         []resolve.Tag{{Key: "status", Value: "Draft"}},
 		RequiresOwned: []string{"status"},
 		NextTags:      []resolve.Tag{{Key: "status", Value: "Blocked"}},
-		Writes:        []resolve.Tag{{Key: "status", Value: "Blocked"}},
 		Escape:        []resolve.RefusalKind{class},
 	}
 }

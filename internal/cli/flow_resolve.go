@@ -16,6 +16,7 @@ package cli
 // laundered into a rescue the model did not model (REQ-116, REQ-119).
 
 import (
+	"errors"
 	"slices"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
@@ -111,8 +112,7 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		Guards:     guardSeam(),
 	})
 	if err != nil {
-		return respond.Fail(cmd, internalErr(codeAccessorFailed,
-			"the resolution kernel reported a programmer error: "+err.Error()))
+		return respond.Fail(cmd, kernelResolveFailure(err))
 	}
 	if result.Refused() {
 		return respond.Fail(cmd, kernelFailure(*result.Refusal))
@@ -236,6 +236,79 @@ func escapeClassOf(row table.Row, req flowRequest, owned []resolve.Tag, outcome 
 
 // LintFindings keeps the findings type referenced from this file's imports.
 var _ = clierr.Finding{}
+
+// --- kernel Go-error mapping (RDR 0009 `0009:C7`) ------------------------
+
+// kernelResolveFailure wraps one kernel Go error — the channel RDR 0001
+// reserves for producer/programmer mistakes, never for modeled refusals —
+// into the CLI envelope. It is the sibling of kernelFailure, which maps
+// modeled refusals.
+//
+// It DISCRIMINATES: an escape-row shape breach gets its own stable Code and
+// carries every offending row identity structurally; every other kernel
+// error still falls through to the generic accessor-failed branch. A
+// blanket recode would mislabel RDR 0008's reserved-key breach.
+func kernelResolveFailure(err error) *clierr.CLIError {
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, resolve.ErrEscapeShapeBreach) {
+		return internalErr(codeAccessorFailed,
+			"the resolution kernel reported a programmer error: "+err.Error())
+	}
+
+	// The kernel's aggregate is exactly one level deep, every element a
+	// *EscapeShapeBreachError, already sorted by RowRef identity with equal
+	// identities collapsed (`0009:C5`). The verb traverses it rather than
+	// calling errors.As once, which would report the first breach alone.
+	ce := &clierr.CLIError{
+		Code:  codeEscapeRowShapeBreach,
+		Group: clierr.GroupInternal,
+		Message: "the transition table carries an escape row that also " +
+			"carries writes; an escape row describes no owned-state mutation",
+		Hint:  hintEscapeRowShapeBreach,
+		Cause: err,
+	}
+
+	// The identities reach the wire on `findings` — `Cause` is json:"-", so
+	// the Go chain that holds the RowRef values is not wire-visible, and
+	// folding them into `Detail` would make a caller re-parse prose.
+	// clierr stays a leaf: the conversion from resolve.RowRef to plain
+	// strings happens here, in the layer that already imports both.
+	for _, breach := range escapeShapeBreaches(err) {
+		ce.Findings = append(ce.Findings, clierr.Finding{
+			Code:    codeEscapeRowShapeBreach,
+			Rule:    breach.Ref.RuleID,
+			Locator: breach.Ref.SourceLocator,
+			Count:   breach.Count,
+			Message: "this escape row carries writes",
+			Hint:    hintEscapeRowShapeBreach,
+		})
+	}
+	return ce
+}
+
+// escapeShapeBreaches returns the per-identity breach elements err carries,
+// in the kernel's order. The traversal is one level deep, matching the flat
+// shape `0009:C4` guarantees; a bare (unjoined) breach is handled too, so
+// the verb does not depend on the aggregate's cardinality.
+func escapeShapeBreaches(err error) []*resolve.EscapeShapeBreachError {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var out []*resolve.EscapeShapeBreachError
+		for _, elem := range joined.Unwrap() {
+			var breach *resolve.EscapeShapeBreachError
+			if errors.As(elem, &breach) {
+				out = append(out, breach)
+			}
+		}
+		return out
+	}
+	var breach *resolve.EscapeShapeBreachError
+	if errors.As(err, &breach) {
+		return []*resolve.EscapeShapeBreachError{breach}
+	}
+	return nil
+}
 
 // guardSeam returns RDR 0003's value-comparison evaluator, the delegated
 // seam the kernel calls for typed operator semantics. This RDR does not
