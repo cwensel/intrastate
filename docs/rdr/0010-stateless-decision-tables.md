@@ -481,6 +481,49 @@ intrastate flow resolve --model navigator.toml --outcome locate \
 #    "next":{},"writes":{},"clear":[],"owned":{},"readers":[],…}}
 ```
 
+Non-normative — how the sections above interlink at load and lint, and how
+one `flow resolve` call walks the observed dimensions to a row and its
+`emit`. Contracts C1–C5 govern; the figure only illustrates them.
+
+```mermaid
+flowchart TB
+  subgraph toml["navigator.toml (authored)"]
+    M["[model]<br/>class = decision-table"]
+    T1["[tags.status]<br/>provenance = observed<br/>domain = {Draft, Final}"]
+    T2["[tags.recognized]<br/>provenance = recognized<br/>domain = {locate}"]
+    R["[[rule]] draft-propose<br/>match: status = Draft ∧ recognized = locate"]
+    E["[rule.emit]<br/>next = propose"]
+    R --- E
+  end
+
+  subgraph load["load + lint"]
+    OWN["owned tag set = ∅<br/>(C1: class must agree)"]
+    ROOT(("empty owned-state<br/>node = lint root (C5)"))
+    COV["overlap / coverage run<br/>over status × recognized"]
+  end
+
+  M -->|"declares"| OWN
+  T1 & T2 -->|"zero owned"| OWN
+  OWN --> ROOT --> COV
+  R -.->|"only dimensions matched"| COV
+
+  subgraph resolve["flow resolve --outcome locate --tag status=…"]
+    V["assembled view<br/>status=&lt;tag&gt;, recognized=locate<br/>no readers invoked, no --artifact"]
+    D{"status?"}
+    HIT["row draft-propose<br/>(kernel exact-one match)"]
+    MISS["no_match<br/>(or an escape 'otherwise'<br/>row carrying its own emit)"]
+    P["payload: rule + emit<br/>next/writes/clear/owned = empty (C4)"]
+  end
+
+  V --> D
+  D -->|"Draft"| HIT
+  D -->|"Final"| MISS
+  R -.->|"row"| HIT
+  E -.->|"joined by rule id after selection (C3)"| P
+  HIT --> P
+  COV -.->|"Final × locate uncovered → coverage finding<br/>unless an escape row closes it (A9)"| MISS
+```
+
 ### Capability Dependencies
 
 | Needed Capability | Source | Status | Spec Impact |
