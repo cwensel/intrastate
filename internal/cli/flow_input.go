@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
@@ -183,7 +184,6 @@ func parseArtifacts(cmd *cobra.Command) (map[string]string, *clierr.CLIError) {
 func parseTags(cmd *cobra.Command, m *table.Model) ([]resolveTag, *clierr.CLIError) {
 	raw, _ := cmd.Flags().GetStringArray("tag")
 	owned := flowbind.OwnedTags(m)
-	sets := flowbind.SetKeys(m)
 
 	var out []resolveTag
 	seen := map[string]bool{}
@@ -208,7 +208,15 @@ func parseTags(cmd *cobra.Command, m *table.Model) ([]resolveTag, *clierr.CLIErr
 		}
 		seen[key] = true
 
-		canonical, ce := canonicalValue(key, value, slices.Contains(sets, key), "tag")
+		// A `--tag` legitimately carries an observed key the model does not
+		// declare, so the lookup is GUARDED: a missing declaration yields
+		// the zero `TagDecl`, which conforms everything and leaves the
+		// shape-only behaviour a caller already relies on intact. Refusing
+		// an undeclared key is a different decision, under a different code,
+		// and this is not the place that makes it.
+		decl := m.Tags[key]
+
+		canonical, ce := canonicalValue(key, value, decl, "tag")
 		if ce != nil {
 			return nil, ce
 		}
@@ -233,8 +241,21 @@ type resolveTag struct {
 // literal, but may equally hand an unsorted or duplicated one, and read-back
 // equality is byte equality over the canonical form. A scalar handed an
 // array, or a set handed a bare scalar, is the wrong-kind refusal.
-func canonicalValue(key, value string, isSet bool, flag string) (string, *clierr.CLIError) {
+//
+// "Well-formed for its declared kind" (REQ-61) reaches the DOMAIN, not only
+// the set-vs-scalar shape: the declaration carries an enum's `domain`, an
+// int's `min`/`max`, a bool's two literals, and a set's `elements`, and
+// `table.ConformValue` holds the value to all of them. RDR 0002's loader
+// already hard-refuses such a literal when a RULE authors it, so admitting
+// it from `--write` would make the declaration advisory on exactly the path
+// that persists.
+//
+// Set members are conformed BEFORE `canonicalSet`, so the refusal names the
+// offending member as the caller spelled it rather than after sorting and
+// de-duplication have moved it.
+func canonicalValue(key, value string, decl table.TagDecl, flag string) (string, *clierr.CLIError) {
 	looksArray := strings.HasPrefix(strings.TrimSpace(value), "[")
+	isSet := decl.Kind == "set"
 
 	if !isSet {
 		if looksArray {
@@ -244,6 +265,11 @@ func canonicalValue(key, value string, isSet bool, flag string) (string, *clierr
 		if value == "" {
 			return "", userErr(codeInvalidFor(flag), key,
 				"the tag `"+key+"` was given an empty value")
+		}
+		if err := table.ConformValue(decl, value); err != nil {
+			return "", userErr(codeInvalidFor(flag), key,
+				"the value for `"+key+"` does not conform to its declaration: "+
+					err.Error())
 		}
 		return value, nil
 	}
@@ -256,6 +282,13 @@ func canonicalValue(key, value string, isSet bool, flag string) (string, *clierr
 	if err := json.Unmarshal([]byte(value), &members); err != nil {
 		return "", userErr(codeInvalidFor(flag), key,
 			"the set literal for `"+key+"` is not a JSON array of strings: "+err.Error())
+	}
+	for _, m := range members {
+		if err := table.ConformValue(decl, m); err != nil {
+			return "", userErr(codeInvalidFor(flag), key,
+				"the set member "+strconv.Quote(m)+" for `"+key+"` does not "+
+					"conform to its declaration: "+err.Error())
+		}
 	}
 	return canonicalSet(members), nil
 }

@@ -68,20 +68,6 @@ func OwnedTags(m *table.Model) []string {
 	return out
 }
 
-// SetKeys returns the model's set-kind tag keys, sorted. The CLI needs it
-// to validate a `--tag` or `--write` value against its declared kind
-// (REQ-29, REQ-61) and to render a set value in canonical form.
-func SetKeys(m *table.Model) []string {
-	var out []string
-	for key, decl := range m.Tags {
-		if decl.Kind == "set" {
-			out = append(out, key)
-		}
-	}
-	slices.Sort(out)
-	return out
-}
-
 func keys[V any](m map[string]V) func(func(string) bool) {
 	return func(yield func(string) bool) {
 		for k := range m {

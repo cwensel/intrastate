@@ -785,3 +785,93 @@ path = "flow.sidecar"
 keys = ["sidenote"]
 timeout = "2s"
 `
+
+// flowDomainModel declares one tag of each CONSTRAINED kind, all served by
+// the same writer, so a `--write` value can be held to its declaration
+// independently of any accessor or rule:
+//
+//   - `[tags.status]`  enum with a `domain`
+//   - `[tags.iter]`    int with `min` / `max`
+//   - `[tags.ready]`   bool
+//   - `[tags.labels]`  set with `elements`
+//   - `[tags.free]`    scalar — the UNCONSTRAINED control, which must keep
+//     accepting anything, so a domain refusal elsewhere is provably the
+//     DECLARATION biting and not a blanket tightening of `--write`
+//   - `[tags.hint]`    observed enum with a `domain`, the `--tag` channel
+//
+// `[write.state]` names every owned key, so none of them can be refused
+// `flow-write-unbound` — a refusal here is the value's, not the binding's.
+const flowDomainModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "domain"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.iter]
+provenance = "owned"
+kind = "int"
+min = 0
+max = 9
+
+[tags.ready]
+provenance = "owned"
+kind = "bool"
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+elements = ["alpha", "beta"]
+
+[tags.free]
+provenance = "owned"
+kind = "scalar"
+
+[tags.hint]
+provenance = "observed"
+kind = "enum"
+domain = ["low", "high"]
+single_valued = true
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "iter", "ready", "labels", "free"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "iter", "ready", "labels", "free"]
+timeout = "2s"
+read_back = true
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "advance"
+[rule.match.status]
+eq = "draft"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"
+`

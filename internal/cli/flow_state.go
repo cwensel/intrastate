@@ -24,7 +24,6 @@ import (
 
 	"github.com/newcoinc/intrastate/internal/accessor"
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/cli/flowbind"
 	"github.com/newcoinc/intrastate/internal/cli/respond"
 	"github.com/newcoinc/intrastate/internal/resolve"
 	"github.com/newcoinc/intrastate/internal/table"
@@ -239,7 +238,6 @@ func parseWrites(cmd *cobra.Command, m *table.Model) ([]resolve.Tag, []string, *
 	rawWrites, _ := cmd.Flags().GetStringArray("write")
 	rawClears, _ := cmd.Flags().GetStringArray("clear")
 
-	sets := flowbind.SetKeys(m)
 	seen := map[string]bool{}
 
 	var planned []resolve.Tag
@@ -263,10 +261,16 @@ func parseWrites(cmd *cobra.Command, m *table.Model) ([]resolve.Tag, []string, *
 		}
 		seen[key] = true
 
+		// The BINDING check precedes the value check: a key no writer serves
+		// has no business being told its value is out of domain, and a
+		// caller who mistyped the key must hear about the key.
 		if ce := writerFor(m, key, codeWriteUnbound); ce != nil {
 			return nil, nil, ce
 		}
-		canonical, ce := canonicalValue(key, value, slices.Contains(sets, key), "write")
+		// A `--write` key always has a declaration — `writerFor` just proved
+		// a writer names it, and a writer's `keys` are declared tags — so
+		// the lookup here is total, unlike `parseTags`'s.
+		canonical, ce := canonicalValue(key, value, m.Tags[key], "write")
 		if ce != nil {
 			return nil, nil, ce
 		}

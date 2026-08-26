@@ -507,3 +507,161 @@ func TestReq112_NoNewThirdPartyDependencyIsIntroduced(t *testing.T) {
 		}
 	}
 }
+
+// REQ-61: "Before any accessor runs it MUST refuse … a --write value
+// malformed for its declared kind".
+// REQ-84: `flow-write-invalid` — "malformed or wrong-kind `--write` value" —
+// `GroupUserEnv` / 2 — `param`.
+//
+// "Malformed for its DECLARED KIND" reaches the declaration's domain, not
+// only the set-vs-scalar shape. The declaration carries an enum's `domain`,
+// an int's `min`/`max`, a bool's two literals, and a set's `elements`, and
+// RDR 0002's loader already hard-refuses each of those from a RULE's
+// authored literal — so a `--write` that may persist what a rule may not
+// author would make the declaration advisory on exactly the path that
+// writes.
+//
+// ADVERSARIAL — each case pairs the refusal with an ACCEPTED sibling under
+// the same key, so the test cannot pass by refusing that key wholesale.
+func TestReq61And84_AWriteValueIsHeldToItsDeclaredDomainAndBounds(t *testing.T) {
+	model := writeFlowModel(t, flowDomainModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	set := func(t *testing.T, write string) (string, string, error) {
+		t.Helper()
+		return runCmd(t, "flow", "set-state", "--model", model,
+			"--artifact", bind, "--write", write, "--as=json")
+	}
+
+	for _, tc := range []struct {
+		name string
+		// bad is refused `flow-write-invalid`; good is ACCEPTED. The pair
+		// is what makes the case discriminate: a fix that refused the key
+		// unconditionally would fail on `good`.
+		bad, good string
+		// member, when set, must appear in the refusal's message — a set
+		// refusal that named only the key would leave a caller hunting
+		// through the literal for which member offended.
+		member string
+	}{
+		{
+			name: "enum outside its domain",
+			bad:  "status=notARealState", good: "status=final",
+		},
+		{
+			name: "int above max",
+			bad:  "iter=10", good: "iter=9",
+		},
+		{
+			name: "int below min",
+			bad:  "iter=-1", good: "iter=0",
+		},
+		{
+			name: "int that is not a number at all",
+			bad:  "iter=seven", good: "iter=7",
+		},
+		{
+			name: "bool spelled some other way",
+			bad:  "ready=yes", good: "ready=true",
+		},
+		{
+			name: "set member outside its elements",
+			bad:  `labels=["alpha","gamma"]`, good: `labels=["alpha","beta"]`,
+			member: "gamma",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ce := requireRefusal(t, "flow-write-invalid", 2,
+				"flow", "set-state", "--model", model,
+				"--artifact", bind, "--write", tc.bad, "--as=json")
+
+			key, _, _ := strings.Cut(tc.bad, "=")
+			if ce.Param != key {
+				t.Errorf("refusal param = %q; want %q — the code table fixes "+
+					"`param` as this code's carrier, and it must name the "+
+					"OFFENDING key", ce.Param, key)
+			}
+			if tc.member != "" && !strings.Contains(ce.Message, tc.member) {
+				t.Errorf("the refusal message does not name the offending "+
+					"member %q:\n%s\nA set refusal that names only the key "+
+					"leaves the caller to find which member offended",
+					tc.member, ce.Message)
+			}
+
+			// The conforming sibling under the SAME key must still be
+			// accepted, so the refusal above is the DECLARATION biting.
+			if _, _, err := set(t, tc.good); err != nil {
+				t.Errorf("the conforming value %q was refused: %v\nHolding a "+
+					"value to its declaration must not reject what the "+
+					"declaration admits", tc.good, err)
+			}
+		})
+	}
+
+	// The UNCONSTRAINED control: a scalar declares no domain, so it keeps
+	// taking anything. If this refused, the change would be a blanket
+	// tightening of `--write` rather than declaration conformance.
+	t.Run("an unconstrained scalar still takes any value", func(t *testing.T) {
+		if _, _, err := set(t, "free=anything at all $%^"); err != nil {
+			t.Errorf("a `scalar` write was refused %v; a scalar declares no "+
+				"domain and there is nothing for it to violate", err)
+		}
+	})
+}
+
+// REQ-61 / REQ-84 — ORDERING. An unbound key and an out-of-domain value in
+// the SAME argument: the caller must hear that the key is bound to no
+// writer, because that is the mistake they made. Reporting a domain
+// complaint about a key no writer serves sends them to fix the wrong thing.
+// ADVERSARIAL — the two refusals are both reachable, so only their ORDER
+// distinguishes a correct implementation.
+func TestReq61_AnUnboundKeyIsReportedBeforeItsValuesDomain(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+
+	// `profile` is an OBSERVED enum with domain ["mid","foundational"], so
+	// `nonsense` is out of domain AND no writer's keys name the key. The
+	// binding refusal must win.
+	requireRefusal(t, "flow-write-unbound", 2,
+		"flow", "set-state", "--model", model,
+		"--artifact", artifactBinding(flowStateRole, art),
+		"--write", "profile=nonsense", "--as=json")
+}
+
+// REQ-80: `flow-tag-invalid` — "malformed `--tag`" — `GroupUserEnv` / 2.
+// REQ-26: `--tag` carries OBSERVED context.
+//
+// An observed key the model DOES declare is held to its domain, on the same
+// grounds as `--write`. An observed key the model does NOT declare is not:
+// `--tag` legitimately carries context the model never modelled, and
+// refusing it would be a different decision under a different code.
+// DOMAIN EDGE — the two halves are the whole point, so both are asserted.
+func TestReq80And26_ADeclaredTagIsDomainCheckedAndAnUndeclaredOneIsNot(t *testing.T) {
+	model := writeFlowModel(t, flowDomainModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	t.Run("a declared observed enum is held to its domain", func(t *testing.T) {
+		ce := requireRefusal(t, "flow-tag-invalid", 2,
+			"flow", "next", "--model", model, "--artifact", bind,
+			"--tag", "hint=sideways", "--as=json")
+		if ce.Param != "hint" {
+			t.Errorf("refusal param = %q; want %q", ce.Param, "hint")
+		}
+
+		// …and a value INSIDE the domain still passes.
+		requireSuccess(t, "flow", "next", "--model", model,
+			"--artifact", bind, "--tag", "hint=high", "--as=json")
+	})
+
+	t.Run("an undeclared observed key still passes", func(t *testing.T) {
+		// The model declares no `sidechannel` tag at all. There is no
+		// declaration to violate, so the shape-only behaviour a caller
+		// already relies on must survive: this is NOT the kata that
+		// decides whether an unmodeled `--tag` key should be refused.
+		requireSuccess(t, "flow", "next", "--model", model,
+			"--artifact", bind,
+			"--tag", "sidechannel=whatever-the-caller-likes", "--as=json")
+	})
+}
