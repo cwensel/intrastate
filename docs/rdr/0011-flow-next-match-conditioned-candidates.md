@@ -149,7 +149,7 @@ Illustrative — intent only.
 
 ```sh
 # Default: rows the supplied state can take. At stage=resolved this lists the
-# resolved→* rows, not all 22.
+# resolved→* rows, not 21 of the 22.
 intrastate flow next --model models/rdr.toml --artifact rdr=./0011.md --as=json
 
 # 0005's enumeration: every row the guards do not exclude, match ignored.
@@ -177,8 +177,8 @@ The caller's question is "what can I do from here", and every peer that answers 
 
 Premortem (paragraph): this shipped, and a skill driving a model whose rows match on an owned key its reader does not serve (a typo'd `keys` list) saw every row listed as a candidate with the key under `unresolved` — the same wall-of-candidates symptom as before, now with a hint. A second failure: a caller who scripted against 0005's list found candidates missing and no flag in the error, because there is no error — the list is just shorter. Both are answered by the design rather than forcing a switch: the first is the intended three-valued behaviour and the `unresolved` key is the diagnostic (the alternative, silently dropping the row, is the worse failure); the second is the override's cost, mitigated by C3's help text, the test-file header, and `--all`. Neither shows a case the chosen predicate cannot answer.
 Premortem: survived (paragraph)
-Ground-sweep: clean (24 anchors) — 23 confirmed, 1 cosmetic correction folded (`models/rdr.toml` has 22 `[[rule]]` tables; the observed 21 reported is the seed's count, now stated as 21 of 22). Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/grounding-sweep/sweep.md`.
-Joint-check: fired → 0010 (home: cli/0011:C1; disposition 2026-08-26: cite-don't-restate — C1 is the sole normative home, 0010 cites it and restates nothing). Open peers at depth 1 with Status Draft/Final: cli/0010 only (0001–0009 are `Implemented`). Shared modify-anchor: `internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both RDRs). Shared contract literals: `no_match` (0010: the escape class of its "otherwise" row, `0010:A9`; here: the excluding kernel refusal in C1) and `flow next`. The coupling behind the tokens is real: `0010:A11` and 0010's MVV step 5 assert that `flow next` over a decision table with no `--tag` lists every rule with empty `required`, which holds only under C1's absent-key rule (A5) and fails under Alternative 1; 0010 defers that predicate to this RDR (`0010:C4`), so the decision is homed in C1 by citation. Dispositions for the user: cite-don't-restate (`0010:A11` keeps citing cli/0011:C1; nothing added to 0010) or declare in both (0010 gains a class clause on `flow next` over the decision-table class). Absence arm: this RDR narrows a reported set rather than converting a refusal into an acceptance; no `Final` peer exists, and the `Implemented` predecessor 0005's reliance on the enumeration is named under `Overrides` and rides to 7.1. Bridge sub-check: n/a — neither plan retires a surface the other introduces (0010 stays out of `flow_next.go`; this RDR stays out of `resolvePayload`, `normalizeRule`, `reach`, `checkGroups`).
+Ground-sweep: clean (24 anchors). Ledger: `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/grounding-sweep/sweep.md`.
+Joint-check: fired → 0010; disposition 2026-08-26: cite-don't-restate — C1 is the sole normative home of the `flow next` predicate; `0010:A11` cites it and 0010 restates nothing. Open peers at depth 1 with Status Draft/Final: cli/0010 only (0001–0009 are `Implemented`). Shared modify-anchor: `internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both). Shared literals: `no_match` (0010: its "otherwise" row's escape class, `0010:A9`; here: the excluding kernel refusal in C1) and `flow next` — the coupling is real (A5). Absence arm: this RDR narrows a reported set rather than converting a refusal into an acceptance; no `Final` peer exists, and the `Implemented` predecessor 0005's reliance on the enumeration is named under `Overrides` and rides to 7.1. Bridge sub-check: n/a — neither plan retires a surface the other introduces (0010 stays out of `flow_next.go`; this RDR stays out of `resolvePayload`, `normalizeRule`, `reach`, `checkGroups`).
 
 ## Alternatives Considered
 
@@ -236,7 +236,7 @@ Joint-check: fired → 0010 (home: cli/0011:C1; disposition 2026-08-26: cite-don
 
 ### Background
 
-Observed 2026-08-26 while driving the consumer model (rdr#tmxk): `flow next --model models/rdr.toml --artifact rdr=<state with stage=resolved>` lists all 21 rules. The cause is by design in RDR 0005: `internal/cli/flow_next.go::excluded` nils `probe.Match` / `probe.Escape` before probing, under the comment "dropping a row whose match pattern the supplied facts do not satisfy would be a selection this verb was not asked to make" — the sentence this RDR revisits. 0005 rationale `0005:A3` holds that `next` exposes the alphabet without owning guard evaluation; selection (gate-then-count, exact-one survivor) belongs to the kernel. 0005's Briefly Rejected list also refused exit-code-only output because it "cannot carry legal outcome alphabets, conditional summaries" — the conditional summary is the surface this RDR sharpens. Constraints: RDRs are never amended in content (this is a new RDR that overrides 0005's clause); intrastate stays generic — no consumer (RDR-process) knowledge in code, docs, or fixtures; `make check` must pass. Not a facet of kata `zdat` / cli/0010 (owned-state optionality is a model-class decision; this is a verb-predicate decision) — cross-cite only; 0010 leaves `flow next` to this RDR (`0010:C4`, `0010:A11`).
+Observed 2026-08-26 while driving the consumer model (rdr#tmxk): `flow next --model models/rdr.toml --artifact rdr=<state with stage=resolved>` lists 21 of the 22 rules. The cause is by design in RDR 0005: `internal/cli/flow_next.go::excluded` nils `probe.Match` / `probe.Escape` before probing, under the comment "dropping a row whose match pattern the supplied facts do not satisfy would be a selection this verb was not asked to make" — the sentence this RDR revisits. 0005 rationale `0005:A3` holds that `next` exposes the alphabet without owning guard evaluation; selection (gate-then-count, exact-one survivor) belongs to the kernel. 0005's Briefly Rejected list also refused exit-code-only output because it "cannot carry legal outcome alphabets, conditional summaries" — the conditional summary is the surface this RDR sharpens. Constraints: RDRs are never amended in content (this is a new RDR that overrides 0005's clause); intrastate stays generic — no consumer (RDR-process) knowledge in code, docs, or fixtures; `make check` must pass. Not a facet of kata `zdat` / cli/0010 (owned-state optionality is a model-class decision; this is a verb-predicate decision) — cross-cite only; 0010 leaves `flow next` to this RDR (`0010:C4`, `0010:A11`).
 
 ### Technical Environment
 
@@ -246,7 +246,7 @@ Go CLI (`bin/intrastate`); `internal/cli/flow_next.go` (`excluded`, `summarize`,
 
 ### Investigation
 
-Prior art was read first, class and instance. Class (StateMachineRes corpus, three queries, ledger in `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/prior-art.md`): the "what next" operator exists in every peer that has a current state, and is conditioned on it. Instance: qmuntal-stateless's README "Introspection" — "a list of the triggers that can be successfully fired within the current state via the `StateMachine.PermittedTriggers` property" — implemented in `states.go::stateRepresentation.PermittedTriggers` as triggers with `len(tb.UnmetGuardConditions(...)) == 0` ⇒ state- and guard-conditioned, the conditioned form is the only form. pytransitions `transitions/core.py::Machine.get_triggers` returns triggers declared from the given states without evaluating conditions, while `Machine._can_trigger` (the `may_*` family) evaluates them ⇒ the declared-shape enumeration exists but as a distinct operator, which is what `--all` is here. xstate's `packages/core/CHANGELOG.md` records "Removed `MachineSnapshot['nextEvents']`" and `packages/core/src/State.ts::machineSnapshotCan` keeps the guard-evaluated `can(event)` ⇒ when forced to keep one, the peer kept the conditioned query. scxmlcc `doc/user-manual.md` (`cond`): "The transition is only executed if the condition evaluates to true" ⇒ enablement is event- and condition-conditioned. ⚠ no prior-art coverage for a peer that distinguishes an *absent* state key from a mismatching one at the match seam — every peer assumes a current state is always present — so the three-valued absent-key rule in C1 rests on this codebase's own posture (`excluded`, `0007:C8`) and is verified by A2/A3/A5, not by prior art. Code paths: `internal/cli/flow_next.go::excluded` (the probe; `probe.Match = nil`), `::summarize` (presence walk over `Row.Atoms`), `internal/table/model.go::Row.KernelRow` (block routing), `internal/resolve/resolve.go::Resolve` / `::gate` / `::TagSet.matches` (the kernel's two verdicts and its absence rule).
+Prior art was read first, class and instance. Class (StateMachineRes corpus, three queries, ledger in `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/research/prior-art.md`): the "what next" operator exists in every peer that has a current state, and is conditioned on it. Instance: qmuntal-stateless's README "Introspection" — "a list of the triggers that can be successfully fired within the current state via the `StateMachine.PermittedTriggers` property" — implemented in `states.go::stateRepresentation.PermittedTriggers` as triggers with `len(tb.UnmetGuardConditions(...)) == 0` ⇒ state- and guard-conditioned, the conditioned form is the only form. pytransitions `transitions/core.py::Machine.get_triggers` returns triggers declared from the given states without evaluating conditions, while `Machine._can_trigger` (the `may_*` family) evaluates them ⇒ the declared-shape enumeration exists but as a distinct operator, which is what `--all` is here. xstate's `packages/core/CHANGELOG.md` records "Removed `MachineSnapshot['nextEvents']`" and `packages/core/src/State.ts::machineSnapshotCan` keeps the guard-evaluated `can(event)` ⇒ when forced to keep one, the peer kept the conditioned query. scxmlcc `doc/user-manual.md` (`cond`): "The transition is only executed if the condition evaluates to true" ⇒ enablement is event- and condition-conditioned. ⚠ no prior-art coverage for a peer that distinguishes an *absent* state key from a mismatching one at the match seam — every peer assumes a current state is always present — so the three-valued absent-key rule in C1 rests on this codebase's own posture (`excluded`, `0007:C8`) and is verified by A2/A3/A5, not by prior art.
 
 ### Key Discoveries
 
@@ -255,7 +255,7 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 - **Documented** — `internal/cli/flow_next.go::summarize` walks every `Row.Atoms` entry, match-block atoms included, against the view. ⇒ an absent match key is already an `unresolved` entry (A2).
 - **Documented** — 0005 Decision Rationale premortem: "`next` omits enough condition detail to constrain a skill". ⇒ 0005 foresaw this failure and answered it with candidate *summaries*; the summaries were not enough because the *set* was unconditioned.
 - **Documented** — `0010:C4`: "`flow next`, `flow read-state`, and `flow set-state` are unchanged by this RDR"; `0010:A11` defers the decision-table `next` behaviour to this RDR's predicate. ⇒ the absent-key rule must serve a no-tag decision table (A5).
-- **Documented** — prior art (Investigation): stateless conditioned-only; pytransitions two operators; xstate retired the unconditioned one. ⇒ conditioned is the default, enumeration is the secondary surface.
+- **Documented** — prior art (Investigation). ⇒ conditioned is the default, enumeration is the secondary surface.
 - **Assumed** — every 0005 `next` oracle seeds the owned key its named rows match on (A4).
 
 ## Trade-offs
@@ -272,7 +272,7 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 - **Risk**: an absent match key makes the list look like the old wall of candidates.
   **Mitigation**: the key is named under `unresolved` on every such candidate (C1); the fix is on the caller's side (bind the reader / supply the tag) and is visible.
 - **Risk**: a 0005 oracle silently passes for the wrong reason after the default flips.
-  **Mitigation**: A4's run plus C3's explicit re-homing rule; Resolve's Testing Strategy adds a default-vs-`--all` pair on the MVV fixture.
+  **Mitigation**: A4's run plus C3's explicit re-homing rule; Testing Strategy S2 pairs default and `--all` on the MVV fixture.
 
 ### Failure Modes
 
@@ -286,7 +286,6 @@ Prior art was read first, class and instance. Class (StateMachineRes corpus, thr
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified (A2/A3 first — they fix the probe shape; A4 decides the test moves)
-- [ ] Joint-check disposition with cli/0010 recorded (Decision Rationale)
 
 ### Minimum Viable Validation
 
@@ -316,13 +315,16 @@ Intent: re-home the 0005 `next` assertions that relied on match-excluded rows un
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+1. **Scenario**: S1 — `models/rdr.toml` at owned `stage=resolved`, default mode (MVV 2–3).
+   **Expected**: `candidates[]` is exactly the rules whose `match.stage` admits `resolved`; `outcomes[]` is the full alphabet.
+2. **Scenario**: S2 — `flowMVVModel` (`status=draft`) with and without `--all` (MVV 4–5).
+   **Expected**: `gated-excluded` absent in both; a row whose `match.status` names another value absent by default, present under `--all`; payload shape identical; `--all` rejected by `resolve` / `read-state` / `set-state`.
+3. **Scenario**: S3 — no reader, no `--tag`, rows matching on an observed key (MVV 6).
+   **Expected**: every ordinary row a candidate with the key under `unresolved`; `--tag key=<v>` narrows to rows whose match holds; a present-key match failure excludes the row and its gates do not run under `--evaluate-gates`.
+4. **Scenario**: S4 — the 0005 `next` suite after the default flips (A4, C3).
+   **Expected**: alphabet, gate-handling, reader-narrowing, determinism, and non-mutation oracles pass unchanged; match-dependent assertions re-homed under `--all`, none deleted; file header names this RDR.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+Done: S1–S4 green and `make check` passes.
 
 ## Finalization Gate
 
