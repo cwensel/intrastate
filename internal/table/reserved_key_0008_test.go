@@ -59,6 +59,20 @@ func TestReq11_OwnedDeclarationNamedRecognizedFailsReservedTagKey(t *testing.T) 
 	}
 }
 
+// REQ-11: `0008:C2` "A tag declaration with provenance `owned` or `observed`
+// MUST NOT be named `recognized`."
+// DOMAIN EDGE (regression pin — landed in RDR 0002)
+//
+// The observed half of REQ-11's "owned or observed". The loader's guard tests
+// provenance for INEQUALITY against `recognized`, so owned and observed are
+// treated identically today; nothing but this fixture stops a later narrowing
+// to `== ProvenanceOwned` from passing the whole suite.
+func TestReq11_ObservedDeclarationNamedRecognizedFailsReservedTagKey(t *testing.T) {
+	if got := loadCategory(t, "neg/neg-recognized-observed.toml"); got != table.CatReservedTagKey {
+		t.Errorf("category = %q; want %q", got, table.CatReservedTagKey)
+	}
+}
+
 // REQ-12: `0008:C2` "because `[tags.<tag>]` is keyed by tag name, one model
 // admits at most one declaration named `recognized`, so at most one
 // recognized-provenance declaration survives validation — cardinality is a
@@ -348,6 +362,12 @@ func TestReq26And29And30And92And101_BothDirectionsCarryTheThreeFieldPayload(t *t
 		},
 		"owned declaration named recognized": {
 			fixture:   "neg/neg-recognized-owned.toml",
+			offending: reservedKey,
+			remedy:    "",
+			rule:      ruleAuthorMustRename,
+		},
+		"observed declaration named recognized": {
+			fixture:   "neg/neg-recognized-observed.toml",
 			offending: reservedKey,
 			remedy:    "",
 			rule:      ruleAuthorMustRename,
@@ -729,8 +749,9 @@ func TestReq73And75_NormalizerHalfCleanLoadPlusBothFailuresWithPayload(t *testin
 		remedy  string
 		rule    string
 	}{
-		"declaration renamed":        {"neg/neg-recognized-misnamed.toml", reservedKey, ruleKernelOwned},
-		"owned tag named recognized": {"neg/neg-recognized-owned.toml", "", ruleAuthorMustRename},
+		"declaration renamed":           {"neg/neg-recognized-misnamed.toml", reservedKey, ruleKernelOwned},
+		"owned tag named recognized":    {"neg/neg-recognized-owned.toml", "", ruleAuthorMustRename},
+		"observed tag named recognized": {"neg/neg-recognized-observed.toml", "", ruleAuthorMustRename},
 	}
 	for name, d := range directions {
 		t.Run(name, func(t *testing.T) {
