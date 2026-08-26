@@ -68,3 +68,29 @@ rejected spellings recorded in the RDR). Model prior.
   grep'd names; not opened further (budget).
 - xstate `nextEvents` semantics in v4 — the removal note suffices for the
   disposition; v4 source not opened.
+
+## Re-propose (iter-3, 2026-08-26) — after the second critique route-back
+
+No corpus query spent: the two re-decided clauses (the probe filter's licence
+under a key carrying several match tags; the demand-set term's scope across
+`flow next` / `flow resolve`) rest on in-repo authorities, opened and quoted:
+
+- `0002:C13` (via `rdr inspect --select 0002:C13 0002`): "A product row whose
+  expanded atoms cannot be satisfied together (two `eq` on one key, different
+  literals) is a dead row for RDR 0006, not a load failure." ⇒ the multi-tag
+  key is a sanctioned shape; the dead row is lint's, not `flow next`'s.
+- `internal/table/normalize.go::atomsFromBlock` — operator loop nested inside
+  the key loop; `atom` admits `eq` and `in` together under a match block.
+- 0005 DEV-8 (`docs/rdr/0005-skill-integration-cli-contract/artifacts/deviations.md`):
+  "a `match` atom on an owned key a row does not write would demand a reader by
+  the same argument, and would produce `flow-no-match` rather than
+  `flow-guard-unevaluable` … It is a genuine RDR-SEED candidate." ⇒ the
+  uniform (both-caller) widening has an in-repo precedent and a named seed.
+- `0005:C1` narrowing clause: "The invoked read-accessor set MUST be exactly
+  those readers serving an owned key some candidate row of the requested model
+  requires — not every declared reader."
+
+Rejected branch: a peer-CLI search for "dead rule" / unsatisfiable-rule
+handling in decision-table tools was not run — the disposition is fixed by
+`0002:C13`'s own assignment, and a peer's choice could not override a locked
+predecessor.
