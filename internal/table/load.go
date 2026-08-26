@@ -156,14 +156,32 @@ func (l *loader) loadTags() error {
 
 	// A `recognized` declaration MUST be named `recognized`, and no owned
 	// or observed declaration may take that name (`0002:C12`).
+	//
+	// RDR 0008 `0008:C3` — each violation carries the three-field payload:
+	// the offending name as authored, the direction's remedy name, and the
+	// direction's stable rule identifier.
 	for key, decl := range decls {
 		if decl.Provenance == ProvenanceRecognized && key != RecognizedTagKey {
-			return fail(CatReservedTagKey,
-				"tag "+key+" declares provenance recognized under another name")
+			// Rename TO the reserved key: the remedy names it.
+			return &Failure{
+				Category:  CatReservedTagKey,
+				Detail:    "tag " + key + " declares provenance recognized under another name",
+				Offending: key,
+				Remedy:    RecognizedTagKey,
+				Rule:      RuleKernelOwned,
+			}
 		}
 		if key == RecognizedTagKey && decl.Provenance != ProvenanceRecognized {
-			return fail(CatReservedTagKey,
-				"tag "+RecognizedTagKey+" is reserved for the recognized declaration")
+			// Rename AWAY FROM the reserved key: the remedy is the empty
+			// string, because "choose any other name" has no one answer and a
+			// renderer must not present the reserved key as the required one.
+			return &Failure{
+				Category:  CatReservedTagKey,
+				Detail:    "tag " + RecognizedTagKey + " is reserved for the recognized declaration",
+				Offending: key,
+				Remedy:    "",
+				Rule:      RuleAuthorMustRename,
+			}
 		}
 	}
 	if _, ok := decls[RecognizedTagKey]; !ok {
