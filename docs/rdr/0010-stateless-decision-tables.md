@@ -544,14 +544,17 @@ quotes, 4 external prior-art quotes; two cosmetic corrections folded (the
 `[dump]` fixture count in A4; the refusal categories for a declared
 non-owned `[initial]` key in C2). Ledger:
 `docs/rdr/0010-stateless-decision-tables/evidence/grounding-sweep/sweep.md`.
-Joint-check: clear (1 peer). Open peers at depth 1 with Status Draft/Final:
-cli/0011 only (0001–0009 are `Implemented`); 0011 shares none of this RDR's
-modify-anchors (`invokedReaders`, `runReaders`, `resolvePayload`,
-`normalizeRule`, `checkDanglingEdge`, `reach`, `checkGroups`, `dumpColumns`)
-nor its contract literals (`class`, `decision-table`, `state-machine`,
-`emit`, `malformed model declaration`, `graph-dangling-edge`,
-`flow-artifact-missing`), and this RDR deliberately leaves `flow next` to
-it. Absence arm: the refusals this RDR converts to acceptances — the
+Joint-check: fired → 0011 (home: cli/0011:C1). Open peers at depth 1 with
+Status Draft/Final: cli/0011 only (0001–0009 are `Implemented`). Recorded
+`clear` while 0011 was unwritten; re-run against 0011's written proposal
+(2026-08-26) it fires: shared modify-anchor
+`internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both),
+shared contract literal `no_match`, and the real coupling — A11 and MVV
+step 5 assert `flow next` over a no-tag decision table lists every rule,
+which holds only under cli/0011:C1's absent-match-key rule. This RDR
+leaves `flow next` to 0011 (C4); disposition pending the user:
+cite-don't-restate (A11 keeps citing cli/0011:C1) or declare a class
+clause here too. Absence arm: the refusals this RDR converts to acceptances — the
 no-write-block `malformed rule shape` arm and the missing-root
 `graph-dangling-edge` — are relied on by the `Implemented` predecessors
 0002 (C4) and 0006 (C18, S15), which are named under `Overrides` and
