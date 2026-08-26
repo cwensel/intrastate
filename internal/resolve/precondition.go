@@ -1,12 +1,8 @@
 package resolve
 
+import "errors"
+
 // RDR 0008 `0008:C4` / `0008:C5` — the reserved-key producer precondition.
-//
-// PHASE 1 DECLARATION ONLY. The predicate below is UNIMPLEMENTED: it accepts
-// every Input. The conformance suite in reserved_key_0008_test.go is red
-// against it by design, and Phase 2 fills in the scan. The declaration lands
-// separately so the repository's pre-commit gate (`go vet ./...`) stays green
-// while the tests that drive the implementation are already in place.
 
 // CheckInput reports whether in breaches RDR 0008's reserved-key producer
 // obligation, returning a non-nil error on the first breach it finds.
@@ -25,10 +21,37 @@ package resolve
 // Resolve applies this same predicate at entry, so the reserved name has
 // exactly one enforcement point across every channel it can arrive through.
 func CheckInput(in Input) error {
-	// TODO(rdr-0008 Phase 2): scan Owned, Observed, and Table.Rows'
-	// RequiresOwned for recognizedTagKey; return the first breach as a single
-	// non-nil error. Unimplemented: every conformance assertion over this
-	// function currently fails.
-	_ = in
+	for _, tag := range in.Owned {
+		if tag.Key == recognizedTagKey {
+			return errReservedOwnedTag
+		}
+	}
+	for _, tag := range in.Observed {
+		if tag.Key == recognizedTagKey {
+			return errReservedObservedTag
+		}
+	}
+	for _, row := range in.Table.Rows {
+		for _, key := range row.RequiresOwned {
+			if key == recognizedTagKey {
+				return errReservedRequiresOwned
+			}
+		}
+	}
 	return nil
 }
+
+// The three breach channels, one sentinel each. They are plain errors: a
+// producer breach is a programmer mistake, not table data, so it carries no
+// load category and spells no RefusalKind (`0008:C4`, REQ-37/REQ-49).
+var (
+	errReservedOwnedTag = errors.New(
+		"resolve: owned tag on the reserved key " + recognizedTagKey +
+			"; the recognized outcome enters only through Input.Recognized")
+	errReservedObservedTag = errors.New(
+		"resolve: observed tag on the reserved key " + recognizedTagKey +
+			"; the recognized outcome enters only through Input.Recognized")
+	errReservedRequiresOwned = errors.New(
+		"resolve: row RequiresOwned names the reserved key " + recognizedTagKey +
+			"; the key is kernel-supplied and never owned state")
+)

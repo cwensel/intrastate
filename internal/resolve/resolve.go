@@ -410,6 +410,14 @@ func (r Result) Refused() bool { return r.Refusal != nil }
 // escape candidates, so an escape edge can never reach a plan on terms an
 // ordinary edge would be refused on (REQ-5, REQ-15, REQ-23).
 func Resolve(in Input) (Result, error) {
+	// RDR 0008 `0008:C4` — the reserved-key producer precondition, applied at
+	// entry. One definition, two call sites: this is the same CheckInput a
+	// producer may call at construction time, never a second independent
+	// check. A breach yields a non-nil error and no Result disposition.
+	if err := CheckInput(in); err != nil {
+		return Result{}, err
+	}
+
 	view := assemble(in)
 
 	if !in.Table.models(in.Recognized) {
