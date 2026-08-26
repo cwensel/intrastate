@@ -323,6 +323,12 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 // Every OWNED tag MUST be served by exactly one reader; an OBSERVED tag MAY
 // be served by at most one, and zero is legal because an observed key may
 // arrive from the caller (JDR 0001 §JD-9).
+//
+// The writer arity is scoped by USE rather than by provenance: a key some
+// rule writes or clears, or `[initial]` assigns, owes exactly one writer,
+// while an owned key nothing writes owes at most one. Both walks cover every
+// declared tag — a two-writer key outside `written` is malformed even though
+// nothing in the model writes it.
 func (l *loader) checkAccessorBindings() error {
 	readerCount := map[string]int{}
 	for _, r := range l.model.Readers {
@@ -365,11 +371,44 @@ func (l *loader) checkAccessorBindings() error {
 	for _, t := range l.model.Initial {
 		written[t.Key] = true
 	}
-	for _, key := range slices.Sorted(maps.Keys(written)) {
-		if writerCount[key] != 1 {
-			return fail(CatMalformedAccessorBinding,
-				fmt.Sprintf("written tag %s is served by %d writers; want exactly one",
-					key, writerCount[key]))
+	// The walk is over every DECLARED tag, the way the reader guard above
+	// walks them, rather than over `written` alone. A key can be owned,
+	// served by two writers, and named by no rule write, no clear list, and
+	// no `[initial]` — outside `written` entirely — and such a model used to
+	// load clean, leaving the CLI to route the mutation to whichever writer
+	// sorted first (kata 8dg3).
+	//
+	// The arity itself stays provenance- and use-scoped:
+	//
+	//   - a key in `written` owes EXACTLY one writer, because something in
+	//     the model actually writes it;
+	//   - an owned key nothing writes owes AT MOST one, because zero is
+	//     legal — the RDR 0005 MVV fixture's `note` is owned, read by one
+	//     reader, and served by no writer, and `internal/cli::writerFor`
+	//     names that case as the reason it checks writer keys rather than
+	//     ownership. Tightening zero into a refusal would make such a key
+	//     unauthorable.
+	keys := map[string]bool{}
+	for key := range l.model.Tags {
+		keys[key] = true
+	}
+	for key := range written {
+		keys[key] = true
+	}
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		switch {
+		case written[key]:
+			if writerCount[key] != 1 {
+				return fail(CatMalformedAccessorBinding,
+					fmt.Sprintf("written tag %s is served by %d writers; want exactly one",
+						key, writerCount[key]))
+			}
+		case l.model.Tags[key].Provenance == ProvenanceOwned:
+			if writerCount[key] > 1 {
+				return fail(CatMalformedAccessorBinding,
+					fmt.Sprintf("owned tag %s is served by %d writers; want at most one",
+						key, writerCount[key]))
+			}
 		}
 	}
 	return nil
