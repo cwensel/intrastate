@@ -6,12 +6,7 @@
 ## Metadata
 
 - **Date**: 2026-08-09
-- **Status**: Final [joint decision → JDR 0001 §JD-5: precondition precedence]
-  [§JD-8 answered 2026-08-24 by §D10 — the code table, the exit-3 rule, and the
-  `omitempty` `findings` list carry the row identities; `GroupInternal` already
-  ships. Citations owed at Stage 8, see `artifacts/deviations.md`.] [§JD-15
-  answered 2026-08-24 by §D5, checked consistent at the 0002-0009 iteration-3
-  gate — 0009 unchanged]
+- **Status**: Implemented
   <!--
   - `Demoted` is the terminal status for an RDR judged
     *not RDR-shaped* — the decision was never a real

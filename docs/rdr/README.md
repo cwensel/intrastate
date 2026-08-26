@@ -17,7 +17,7 @@ engine README — this file is only the per-project index.
 | 0006 | Graph lint authority and guarantees | Implemented | High |
 | [0007](0007-guard-predicate-totality.md) | Guard predicate totality over an incomplete evaluation view | Implemented | Medium |
 | [0008](0008-recognized-tag-key-ownership.md) | Ownership of the recognized-outcome tag key name | Implemented | Medium |
-| [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Final [joint decision → JDR 0001 §JD-5] | Medium |
+| [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Implemented | Medium |
 
 ## Implementing
 
