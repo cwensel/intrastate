@@ -400,6 +400,15 @@ func TestAdv0008_LintSurfacesTheNearMissAdvisory(t *testing.T) {
 	for _, f := range raw {
 		rule, _ := f["rule"].(string)
 		if rule == table.AdvisoryNearMiss {
+			code, _ := f["code"].(string)
+			if code != table.AdvisoryNearMiss {
+				t.Errorf("near-miss finding code = %q; want advisory identifier %q",
+					code, table.AdvisoryNearMiss)
+			}
+			if code == string(table.CatReservedTagKey) {
+				t.Errorf("near-miss finding carries validation-failure category %q",
+					code)
+			}
 			return // the advisory reached the user
 		}
 	}

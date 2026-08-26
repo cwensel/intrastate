@@ -140,14 +140,13 @@ func runLint(cmd *cobra.Command, _ []string) error {
 // the near-miss rides it beside graph-lint's own advisory tier — same record,
 // info severity, no new field and no new envelope.
 //
-// The `code` stays the reserved-key category slug so a consumer branches on
-// the same discriminator it would on the failure side; `rule` separates the
-// advisory from a refusal.
+// The advisory identifier is also its finding code; legal near-misses must
+// not share the reserved-key validation-failure category.
 func nearMissFindings(advisories []table.Advisory) []clierr.Finding {
 	out := make([]clierr.Finding, 0, len(advisories))
 	for _, a := range advisories {
 		out = append(out, clierr.Finding{
-			Code: string(table.CatReservedTagKey),
+			Code: a.Rule,
 			Message: "the tag key `" + a.Authored + "` nearly matches the " +
 				"reserved key `" + a.Reserved + "`",
 			Severity: graphlint.SeverityInfo,
