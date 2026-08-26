@@ -27,6 +27,8 @@ package cli
 //     denies.
 
 import (
+	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/newcoinc/intrastate/internal/cli/respond"
 	"github.com/spf13/cobra"
 )
 
@@ -51,9 +53,28 @@ Artifact locations are never discovered: every one arrives as an explicit
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
 		// A bare `flow` with no verb is a usage error, not a silent
-		// success: the group carries no behaviour of its own.
+		// success: the group carries no behaviour of its own. It routes
+		// through the SAME gateway and the SAME group-level usage code
+		// (`command-error`, GroupUserEnv / exit 2) that root.go already
+		// gives the sibling case `flow <unknown-verb>` — so both usage
+		// errors under this group are one disposition, and neither
+		// leaves stdout carrying help text where `--as=json` reserves it
+		// for the single terminal record (REQ-113).
+		//
+		// ValidateMode runs FIRST, matching REQ-5's ordering on the four
+		// verbs: a caller who cannot name the output mode cannot read
+		// the usage refusal either.
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmd.Help()
+			if ce := respond.ValidateMode(cmd); ce != nil {
+				return respond.Fail(cmd, ce)
+			}
+			return respond.Fail(cmd, &clierr.CLIError{
+				Code: "command-error",
+				Message: "`flow` requires a verb: next, resolve, " +
+					"read-state, set-state",
+				Group: clierr.GroupUserEnv,
+				Hint:  "run `intrastate flow --help` to list the verbs",
+			})
 		},
 	}
 
