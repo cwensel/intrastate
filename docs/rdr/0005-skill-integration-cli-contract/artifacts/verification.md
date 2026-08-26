@@ -446,10 +446,23 @@ Recorded so a later pass does not re-run them:
 - **Two `[write.<id>]` entries serving one key** (REQ-61's "served by
   exactly one", REQ-86/REQ-87). `internal/cli::writerFor` checks only that
   SOME writer names the key, and `groupByWriter` would silently pick the
-  alphabetically-first — but RDR 0002's loader refuses the model first
-  (`malformed_accessor_binding`: "written tag X is served by 2 writers;
-  want exactly one"), and likewise for two readers over one owned key. The
-  CLI's incomplete check is unreachable.
+  alphabetically-first.
+
+  **CORRECTION (scope review, 2026-08-26 — this entry was WRONG).** The
+  original claim was that RDR 0002's loader refuses such a model first,
+  making the CLI's incomplete check unreachable. It does not, in general.
+  The loader's writer guard (`internal/table::checkAccessorBindings`,
+  `load.go:352-370`) counts writers only over `written` =
+  `row.RequiresOwned` ∪ `model.Initial` — note its own message says
+  "**written** tag X is served by 2 writers", which names that narrowed
+  set. An owned key declared in `[tags]`, served by two writers, and named
+  by NO rule write/clear and NO `[initial]` is never counted, so the model
+  loads clean and the CLI's first-match `writerFor` silently routes the
+  write to the lexicographically-first writer. Verified empirically by
+  loading such a fixture, not by re-reading the guard. The reader guard
+  iterates all of `model.Tags` and does NOT have this hole, which is what
+  made the original symmetry argument look sound. Tracked as kata `8dg3`,
+  whose fix closes both layers.
 - **Canonical set literal round trip** (REQ-70/71/107/108). An unsorted,
   duplicated caller spelling `["x&y","a<b","a<b"]` is re-canonicalised to
   `["a<b","x&y"]` and survives `set-state` → `read-state` byte-identically
