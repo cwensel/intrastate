@@ -21,7 +21,6 @@ package table_test
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/table"
@@ -95,12 +94,11 @@ status = "b"
 // model breaching BOTH naming directions reports the same rule identifier
 // and the same remedy on every load of the identical bytes.
 //
-// FAILURE MODE: `internal/table/load.go:165` iterates `decls`, a Go
-// `map[string]TagDecl`, and returns on the first match. Go randomizes map
-// iteration order per range, so which of the two branches fires is decided
-// by the runtime hash seed. The category is stable — both branches carry
-// `reserved_tag_key` — but the THREE FIELDS `0008:C3` adds are not: one
-// run yields
+// FAILURE MODE: a scan that iterates `decls`, a Go `map[string]TagDecl`,
+// and returns on the first match leaves the payload to the runtime hash
+// seed, because Go randomizes map iteration order per range. The category
+// is stable — both branches carry `reserved_tag_key` — but the THREE
+// FIELDS `0008:C3` adds are not: one run yields
 //
 //	Offending "outcome",    Remedy "recognized", Rule reserved-tag-key/kernel-owned
 //
@@ -111,60 +109,55 @@ status = "b"
 // REQ-27's byte-for-byte golden assertion and REQ-33's "remediation
 // lookup" are both undefined against a payload that flips. REQ-82's
 // license covers two same-direction declarations, not two contradictory
-// remedies. Sorting the declaration keys before the scan fixes it.
+// remedies. Sorting the declaration keys before the scan fixes it, which
+// is why this test asserts the sorted-first payload exactly rather than
+// sampling repeated loads: repeated map ranges are not guaranteed to
+// expose every order, so a histogram could pass against the broken scan.
 func TestAdv0008_DoublyBreachingModelReportsOneStableDirection(t *testing.T) {
-	const runs = 200
-
-	type payload struct{ offending, remedy, rule string }
-	seen := map[payload]int{}
-
-	for range runs {
-		_, err := table.Load([]byte(advBothDirections), "adv-both.toml")
-		if err == nil {
-			t.Fatalf("the doubly-breaching model loaded clean; it breaches " +
-				"both directions of `0008:C2`")
-		}
-		cat, ok := table.CategoryOf(err)
-		if !ok || cat != table.CatReservedTagKey {
-			t.Fatalf("category = %q (ok=%v); want %q — REQ-31 puts both "+
-				"rule identifiers inside the one category",
-				cat, ok, table.CatReservedTagKey)
-		}
-		var f *table.Failure
-		if !errors.As(err, &f) {
-			t.Fatalf("refusal is not a *table.Failure: %v", err)
-		}
-		seen[payload{f.Offending, f.Remedy, f.Rule}]++
+	_, err := table.Load([]byte(advBothDirections), "adv-both.toml")
+	if err == nil {
+		t.Fatalf("the doubly-breaching model loaded clean; it breaches " +
+			"both directions of `0008:C2`")
+	}
+	cat, ok := table.CategoryOf(err)
+	if !ok || cat != table.CatReservedTagKey {
+		t.Fatalf("category = %q (ok=%v); want %q — REQ-31 puts both "+
+			"rule identifiers inside the one category",
+			cat, ok, table.CatReservedTagKey)
+	}
+	var f *table.Failure
+	if !errors.As(err, &f) {
+		t.Fatalf("refusal is not a *table.Failure: %v", err)
 	}
 
-	if len(seen) > 1 {
-		var lines []string
-		for p, n := range seen {
-			lines = append(lines, "offending="+p.offending+
-				" remedy="+p.remedy+" rule="+p.rule+
-				" hits="+itoaAdv(n))
-		}
-		t.Errorf("the SAME bytes yielded %d different reserved_tag_key "+
-			"payloads across %d loads; `0008:C3`'s rule identifier is a "+
-			"token \"for golden assertions and remediation lookup\" "+
-			"(REQ-27, REQ-33) and the two directions prescribe OPPOSITE "+
-			"edits — REQ-82 licenses an unspecified choice between two "+
-			"same-direction declarations, not a coin-flip between "+
-			"contradictory remedies. load.go:165 ranges a Go map.\n  %s",
-			len(seen), runs, strings.Join(lines, "\n  "))
+	// The scan runs over sorted declaration keys, so the doubly-breaching
+	// model reports the lexicographically first offender: `outcome` (which
+	// declares provenance `recognized` under another name) sorts before
+	// `recognized` (declared `owned`). That is an exact payload, not a
+	// sampled one — `0008:C3`'s rule identifier is a token "for golden
+	// assertions and remediation lookup" (REQ-27, REQ-33), and the two
+	// directions prescribe OPPOSITE edits, so a histogram over repeated
+	// loads is the wrong oracle: Go never promises a map range exposes every
+	// order, and a map-ranging implementation could pass it by luck.
+	// REQ-82 licenses an unspecified choice between two SAME-direction
+	// declarations; this fixture is cross-direction and is pinned exactly.
+	if f.Offending != "outcome" {
+		t.Errorf("Offending = %q; want %q — the sorted scan reports the "+
+			"lexicographically first breaching declaration, and `0008:C3` "+
+			"carries the offending name as authored (REQ-27, REQ-33)",
+			f.Offending, "outcome")
 	}
-}
-
-func itoaAdv(n int) string {
-	if n == 0 {
-		return "0"
+	if f.Remedy != "recognized" {
+		t.Errorf("Remedy = %q; want %q — the kernel-owned direction's "+
+			"remedy names the reserved key to rename TO; the opposite "+
+			"direction's remedy is the empty string, and REQ-33's "+
+			"remediation lookup is undefined if the two can swap "+
+			"(REQ-27, REQ-33, REQ-82)", f.Remedy, "recognized")
 	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
+	if f.Rule != table.RuleKernelOwned {
+		t.Errorf("Rule = %q; want %q — REQ-27 makes the rule identifier a "+
+			"comparable token a golden test asserts byte-for-byte, and "+
+			"REQ-82 licenses no coin-flip between contradictory remedies",
+			f.Rule, table.RuleKernelOwned)
 	}
-	return string(buf[i:])
 }
