@@ -48,7 +48,7 @@ The system-internal requirement is a single decision on the candidate predicate 
 - **A4 The 0005 `flow next` tests move rather than rewrite: every oracle that asserts on a named candidate seeds the owned key its rows match on (`status=draft` in `flowMVVModel` / `flowGatedNextModel`), and the alphabet, gate-handling, reader-narrowing, and non-mutation oracles do not depend on a match-excluded row being reported.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1 leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts, **against C1's candidate predicate**: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**. This classification is predicate-scoped and does NOT clear the suite for the build as a whole: the `unresolved` → `unknown` payload change is an independent edit that mechanically breaks 6 assertions in the same suite (C3 names them).
+  - **Evidence**: all 28 `flow next` oracles across `internal/cli/flow_next_0005_test.go`, `flow_mvv_0005_test.go`, `flow_adversarial_0005_test.go`, `flow_input_0005_test.go`, `flow_encoder_0005_test.go`, `flow_resolve_0005_test.go`, `flow_harness_0005_test.go`, and `reserved_key_0008_test.go` were enumerated and classified against C1's predicate. Every match atom in the `next` fixtures is `status eq "draft"` (`flowMVVModel`'s `advance-draft` / `hold-draft`; `flowGatedNextModel`; `flowGateDenyModel`; `advUnlessExcludedModel`; `advInExcludedModel`), and every seed supplies `status=draft`, so `status` is present in the view and holds in every case. Every exclusion the suite exercises is a **guard** exclusion (`all.flag eq false`, `unless.flag`, `all.tier in [mid,high]`), which C1 leaves untouched. Baseline green: `go test ./internal/cli -run 'Next|Req4[0-7]|Req3[5-9]|MVV|Adv1'` → ok. Counts, **against C1's candidate predicate**: PASSES-UNCHANGED 28, MOVES-UNDER-`--all` **0**, BREAKS **0**. This classification is predicate-scoped and does NOT clear the suite for the build as a whole: the `unresolved` → `unknown` payload change is an independent edit that mechanically breaks 5 assertions in the same suite (C3 names them, with line numbers).
   - **If wrong**: the 0005 suite splits into default / `--all` variants beyond the moves C3 names, and Testing Strategy must enumerate them.
 - **A5 Over 0010's decision-table class, `flow next` with no `--tag` reports every ordinary rule and exits 0, each rule's observed match keys appearing in the candidate's undecided list — with the exception of a row whose only match atom is `recognized`, whose list is empty by construction — so `0010:A11` and 0010's MVV step 5 hold under C1; and a partial `--tag` set narrows the list to the rows whose supplied keys hold, a supplied-but-mismatched key dropping its row.**
   - **Status**: Verified
@@ -242,23 +242,36 @@ Renaming the candidate's flat `unresolved` list to the `{key, reason}`
 `unknown` list is a payload change independent of the candidate predicate,
 and it breaks assertions the predicate leaves untouched. The build MUST
 mechanically re-home every shipped read of the `unresolved` key to `unknown`
-and its element type from string to `{key, reason}` — six TEST reads on
-this build: `internal/cli/flow_next_0005_test.go` (4, at the presence check
-and the gate-id assertions), `internal/cli/flow_adversarial_0005_test.go`
-(1), and `internal/cli/flow_mvv_0005_test.go` (1). The count is of test
-reads only; the production rename additionally touches the
+and its element type from string to `{key, reason}` — FIVE TEST reads on
+this build: `internal/cli/flow_next_0005_test.go` (3 — the presence check
+`:103`, the gate-id assertion `:163`, and the adversarial guard-fact
+assertion `:404`), `internal/cli/flow_adversarial_0005_test.go` (1, `:446`),
+and `internal/cli/flow_mvv_0005_test.go` (1, `:66`). A sixth occurrence of
+the literal, `flow_next_0005_test.go:166`, is the `%#v` argument of the
+`t.Fatalf` reporting `:163`'s failure — it re-homes with that read and is
+not a read of its own. The count is of test reads only; the production
+rename additionally touches the
 `candidate.Unresolved` field and its `json:"unresolved"` tag, the field's
-doc comment, the file header comment naming `unresolved`, and `summarize`'s
-`slices.Contains(c.Unresolved, …)` uses — none of which are assertions and
-none of which the six counts. These are mechanical re-homings, NOT the
-`--all` moves above, and MUST NOT be counted against or excused by A4's
+doc comment, the file header comment naming `unresolved`, `summarize`'s
+`Unresolved: []string{}` initializer, its three `c.Unresolved = append(…)`
+assignments and the `slices.Contains(c.Unresolved, …)` guards
+beside them, and — the one shipped USER-FACING string, not a comment — the
+cobra `Long` help at `internal/cli/flow_next.go:70-71` ("next ENUMERATES
+rather than selects … their ids are reported as unresolved facts"), which
+the help rewrite this contract's first paragraph mandates already reaches.
+None of these is an assertion and none of them the five counts. These are
+mechanical re-homings, NOT the `--all` moves above, and MUST NOT be counted
+against or excused by A4's
 predicate-scoped BREAKS-0 result. The gate-id reads re-home to the
 `not-evaluated` reason C1 names; a re-homing that has to invent a reason
-token is not mechanical and is a defect. Two of the six discard the
-comma-ok of a helper that returns `nil,false` on a non-string element and
-one of those is a NEGATIVE assertion that passes vacuously on the empty
-slice, so a re-homed read MUST assert the ok bool, and a green suite MUST
-NOT be cited as evidence that this contract was implemented.
+token is not mechanical and is a defect. THREE of the five discard the
+comma-ok of a helper (`flow_harness_0005_test.go::stringsAt`, which returns
+`nil,false` on a missing key, a non-array value, or a non-string element) —
+`flow_next_0005_test.go:404`, `flow_mvv_0005_test.go:66`, and
+`flow_adversarial_0005_test.go:446` — and the last of those is a NEGATIVE
+assertion (`if containsString(unresolved, "flag")`) that passes vacuously
+on the empty slice, so a re-homed read MUST assert the ok bool, and a green
+suite MUST NOT be cited as evidence that this contract was implemented.
 
 Because no shipped 0005 fixture contains a row whose match key is present
 and unequal, the 0005 suite cannot by itself distinguish this predicate
@@ -343,7 +356,7 @@ Fired by cue. Cues absent: round-trip / fidelity — this RDR defines no import/
 | 5. `flowMVVModel` ± `--all` | C3 (added discriminating row); C1 guard exclusions untouched | `gated-excluded` absent in both — guard-excluded |
 | 6. three match classes + the three pins | C1; `disposition` table above; C3 pins | the conflicted row is refused before a probe exists |
 | 7. `unknown` as `[]` | C2 (identical payload shape both modes) | one consumer struct parses either |
-| 8. `make check` + suites | C3 (6 mechanical re-homings, ok-bool asserted); S5 (kernel suite unchanged); S6 (anti-oracle) | `git diff --stat internal/resolve` empty |
+| 8. `make check` + suites | C3 (5 mechanical re-homings, ok-bool asserted); S5 (kernel suite unchanged); S6 (anti-oracle) | `git diff --stat internal/resolve` empty |
 
 No CONTRADICTION row: step 4's `finalize-pass` is guard-excluded in both modes, which is consistent — C1 leaves guard exclusions untouched and C2 changes only match's participation.
 
@@ -409,7 +422,7 @@ O3 wins on the two deciding rows and ties or leads on the rest. O4 loses on both
 
 Why `0007:REQ-78` stays deferred rather than closed: closing it means deciding what `flow resolve` does with an undecidable match, and the only non-escapable class the kernel has for "undecidable" is a resolution-level veto by locked contract. Taking that on is a `flow resolve` design decision — with a counter-example in SQL's statement-scope fold and a direct dependency on 0010's default-row rescue — that no caller has asked for and this RDR's user does not need. The cost is recorded honestly in Consequences: `next` and `resolve` disagree on an absent-key row, in the escapable direction.
 
-Premortem (hardened): one draft-free critic, briefed on the approach, its load-bearing claims, and the rejection reasons; ledger at `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/propose-premortem/critic.md`, 15 findings, verdict PASS with mitigations. All mitigations are folded into the live text — C1 (omitted-atom rows, presence defined once, view fixed per invocation), C2 (no match entry under `--all`), C3 (the three pins, the help wording, the rule-id set in MVV 3), A3, A11–A14. Two findings are deliberately not folded: a count/golden assertion breaking beyond C3's six reads (A4's enumeration found none; S6 states the checkable form), and an escape hatch for reopening Alternative 4 (its first two legs stand on `0007:C10` and `Resolve`'s control flow regardless of the carrier).
+Premortem (hardened): one draft-free critic, briefed on the approach, its load-bearing claims, and the rejection reasons; ledger at `docs/rdr/0011-flow-next-match-conditioned-candidates/evidence/propose-premortem/critic.md`, 15 findings, verdict PASS with mitigations. All mitigations are folded into the live text — C1 (omitted-atom rows, presence defined once, view fixed per invocation), C2 (no match entry under `--all`), C3 (the three pins, the help wording, the rule-id set in MVV 3), A3, A11–A14. Two findings are deliberately not folded: a count/golden assertion breaking beyond C3's five reads (A4's enumeration found none; S6 states the checkable form), and an escape hatch for reopening Alternative 4 (its first two legs stand on `0007:C10` and `Resolve`'s control flow regardless of the carrier).
 Premortem: survived (hardened)
 Ground-sweep: clean (58 anchors) — 28 `path::Symbol`, 18 source-quoted behaviours, 12 peer-RDR passages, all CONFIRMED by a draft-free checker on `main` (2026-08-26). Note carried forward: `0007:REQ-78` / `0007:REQ-79` are entries in RDR 0007's req-list artifact (`docs/rdr/0007-guard-predicate-totality/artifacts/req-list.md`), not projector-inspectable elements; the text cited is verbatim from that artifact.
 Joint-check: fired → 0010 (home: cli/0011:C1), checked 2026-08-26. Open peers at depth 1 with Status Draft/Final: cli/0010 only (0001–0009 are `Implemented`). Shared modify-anchor: `internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both). Shared literals: `no_match` (0010: its "otherwise" row's escape class, `0010:A9`; here: the excluding probe disposition in C1) and `flow next`; 0010's `unknown` hits are the phrase "unknown tag", not this RDR's payload field. Disposition — cite-don't-restate: C1 is the sole normative home of the `flow next` predicate, `0010:A11` cites it, and 0010's own `Joint-check:` line records the same fire and home, so symmetry holds without a peer edit. The coupling runs one way: this proposal leaves `internal/resolve` untouched, so `0010:A9`'s escape row keeps rescuing `no_match` on a partially-supplied decision table. Checked against 0010's actual row shapes: the "otherwise" row is an ESCAPE row (`0010:A9`), and `flow next` never lists escape rows (`runFlowNext` skips `len(row.Escape) != 0`), so the catch-all is never offered as a candidate; the ordinary rows carry observed match keys, each reported `absent` with no `--tag` (A5). Absence arm: this RDR narrows a reported set and converts no refusal into an acceptance; no `Final` peer exists, and the `Implemented` predecessor 0005's reliance on the enumeration is named under `Overrides` and rides to 7.1. Bridge sub-check: n/a — neither plan retires a surface the other introduces (0010 stays out of `flow_next.go`; this RDR stays out of `resolvePayload`, `normalizeRule`, `reach`, `checkGroups`, and out of `internal/resolve` entirely). Not paused: the fork is answered and its home is unchanged.
@@ -549,7 +562,7 @@ Prior art was read class and instance. Class (StateMachineRes corpus, three quer
 ### Prerequisites
 
 - [x] A1, A2, A4, A5, A6 verified. A6's prototype is the probe shape C1 fixes.
-- [ ] A3, A11, A12, A13, A14 verified — the reachability invariant, the presence agreement, the probe independence, the guard-payload read, and the `--all` negative.
+- [x] A3, A11, A12, A13, A14 verified — the reachability invariant, the presence agreement, the probe independence, the guard-payload read, and the `--all` negative.
 
 ### Minimum Viable Validation
 
@@ -560,7 +573,7 @@ Prior art was read class and instance. Class (StateMachineRes corpus, three quer
 5. Run over the 0005 MVV fixture (`flowMVVModel`, `status=draft`) with and without `--all`; assert the `gated-excluded` row is absent in both (guard-excluded), and that the row C3 adds — whose `match.status` names a value other than `draft` — is absent by default and present under `--all`.
 6. Run over a model exercising the three reachable match cases: present-and-equal (candidate, nothing in `unknown`), present-and-unequal (excluded; gates do not run under `--evaluate-gates`), absent (candidate, `{key, absent}`). Then add `--tag key=<value>` and assert the list narrows to the rows whose match holds. Assert the three pins: a model declaring one owned key served by two readers is refused at load; a repeated `--tag` is refused `flow-tag-duplicate`; a `--tag` on an owned key is refused `flow-tag-owned`.
 7. Assert `unknown` is present as `[]` rather than omitted on a candidate with nothing undecided, in both modes; assert a guard atom the seam cannot decide over a present key reports `{key, uncomparable}` (A13).
-8. `make check` passes; `go test ./internal/resolve` passes with no test changed and `git diff --stat internal/resolve` empty; the 0005 `next` suite passes with only C3's six mechanical `unresolved`→`unknown` re-homings (ok-bool asserted), and the file header names this RDR.
+8. `make check` passes; `go test ./internal/resolve` passes with no test changed and `git diff --stat internal/resolve` empty; the 0005 `next` suite passes with only C3's five mechanical `unresolved`→`unknown` re-homings (ok-bool asserted), and the file header names this RDR.
 
 End-state: `flow next` answers "what is legal from here" with the rows the supplied state can take, `--all` yields 0005's enumeration, every 0005 obligation other than the candidate predicate is unchanged, and the kernel is untouched.
 
@@ -574,7 +587,7 @@ Intent: register `--all` on `next` only, route it to a probe with the match patt
 
 ### Phase 3: Fixtures and Docs
 
-Intent: add C3's discriminating fixtures (present-unequal, absent), the three invariant pins, the default/`--all` pair, the `recognized`-only and empty-match rows, and the guard-`uncomparable` row; re-home the 6 shipped reads of the `unresolved` key to `unknown` (C3); update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
+Intent: add C3's discriminating fixtures (present-unequal, absent), the three invariant pins, the default/`--all` pair, the `recognized`-only and empty-match rows, and the guard-`uncomparable` row; re-home the 5 shipped reads of the `unresolved` key to `unknown` (C3), the production sites C3 enumerates, and the cobra `Long` help; update the 0005 file header; document `flow next`'s payload — including `unknown` and the `--all` invocation — in `docs/cli-output-contract.md`, which currently shows only the invocation grammar.
 
 ## Validation
 
@@ -593,7 +606,7 @@ Tightened at Resolve against the verified assumptions: every scenario names the 
 5. **Scenario**: S5 — the invariants C1's presence test rests on, and the kernel left untouched.
    **Expected**: a model with one owned key served by two readers fails to load on `checkAccessorBindings`' message (which counts key OCCURRENCES, so one reader declaring a key twice fails the same test); `flow next --tag k=a --tag k=b` is refused `flow-tag-duplicate` and `--tag <owned-key>=v` is refused `flow-tag-owned`, with no probe built; `go test ./internal/resolve` passes with no test file changed — `TestReq78_MatchPatternStillFoldsAbsenceIntoNonMatch`, the `match_conflicted_test.go` oracles, and the reason-set pins `TestReq49`/`TestReq47` (which hold `Reasons()` at exactly `absent`/`uncomparable`, the closure A13's merge relies on) stay green as shipped.
 6. **Scenario**: S6 — the 0005 `next` suite after the default flips (A4, C3).
-   **Expected**: the `flow next` oracles pass, none re-homed under `--all`; the 6 test reads of `unresolved` are re-homed to `unknown` with the ok-bool asserted; file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are. The "28 oracles" figure A4 reports is provenance for A4's verdict, not an oracle: the build asserts the checkable form (`go test ./internal/cli` green except C3's six named re-homings, none re-homed under `--all`).
+   **Expected**: the `flow next` oracles pass, none re-homed under `--all`; the 5 test reads of `unresolved` are re-homed to `unknown` with the ok-bool asserted; file header names this RDR. A green 0005 suite is NOT evidence C1 shipped — S2/S3 are. The "28 oracles" figure A4 reports is provenance for A4's verdict, not an oracle: the build asserts the checkable form (`go test ./internal/cli` green except C3's five named re-homings, none re-homed under `--all`).
 7. **Scenario**: S7 — the guard-payload read (A13) and its one precedence limit.
    **Expected**: a guard atom over a present key the seam cannot decide appears as `{key, uncomparable}` — the fixture builds that from A13's one reachable producer, a present value the operator cannot parse (`gt` on a non-integer, `contains` on a non-array); the same atom over an absent key appears once as `{key, absent}` (walk and payload agree, dedup on the pair); on a row that also lacks an owned key the probe refuses `owned_state_unavailable`, the row is still a candidate carrying the missing owned key and its `absent` facts, and the `uncomparable` guard atom is not reported — asserted so the limit is pinned rather than discovered.
 
