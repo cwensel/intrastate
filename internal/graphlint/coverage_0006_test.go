@@ -1850,3 +1850,128 @@ func TestReq118_NoRoundTripOrInverseSurfaceIsIntroduced(t *testing.T) {
 		}
 	}
 }
+
+// REQ-93's second clause ("MUST NOT report a computed size for a product
+// carrying an unprovable dimension") and REQ-94 ("the over-large refusal …
+// is simply not among the findings for such a group"). REQ-58 settles that
+// an unprojectable ATOM is unprovable "exactly as a dimension with no finite
+// declared domain does", so the two cases take the same outcome.
+//
+// Before kata `ge67`, a group that was BOTH over-large and unprojectable
+// reported only `graph-product-too-large` carrying a size lint could not
+// witness, and told the author to "narrow a declared domain" when the actual
+// defect was a missing single-valued marker. The identical atom under the
+// bound reported `tag-not-single-valued` and the right remedy, so the
+// diagnosis flipped on cardinality alone.
+func TestReq94_OverLargeGroupCarryingAnUnprojectableAtomDrawsNoComputedSize(t *testing.T) {
+	// A 12-value UNMARKED enum guarded by `eq` (unprojectable per 0003::A21)
+	// times nine marked bools: 12 * 2^9 = 6144, above the 2048 bound.
+	decls := `
+[tags.big]
+provenance = "owned"
+kind = "enum"
+domain = ["a","b","c","d","e","f","g","h","i","j","k","l"]
+required = true
+`
+	body := `
+[[rule]]
+id = "r1"
+source = "t:r1"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.big]
+eq = "a"
+[rule.write]
+`
+	for i := range 9 {
+		decls += fmt.Sprintf(`
+[tags.b%d]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+`, i)
+		body += fmt.Sprintf("[rule.guard.all.b%d]\neq = true\n", i)
+	}
+	body += "\n[initial]\nbig = \"a\"\n"
+	for i := range 9 {
+		body += fmt.Sprintf("b%d = false\n", i)
+	}
+
+	r := lint(t, decls, body)
+
+	if n := countCode(r, graphlint.CodeProductTooLarge); n != 0 {
+		t.Errorf("an over-large group carrying an unprojectable atom drew %d "+
+			"`%s` finding(s); REQ-94 says the over-large refusal is not among "+
+			"the findings for such a group, and REQ-93 forbids reporting a "+
+			"computed size for it; findings=%s",
+			n, graphlint.CodeProductTooLarge, render(r))
+	}
+
+	got := withCode(r, graphlint.CodeUnprovableCoverage)
+	if len(got) == 0 {
+		t.Fatalf("no `%s` finding; the unprojectable dimension must draw its "+
+			"own blocking finding (REQ-94/REQ-95); findings=%s",
+			graphlint.CodeUnprovableCoverage, render(r))
+	}
+	if got[0].Reason != graphlint.ReasonTagNotSingleValued {
+		t.Errorf("reason is %q; the remedy for a value atom over an unmarked "+
+			"tag is the marker, not narrowing a domain", got[0].Reason)
+	}
+	if got[0].Dimension != "big" {
+		t.Errorf("finding names dimension %q; want the unprojectable one, "+
+			"`big`", got[0].Dimension)
+	}
+}
+
+// The converse: suppression is scoped to unprojectability, not to size. A
+// group that is over-large but fully PROJECTABLE still draws the over-large
+// refusal carrying its computed size — otherwise the ge67 fix would silence
+// the bound itself.
+func TestReq93_OverLargeButProjectableGroupStillReportsItsComputedSize(t *testing.T) {
+	decls := `
+[tags.big]
+provenance = "owned"
+kind = "enum"
+domain = ["a","b","c","d","e","f","g","h","i","j","k","l"]
+single_valued = true
+required = true
+`
+	body := `
+[[rule]]
+id = "r1"
+source = "t:r1"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.big]
+eq = "a"
+[rule.write]
+`
+	for i := range 9 {
+		decls += fmt.Sprintf(`
+[tags.b%d]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+`, i)
+		body += fmt.Sprintf("[rule.guard.all.b%d]\neq = true\n", i)
+	}
+	body += "\n[initial]\nbig = \"a\"\n"
+	for i := range 9 {
+		body += fmt.Sprintf("b%d = false\n", i)
+	}
+
+	r := lint(t, decls, body)
+
+	got := withCode(r, graphlint.CodeProductTooLarge)
+	if len(got) != 1 {
+		t.Fatalf("an over-large PROJECTABLE group drew %d `%s` findings; want "+
+			"exactly one — the bound still refuses what it can witness; "+
+			"findings=%s", len(got), graphlint.CodeProductTooLarge, render(r))
+	}
+	if n := countCode(r, graphlint.CodeUnprovableCoverage); n != 0 {
+		t.Errorf("a fully projectable group drew %d `%s` finding(s)",
+			n, graphlint.CodeUnprovableCoverage)
+	}
+}

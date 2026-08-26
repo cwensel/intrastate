@@ -48,6 +48,25 @@ func (a *analysis) checkCoverage(g guard.Group) {
 	// dimension; testing it later would send the projection scan through a
 	// product this implementation has already declined to enumerate.
 	if card, ok := guard.Cardinality(a.model, g); ok && card > ProductBound() {
+		// REQ-94: the over-large refusal "is simply not among the findings"
+		// for a group carrying an unprovable dimension, and REQ-93's second
+		// clause forbids reporting a computed size for one. A size counted
+		// over a product whose atoms do not project is a number lint cannot
+		// witness. REQ-58 settles that an unprojectable atom is unprovable
+		// "exactly as a dimension with no finite declared domain does", so
+		// the unprojectable-ATOM case is in scope, not only the
+		// no-finite-DOMAIN case.
+		//
+		// The scan is STRUCTURAL — the marker arm of unprovableReason, which
+		// reads declarations only and never calls Denotation — so REQ-93's
+		// cost ordering holds and no enumeration reaches the refusal path
+		// (ADV-2). It also corrects the remedy: "add the marker" rather than
+		// "narrow a declared domain", which was never the defect here.
+		if a.emitStructurallyUnprovable(g) {
+			a.emitWithholdings(g)
+			return
+		}
+
 		a.emit(clierr.Finding{
 			Code:      CodeProductTooLarge,
 			Rule:      firstRuleID(g),
@@ -110,6 +129,47 @@ func (a *analysis) emitUnprovableDimensions(g guard.Group) bool {
 			f.Block = string(atom.Block)
 		}
 		a.emit(f)
+	}
+	return any
+}
+
+// emitStructurallyUnprovable emits a `graph-unprovable-coverage` finding for
+// every participating dimension whose unprovability is decidable from
+// DECLARATIONS ALONE — a value atom over a tag carrying no single-valued
+// marker (`0003::A21`). It reports whether it emitted any.
+//
+// It is the subset of unprovableReason that is safe on the over-large refusal
+// path: the `Denotation` arm would materialize the very product the bound has
+// already declined, which is the naive enumeration ADV-2 closed. The
+// no-finite-DOMAIN arm is omitted for a different reason — a dimension with no
+// finite domain has no cardinality, so a group carrying one never reaches this
+// branch at all (`guard.Cardinality` returns ok=false).
+func (a *analysis) emitStructurallyUnprovable(g guard.Group) bool {
+	var any bool
+	for _, key := range guard.Dimensions(a.model, g) {
+		decl := a.model.Tags[key]
+		if decl.SingleValued {
+			continue
+		}
+		atoms := a.groupAtomsOver(g, key)
+		for i := range atoms {
+			if !slices.Contains(singleValueOperators, atoms[i].Operator) {
+				continue
+			}
+			any = true
+			a.emit(clierr.Finding{
+				Code:      CodeUnprovableCoverage,
+				Reason:    ReasonTagNotSingleValued,
+				Dimension: key,
+				Key:       key,
+				Element:   g.Context.String(),
+				Message:   a.unprovableMessage(ReasonTagNotSingleValued, key, g),
+				Operator:  atoms[i].Operator,
+				Literal:   strings.Join(atoms[i].Literal, ","),
+				Block:     string(atoms[i].Block),
+			})
+			break
+		}
 	}
 	return any
 }

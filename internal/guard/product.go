@@ -225,6 +225,44 @@ func decidableKeys(m *table.Model, g Group) []string {
 	return out
 }
 
+// structurallyUnprojectable reports whether some row's atom over key cannot
+// project for a reason decidable from DECLARATIONS ALONE — the tag carries no
+// single-valued marker under a single-value operator, or a `contains` atom
+// sits over a non-set kind. It never enumerates, so it is safe to call on the
+// refusal path: ADV-2 forbids materializing a product before the bound is
+// compared, and `Denotation` would do exactly that via `valueAssignments`.
+//
+// This is deliberately NARROWER than unprovableDimension. It omits the two
+// causes that need the domain built — an operator/kind pairing the matrix
+// declines per value, and a domain the bound itself declines — because on the
+// over-large path the second is not a property of the atom at all: every
+// dimension of an over-large product is bound-declined, so treating that as
+// unprojectability would suppress the over-large finding for every group that
+// carries one. What survives here is unprojectability the author must fix by
+// changing a DECLARATION, which is precisely the case whose remedy the
+// over-large message would otherwise misreport.
+func structurallyUnprojectable(m *table.Model, g Group, key string) bool {
+	decl := m.Tags[key]
+	for _, row := range g.Rows {
+		for _, atom := range guardAtoms(row) {
+			if atom.Key != key {
+				continue
+			}
+			if atom.Operator == resolve.OpExists {
+				// `exists` reads presence and always projects.
+				continue
+			}
+			if isSingleValueOperator(atom.Operator) && !decl.SingleValued {
+				return true
+			}
+			if atom.Operator == "contains" && decl.Kind != "set" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // unprovableDimension reports whether a participating dimension cannot be
 // proved: it has no finite declared domain, or some row's atom over it does
 // not project.

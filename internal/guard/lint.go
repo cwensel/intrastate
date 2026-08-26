@@ -235,6 +235,44 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 		r.Verdict = VerdictWithheld
 		r.Cardinality = card
 		r.CoverageUnion = newSet(nil)
+
+		// REQ-94: "the over-large refusal — the one that carries `(computed
+		// size, bound)` — is simply not among the findings for such a
+		// group". A size computed over a product whose atoms do not project
+		// is a number lint cannot witness, and REQ-93's own second clause
+		// forbids reporting one: "MUST NOT report a computed size for a
+		// product carrying an unprovable dimension". REQ-58 settles that an
+		// unprojectable atom is unprovable "exactly as a dimension with no
+		// finite declared domain does", so the unprojectable-ATOM case is
+		// in scope here, not only the no-finite-DOMAIN case.
+		//
+		// The scan is STRUCTURAL — declaration arithmetic only, never
+		// `Denotation` — so REQ-93's cost ordering is preserved and no
+		// enumeration reaches the refusal path (ADV-2). Reporting the
+		// unprovable dimension instead of the size also fixes the remedy:
+		// the author is told to add the missing marker rather than to
+		// narrow a domain that was never the defect.
+		var structural []Finding
+		for _, key := range Dimensions(m, g) {
+			if !structurallyUnprojectable(m, g, key) {
+				continue
+			}
+			structural = append(structural, Finding{
+				Code:      CodeUnprovableCoverage,
+				Context:   r.Context,
+				RuleIDs:   r.RuleIDs,
+				Locators:  locators(g.Rows),
+				Dimension: key,
+				Blocking:  true,
+			})
+		}
+		if len(structural) > 0 {
+			r.Cardinality = 0
+			r.Findings = append(r.Findings, structural...)
+			r.Findings = append(r.Findings, withholdingFindings(m, g)...)
+			return r
+		}
+
 		r.Findings = append(r.Findings, Finding{
 			Code:         CodeProductTooLarge,
 			Context:      r.Context,
