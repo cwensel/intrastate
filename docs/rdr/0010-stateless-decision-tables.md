@@ -411,7 +411,7 @@ knowledge, no artifact discovery).
     not populate `Initial`), so both stay silent — but by the old key, not by
     the class and not by the ∅ node satisfying every context. That is why C5
     lists them as vacuous rather than class-keying them, and it is a
-    standing trap: converting either site to the class accessor would flip it
+    standing trap: converting either site to the class test would flip it
     live over every decision table.
     **The load-bearing correction:** the six "exercised unchanged" codes are
     unchanged *only because C5 supplies the root* — this is a property of
@@ -531,6 +531,26 @@ knowledge, no artifact discovery).
   - **If wrong**: C5's fence cannot carry a truthful `reason`, so it either
     fails REQ-80 or states a remedy that does not apply; the fence then moves
     to load-time or waits on a 0006 taxonomy change.
+- **A15 An exported `Model.Class` field whose empty zero value reads as
+  `state-machine` is sufficient for the four class readers, and the
+  agreement check has a step available in the window at/after `loadTags`
+  and before `checkAccessorBindings`.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: pending. Grounded so far at pre-lock: `table.Model`
+    carries thirteen exported fields and one projection method
+    (`internal/table/model.go::KernelTable`) with no field accessor, so an
+    exported field is the type's existing convention and an accessor would
+    be its sole exception; `internal/table/load.go::run` fixes the step
+    slice `loadModelHeader, loadOutcomes, loadTags, loadAccessors,
+    loadDump, loadContexts, loadInitial, loadTerminal, normalizeRules,
+    checkAccessorBindings`, so the C1 window is non-empty and
+    `checkAccessorBindings` is genuinely `run`'s last step. What remains is
+    to confirm each of the four readers can reach the field where it runs
+    and that no reader needs the class before `loadModelHeader` sets it.
+  - **If wrong**: the class needs an accessor (or an unexported field) after
+    all, and C1's storage clause plus the *Authority* ownership row change
+    shape — a normative edit, not an implementation detail.
 
 ## Proposed Solution
 
@@ -585,9 +605,10 @@ Three seams change, each additively on its owner's grammar:
    in a step at or after `loadTags`, since `loadModelHeader` runs before the
    tag table exists (C1); `Row` gains `Emit []EmitValue` sorted by key;
    `dumpColumns` gains `emit`, appended last. `table.Model` gains the class
-   as a field with an accessor whose **zero value is `state-machine`**, so a
+   as an exported `Class string` field whose **zero value reads as
+   `state-machine`** (C1), so a
    hand-constructed `table.Model` that never passed the loader keeps today's
-   behaviour rather than silently becoming a decision table. **The accessor is
+   behaviour rather than silently becoming a decision table. **That field is
    the single source for "what class is this" — not for "is there a root",
    which stays a separate question.** Of the four shipped
    `len(Initial) == 0` sites, exactly two become class-aware:
@@ -597,7 +618,8 @@ Three seams change, each additively on its owner's grammar:
    (`internal/graphlint/analysis.go`), keep the bare `len(Initial)` test —
    they are silent over a decision table by that key, and class-keying them
    would flip them live on every row (A10). Any site asking "is this a
-   decision table" reads the accessor and never re-derives it from
+   decision table" reads the `Class` field (empty = `state-machine`, C1) and
+   never re-derives it from
    `len(owned) == 0`. The
    kernel row (`internal/resolve/resolve.go::Row`) is
    untouched — `emit` never crosses the kernel boundary; the CLI joins it
@@ -648,12 +670,38 @@ a load failure for every rootless model and make this RDR's own
 class-omitted control unwritable). The class is model data and is carried on
 the loaded model; nothing downstream infers it from the owned set.
 
+The class is carried as an **exported `Class string` field on
+`internal/table/model.go::Model`**, whose zero value — the empty string —
+MUST be read everywhere as `"state-machine"`, so a hand-constructed
+`table.Model` is a state machine without naming a class. An exported field,
+not an accessor: `Model` today is a plain exported-field record whose every
+member (`ID`, `Version`, `Outcomes`, `Initial`, `Tags`, `Readers`,
+`Writers`, `Gates`, `DumpOrder`, `Rows`) is exported and which carries no
+field accessor at all (its one method, `Model.KernelTable`, is a
+projection), so an accessor-only class would be the single exception in the
+type and would still not be enforceable. The "one writer, four readers"
+ownership in *Authority* is therefore a **review obligation, not a
+mechanized one** — as that section already states for the fifth-site risk.
+A reader MAY spell the zero value through a small helper rather than
+repeating the empty-string comparison, but the field is the storage and no
+reader re-derives the class from the owned set.
+
 The check MUST run after the tag table is loaded, not in the `[model]` header
 step: `internal/table/load.go::run` fixes the order `loadModelHeader,
-loadOutcomes, loadTags, …`, so `l.model.Tags` is empty while the header
-loads. The class is read in `loadModelHeader` (it is `[model]` data) and the
-agreement is checked in a step at or after `loadTags`, so an undeclared-tag
-refusal precedes a class-disagreement refusal under `run`'s fail-fast order.
+loadOutcomes, loadTags, loadAccessors, loadDump, loadContexts, loadInitial,
+loadTerminal, normalizeRules, checkAccessorBindings`, so `l.model.Tags` is
+empty while the header loads. The class is read in `loadModelHeader` (it is
+`[model]` data) and the agreement is checked in a step at or after
+`loadTags`, so an undeclared-tag refusal precedes a class-disagreement
+refusal under `run`'s fail-fast order. The position is fixed at **both**
+ends: the check MUST run at or after `loadTags` and **before
+`checkAccessorBindings`**, `run`'s last step. The ceiling is what makes the
+doubly-malformed case determinate — a decision-table model that declares
+both an owned tag and `[initial]` refuses as `malformed model declaration`
+naming the class and `owned=<n>`, never with the accessor-binding
+writer-arity diagnostic C2 notes is "survivable but not self-explanatory".
+Any step in that window satisfies this clause; the RDR fixes the window,
+not the step's name.
 ```
 
 Overrides, additively: `0002:C2` (the closed `[model]` layout) and `0002:C3`
@@ -721,7 +769,15 @@ unreachable — a TOML table refuses them in the decoder before this code runs
 is a property of the source grammar, not an obligation on the loader.
 `Row.Emit` MUST be carried through `internal/table/normalize.go::expand` for
 every expanded row, which builds each row from the seed literal rather than
-copying `base`. Emit keys are NOT tag keys: they are
+copying `base`. The carried sequence MAY be **shared** across the rows one
+rule expands to — no clone is required. `Emit` is never mutated after
+normalization: it is read by the dump column and by the `resolvePayload`
+join and by nothing else, and both are readers. This is the deliberate
+counterpart to the type choice above — `EmitValue` exists precisely to stay
+clear of `TagValue`'s `cloneTagValues` path, so requiring a clone here
+would reintroduce the machinery the new type avoids. Sharing and cloning
+are indistinguishable to S3's byte-for-byte assertion; the clause is stated
+so an implementer does not add a defensive copy and read it as contract. Emit keys are NOT tag keys: they are
 undeclared, uninterpreted, compared by exact byte equality, and MUST NOT be
 matched, guarded, written, or read by any accessor — the same carried-through
 treatment `[model.metadata]` receives under `0002:C2`. Normalization MUST
@@ -764,15 +820,41 @@ carrier of the answer (0002's premise); the kernel stays JDR 0001-shaped.
 The `flow resolve` success payload MUST carry `emit`: a JSON object of
 string values, keys in byte order, present as `{}` — never `null`, never
 omitted — when the selected row authored none. Its **position is fixed**:
-`emit` is declared immediately after `Rule` in
-`internal/cli/flow_resolve.go::resolvePayload`, whose thirteen-field
-declaration order is the JSON key order Go's encoder emits. Position is
+`emit` is declared immediately after `Gates` in
+`internal/cli/flow_resolve.go::resolvePayload`, taking that struct from
+thirteen fields to fourteen; the declaration order is the JSON key order
+Go's encoder emits. `Gates`, not `Rule`, is `emit`'s predecessor: the
+pre-edit struct already declares `Model, Revision, Observed, Owned,
+Readers, Outcome, Rule, Gates, Next, Writes, Clear, Escaped, EscapeClass`,
+so `rule` and `emit` are adjacent only across the gate results, and
+displacing `Gates` would rewrite a key order this RDR does not own.
+Position is
 specified for the same reason C3 fixes the dump column's ("appended last,
 after `escape`") — the repo asserts payload JSON inline in Go tests, so an
 unfixed position is an unlicensed diff waiting on whichever implementer
-guesses differently. `emit` sits beside `rule` because the two are one
-answer: the row selected, and what it says. `next`, `writes`, `clear`, `owned`, and `readers` keep their
-`0005:C1` shapes and are empty over a decision-table model. Text mode is
+guesses differently. `emit` sits next to the selection block because the
+two are one answer: the row selected, and what it says. `next`, `writes`, `clear`, `owned`, and `readers` keep their
+`0005:C1` shapes and are empty over a decision-table model.
+
+Gate evaluation is **unchanged and prior to the emit join**: gates on the
+selected row run after kernel selection and before the payload is built
+(`internal/cli/flow_exec.go::runGates`, then
+`internal/cli/flow_exec.go::gateVerdictFailure`), and a deny is
+`flow-gate-denied` — a refusal, never a payload, so `emit` is never
+computed on a denied selection. A success payload's `gates` is therefore
+always an all-allow list. This RDR adds no gate behaviour and takes no
+`Overrides` entry against it; the clause is stated because `emit`'s
+position is declared relative to `Gates`.
+
+`escaped` is an existing payload field this RDR does not move: it stays at
+its declared position between `clear` and `escape_class`. A plan rescued
+by an escape row carries that escape row's **own** `emit`, joined on the
+same `Plan.RuleID` path as any other selection —
+`internal/resolve/resolve.go::planOf` sets `RuleID` from the rescuing row
+(`internal/resolve/resolve.go::escapeOrRefuse` passes it with
+`escaped=true`), so `rowByID` returns the escape row and C3's per-rule
+join needs no escape-specific arm. An escape row authoring no `[rule.emit]`
+renders `{}` like any other. Text mode is
 **not** specified by this RDR: `emit` is a payload field like any other and
 renders through the generic payload renderer 0005 owns
 (`internal/cli/respond/text.go::writeTextPayload`), which emits one
@@ -901,7 +983,7 @@ that re-derives the class from `len(owned) == 0`.
 
 | Input / decision | Writer (canonical) | Readers | Call sites | Sibling arms | Which is canonical |
 | --- | --- | --- | --- | --- | --- |
-| model class | `loadModelHeader` reads it; the agreement check runs at/after `loadTags` (C1) | `normalizeRule`, `reach`, `checkDanglingEdge` root arm, `checkCoverage` zero-dim arm | one per reader | the owned tag set (`len(owned) == 0`) | **the declared `class` on the loaded model**, via one accessor whose zero value is `state-machine`; the owned set is never re-derived downstream (C1) |
+| model class | `loadModelHeader` reads it; the agreement check runs at/after `loadTags` and before `checkAccessorBindings` (C1) | `normalizeRule`, `reach`, `checkDanglingEdge` root arm, `checkCoverage` zero-dim arm | one per reader | the owned tag set (`len(owned) == 0`) | **the declared `class` on the loaded model**, the exported `Model.Class` field whose empty zero value reads as `state-machine`; the owned set is never re-derived downstream (C1) |
 | row kind (ordinary/escape) | `normalizeRule` (validates shape) | `Row.Kind()` derives it | dump `kind` column, `bareEscapeFor` | — | `internal/table/model.go::Row.Kind`, presence-inferred, per-row — the contrast case, not a reusable mechanism |
 | the answer (`emit`) | `[rule.emit]` on the authored row | dump column, `resolvePayload` | joined by `Plan.RuleID` after selection | the kernel row's `NextTags` (the PoC's pseudo-owned shape, BR2) | **the normalized row's `Emit`**; never the kernel row (C3) |
 | reachability root | `reach` | `contextReachable` → `checkGroups` | one | `[initial]` (state-machine) vs ∅ (decision-table) | the class, per C5 — not `len(Initial)` |
