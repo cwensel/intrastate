@@ -161,6 +161,98 @@ func TestReq18And21And115_TheDemandSetIsModeIndependentAndEmptyWhereNoRowMatchOw
 	})
 }
 
+// REQ-20 / `0011:F6`: the accepted `flow resolve` change is scoped to runs
+// where "the requested outcome has a row on that key" — so the demand set
+// is a union over THAT OUTCOME's rows, not over the model's.
+// REQ-18: "The demand set is a property of the MODEL (and, for `resolve`,
+// the requested outcome)" — the parenthesis is the whole assertion here.
+// ADVERSARIAL — the NEGATIVE half of the demand-set scope, and the half
+// suite-green cannot give. Every other oracle in this file asserts a reader
+// IS invoked; a build that unioned the match-owned keys across every row
+// BEFORE applying the outcome filter would satisfy all of them and still be
+// wrong, because it would invoke `read.side` for outcome `stop` — whose
+// only row (`stop-row`) matches on `status` alone. The cost is not
+// cosmetic: with `side` unbound that build refuses `flow-artifact-missing`
+// (exit 2) a run that must plan, which is `TestReq20And116`'s accepted cost
+// LEAKING onto an outcome F6 never licensed it for.
+func TestReq20AndF6_MatchOwnedKeysOfOtherOutcomesAreExcludedFromResolve(t *testing.T) {
+	// `flowMatchOnlyOwnedModel` is the discriminating fixture: `mode-row`
+	// MATCH-owns `mode` (served solely by `read.side`) under outcome `go`,
+	// while outcome `stop`'s only row matches on `status` alone. So `go`
+	// and `stop` MUST disagree on the reader set over one model — the
+	// property a union-before-filter build erases.
+	t.Run("stop-invokes-only-the-reader-its-own-row-needs", func(t *testing.T) {
+		model := writeFlowModel(t, flowMatchOnlyOwnedModel)
+		binds := sideBindings(t, model, true, "mode=fast")
+
+		args := []string{"flow", "resolve", "--model", model}
+		for _, b := range binds {
+			args = append(args, "--artifact", b)
+		}
+		data := flowData(t, requireSuccess(t,
+			append(args, "--outcome", "stop", "--as=json")...))
+
+		if readers := readersOf(t, data); !slices.Equal(readers, []string{"state"}) {
+			t.Errorf("`resolve --outcome stop` readers = %v; want exactly "+
+				"[state]. `stop-row` is outcome `stop`'s only row and it "+
+				"matches on `status` alone; `mode` is match-owned by "+
+				"`mode-row`, which binds outcome `go`. A build that unioned "+
+				"the match-owned term across every row BEFORE the outcome "+
+				"filter reports [side state] here and passes every other "+
+				"oracle in this file", readers)
+		}
+		// The same model at the OTHER outcome DOES pull the reader in, so
+		// the assertion above is a real exclusion and not a fixture that
+		// never demanded `side` in the first place. Seeded `mode=slow` so
+		// `mode-row` does not match and `plain-row` is the sole `go`
+		// candidate: at `mode=fast` BOTH `go` rows match and the kernel
+		// refuses `ambiguous_match` before reporting a reader set, which is
+		// the two-row fixture's deliberate shape (DEV-6). `read.side` is
+		// demanded either way — the demand set is computed before the row
+		// loop and does not depend on which rows end up matching.
+		gmodel := writeFlowModel(t, flowMatchOnlyOwnedModel)
+		gbinds := sideBindings(t, gmodel, true, "mode=slow")
+		gargs := []string{"flow", "resolve", "--model", gmodel}
+		for _, b := range gbinds {
+			gargs = append(gargs, "--artifact", b)
+		}
+		gdata := flowData(t, requireSuccess(t,
+			append(gargs, "--outcome", "go", "--as=json")...))
+		if readers := readersOf(t, gdata); !slices.Contains(readers, "side") {
+			t.Errorf("`resolve --outcome go` readers = %v; the same model's "+
+				"`go` rows DO match-own `mode`. Without this arm the "+
+				"exclusion above would pass against a build that never "+
+				"invoked `read.side` for any outcome", readers)
+		}
+	})
+
+	// The caller-visible harm, and the arm that fails LOUDEST on a
+	// union-before-filter build: with `side` UNBOUND, `stop` must still
+	// plan. `TestReq20And116` pins the mirror — that `go` under the same
+	// unbound role refuses exit 2 — so the pair fixes the accepted cost's
+	// exact boundary: it lands on `go` and NOT on `stop`.
+	t.Run("stop-still-plans-with-the-other-outcomes-reader-unbound", func(t *testing.T) {
+		model := writeFlowModel(t, flowMatchOnlyOwnedModel)
+		binds := sideBindings(t, model, false)
+
+		args := []string{"flow", "resolve", "--model", model}
+		for _, b := range binds {
+			args = append(args, "--artifact", b)
+		}
+		data := flowData(t, requireSuccess(t,
+			append(args, "--outcome", "stop", "--as=json")...))
+
+		if data["rule"] != "stop-row" {
+			t.Errorf("the run yielded rule %#v; want `stop-row`. With "+
+				"`side` unbound a union-before-filter build refuses "+
+				"`flow-artifact-missing` (exit 2) for a role no row of "+
+				"outcome `stop` needs — F6 scopes the accepted change to "+
+				"runs where \"the requested outcome has a row on that "+
+				"key\", and this run has none", data["rule"])
+		}
+	})
+}
+
 // REQ-17: "It therefore binds BOTH callers of `invokedReaders` —
 // `flow_next.go` (`invokedReaders(req.model, \"\")`) and `flow_resolve.go`
 // (`invokedReaders(req.model, outcome)`) — and MUST NOT be scoped to `next`"
@@ -419,24 +511,90 @@ func TestReq35And118_ResolveOverTheCheckedInModelAndShippedFixturesIsUnchanged(t
 		})
 	}
 
-	// The shipped 0005 fixtures, in the same full-payload form — the half
-	// the spike attested only by suite-green.
-	t.Run("shipped-fixture", func(t *testing.T) {
-		fx := writeFlowModel(t, flowMVVModel)
-		fart := seedArtifact(t, fx, "status=draft")
-		fbind := artifactBinding(flowStateRole, fart)
+	// The shipped fixtures, in the same full-payload form — the half the
+	// spike attested only by suite-green, and the half this subtest used
+	// to discharge with ONE fixture (`flowMVVModel`) against S8's "every
+	// shipped fixture".
+	for _, tc := range shippedResolveGoldens {
+		t.Run("shipped-fixture/"+tc.name+"/"+tc.outcome, func(t *testing.T) {
+			fx := writeFlowModel(t, tc.model)
 
-		stdout, _, err := runCmd(t, "flow", "resolve", "--model", fx,
-			"--artifact", fbind, "--outcome", "hold", "--as=json")
-		if err != nil {
-			t.Fatalf("`flow resolve` over the shipped MVV fixture refused: "+
-				"%v", err)
+			var binds []string
+			for _, s := range tc.seeds {
+				art := newFlowArtifact(t, s.role+".artifact")
+				bind := artifactBinding(s.role, art)
+				args := []string{"flow", "set-state", "--model", fx,
+					"--artifact", bind}
+				for _, w := range s.writes {
+					args = append(args, "--write", w)
+				}
+				requireSuccess(t, append(args, "--as=json")...)
+				binds = append(binds, bind)
+			}
+			for _, role := range tc.bindOnly {
+				binds = append(binds,
+					artifactBinding(role, newFlowArtifact(t, role+".artifact")))
+			}
+
+			args := []string{"flow", "resolve", "--model", fx}
+			for _, b := range binds {
+				args = append(args, "--artifact", b)
+			}
+			stdout, _, err := runCmd(t,
+				append(args, "--outcome", tc.outcome, "--as=json")...)
+			if err != nil {
+				t.Fatalf("`flow resolve --outcome %s` over the shipped "+
+					"fixture `%s` refused: %v\nThis entry names a run that "+
+					"reaches a PLAN; a refusal here means the fixture or "+
+					"its seeding drifted", tc.outcome, tc.name, err)
+			}
+			got := normalizeModelPath(stdout, fx)
+			if got != tc.golden {
+				t.Errorf("`flow resolve --outcome %s` over `%s` changed.\n"+
+					"got:  %s\nwant: %s\nNo shipped flow-reachable fixture "+
+					"is in the changed class (A15 iii), so every one of "+
+					"these payloads is byte-identical before and after",
+					tc.outcome, tc.name, got, tc.golden)
+			}
+		})
+	}
+
+	// REQ-118 says "every shipped fixture", so the sweep's MEMBERSHIP is
+	// itself an oracle: a fixture added later must land in the table or in
+	// the named excluded set, never escape both silently. Without this the
+	// table is a snapshot of today's corpus and S8 decays with every new
+	// fixture.
+	t.Run("every-shipped-fixture-is-swept-or-named-excluded", func(t *testing.T) {
+		swept := map[string]bool{}
+		for _, tc := range shippedResolveGoldens {
+			swept[tc.name] = true
 		}
-		got := normalizeModelPath(stdout, fx)
-		if got != resolveFixtureGolden {
-			t.Errorf("`flow resolve` over `flowMVVModel` changed.\n"+
-				"got:  %s\nwant: %s\nNo shipped flow-reachable fixture is "+
-				"in the changed class (A15 iii)", got, resolveFixtureGolden)
+		for name := range shippedFixtureCorpus {
+			if swept[name] {
+				continue
+			}
+			if _, ok := unsweptShippedFixtures[name]; !ok {
+				t.Errorf("`%s` is a shipped fixture that is neither in "+
+					"`shippedResolveGoldens` nor named in "+
+					"`unsweptShippedFixtures`.\nS8/REQ-118 states the "+
+					"byte-identity guarantee over EVERY shipped fixture; a "+
+					"fixture that escapes both sets discharges it by "+
+					"omission. Add a golden entry, or record why the "+
+					"fixture has no reachable `flow resolve` plan", name)
+			}
+		}
+		// The mirror: a name in the excluded set that is no longer a
+		// fixture, or that IS swept, means the two lists drifted apart.
+		for name := range unsweptShippedFixtures {
+			if _, ok := shippedFixtureCorpus[name]; !ok {
+				t.Errorf("`%s` is named in `unsweptShippedFixtures` but is "+
+					"not in the fixture corpus; the exclusion outlived its "+
+					"fixture", name)
+			}
+			if swept[name] {
+				t.Errorf("`%s` is BOTH swept and named excluded; the "+
+					"exclusion is stale and its reason is now false", name)
+			}
 		}
 	})
 }
@@ -480,10 +638,237 @@ var resolveGolden = map[string]string{
 		`"escaped":false}}`,
 }
 
-// resolveFixtureGolden is the same, over the shipped 0005 MVV fixture — the
-// half A15's spike attested only by suite-green.
-const resolveFixtureGolden = `{"type":"ok","data":{"model":"<model>",` +
-	`"revision":"","observed":{},"owned":{"status":"draft"},` +
-	`"readers":["state"],"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
-	`"next":{"status":"draft"},"writes":{"status":"draft"},"clear":[],` +
-	`"escaped":false}}`
+// --- the shipped-fixture sweep (S8 / REQ-118) ----------------------------
+
+// fixtureSeed establishes one artifact role through the PRODUCTION write
+// path before the resolve under test — never by writing a file whose format
+// the test claims to understand (the 0005 harness rule).
+type fixtureSeed struct {
+	role   string
+	writes []string
+}
+
+// shippedFixtureGolden is one `flow resolve` run over one shipped fixture,
+// with the FULL payload it must keep producing.
+type shippedFixtureGolden struct {
+	name    string
+	model   string
+	outcome string
+	seeds   []fixtureSeed
+	// bindOnly names roles the run must BIND but not seed — a reader the
+	// model declares whose absence would refuse `flow-artifact-missing`
+	// before the payload exists.
+	bindOnly []string
+	golden   string
+}
+
+// shippedResolveGoldens is S8/REQ-118's sweep: every shipped fixture with a
+// reachable `flow resolve` PLAN, each asserted as a FULL payload captured
+// from this tree's behaviour per A-11 ("the oracle may be a golden payload
+// … provided it … asserts the FULL payload rather than a subset — which is
+// the gap S8 names").
+//
+// This replaces a one-fixture discharge. S8 states the guarantee over
+// "every shipped fixture" and A15's limit (b) records why suite-green
+// cannot give it: "a fixture asserting a subset of its payload would not
+// catch an unasserted-field change". One entry per (fixture, outcome) that
+// reaches exit 0 — a refusal has no payload to be byte-identical about, and
+// the refusal fixtures are pinned by code and exit elsewhere in this suite.
+//
+// The goldens are deliberately brittle: any change to the resolve envelope
+// re-breaks every entry at once. That is the change-detection S8 asks for,
+// and the cost is one mechanical regeneration confined to this variable.
+var shippedResolveGoldens = []shippedFixtureGolden{
+	{
+		name: "flowMVVModel", model: flowMVVModel, outcome: "hold",
+		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		bindOnly: []string{flowOrphanRole},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowEscapeModel", model: flowEscapeModel, outcome: "hold",
+		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		bindOnly: []string{flowOrphanRole},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The ESCAPED payload shape — `escaped:true` plus `escape_class`,
+		// two fields no other entry in this table carries. Without it the
+		// sweep would leave the escape envelope to suite-green.
+		name: "flowEscapeModel", model: flowEscapeModel, outcome: "bail",
+		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		bindOnly: []string{flowOrphanRole},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{},"readers":[],"outcome":"bail",` +
+			`"rule":"bail-escape","gates":[],"emit":{},"next":{},` +
+			`"writes":{},"clear":[],"escaped":true,` +
+			`"escape_class":"no_match"}}`,
+	},
+	{
+		name: "flowEscapeOtherOutcomeModel", model: flowEscapeOtherOutcomeModel,
+		outcome:  "hold",
+		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		bindOnly: []string{flowOrphanRole, "sidecar"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowDomainModel", model: flowDomainModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"advance","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The GATED payload shape — a non-empty `gates` array, which no
+		// other entry carries.
+		name: "flowGatedNextModel", model: flowGatedNextModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft", "flag=true"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
+			`"readers":["state"],"outcome":"advance",` +
+			`"rule":"gated-reported","gates":[{"id":"reported",` +
+			`"result":"allow"}],"emit":{},"next":{"status":"final"},` +
+			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowSetObservedModel", model: flowSetObservedModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"advance","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowMatchClassesModel", model: flowMatchClassesModel, outcome: "gamma",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"gamma","rule":"no-match-atoms","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowSetKindedMatchModel", model: flowSetKindedMatchModel, outcome: "hold",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"scalar-control","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowAbsentMatchKeyModel", model: flowAbsentMatchKeyModel, outcome: "hold",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"recognized-only","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowFullyResolvedModel", model: flowFullyResolvedModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft", "flag=true"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
+			`"readers":["state"],"outcome":"advance","rule":"resolved-row",` +
+			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
+	},
+	{
+		name: "flowLooseWriterModel", model: flowLooseWriterModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+}
+
+// shippedFixtureCorpus is every shipped `flow*Model` fixture this repo
+// declares. The membership oracle reads it, so a fixture added later must
+// join this map and then land in the sweep or the excluded set.
+var shippedFixtureCorpus = map[string]string{
+	"flowMVVModel":                flowMVVModel,
+	"flowEscapeModel":             flowEscapeModel,
+	"flowAmbiguousModel":          flowAmbiguousModel,
+	"flowGatedNextModel":          flowGatedNextModel,
+	"flowInvalidModel":            flowInvalidModel,
+	"flowGateDenyModel":           flowGateDenyModel,
+	"flowGateFailModel":           flowGateFailModel,
+	"flowGuardUnevaluableModel":   flowGuardUnevaluableModel,
+	"flowReadBackFailModel":       flowReadBackFailModel,
+	"flowSetObservedModel":        flowSetObservedModel,
+	"flowSetPlanModel":            flowSetPlanModel,
+	"flowEscapeOtherOutcomeModel": flowEscapeOtherOutcomeModel,
+	"flowDomainModel":             flowDomainModel,
+	"flowMatchClassesModel":       flowMatchClassesModel,
+	"flowSetKindedMatchModel":     flowSetKindedMatchModel,
+	"flowMixedStateRowModel":      flowMixedStateRowModel,
+	"flowAbsentMatchKeyModel":     flowAbsentMatchKeyModel,
+	"flowFullyResolvedModel":      flowFullyResolvedModel,
+	"flowLooseWriterModel":        flowLooseWriterModel,
+	"flowUncomparableGuardModel":  flowUncomparableGuardModel,
+	"flowOwnedUnavailableModel":   flowOwnedUnavailableModel,
+	"flowSortOrderModel":          flowSortOrderModel,
+	"flowMatchOnlyOwnedModel":     flowMatchOnlyOwnedModel,
+	"flowMatchOnlyOwnedSoloModel": flowMatchOnlyOwnedSoloModel,
+	"flowSideWriterModel":         flowSideWriterModel,
+	"flowZeroOwnedMatchModel":     flowZeroOwnedMatchModel,
+	"flowTwoReadersOneKeyModel":   flowTwoReadersOneKeyModel,
+	"flowEscapeMatchOwnedModel":   flowEscapeMatchOwnedModel,
+	"flowRefusingSideReaderModel": flowRefusingSideReaderModel,
+}
+
+// unsweptShippedFixtures names every shipped fixture the golden sweep does
+// NOT cover, with the reason. S8's guarantee is over "every shipped
+// fixture"; discharging it honestly means the uncovered ones are NAMED, not
+// silently absent — so this map is the second half of the oracle above.
+//
+// Two classes, and neither is a byte-identity subject:
+//
+//   - NO REACHABLE PLAN — the fixture exists to produce a REFUSAL, so it
+//     has no success payload to be byte-identical about. Its refusal code
+//     and exit are pinned by the oracles that own it.
+//   - INSIDE THE CHANGED CLASS — 0011's own match-only-owned-key fixtures.
+//     A15 iii's warrant is that no shipped flow-reachable fixture is in the
+//     changed class; these are the deliberate exceptions the RDR BUILT, so
+//     asserting they are unchanged would assert the term did nothing.
+var unsweptShippedFixtures = map[string]string{
+	// --- no reachable plan: refusal fixtures ---
+	"flowInvalidModel":           "refuses `flow-model-invalid` at load",
+	"flowTwoReadersOneKeyModel":  "refuses `flow-model-invalid` at load",
+	"flowAmbiguousModel":         "refuses `flow-ambiguous-match`",
+	"flowGateDenyModel":          "refuses `flow-gate-denied` / `flow-gate-indeterminate` on every outcome",
+	"flowGateFailModel":          "refuses `flow-accessor-failed`",
+	"flowGuardUnevaluableModel":  "refuses `flow-guard-unevaluable`",
+	"flowUncomparableGuardModel": "refuses `flow-guard-unevaluable` on every outcome",
+	"flowReadBackFailModel":      "refuses `flow-read-incomplete`; its writer cannot even seed",
+	"flowOwnedUnavailableModel":  "refuses `flow-owned-state-unavailable`",
+	"flowSetPlanModel":           "refuses `flow-owned-state-unavailable` under `resolve`",
+	"flowMixedStateRowModel":     "refuses `flow-no-match` on its only outcome",
+	"flowSortOrderModel":         "refuses `flow-no-match` on its only outcome",
+	"flowZeroOwnedMatchModel":    "refuses `flow-no-match`; pinned by name as the zero-owned-match control",
+
+	// --- inside the changed class: 0011's own demand-set fixtures ---
+	"flowMatchOnlyOwnedModel":     "match-only owned key — the changed class itself (S8's subject)",
+	"flowMatchOnlyOwnedSoloModel": "match-only owned key — the changed class itself (S8's subject)",
+	"flowEscapeMatchOwnedModel":   "escape-row match-only owned key — DEV-8/DEV-9's subject",
+	"flowSideWriterModel":         "the sibling writer for the changed class's `side` role",
+	"flowRefusingSideReaderModel": "a deliberately refusing reader — exit 3, no payload",
+}
