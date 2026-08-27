@@ -40,7 +40,7 @@ intrastate version                       # build version, commit, date
 intrastate version --as=json             # same, as a JSON envelope
 
 intrastate lint                          # validate transition models
-intrastate flow next --flow <name>       # list legal next outcomes
+intrastate flow next --flow <name>       # candidate rules the state can take
 intrastate flow resolve --flow <name>    # resolve a recognized outcome
 intrastate flow read-state --flow <name>
 intrastate flow set-state --flow <name>

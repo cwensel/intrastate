@@ -123,9 +123,14 @@ exercise the flag grammar; the output shown by `--as=json` is one terminal
 envelope per invocation.
 
 ```sh
-# Enumerate the legal outcomes and their candidate rules.
+# Report the candidate rules the supplied state can take, and the legal
+# outcome alphabet behind them.
 intrastate flow next --model flow.toml \
   --artifact state=./state.json --tag profile=mid --as=json
+
+# Report every row the guards do not exclude, regardless of match.
+intrastate flow next --model flow.toml \
+  --artifact state=./state.json --all --as=json
 
 # Map one recognized outcome to exactly one plan, or refuse.
 intrastate flow resolve --model flow.toml \
@@ -142,4 +147,39 @@ intrastate flow set-state --model flow.toml \
   --artifact state=./state.json \
   --write status=final --write 'labels=["cli","final"]' \
   --clear stale --as=json
+```
+
+## `flow next` candidates and the `unknown` list
+
+A candidate is a rule whose match and guard both HOLD or are UNDECIDED
+over the supplied state. A match or guard key the state does not carry
+does not exclude the row — it leaves the row a candidate with that key
+named under `unknown`. A candidate is what the state does not exclude, not
+what `flow resolve` will select: a candidate carrying an `unknown` entry
+may still be refused by `flow resolve` over the same state.
+
+`--all` reports every row the guards do not exclude, regardless of match.
+In that mode a match atom takes no part in the verdict and contributes no
+`unknown` entry.
+
+Each candidate carries `rule`, `outcome`, `required`, `unknown`, `next`,
+`writes`, `clear`, and — only under `--evaluate-gates` — `gates`. The
+`unknown` list is present in both modes, as `[]` rather than omitted, so
+one consumer struct parses either.
+
+Each `unknown` entry is a `{key, reason}` pair, deduplicated on the pair
+and sorted by `(key, reason)`. The reason names the remedy and comes from
+a closed set:
+
+| reason | source | remedy |
+| --- | --- | --- |
+| `absent` | a match or guard atom over a key the state does not carry, or an owned key no invoked reader established | bind the reader, or supply the tag |
+| `uncomparable` | a guard atom over a key present at a value its operator cannot compare | fix the value, or the atom's literal |
+| `not-evaluated` | one of the row's own gate ids, un-run because `--evaluate-gates` was not passed | pass `--evaluate-gates` |
+
+```json
+{"rule":"prelock","outcome":"advance","required":["stage"],
+ "unknown":[{"key":"gate_passed","reason":"absent"},
+            {"key":"approval","reason":"not-evaluated"}],
+ "next":{"stage":"prelocked"},"writes":{"stage":"prelocked"},"clear":[]}
 ```
