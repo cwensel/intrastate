@@ -1,0 +1,30 @@
+outcomes = ["locate"]
+terminal = ["done"]
+
+[model]
+id = "navigator"
+version = 1
+
+[tags.status]
+provenance = "observed"
+kind = "enum"
+domain = ["Draft", "Final"]
+single_valued = true
+required = true
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+domain = ["locate"]
+single_valued = true
+required = true
+
+[context.done]
+[context.done.match.status]
+eq = "Final"
+
+[[rule]]
+id = "otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "locate"
