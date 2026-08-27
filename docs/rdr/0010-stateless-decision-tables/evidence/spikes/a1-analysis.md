@@ -11,6 +11,14 @@ the same findings the scratch-tag PoC produced.
 The spike reproduces the PoC baseline, shows the current zero-owned failure,
 and then EXECUTES C5's proposed ∅ root without editing `internal/`.
 
+## Reproducing
+
+The harness is gated behind a build tag so it is evidence rather than a
+member of `make check` (it reads `internal/` internals that implementation
+will change):
+
+    go test -tags rdr_spike ./docs/rdr/0010-stateless-decision-tables/evidence/spikes/emptyroot/ -v
+
 ## Model shape
 
 `a1-baseline.toml` — 9 `bool` observed dimensions (`d0`..`d8`, each

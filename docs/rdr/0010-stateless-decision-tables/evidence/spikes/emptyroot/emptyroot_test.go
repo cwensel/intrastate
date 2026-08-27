@@ -1,3 +1,5 @@
+//go:build rdr_spike
+
 // Package emptyroot is an RDR 0010 A1 SPIKE. It is not production code and
 // is not wired into any build target: it exists to execute C5's proposed
 // "root the reachability relation at the empty owned-state node" WITHOUT
