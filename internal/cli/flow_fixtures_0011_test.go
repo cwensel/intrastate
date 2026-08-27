@@ -24,6 +24,7 @@ package cli
 import (
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -1306,4 +1307,18 @@ func gitDiffStat(t *testing.T, path string) string {
 		t.Skipf("`git diff --stat` failed: %v", err)
 	}
 	return string(out)
+}
+
+// repoModelPath returns the absolute path of the transition model checked
+// into this repo (`models/rdr.toml`), which S1 and MVV 2-4 run against.
+//
+// It is the model whose narrowing the RDR's problem statement is about: 22
+// rules, 21 reported by the stripped-match predicate at `stage=resolved`,
+// 3 by C1's. It is also the model where C2's filter/dedup ORDER is
+// load-bearing, because `stage` is BOTH a `[rule.match]` key and a
+// `[rule.write]` key and so enters `RequiresOwned`.
+func repoModelPath(t *testing.T) string {
+	t.Helper()
+
+	return filepath.Join(repoRootFor(t), checkedInModelPath)
 }
