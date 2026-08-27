@@ -78,14 +78,32 @@ each, with references.
 
 ## Install
 
+With the Go toolchain:
+
 ```sh
-make install        # builds ./bin/intrastate and installs to ~/.local/bin
+go install github.com/cwensel/intrastate/cmd/intrastate@latest
 ```
 
-Or build locally:
+Or download a prebuilt binary for your platform from the
+[latest release](https://github.com/cwensel/intrastate/releases/latest) —
+each release carries a tarball per platform plus `checksums.txt`:
 
 ```sh
-make build          # ./bin/intrastate
+tar xzf intrastate_<version>_<os>_<arch>.tar.gz
+install -m755 intrastate ~/.local/bin/
+```
+
+Verify a download before installing it:
+
+```sh
+sha256sum -c checksums.txt --ignore-missing
+```
+
+From a checkout:
+
+```sh
+make install        # builds ./bin/intrastate and installs to ~/.local/bin
+make build          # ./bin/intrastate, without installing
 ```
 
 ## Usage

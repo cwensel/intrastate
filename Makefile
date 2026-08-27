@@ -16,12 +16,12 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w \
-	-X github.com/newcoinc/intrastate/internal/version.version=$(VERSION) \
-	-X github.com/newcoinc/intrastate/internal/version.commit=$(COMMIT) \
-	-X github.com/newcoinc/intrastate/internal/version.date=$(DATE)
+	-X github.com/cwensel/intrastate/internal/version.version=$(VERSION) \
+	-X github.com/cwensel/intrastate/internal/version.commit=$(COMMIT) \
+	-X github.com/cwensel/intrastate/internal/version.date=$(DATE)
 
 .PHONY: docs docs-check all check fmt fmt-check vet lint graph-lint test test-ci vuln tools \
-	tidy clean build install uninstall hooks
+	tidy clean build install uninstall hooks snapshot release-check
 
 all: check
 
@@ -136,6 +136,45 @@ $(GOLANGCI_LINT):
 
 tidy:
 	$(GO) mod tidy
+
+# Build the full release matrix locally, exactly as CI does, without
+# publishing anything. The local mirror of the `snapshot` CI job — run it
+# before cutting a tag to see the real artifacts.
+snapshot:
+	$(GO) run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+
+# The distribution gate: assert a released artifact was stamped BY LDFLAGS.
+# The `-X` paths in .goreleaser.yaml name the module path, and if they stop
+# matching go.mod nothing fails to build — the binary silently falls back to
+# internal/version's VCS stamps. A shipped binary that cannot name its
+# release is the defect this catches.
+#
+# The oracle is the commit width, not the presence of text. Checking for
+# "dev"/"none"/"unknown" does NOT work: inside a git repo the VCS fallback
+# fills those in with real-looking values, so an unstamped build passes such
+# a check (verified). The two paths are distinguishable because the fallback
+# truncates to internal/version's vcsRevisionLen (12) and may append
+# "-dirty", while goreleaser passes {{ .Commit }} — the full 40-char SHA.
+# So: exactly 40 hex chars means ldflags won, which is the property under
+# test. Keep this in sync with vcsRevisionLen if that constant changes.
+#
+# Runs against the freshly built dist/, so it must follow a goreleaser run;
+# CI invokes it directly after one.
+release-check:
+	@bin=$$(find dist -type f -name intrastate -perm -u+x 2>/dev/null | head -1); \
+	if [ -z "$$bin" ]; then \
+		echo "error: no built binary under dist/ — run 'make snapshot' first" >&2; \
+		exit 1; \
+	fi; \
+	out=$$("$$bin" version); \
+	echo "$$out"; \
+	commit=$$(printf '%s' "$$out" | sed -n 's/.*commit \([0-9a-f]*\).*/\1/p'); \
+	if [ $${#commit} -ne 40 ]; then \
+		echo "error: built binary was not stamped by ldflags (commit '$$commit' is $${#commit} chars, want 40)" >&2; \
+		echo "it fell back to VCS stamps: the -X paths in .goreleaser.yaml no longer match the module path in go.mod" >&2; \
+		exit 1; \
+	fi; \
+	echo "release-check: build identity stamped by ldflags"
 
 clean:
 	rm -rf $(BIN_DIR) coverage.out dist

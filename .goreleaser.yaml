@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: intrastate
+
+before:
+  hooks:
+    - go mod tidy
+
+# ONE build block covers every target. intrastate is pure Go — no cgo, no
+# third-party C — so `CGO_ENABLED=0` cross-compiles all five targets from a
+# single ubuntu runner. This is the deliberate difference from retrofit,
+# whose split into two configs and two runners exists solely because it
+# links libpg_query via cgo and cgo defeats free cross-compilation. Adopting
+# that split here would buy nothing and cost a merge job.
+#
+# Keep this a single block: the moment a cgo dependency lands, this file has
+# to be re-shaped the way retrofit's was, and a per-OS split is the answer
+# then — not before.
+builds:
+  - id: intrastate
+    main: ./cmd/intrastate
+    binary: intrastate
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      # windows/arm64 has no user asking for it; drop it rather than ship an
+      # untested target.
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    # These -X paths must track the module path in go.mod. When they drift,
+    # nothing fails to build — the binary just reports "dev" forever, which
+    # is exactly the silent failure internal/version's VCS fallback exists to
+    # soften. `make release-check` asserts a built binary reports a real
+    # version, so the drift surfaces as a failing check rather than a
+    # mystery in the field.
+    ldflags:
+      - -s -w
+      - -X github.com/cwensel/intrastate/internal/version.version={{ .Version }}
+      - -X github.com/cwensel/intrastate/internal/version.commit={{ .Commit }}
+      - -X github.com/cwensel/intrastate/internal/version.date={{ .CommitDate }}
+    # Reproducible archives: stamp files with the commit time, not build time.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Consumers glob for this shape (`intrastate_*_<os>_<arch>.tar.gz`), so
+    # it is a compatibility surface, not cosmetics. Changing it breaks any
+    # fetcher that resolves an asset by name.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# Snapshot builds (CI, per-commit) carry a version derived from the last tag
+# so an untagged repo still produces a coherent `0.0.1-next`.
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+# `release` stays ENABLED here, unlike retrofit's config. The snapshot half
+# of CI passes `--snapshot`, which suppresses publishing on its own, so one
+# config serves both paths: `release.yml` publishes a real GitHub Release on
+# a v* tag, and `ci.yml` builds the same artifacts without publishing.
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    Download the archive for your platform below, or:
+
+    ```sh
+    go install github.com/cwensel/intrastate/cmd/intrastate@{{ .Tag }}
+    ```
+
+    Verify a download against `checksums.txt`:
+
+    ```sh
+    sha256sum -c checksums.txt --ignore-missing
+    ```

@@ -63,10 +63,51 @@ make hooks     # install .githooks (pre-commit: gofmt + go vet;
                #   commit-msg: Conventional Commits; and post-* hooks)
 ```
 
-CI runs four jobs (see `.github/workflows/ci.yml`): `test` (`make
+CI runs six jobs (see `.github/workflows/ci.yml`): `test` (`make
 test-ci`), `lint` (`make fmt-check` + golangci-lint), `vuln`
-(govulncheck), and `graph-lint`, which builds the binary and lints
-`models/rdr.toml` — the RDR 0006 acceptance gate.
+(govulncheck), `graph-lint`, which builds the binary and lints
+`models/rdr.toml` — the RDR 0006 acceptance gate — `docs` (`make
+docs-check`), and `snapshot`, described below.
+
+### Distribution
+
+Binaries reach users by two paths, both driving the same
+`.goreleaser.yaml`. intrastate is pure Go, so one Ubuntu runner
+cross-compiles every target; there is no per-OS matrix.
+
+**Tagged releases** are the installable artifact. Pushing a `v*` tag runs
+`.github/workflows/release.yml`, which re-runs `make check` against the
+tagged commit and then publishes a GitHub Release with a tarball per
+platform plus `checksums.txt`:
+
+```sh
+git tag -a v0.1.0 -m 'v0.1.0'
+git push origin v0.1.0
+```
+
+A tag is permanent once published, so the release workflow verifies the
+commit itself rather than assuming it passed CI on the way through `main`.
+
+**Snapshots** are per-commit builds for consumers pinning an exact
+revision. The `snapshot` job runs on green `main` only and uploads
+`intrastate-snapshot-<sha>` as an Actions artifact (7-day retention):
+
+```sh
+gh run download <run-id> --repo cwensel/intrastate \
+  --name intrastate-snapshot-<sha>
+```
+
+Preview the full artifact set locally without publishing:
+
+```sh
+make snapshot       # builds dist/ exactly as CI does
+make release-check  # asserts the built binary reports its build identity
+```
+
+`release-check` guards a silent failure: the `-X` ldflags paths in
+`.goreleaser.yaml` name the module path, and if they stop matching
+`go.mod` nothing fails to build — the binary just falls back to VCS
+stamps and can no longer name its release. Both CI paths run it.
 
 ### Reference docs are generated
 

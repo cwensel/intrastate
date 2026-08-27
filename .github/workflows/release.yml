@@ -1,0 +1,55 @@
+name: Release
+
+# The TAGGED half of distribution. Pushing a `v*` tag publishes a GitHub
+# Release carrying a tarball per platform plus checksums.txt — the artifacts
+# an unauthenticated `curl` (or the Release page) can fetch, and the reason
+# this repo being public buys a simpler mechanism than a private one can use.
+#
+# The untagged half is the `snapshot` job in ci.yml. Both drive the same
+# `.goreleaser.yaml`; that one passes `--snapshot` to suppress publishing.
+#
+# Cut a release with:
+#   git tag -a v0.1.0 -m 'v0.1.0' && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  # Creating a Release and uploading its assets is a write to repo contents.
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # goreleaser builds the changelog from the commits since the previous
+      # tag, so it needs full history and tags — not a shallow clone.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # A tag is permanent once published, so the gates run here too rather
+      # than trusting that the tagged commit passed CI on its way through
+      # main. A tag can be cut from any commit, including one that never saw
+      # a green run.
+      - name: Verify the tagged commit
+        run: make check
+
+      # No per-OS matrix: intrastate is pure Go and cross-compiles every
+      # target from this one runner. See .goreleaser.yaml.
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Supplied by Actions; scoped by the `contents: write` permission
+          # above. No PAT or org secret is involved.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

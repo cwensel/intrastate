@@ -114,3 +114,60 @@ jobs:
 
       - name: Verify the committed reference matches the command tree
         run: make docs-check
+
+  # Per-commit binaries for consumers that pin an exact revision. Runs only
+  # on green `main` (and manual dispatch), because a snapshot a fetcher can
+  # resolve must never come from a commit that failed its own gates —
+  # `needs:` names every gate above for that reason.
+  #
+  # This is the UNTAGGED half of distribution. Tagged, publicly downloadable
+  # builds are `release.yml`; both drive the same `.goreleaser.yaml`, this
+  # one with `--snapshot` so nothing is published. One config, two paths.
+  #
+  # Consumers fetch with the GitHub CLI, resolving the artifact by name:
+  #   gh run download <run-id> --repo cwensel/intrastate \
+  #     --name intrastate-snapshot-<sha>
+  # then verify the tarball against the bundled checksums.txt before use.
+  # The artifact name embeds the commit SHA so a fetcher can pin a revision
+  # rather than trusting "whatever is newest".
+  snapshot:
+    name: Snapshot build
+    needs: [test, lint, vuln, graph-lint, docs]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # goreleaser derives the version from tag history, so it needs the
+      # full history — a shallow clone silently yields a wrong version.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # intrastate is pure Go, so one ubuntu runner cross-compiles every
+      # target. No per-OS matrix and no merge job — see .goreleaser.yaml.
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+
+      # Fail loudly rather than publish a binary that reports "dev": the
+      # ldflags -X paths must track the module path, and nothing else in
+      # the build catches that drift.
+      - name: Verify the built binary reports its identity
+        run: make release-check
+
+      - name: Upload snapshot artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: intrastate-snapshot-${{ github.sha }}
+          path: |
+            dist/intrastate_*.tar.gz
+            dist/intrastate_*.zip
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 7
