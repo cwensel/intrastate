@@ -237,7 +237,12 @@ Shared input grammar
                         Repeatable. Never discovered — an unbound role a
                         verb needs refuses with flow-artifact-missing.
   --tag name=value      observed context. Repeatable. A set value is a
-                        JSON array literal.
+                        JSON array literal. A repeated key is
+                        flow-tag-duplicate; a malformed one is
+                        flow-tag-invalid.
+
+  A model that cannot be loaded refuses under flow-model-invalid,
+  carrying one finding per load category.
 
   --tag carries OBSERVED tags only. Naming an owned key refuses with
   flow-tag-owned and naming a reserved key refuses with
@@ -361,6 +366,13 @@ Gates
   into the refusal flow-gate-denied is flow resolve's job: next
   reports, it does not adjudicate.
 
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
+
 Exits
 
   0  candidates reported, including none, and including denied gates.
@@ -444,6 +456,13 @@ No gates
 
 --tag is not accepted here: there is no verdict for observed context to
 inform.
+
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
 
 Exits
 
@@ -546,6 +565,13 @@ Refusals
   Gates on the selected row all run; every result is reported; deny
   overrides both allow and indeterminate.
 
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
+
 Exits
 
   0  exactly one plan.
@@ -644,6 +670,13 @@ Nothing links this to a prior resolve
   It does not know a resolve call happened, and there is no token or
   session to carry. Transcribing a plan is a caller convenience; the
   read-back is the only guarantee.
+
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
 
 Exits
 

@@ -117,7 +117,12 @@ Shared input grammar
                         Repeatable. Never discovered — an unbound role a
                         verb needs refuses with ` + codeArtifactMissing + `.
   --tag name=value      observed context. Repeatable. A set value is a
-                        JSON array literal.
+                        JSON array literal. A repeated key is
+                        ` + codeTagDuplicate + `; a malformed one is
+                        ` + codeTagInvalid + `.
+
+  A model that cannot be loaded refuses under ` + codeModelInvalid + `,
+  carrying one finding per load category.
 
   --tag carries OBSERVED tags only. Naming an owned key refuses with
   ` + codeTagOwned + ` and naming a reserved key refuses with

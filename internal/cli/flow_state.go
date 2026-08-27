@@ -109,6 +109,13 @@ No gates
 --tag is not accepted here: there is no verdict for observed context to
 inform.
 
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
+
 Exits
 
   0  every declared reader reported.
@@ -236,6 +243,13 @@ Nothing links this to a prior resolve
   It does not know a resolve call happened, and there is no token or
   session to carry. Transcribing a plan is a caller convenience; the
   read-back is the only guarantee.
+
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  tag and artifact validation, and the accessor and environment failures
+  are common to every flow verb and are listed once under
+  "intrastate flow --help-all" rather than repeated here.
 
 Exits
 

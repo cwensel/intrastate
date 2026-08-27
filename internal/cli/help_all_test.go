@@ -140,6 +140,27 @@ func TestRootHelpAll_DumpsTheWholeTree(t *testing.T) {
 	}
 }
 
+// TestHelpAll_BothWholeReferenceSpellingsAgree pins that the two
+// documented ways to ask for the whole reference produce the SAME
+// document. They diverged once: `help --all` printed the terse root body
+// plus every descendant's extended body, but silently dropped the root's
+// own — so the alias omitted the vocabulary, the output modes, and the
+// exit contract. Byte equality is the only oracle that catches that,
+// since both spellings still printed something plausible.
+func TestHelpAll_BothWholeReferenceSpellingsAgree(t *testing.T) {
+	viaFlag, _ := runHelp(t, "--help-all")
+	viaSubcommand, _ := runHelp(t, "help", "--all")
+	if viaFlag != viaSubcommand {
+		t.Errorf("`intrastate --help-all` and `intrastate help --all` "+
+			"disagree.\n--help-all is %d bytes, help --all is %d bytes",
+			len(viaFlag), len(viaSubcommand))
+	}
+	// Guard against them agreeing by both being empty.
+	if !strings.Contains(viaFlag, "Extended help:") {
+		t.Errorf("the whole reference carries no extended body")
+	}
+}
+
 // TestLintHelpAll_PublishesTheLiveTaxonomy is the anti-drift oracle for
 // lint. The body is generated from graphlint's own accessors, so this
 // passes by construction today — and fails loudly if someone later

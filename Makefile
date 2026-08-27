@@ -90,32 +90,28 @@ graph-lint: build
 docs: build
 	$(BIN) docs --dir .
 
-# The staleness gate. Regenerates into the working tree and fails if the
-# committed copies differ, so a renamed code cannot land with stale markdown
-# beside it. Refuses up front on an already-dirty tree, which would otherwise
-# produce a confusing failure that blames this target for unrelated edits.
+# The staleness gate: regenerate into a scratch directory and compare with
+# the committed copies. It deliberately does NOT diff the working tree
+# against HEAD — that rejected correctly-regenerated-but-uncommitted files,
+# so the documented `make docs` then `make check` sequence always failed and
+# told you to stash the very files you had just correctly regenerated.
+# Comparing against a fresh render answers the only question that matters:
+# do the committed files match what this binary emits?
 DOCS_FILES = docs/cli-reference.md llms.txt
 
-# `git diff HEAD` (not bare `git diff`) is load-bearing: bare `git diff`
-# compares the working tree to the INDEX, so files already `git add`-ed
-# compare clean and the gate silently passes on real drift. Comparing to
-# HEAD catches staged and unstaged changes alike. Untracked files are
-# caught separately via ls-files, since no diff reports them.
 docs-check: build
-	@if ! git diff --quiet HEAD -- $(DOCS_FILES) 2>/dev/null; then \
-		echo "error: generated docs have uncommitted changes before regenerating:"; \
-		git --no-pager diff --stat HEAD -- $(DOCS_FILES); \
-		echo "commit or stash them first, then re-run."; \
-		exit 1; \
-	fi
-	@$(BIN) docs --dir . >/dev/null
-	@if ! git diff --quiet HEAD -- $(DOCS_FILES) 2>/dev/null || \
-	    [ -n "$$(git ls-files --others --exclude-standard -- $(DOCS_FILES))" ]; then \
-		echo "error: generated docs are stale. Run: make docs"; \
-		git --no-pager diff HEAD -- $(DOCS_FILES); \
-		exit 1; \
-	fi
-	@echo "docs up to date"
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT; \
+	$(BIN) docs --dir "$$tmp" >/dev/null; \
+	status=0; \
+	for f in $(DOCS_FILES); do \
+		if ! diff -q "$$f" "$$tmp/$$f" >/dev/null 2>&1; then \
+			echo "error: $$f is stale. Run: make docs"; \
+			diff -u "$$f" "$$tmp/$$f" | head -40; \
+			status=1; \
+		fi; \
+	done; \
+	if [ $$status -eq 0 ]; then echo "docs up to date"; fi; \
+	exit $$status
 
 test:
 	$(GO) test -race -covermode=atomic -coverprofile=coverage.out ./...

@@ -243,10 +243,18 @@ func wireHelpSubcommandAll(root, helpCmd *cobra.Command) {
 			}
 			return
 		}
-		// With no args, dump the whole tree.
+		// With no args, dump the whole tree — through the SAME path
+		// `intrastate --help-all` takes, so the two documented spellings
+		// of "the whole reference" cannot diverge. Calling HelpFunc plus
+		// writeAllExtended separately is what let them: that pair printed
+		// the terse root body and every DESCENDANT's extended body, but
+		// silently dropped the root's own — the vocabulary, output modes,
+		// and exit contract — from the alias.
 		if len(args) == 0 {
-			root.HelpFunc()(root, args)
-			writeAllExtended(c.OutOrStdout(), root, true)
+			emitHelpAll(root)
+			if root.Annotations != nil {
+				delete(root.Annotations, helpAllEmittedKey)
+			}
 			return
 		}
 		target, _, err := root.Find(args)
