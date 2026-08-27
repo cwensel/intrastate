@@ -1,0 +1,48 @@
+# intrastate
+
+> A Go CLI that makes workflow state transitions explicit, reviewable,
+> and deterministic. A flow is authored once as a transition model — a
+> TOML document of tags, rules, guards, and writes — and callers
+> navigate it by asking the CLI rather than reimplementing the flow in
+> a skill, script, or agent. Given the same model, state, tags, and
+> recognized outcome, the answer is the same every time: one legal
+> plan, or one typed refusal.
+
+The binary is authoritative and self-describing. Prefer asking it over
+reading any file here — a file is a snapshot, the binary is the build
+you actually have:
+
+```sh
+intrastate --help-all      # every command's full reference
+intrastate <cmd> --help-all
+intrastate <cmd> --as=json # one terminal JSON envelope per run
+```
+
+## Commands
+
+- `intrastate flow`: Drive a transition model from a skill
+- `intrastate flow next`: Report the candidate rules the supplied state can take
+- `intrastate flow read-state`: Report what the declared read accessors see
+- `intrastate flow resolve`: Map one recognized outcome to exactly one plan
+- `intrastate flow set-state`: Apply planned owned-tag writes, verified by read-back
+- `intrastate lint`: Check a transition model against the graph invariants
+- `intrastate version`: Print build version, commit, and date
+
+## Docs
+
+- [CLI reference](docs/cli-reference.md): every command, flag, and
+  extended body — generated from the command tree.
+- [Model authoring](docs/model-authoring.md): how to author a
+  transition model in TOML — the model class, a decision table's
+  cells, and the escape row. Not derivable from the CLI surface.
+- [Output contract](docs/cli-output-contract.md): worked JSON
+  payloads and the rationale behind the envelope shape.
+- [README](README.md): what it is, install, and a first invocation.
+
+## Optional
+
+- [Decision records](docs/rdr/): the locked design decisions behind
+  the contracts above. History and rationale; the code is the source
+  of truth.
+- [CONTRIBUTING](CONTRIBUTING.md): layout, the contract every verb
+  follows, and the build targets.

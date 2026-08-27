@@ -35,6 +35,13 @@ func Get() Info {
 }
 
 // String renders the build identity for `--version` output.
+// TextLine satisfies respond.TextLiner so `intrastate version` renders
+// as the one build-identity line rather than a field-per-line payload,
+// while still routing through the output gateway (and so, stdout).
+// It is String() under the name the gateway asks for; both stay because
+// the identity is also useful in error text and test failures.
+func (i Info) TextLine() string { return i.String() }
+
 func (i Info) String() string {
 	return fmt.Sprintf("%s (commit %s, built %s)", i.Version, i.Commit, i.Date)
 }

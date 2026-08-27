@@ -117,6 +117,16 @@ func runLint(cmd *cobra.Command, _ []string) error {
 		return respond.Fail(cmd, ce)
 	}
 
+	// `lint` keeps its OWN selection codes, deliberately. RDR 0006 REQ-10
+	// makes this command's input contract normative and defers only
+	// "cosmetic flag spelling" to RDR 0005, and REQ-11 fixes both-flags as
+	// `flag-mutually-exclusive`. The `flow` group's `flow-model-not-found`
+	// is therefore NOT the code here, and the two surfaces differ by
+	// contract rather than by drift — `lint_0006_test.go` pins it.
+	//
+	// What is shared is the ARM SET: neither flag, both flags, and an
+	// unresolvable `--flow` id each refuse, so no arm silently ignores a
+	// flag the command registers.
 	modelPath, _ := cmd.Flags().GetString("model")
 	flowID, _ := cmd.Flags().GetString("flow")
 	if modelPath != "" && flowID != "" {
@@ -124,6 +134,19 @@ func runLint(cmd *cobra.Command, _ []string) error {
 			Code:    "flag-mutually-exclusive",
 			Message: "--flow and --model are mutually exclusive",
 			Group:   clierr.GroupUserEnv,
+		})
+	}
+	if modelPath == "" && flowID != "" {
+		// Previously this fell through to `flag-required` naming `model`,
+		// which reported on a flag the caller had not used and said
+		// nothing about the one they had. `--flow` resolves no ids in this
+		// build, so the honest refusal names `--flow` and the remedy.
+		return respond.Fail(cmd, &clierr.CLIError{
+			Code:    "flag-invalid-value",
+			Param:   "flow",
+			Message: "no model is registered for the flow id " + flowID,
+			Group:   clierr.GroupUserEnv,
+			Hint:    "give --model <path> instead",
 		})
 	}
 	if modelPath == "" {

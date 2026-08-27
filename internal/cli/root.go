@@ -194,6 +194,8 @@ func NewRootCmd() *cobra.Command {
 	// The `flow` group is RDR 0005's skill-integration surface. `lint`
 	// stays at ROOT and is deliberately NOT absorbed into it (`0005:C1`).
 	cmd.AddCommand(newFlowCmd())
+	// Hidden: it addresses maintainers, not callers. See docs.go.
+	cmd.AddCommand(newDocsCmd())
 
 	// MUST run last: registerHelpAllOnTree captures each command's Args
 	// at registration time and needs every subcommand already attached.

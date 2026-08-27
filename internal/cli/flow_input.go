@@ -100,24 +100,41 @@ func envErr(code, param, message string) *clierr.CLIError {
 // The CLI performs the file I/O and hands the loader BYTES plus a source id
 // (REQ-23): `table.Load` does no file I/O, so an unreadable path is this
 // command's failure and never a load category.
-func selectModel(cmd *cobra.Command) (*table.Model, string, *clierr.CLIError) {
+// selectModelPath resolves the `--model` / `--flow` pair to a path, or to
+// the ONE refusal REQ-90 fixes for every arm of the selection.
+//
+// It is shared by the `flow` verbs and by root `lint` so the two cannot
+// disagree about what selection means. `lint` previously carried its own
+// copy that answered `flag-required` / `flag-mutually-exclusive`, which
+// left a caller branching on `flow-model-not-found` — the code the
+// contract names for "neither / both … or the selection does not
+// resolve" — with an unhandled refusal from one model-taking command.
+func selectModelPath(cmd *cobra.Command) (string, *clierr.CLIError) {
 	path, _ := cmd.Flags().GetString("model")
 	flowID, _ := cmd.Flags().GetString("flow")
 
 	switch {
 	case path != "" && flowID != "":
-		return nil, "", userErr(codeModelNotFound, "model",
+		return "", userErr(codeModelNotFound, "model",
 			"--model and --flow are mutually exclusive; give exactly one")
 	case path == "" && flowID == "":
-		return nil, "", userErr(codeModelNotFound, "model",
+		return "", userErr(codeModelNotFound, "model",
 			"model selection requires exactly one of --model <path> or --flow <id>")
 	case path == "":
 		// `--flow <id>` config discovery. `--model <path>` ships first
 		// (`0005:EIA`); an id this build cannot resolve is a REFUSAL under
 		// the same code, not a missing feature (A-1).
-		return nil, "", userErr(codeModelNotFound, "flow",
+		return "", userErr(codeModelNotFound, "flow",
 			"no model is registered for the flow id "+flowID+
 				"; give --model <path> instead")
+	}
+	return path, nil
+}
+
+func selectModel(cmd *cobra.Command) (*table.Model, string, *clierr.CLIError) {
+	path, ce := selectModelPath(cmd)
+	if ce != nil {
+		return nil, "", ce
 	}
 
 	src, err := os.ReadFile(path)

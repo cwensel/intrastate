@@ -12,7 +12,6 @@ live under [`docs/`](docs/).
     stdout/stderr routes through this package; honors `--as text|json`.
   - **`internal/cli/clierr/`** — structured `CLIError` type and
     exit-code mapping.
-  - **`internal/cli/config/`** — `intrastate.toml` discovery and loader.
 - **`internal/version/`** — build-identity metadata set via `-ldflags`.
 
 New domain packages live under `internal/` (or `pkg/` if they become a
@@ -30,7 +29,9 @@ public API). Keep `cmd/` a shim.
    plain-text errors don't stack above the structured envelope.
 
 `internal/cli/version.go` is the worked example; copy it. Its test in
-`version_test.go` is the harness pattern for new verb tests.
+`version_test.go` is the harness pattern for new verb tests. Note it
+routes BOTH modes through `respond.OK` — a payload whose whole content is
+one line implements `respond.TextLiner` rather than printing directly.
 
 ### Exit codes
 
@@ -51,10 +52,23 @@ branch on:
 make build     # ./bin/intrastate
 make install   # ~/.local/bin/intrastate
 make test      # race + coverage
-make check     # fmt-check + vet + lint + test — local mirror of CI
+make check     # fmt-check + vet + lint + build + graph-lint + docs-check
+               #   + test — local mirror of CI
+make docs      # regenerate docs/cli-reference.md + llms.txt from the CLI
 make vuln      # govulncheck (its own CI job; not in `make check`)
-make hooks     # install .githooks/pre-commit (gofmt + go vet)
+make hooks     # install .githooks (pre-commit: gofmt + go vet;
+               #   commit-msg: Conventional Commits; and post-* hooks)
 ```
 
-CI runs `make test-ci`, `make fmt-check` + golangci-lint, and
-govulncheck (see `.github/workflows/ci.yml`).
+CI runs four jobs (see `.github/workflows/ci.yml`): `test` (`make
+test-ci`), `lint` (`make fmt-check` + golangci-lint), `vuln`
+(govulncheck), and `graph-lint`, which builds the binary and lints
+`models/rdr.toml` — the RDR 0006 acceptance gate.
+
+### Reference docs are generated
+
+`docs/cli-reference.md` and `llms.txt` are generated from the command
+tree by `make docs`; `make check` fails when they are stale. Never edit
+them by hand — change the command's `Long` or its `withExtendedHelp`
+body and regenerate. The binary is the source of truth for the flag
+grammar, the finding taxonomy, and the refusal codes.

@@ -1,37 +1,20 @@
 # CLI output contract
 
-Every verb routes stdout and stderr through `internal/cli/respond`. This
-document is the authoritative description of what that gateway emits.
+Worked payloads and the reasoning behind the envelope shape.
 
-## Modes
+**The binary states the contract itself.** `intrastate --help-all` lists
+the output modes, the refusal codes each verb can return, and the
+exit-code contract, spelled through the same constants the wire is
+emitted from. This document does not repeat that reference — it carries
+what help output cannot: real payloads to parse against, and the *why*
+behind the shapes.
 
-The persistent root flag `--as text|json` selects the wire format.
-Unknown values are refused (`flag-invalid-value`, exit 2).
+For the mode/stream summary and the exit table, run:
 
-## `--as=text`
-
-- **stdout** — verb-defined human output.
-- **stderr** — advisory and error lines:
-  - `note: <message>`
-  - `warning: <message>` (with optional `  detail:` / `  hint:` lines)
-  - `error: <code>: <message>` (with optional `  detail:` / `  hint:`)
-
-## `--as=json`
-
-- **stdout** — exactly one terminal envelope, discriminated by `type`:
-  - `{"type":"ok", ...}` on success
-  - `{"type":"failed", ...}` is not emitted by `Fail`; instead the
-    structured `CLIError` envelope (`{"code":...,"message":...}`) is
-    written to stdout so a single stream carries both dispositions.
-    _(Revisit this if/when an intermediate-record `Stream` emitter is
-    added — at that point the terminal record should carry an explicit
-    `type` discriminator.)_
-- **stderr** — advisories only, discriminated by `level`:
-  - `{"level":"note","message":...}`
-  - `{"level":"warning","message":...,"code":...}`
-
-The terminal record is emitted on every graceful exit. Its absence means
-the process was killed.
+```sh
+intrastate --help-all      # vocabulary, output modes, exit codes
+intrastate lint --help-all # the live finding taxonomy
+```
 
 ## Structured findings
 
@@ -96,16 +79,17 @@ equality byte equality. `clierr.WriteJSONLine` is the non-HTML-escaping
 JSON line writer the envelope itself is emitted through; it does not sort
 or deduplicate, so it is not by itself the canonical-set encoder.
 
-## Exit codes
+## Why exit 2 and exit 3 are separate
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md#exit-codes). The mapping lives
-in `clierr.ExitCodeFor`.
+`intrastate --help-all` carries the exit table; the mapping lives in
+`clierr.ExitCodeFor`. What matters here is the reasoning, because it
+constrains every future refusal:
 
 **Exit 3 means the environment could not be consulted, and the same
-request may be re-run unchanged.** It is the retriable class: an accessor
-timed out, failed to execute, returned an incomplete key set, or a
-post-mutation read-back timed out or did not complete. The remedy is to
-repair the environment and re-issue the identical request.
+request may be re-run unchanged.** An accessor timed out, failed to
+execute, returned an incomplete key set, or a post-mutation read-back did
+not complete. The remedy is to repair the environment and re-issue the
+identical request.
 
 Every other failure is exit 2 — the request or the model is wrong, or the
 model said no. The split is what makes a caller's retry loop safe: a
@@ -145,7 +129,7 @@ intrastate flow resolve --model pricing.toml \
 
 # Report what the declared read accessors see. Runs EVERY declared reader,
 # so every declared role must be bound.
-intrastate flow read-state --flow my-flow \
+intrastate flow read-state --model flow.toml \
   --artifact state=./state.json --artifact notes=./notes.json --as=json
 
 # Apply planned owned-tag writes, verified by read-back. A set value is a

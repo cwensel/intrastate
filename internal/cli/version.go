@@ -26,12 +26,14 @@ that produced any other output.`,
 			if ce := respond.ValidateMode(cmd); ce != nil {
 				return respond.Fail(cmd, ce)
 			}
-			info := version.Get()
-			if respond.ModeOf(cmd) == respond.ModeText {
-				cmd.Println(info.String())
-				return nil
-			}
-			return respond.OK(cmd, respond.Success{Data: info})
+			// Both modes route through the gateway. An earlier cut
+			// special-cased text with `cmd.Println`, which cobra sends to
+			// OutOrStderr — so `$(intrastate version)` captured nothing,
+			// and the one direct print in this package sat in the file
+			// CONTRIBUTING names as the copy-me example. respond/text.go
+			// calls that print out by name as the drift it exists to
+			// avoid (REQ-10); this is that drift removed.
+			return respond.OK(cmd, respond.Success{Data: version.Get()})
 		},
 	}
 	withExtendedHelp(cmd, versionExtendedDesc)

@@ -55,6 +55,17 @@ type Success struct {
 	Data     any        `json:"data,omitempty"`
 }
 
+// TextLiner is the interface a verb's Data payload satisfies when its
+// whole content is one canonical line — a build identity, say — rather
+// than a set of fields worth enumerating.
+//
+// Like FindingCarrier it is an interface rather than a field on Success,
+// so the gateway still gains no knowledge of any verb's payload: a verb
+// opts in by having a TextLine method, and the gateway asks.
+type TextLiner interface {
+	TextLine() string
+}
+
 // FindingCarrier is the interface a verb's Data payload satisfies when it
 // carries structured findings the text branch must enumerate.
 //
@@ -142,6 +153,19 @@ func OK(cmd *cobra.Command, s Success) error {
 			clierr.EmitFindingsText(cmd.OutOrStdout(), carrier.LintFindings())
 			return nil
 		}
+		// A payload whose content is ONE canonical line renders as that
+		// line. The generic renderer below would spread it over a sorted
+		// leaf per field, which is right for a structured result and wrong
+		// for an identity string a caller pipes or greps.
+		//
+		// It is the same content either way — TextLine is derived from the
+		// same value the JSON branch marshals — so this narrows the
+		// FORMAT, which A-11 leaves free, and not the content, which
+		// REQ-11 fixes.
+		if liner, ok := s.Data.(TextLiner); ok {
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), liner.TextLine())
+			return nil
+		}
 		// Any other payload is rendered field-for-field from the SAME value
 		// the JSON branch marshals, so the two modes cannot disagree about
 		// what the run reported (RDR 0005 REQ-7/REQ-9/REQ-11/REQ-120).
@@ -169,6 +193,14 @@ func Fail(cmd *cobra.Command, ce *clierr.CLIError) *clierr.CLIError {
 
 // Note emits a free-form advisory: "note: …" on stderr in text mode, a
 // {"level":"note", …} line on stderr in json mode.
+//
+// No verb emits an advisory yet, so static analysis reports this and Warn
+// below as unreachable. They are kept deliberately: the advisory stream is
+// a specified tier of the wire contract (docs/cli-output-contract.md,
+// RDR 0005), and this is the gateway API that tier is served through.
+// Deleting them would delete a documented surface and push the next verb
+// that needs an advisory toward a direct print — the exact drift the
+// gateway exists to prevent.
 func Note(cmd *cobra.Command, message string) {
 	stderr := cmd.ErrOrStderr()
 	if ModeOf(cmd) == ModeJSON {

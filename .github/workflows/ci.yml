@@ -88,3 +88,21 @@ jobs:
             echo "graph lint refused the model with code: $code" >&2
             exit 1
           fi
+
+  # The generated-docs staleness gate. docs/cli-reference.md and llms.txt
+  # are emitted from the live command tree, so a renamed finding code or a
+  # reworded help body must not land with stale markdown beside it. The
+  # oracle is a regenerate-then-diff against HEAD, the same one
+  # `make docs-check` runs locally.
+  docs:
+    name: Generated docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Verify the committed reference matches the command tree
+        run: make docs-check

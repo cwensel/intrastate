@@ -9,7 +9,6 @@ all wiring lives in `internal/cli`.
 - `internal/cli/` — Cobra command tree and verbs.
   - `respond/` — output gateway (text/json); every verb's I/O goes here.
   - `clierr/` — structured `CLIError` + exit-code mapping.
-  - `config/` — `intrastate.toml` discovery + loader.
 - `internal/version/` — build metadata set via `-ldflags`.
 
 ## Conventions (follow these; don't re-decide)
@@ -33,11 +32,23 @@ all wiring lives in `internal/cli`.
 ```sh
 make build    # ./bin/intrastate
 make test     # race + coverage
-make check    # fmt-check + vet + lint + test (mirror of CI)
+make check    # fmt-check + vet + lint + build + graph-lint
+              #   + docs-check + test (mirror of CI)
+make docs     # regenerate docs/cli-reference.md + llms.txt
 ```
 
 After changing Go code, run `make check` before declaring done.
 
+## Docs
+
+`docs/cli-reference.md` and `llms.txt` are GENERATED from the command
+tree (`make docs`, gated by `make check`). Never hand-edit them: change
+the command's `Long` or its `withExtendedHelp` body instead. The help
+bodies spell finding and refusal codes through the same constants the
+wire uses, so the published vocabulary cannot drift from the emitted one.
+
 ## Output contract
 
-See [docs/cli-output-contract.md](docs/cli-output-contract.md).
+See [docs/cli-output-contract.md](docs/cli-output-contract.md) for worked
+payloads and rationale; run `intrastate --help-all` for the live
+reference.

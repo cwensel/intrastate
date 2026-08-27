@@ -20,7 +20,7 @@ LDFLAGS := -s -w \
 	-X github.com/newcoinc/intrastate/internal/version.commit=$(COMMIT) \
 	-X github.com/newcoinc/intrastate/internal/version.date=$(DATE)
 
-.PHONY: all check fmt fmt-check vet lint graph-lint test test-ci vuln tools \
+.PHONY: docs docs-check all check fmt fmt-check vet lint graph-lint test test-ci vuln tools \
 	tidy clean build install uninstall hooks
 
 all: check
@@ -31,7 +31,7 @@ all: check
 # `build` is a prerequisite because `graph-lint` runs the BUILT command,
 # the same one the CI graph-lint job runs — local parity means the same
 # binary over the same model, not a second code path.
-check: fmt-check vet lint build graph-lint test
+check: fmt-check vet lint build graph-lint docs-check test
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -68,6 +68,40 @@ MODEL ?= models/rdr.toml
 
 graph-lint: build
 	$(BIN) lint --model $(MODEL) --as=json
+
+# Reference docs are GENERATED from the command tree (`internal/cli/docs.go`),
+# never hand-edited: the binary already carries the flag grammar, the finding
+# taxonomy, and the refusal codes, derived from the same constants the wire is
+# emitted from. A hand-maintained copy is a second description that rots.
+docs: build
+	$(BIN) docs --dir .
+
+# The staleness gate. Regenerates into the working tree and fails if the
+# committed copies differ, so a renamed code cannot land with stale markdown
+# beside it. Refuses up front on an already-dirty tree, which would otherwise
+# produce a confusing failure that blames this target for unrelated edits.
+DOCS_FILES = docs/cli-reference.md llms.txt
+
+# `git diff HEAD` (not bare `git diff`) is load-bearing: bare `git diff`
+# compares the working tree to the INDEX, so files already `git add`-ed
+# compare clean and the gate silently passes on real drift. Comparing to
+# HEAD catches staged and unstaged changes alike. Untracked files are
+# caught separately via ls-files, since no diff reports them.
+docs-check: build
+	@if ! git diff --quiet HEAD -- $(DOCS_FILES) 2>/dev/null; then \
+		echo "error: generated docs have uncommitted changes before regenerating:"; \
+		git --no-pager diff --stat HEAD -- $(DOCS_FILES); \
+		echo "commit or stash them first, then re-run."; \
+		exit 1; \
+	fi
+	@$(BIN) docs --dir . >/dev/null
+	@if ! git diff --quiet HEAD -- $(DOCS_FILES) 2>/dev/null || \
+	    [ -n "$$(git ls-files --others --exclude-standard -- $(DOCS_FILES))" ]; then \
+		echo "error: generated docs are stale. Run: make docs"; \
+		git --no-pager diff HEAD -- $(DOCS_FILES); \
+		exit 1; \
+	fi
+	@echo "docs up to date"
 
 test:
 	$(GO) test -race -covermode=atomic -coverprofile=coverage.out ./...
