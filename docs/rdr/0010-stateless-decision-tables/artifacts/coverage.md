@@ -292,3 +292,152 @@ the clause it pins, and every helper is called from at least one such test.
    need the new name.
 5. The 103 `[dump]`-carrying fixtures under `internal/table/testdata/` must
    all gain `"emit"` (REQ-71, ASSUMPTION-8) or they refuse at load.
+
+---
+
+# Phase 2 — REQ-MVV run end to end, actual output
+
+`go test ./...` is GREEN across every package. `TestMVV_StatelessDecisionTables`
+passes all 18 subtests. Below is the MVV driven a second time through the
+BUILT BINARY (`go build ./cmd/intrastate`), so the recorded output is what
+a caller sees rather than what a harness reconstructs. Only the temp-dir
+model path is run-specific.
+
+## REQ-78 / step 2 — partial lint reports the coverage gap
+
+```
+$ intrastate lint --model partial.toml --as=json ; echo exit=$?
+{"code":"graph-lint-failed","message":"the model carries blocking graph-lint findings","findings":[{"code":"graph-coverage-gap","message":"group dt/decide over rows [cell-xp cell-xq cell-yp] leaves 1 of 4 assignments in its scoped product uncovered for the no_match arm; the coverage union must equal the scoped product","model":"dt","severity":"blocking","rule":"cell-xp","element":"dt/decide","dimension":"a,b","class":"no_match"}]}
+exit=2
+```
+
+Exit 2, ONE coverage finding, naming the uncovered cell by its group and
+its two guard dimensions (`a,b`) with the count `1 of 4`. This is the
+POSITIVE finding proving coverage RAN with no root declared — the whole
+point of C5's ∅ seeding.
+
+## REQ-79 / step 3 — complete lint is exactly `[]`
+
+```
+$ intrastate lint --model complete.toml --as=json ; echo exit=$?
+{"type":"ok","data":{"findings":[]}}
+exit=0
+```
+
+No code from the 0006 taxonomy is present (A10).
+
+## REQ-80 / step 3 variant — escape row yields only the advisory
+
+```
+$ intrastate lint --model escape.toml --as=json ; echo exit=$?
+{"type":"ok","data":{"findings":[{"code":"graph-coverage-closed-by-escape","message":"the coverage of group dt/decide is closed by the bare escape row \"otherwise\" rather than proved over its declared domains","model":"dt","severity":"info","rule":"otherwise","element":"dt/decide"}]}}
+exit=0
+```
+
+Exit 0 with exactly the one info-severity advisory — never a bare green.
+
+## REQ-81 / step 4 — resolve returns rule + emit with no `--artifact`
+
+```
+$ intrastate flow resolve --model complete.toml --outcome decide \
+    --tag a=y --tag b=q --as=json ; echo exit=$?
+{"type":"ok","data":{"model":"<model>","revision":"","observed":{"a":"y","b":"q"},"owned":{},"readers":[],"outcome":"decide","rule":"cell-yq","gates":[],"emit":{"code":"4","verdict":"delta"},"next":{},"writes":{},"clear":[],"escaped":false}}
+exit=0
+```
+
+`data.rule` is the fourth rule's id; `data.emit` is its AUTHORED block with
+keys in byte order (`code` before `verdict`); `next`/`writes`/`owned` are
+empty and `readers` is `[]`. `emit` sits immediately after `gates` on the
+wire, and `escaped` still sits after `clear` (REQ-39/REQ-40/REQ-43).
+
+### REQ-38 / SC-5 — the `{}`-never-`null` arm
+
+```
+$ intrastate flow resolve --model noemit.toml --outcome decide \
+    --tag a=y --tag b=q --as=json
+… "gates":[],"emit":{},"next":{} …
+```
+
+### REQ-45 / REQ-99 — text mode, through the GENERIC renderer
+
+```
+$ intrastate flow resolve --model complete.toml --outcome decide --tag a=x --tag b=p
+clear: (none)
+emit.verdict: alpha
+escaped: false
+gates: (none)
+model: <model>
+next: (none)
+observed.a: x
+observed.b: p
+outcome: decide
+owned: (none)
+readers: (none)
+revision:
+rule: cell-xp
+writes: (none)
+
+$ intrastate flow resolve --model noemit.toml --outcome decide --tag a=y --tag b=q | grep '^emit'
+emit: (none)
+```
+
+One path-qualified leaf per pair, and `flatten`'s empty-container arm for an
+unauthored block. No per-verb special case was added (REQ-46).
+
+## REQ-82 / step 5 — dump renders `emit`; `next` carries empty `required`
+
+```
+DumpOrder = [identity source kind outcome atoms next writes requires_owned gate escape emit]
+
+MODEL dt rows=4 outcomes=decide
+identity=dt.cell-xp source=dt:cell-xp kind=transition outcome=decide atoms=[a.eq=x@all; b.eq=p@all] next=[] writes=[] requires_owned=[] gate=[] escape=[] emit=[verdict=alpha]
+identity=dt.cell-xq source=dt:cell-xq kind=transition outcome=decide atoms=[a.eq=x@all; b.eq=q@all] next=[] writes=[] requires_owned=[] gate=[] escape=[] emit=[verdict=beta]
+identity=dt.cell-yp source=dt:cell-yp kind=transition outcome=decide atoms=[a.eq=y@all; b.eq=p@all] next=[] writes=[] requires_owned=[] gate=[] escape=[] emit=[verdict=gamma]
+identity=dt.cell-yq source=dt:cell-yq kind=transition outcome=decide atoms=[a.eq=y@all; b.eq=q@all] next=[] writes=[] requires_owned=[] gate=[] escape=[] emit=[code=4; verdict=delta]
+```
+
+`emit` renders on EVERY row with no `[dump]` declared, appended last after
+`escape`, as `key=value` pairs in key order bracketed like `writes` (see
+`cell-yq`: `[code=4; verdict=delta]`). Taken through `table.Dump` per
+deviations D2 — the repo ships no root `dump` CLI verb.
+
+```
+$ intrastate flow next --model complete.toml --as=json ; echo exit=$?
+{"type":"ok","data":{…,"candidates":[{"rule":"cell-xp","outcome":"decide","required":[],"unknown":[{"key":"a","reason":"absent"},{"key":"b","reason":"absent"}],"next":{},"writes":{},"clear":[]}, …×4]}}
+exit=0
+```
+
+Exit 0, every candidate with empty `required` (A11), and NO `emit` anywhere
+in the payload or on any candidate — `0010:BR4` rejected (REQ-50).
+
+## REQ-83 / step 6 — negative controls
+
+```
+$ intrastate lint --model omitted.toml --as=json ; echo exit=$?
+{"code":"graph-lint-failed",…,"findings":[{"code":"graph-dangling-edge","message":"the model declares no initial owned state; add an `[initial]` table assigning every always-present owned tag","model":"dt","severity":"blocking","element":"model"}]}
+exit=2
+
+$ intrastate flow resolve --model owned.toml --outcome decide --tag a=x --tag b=p --as=json ; echo exit=$?
+{"code":"flow-model-invalid","message":"the selected model could not be loaded","findings":[{"code":"malformed_model_declaration","message":"malformed_model_declaration: [model] class \"decision-table\" declares owned=1; a decision-table model declares zero tags of provenance owned","locator":"<model>:1"}]}
+exit=2
+
+$ intrastate lint --model models/rdr.toml --as=json ; echo exit=$?
+{"type":"ok","data":{"findings":[]}}
+exit=0
+```
+
+The class-omitted control takes `0006:C18`'s missing-root finding at
+`element = model`, unchanged. The owned-tag control refuses
+`malformed model declaration` carrying the literal token `owned=1` and the
+class. The checked-in navigator model lints exactly as before and is
+untouched.
+
+## REQ-84 — end state
+
+Discharged as the inverse invariant across all four cells: what the fixture
+AUTHORS as `[rule.emit]` is what `flow resolve` RETURNS as `data.emit`,
+both by `reflect.DeepEqual` on the decoded object and byte-for-byte against
+the raw wire object. `owned` is `{}` and `readers` is `[]` on every cell —
+no owned state, no accessor, no artifact — and the shipped 0005
+state-machine fixture resolves to `advance-draft` with `owned.status=draft`
+exactly as it did, its `emit` the empty object.
