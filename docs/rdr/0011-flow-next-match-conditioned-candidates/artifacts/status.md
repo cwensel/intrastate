@@ -1,8 +1,8 @@
-RDR: 0011-flow-next-match-conditioned-candidates | phase: 0 — spec audit | state: IN-PROGRESS
-last: Phase 0 wrote req-list.md — 130 REQ, REQ-MVV=REQ-87..94, 2 QUESTIONS resolved to ASSUMPTIONs
+RDR: 0011-flow-next-match-conditioned-candidates | phase: 1 — tests first | state: IN-PROGRESS
+last: Phase 1 wrote 62 tests in 7 *_0011_test.go files citing 130/130 REQ; red gate PASSED (53 change-behaviour red, 9 preservation green)
 blocker: none
-changed: docs/rdr/0011-flow-next-match-conditioned-candidates/artifacts/req-list.md
+changed: internal/cli/flow_{fixtures,next,all,unknown,demand,mvv,rehome}_0011_test.go, artifacts/{req-list,coverage,deviations}.md
 validate: make check
-next: Phase 1 — test author (red-before-green gate)
+next: Phase 2 — implementer (minimum code to green; start at flow_exec.go::invokedReaders)
 session: 2026-08-26 | rdr-implement-triage rdr-0011
 artifacts: req-list.md coverage.md verification.md deviations.md
