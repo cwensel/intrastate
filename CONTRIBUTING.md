@@ -12,7 +12,10 @@ live under [`docs/`](docs/).
     stdout/stderr routes through this package; honors `--as text|json`.
   - **`internal/cli/clierr/`** — structured `CLIError` type and
     exit-code mapping.
-- **`internal/version/`** — build-identity metadata set via `-ldflags`.
+- **`internal/version/`** — build-identity metadata: `-ldflags` where
+  present, Go's embedded VCS stamps as the fallback, so a plain
+  `go build` / `go install` binary still reports a source revision.
+  Same scheme as retrofit, roborev, and kata.
 
 New domain packages live under `internal/` (or `pkg/` if they become a
 public API). Keep `cmd/` a shim.

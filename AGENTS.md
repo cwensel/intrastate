@@ -9,7 +9,8 @@ all wiring lives in `internal/cli`.
 - `internal/cli/` — Cobra command tree and verbs.
   - `respond/` — output gateway (text/json); every verb's I/O goes here.
   - `clierr/` — structured `CLIError` + exit-code mapping.
-- `internal/version/` — build metadata set via `-ldflags`.
+- `internal/version/` — build metadata: `-ldflags`, falling back to Go's
+  embedded VCS stamps so an unstamped build still names its revision.
 
 ## Conventions (follow these; don't re-decide)
 

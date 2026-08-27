@@ -46,9 +46,16 @@ const versionExtendedDesc = `The three fields identify the build, not the model 
   commit   the source revision the binary was built from.
   date     the build timestamp.
 
-They are stamped at link time. A build produced without those stamps
-reports the ` + "`dev`" + ` identity rather than guessing or failing, so a
-locally built binary is still self-identifying.
+Identity comes from two sources, in order. A release build carries them
+stamped at link time. A plain ` + "`go build`" + ` or ` + "`go install`" + ` carries no
+stamps, so the fields fall back to the VCS metadata Go embeds in every
+binary built inside a repository — the revision (truncated, with a
+` + "`-dirty`" + ` marker when the tree was modified), the commit time, and
+for ` + "`go install module@version`" + ` the module version.
+
+So a binary built any of those ways can still be tied to a source
+revision. Only a build stripped with ` + "`-buildvcs=false`" + `, or made
+outside a repository, reports the bare ` + "`dev`" + ` identity.
 
 Pin the build alongside any captured output — the finding codes, the
 refusal vocabulary, and the lint bounds are all properties of a
