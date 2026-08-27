@@ -37,10 +37,19 @@ type resolvePayload struct {
 	Outcome  string            `json:"outcome"`
 	Rule     string            `json:"rule"`
 	Gates    []gateResult      `json:"gates"`
-	Next     map[string]string `json:"next"`
-	Writes   map[string]string `json:"writes"`
-	Clear    []string          `json:"clear"`
-	Escaped  bool              `json:"escaped"`
+	// Emit is the selected row's `[rule.emit]` block (`0010:C4`): a JSON
+	// object of string values, keys in byte order, present as `{}` — never
+	// `null`, never omitted — when the selected row authored none.
+	//
+	// Its POSITION is fixed immediately after Gates, because the
+	// declaration order IS the JSON key order Go's encoder emits and
+	// displacing Next..EscapeClass would rewrite a key order this RDR does
+	// not own. Gates, not Rule, is the predecessor.
+	Emit    map[string]string `json:"emit"`
+	Next    map[string]string `json:"next"`
+	Writes  map[string]string `json:"writes"`
+	Clear   []string          `json:"clear"`
+	Escaped bool              `json:"escaped"`
 	// EscapeClass is carried only when the plan came from an escape row.
 	EscapeClass string `json:"escape_class,omitempty"`
 }
@@ -146,10 +155,18 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		Outcome:  outcome,
 		Rule:     plan.RuleID,
 		Gates:    gates,
-		Next:     tagMap(plan.NextTags),
-		Writes:   map[string]string{},
-		Clear:    []string{},
-		Escaped:  plan.Escaped,
+		// The join is by rule id, AFTER selection and after the gates: `row`
+		// is what `rowByID` already returned for `plan.RuleID`, so an
+		// escaped plan carries the ESCAPE ROW's own block with no
+		// escape-specific arm, and a row authoring none renders `{}`.
+		// `emit` never crosses the kernel seam, and a gate deny is a
+		// refusal rather than a payload, so this is never computed on a
+		// denied selection.
+		Emit:    emitMap(row.Emit),
+		Next:    tagMap(plan.NextTags),
+		Writes:  map[string]string{},
+		Clear:   []string{},
+		Escaped: plan.Escaped,
 	}
 	if payload.Gates == nil {
 		payload.Gates = []gateResult{}
@@ -180,6 +197,23 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 	}
 
 	return respond.OK(cmd, respond.Success{Data: payload})
+}
+
+// emitMap renders the selected row's emit sequence as the payload's
+// string→string object (`0010:C4`).
+//
+// It allocates UNCONDITIONALLY, so a row authoring no block yields the
+// empty map rather than nil — the difference between `"emit":{}` and
+// `"emit":null` on the wire, and C4 fixes the former. Key ORDER is not this
+// function's to fix: the payload encoder emits a map's keys in byte order
+// with HTML escaping disabled, which is the one policy every other payload
+// map already crosses on, and the row's sequence is key-sorted anyway.
+func emitMap(emit []table.EmitValue) map[string]string {
+	out := make(map[string]string, len(emit))
+	for _, e := range emit {
+		out[e.Key] = e.Value
+	}
+	return out
 }
 
 // rowByID finds the normalized row the kernel selected.

@@ -464,17 +464,17 @@ var resolveGolden = map[string]string{
 	"advance": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"advance",` +
-		`"rule":"prelock","gates":[],"next":{"stage":"prelocked"},` +
+		`"rule":"prelock","gates":[],"emit":{},"next":{"stage":"prelocked"},` +
 		`"writes":{"stage":"prelocked"},"clear":[],"escaped":false}}`,
 	"revise": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"revise",` +
-		`"rule":"resolve-route-back","gates":[],"next":{"stage":"refined"},` +
+		`"rule":"resolve-route-back","gates":[],"emit":{},"next":{"stage":"refined"},` +
 		`"writes":{"stage":"refined"},"clear":[],"escaped":false}}`,
 	"abandon": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"abandon",` +
-		`"rule":"resolve-abandon","gates":[],` +
+		`"rule":"resolve-abandon","gates":[],"emit":{},` +
 		`"next":{"stage":"dropped","status":"abandoned"},` +
 		`"writes":{"stage":"dropped","status":"abandoned"},"clear":[],` +
 		`"escaped":false}}`,
@@ -484,6 +484,6 @@ var resolveGolden = map[string]string{
 // half A15's spike attested only by suite-green.
 const resolveFixtureGolden = `{"type":"ok","data":{"model":"<model>",` +
 	`"revision":"","observed":{},"owned":{"status":"draft"},` +
-	`"readers":["state"],"outcome":"hold","rule":"hold-draft","gates":[],` +
+	`"readers":["state"],"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
 	`"next":{"status":"draft"},"writes":{"status":"draft"},"clear":[],` +
 	`"escaped":false}}`

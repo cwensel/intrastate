@@ -744,15 +744,17 @@ func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
 
 	// The test-side surface RDR 0010 changes: its own suite, the fixture
 	// corpus whose `[dump]` lists must gain `emit` or stop loading, and the
-	// four checked-in expectations 0010's own Done clause licenses by shape
-	// (its REQ-87 (iii) and (iv), plus deviations D3 and D4). Each is named
-	// or bounded rather than waved through, so an unrelated test edit still
-	// fails this guard.
+	// checked-in expectations 0010's own Done clause licenses by shape (its
+	// REQ-87 (ii), (iii) and (iv), plus deviations D3, D4 and D10). Each is
+	// named or bounded rather than waved through, so an unrelated test edit
+	// still fails this guard.
 	allowedTest := func(path string) bool {
 		switch path {
 		case "internal/table/helpers_test.go",
 			"internal/table/dump_test.go",
-			"internal/graphlint/findings_0006_test.go":
+			"internal/table/roundtrip_test.go",
+			"internal/graphlint/findings_0006_test.go",
+			"internal/cli/flow_demand_0011_test.go":
 			return true
 		}
 		return strings.Contains(path, "_0010_test.go") ||
