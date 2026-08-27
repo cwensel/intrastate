@@ -172,6 +172,154 @@ eq = "dead"
 status = "final"
 `
 
+// flowExcludedGateTripwireModel makes "the excluded row's gate did not run"
+// an OBSERVABLE fact rather than an absence.
+//
+// It clones `flowMatchClassesModel`'s two match rows and re-points
+// `match-beta` — the row `--tag phase=alpha` excludes — at a gate whose
+// locator CANNOT BE REACHED. `internal/accessor/executor.go::Gate` answers
+// an unreachable locator with `ClassExecutionFailure`, which
+// `flow_exec.go::runGates` converts to exit 3 carrying the accessor id as
+// `param`. So invoking the excluded row's gate is not a quiet extra call:
+// it TERMINATES the command.
+//
+// That turns REQ-12/REQ-70/REQ-78's obligation into a decisive oracle. The
+// payload alone cannot distinguish "never evaluated the gate" from
+// "evaluated it and discarded the candidate", because both leave
+// `match-beta` off the candidate list. The tripwire can: a build that runs
+// `runGates` before the `excluded(result)` check exits 3 with
+// `param=tripwire` instead of reporting `match-alpha`.
+//
+// The technique is the repo's established no-production-seam idiom — an
+// UNREACHABLE accessor locator, exactly as `flowGateFailModel`
+// (`flow_fixtures_0005_test.go`) provokes exit 3 through the ordinary CLI
+// surface. It is CLONED here rather than reached by editing the 0005
+// fixture, because `TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec`
+// exempts `*_0011_test.go` and would fail an edit to the 0005 file.
+//
+// The PATH is `flow.gate.unreachable` verbatim: `flowbind.verdictFor`
+// matches the ONE segment after the `flow.gate` prefix against a closed
+// set, so a decorated locator like `flow.gate.tripwire.unreachable` falls
+// to the default arm and answers ALLOW — a silently disarmed tripwire.
+// The ACCESSOR ID carries the naming instead, and the id is what
+// `accessorFailure` reports as `param`, which is what the oracle reads.
+//
+// `match-alpha` keeps the REACHABLE `[gate.approval]`, so the same run
+// carries its own negative control: the reported row's gate DID run, which
+// is what rules out a build that evaluates no gate at all.
+const flowExcludedGateTripwireModel = `outcomes = ["alpha", "beta"]
+terminal = ["done"]
+
+[model]
+id = "gatetripwire"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.phase]
+provenance = "observed"
+kind = "enum"
+domain = ["alpha", "beta"]
+single_valued = true
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[gate.approval]
+role = "state"
+path = "flow.gate"
+keys = ["status"]
+timeout = "2s"
+
+[gate.tripwire]
+role = "state"
+path = "flow.gate.unreachable"
+keys = ["status"]
+timeout = "2s"
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "match-alpha"
+gate = ["approval"]
+[rule.match.phase]
+eq = "alpha"
+[rule.match.recognized]
+eq = "alpha"
+[rule.write]
+status = "final"
+
+[[rule]]
+id = "match-beta"
+gate = ["tripwire"]
+[rule.match.phase]
+eq = "beta"
+[rule.match.recognized]
+eq = "beta"
+[rule.write]
+status = "final"
+`
+
+// flowEscapeStripModel authors the ONE row that can witness the probe's
+// escape strip (`0011:A7`).
+//
+// `flowEscapeModel`'s `bail-escape` cannot: `runFlowNext` `continue`s on
+// `len(row.Escape) != 0` BEFORE `probeRow` runs, so that row's absence from
+// the payload is fully explained by the PRE-FILTER and says nothing about
+// what the builder did. And a row whose match FAILS cannot witness it
+// either — `escapeOrRefuse` re-checks the escape edge's own match before
+// rescuing, so a row that is `no_match` because its match failed cannot
+// rescue itself whether the list survives or not.
+//
+// `matching-escape` is the discriminating shape: `escape = ["no_match"]`
+// PLUS a match block that HOLDS over the probed view. Fed to the kernel
+// with the list intact, the main loop skips it as an ordinary candidate,
+// `escapeOrRefuse` finds it the exactly-one viable rescue for `no_match`,
+// and it returns a plan flagged `Escaped: true`. With the list stripped it
+// is an ordinary candidate and the plan is `Escaped: false`. Both
+// dispositions are PLANS, so the flag — not "refused or not" — is what
+// discriminates.
+//
+// It is probed DIRECTLY rather than driven through the CLI, because the
+// pre-filter means no `flow next` invocation ever hands this row to
+// `probeRow`. The strip is a defensive invariant behind that filter, and
+// the direct call is the only construction that observes it.
+const flowEscapeStripModel = flowMVVModel + `
+[[rule]]
+id = "matching-escape"
+escape = ["no_match"]
+[rule.match.status]
+eq = "final"
+[rule.match.recognized]
+eq = "bail"
+`
+
 // flowSetKindedMatchModel is S3(a) — the ONE fixture that separates a
 // filter-applied-over-`KernelRow()` build from a filter-applied-over-
 // `row.Atoms` build (REQ-6, REQ-102).

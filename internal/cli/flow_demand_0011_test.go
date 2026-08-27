@@ -773,6 +773,40 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"clear":[],"escaped":false}}`,
 	},
 	{
+		// The gate-tripwire clone. Its EXCLUDED row's gate sits at an
+		// unreachable locator, so this entry is also the standing proof
+		// that the clone's REPORTED row still reaches an ordinary plan —
+		// a fixture whose every outcome refused would pin nothing about
+		// the gate the tripwire is contrasted against.
+		name:    "flowExcludedGateTripwireModel",
+		model:   flowExcludedGateTripwireModel,
+		outcome: "alpha",
+		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		tags:    []string{"phase=alpha"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{"phase":"alpha"},"owned":{"status":"draft"},` +
+			`"readers":["state"],"outcome":"alpha","rule":"match-alpha",` +
+			`"gates":[{"id":"approval","result":"allow"}],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The escape-strip fixture. `matching-escape` is probed DIRECTLY
+		// by the probe-shape oracle and is never selected here — `hold`
+		// resolves through the ordinary `hold-draft` row, which is what
+		// makes the added escape row a byte-identity NO-OP on the shipped
+		// resolve surface.
+		name: "flowEscapeStripModel", model: flowEscapeStripModel,
+		outcome:  "hold",
+		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		bindOnly: []string{flowOrphanRole},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
 		name: "flowMatchClassesModel", model: flowMatchClassesModel, outcome: "gamma",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +

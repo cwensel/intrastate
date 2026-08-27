@@ -16,6 +16,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/newcoinc/intrastate/internal/table"
 )
 
 // --- the predicate itself ------------------------------------------------
@@ -156,12 +160,43 @@ func TestReq77And101_APresentAndEqualMatchKeyLeavesNoUnknownEntryForThatKey(t *t
 // REQ-70: "gates under `--evaluate-gates` for reported candidates only".
 // ADVERSARIAL — the gate is the observable side effect a match-excluded row
 // must not produce.
+//
+// The obligation is a NON-INVOCATION, and a payload cannot witness one: an
+// implementation that ran the excluded row's gate and then discarded the
+// candidate leaves exactly the same `candidates` array as one that never
+// called it. So the oracle is written over
+// `flowExcludedGateTripwireModel`, whose excluded row carries a gate at an
+// UNREACHABLE locator. Invoking it is an accessor execution failure — exit
+// 3, `param=tripwire` — so the non-invocation becomes the observable fact
+// that the command SUCCEEDED. The payload absence checks are kept as the
+// secondary assertion they always were.
 func TestReq12And70And78_AMatchExcludedRowsGatesDoNotRunUnderEvaluateGates(t *testing.T) {
-	model := writeFlowModel(t, flowMatchClassesModel)
-	bind := seedMatchArtifact(t, model, "status=draft")
+	model := writeFlowModel(t, flowExcludedGateTripwireModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowMatchRole, art)
 
-	data := runNext(t, model, []string{bind},
-		"--tag", "phase=alpha", "--evaluate-gates")
+	stdout, _, err := runCmd(t, nextArgs(model, []string{bind},
+		"--tag", "phase=alpha", "--evaluate-gates")...)
+	if err != nil {
+		// The tripwire fired. Name what it means rather than reporting a
+		// bare non-zero exit: `match-beta` is excluded by `phase=alpha`, so
+		// nothing may consult its gate.
+		var ce *clierr.CLIError
+		if asCLIError(err, &ce) && ce.Param == "tripwire" {
+			t.Fatalf("the match-excluded row `match-beta`'s gate WAS "+
+				"invoked: the run failed at accessor `tripwire`, whose "+
+				"locator is unreachable and which only `match-beta` "+
+				"declares (exit %d). REQ-12 requires the probe's "+
+				"`no_match` to exclude the row BEFORE --evaluate-gates "+
+				"reaches it; a build that gates first and filters after "+
+				"discards the candidate but keeps the side effect",
+				clierr.ExitCodeFor(err))
+		}
+		t.Fatalf("`flow next --evaluate-gates` failed for an unexpected "+
+			"reason: %v", err)
+	}
+
+	data := flowData(t, stdout)
 
 	if c := candidateNamed(t, data, "match-beta"); c != nil {
 		t.Fatalf("`match-beta` matches `phase eq \"beta\"` while `phase` is "+
@@ -171,7 +206,7 @@ func TestReq12And70And78_AMatchExcludedRowsGatesDoNotRunUnderEvaluateGates(t *te
 	}
 
 	// The negative control: the row that DOES match is reported and its
-	// gate DID run, so the absence above is a match exclusion and not a
+	// gate DID run, so the exit-0 above is a match exclusion and not a
 	// gate surface that never works.
 	reported := requireCandidate(t, data, "match-alpha")
 	gates, ok := objectsAt(reported, "gates")
@@ -739,38 +774,114 @@ func TestReq34And107And130_TheKernelPackageIsUntouchedByThisContract(t *testing.
 // REQ-67: "`excluded` must return the kernel's `Result` (not a `bool`) so
 // `summarize` can read the `guard_unevaluable` payload; this is the one
 // signature change in the file"
-// ADVERSARIAL — the probe's three non-match properties, each observable
-// through the payload rather than through the builder.
+// ADVERSARIAL — the probe's three non-match properties. Arms (i) and (ii)
+// are asserted at the BUILDER, arm (iii) through the payload.
+//
+// The split is forced by what the payload can distinguish. A candidate's
+// `outcome` is serialized from `row.Outcome` in `summarize`, independently
+// of the probe's `Recognized` binding, so no payload field pairs the two —
+// and every escape row is `continue`d in `runFlowNext` BEFORE `probeRow`
+// runs, so an escape row's absence from the payload witnesses the
+// PRE-FILTER, never the strip. Arms (i) and (ii) therefore call `probeRow`
+// directly, which is in-package and needs no production seam. Arm (iii)
+// stays on the payload, where the `guard_unevaluable` reason IS what only a
+// retained `Result` can deliver.
 func TestReq2And67_TheProbeBindsItsOwnOutcomeStripsEscapeAndKeepsTheResult(t *testing.T) {
-	// (i) `Recognized` bound to the row's OWN outcome: `unmodeled_outcome`
-	// is unreachable, so `flow next` never refuses it however many
-	// outcomes the model declares. A builder that bound the requested
-	// outcome (there is none on `next`) or left it empty would refuse.
-	model := writeFlowModel(t, flowMatchClassesModel)
-	bind := seedMatchArtifact(t, model, "status=draft")
-
-	data := runNext(t, model, []string{bind})
-	for _, c := range nextCandidates(t, data) {
-		outcome, _ := c["outcome"].(string)
-		if outcome == "" {
-			t.Errorf("candidate %v names no outcome; the probe binds "+
-				"`Recognized` to the ROW's own outcome, which is what keeps "+
-				"it modelling itself", c["rule"])
-		}
+	// (i) `Recognized` bound to the row's OWN outcome, PAIRED with
+	// `Outcomes: []string{row.Outcome}` so `Table.models` holds trivially
+	// (A-8). Break either half and the kernel refuses `unmodeled_outcome`
+	// for every row — so the witness is that no row's probe carries that
+	// refusal, asserted over an EXPECTED rule-id set rather than over
+	// whatever survived. An existential loop over the candidate list
+	// passes vacuously on the empty list a broken binding produces, which
+	// is exactly the build this arm must catch.
+	model, err := table.Load([]byte(flowMatchClassesModel), "matchclasses")
+	if err != nil {
+		t.Fatalf("loading `flowMatchClassesModel` failed: %v", err)
 	}
 
-	// (ii) the escape list is STRIPPED: an escape row is never reported as
-	// a candidate, and its presence never rescues a row the match
-	// predicate excluded. `flowEscapeModel` authors one for `bail`.
-	esc := writeFlowModel(t, flowEscapeModel)
-	escBind := artifactBinding(flowStateRole, seedArtifact(t, esc, "status=draft"))
-	escData := runNext(t, esc, []string{escBind})
-	if c := candidateNamed(t, escData, "bail-escape"); c != nil {
-		t.Errorf("the escape row `bail-escape` is reported as a candidate: "+
-			"%#v\nC1 reports exactly each NON-ESCAPE row, and the probe "+
-			"carries no escape list — the stripped list leaves "+
-			"`escapeOrRefuse` no rescue row, so it passes the original "+
-			"refusal through", c)
+	owned := []resolve.Tag{{Key: "status", Value: "draft"}}
+	view := map[string]string{"status": "draft"}
+
+	// `phase` is left ABSENT from the view, so every match atom over it is
+	// omitted and no row is excluded on match: all five expanded non-escape
+	// rows must survive their probe.
+	want := []string{
+		"dead-row", "dead-row", "match-alpha", "match-beta", "no-match-atoms",
+	}
+	var got []string
+	for _, row := range model.Rows {
+		if len(row.Escape) != 0 {
+			continue
+		}
+		result := probeRow(row, view, owned, nil, false)
+		if result.Refused() &&
+			result.Refusal.Kind == resolve.KindUnmodeledOutcome {
+			t.Errorf("row %q's probe refused `unmodeled_outcome`; "+
+				"`Recognized` MUST be bound to the row's OWN outcome (%q) "+
+				"alongside `Outcomes: []string{row.Outcome}`, and A-8 "+
+				"requires the builder to preserve that PAIRING — breaking "+
+				"either half makes the kernel reject every row",
+				row.RuleID, row.Outcome)
+			continue
+		}
+		if excluded(result) {
+			continue
+		}
+		got = append(got, row.RuleID)
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("probed candidates = %v; want %v\n`phase` is absent from "+
+			"the view, so no match atom excludes and every non-escape row "+
+			"survives. A count assertion is what makes this arm "+
+			"discriminating: a probe whose `Recognized`/`Outcomes` pairing "+
+			"is broken yields the EMPTY set, which an existential "+
+			"`outcome != \"\"` loop reports as green", got, want)
+	}
+
+	// (ii) the escape list is STRIPPED. `flowEscapeStripModel` authors the
+	// one row that can witness it: a row carrying `escape = ["no_match"]`
+	// whose match HOLDS over the view.
+	//
+	// Feed that row to the kernel with its escape list intact and the main
+	// loop skips it as an ordinary candidate, `escapeOrRefuse` finds it the
+	// exactly-one viable rescue for `no_match`, and it comes back as a plan
+	// flagged `Escaped: true` — a row `flow next` would then report as a
+	// candidate on the strength of its OWN escape modeling. With the list
+	// stripped it is an ordinary candidate and the plan is `Escaped:
+	// false`. The FLAG is the discriminator; the disposition is a plan
+	// either way, so an oracle reading only "refused or not" sees nothing.
+	esc, err := table.Load([]byte(flowEscapeStripModel), "escapestrip")
+	if err != nil {
+		t.Fatalf("loading `flowEscapeStripModel` failed: %v", err)
+	}
+	var escRow table.Row
+	for _, row := range esc.Rows {
+		if row.RuleID == "matching-escape" {
+			escRow = row
+		}
+	}
+	if len(escRow.Escape) == 0 {
+		t.Fatal("`matching-escape` carries no escape list; the fixture no " +
+			"longer authors the row this arm needs")
+	}
+
+	escView := map[string]string{"status": "final"}
+	escOwned := []resolve.Tag{{Key: "status", Value: "final"}}
+	escResult := probeRow(escRow, escView, escOwned, nil, false)
+	if escResult.Plan == nil {
+		t.Fatalf("`matching-escape`'s probe produced no plan: %#v\nIts "+
+			"match holds over the view, so with the escape list stripped it "+
+			"is an ordinary candidate", escResult.Refusal)
+	}
+	if escResult.Plan.Escaped {
+		t.Errorf("`matching-escape`'s probe returned an ESCAPED plan; the " +
+			"builder did not strip `probe.Escape`, so the kernel rescued " +
+			"the row through its own escape modeling (A-7). A row reported " +
+			"on the strength of its escape list is a transition the caller " +
+			"cannot request, and the strip is what leaves `escapeOrRefuse` " +
+			"no rescue row")
 	}
 
 	// (iii) `excluded` returns the kernel's `Result` rather than a `bool`:
