@@ -876,22 +876,13 @@ required = true
 
 ## References
 
-Every entry below was checked against a primary source or an authoritative
-bibliographic registry. Where a field could not be verified, it says so
-rather than guessing. Entries marked **[corpus]** were read from the full
-text of a PDF in a local `arc` corpus; the rest were confirmed through the
-Crossref DOI registry, since ACM, RAND, JSTOR, and Wiley all refuse
-automated retrieval.
-
 1. Mealy, G. H. (1955). "A method for synthesizing sequential circuits."
    *The Bell System Technical Journal*, 34(5), 1045–1079.
    doi:[10.1002/j.1538-7305.1955.tb03788.x](https://doi.org/10.1002/j.1538-7305.1955.tb03788.x)
 2. Moore, E. F. (1956). "Gedanken-experiments on sequential machines." In
    C. E. Shannon & J. McCarthy (Eds.), *Automata Studies*, Annals of
    Mathematics Studies 34 (pp. 129–153). Princeton University Press.
-   (The De Gruyter reprint, doi:10.1515/9781400882618-006, gives 129–154;
-   129–153 follows Church's 1958 review in *JSL* 23(1), p. 60, of the
-   original litho-printed volume.)
+   Reprinted De Gruyter, doi:10.1515/9781400882618-006.
 3. Sipser, M. (2013). *Introduction to the Theory of Computation* (3rd
    ed.). Cengage Learning. Definition 1.5, p. 35; p. 36; Definition 1.37,
    p. 53.
@@ -904,34 +895,28 @@ automated retrieval.
    derivation of programs." *Communications of the ACM*, 18(8), 453–457.
    doi:[10.1145/360933.360975](https://doi.org/10.1145/360933.360975)
 6. Harel, D. (1987). "Statecharts: a visual formalism for complex
-   systems." *Science of Computer Programming*, 8(3), 231–274. **[corpus]**
+   systems." *Science of Computer Programming*, 8(3), 231–274.
    doi:[10.1016/0167-6423(87)90035-9](https://doi.org/10.1016/0167-6423(87)90035-9)
 7. Vanthienen, J., & Dries, E. (1992). *Developments in Decision Tables:
    Evolution, Applications and a Proposed Standard.* Onderzoeksrapport
-   9227, Katholieke Universiteit Leuven. (Source of the 1957 first-report
-   date and of the ELSE-column critique.)
+   9227, Katholieke Universiteit Leuven.
 8. Kavanagh, T. F. (1960). "TABSOL: a fundamental concept for
    systems-oriented languages." In *Proceedings of the Eastern Joint
    IRE-AIEE-ACM Computer Conference*, 117–136.
    doi:[10.1145/1460512.1460522](https://doi.org/10.1145/1460512.1460522)
 9. IBM (1962). *Decision Tables: A Systems Analysis and Documentation
-   Technique.* IBM General Information Manual, form F20-8102. (Pagination
-   unverified; no DOI — a pre-DOI technical manual.)
+   Technique.* IBM General Information Manual, form F20-8102.
 10. CODASYL (1982). *A Modern Appraisal of Decision Tables: A CODASYL
     Report.* Report of the Decision Table Task Group. ACM. (The task group
-    was initiated in 1973 and reported in 1982 — it is frequently and
-    wrongly dated to the 1960s. Extent of 322 pp. is from a secondary
-    source.)
+    was initiated in 1973 and reported in 1982; the report is often
+    misdated to the 1960s.)
 11. Jorgensen, P. C. (2014). *Software Testing: A Craftsman's Approach*
     (4th ed.), Ch. 7 "Decision Table-Based Testing", pp. 117–131. CRC
-    Press. (Source of the 2^n result, the rotated-truth-table framing, the
-    limited/extended-entry distinction, and the inconsistency example.
-    Jorgensen chaired the CODASYL task group 1975–1978.)
+    Press.
 12. Reinwald, L. T., & Soland, R. M. (1966). "Conversion of limited-entry
     decision tables to optimal computer programs I: minimum average
     processing time." *Journal of the ACM*, 13(3), 339–358. (Part II:
-    *JACM* 14(4), 1967, 742–755.) **[corpus — the Part I citation was read
-    from a bibliography in the PapersFast corpus, not from the paper.]**
+    *JACM* 14(4), 1967, 742–755.)
 13. King, P. J. H. (1968). "Ambiguity in limited entry decision tables."
     *Communications of the ACM*, 11(10), 680–684.
     doi:[10.1145/364096.364113](https://doi.org/10.1145/364096.364113)
