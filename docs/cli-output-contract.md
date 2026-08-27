@@ -136,6 +136,13 @@ intrastate flow next --model flow.toml \
 intrastate flow resolve --model flow.toml \
   --artifact state=./state.json --outcome advance --as=json
 
+# The same verb over a decision-table model. The table declares no owned
+# tag, so no reader is invoked and --artifact is not required; the
+# discriminating dimensions arrive as --tag. The answer is `rule` plus
+# `emit`.
+intrastate flow resolve --model pricing.toml \
+  --outcome decide --tag tier=free --tag region=eu --as=json
+
 # Report what the declared read accessors see. Runs EVERY declared reader,
 # so every declared role must be bound.
 intrastate flow read-state --flow my-flow \
@@ -148,6 +155,38 @@ intrastate flow set-state --model flow.toml \
   --write status=final --write 'labels=["cli","final"]' \
   --clear stale --as=json
 ```
+
+## `flow resolve` and the `emit` answer
+
+The `flow resolve` success payload carries `emit`, a JSON object of string
+values with keys in byte order. It is the row's authored answer, joined to
+the selected rule after selection. It is present as `{}` — never `null`,
+never omitted — when the selected row authored none, so a consumer parses
+one shape either way. `emit` sits immediately after `gates`: the row
+selected and what it says are one answer.
+
+```json
+{"model":"pricing.toml","revision":"","observed":{"region":"eu","tier":"free"},
+ "owned":{},"readers":[],"outcome":"decide","rule":"free-eu","gates":[],
+ "emit":{"dpa":"required","plan":"basic"},
+ "next":{},"writes":{},"clear":[],"escaped":false}
+```
+
+Gates are unchanged and run before the answer is built, so a denied gate is
+`flow-gate-denied` — a refusal, never a payload — and `emit` is never
+computed on a denied selection.
+
+A plan rescued by an escape row carries **that escape row's own** `emit`,
+alongside `escaped: true` and its `escape_class`. An escape row authoring no
+answer renders `{}` like any other row.
+
+In `--as=text` the field renders through the same generic payload renderer as
+every other: one path-qualified leaf per line, `emit.<key>: <value>`, and an
+unauthored block as `emit: (none)`.
+
+`flow next` carries no `emit`. Its candidate preview reports what a row would
+require and write without evaluating anything; the answer is what `flow
+resolve` selects.
 
 ## `flow next` candidates and the `unknown` list
 
