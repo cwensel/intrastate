@@ -396,7 +396,7 @@ warranted:
         --- PASS: .../read_holding_the_literal_clear_refuses_incomplete_read (0.00s)
         --- PASS: .../control_the_assignment_fixture_still_asserts_presence_and_equality (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/accessor	0.281s
+ok  	github.com/cwensel/intrastate/internal/accessor	0.281s
 ```
 
 All nine numbered scenarios pass **with their named negative controls**:

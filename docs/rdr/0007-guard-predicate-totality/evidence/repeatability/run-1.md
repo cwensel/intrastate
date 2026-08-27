@@ -138,7 +138,7 @@ Normative constraints the RDR *does* fix on this surface:
 - Takes "a `*testing.T`-like reporter" — so a `TestingT` interface, not a
   concrete `*testing.T`. **GUESS:** the reporter interface's method set.
 - Placement caveat: if RDR 0003's evaluator lands outside module
-  `github.com/newcoinc/intrastate`, the `internal/` placement must be revisited.
+  `github.com/cwensel/intrastate`, the `internal/` placement must be revisited.
 
 **GUESS (significant):** the *vector encoding* — file format, whether vectors
 are Go literals or `testdata/` golden files, and the suite's version stamp

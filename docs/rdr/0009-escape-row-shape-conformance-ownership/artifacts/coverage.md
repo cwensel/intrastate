@@ -448,7 +448,7 @@ $ go test ./internal/resolve/ -run TestMVV0009_EscapeRowShapeConformanceIsOwnedB
     --- PASS: .../2_conformed_table_resolves_value_for_value (0.00s)
     --- PASS: .../3_conformed_tables_still_escape_and_still_refuse (0.00s)
     --- PASS: .../4_validator_and_entry_check_are_one_predicate (0.00s)
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.243s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.243s
 ```
 
 Observed values, printed from the same fixtures the runner asserts on:
@@ -531,7 +531,7 @@ runs, so the oracle is exactly the pre-existing frozen suite.
 
 ```
 $ go test ./internal/resolve/
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.316s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.316s
 ```
 
 The frozen suite still passes, as REQ-81 expects: every pre-existing fixture
@@ -544,7 +544,7 @@ the fixtures by restoring `Writes` on `fixtures_test.go::escapeRow`.
 ```
 $ go test ./internal/resolve/ 2>&1 | grep -c '^--- FAIL'
 9
-FAIL	github.com/newcoinc/intrastate/internal/resolve	0.235s
+FAIL	github.com/cwensel/intrastate/internal/resolve	0.235s
 ```
 
 The frozen suite fails in nine tests, as REQ-82 expects: the entry check is

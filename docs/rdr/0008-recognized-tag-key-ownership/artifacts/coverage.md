@@ -342,7 +342,7 @@ predecessor test was weakened, and no unrelated test changed.
         --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/5_kernel_half_all_three_breach_channels_are_rejected_at_both_sites/row_naming_it_in_RequiresOwned (0.00s)
     --- PASS: TestMVV0008_ReservedKeyOwnershipEndToEnd/6_the_two_halves_agree_on_the_spelling (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/table	0.198s
+ok  	github.com/cwensel/intrastate/internal/table	0.198s
 ```
 
 Both MVV halves are executed: the normalizer half (clean load plus both

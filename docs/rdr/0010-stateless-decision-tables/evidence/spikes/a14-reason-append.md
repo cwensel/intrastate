@@ -9,7 +9,7 @@ consumer of `graphlint.Reasons()`, and 0006 accepts the append."
 **Verdict: PASS** (all three sub-questions verify).
 
 Baseline before any change: `go test ./internal/graphlint/...` → `ok
-github.com/newcoinc/intrastate/internal/graphlint 3.397s`.
+github.com/cwensel/intrastate/internal/graphlint 3.397s`.
 
 Method note: committed source was NOT modified. The append was exercised on a
 scratch copy of the tree at

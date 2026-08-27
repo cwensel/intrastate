@@ -392,7 +392,7 @@ $ git diff --stat main -- internal/resolve
 (empty)
 
 $ go test ./internal/resolve
-ok   github.com/newcoinc/intrastate/internal/resolve
+ok   github.com/cwensel/intrastate/internal/resolve
 
 $ git diff --stat main -- internal/cli/flow_{next,adversarial,mvv}_0005_test.go
  internal/cli/flow_adversarial_0005_test.go | 12 +++--

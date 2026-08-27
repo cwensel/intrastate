@@ -243,7 +243,7 @@ Actual output:
         --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/guard_unevaluable (0.00s)
         --- PASS: TestMVV_ReplayDeterminismAndFiveValueLevelRefusals/4_replay_holds_for_refusal_dispositions_too/unmodeled_outcome (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.189s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.189s
 ```
 
 All three MVV obligations are satisfied by the run above: leg 1 compares
@@ -258,12 +258,12 @@ all five refusal dispositions.
 
 ```
 $ go test -count=1 ./...
-ok  	github.com/newcoinc/intrastate/internal/cli	0.187s
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.355s
+ok  	github.com/cwensel/intrastate/internal/cli	0.187s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.355s
 (all other packages: no test files)
 
 $ go test -race -count=1 ./internal/resolve/
-ok  	github.com/newcoinc/intrastate/internal/resolve	1.308s
+ok  	github.com/cwensel/intrastate/internal/resolve	1.308s
 
 $ golangci-lint run ./...
 0 issues.

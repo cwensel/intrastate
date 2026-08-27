@@ -3,7 +3,7 @@ package resolve_test
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // SPIKE-ONLY probe (not part of the frozen suite): the frozen tests all use

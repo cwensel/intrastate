@@ -16,19 +16,19 @@ and the frozen ADV/Fixup dispositions unchanged.
 ## 1. Importer sweep (A3's explicit re-verification trigger)
 
 ```
-$ rg -n -t go --glob '!internal/resolve/**' 'newcoinc/intrastate/internal/resolve' .
+$ rg -n -t go --glob '!internal/resolve/**' 'cwensel/intrastate/internal/resolve' .
 (no output; exit=1)
 
 $ rg -n -t go 'internal/resolve"' .
-./internal/resolve/adversarial_test.go:22:	"github.com/newcoinc/intrastate/internal/resolve"
-./internal/resolve/resolve_test.go:8:	"github.com/newcoinc/intrastate/internal/resolve"
-./internal/resolve/fixtures_test.go:4:	"github.com/newcoinc/intrastate/internal/resolve"
+./internal/resolve/adversarial_test.go:22:	"github.com/cwensel/intrastate/internal/resolve"
+./internal/resolve/resolve_test.go:8:	"github.com/cwensel/intrastate/internal/resolve"
+./internal/resolve/fixtures_test.go:4:	"github.com/cwensel/intrastate/internal/resolve"
 ./internal/resolve/boundary_test.go:26:	return kernelModulePath + "/internal/resolve"
-./internal/resolve/fixup_test.go:30:	"github.com/newcoinc/intrastate/internal/resolve"
-./internal/resolve/mvv_test.go:7:	"github.com/newcoinc/intrastate/internal/resolve"
+./internal/resolve/fixup_test.go:30:	"github.com/cwensel/intrastate/internal/resolve"
+./internal/resolve/mvv_test.go:7:	"github.com/cwensel/intrastate/internal/resolve"
 
 $ for p in $(go list ./...); do go list -f '{{.ImportPath}} -> {{join .Imports " "}}' $p | grep -q 'internal/resolve' && echo "IMPORTER: $p"; done
-IMPORTER: github.com/newcoinc/intrastate/internal/resolve
+IMPORTER: github.com/cwensel/intrastate/internal/resolve
 ```
 
 **Result: NO production importer exists.** Every reference is the package's
@@ -113,7 +113,7 @@ are never parsed — which is exactly why they re-key onto atoms mechanically.
 
 ## 4. The spike
 
-Scratchpad: `/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/892a7fcc-6624-456e-9668-3764248330ea/scratchpad/spike-a3/`
+Scratchpad: `<scratchpad>/spike-a3/`
 The probe file is kept at `evidence/spikes/a3-reshape/`. The working
 diffs (kernel, fixtures, tests) were scratchpad-only and have been
 removed; the substance of each is quoted inline below, and the reshape is
@@ -123,7 +123,7 @@ re-derivable from the section that follows.
 
 ```
 $ cp -R internal/resolve <scratch>/spike-a3/internal/resolve
-$ printf 'module github.com/newcoinc/intrastate\n\ngo 1.26.3\n' > <scratch>/spike-a3/go.mod
+$ printf 'module github.com/cwensel/intrastate\n\ngo 1.26.3\n' > <scratch>/spike-a3/go.mod
 $ cd <scratch>/spike-a3 && go test ./... -run . -v -count=1     # baseline
    ... apply reshape ...
 $ go vet ./... && go test ./... -run . -v -count=1              # post-reshape
@@ -143,7 +143,7 @@ with the **same module prefix** so the tests' own import path resolves and
 --- PASS: 154
 --- FAIL: 0
 PASS
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.182s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.182s
 ```
 
 ### The reshape applied
@@ -180,7 +180,7 @@ is on the tested path.
 --- PASS: 160
 --- FAIL: 0
 PASS
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.250s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.250s
 ```
 
 All 154 frozen tests pass unchanged in disposition.
@@ -267,7 +267,7 @@ for UNEVALUABLE-dominance in `evaluateGuard` — **survived the entire frozen
 ```
 $ (mutate evaluateGuard: FALSE no longer short-circuits, UNEVALUABLE does)
 $ go test ./... -count=1
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.247s      # MUTANT SURVIVES
+ok  	github.com/cwensel/intrastate/internal/resolve	0.247s      # MUTANT SURVIVES
 ```
 
 The reason: **every guard in the frozen suite is a single atom.** A one-atom
@@ -282,7 +282,7 @@ A 6-case spike-only probe (`evidence/spikes/a3-reshape/spike_kleene_test.go.txt`
 ```
 $ (same mutation, with the probe present)
 --- FAIL: TestSpikeStrongKleeneAndPresence/FALSE_dominates_an_undecided_sibling
-FAIL	github.com/newcoinc/intrastate/internal/resolve	0.249s      # MUTANT KILLED
+FAIL	github.com/cwensel/intrastate/internal/resolve	0.249s      # MUTANT KILLED
 ```
 
 The probe pins: FALSE dominates an undecided sibling; an undecided atom beside

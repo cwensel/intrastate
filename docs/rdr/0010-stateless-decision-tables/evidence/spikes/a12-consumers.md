@@ -15,7 +15,7 @@ Work was read-only on source. No source file was modified.
 
 ```
 $ go test ./internal/graphlint/...
-ok  	github.com/newcoinc/intrastate/internal/graphlint	3.499s
+ok  	github.com/cwensel/intrastate/internal/graphlint	3.499s
 ```
 
 PASS (exit 0). Green baseline established.

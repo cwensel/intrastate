@@ -28,8 +28,8 @@ edited. Spike source and captured output:
 
 ```
 $ go test ./internal/graphlint/... ./internal/table/...
-ok  	github.com/newcoinc/intrastate/internal/graphlint	3.370s
-ok  	github.com/newcoinc/intrastate/internal/table	0.502s
+ok  	github.com/cwensel/intrastate/internal/graphlint	3.370s
+ok  	github.com/cwensel/intrastate/internal/table	0.502s
 ```
 
 GREEN, both before and after the spike (`internal/` is clean per

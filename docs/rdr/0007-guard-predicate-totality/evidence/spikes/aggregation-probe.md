@@ -28,7 +28,7 @@ rm internal/resolve/zz_probe_test.go
     zz_probe_test.go:47: PROBE B: kind="guard_unevaluable" guard="unknown-predicate"  (blocks true sibling: correct)
 --- PASS: TestProbeB_UnevaluableBlocksTrueSibling (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.361s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.361s
 ```
 
 ## Probe A — unevaluable escape row over a `no_match` candidate set
@@ -108,7 +108,7 @@ package resolve_test
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // Probe A: unevaluable ESCAPE row over a no_match candidate set.

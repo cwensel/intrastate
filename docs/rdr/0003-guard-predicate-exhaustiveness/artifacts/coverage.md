@@ -250,7 +250,7 @@ Result:
     --- PASS: TestMVV_GuardPredicateExhaustiveness/4-positive-blocking-finding-names-the-row-and-the-atom (0.00s)
     --- PASS: TestMVV_GuardPredicateExhaustiveness/5-negative-control-certifies-green (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/guard	0.200s
+ok  	github.com/cwensel/intrastate/internal/guard	0.200s
 ```
 
 `PASS` alone does not show WHAT lint decided, and obligation 4 turns on a

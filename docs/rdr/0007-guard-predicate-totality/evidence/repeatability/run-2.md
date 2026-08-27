@@ -109,7 +109,7 @@ func RunGuardVectors(t TestingT, eval resolve.GuardEvaluator)
 
 - The RDR fixes: exported, importable (non-`_test` package under the same
   module — `internal/` is importable anywhere inside
-  `github.com/newcoinc/intrastate`), takes "the seam and a `*testing.T`-like
+  `github.com/cwensel/intrastate`), takes "the seam and a `*testing.T`-like
   reporter".
 - **GUESS**: `TestingT` is a local minimal interface
   (`Errorf/Fatalf/Helper`-shaped) rather than a concrete `*testing.T`, since

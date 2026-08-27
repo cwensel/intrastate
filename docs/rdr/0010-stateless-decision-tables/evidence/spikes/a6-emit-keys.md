@@ -10,7 +10,7 @@ not against memory.
 
 ## What the consumer is
 
-`kata show tmxk` (repo `~/sandbox/newcoinc/rdr`):
+`kata show tmxk` (repo `../rdr`):
 
 > `rdr/models/rdr-status.toml`: the routing table as an intrastate model, linted
 > for coverage. Port rdr-status's "How it decides next" + rdr-common §lens-row to

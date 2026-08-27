@@ -381,15 +381,15 @@ restored:
 
 ```
 $ go test ./...                       # POST-extension, only the diff above applied
-?   	github.com/newcoinc/intrastate/cmd/intrastate	[no test files]
-ok  	github.com/newcoinc/intrastate/internal/accessor	0.935s
-ok  	github.com/newcoinc/intrastate/internal/cli	0.469s
-ok  	github.com/newcoinc/intrastate/internal/cli/clierr	0.446s
-ok  	github.com/newcoinc/intrastate/internal/cli/flowbind	0.581s
-ok  	github.com/newcoinc/intrastate/internal/graphlint	4.265s
-ok  	github.com/newcoinc/intrastate/internal/guard	0.886s
-ok  	github.com/newcoinc/intrastate/internal/resolve	1.059s
-ok  	github.com/newcoinc/intrastate/internal/table	0.975s
+?   	github.com/cwensel/intrastate/cmd/intrastate	[no test files]
+ok  	github.com/cwensel/intrastate/internal/accessor	0.935s
+ok  	github.com/cwensel/intrastate/internal/cli	0.469s
+ok  	github.com/cwensel/intrastate/internal/cli/clierr	0.446s
+ok  	github.com/cwensel/intrastate/internal/cli/flowbind	0.581s
+ok  	github.com/cwensel/intrastate/internal/graphlint	4.265s
+ok  	github.com/cwensel/intrastate/internal/guard	0.886s
+ok  	github.com/cwensel/intrastate/internal/resolve	1.059s
+ok  	github.com/cwensel/intrastate/internal/table	0.975s
 
 $ go vet ./...
 VET_OK

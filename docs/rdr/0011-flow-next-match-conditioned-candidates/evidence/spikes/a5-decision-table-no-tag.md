@@ -145,7 +145,7 @@ $ ./bin/intrastate flow next --model dt-write.toml --artifact nav=nav.json --as=
 {
     "type": "ok",
     "data": {
-        "model": "/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/1e287595-8a01-4cf0-a9e8-809d96ea1be1/scratchpad/dt-write.toml",
+        "model": "<scratchpad>/dt-write.toml",
         "revision": "",
         "observed": {},
         "owned": {},
@@ -259,7 +259,7 @@ $ ./bin/intrastate flow next --model dt-write.toml --artifact nav=nav.json --tag
 {
     "type": "ok",
     "data": {
-        "model": "/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/1e287595-8a01-4cf0-a9e8-809d96ea1be1/scratchpad/dt-write.toml",
+        "model": "<scratchpad>/dt-write.toml",
         "revision": "",
         "observed": {
             "status": "Draft"
@@ -374,7 +374,7 @@ $ ./bin/intrastate flow next --model dt-write.toml --artifact nav=nav.json --tag
 {
     "type": "ok",
     "data": {
-        "model": "/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/1e287595-8a01-4cf0-a9e8-809d96ea1be1/scratchpad/dt-write.toml",
+        "model": "<scratchpad>/dt-write.toml",
         "revision": "",
         "observed": {
             "size": "small",
@@ -542,7 +542,7 @@ $ ./bin/intrastate flow next --model dt-crux.toml --artifact nav=nav.json --as=j
 {
     "type": "ok",
     "data": {
-        "model": "/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/1e287595-8a01-4cf0-a9e8-809d96ea1be1/scratchpad/dt-crux.toml",
+        "model": "<scratchpad>/dt-crux.toml",
         "revision": "",
         "observed": {},
         "owned": {},
@@ -614,7 +614,7 @@ $ ./bin/intrastate flow next --model dt-crux.toml --artifact nav=nav-full.json -
 {
     "type": "ok",
     "data": {
-        "model": "/private/tmp/claude-501/-Users-cwensel-sandbox-newcoinc-intrastate/1e287595-8a01-4cf0-a9e8-809d96ea1be1/scratchpad/dt-crux.toml",
+        "model": "<scratchpad>/dt-crux.toml",
         "revision": "",
         "observed": {},
         "owned": {

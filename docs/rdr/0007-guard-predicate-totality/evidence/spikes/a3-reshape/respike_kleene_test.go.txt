@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // valueSeam is a per-atom VALUE seam. It never sees the view: the kernel

@@ -149,7 +149,7 @@ replacing `viable, blocked := gate(escapes, in.Guards, view)` and its
     --- FAIL: .../missing_owned_state
     --- FAIL: .../undecidable_guard
     --- FAIL: .../absent_guard_seam
-FAIL	github.com/newcoinc/intrastate/internal/resolve
+FAIL	github.com/cwensel/intrastate/internal/resolve
 ```
 
 All eleven escape-gate assertions still fire on a conformed fixture set.

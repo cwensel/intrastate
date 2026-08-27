@@ -24,7 +24,7 @@ Worked in a scratch copy; `internal/` in the repo was never edited.
 ```
 $ S=<scratchpad>/respike
 $ cp -R internal/resolve "$S/internal/resolve"
-$ printf 'module github.com/newcoinc/intrastate\n\ngo 1.26.3\n' > "$S/go.mod"
+$ printf 'module github.com/cwensel/intrastate\n\ngo 1.26.3\n' > "$S/go.mod"
 ```
 
 The module skeleton uses the **same module prefix** so the external test
@@ -38,7 +38,7 @@ $ go test ./internal/resolve/... -count=1 -v
 PASS lines: 154
 FAIL lines: 0
 top-level RUN: 154
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.174s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.174s
 ```
 
 154 PASS / 0 FAIL — matches the prior spike's baseline exactly.
@@ -143,7 +143,7 @@ Verbatim failure:
 ```
 exit=0
 PASS: 154  FAIL: 0
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.241s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.241s
 ```
 
 ### Run 4 — full suite with the re-spike probes added
@@ -336,7 +336,7 @@ error the combination clause names:
 ```
 --- frozen suite ONLY, against mutant 1 ---
     resolve_test.go:1160: expected a refusal disposition; got plan {RuleID:rdr.guarded.successful ...}
-FAIL	github.com/newcoinc/intrastate/internal/resolve	0.249s
+FAIL	github.com/cwensel/intrastate/internal/resolve	0.249s
 ```
 
 **KILLED by the frozen suite.** New finding, and a mild correction to the
@@ -350,12 +350,12 @@ accumulator, which the frozen `guard_unevaluable` fixtures see directly.
 
 ```
 --- frozen suite ONLY (154), against mutant 2 ---
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.264s      # SURVIVES
+ok  	github.com/cwensel/intrastate/internal/resolve	0.264s      # SURVIVES
 
 --- full suite incl. respike probe ---
 --- FAIL: TestRespikeStrongKleeneCombination
     --- FAIL: TestRespikeStrongKleeneCombination/F_dominates_U_(F_AND_U_=_F):_the_row_is_pruned,_not_undecidable
-FAIL	github.com/newcoinc/intrastate/internal/resolve	0.177s      # KILLED
+FAIL	github.com/cwensel/intrastate/internal/resolve	0.177s      # KILLED
 ```
 
 **A3's coverage-gap finding stands.** Every frozen guard is a single atom, so
@@ -545,7 +545,7 @@ $ go test ./internal/resolve/... -count=1 -v -run 'TestReq25_...|TestReq36_...|T
 === RUN   TestReq37_KernelIntroducesNoHashOrCanonicalSerialization
 --- PASS: TestReq37_KernelIntroducesNoHashOrCanonicalSerialization (0.00s)
 PASS
-ok  	github.com/newcoinc/intrastate/internal/resolve	0.176s
+ok  	github.com/cwensel/intrastate/internal/resolve	0.176s
 ```
 
 **All three PASS.** These run `exportedKernelSymbols(t)`, which AST-walks the

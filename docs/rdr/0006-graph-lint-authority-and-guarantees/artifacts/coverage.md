@@ -65,7 +65,7 @@ five sub-scenarios and all eleven illegal-matrix arms:
     --- PASS: .../multi-defect_group
     --- PASS: .../legal_advisory_matrix
     --- PASS: .../findings_key_always_emitted
-ok  github.com/newcoinc/intrastate/internal/cli
+ok  github.com/cwensel/intrastate/internal/cli
 ```
 
 ### The matrix, as the shipped command actually answers it

@@ -375,7 +375,7 @@ existing one.
     prune → owned-state → undecidable partition is
     byte-identical — its only hunk builds the refusal
     payload. Importer sweep
-    `rg -n -t go --glob '!internal/resolve/**' 'newcoinc/intrastate/internal/resolve' .`
+    `rg -n -t go --glob '!internal/resolve/**' 'cwensel/intrastate/internal/resolve' .`
     returns no production importer; `internal/cli/root.go::NewRootCmd`
     registers only `newVersionCmd()`. Inspection: `resolve.go::gate`
     consumes only the `GuardResult` from

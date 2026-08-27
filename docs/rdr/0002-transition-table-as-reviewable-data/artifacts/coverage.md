@@ -409,7 +409,7 @@ $ go test ./internal/table/ -run TestMVV_ParseNormalizeDumpValidateAndResolve -v
     --- PASS: .../8_unsupported_version_is_refused_before_normalization (0.00s)
     --- PASS: .../9_overlap_is_deferred_to_the_phase_5_lint_handshake (0.00s)
 PASS
-ok      github.com/newcoinc/intrastate/internal/table   0.170s
+ok      github.com/cwensel/intrastate/internal/table   0.170s
 ```
 
 Leg 9 is DEFERRED by REQ-117, not counted satisfied: it asserts only what
