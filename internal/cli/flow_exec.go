@@ -457,8 +457,27 @@ func readBackMismatchMessage(want resolve.Tag, got string, held bool) string {
 // kernelFailure maps one kernel refusal onto its mirrored CLI code:
 // `flow-<kind>` with underscores hyphenated, one-to-one over the closed
 // five-kind set (REQ-4, REQ-49). The CLI mints no kind of its own.
+// kernelCode is the one place a kernel refusal kind becomes a CLI code.
+// kernelFailure emits through it and the help text spells its codes
+// through it, so a kind renamed in the kernel renames itself on both the
+// wire and in `--help-all` — the published vocabulary cannot drift from
+// the one a caller actually receives.
+func kernelCode(kind resolve.RefusalKind) string {
+	return "flow-" + strings.ReplaceAll(string(kind), "_", "-")
+}
+
+// The kernel-mirrored codes `flow resolve` can refuse under, named so the
+// help text and the emitter share one derivation.
+var (
+	codeUnmodeledOutcome      = kernelCode(resolve.KindUnmodeledOutcome)
+	codeNoMatch               = kernelCode(resolve.KindNoMatch)
+	codeAmbiguousMatch        = kernelCode(resolve.KindAmbiguousMatch)
+	codeOwnedStateUnavailable = kernelCode(resolve.KindOwnedStateUnavailable)
+	codeGuardUnevaluable      = kernelCode(resolve.KindGuardUnevaluable)
+)
+
 func kernelFailure(refusal resolve.Refusal) *clierr.CLIError {
-	code := "flow-" + strings.ReplaceAll(string(refusal.Kind), "_", "-")
+	code := kernelCode(refusal.Kind)
 
 	ce := &clierr.CLIError{Code: code, Group: clierr.GroupUserEnv}
 

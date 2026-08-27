@@ -11,6 +11,7 @@ package cli
 
 import (
 	"os"
+	"strings"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
 	"github.com/newcoinc/intrastate/internal/cli/respond"
@@ -54,7 +55,61 @@ constants, not per-model inputs):
 	}
 	cmd.Flags().String("model", "", "path to the transition model to lint")
 	cmd.Flags().String("flow", "", "flow id to lint, resolved through config discovery")
+	withExtendedHelp(cmd, lintExtendedDesc())
 	return cmd
+}
+
+// lintExtendedDesc is the --help-all body: the two closed finding tiers,
+// spelled from graphlint's own taxonomy accessors rather than restated
+// here. A rule added, renamed, or retired in the taxonomy renames itself
+// in this help text, so the published vocabulary cannot drift from the
+// one the analysis actually emits.
+func lintExtendedDesc() string {
+	var b strings.Builder
+	b.WriteString(`Findings come in two tiers, and the tier decides the verdict.
+
+Blocking — any one of these refuses the model. The command exits 2 under
+the aggregate code ` + graphlint.AggregateCode + `, and every blocking
+finding travels in the machine-readable findings list:
+
+`)
+	for _, code := range graphlint.BlockingCodes() {
+		b.WriteString("  " + code + "\n")
+	}
+	b.WriteString(`
+Advisory (severity ` + graphlint.SeverityInfo + `) — reported, never
+refused. The command still exits 0 and carries them on the SUCCESS
+payload's data.findings:
+
+`)
+	for _, code := range graphlint.AdvisoryCodes() {
+		b.WriteString("  " + code + "\n")
+	}
+	b.WriteString(`
+Both tiers are CLOSED: this build emits no finding code outside these two
+lists. An empty data.findings on a successful run is the receipt that
+lint ran and found nothing — not a dropped payload.
+
+Reserved-key near misses ride that same advisory list: a tag key that
+nearly matches a reserved key is legal, and is reported only because a
+reader may mistake it for the reserved one.
+
+A model that cannot be LOADED refuses under ` + codeModelInvalid + ` instead,
+carrying one finding per load category with the offending file in each
+finding's locator. That is a different failure from a model that loaded
+and then failed the graph invariants — branch on the code, not on the
+presence of findings.
+
+The two bounds below are implementation constants of this build, not
+per-model inputs. A guard group whose product exceeds the product bound
+declines to be proven and reports ` + graphlint.CodeUnprovableCoverage + `;
+a traversal whose reachable node set exceeds the node ceiling reports the
+same code rather than running unboundedly.
+
+  product bound   ` + itoa(graphlint.ProductBound()) + `
+  node ceiling    ` + itoa(graphlint.NodeCeiling()) + `
+`)
+	return b.String()
 }
 
 func runLint(cmd *cobra.Command, _ []string) error {

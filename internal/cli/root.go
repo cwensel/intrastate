@@ -24,11 +24,146 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const rootLongDesc = `intrastate — <one-line description of what this tool does>.
+// rootLongDesc is the terse default body: what the tool is, the two
+// surfaces a caller reaches for, and a worked invocation of each. The
+// vocabulary (tags, provenance, models, artifacts) and the wire/exit
+// contract live in rootExtendedDesc, surfaced on --help-all, so the
+// default landing page stays one screen.
+const rootLongDesc = `intrastate makes workflow state transitions explicit, reviewable, and
+deterministic. A flow is authored once as a transition model — a TOML
+document of tags, rules, guards, and writes — and every caller navigates
+it by asking this CLI, rather than reimplementing the flow in a skill,
+script, or agent.
 
-Run any subcommand with --help for its flags. Global flags:
+Two surfaces:
 
-  --as text|json    output mode (default text)`
+  lint    check a model against the graph invariants, before runtime
+  flow    drive a model at runtime: what can happen, what does happen,
+          and what state was written
+
+Author a model, then check it:
+
+  intrastate lint --model flow.toml
+
+Ask what the current state can do, then commit one outcome:
+
+  intrastate flow next     --model flow.toml --artifact state=state.json
+  intrastate flow resolve  --model flow.toml --artifact state=state.json \
+      --outcome approved
+  intrastate flow set-state --model flow.toml --artifact state=state.json \
+      --write status=approved
+
+Given the same model, state, tags, and recognized outcome, the answer is
+the same every time: one legal plan, or one typed refusal. intrastate
+never guesses which of two matching rules you meant.
+
+Global flags:
+
+  --as text|json    output mode (default text)
+  --help-all        the extended reference for any command
+
+Run any subcommand with --help for its flags, or --help-all for its
+extended reference. ` + "`intrastate help --all`" + ` prints the full reference for
+every command at once.`
+
+// rootExtendedDesc is the vocabulary and contract a caller needs to
+// read this CLI's output — surfaced on --help-all. It describes what
+// the code does; docs/ carries the longer-form authoring guidance.
+const rootExtendedDesc = `Vocabulary
+
+  model       one TOML document declaring the tags, rules, guards, and
+              writes of a flow. Its class is either state-machine (it
+              owns state and advances it) or decision-table (it owns no
+              state and maps a situation to an answer).
+  tag         one named piece of state. Its PROVENANCE says who supplies
+              it, and that is what decides which flag carries it:
+                owned      the model's own state, read and written
+                           through accessors. Never settable via --tag;
+                           --write is the only authoring channel.
+                observed   caller context, supplied as --tag name=value.
+                recognized the outcome being asked about, supplied as
+                           --outcome on flow resolve.
+  rule        one row of the model: a match, optional guards, an
+              optional write block, and (for a decision table) an emit
+              block of answer values.
+  candidate   a rule the supplied state does not exclude. Not a rule
+              that will be selected — that is flow resolve's verdict.
+  plan        the writes a resolved rule calls for. It is data the
+              caller acts on: resolve applies nothing, and nothing links
+              a resolve call to the set-state call that follows it.
+  accessor    the declared reader, writer, or gate that touches an
+              artifact. Artifact locations are never discovered: every
+              one arrives as an explicit --artifact role=path binding.
+
+Model selection
+
+  Every model-taking command requires exactly one of:
+
+    --model <path>   the transition model to load
+    --flow <id>      a registered flow id
+
+  --flow is the reserved spelling for config discovery. This build
+  registers no ids, so --flow refuses with flow-model-not-found and
+  names --model as the remedy. Use --model <path> today.
+
+Output modes
+
+  --as text (default)
+    stdout carries the verb's human output; stderr carries advisories
+    (note:, warning:) and errors (error: <code>: <message>, with
+    optional detail: and hint: lines). Every finding renders on its own
+    line, with its identity fields appended.
+
+  --as json
+    stdout carries EXACTLY ONE terminal record. On success it is
+    {"type":"ok",...}; on failure it is the structured error envelope
+    {"code":...,"message":...}. stderr carries advisories only, each
+    discriminated by "level". The terminal record is emitted on every
+    graceful exit — its absence means the process was killed.
+
+  Aggregate failures (gate results, model-load categories, read-back
+  mismatches) report one entry per subject in a top-level "findings"
+  array, regardless of how many subjects a given run produces. Scalar
+  failures (tag, write, artifact, and selection validation) name their
+  one subject in "param" instead. Branch on the code to know which
+  carrier to read, never on the number of subjects observed.
+
+Exit codes
+
+  0    the command completed. A gate that denied a candidate under
+       flow next is a reported result, not a failure.
+  2    the request or the model is wrong, or the model said no. Fix
+       the input; re-running it unchanged will refuse again.
+  3    the environment could not be consulted — an accessor timed out,
+       failed to execute, returned an incomplete key set, or a
+       post-mutation read-back did not complete. THE RETRIABLE CLASS:
+       repair the environment and re-issue the identical request.
+  130  interrupted (SIGINT).
+
+  The 2/3 split is what makes a caller's retry loop safe: a refusal
+  about the request never exits 3, so a caller cannot spin on an input
+  it must instead fix.
+
+  A read-back that did not complete says the write MAY have been
+  applied and was not verified. It is never reported as a write that
+  did not occur.
+
+Set values
+
+  A set-valued tag crosses the CLI as a canonical JSON array — members
+  sorted, deduplicated, compact, and encoded WITHOUT HTML escaping, so
+  <, >, and & serialize as themselves. Every emit and compare site
+  builds it the same way, which is what makes copying a plan value back
+  into a request, and the read-back check itself, byte equality.
+
+  The reserved value <clear> is unauthorable. Removing an owned tag is
+  --clear <key> on flow set-state, never --write key=<clear>.
+
+Further reading
+
+  docs/model-authoring.md      the model class, and authoring a
+                               decision table's cells and escape row
+  docs/cli-output-contract.md  the authoritative wire contract`
 
 // NewRootCmd builds a fresh command tree. Callers MUST construct a new
 // tree per invocation (do not share one across goroutines) — cobra
@@ -59,6 +194,11 @@ func NewRootCmd() *cobra.Command {
 	// The `flow` group is RDR 0005's skill-integration surface. `lint`
 	// stays at ROOT and is deliberately NOT absorbed into it (`0005:C1`).
 	cmd.AddCommand(newFlowCmd())
+
+	// MUST run last: registerHelpAllOnTree captures each command's Args
+	// at registration time and needs every subcommand already attached.
+	withExtendedHelp(cmd, rootExtendedDesc)
+	registerHelpAllOnTree(cmd)
 
 	return cmd
 }

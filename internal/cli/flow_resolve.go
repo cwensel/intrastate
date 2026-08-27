@@ -79,8 +79,75 @@ plan back is flow set-state's job, and nothing links the two calls.`,
 	registerSelectionFlags(cmd)
 	registerTagFlag(cmd)
 	cmd.Flags().String("outcome", "", "the recognized outcome tag to resolve")
+	withExtendedHelp(cmd, flowResolveExtendedDesc)
 	return cmd
 }
+
+var flowResolveExtendedDesc = `Reading a successful plan
+
+  rule          the id of the one row that was selected.
+  next{}        the owned state that row's writes call for.
+  writes{}      the planned writes, as name=value.
+  clear[]       the owned keys the plan removes. The <clear> sentinel
+                never appears as a write VALUE, so transcribe these with
+                --clear <key> on set-state, never --write key=<clear>.
+  emit{}        a decision table's answer block for the selected row.
+                Its keys are not tags: nothing declares them, nothing
+                writes them, and they take no part in selection.
+  escaped       true when the plan came from an escape row.
+  escape_class  the failure class that escape row RESCUED — the request's
+                own refusal kind, not the whole list the row declares. A
+                row modeling several classes rescued this request under
+                exactly one.
+  gates[]       every gate on the selected row, with its result.
+
+  The plan is data you act on. resolve applies nothing: writing it back
+  is flow set-state's job, and nothing links the two calls.
+
+Refusals
+
+  ` + codeTagInvalid + `
+      --outcome was absent or empty. A malformed request.
+  ` + codeUnmodeledOutcome + `
+      the outcome is outside the model's declared alphabet. A request
+      the model does not recognise — a different mistake, so a different
+      code. The offending outcome is in param.
+  ` + codeNoMatch + `
+      no rule matches over the assembled state. Every rule considered is
+      named in findings.
+  ` + codeAmbiguousMatch + `
+      more than one rule matches. EVERY conflicting row is named in
+      findings: reporting one would be exactly the tie-break the model
+      did not author. resolve never picks among them.
+  ` + codeOwnedStateUnavailable + `
+      a candidate rule requires owned state no reader established. One
+      finding per missing key.
+  ` + codeGateDenied + `
+      a gate on the selected row denied. A refusal — never a plan, and
+      never an escape class: a denied transition cannot be rescued into
+      one.
+  ` + codeGuardUnevaluable + `
+      a guard on a matching rule could not be evaluated over the
+      assembled state.
+  ` + codeGateIndeterminate + `
+      a gate answered neither allow nor deny.
+
+  Gates on the selected row all run; every result is reported; deny
+  overrides both allow and indeterminate.
+
+Exits
+
+  0  exactly one plan.
+  2  any refusal above — the request or the model is wrong, or the model
+     said no.
+  3  a reader or gate could not be consulted; re-run unchanged once the
+     environment is repaired.
+
+Worked call
+
+  intrastate flow resolve --model flow.toml \
+      --artifact state=state.json \
+      --tag actor=reviewer --outcome approved --as json`
 
 func runFlowResolve(cmd *cobra.Command, _ []string) error {
 	if ce := respond.ValidateMode(cmd); ce != nil {

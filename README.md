@@ -39,16 +39,40 @@ make build          # ./bin/intrastate
 intrastate version                       # build version, commit, date
 intrastate version --as=json             # same, as a JSON envelope
 
-intrastate lint                          # validate transition models
-intrastate flow next --flow <name>       # candidate rules the state can take
-intrastate flow resolve --flow <name>    # resolve a recognized outcome
-intrastate flow read-state --flow <name>
-intrastate flow set-state --flow <name>
+intrastate lint --model flow.toml        # check a model's graph invariants
+
+intrastate flow next       --model flow.toml --artifact state=state.json
+intrastate flow resolve    --model flow.toml --artifact state=state.json \
+    --outcome approved
+intrastate flow read-state --model flow.toml --artifact state=state.json
+intrastate flow set-state  --model flow.toml --artifact state=state.json \
+    --write status=approved
 ```
+
+Every model-taking command requires exactly one of `--model <path>` or
+`--flow <id>`. `--flow` is reserved for config discovery; this build
+registers no ids and refuses with `flow-model-not-found`, so pass
+`--model`.
 
 Every command accepts the global `--as text|json` flag. Under `--as=json`
 stdout carries a single terminal envelope discriminated by a `type`
 field (`ok` | `failed`); under `--as=text` it is human-readable.
+
+The CLI is self-describing. `--help` on any command is the terse
+orientation; `--help-all` adds its extended reference — the vocabulary,
+the refusal codes it can return, and the exit contract. A single
+`intrastate --help-all` (or `intrastate help --all`) prints the whole
+surface at once.
+
+```sh
+intrastate --help-all                    # every command's full reference
+intrastate flow resolve --help-all       # one verb's refusal vocabulary
+intrastate lint --help-all               # the live finding taxonomy
+```
+
+The finding and refusal code lists in that output are generated from the
+same constants the wire is emitted from, so they cannot drift from what a
+caller actually receives.
 
 ## Design Goals
 

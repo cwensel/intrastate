@@ -136,8 +136,58 @@ all.`,
 	// C2 pins (`0011:A14`).
 	cmd.Flags().Bool("all", false,
 		"report every row the guards do not exclude, regardless of match")
+	withExtendedHelp(cmd, flowNextExtendedDesc)
 	return cmd
 }
+
+const flowNextExtendedDesc = `Reading the output
+
+  candidate[]  one entry per row the supplied state does not exclude,
+               each naming its rule id, its outcome, and its verdict.
+  unknown[]    per candidate, the keys that left the row undecided and
+               the reason each is unsettled. This is the actionable
+               field: it names exactly what to supply.
+  observed{}   the tags you passed, echoed as parsed.
+  owned{}      the owned tags the invoked readers established.
+  readers[]    which readers this call actually invoked — the model's
+               demand set for these rows, not every declared reader.
+
+  A candidate carrying an unknown entry may still be refused by flow
+  resolve over the same state. next reports what is not excluded;
+  choosing among what remains is resolve's job, and the two answering
+  differently is the contract working, not a discrepancy.
+
+--all
+
+  Without it, a row is a candidate when its match and its guards both
+  hold or are undecided. With it, matches take no part in the verdict:
+  every row the GUARDS do not exclude is reported, and a match atom
+  contributes no unknown entry. Use it to see the whole guard-legal
+  surface at a state, independent of any one outcome.
+
+Gates
+
+  Gates are not evaluated unless you pass --evaluate-gates. Without it,
+  no gate accessor is invoked at all and each gate id is reported under
+  unknown as not-evaluated — so a bare next never touches the
+  environment on a gate's behalf.
+
+  With it, a gate that DENIES constrains only the candidate carrying it.
+  The result is reported and the command still exits 0. Turning a deny
+  into the refusal ` + codeGateDenied + ` is flow resolve's job: next
+  reports, it does not adjudicate.
+
+Exits
+
+  0  candidates reported, including none, and including denied gates.
+  2  the request or the model is wrong.
+  3  a reader or an evaluated gate could not be consulted.
+
+Worked call
+
+  intrastate flow next --model flow.toml \
+      --artifact state=state.json \
+      --tag actor=reviewer --evaluate-gates --as json`
 
 func runFlowNext(cmd *cobra.Command, _ []string) error {
 	if ce := respond.ValidateMode(cmd); ce != nil {

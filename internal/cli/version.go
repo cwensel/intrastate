@@ -11,9 +11,14 @@ import (
 // it prints the build-identity string; in json mode it emits the
 // structured Info under the terminal "ok" envelope.
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:           "version",
-		Short:         "Print build version, commit, and date",
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print build version, commit, and date",
+		Long: `Print this build's version, commit, and date.
+
+Under --as=json the same identity is emitted as the structured Info
+value under the terminal "ok" envelope, so a caller can pin the build
+that produced any other output.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
@@ -29,4 +34,23 @@ func newVersionCmd() *cobra.Command {
 			return respond.OK(cmd, respond.Success{Data: info})
 		},
 	}
+	withExtendedHelp(cmd, versionExtendedDesc)
+	return cmd
 }
+
+const versionExtendedDesc = `The three fields identify the build, not the model or the flow:
+
+  version  the release identity, or ` + "`dev`" + ` for an unstamped local build.
+  commit   the source revision the binary was built from.
+  date     the build timestamp.
+
+They are stamped at link time. A build produced without those stamps
+reports the ` + "`dev`" + ` identity rather than guessing or failing, so a
+locally built binary is still self-identifying.
+
+Pin the build alongside any captured output — the finding codes, the
+refusal vocabulary, and the lint bounds are all properties of a
+particular build, and ` + "`--help-all`" + ` on this binary is the
+authoritative statement of what THIS build does.
+
+  intrastate version --as=json`

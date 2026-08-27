@@ -46,9 +46,12 @@ The four verbs are the whole skill-integration surface:
   read-state  report what the declared read accessors see
   set-state   apply planned owned-tag writes and verify them by read-back
 
-Model selection takes exactly one of --model <path> or --flow <id>.
-Artifact locations are never discovered: every one arrives as an explicit
---artifact role=path binding.`,
+Every verb takes exactly one of --model <path> or --flow <id>, and binds
+each artifact explicitly as --artifact role=path: nothing about a flow's
+location is discovered. This build resolves no --flow ids yet, so pass
+--model <path>.
+
+Run any verb with --help-all for its refusal codes and worked calls.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
@@ -84,8 +87,70 @@ Artifact locations are never discovered: every one arrives as an explicit
 		newFlowReadStateCmd(),
 		newFlowSetStateCmd(),
 	)
+	withExtendedHelp(cmd, flowExtendedDesc)
 	return cmd
 }
+
+// flowExtendedDesc is the group's --help-all body: the shared grammar
+// and the division of labour among the four verbs. Per-verb refusals
+// live on each verb's own extended body.
+const flowExtendedDesc = `The four verbs divide one job, and the division is deliberate:
+
+  next        reports what the state does not exclude. It never selects.
+  resolve     selects exactly one row, or refuses. It never writes.
+  set-state   writes, and verifies by read-back. It never selects.
+  read-state  reports what the readers see. It decides nothing.
+
+Nothing links one call to the next. A resolve plan is data you may act
+on; set-state re-derives its own legality from its own request, and the
+read-back is the only commit-time check. A caller that drops a plan on
+the floor has broken nothing.
+
+Shared input grammar
+
+  --model <path>        the transition model. Exactly one of --model or
+                        --flow is required.
+  --flow <id>           reserved for config discovery. This build
+                        registers no ids and refuses with
+                        ` + codeModelNotFound + `; use --model.
+  --artifact role=path  bind one declared accessor role to a file.
+                        Repeatable. Never discovered — an unbound role a
+                        verb needs refuses with ` + codeArtifactMissing + `.
+  --tag name=value      observed context. Repeatable. A set value is a
+                        JSON array literal.
+
+  --tag carries OBSERVED tags only. Naming an owned key refuses with
+  ` + codeTagOwned + ` and naming a reserved key refuses with
+  ` + codeTagReserved + `: owned state comes from the readers and is
+  written only through set-state, so accepting it as context would let a
+  caller assert state the model owns. --tag is absent from read-state,
+  which reports what readers see rather than evaluating anything.
+
+Ordering
+
+  Every input refusal precedes every accessor invocation. A caller whose
+  --tag names an owned key learns that, and not that some artifact role
+  went unbound: the input is what they must fix, and consulting the
+  environment first would report the wrong subject.
+
+  Gates run AFTER exact-one selection and BEFORE the plan is emitted.
+  Earlier would gate rows the model never selected; later would emit a
+  plan a gate denies.
+
+Reader narrowing
+
+  next and resolve invoke only the readers the model's relevant rows
+  demand, so an artifact no candidate needs may stay unbound. read-state
+  is diagnostic and runs EVERY declared reader, so it requires every
+  declared role to be bound. The demand set is a property of the model,
+  not of the flags.
+
+Environment failures
+
+  ` + codeAccessorTimeout + `, ` + codeAccessorFailed + `, and
+  ` + codeReadIncomplete + ` exit 3: the environment could not be
+  consulted and the identical request may be re-run once it is repaired.
+  Every refusal about the request itself exits 2.`
 
 // registerSelectionFlags adds the model-selection flags every verb carries.
 // The pair is mutually exclusive and one is required (REQ-22).

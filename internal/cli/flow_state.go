@@ -68,8 +68,57 @@ rather than a tag value.`,
 		RunE:          runFlowReadState,
 	}
 	registerSelectionFlags(cmd)
+	withExtendedHelp(cmd, flowReadStateExtendedDesc)
 	return cmd
 }
+
+const flowReadStateExtendedDesc = `read-state answers "what does the environment currently look like to
+this model", and nothing else. It selects no rule, evaluates no guard,
+and writes nothing.
+
+Every declared reader must be bound
+
+  next and resolve narrow to the readers their candidate rows demand, so
+  an artifact no candidate needs may go unbound there. read-state is
+  diagnostic: it runs EVERY declared reader, so every declared artifact
+  role must be bound or the call refuses with ` + codeArtifactMissing + `.
+  That is the intended asymmetry — a diagnostic that quietly skipped a
+  reader would hide the very binding you ran it to check.
+
+Reading the output
+
+  Each reader reports its DECLARED key set beside the tags it actually
+  returned. That is what makes the three states distinguishable:
+
+    present    the key is in the artifact, with its value.
+    absent     the reader was asked for the key and established that the
+               artifact does not carry it.
+    not asked  the key is outside this reader's declared set, so its
+               absence here says nothing about the artifact.
+
+  A reader that returns fewer keys than it declared without establishing
+  their absence is ` + codeReadIncomplete + ` at exit 3 — an environment
+  failure, not an empty result.
+
+No gates
+
+  read-state invokes no gate accessor. A gate answers allow, deny, or
+  indeterminate; it does not return a tag value, so there is nothing for
+  a state report to carry.
+
+--tag is not accepted here: there is no verdict for observed context to
+inform.
+
+Exits
+
+  0  every declared reader reported.
+  2  the request or the model is wrong, or a role is unbound.
+  3  a reader timed out, failed, or returned an incomplete key set.
+
+Worked call
+
+  intrastate flow read-state --model flow.toml \
+      --artifact state=state.json --as json`
 
 func runFlowReadState(cmd *cobra.Command, _ []string) error {
 	if ce := respond.ValidateMode(cmd); ce != nil {
@@ -138,8 +187,67 @@ and the read-back is the only commit-time check.`,
 		"planned owned-tag write, as name=value (repeatable)")
 	cmd.Flags().StringArray("clear", nil,
 		"owned tag key to remove (repeatable)")
+	withExtendedHelp(cmd, flowSetStateExtendedDesc)
 	return cmd
 }
+
+const flowSetStateExtendedDesc = `The write grammar
+
+  --write name=value   set an owned tag. Repeatable. A set value is a
+                       JSON array literal, canonical on the wire: members
+                       sorted, deduplicated, compact.
+  --clear <key>        remove an owned tag. Repeatable.
+
+  The two are separate flags because the reserved value <clear> is
+  unauthorable: it can never cross as a write VALUE. A plan's removals
+  therefore arrive in the plan's clear[] list, and you transcribe them
+  with --clear — never as --write key=<clear>, which refuses.
+
+  Only OWNED tags are writable. Naming a non-owned key refuses with
+  ` + codeWriteNonOwned + `, and a key no declared writer serves refuses
+  with ` + codeWriteUnbound + ` (` + codeClearUnbound + ` for --clear).
+
+  --tag on set-state is CONTEXT ONLY and is never written. Its refusals
+  still bite — an owned key through --tag is refused here as anywhere —
+  but a parsed --tag value cannot become a write.
+
+Read-back is the commit-time check
+
+  Success is reported ONLY after the accessor layer reads the artifact
+  back and confirms both that the planned values landed and that
+  non-owned tags are unchanged. owned{} in the output is the
+  READ-BACK-CONFIRMED state, not your request echoed: a cleared key is
+  absent from it, because a verified removal is not a written value.
+
+  Writes are grouped by the writer that serves each key. Each writer
+  applies its own keys and reads back. No cross-writer atomicity is
+  promised, and this says so rather than implying one: a multi-writer
+  request can leave one writer's keys applied and another's not.
+
+  ` + codeReadBackMismatch + ` at exit 2 means the read-back completed and
+  disagreed. ` + codeReadBackIncomplete + ` and ` + codeReadBackTimeout + `
+  at exit 3 mean it could not complete: the write MAY have been applied
+  and was not verified. That is never reported as a write that did not
+  occur — inspect the artifact before retrying.
+
+Nothing links this to a prior resolve
+
+  set-state validates its own request against the model's own grammar.
+  It does not know a resolve call happened, and there is no token or
+  session to carry. Transcribing a plan is a caller convenience; the
+  read-back is the only guarantee.
+
+Exits
+
+  0  every planned write applied and verified by read-back.
+  2  the request or the model is wrong, or the read-back disagreed.
+  3  a writer or the read-back could not complete.
+
+Worked call
+
+  intrastate flow set-state --model flow.toml \
+      --artifact state=state.json \
+      --write status=approved --clear draft_note --as json`
 
 func runFlowSetState(cmd *cobra.Command, _ []string) error {
 	if ce := respond.ValidateMode(cmd); ce != nil {
