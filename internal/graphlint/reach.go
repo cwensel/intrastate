@@ -88,7 +88,22 @@ func Reach(m *table.Model) []Node {
 // enumeration is therefore unrepresentable here rather than merely avoided,
 // and the exponential reading the record rejects has nowhere to arise.
 func reach(m *table.Model) (nodes []Node, complete bool) {
-	if m == nil || len(m.Initial) == 0 {
+	// The seeding predicate is "decision-table class OR a non-empty declared
+	// root", never "class alone" (`0010:C5`). A decision table owns no
+	// state, so its root is the EMPTY owned-state node and every selection
+	// context is reachable from it; a STATE MACHINE with an empty
+	// `[initial]` still traverses nothing and takes `0006:C18`'s
+	// missing-root finding, which is why the class test AUGMENTS the
+	// `len(Initial)` test rather than replacing it.
+	//
+	// The class is read off the loaded model and never re-derived from
+	// `len(owned) == 0`: a zero-owned state machine is rootless, not
+	// stateless, and seeding it at ∅ would silence exactly the finding
+	// invariant 1 exists to report.
+	if m == nil {
+		return nil, true
+	}
+	if len(m.Initial) == 0 && !table.IsDecisionTable(m) {
 		// No declared root: the traversal has nothing to start from. The
 		// caller must NOT read the empty set as "nothing reachable,
 		// therefore clean" — invariant 1 reports the missing declaration.

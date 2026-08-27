@@ -110,7 +110,15 @@ func (a *analysis) emit(f clierr.Finding) {
 // (JDR 0001 §D7(i), which RDR 0002 fences as this RDR's blocking finding
 // rather than a load failure).
 func (a *analysis) checkDanglingEdge() {
-	if len(a.model.Initial) == 0 {
+	// The root arm is class-keyed, AUGMENTING the `len(Initial)` test the
+	// same way `reach`'s seed is (`0010:C5`). A decision table declaring no
+	// `[initial]` is not missing a root — its root is the ∅ owned-state
+	// node — so reporting one would accuse it of the shape that defines it.
+	//
+	// The TERMINAL arm below stays live for both classes: it is what
+	// enforces `0010:C2`'s `terminal` prohibition, and it is distinguished
+	// from this arm by ELEMENT (`terminal[i]` vs `model`), never by code.
+	if len(a.model.Initial) == 0 && !table.IsDecisionTable(a.model) {
 		// Never "nothing reachable, therefore clean": the absent root is
 		// itself the defect, reported against the declaration that is
 		// missing rather than against an arbitrary row.

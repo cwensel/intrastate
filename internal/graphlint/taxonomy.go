@@ -60,6 +60,13 @@ const (
 	ReasonDimensionNotFinite = "dimension-not-finite"
 	ReasonTagNotSingleValued = "tag-not-single-valued"
 	ReasonRowCanRefuse       = "row-can-refuse"
+	// ReasonNoParticipatingDimension is RDR 0010's append (`0010:C5`): a
+	// decision-table group whose scoped product has ZERO participating
+	// dimensions. It is its own member because the three above are
+	// DIMENSION-scoped and each names a remedy for a dimension that, here,
+	// does not exist — the remedy is to author the discriminators as guard
+	// atoms. The set is closed and APPEND-ONLY, and this is the append.
+	ReasonNoParticipatingDimension = "no-participating-dimension"
 )
 
 // blockingCodes is the blocking tier, in taxonomy order.
@@ -89,6 +96,7 @@ var reasons = []string{
 	ReasonDimensionNotFinite,
 	ReasonTagNotSingleValued,
 	ReasonRowCanRefuse,
+	ReasonNoParticipatingDimension,
 }
 
 // severities is the two-valued severity vocabulary.

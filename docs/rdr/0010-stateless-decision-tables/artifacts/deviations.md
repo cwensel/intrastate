@@ -301,3 +301,43 @@ genuinely zero-owned. That STRENGTHENS the test: the shared empty owned set
 is now real rather than merely asserted, so the discrimination REQ-6 asks
 for actually holds. No assertion was relaxed; the closing invariant is
 unchanged and still fatal.
+
+---
+
+## D12 — the zero-dimension arm is per-GROUP, and a group's name carries its scoping match atoms
+
+**REQs**: REQ-55, REQ-58, REQ-59, REQ-60, REQ-95.
+
+**Type**: TEST-FIXTURE. **Status**: mechanical translation.
+
+Three Phase-1 assertions encoded fixture assumptions about the group
+partition that the shipped partition does not hold:
+
+1. `TestReq55` expected `f.Element == "dt/decide"`. The group's canonical
+   name is `guard.Selection.String()`, which carries the match atoms that
+   SCOPE the context — for `dtMatchOnly0010` that is `dt/decide a.eq=x`,
+   the very `[rule.match.a]` atom whose use instead of a guard atom IS the
+   defect being reported. `Element: g.Context.String()` is the spelling
+   every other group-scoped finding in `coverage.go` already uses, and
+   `dt/decide` names a DIFFERENT group in the same model
+   (`dtMatchOnlyBareEscape0010` carries both). The expectation is
+   repointed at the real name; the assertion is otherwise unchanged.
+
+2. `TestReq58`/`TestReq60` used `requireOneCode` over
+   `dtMatchOnlyBareEscape0010`. That fixture carries TWO zero-dimension
+   groups — the bare escape row authors no match atom, so it scopes its own
+   `dt/decide` beside `dt/decide a.eq=x` — and C5 binds the arm per GROUP
+   ("a decision-table **group** whose scoped product has zero participating
+   dimensions"), so two findings is the contract, not a fall-through. Both
+   are now asserted BY ELEMENT and BY REASON, which is strictly more than
+   the count was checking.
+
+**The clause under test is untouched and still fails without the early
+`return`.** Verified: the report over the bare-escape fixture carries
+`graph-unprovable-coverage` and nothing else — no `graph-coverage-gap`, no
+`graph-coverage-closed-by-escape`, no `graph-product-too-large`. REQ-58's
+count check is replaced by an EXACT code-set equality, so a fall-through
+that emitted the closure advisory still reddens it. Evidence: the shipped
+partition (`internal/guard/product.go::selectionOf`, which builds the
+context from a row's match atoms) and `0006:C7`/`0003:C13`, which the RDR
+cites in the same terms ("match keys select a row's group").

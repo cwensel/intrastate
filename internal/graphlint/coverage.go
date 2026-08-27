@@ -33,6 +33,31 @@ var singleValueOperators = []string{"eq", "in", "lt", "lte", "gt", "gte"}
 func (a *analysis) checkCoverage(g guard.Group) {
 	dims := guard.Dimensions(a.model, g)
 	if len(dims) == 0 {
+		if table.IsDecisionTable(a.model) {
+			// A decision table IS its guard product: the cells are the
+			// authored guard dimensions, and a group ranging over none has
+			// nothing for coverage to be proved over. The empty product's
+			// single empty assignment would be "covered" by any row at all,
+			// so reporting it covered is a vacuous green — a table whose
+			// author discriminated with `[rule.match.<key>]` atoms (which
+			// scope the group and contribute no dimension, `0006:C7`) would
+			// lint clean while proving nothing.
+			//
+			// The arm binds THIS CLASS ONLY. Over a state machine a
+			// zero-dimension group is legitimate — the owned-state
+			// traversal is what carries the proof there — and an
+			// unconditional arm would redden 151 such groups across every
+			// loadable fixture.
+			//
+			// It RETURNS rather than falling through. Emitting and then
+			// running `emitCoverageArms` would yield both this finding and
+			// `graph-coverage-closed-by-escape` over a zero-dimension group
+			// carrying a bare escape row, which is the double-report
+			// `0010:C5` forbids; ordering alone does not deliver the
+			// precedence, the return does.
+			a.emitNoParticipatingDimension(g)
+			return
+		}
 		// A group over no guard dimension still has a scoped product — the
 		// empty one, carrying the single empty assignment — so the per-class
 		// arms below are decidable and the claim is not withheld. What is
@@ -97,6 +122,35 @@ func (a *analysis) checkCoverage(g guard.Group) {
 	}
 
 	a.emitCoverageArms(g)
+}
+
+// emitNoParticipatingDimension reports the GROUP-level unprovable-coverage
+// finding a decision-table group with zero participating dimensions takes
+// (`0010:C5`).
+//
+// It supplies its OWN message rather than routing through
+// unprovableMessage, whose `default` limb phrases the remedy as "declare
+// the domain" — advice for a dimension that does not exist here. The remedy
+// this arm states is the one C5's own prose gives: author the
+// discriminators as guard atoms.
+//
+// The finding is group-scoped, so it carries no `Dimension` and no `Key`:
+// there is no dimension to name, and borrowing one would misreport which
+// declaration is at fault. It names the class nowhere — `0010:BR6` (a lint
+// finding announcing the class) was rejected, so the message speaks about
+// the GROUP's authoring, not about what the model declared itself to be.
+func (a *analysis) emitNoParticipatingDimension(g guard.Group) {
+	a.emit(clierr.Finding{
+		Code:    CodeUnprovableCoverage,
+		Reason:  ReasonNoParticipatingDimension,
+		Rule:    firstRuleID(g),
+		Element: g.Context.String(),
+		Message: fmt.Sprintf("group %s ranges over no participating "+
+			"dimension, so its scoped product carries the single empty "+
+			"assignment and its coverage cannot be proved; author the "+
+			"discriminating keys as `[rule.guard.all.<key>]` atoms, which "+
+			"is what makes them product dimensions", g.Context.String()),
+	})
 }
 
 // emitUnprovableDimensions reports one blocking finding per unprovable

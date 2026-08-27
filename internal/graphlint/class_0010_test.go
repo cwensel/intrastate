@@ -342,7 +342,12 @@ func TestReq55_AZeroDimensionDecisionTableGroupIsUnprovable(t *testing.T) {
 	r := graphlint.Run(graphlint.NewRequest(mustLoad(t, dtMatchOnly0010)))
 
 	f := requireOneCode(t, r, graphlint.CodeUnprovableCoverage)
-	if f.Element != "dt/decide" {
+	// The GROUP's canonical name is `Selection.String()`, which carries the
+	// match atoms that SCOPE the context — here the very `[rule.match.a]`
+	// atom whose use instead of a guard atom is the defect. That is the
+	// same spelling every group-scoped finding in `coverage.go` already
+	// uses, and naming the bare `dt/decide` would name a different group.
+	if f.Element != "dt/decide a.eq=x" {
 		t.Errorf("finding element = %q; the arm MUST name the GROUP", f.Element)
 	}
 	if !graphlint.IsBlocking(f.Code) {
@@ -402,7 +407,27 @@ func TestReq56_TheZeroDimensionArmCarriesTheFourthReasonValue(t *testing.T) {
 func TestReq60_TheZeroDimensionArmReturnsRatherThanFallingThrough(t *testing.T) {
 	r := graphlint.Run(graphlint.NewRequest(mustLoad(t, dtMatchOnlyBareEscape0010)))
 
-	requireOneCode(t, r, graphlint.CodeUnprovableCoverage)
+	// The bare escape row carries no match atom, so it scopes its OWN group
+	// (`dt/decide`) beside the match-discriminated one (`dt/decide a.eq=x`).
+	// Both range over zero guard dimensions, so both take the arm — it is
+	// per-GROUP, as C5 states it. What the clause forbids is the CLOSURE
+	// advisory accompanying it, which is what the early `return` prevents:
+	// falling through would let the bare escape row close its group's
+	// `no_match` arm and emit `graph-coverage-closed-by-escape` alongside.
+	found := requireCode(t, r, graphlint.CodeUnprovableCoverage)
+	var elements []string
+	for _, f := range found {
+		elements = append(elements, f.Element)
+		if f.Reason != "no-participating-dimension" {
+			t.Errorf("finding at %q carries reason %q; want "+
+				"no-participating-dimension", f.Element, f.Reason)
+		}
+	}
+	slices.Sort(elements)
+	if !slices.Equal(elements, []string{"dt/decide", "dt/decide a.eq=x"}) {
+		t.Errorf("unprovable findings name %v; want one per zero-dimension "+
+			"group", elements)
+	}
 	requireNoCode(t, r, graphlint.CodeCoverageClosedByEscape)
 
 	if hasCode(r, graphlint.CodeCoverageClosedByEscape) {
@@ -429,7 +454,15 @@ func TestReq58_AZeroDimensionGroupTakesOnlyTheUnprovableFinding(t *testing.T) {
 	} {
 		requireNoCode(t, r, code)
 	}
-	requireOneCode(t, r, graphlint.CodeUnprovableCoverage)
+	// One per zero-dimension GROUP (the fixture carries two, see REQ-60),
+	// and NOTHING from invariant 4's other arms — which is the observable
+	// consequence of the arm sitting inside the `len(dims) == 0` branch and
+	// returning before `emitCoverageArms`.
+	if got := codesIn(r); !slices.Equal(got,
+		[]string{graphlint.CodeUnprovableCoverage}) {
+		t.Errorf("codes = %v; want exactly [%s]:%s", got,
+			graphlint.CodeUnprovableCoverage, render(r))
+	}
 }
 
 // REQ-61 / ASSUMPTION-6: "The arm MUST supply its **own message** rather

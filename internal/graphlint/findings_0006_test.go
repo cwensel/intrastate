@@ -515,7 +515,14 @@ status = "b"
 // ASSUMPTION-4: the discriminator is carried only on this code.
 // BOUNDARY
 func TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet(t *testing.T) {
-	want := []string{"dimension-not-finite", "row-can-refuse", "tag-not-single-valued"}
+	// The set is declared "closed, **append-only**", and RDR 0010 `0010:C5`
+	// takes that licence: `no-participating-dimension` is the fourth
+	// member. This stays an EXACT-set assertion — only the expected set
+	// grew — so a fifth member arriving unannounced still fails here.
+	want := []string{
+		"dimension-not-finite", "no-participating-dimension",
+		"row-can-refuse", "tag-not-single-valued",
+	}
 	got := slices.Clone(graphlint.Reasons())
 	slices.Sort(got)
 
