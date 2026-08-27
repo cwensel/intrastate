@@ -191,6 +191,20 @@ func codesIn(r graphlint.Report) []string {
 	return out
 }
 
+// codesOf returns the report's codes in sorted order, PRESERVING
+// duplicates. Distinct from codesIn, which dedupes: an oracle that must
+// bound a report (SC-4's "exact finding lists") has to see a duplicated
+// code, since a regression emitting the same code twice is a real defect
+// that a deduped comparison hides.
+func codesOf(r graphlint.Report) []string {
+	out := make([]string, 0, len(r.Findings))
+	for _, f := range r.Findings {
+		out = append(out, f.Code)
+	}
+	slices.Sort(out)
+	return out
+}
+
 // blockingCodes returns the sorted, duplicate-free code set of the
 // report's BLOCKING findings.
 func blockingCodes(r graphlint.Report) []string {

@@ -626,6 +626,22 @@ func TestReq65_TheTerminalPredicateArmStaysLiveOverADecisionTable(t *testing.T) 
 		t.Errorf("no %s at element `terminal[0]`; findings:%s",
 			graphlint.CodeDanglingEdge, render(r))
 	}
+
+	// SC-4 bounds the report, not just its required member: the checks
+	// above only LOCATE the terminal-scoped dangling edge, so any ADDITIONAL
+	// finding over this fixture passes unnoticed — including a duplicate of
+	// the same code. Duplicate-preserving, since `codesIn` dedupes.
+	//
+	// Scope: the ADV-1/ADV-2 class-suppression regressions do NOT surface on
+	// this fixture (verified: disabling both class guards leaves this report
+	// byte-identical); `TestAdv0010_*` owns those, on fixtures built to trip
+	// them. This bound is the general "nothing else fired" guarantee.
+	if want := []string{graphlint.CodeDanglingEdge}; !slices.Equal(
+		codesOf(r), want) {
+		t.Errorf("code list = %v; want exactly %v — a decision table "+
+			"declaring `terminal` reports the terminal-scoped dangling edge "+
+			"and nothing else:%s", codesOf(r), want, render(r))
+	}
 }
 
 // REQ-66: "Declared-terminal handling (7) proper, and the escape arm of it,
@@ -796,6 +812,24 @@ func TestReq96_TheOtherwiseRowIsScopedPerOutcome(t *testing.T) {
 	if !reviewGap {
 		t.Errorf("the UNRESCUED outcome `review` reports no coverage gap; "+
 			"`the otherwise row` is per-outcome (`0002:C5`):%s", render(r))
+	}
+
+	// SC-4 bounds the report. The per-outcome checks above only LOCATE the
+	// gap and assert `decide` is not among the gaps; any OTHER finding over
+	// this fixture — a second code, or a duplicate coverage gap — passes
+	// unnoticed. Duplicate-preserving, since `codesIn` dedupes.
+	//
+	// Scope: as in TestReq65, the ADV-1/ADV-2 arms do not fire over this
+	// fixture, so this is the general "nothing else fired" guarantee rather
+	// than a class-suppression guard; `TestAdv0010_*` owns that.
+	want := []string{
+		graphlint.CodeCoverageClosedByEscape, // dt/decide, rescued
+		graphlint.CodeCoverageGap,            // dt/review, unrescued
+	}
+	if got := codesOf(r); !slices.Equal(got, want) {
+		t.Errorf("code list = %v; want exactly %v — the rescued outcome "+
+			"reports only the closure advisory and the unrescued one only "+
+			"the gap:%s", got, want, render(r))
 	}
 }
 

@@ -761,6 +761,7 @@ func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
 			"internal/table/dump_test.go",
 			"internal/table/roundtrip_test.go",
 			"internal/graphlint/findings_0006_test.go",
+			"internal/graphlint/fixtures_0006_test.go",
 			"internal/cli/flow_demand_0011_test.go":
 			return true
 		}
