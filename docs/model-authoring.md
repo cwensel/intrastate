@@ -15,10 +15,12 @@ Both are authored in the same grammar, both are linted by the same
 analysis, and both are driven by the same four `flow` verbs. The class is
 declared in `[model]`, and it decides which invariants apply.
 
-Worked, CI-linted examples of each live under
-[`models/examples/`](../models/examples/): a
-[decision table](../models/examples/pricing-decision-table.toml) and a
-[state machine](../models/examples/review-state-machine.toml). They are
+Worked, CI-linted examples live under
+[`models/examples/`](../models/examples/): a minimal
+[decision table](../models/examples/pricing-decision-table.toml), a minimal
+[state machine](../models/examples/review-state-machine.toml), and a
+[grammar-surface model](../models/examples/release-grammar.toml) carrying
+every construct [The grammar](#the-grammar) *documents*. All three are
 linted by `make graph-lint`, so an example this document describes cannot
 drift from one the tool accepts.
 
@@ -49,6 +51,292 @@ Declaring the class rather than deriving it is what makes the refusal
 possible. A tool that inferred "no owned tags, therefore a table" would
 silently accept a state machine whose owned declaration an author had
 dropped, and answer with an empty plan instead of refusing.
+
+## The grammar
+
+Everything below is common to both classes: the same tag declarations, the
+same operators, the same rule shape. What differs is which parts a class
+uses, which the sections after this one cover.
+
+A model's root admits a closed set of keys — `outcomes`, `terminal`,
+`[model]`, `[initial]`, `[tags.<key>]`, `[read.<id>]`, `[write.<id>]`,
+`[gate.<id>]`, `[context.<id>]`, `[[rule]]`, and `[dump]`. Decoding is
+strict: an unrecognised key is refused as `unknown_schema_field`, never
+ignored. A misspelled facet is a stable refusal rather than a silent no-op.
+
+The worked model for this section is
+[`release-grammar.toml`](../models/examples/release-grammar.toml), linted
+by `make graph-lint`. The snippets in this section are taken from it, so
+none of them describes a construct the tool rejects. It carries every
+construct this section documents, with two deliberate exceptions: `[dump]`
+and the rule-level `source` key are each named here — `[dump]` in the
+root-key set above, `source` in the placement list below — but neither is
+otherwise covered, and the example authors neither.
+
+### Declaring a tag
+
+A tag declaration carries a **provenance**, a **kind**, and the facets its
+kind admits.
+
+Provenance is one of three, and it decides who supplies the value:
+
+| provenance | supplied by | notes |
+| --- | --- | --- |
+| `owned` | the model's `[read.*]` accessors | state the model owns; a `decision-table` declares none |
+| `observed` | the caller, as `--tag key=value` | may also be served by at most one reader |
+| `recognized` | the kernel, from `--outcome` | exactly the reserved `recognized` key; no accessor may name it |
+
+Kind is one of exactly **five** tokens, and each admits a different facet.
+Authoring a *populated* facet on the wrong kind is refused at load as
+`malformed_tag_declaration`:
+
+| kind | facet it carries | `single_valued` | finite dimension? |
+| --- | --- | --- | --- |
+| `enum` | `domain = [...]` | admitted | yes, given a `domain` |
+| `bool` | none — its two literals are the domain | admitted | yes, always |
+| `int` | `min` / `max` | admitted | only with **both** bounds |
+| `set` | `elements = [...]` | **refused** | yes, given `elements` |
+| `scalar` | none | **refused** | **never** |
+
+`single_valued = true` says the tag holds **at most one** of its domain's
+values — one when the key is present, and it constrains nothing when the
+key is absent. Pairing it with `required = true` is what yields exactly
+one. Without it the values may co-occur, and the dimension becomes one
+independent boolean per value — `2^|domain|` rather than `|domain|`. It is
+refused outright on `set` and `scalar`: a set holds any *subset* of its
+element universe, so its space is `2^|elements|` by construction and there
+is no single-valued reading to select; a scalar has no declared domain to
+partition at all.
+
+Two of those refusals key on the facet being **non-empty**, not on it
+being written: `domain` and `elements` are checked by length, so an empty
+`domain = []` or `elements = []` on a kind that admits neither loads
+without complaint. It declares nothing and changes nothing — the kind's
+own dimension rules still decide — but do not read a clean load of an
+empty array as the kind having accepted the facet. `single_valued` is
+checked by presence instead, so `single_valued = false` on a `set` or
+`scalar` *is* refused.
+
+`required = true` says the key is always present. An optional key doubles
+its dimension with a `{present, absent}` factor, and — more consequentially
+— any *value* atom over it can refuse `flow-guard-unevaluable` at runtime
+when the key is missing, which lint reports as `graph-unprovable-coverage`
+with `reason = row-can-refuse`. **A dimension a decision table
+discriminates on therefore wants `required = true`**; a sentinel member in
+the domain, always emitted by the producer, is the idiom for a value that
+is legitimately sometimes unknown.
+
+`single_valued = true` is the companion recommendation, but only for the
+**single-value** operators — `eq`, `in`, and the four integer
+comparisons — on an `enum`, `bool`, or `int` dimension. It keeps the
+dimension `|domain|` rather than `2^|domain|`, and a guard row over a
+multi-valued tag is what lint reports as unprovable. The other two
+operators are deliberate exceptions:
+
+- **`contains`** discriminates on a `set`, which *refuses*
+  `single_valued` by construction. A `contains` dimension wants
+  `required = true` alone; its `2^|elements|` space is the point, not a
+  defect.
+- **`exists`** discriminates on *presence*, so the key must be
+  **optional**. `required = true` collapses the `{present, absent}`
+  factor to one, leaving the atom constant either way — `exists = true`
+  denotes the whole dimension, `exists = false` denotes none of it — and
+  lint reports both as `graph-vacuous-atom`.
+
+```toml
+# an enum: the only kind that carries a domain
+[tags.phase]
+provenance = "owned"
+kind = "enum"
+domain = ["idle", "building", "shipped", "held"]
+single_valued = true
+required = true
+
+# an int: both bounds, or the dimension is not finite
+[tags.risk]
+provenance = "observed"
+kind = "int"
+min = 0
+max = 2
+single_valued = true
+required = true
+
+# a set: `elements`, and no single-valued marker
+[tags.checks]
+provenance = "observed"
+kind = "set"
+elements = ["tests", "signoff"]
+required = true
+
+# a scalar: opaque, no facets, no exhaustiveness claim
+[tags.build-id]
+provenance = "owned"
+kind = "scalar"
+```
+
+A dimension lint cannot enumerate — a `scalar`, an `int` missing a bound, an
+`enum` with no `domain` — takes `graph-unprovable-coverage` with
+`reason = dimension-not-finite`. A `scalar` is therefore fine to *carry* and
+never usable to *discriminate on*.
+
+### Guard and match atoms
+
+An atom is one operator applied to one tag, authored as a sub-table named
+for the tag:
+
+```toml
+[rule.guard.all.risk]
+gte = 1
+```
+
+The operator vocabulary is **closed at eight**, and an unadmitted token is
+refused as `malformed_predicate_atom` in every block. Which *kinds* each
+operator accepts is decided by the matrix below, and an unadmitted
+operator/kind pair is refused as `malformed_predicate_atom` too:
+
+| operator | accepts kinds | literal shape |
+| --- | --- | --- |
+| `eq` | `enum` `bool` `int` `scalar` | one typed scalar |
+| `in` | `enum` `bool` `int` `scalar` | non-empty typed scalar set |
+| `lt` `lte` `gt` `gte` | `int` | one typed integer |
+| `contains` | `set` | non-empty typed element set |
+| `exists` | all five | `true` or `false` |
+
+**The matrix binds guard atoms only** — `[rule.guard.all.<key>]` and
+`[rule.guard.unless.<key>]`. Guard atoms are what become product
+dimensions, so the matrix is what keeps a dimension's operator meaningful
+over its kind. A match block is scoped separately: it admits only `eq` and
+`in`, and over **any** declared kind, `set` included. A
+`[rule.match.checks]` block carrying `eq = "tests"` is therefore
+well-formed where `[rule.guard.all.checks]` carrying the same atom is
+not.
+
+What still binds every block is the **literal**. A member is checked
+against the tag's kind — an `int` tag takes only parseable integers, a
+`bool` tag only `true`/`false` — and against its declared domain: an
+`enum`'s `domain`, a `set`'s `elements`, an `int`'s `min`/`max`. An
+out-of-domain member is `malformed_predicate_atom` wherever it is
+authored. A comparison bound is kind-checked but not domain-checked, so
+`gte = 9` over `min = 0, max = 2` loads and simply denotes nothing.
+
+`contains` asks whether the held set is a **superset** of the literal, and
+it is total: a held `[]` answers false rather than refusing. `exists` reads
+presence alone and never the value, so it is the one operator that decides
+something over an optional key. Over an always-present key it is constant,
+and which constant depends on the literal: `exists = true` holds
+everywhere and denotes the whole dimension, `exists = false` holds nowhere
+and denotes none of it. Neither discriminates, and lint reports both as
+`graph-vacuous-atom` — the advisory keys on the operator and the key's
+`required` marker, not on the literal. A set literal is order-insensitive
+and a repeated member is refused, not collapsed.
+
+Three blocks take atoms, and the block decides what the atom does:
+
+- **`[rule.guard.all.<key>]`** — a conjunct. Every atom must hold.
+- **`[rule.guard.unless.<key>]`** — the negated block. Negation is
+  **block-level, not per atom**: every `unless` atom is conjoined and the
+  conjunction is negated *once*.
+- **`[rule.match.<key>]`** — scoping, not discrimination. A match block
+  admits **only `eq` and `in`**; any other operator is refused. An `in`
+  atom here *expands* into one row per member.
+
+The row's guard verdict is therefore
+
+```
+all₁ ∧ all₂ ∧ … ∧ ¬(unless₁ ∧ unless₂ ∧ …)
+```
+
+with the `unless` term contributing nothing when the block is absent.
+**With two or more `unless` atoms this is weaker than negating each one.**
+The row is enabled where *at least one* `unless` atom fails — not where
+they all fail.
+
+If what you want is `¬u₁ ∧ ¬u₂`, express each negation in `guard.all`
+with the operator's complement — `gte` against `lt`, `eq` against an `in`
+over the rest of the domain — since `guard.all` conjoins. Splitting the
+atoms across two rules does **not** work: that yields two rows, one
+enabled by `¬u₁` and one by `¬u₂`, which is the disjunction, and where
+both hold the rows overlap into a `graph-overlap` finding or an
+`ambiguous_match` refusal. Where no complement is expressible the
+conjunction needs the model restructured, not a second `unless` block.
+
+Only `guard.all` and `guard.unless` atoms become dimensions in the product
+lint proves coverage over. That distinction is the single most consequential
+authoring choice for a decision table, and
+[its own section](#discriminate-with-guard-atoms-not-rulematchkey) covers
+why.
+
+### Shared contexts
+
+A `[context.<id>]` block is a named match block. A rule pulls one in with a
+rule-level `use` list, and a context chains onto another with `inherits`:
+
+```toml
+[context.shipping]
+[context.shipping.match.recognized]
+eq = "ship"
+
+[context.expedited]
+inherits = "shipping"
+
+[[rule]]
+id = "ship-clean"
+use = ["expedited"]
+[rule.match.recognized]
+eq = "ship"
+```
+
+Inheritance **accumulates** — it never overrides. Merging is by full atom
+identity, so an atom a rule and a context both contribute collapses to one,
+and two atoms differing only in literal both survive. An `inherits` cycle is
+refused as `cyclic_context_inheritance`; naming a context that does not
+exist is `unknown_context`.
+
+One ordering rule is deliberate and catches authors out: **`use` cannot
+supply the rule's match block, only atoms within it.** The "every rule
+carries a match block" check runs *before* inheritance and keys on the
+block's *presence* — a rule with no `[rule.match.*]` sub-table at all is
+refused as `malformed_rule_shape` however much its contexts would have
+contributed.
+
+What that check does **not** demand is a local `recognized` atom. Outcome
+binding runs *after* the merge and reads the merged match atoms, local and
+inherited alike, so a rule carrying some other local match atom may take
+its `recognized` binding entirely from a context. A `recognized` atom
+authored under `guard.all` or `guard.unless` is a different matter: it is
+refused as `malformed_outcome_binding` rather than lifted, because only
+match blocks bind outcomes.
+
+The example rule above repeats its `recognized` atom regardless, for a
+reason unrelated to shape: a match atom other than `recognized` *scopes*
+the coverage group, and scoping that rule separately would break the
+partition it forms with its siblings.
+
+Contexts serve a second job unrelated to rules: `terminal` names them, which
+[the terminals section](#terminals-are-predicates-not-state-names) covers.
+
+### Rule-level keys and where they go
+
+`id`, `use`, `gate`, `clear`, `escape`, and `source` belong to the
+`[[rule]]` table itself, so they **must precede the first `[rule.*]`
+sub-table**. TOML reads
+a key written after one as belonging to *that* table — `clear` placed after
+`[rule.guard.all.build-id]` parses as a guard atom and refuses with
+`unknown operator`. It is a plain TOML rule with a confusing error, and it
+is worth knowing before it happens:
+
+```toml
+[[rule]]
+id = "ship-clean"
+use = ["expedited"]
+clear = ["build-id"]
+[rule.match.recognized]
+eq = "ship"
+[rule.guard.all.phase]
+eq = "building"
+[rule.write]
+phase = "shipped"
+```
 
 ## What both classes share
 
@@ -235,6 +523,50 @@ read_back = true
 what makes `flow set-state` verify a write by reading it back rather than
 trusting that it landed.
 
+Every accessor entry needs all four of `role`, `path`, `keys`, and a
+positive Go-duration `timeout` — any one absent or empty is
+`malformed_accessor_declaration`. `read_back` is a **write-entry key**:
+a write entry must carry `read_back = true`, and a read or gate entry
+carrying it at all is refused. No accessor of any capability may name the
+reserved `recognized` key.
+
+#### Gates
+
+`[gate.<id>]` is the third accessor capability. It answers **allow, deny,
+or indeterminate** — it reads nothing into the tag view and writes nothing.
+A rule opts into one with a rule-level `gate` list:
+
+```toml
+[gate.change-window]
+role = "release"
+path = "release.window"
+keys = ["phase"]
+timeout = "5s"
+
+[[rule]]
+id = "begin"
+gate = ["change-window"]
+[rule.match.recognized]
+in = ["build"]
+[rule.guard.all.phase]
+eq = "idle"
+[rule.write]
+phase = "building"
+build-id = "pending"
+```
+
+Gates run **after** exact-one selection and before the plan is emitted.
+That placement is the whole point: a gate never prunes a candidate the
+model would otherwise have chosen, it denies a plan already chosen. Under
+`flow resolve` a deny is the refusal `flow-gate-denied` — never a plan,
+never a silent fall-through to a second row. `flow next` invokes no gate at
+all unless `--evaluate-gates` is passed, and reports each id as
+not-evaluated otherwise.
+
+Naming a gate no `[gate.<id>]` block declares is refused as
+`unknown_accessor`. An escape row may carry no gate list at all, even an
+empty one.
+
 ### The root
 
 `[initial]` declares the owned state a model starts from. Every
@@ -269,6 +601,51 @@ status = "submitted"
 `flow resolve --outcome submit` over `status = "draft"` selects this row
 and returns the write as a **plan**. It applies nothing: `flow set-state`
 is what writes, and nothing links the two calls.
+
+A write **replaces**; it never merges. For a `set` key the array literal is
+the whole new set, and on every other kind a multi-member value is refused
+rather than truncated. Every key a `[rule.write]` block names must be an
+owned tag — writing an observed or recognized one is `write_to_non_owned_tag`
+— and a value outside its declared domain is refused at load, so the
+declaration is never advisory on the path that persists.
+
+#### Removing an owned tag: `clear`
+
+Absence from a write block never implies deletion. Removing an owned key is
+a rule-level `clear` list, and normalization renders each named key as a
+`<clear>` write:
+
+```toml
+[[rule]]
+id = "ship-clean"
+clear = ["build-id"]
+[rule.match.recognized]
+eq = "ship"
+[rule.guard.all.phase]
+eq = "building"
+[rule.write]
+phase = "shipped"
+```
+
+`clear` carries the same obligations a write does: an undeclared key is
+`unknown_tag`, a non-owned one is `write_to_non_owned_tag`. A rule may
+carry both blocks, as above, and the cleared keys join the written ones in
+the plan's owned-key set.
+
+`<clear>` is a **reserved TAG value**, refused in the three places a tag
+value is authored: a `[rule.write]` block, `[initial]`, and any atom
+literal. The `clear` list is the only way to produce it as a tag value,
+and it surfaces the same way at the CLI: `flow set-state --clear <key>`,
+never `--write key=<clear>`.
+
+The reservation does not reach `[rule.emit]`. Emit keys are not tags —
+nothing declares them and nothing writes them — and their values are
+uninterpreted strings, so `plan = "<clear>"` in an emit block loads and
+answers with that literal text. It carries no clearing meaning there.
+
+Note the placement — `clear` is a rule-level key, so it precedes the first
+`[rule.*]` sub-table. See
+[rule-level keys](#rule-level-keys-and-where-they-go).
 
 ### Terminals are predicates, not state names
 
@@ -386,8 +763,14 @@ declares them, nothing writes them, and they take no part in selection.
 **A decision table's discriminating dimensions must be authored as
 guard atoms — `[rule.guard.all.<key>]` or `[rule.guard.unless.<key>]` — not
 as `[rule.match.<key>]`.** This is the one authoring choice that
-lint cannot forgive quietly, and it is easy to get wrong because both block
-kinds accept the same operators over the same tags.
+lint cannot forgive quietly, and it is easy to get wrong because the two
+blocks share a syntax and overlap on the operators most tables reach for:
+`eq` and `in` are admitted in either. They are not interchangeable beyond
+that overlap — a guard atom must satisfy the
+[operator/kind matrix](#guard-and-match-atoms) while a match atom takes
+only `eq` and `in`, over any kind — so a block swapped for the other can
+turn from silently-accepted into a loader refusal depending on the
+operator. The failure this section is about is the silent one.
 
 The reason is what each block does to the coverage claim. A **match** atom
 *scopes* the row group — it decides which rows are compared against one
@@ -459,6 +842,37 @@ intrastate flow resolve --model pricing.toml \
 The answer is `rule` plus `emit`; `next`, `writes`, `clear`, `owned`, and
 `readers` are all empty over this class. See
 [cli-output-contract.md](cli-output-contract.md) for the payload.
+
+### Passing a set-valued tag
+
+A `set` tag's value crosses as a JSON array literal, and the model's
+declaration is what tells the parser to expect one:
+
+```sh
+intrastate flow resolve --model triage.toml \
+  --outcome triage --tag 'labels=["security"]' --tag severity=3 --as=json
+```
+
+**An undeclared tag whose value is an array is refused.** A `--tag` naming
+a key the model does not declare passes through harmlessly *as a scalar* —
+but it is validated against the zero declaration, whose kind is not `set`,
+so an array literal there returns `flow-tag-invalid` ("the tag `x` is not
+set-valued") and the call exits 2.
+
+This bites a caller that pipes a producer's whole tag output through one
+invocation: **every set-valued key the caller passes must be declared, even
+one no row guards on.** Declaring it costs the coverage product nothing —
+only guard atoms contribute dimensions, so a declared-but-unguarded tag adds
+no cell to prove:
+
+```toml
+# received and ignored; declared only so the array literal parses
+[tags.labels]
+provenance = "observed"
+kind = "set"
+elements = ["security", "docs"]
+required = true
+```
 
 ## References
 

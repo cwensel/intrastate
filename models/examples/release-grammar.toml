@@ -1,0 +1,308 @@
+# The grammar surface: every construct docs/model-authoring.md's
+# "The grammar" section names, in one model that lints.
+#
+# Referenced by docs/model-authoring.md. Linted by `make graph-lint`, so
+# a change to the loader or the analysis that invalidates this document
+# fails CI rather than leaving the documentation describing a model the
+# tool no longer accepts.
+#
+# The other two examples are deliberately minimal -- one teaches a
+# decision table's proved 2x2, the other a state machine's escape rows.
+# Neither should grow a construct it does not need. This one exists for
+# the opposite reason: it is the SNIPPET SOURCE. Every grammar snippet in
+# the doc is copied from here, so the doc cannot describe a construct the
+# tool rejects.
+#
+# A release train: idle -> building -> shipped | held. What it carries
+# that the other two do not:
+#
+#   - all five tag kinds -- enum, bool, int, set, scalar
+#   - the per-kind facets -- domain, min/max, elements, single_valued
+#   - guard operators past `eq` -- in, gte, lt, contains, exists
+#   - guard.unless, the block-level negation
+#   - a rule-level `clear` list, which renders as a `<clear>` write
+#   - a [gate.<id>] accessor and a rule-level `gate` list
+#   - a [context.<id>] block reused by `use`, and one that `inherits`
+#
+# NOTE the placement of the rule-level keys. `id`, `use`, `gate`,
+# `clear`, `escape`, and `source` belong to the [[rule]] table itself, so
+# they MUST precede the first [rule.*] sub-table. Written after one, TOML reads
+# them as keys of THAT table -- `clear` after [rule.guard.all.lease]
+# parses as a guard atom and refuses with "unknown operator".
+
+outcomes = ["build", "ship", "hold"]
+terminal = ["shipped", "held"]
+
+[model]
+id = "release"
+version = 1
+class = "state-machine"
+description = "the grammar-surface example docs/model-authoring.md quotes"
+
+# --- tags: the five kinds and their per-kind facets ---------------------
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+# `owned` -- state this model owns and the CLI persists. An enum carries
+# a `domain`; only an enum may.
+[tags.phase]
+provenance = "owned"
+kind = "enum"
+domain = ["idle", "building", "shipped", "held"]
+single_valued = true
+required = true
+
+# A `scalar` is the opaque kind: no domain to declare, and no
+# `single_valued` marker admitted. It carries a value the model moves
+# around without ever guarding on it -- which is why this one is cleared
+# rather than compared.
+[tags.build-id]
+provenance = "owned"
+kind = "scalar"
+
+# An `int` carries `min`/`max`, and only an int may. Both are needed for
+# the dimension to be finite: without them lint reports
+# `graph-unprovable-coverage` with reason `dimension-not-finite`.
+[tags.risk]
+provenance = "observed"
+kind = "int"
+min = 0
+max = 2
+single_valued = true
+required = true
+
+# A `set` carries `elements`, and only a set may. It admits NO
+# `single_valued` marker: a set holds any SUBSET of its universe, so its
+# dimension is 2^|elements| rather than |elements|, and there is no
+# single-valued reading for the marker to select.
+[tags.checks]
+provenance = "observed"
+kind = "set"
+elements = ["tests", "signoff"]
+required = true
+
+# A `bool` declares no domain -- its two literals are the domain.
+[tags.urgent]
+provenance = "observed"
+kind = "bool"
+single_valued = true
+
+# --- accessors: read, write, and the gate ------------------------------
+
+[read.release-state]
+role = "release"
+path = "release.state"
+keys = ["phase", "build-id"]
+timeout = "5s"
+
+[write.release-state]
+role = "release"
+path = "release.state"
+keys = ["phase", "build-id"]
+timeout = "5s"
+read_back = true
+
+# A [gate.<id>] is the third accessor capability. It answers allow, deny,
+# or indeterminate; it reads nothing into the view and writes nothing.
+# Gates run AFTER exact-one selection, so a gate never prunes a
+# candidate -- it denies a plan that was already chosen.
+[gate.change-window]
+role = "release"
+path = "release.window"
+keys = ["phase"]
+timeout = "5s"
+
+[initial]
+phase = "idle"
+
+# --- contexts: shared predicates, reused and chained --------------------
+
+# Terminal contexts: predicates over owned tags, never bare state names.
+[context.shipped]
+[context.shipped.match.phase]
+eq = "shipped"
+
+[context.held]
+[context.held.match.phase]
+eq = "held"
+
+# A context is just a named match block. This one is reused by `use`.
+[context.shipping]
+[context.shipping.match.recognized]
+eq = "ship"
+
+# `inherits` chains one context onto another: `expedited` carries its
+# parent's atoms plus its own. Inheritance ACCUMULATES -- it never
+# overrides, and a cycle is refused as `cyclic_context_inheritance`.
+#
+# `expedited` adds no atom of its own, so `use = ["expedited"]` and
+# `use = ["shipping"]` select the same rows here. The chain is in the
+# model to show the SHAPE `inherits` takes -- what it accumulates is
+# exercised by the `shipping` atom reaching `ship-clean` through it.
+[context.expedited]
+inherits = "shipping"
+
+# --- rules -------------------------------------------------------------
+
+# `in` over the outcome alphabet expands into one row per member.
+[[rule]]
+id = "begin"
+gate = ["change-window"]
+[rule.match.recognized]
+in = ["build"]
+[rule.guard.all.phase]
+eq = "idle"
+[rule.write]
+phase = "building"
+build-id = "pending"
+
+# `use` names a context whose match atoms merge into this rule's. It does
+# NOT relieve the rule of its own match block: outcome binding runs after
+# the merge, and it reads the merged atoms -- local and inherited alike.
+# What runs BEFORE inheritance is the "every rule carries a match block"
+# check, and it keys on the block's PRESENCE: a rule with no
+# [rule.match.*] sub-table at all is refused as `malformed_rule_shape`
+# however much its contexts would have supplied. It does NOT demand a
+# local `recognized` atom -- a rule carrying some other local match atom
+# may take its binding from a context alone.
+#
+# This rule repeats the atom anyway, because a match atom SCOPES the
+# coverage group. Any local match atom other than `recognized` would put
+# `ship-clean` in a group of its own and break the checks x risk
+# partition it forms with the two rows below.
+#
+# `clear` is a rule-level list. Each key it names renders as a `<clear>`
+# write -- the sentinel is unauthorable as a write VALUE, and clearing is
+# the only way to author it. Every cleared key must be owned, exactly as
+# a written one must.
+[[rule]]
+id = "ship-clean"
+use = ["expedited"]
+clear = ["build-id"]
+[rule.match.recognized]
+eq = "ship"
+[rule.guard.all.phase]
+eq = "building"
+[rule.guard.all.checks]
+contains = ["tests", "signoff"]
+[rule.write]
+phase = "shipped"
+
+# `guard.unless` negates: this row is enabled where the checks are NOT a
+# superset of {tests, signoff}. Together with the row above it partitions
+# the `checks` dimension over phase = "building".
+#
+# The negation is BLOCK-level, not per atom: every unless atom is
+# conjoined and the conjunction negated once, so the verdict is
+# `all ^ !(unless_1 ^ unless_2 ^ ...)`. This block carries one atom, so
+# the two readings coincide here -- with two they would not, and the row
+# would be enabled where merely ONE of them failed.
+#
+# `gte` and `lt` are int-only comparators, and they partition `risk`
+# between the two rows below.
+[[rule]]
+id = "hold-risky"
+[rule.match.recognized]
+eq = "ship"
+[rule.guard.all.phase]
+eq = "building"
+[rule.guard.unless.checks]
+contains = ["tests", "signoff"]
+[rule.guard.all.risk]
+gte = 1
+[rule.write]
+phase = "held"
+
+[[rule]]
+id = "ship-low-risk"
+[rule.match.recognized]
+eq = "ship"
+[rule.guard.all.phase]
+eq = "building"
+[rule.guard.unless.checks]
+contains = ["tests", "signoff"]
+[rule.guard.all.risk]
+lt = 1
+[rule.write]
+phase = "shipped"
+
+# `exists` reads PRESENCE, not value, and accepts every kind. It is the
+# one operator that means something over an OPTIONAL key -- `urgent`
+# declares no `required = true`.
+#
+# Over an always-present key it is CONSTANT, and which constant depends
+# on the literal: `exists = true` holds everywhere and denotes the whole
+# dimension, `exists = false` holds nowhere and denotes none of it.
+# Neither discriminates, and lint reports both as `graph-vacuous-atom` --
+# the advisory keys on the operator and the key's `required` marker, not
+# on the literal.
+#
+# `lte` and `gt` are the other two int comparators, and they partition
+# `risk` across the two rows below exactly as `gte`/`lt` do across the
+# two ship rows above. With them the model authors all EIGHT operator
+# tokens, so none of the doc's vocabulary is described without being
+# linted. It does not author every admitted operator/kind PAIR -- `eq`
+# and `in` accept four kinds each and are exercised here on enum, so this
+# model is not where per-pair coverage lives.
+#
+# Note that the loader does NOT call `guard.Accepts`. It enforces its own
+# mirrored copy of the matrix -- `internal/table.operatorAcceptsKind`,
+# which internal/table/model.go documents as a mirror precisely because
+# `guard` imports `table` and not the reverse. REQ-4 in
+# internal/guard/guard_grammar_0003_test.go pins the guard-side predicate
+# cell by cell; keeping the two copies in step is a separate concern this
+# example does not address either.
+[[rule]]
+id = "hold-urgent"
+[rule.match.recognized]
+eq = "hold"
+[rule.guard.all.phase]
+in = ["idle", "building"]
+[rule.guard.all.urgent]
+exists = true
+[rule.guard.all.risk]
+gt = 0
+[rule.write]
+phase = "held"
+
+[[rule]]
+id = "hold-urgent-low-risk"
+[rule.match.recognized]
+eq = "hold"
+[rule.guard.all.phase]
+in = ["idle", "building"]
+[rule.guard.all.urgent]
+exists = true
+[rule.guard.all.risk]
+lte = 0
+[rule.write]
+phase = "held"
+
+# One escape row per outcome. All three carry the
+# `graph-coverage-closed-by-escape` advisory -- informational, exit 0.
+# The advisory reports a BARE escape row in the closing population
+# whatever else closed the arm, so it fires even for `ship`, whose three
+# ordinary rows already partition checks x risk over phase = "building".
+# Clearing it would mean pinning every remaining phase explicitly, which
+# is not what this example is here to teach.
+[[rule]]
+id = "begin-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "build"
+
+[[rule]]
+id = "ship-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "ship"
+
+[[rule]]
+id = "hold-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "hold"
