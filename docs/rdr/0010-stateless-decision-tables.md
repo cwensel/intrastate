@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-26
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -1828,103 +1828,41 @@ to verify beforehand, and S3 asserts it on a multi-member `in` rule.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace this section's body with the
-> one-line pointer to gate.md — responses are never
-> inlined. The sub-sections below spec gate.md's
-> content.
-
-### Contradiction Check
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0010-stateless-decision-tables/artifacts/gate.md (Gate PASS 2026-08-26)
 
 ### Cross-Cutting Concerns
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+- **Incremental adoption** — addressed here. `class` is optional and its
+  absence reads as `"state-machine"` (C1), so every checked-in model loads,
+  lints, and resolves unchanged; the agreement check is one-directional, so
+  no existing model can be newly refused. The one non-silent widening is the
+  dump vocabulary: an explicit `[dump]` list must gain `emit` or fail at load
+  (A4, 103 fixtures), which is `0002:C19`'s own exhaustiveness rule, not a new
+  policy.
+- **Versioning** — addressed here, by refusal rather than by a version field.
+  A `class = "decision-table"` model met by a binary predating this RDR
+  refuses at strict decode as `unknown_schema_field`, never silently loading
+  as a machine (A8). The model grammar carries no version negotiation and
+  this RDR adds none; `[model] version` stays the model's own version, per
+  `0002:C3`.
+- **Canonical-form / determinism** — this RDR makes no byte-identity or
+  replay-stable-hash claim of its own, so the hash checklist does not apply.
+  Two determinism obligations it does carry: `Row.Emit` is sorted by key and
+  the dump renders `key=value` pairs in key order (C3), and the payload's
+  `emit` object is serialized with the same byte order and HTML-escaping
+  policy every other payload map already uses (`0005:C1`). Finding identity
+  is explicitly *not* widened — `emit` does not join
+  `internal/graphlint/engine.go::Fingerprint`, so editing an emit block never
+  changes a finding's identity (A7, D-identity).
+- **Concurrency model** — no concurrency surface is added. The class is read
+  from the loaded model, immutable after load; lint and resolve are
+  single-pass over that value.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+The remaining candidate concerns do not apply: this RDR adds no build-tool,
+licensing, deployment, or IDE surface; no secret or credential enters the
+model or the payload; `emit` values are bounded literal strings authored in
+the model, so no memory-management policy is engaged; and character encoding
+is TOML's and the existing JSON payload's, unchanged.
 
 ## References
 
