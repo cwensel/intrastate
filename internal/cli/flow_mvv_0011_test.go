@@ -283,6 +283,7 @@ func TestReq64And66And105_TheForbiddenFixtureShapesAreAbsentFromTheCorpus(t *tes
 		"flowUncomparableGuardModel":  flowUncomparableGuardModel,
 		"flowOwnedUnavailableModel":   flowOwnedUnavailableModel,
 		"flowSortOrderModel":          flowSortOrderModel,
+		"flowUnknownPairModel":        flowUnknownPairModel,
 		"flowMatchOnlyOwnedModel":     flowMatchOnlyOwnedModel,
 		"flowMatchOnlyOwnedSoloModel": flowMatchOnlyOwnedSoloModel,
 		"flowZeroOwnedMatchModel":     flowZeroOwnedMatchModel,

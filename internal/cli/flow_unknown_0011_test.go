@@ -351,6 +351,75 @@ func TestReq29And113_UnknownIsSortedByKeyThenReasonAndDedupedOnThePair(t *testin
 	}
 }
 
+// REQ-29: "Entries are deduplicated by `{key, reason}` pair, not by key,
+// and sorted by `(key, reason)`."
+// REQ-113 / `0011:S7`: "`unknown` is SORTED by `(key, reason)` — asserted on
+// a fixture whose facts are minted out of that order, so an unsorted build
+// fails."
+// BOUNDARY — the PAIR half of both clauses. `flowSortOrderModel` above
+// declares four DISTINCT keys, so it cannot separate pair dedup from key
+// dedup, nor the `(key, reason)` sort from a key-only sort: both broken
+// builds stay green over it. This fixture supplies the discriminating
+// input — ONE key minted twice with different reasons, from two different
+// sources — which `flowUnknownPairModel` gets from a deliberate tag-key /
+// gate-id namespace collision.
+func TestReq29_DedupAndSortDiscriminateOnTheReasonNotOnlyTheKey(t *testing.T) {
+	model := writeFlowModel(t, flowUnknownPairModel)
+	bind := seedMatchArtifact(t, model, "status=draft")
+
+	data := runNext(t, model, []string{bind})
+	pairs := candidateUnknown(t, requireCandidate(t, data, "pair-row"))
+
+	// (i) BOTH same-key entries survive. A build keying `seen` on `f.Key`
+	// instead of the whole pair collapses these two into one.
+	for _, want := range []unknownPair{
+		{Key: "beta", Reason: "absent"},        // atom walk (absent match key)
+		{Key: "beta", Reason: "not-evaluated"}, // gate loop (un-run gate id)
+	} {
+		if !hasUnknown(pairs, want.Key, want.Reason) {
+			t.Errorf("`unknown` is missing %#v: %#v\nThe key `beta` is BOTH "+
+				"an observed match key nothing supplies and an un-run gate "+
+				"id, so it is minted twice with DIFFERENT reasons. Dedup is "+
+				"on the `{key, reason}` PAIR, not on the key — `absent` and "+
+				"`not-evaluated` name different remedies, so collapsing "+
+				"them loses one of them (REQ-29, `0011:C1`)", want, pairs)
+		}
+	}
+
+	// (ii) exactly two `beta` entries — the pair dedup still DEDUPES, it
+	// just does not over-collapse.
+	betas := 0
+	for _, p := range pairs {
+		if p.Key == "beta" {
+			betas++
+		}
+	}
+	if betas != 2 {
+		t.Errorf("`unknown` carries %d entries for `beta`; want exactly 2: "+
+			"%#v\nOne per reason — dedup on the pair removes repeats of the "+
+			"SAME pair without merging distinct ones", betas, pairs)
+	}
+
+	// (iii) the REASON is the sort tiebreak, and the ordering it produces
+	// is TOTAL. Over two entries sharing a key a key-only comparison
+	// returns 0, leaving their relative order to `slices.SortFunc`, which
+	// is NOT stable — so a build without the tiebreak has no defined
+	// answer here. Assert the full expected sequence rather than a
+	// sortedness predicate, which a key-only comparator also satisfies.
+	want := []unknownPair{
+		{Key: "alpha", Reason: "absent"},
+		{Key: "beta", Reason: "absent"},
+		{Key: "beta", Reason: "not-evaluated"},
+	}
+	if !slices.Equal(pairs, want) {
+		t.Errorf("`unknown` = %#v; want %#v\nSorted by `(key, reason)` the "+
+			"list is total: `alpha` before both `beta` entries (the KEY "+
+			"comparison), and within `beta` the reason `absent` before "+
+			"`not-evaluated` (the REASON tiebreak). A build comparing only "+
+			"the key leaves the second comparison undefined", pairs, want)
+	}
+}
+
 // REQ-124 / `0011:F3`: "Only guard atoms can carry this reason on `next`."
 // REQ-129: "adds the reason token `not-evaluated` for un-run gate ids on
 // that CLI list only — `0007:C8`'s seam vocabulary stays at

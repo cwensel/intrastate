@@ -827,6 +827,95 @@ mid = "m"
 status = "final"
 `
 
+// flowUnknownPairModel is REQ-29's PAIR fixture: one candidate carrying two
+// `unknown` entries that share a KEY and differ only in REASON, which is the
+// input `flowSortOrderModel` cannot supply (its four keys are all distinct,
+// so key-only dedup and key-only sort both pass over it).
+//
+// The discriminator is a DELIBERATE cross-namespace collision. A tag key
+// (`[tags.<key>]`) and a gate accessor id (`[gate.<id>]`) live in separate
+// namespaces — `internal/table/normalize.go::normalizeRule` validates only
+// that a gated id exists in the model's gates, and never cross-checks the
+// tag table — so a model may declare BOTH `[tags.beta]` and `[gate.beta]`.
+// It loads and runs.
+//
+// `pair-row` then mints `beta` twice from two different sources: the atom
+// walk contributes `{beta, absent}` (an observed match key nothing supplies)
+// and the un-run gate loop contributes `{beta, not-evaluated}`. A build
+// deduplicating by KEY collapses them to one; a build sorting by KEY alone
+// leaves their relative order to emission order, which is the reverse of
+// `(key, reason)` order because the gate loop runs LAST (`0011:C1`, REQ-29).
+//
+// `alpha` is a second absent match key so the CROSS-key sort stays exercised
+// on the same candidate: sorted, the list is `alpha/absent`, `beta/absent`,
+// `beta/not-evaluated`.
+const flowUnknownPairModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "unknownpair"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.beta]
+provenance = "observed"
+kind = "scalar"
+
+[tags.alpha]
+provenance = "observed"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[gate.beta]
+role = "state"
+path = "flow.gate"
+keys = ["status"]
+timeout = "2s"
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "pair-row"
+gate = ["beta"]
+[rule.match.beta]
+eq = "b"
+[rule.match.alpha]
+eq = "a"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"
+`
+
 // flowMatchOnlyOwnedModel is S8's demand-set fixture (REQ-16..21, REQ-114,
 // REQ-116, REQ-117): a model declaring an owned key that some row MATCHES
 // on but NO row writes, clears, or guards, served by exactly one reader.
@@ -1385,6 +1474,34 @@ func seedMatchArtifact(t *testing.T, model string, writes ...string) string {
 	t.Helper()
 
 	return artifactBinding(flowMatchRole, seedArtifact(t, model, writes...))
+}
+
+// seedRawMatchArtifact writes the `state` artifact DIRECTLY, bypassing
+// `flow set-state`, and returns its binding.
+//
+// It exists for exactly one input the CLI's own write path cannot express:
+// the EMPTY-BUT-PRESENT value. `canonicalValue` (`flow_input.go`) refuses
+// `value == ""` on both `--tag` and `--write`, so every artifact seeded
+// through `seedMatchArtifact` carries only non-empty values. REQ-4's
+// discriminating case is a READER reporting `Value: ""` with the key
+// established (not `Absent`), which is what an artifact holding `""`
+// produces — the on-disk form is a flat JSON object of key to value, and
+// the accessor reads it back verbatim.
+//
+// Use this ONLY for that case; every other fixture goes through
+// `seedMatchArtifact` so it exercises the real write path.
+func seedRawMatchArtifact(t *testing.T, values map[string]string) string {
+	t.Helper()
+
+	b, err := json.Marshal(values)
+	if err != nil {
+		t.Fatalf("encoding the raw artifact failed: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "state.artifact")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatalf("writing the raw artifact failed: %v", err)
+	}
+	return artifactBinding(flowMatchRole, path)
 }
 
 // readersOf reads the payload's `readers` list, sorted.

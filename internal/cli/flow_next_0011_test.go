@@ -495,6 +495,66 @@ func TestReq3And4And5_PresenceIsMapMembershipAndTheEmptyStringIsPresent(t *testi
 	}
 }
 
+// REQ-4 / A-1: "Present means the view HOLDS A VALUE for the key" — read as
+// map membership, never a non-empty test, because "an empty-but-present
+// value yields a `Tag` with `Value: \"\"`, which `assembledView` stores as a
+// present map entry".
+// BOUNDARY — the EMPTY STRING is the single input that separates a presence
+// test from a non-empty test, and the sibling test above cannot supply it:
+// `canonicalValue` refuses an empty `--tag`/`--write` value, so every
+// CLI-seeded artifact carries only non-empty values and a build testing
+// `view[k] != ""` passes over all of them. The value is reader-sourced here
+// (`seedRawMatchArtifact`), which is the layer REQ-4 names — `OwnedSnapshot`
+// omits only the keys the binding reports `Absent`, so an established key
+// holding `""` reaches the view as a present entry.
+func TestReq4_AnEmptyButPresentOwnedValueIsPresentNotAbsent(t *testing.T) {
+	model := writeFlowModel(t, flowSortOrderModel)
+
+	// `mid` is an owned key `sort-row` WRITES, so it is in `RequiresOwned`
+	// and the owned-key walk visits it on every run. That walk is the
+	// presence test under oracle: it emits `{mid, absent}` for a key the
+	// view does not hold.
+	empty := runNext(t, model, []string{seedRawMatchArtifact(t,
+		map[string]string{"status": "draft", "mid": ""})})
+	c := requireCandidate(t, empty, "sort-row")
+
+	if pairs := candidateUnknown(t, c); hasUnknown(pairs, "mid", "absent") {
+		t.Errorf("`mid` is reported `{mid, absent}` while the reader "+
+			"established it with the value \"\": %#v\nPresence is MAP "+
+			"MEMBERSHIP (`_, known := view[key]`), never a non-empty test. "+
+			"A build testing `view[key] != \"\"` reports an established "+
+			"empty value as absent — and would also break REQ-109's "+
+			"key-set agreement, since the kernel stores the same empty "+
+			"value as a present `taggedValue` (REQ-4, A-1, `0011:C1`)",
+			pairs)
+	}
+
+	// The view itself agrees: `mid` is a KEY of `owned`, holding `""`.
+	owned, ok := empty["owned"].(map[string]any)
+	if !ok {
+		t.Fatalf("`owned` is not an object: %#v", empty["owned"])
+	}
+	if v, known := owned["mid"]; !known || v != "" {
+		t.Errorf("`owned[\"mid\"]` = %#v (present=%v); want the present "+
+			"empty string\nThe reported view is the same map the presence "+
+			"test reads, so a build dropping empty values here would "+
+			"disagree with `unknown` about which keys are known", v, known)
+	}
+
+	// NEGATIVE CONTROL — the same model with `mid` genuinely OMITTED does
+	// report `{mid, absent}`. Without this arm the assertion above passes
+	// against a build that never emits `{mid, absent}` at all.
+	omitted := runNext(t, model, []string{seedRawMatchArtifact(t,
+		map[string]string{"status": "draft"})})
+	if pairs := candidateUnknown(t, requireCandidate(t, omitted, "sort-row")); !hasUnknown(pairs, "mid", "absent") {
+		t.Errorf("`mid` is NOT reported `{mid, absent}` when the reader "+
+			"omits it entirely: %#v\nAbsence and the empty string are "+
+			"DIFFERENT inputs with different verdicts; this arm is what "+
+			"keeps the empty-string assertion above from passing "+
+			"vacuously", pairs)
+	}
+}
+
 // REQ-15: "The invoked reader set and the assembled view are fixed ONCE per
 // invocation, before the row loop, and are the same under --all; `unknown`
 // is never a function of row order or of the flag."

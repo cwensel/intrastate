@@ -908,6 +908,25 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"escaped":false}}`,
 	},
 	{
+		// The PAIR fixture's supplied arm. Its tag key `beta` and its gate
+		// id `beta` are the SAME token in two namespaces, and this payload
+		// is where that separation is observable on the wire: `observed`
+		// carries `beta` the tag while `gates` carries `beta` the accessor
+		// id, in one envelope. A build that conflated the namespaces could
+		// not produce both.
+		name: "flowUnknownPairModel", model: flowUnknownPairModel,
+		outcome: "advance",
+		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		tags:    []string{"beta=b", "alpha=a"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{"alpha":"a","beta":"b"},` +
+			`"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"pair-row",` +
+			`"gates":[{"id":"beta","result":"allow"}],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
 		// The uncomparable-guard fixture's COMPARABLE arm. `size` is an
 		// `int` tag and the guard's bound is the string `"3"`; the
 		// refusal its exclusion cited is that uncomparability, which the
