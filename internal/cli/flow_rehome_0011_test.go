@@ -273,6 +273,14 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 	}
 	help := stdout + stderr
 
+	// REQ-51 binds `Short` AS WELL AS `Long`, and `Short` is what the
+	// parent `flow --help` listing renders for `next` — a caller choosing
+	// a verb reads it before ever running `flow next --help`. `Short` is
+	// one line, so it carries the REPORTING clause only (the remaining
+	// REQ-51 clauses are `Long`'s job, asserted below); what it must not
+	// do is regress to 0005's enumerate framing or drop `candidate`.
+	assertNextShortInFlowListing(t)
+
 	// The OLD framing must be gone: it states the predicate this RDR
 	// overrides, and it is shipped user-facing text, not a comment.
 	for _, stale := range []string{"ENUMERATES", "unresolved facts"} {
@@ -305,6 +313,10 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 	for _, want := range []struct {
 		clause string
 		anyOf  []string
+		// nearby, when set, must also appear in the same PARAGRAPH as
+		// the matched phrase. It pins a clause's subject when the
+		// shipped prose states it in an adjacent sentence.
+		nearby string
 		why    string
 	}{
 		{
@@ -322,12 +334,20 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 		},
 		{
 			clause: "an absent key leaves the row a candidate",
+			// Each alternative carries BOTH halves: the absent key (a
+			// match-or-guard key the state does not carry) AND what it
+			// does not do (exclude the row / cost it candidacy). A bare
+			// "leaves the row a candidate" is not enough — it could
+			// describe any other reason a row stays a candidate.
+			// Every alternative names the key as a MATCH or GUARD key.
+			// REQ-51 is about those two; an `owned` key the state does
+			// not carry is a different concept in this CLI, so prose
+			// saying that would not state this clause.
 			anyOf: []string{
-				"does not carry does not exclude",
-				"the state does not carry does not exclude",
-				"absent key does not exclude",
-				"leaves the row a candidate",
-				"leaves it a candidate",
+				"match or guard key the state does not carry does not exclude the row",
+				"match or guard key the state does not carry leaves the row a candidate",
+				"absent match or guard key does not exclude the row",
+				"match or guard key it does not carry does not exclude the row",
 			},
 			why: "REQ-51 requires the help to state that a match or guard " +
 				"key the state DOES NOT CARRY does not exclude the row. " +
@@ -336,11 +356,15 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 		},
 		{
 			clause: "the absent key is reported under `unknown` with its reason",
+			// Each alternative binds the KEY to being listed under
+			// `unknown` with its reason. A bare "unknown and its reason
+			// named" would also be satisfied by the gate-id sentence
+			// below, which is a different clause.
 			anyOf: []string{
-				"under unknown and its reason named",
-				"listed under unknown and its reason",
-				"under unknown with its reason",
-				"unknown and its reason named",
+				"with the key listed under unknown and its reason named",
+				"the key listed under unknown and its reason named",
+				"the key is listed under unknown with its reason",
+				"key listed under unknown and its reason",
 			},
 			why: "REQ-51 requires BOTH halves: the key is listed under " +
 				"`unknown` AND its reason is named. `unknown` alone is a " +
@@ -349,10 +373,15 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 		},
 		{
 			clause: "`--all` reports guard-legal rows regardless of match",
+			// Every alternative NAMES `--all`: the clause is about what
+			// that flag does, so prose stating guard-legal reporting
+			// without attributing it to `--all` does not state it. The
+			// remaining variation is only in how the sentence is worded.
 			anyOf: []string{
 				"--all reports every row the guards do not exclude, regardless of match",
-				"every row the guards do not exclude, regardless of match",
-				"regardless of match",
+				"--all reports all rows the guards do not exclude, regardless of match",
+				"--all reports every row the guards do not exclude, no matter the match",
+				"with --all, every row the guards do not exclude is reported, regardless of match",
 			},
 			why: "REQ-51 requires the help to state that `--all` reports " +
 				"every row the GUARDS do not exclude REGARDLESS OF MATCH. " +
@@ -361,26 +390,64 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 		},
 		{
 			clause: "the `not-evaluated` reason",
+			// The token must be bound to UNEVALUATED GATE IDS. A bare
+			// `not-evaluated` anywhere in the prose would satisfy the
+			// check without the help ever saying what carries it, and a
+			// subject-less "ids are reported …" would be satisfied by a
+			// sentence about reader or rule ids. Every alternative names
+			// the gates, either directly or as the `--evaluate-gates`
+			// flag whose absence is what leaves them unevaluated.
+			// Every alternative binds the token to the GATE ids that
+			// carry it — either by naming them, or via "their ids",
+			// whose referent `nearby` pins to the gates sentence in the
+			// same paragraph. Prose assigning `not-evaluated` to reader
+			// or rule ids does not state this clause.
 			anyOf: []string{
-				"not-evaluated",
+				"their ids are reported under unknown as not-evaluated",
+				"gate ids are reported under unknown as not-evaluated",
+				"their gate ids are reported under unknown as not-evaluated",
+				"gate ids are unknown with the reason not-evaluated",
 			},
+			// The shipped sentence writes the subject as "Gates run only
+			// under --evaluate-gates. Without it THEIR ids …", so the
+			// gate subject sits in the PRECEDING sentence. Requiring it
+			// in the same paragraph keeps the token bound to gates —
+			// "reader ids are … not-evaluated" alone does not pass —
+			// without inlining a phrase long enough to span a sentence
+			// boundary, which would break on a re-wrap. Re-wrapping is
+			// styling, not contract.
+			nearby: "gate",
 			why: "the reason vocabulary is half of the `unknown` contract: " +
 				"without `--evaluate-gates` a gate id is unknown for the " +
 				"reason `not-evaluated`, not because a fact is missing. " +
 				"C1 names the token, so the help must spell it",
 		},
 	} {
+		// A clause counts as stated when one accepted phrasing appears
+		// in a paragraph that also carries the clause's subject.
 		var stated bool
-		for _, phrase := range want.anyOf {
-			if strings.Contains(prose, phrase) {
-				stated = true
+		for _, para := range strings.Split(prose, "\n\n") {
+			if want.nearby != "" && !strings.Contains(para, want.nearby) {
+				continue
+			}
+			for _, phrase := range want.anyOf {
+				if strings.Contains(para, phrase) {
+					stated = true
+					break
+				}
+			}
+			if stated {
 				break
 			}
 		}
 		if !stated {
+			subject := ""
+			if want.nearby != "" {
+				subject = " in a paragraph that also names " + want.nearby
+			}
 			t.Errorf("the help's prose does not state %s: %s\n"+
-				"None of the accepted phrasings %q appear in:\n%s",
-				want.clause, want.why, want.anyOf, prose)
+				"None of the accepted phrasings %q appear%s in:\n%s",
+				want.clause, want.why, want.anyOf, subject, prose)
 		}
 	}
 }
@@ -390,6 +457,58 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 // sections. Those sections are assembled from flag registrations, not
 // from `Long`, so a REQ-51 clause found only there is not help the author
 // wrote and is not evidence the clause is stated.
+// assertNextShortInFlowListing pins REQ-51's `Short` half: the one-line
+// description cobra renders for `next` under the parent `flow --help`
+// listing. It is isolated to that row rather than matched over the whole
+// blob, because `flow`'s own `Long` also describes the four verbs and would
+// otherwise satisfy the check for free — the same vacuity the `Long`
+// assertions below exist to close.
+func assertNextShortInFlowListing(t *testing.T) {
+	t.Helper()
+	stdout, stderr, err := runCmd(t, "flow", "--help")
+	if err != nil {
+		t.Fatalf("`flow --help` failed: %v", err)
+	}
+	listing := stdout + stderr
+
+	const header = "\nAvailable Commands:"
+	i := strings.Index(listing, header)
+	if i < 0 {
+		t.Fatalf("`flow --help` renders no `Available Commands:` listing, "+
+			"so `next`'s Short description is not shown to a caller "+
+			"choosing a verb:\n%s", listing)
+	}
+	var short string
+	for _, line := range strings.Split(listing[i+len(header):], "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 1 && fields[0] == "next" {
+			short = strings.ToLower(strings.Join(fields[1:], " "))
+			break
+		}
+	}
+	if short == "" {
+		t.Fatalf("`flow --help`'s command listing has no `next` row, so "+
+			"REQ-51's `Short` contract is unstated:\n%s", listing)
+	}
+
+	// Same accepted-phrasing discipline as the `Long` clauses: a set, not
+	// a golden, so rewording survives and dropping the clause does not.
+	anyOf := []string{
+		"report the candidate rules the supplied state can take",
+		"report the candidate rows the supplied state can take",
+		"report the candidate rules the state can take",
+	}
+	for _, phrase := range anyOf {
+		if strings.Contains(short, phrase) {
+			return
+		}
+	}
+	t.Errorf("`next`'s Short description reads %q, which does not state "+
+		"REQ-51's reporting clause — that `next` REPORTS the CANDIDATE "+
+		"rows the supplied state CAN TAKE. This is the line a caller "+
+		"reads when choosing a verb; accepted phrasings: %q", short, anyOf)
+}
+
 func helpProse(t *testing.T, help string) string {
 	t.Helper()
 	const boundary = "\nUsage:"
@@ -405,7 +524,17 @@ func helpProse(t *testing.T, help string) string {
 			"the command's `Long` is empty, and every REQ-51 clause is "+
 			"unstated:\n%s", help)
 	}
-	return prose
+	// Collapse runs of whitespace WITHIN each paragraph to single
+	// spaces, keeping the blank line between paragraphs. The help is
+	// hard-wrapped, so a clause spans a line break at whatever column
+	// the wrap happens to fall; re-wrapping the same sentence must not
+	// decide whether a clause counts as stated. Paragraph boundaries
+	// survive because `nearby` is scoped to one paragraph.
+	paras := strings.Split(prose, "\n\n")
+	for i, p := range paras {
+		paras[i] = strings.Join(strings.Fields(p), " ")
+	}
+	return strings.Join(paras, "\n\n")
 }
 
 // REQ-52: "The help MUST also state that a candidate is a row the supplied
