@@ -1,0 +1,72 @@
+# a8-baseline.toml — minimal valid model for RDR 0010 A8 spike.
+# Loads and lints cleanly on the pre-change binary (HEAD 2886a69).
+outcomes = ["advance", "abandon"]
+terminal = ["done"]
+
+[model]
+id = "a8-baseline"
+version = 1
+description = "Minimal MVV-shaped model for the A8 strict-decode spike."
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["start", "finished"]
+single_valued = true
+required = true
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[read.a8-status]
+role = "a8"
+path = "a8.status"
+keys = ["stage"]
+timeout = "2s"
+
+[write.a8-status]
+role = "a8"
+path = "a8.status"
+keys = ["stage"]
+timeout = "2s"
+read_back = true
+
+[initial]
+stage = "start"
+
+[context.done]
+[context.done.match.stage]
+eq = "finished"
+
+[[rule]]
+id = "advance"
+source = "a8-spike"
+[rule.match.stage]
+eq = "start"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "finished"
+
+[[rule]]
+id = "abandon"
+source = "a8-spike"
+[rule.match.stage]
+eq = "start"
+[rule.match.recognized]
+eq = "abandon"
+[rule.write]
+stage = "finished"
+
+[[rule]]
+id = "done-loop"
+source = "a8-spike"
+[rule.match.stage]
+eq = "finished"
+[rule.match.recognized]
+in = ["advance", "abandon"]
+[rule.write]
+stage = "finished"
