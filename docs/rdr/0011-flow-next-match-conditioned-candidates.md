@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-26
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Feature
 - **Profile**: large — one independent contract, the `flow next` candidate predicate (C1), locking the `unknown` payload shape and its reason vocabulary; C2 (`--all`) is that predicate's second surface and C3 pins its wording and fixtures, so neither is separately held. The demand-set term C1 carries changes `flow resolve` too (A15), but through one function in one module with `internal/resolve` untouched — one seam, not a module span
 - **Priority**: High
