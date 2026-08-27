@@ -711,12 +711,16 @@ func TestReq109_TheCLIViewsKeySetAgreesWithTheKernelsModuloRecognized(t *testing
 // the `match_conflicted_test.go` oracles, and the reason-set pins
 // `TestReq49`/`TestReq47` … stay green as shipped."
 // ADVERSARIAL — the upstream pins A13's merge relies on. They must still
-// EXIST and be unedited; running them is `go test ./internal/resolve`'s job
-// and their unchangedness is asserted as a diff by MVV 9's oracle.
+// EXIST; running them is `go test ./internal/resolve`'s job. Their
+// UNCHANGEDNESS was a build-time proof obligation in the diff form
+// (`0011:S5`, MVV 9's `git diff --stat internal/resolve` empty), discharged
+// at review in the landing commit per `0011:S6`; post-merge there is no
+// branch point, so no test can observe it and none is restated here.
 func TestReq108_TheUpstreamKernelPinsStillExistAsShipped(t *testing.T) {
 	// All three ship in one file on this build. Their HOME is provenance;
-	// the obligation is that the symbols still exist, unedited — the
-	// unchangedness itself is asserted as a diff by MVV 9's oracle.
+	// the obligation this test CAN carry post-merge is that the symbols
+	// still exist. Unchangedness was discharged at review, not asserted
+	// here.
 	src := readRepoFile(t, "internal/resolve/guard_atoms_test.go")
 
 	for _, pin := range []struct{ symbol, why string }{
