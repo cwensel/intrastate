@@ -10,7 +10,6 @@ package cli
 // signal.
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,7 @@ import (
 func renderBoth(t *testing.T) (reference, llms string) {
 	t.Helper()
 	root := NewRootCmd()
-	var ref, idx bytes.Buffer
+	var ref, idx strings.Builder
 	writeCLIReference(&ref, root)
 	writeLLMsTxt(&idx, root)
 	return ref.String(), idx.String()

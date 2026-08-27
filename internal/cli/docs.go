@@ -27,8 +27,6 @@ package cli
 // on every release build and turn the staleness gate into noise.
 
 import (
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,7 +100,7 @@ func runDocs(cmd *cobra.Command, _ []string) error {
 
 	files := []struct {
 		path   string
-		render func(io.Writer, *cobra.Command)
+		render func(*strings.Builder, *cobra.Command)
 	}{
 		{filepath.Join("docs", "cli-reference.md"), writeCLIReference},
 		{"llms.txt", writeLLMsTxt},
@@ -141,48 +139,72 @@ func runDocs(cmd *cobra.Command, _ []string) error {
 	})
 }
 
+// line, linef, and raw write to a strings.Builder, whose Write is
+// documented never to return an error. Going through them rather than
+// fmt.Fprintln keeps the renderers free of 70 unchecked-error sites that
+// could not fail and could not be meaningfully handled if they did.
+// line writes each string then a newline; linef formats first; raw
+// writes without the newline.
+//
+// They take a *strings.Builder rather than an io.Writer because
+// Builder.Write is documented never to return an error. That keeps the
+// renderers free of ~70 unchecked-error sites that could not fail and
+// could not be handled if they did — and it is a real constraint, not a
+// convenience: a renderer that could fail mid-document would need an
+// error path through every call, for a writer that has none.
+func line(w *strings.Builder, parts ...string) {
+	for _, p := range parts {
+		w.WriteString(p)
+	}
+	w.WriteByte('\n')
+}
+
+func raw(w *strings.Builder, s string) {
+	w.WriteString(s)
+}
+
 // writeCLIReference renders the whole tree: for each command, its terse
 // body, its usage block, and its extended help. It is the file form of
 // `intrastate --help-all`, and it is built by walking the SAME tree that
 // command walks — there is no second description to keep in step.
-func writeCLIReference(w io.Writer, root *cobra.Command) {
-	fmt.Fprintln(w, generatedBanner)
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "# intrastate CLI reference")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Every command, its flags, and its extended reference.")
-	fmt.Fprintln(w, "The same content is available from the binary itself:")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "```sh")
-	fmt.Fprintln(w, "intrastate --help-all           # this whole document")
-	fmt.Fprintln(w, "intrastate <command> --help-all # one command's section")
-	fmt.Fprintln(w, "```")
+func writeCLIReference(w *strings.Builder, root *cobra.Command) {
+	line(w, generatedBanner)
+	line(w)
+	line(w, "# intrastate CLI reference")
+	line(w)
+	line(w, "Every command, its flags, and its extended reference.")
+	line(w, "The same content is available from the binary itself:")
+	line(w)
+	line(w, "```sh")
+	line(w, "intrastate --help-all           # this whole document")
+	line(w, "intrastate <command> --help-all # one command's section")
+	line(w, "```")
 
 	walkCommandTree(root, func(c *cobra.Command) {
 		if c.Hidden {
 			return
 		}
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "## %s\n", c.CommandPath())
-		fmt.Fprintln(w)
+		line(w)
+		line(w, "## "+c.CommandPath())
+		line(w)
 		if c.Short != "" {
-			fmt.Fprintln(w, c.Short)
-			fmt.Fprintln(w)
+			line(w, c.Short)
+			line(w)
 		}
 		if body := strings.TrimRight(c.Long, " \t\r\n"); body != "" && body != c.Short {
-			fmt.Fprintln(w, "```")
-			fmt.Fprintln(w, body)
-			fmt.Fprintln(w, "```")
-			fmt.Fprintln(w)
+			line(w, "```")
+			line(w, body)
+			line(w, "```")
+			line(w)
 		}
-		fmt.Fprintln(w, "```")
-		fmt.Fprint(w, usageWithoutVersion(c))
-		fmt.Fprintln(w, "```")
+		line(w, "```")
+		raw(w, usageWithoutVersion(c))
+		line(w, "```")
 		if ext := extendedHelpFor(c); ext != "" {
-			fmt.Fprintln(w)
-			fmt.Fprintln(w, "```")
-			fmt.Fprintln(w, ext)
-			fmt.Fprintln(w, "```")
+			line(w)
+			line(w, "```")
+			line(w, ext)
+			line(w, "```")
 		}
 	})
 }
@@ -195,57 +217,57 @@ func writeCLIReference(w io.Writer, root *cobra.Command) {
 // It points an agent at the binary first. A file is a snapshot; the
 // binary is the build actually installed, and `--help-all --as=json` is
 // the machine-readable form of the same content.
-func writeLLMsTxt(w io.Writer, root *cobra.Command) {
-	fmt.Fprintln(w, "# intrastate")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "> A Go CLI that makes workflow state transitions explicit, reviewable,")
-	fmt.Fprintln(w, "> and deterministic. A flow is authored once as a transition model — a")
-	fmt.Fprintln(w, "> TOML document of tags, rules, guards, and writes — and callers")
-	fmt.Fprintln(w, "> navigate it by asking the CLI rather than reimplementing the flow in")
-	fmt.Fprintln(w, "> a skill, script, or agent. Given the same model, state, tags, and")
-	fmt.Fprintln(w, "> recognized outcome, the answer is the same every time: one legal")
-	fmt.Fprintln(w, "> plan, or one typed refusal.")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "The binary is authoritative and self-describing. Prefer asking it over")
-	fmt.Fprintln(w, "reading any file here — a file is a snapshot, the binary is the build")
-	fmt.Fprintln(w, "you actually have:")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "```sh")
-	fmt.Fprintln(w, "intrastate --help-all      # every command's full reference")
-	fmt.Fprintln(w, "intrastate <cmd> --help-all")
-	fmt.Fprintln(w, "intrastate <cmd> --as=json # one terminal JSON envelope per run")
-	fmt.Fprintln(w, "```")
-	fmt.Fprintln(w)
+func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
+	line(w, "# intrastate")
+	line(w)
+	line(w, "> A Go CLI that makes workflow state transitions explicit, reviewable,")
+	line(w, "> and deterministic. A flow is authored once as a transition model — a")
+	line(w, "> TOML document of tags, rules, guards, and writes — and callers")
+	line(w, "> navigate it by asking the CLI rather than reimplementing the flow in")
+	line(w, "> a skill, script, or agent. Given the same model, state, tags, and")
+	line(w, "> recognized outcome, the answer is the same every time: one legal")
+	line(w, "> plan, or one typed refusal.")
+	line(w)
+	line(w, "The binary is authoritative and self-describing. Prefer asking it over")
+	line(w, "reading any file here — a file is a snapshot, the binary is the build")
+	line(w, "you actually have:")
+	line(w)
+	line(w, "```sh")
+	line(w, "intrastate --help-all      # every command's full reference")
+	line(w, "intrastate <cmd> --help-all")
+	line(w, "intrastate <cmd> --as=json # one terminal JSON envelope per run")
+	line(w, "```")
+	line(w)
 
-	fmt.Fprintln(w, "## Commands")
-	fmt.Fprintln(w)
+	line(w, "## Commands")
+	line(w)
 	walkCommandTree(root, func(c *cobra.Command) {
 		if c.Hidden || c.Parent() == nil {
 			return
 		}
-		fmt.Fprintf(w, "- `%s`: %s\n", c.CommandPath(), c.Short)
+		line(w, "- `"+c.CommandPath()+"`: "+c.Short)
 	})
-	fmt.Fprintln(w)
+	line(w)
 
-	fmt.Fprintln(w, "## Docs")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "- [CLI reference](docs/cli-reference.md): every command, flag, and")
-	fmt.Fprintln(w, "  extended body — generated from the command tree.")
-	fmt.Fprintln(w, "- [Model authoring](docs/model-authoring.md): how to author a")
-	fmt.Fprintln(w, "  transition model in TOML — the model class, a decision table's")
-	fmt.Fprintln(w, "  cells, and the escape row. Not derivable from the CLI surface.")
-	fmt.Fprintln(w, "- [Output contract](docs/cli-output-contract.md): worked JSON")
-	fmt.Fprintln(w, "  payloads and the rationale behind the envelope shape.")
-	fmt.Fprintln(w, "- [README](README.md): what it is, install, and a first invocation.")
-	fmt.Fprintln(w)
+	line(w, "## Docs")
+	line(w)
+	line(w, "- [CLI reference](docs/cli-reference.md): every command, flag, and")
+	line(w, "  extended body — generated from the command tree.")
+	line(w, "- [Model authoring](docs/model-authoring.md): how to author a")
+	line(w, "  transition model in TOML — the model class, a decision table's")
+	line(w, "  cells, and the escape row. Not derivable from the CLI surface.")
+	line(w, "- [Output contract](docs/cli-output-contract.md): worked JSON")
+	line(w, "  payloads and the rationale behind the envelope shape.")
+	line(w, "- [README](README.md): what it is, install, and a first invocation.")
+	line(w)
 
-	fmt.Fprintln(w, "## Optional")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "- [Decision records](docs/rdr/): the locked design decisions behind")
-	fmt.Fprintln(w, "  the contracts above. History and rationale; the code is the source")
-	fmt.Fprintln(w, "  of truth.")
-	fmt.Fprintln(w, "- [CONTRIBUTING](CONTRIBUTING.md): layout, the contract every verb")
-	fmt.Fprintln(w, "  follows, and the build targets.")
+	line(w, "## Optional")
+	line(w)
+	line(w, "- [Decision records](docs/rdr/): the locked design decisions behind")
+	line(w, "  the contracts above. History and rationale; the code is the source")
+	line(w, "  of truth.")
+	line(w, "- [CONTRIBUTING](CONTRIBUTING.md): layout, the contract every verb")
+	line(w, "  follows, and the build targets.")
 }
 
 // usageWithoutVersion is cmd.UsageString with the ldflags-stamped
@@ -259,7 +281,7 @@ func writeLLMsTxt(w io.Writer, root *cobra.Command) {
 // rather than by luck.
 func usageWithoutVersion(c *cobra.Command) string {
 	var kept []string
-	for _, line := range strings.Split(c.UsageString(), "\n") {
+	for line := range strings.SplitSeq(c.UsageString(), "\n") {
 		if strings.Contains(line, "--version") {
 			continue
 		}
