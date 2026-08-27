@@ -517,6 +517,15 @@ func TestReq125_NoVersionMarkerIsMintedAndTheOldFieldIsGone(t *testing.T) {
 		}
 		// And the new field is a list of OBJECTS, not of strings — the
 		// element type change is half of what the five re-homings are for.
+		//
+		// An EMPTY JSON array carries no element type: `stringsAt` returns
+		// `([], true)` over `[]` in every possible build, so the check is
+		// scoped to a candidate that actually carries an entry. `absent-row`
+		// does (`{wanted, absent}`), which is what makes the assertion
+		// discriminating rather than vacuous. Recorded as DEV-7.
+		if pairs := candidateUnknown(t, c); len(pairs) == 0 {
+			continue
+		}
 		if _, ok := stringsAt(c, "unknown"); ok {
 			t.Errorf("candidate %v's `unknown` decodes as a []string; its "+
 				"elements are `{key, reason}` OBJECTS. A flat list cannot "+

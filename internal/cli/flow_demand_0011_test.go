@@ -171,7 +171,15 @@ func TestReq18And21And115_TheDemandSetIsModeIndependentAndEmptyWhereNoRowMatchOw
 // different views over one model, so `next` would report a row a candidate
 // that `resolve` then refuses `flow-no-match` for the key it never read."
 func TestReq17And117_BothVerbsAgreeOnTheReaderSetOverOneModelAndOutcome(t *testing.T) {
-	model := writeFlowModel(t, flowMatchOnlyOwnedModel)
+	// The SOLO fixture, for DEV-4's reason: over the two-row model
+	// `mode=fast` makes BOTH `go` rows match and `flow resolve` refuses
+	// `ambiguous_match` before it can report a `readers` set to compare.
+	// The solo model satisfies S8's stated fixture requirement — its
+	// `read.side` serves `mode` AND `extra`, so the agreement is asserted
+	// over a reader carrying more than the one key the term found — and
+	// the two-row shape is the BREAKING arm's subject, which has its own
+	// oracle below. Recorded as DEV-6.
+	model := writeFlowModel(t, flowMatchOnlyOwnedSoloModel)
 	binds := sideBindings(t, model, true, "mode=fast")
 
 	nextReaders := readersOf(t, runNext(t, model, binds))
