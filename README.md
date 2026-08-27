@@ -58,10 +58,23 @@ same analysis. What they share is the part worth stating plainly:
   that closes the remainder, and a group closed that way carries an
   advisory saying so.
 
+Neither class is invented here. A state machine of this shape is a finite
+transition system in the Mealy sense — output attached to the transition,
+not the state — and refusing two simultaneously-enabled rows is the
+classical determinism requirement enforced statically. A decision table is
+the technique first reported in 1957 and standardized today as OMG's DMN,
+whose completeness check is the same one `intrastate lint` performs.
+
+The deliberate divergence is ambiguity. DMN decision tables carry a *hit
+policy* — `First`, `Priority`, and others — that resolves overlapping rules
+by authoring order or a declared ranking. intrastate has no such policy:
+overlap is a lint failure, because a tie-break the model never authored is
+a decision no reviewer approved.
+
 Worked, CI-linted examples of both live in
 [`models/examples/`](models/examples/), and
 [docs/model-authoring.md](docs/model-authoring.md) walks through authoring
-each.
+each, with references.
 
 ## Install
 

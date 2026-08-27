@@ -82,6 +82,119 @@ The other shared properties:
   and `flow set-state` drive both classes — though a decision table has no
   state to read or set, so only `next` and `resolve` are meaningful for it.
 
+## Where the two classes come from
+
+Neither class is invented here. Both are long-standing specification
+techniques, and intrastate's invariants are the classical checks on each,
+enforced before runtime rather than discovered in production.
+
+### The state machine
+
+A model of this class is a finite transition system: a finite owned-state
+space, a recognized-outcome alphabet, and a transition relation authored
+as rows.
+
+Where the output is attached distinguishes the two classical variants.
+**Mealy** machines associate output with the *transition* — the (state,
+input) pair — while **Moore** machines make it a function of the state
+alone [1][2]. intrastate's rules are Mealy-shaped: `[rule.write]` and
+`[rule.emit]` hang off the row, which is a (state, outcome) pair, not off
+the state.
+
+Determinism is the property that a machine has **exactly one** transition
+per (state, input) pair; a nondeterministic one admits a *set* of next
+states [3][4]. intrastate refuses nondeterminism statically rather than
+resolving it: two rows enabled by the same assignment is `graph-overlap`
+at lint, and `flow-ambiguous-match` if it is ever reached at runtime.
+
+The guard blocks are a guarded-command construct in Dijkstra's sense,
+where nondeterminacy arises precisely when several guards are
+simultaneously true and "the order in which the guarded commands of a set
+appear in our text is semantically irrelevant" [5]. intrastate takes the
+same position on order — authoring position never breaks a tie — but
+diverges on the consequence: Dijkstra's alternative construct selects an
+arbitrary true-guarded list, where intrastate refuses. An arbitrary choice
+is not reviewable, and a workflow that silently picked one of two rules
+would be unauditable.
+
+Two classical reachability notions are separate findings here, and the
+distinction is the standard one. An **inaccessible** state has no path
+from the start state; a **dead** (or trap) state is reachable but cannot
+reach an accepting state [4]. `graph-unreachable-rule` reports the first —
+"no reachable owned-state satisfies the selection context of row X" — and
+`graph-dead-end` the second: a *reachable* state that satisfies no
+declared terminal and is the source of no non-escape row.
+
+Statecharts extend flat machines with hierarchy, concurrency, and
+communication, motivated by the difficulty of describing reactive
+behaviour in ways that are "clear and realistic, and at the same time
+formal and rigorous" [6]. intrastate deliberately does not take that
+extension: a model is one flat rule set over a tag-valued state.
+Hierarchy is the natural next step if flat models stop scaling, not
+something the current design provides.
+
+### The decision table
+
+Decision tables are a specification technique from commercial data
+processing, first reported in 1957 [7]. General Electric's TABSOL made the
+form executable in 1960 [8], and IBM's 1962 manual gave the technique its
+canonical name and treatment [9]. The technique was standardized late and
+repeatedly — a CODASYL Decision Table Task Group ran from 1973 and
+reported in 1982 [10].
+
+The classical structure is a condition part that is "a truth table (from
+propositional logic) that has been rotated 90°," which "guarantees that we
+consider every possible combination of condition values" [11]. That is
+what intrastate's coverage proof checks. The classical vocabulary also
+distinguishes **limited-entry** tables, where every condition is binary,
+from **extended-entry** tables, where a condition may take several values
+[11][12]. intrastate's tables are extended-entry: a dimension is a tag's
+declared domain, of any finite size, not a yes/no.
+
+The scaling consequence is the classical one: a limited-entry table over
+n conditions has 2^n rules [11]. intrastate's product bound (published in
+`intrastate lint --help-all`) is the point past which the analysis
+declines to prove coverage rather than enumerate indefinitely.
+
+Two defects have been the subject of formal analysis since the 1960s:
+**ambiguity**, where more than one rule covers a case [13], and
+**redundancy**. Jorgensen puts the consequence directly: when two rules
+apply to the same transaction, "1. Rules 4 and 9 are inconsistent. 2. The
+decision table is nondeterministic" [11]. intrastate reports the first as
+`graph-overlap` and the second as `graph-redundant-row`, and treats
+ambiguity as blocking.
+
+**The modern standard is DMN** (Decision Model and Notation), whose
+decision tables carry a *hit policy* saying what to do when several rules
+match: single-hit **Unique, Any, Priority, First** and multiple-hit
+**Output order, Rule order, Collect**, defaulting to Unique [14].
+
+This is where intrastate deliberately parts company with common practice.
+A `First` or `Priority` policy resolves ambiguity by authoring order or by
+a declared ranking; intrastate provides no such policy, because a
+tie-break the model did not author is a decision no reviewer approved.
+Overlap is refused at lint instead. The nearest DMN analogue to
+intrastate's design is the default policy, `Unique` — the one policy under
+which overlap cannot arise.
+
+DMN defines completeness the same way — "a decision table will be
+considered complete if its rules cover all combinations of expected input
+values for all input expressions" — and provides a `defaultOutputEntry`
+for the unmatched case, with a rule that is exactly intrastate's advisory:
+"A complete decision table SHALL NOT specify a default output value" [14].
+An escape row and a proved product are alternatives, not companions, which
+is why closing coverage by escape is reported rather than silent.
+
+The **ELSE** mechanism has a long history and a long-standing critique.
+Vanthienen and Dries argue against the ELSE-column specifically because it
+becomes "a waste basket in which all kinds of hidden combinations of
+conditions are put," and prefer an explicit `OTHER` state per condition,
+which "eliminates 'rule ambiguity' ... and simplifies testing for
+completeness" [7]. intrastate's escape row is closer to their `OTHER` than
+to the ELSE-column: it is scoped per outcome, it is declared with the
+failure class it rescues, and a plan that came through it is marked
+`escaped: true` rather than being indistinguishable from an ordinary hit.
+
 ## Authoring a state machine
 
 A machine's rules advance owned state. The
@@ -346,3 +459,93 @@ intrastate flow resolve --model pricing.toml \
 The answer is `rule` plus `emit`; `next`, `writes`, `clear`, `owned`, and
 `readers` are all empty over this class. See
 [cli-output-contract.md](cli-output-contract.md) for the payload.
+
+## References
+
+Every entry below was checked against a primary source or an authoritative
+bibliographic registry. Where a field could not be verified, it says so
+rather than guessing. Entries marked **[corpus]** were read from the full
+text of a PDF in a local `arc` corpus; the rest were confirmed through the
+Crossref DOI registry, since ACM, RAND, JSTOR, and Wiley all refuse
+automated retrieval.
+
+1. Mealy, G. H. (1955). "A method for synthesizing sequential circuits."
+   *The Bell System Technical Journal*, 34(5), 1045–1079.
+   doi:[10.1002/j.1538-7305.1955.tb03788.x](https://doi.org/10.1002/j.1538-7305.1955.tb03788.x)
+2. Moore, E. F. (1956). "Gedanken-experiments on sequential machines." In
+   C. E. Shannon & J. McCarthy (Eds.), *Automata Studies*, Annals of
+   Mathematics Studies 34 (pp. 129–153). Princeton University Press.
+   (The De Gruyter reprint, doi:10.1515/9781400882618-006, gives 129–154;
+   129–153 follows Church's 1958 review in *JSL* 23(1), p. 60, of the
+   original litho-printed volume.)
+3. Sipser, M. (2013). *Introduction to the Theory of Computation* (3rd
+   ed.). Cengage Learning. Definition 1.5, p. 35; p. 36; Definition 1.37,
+   p. 53.
+4. Hopcroft, J. E., Motwani, R., & Ullman, J. D. (2007). *Introduction to
+   Automata Theory, Languages, and Computation* (3rd ed.).
+   Pearson/Addison-Wesley. §2.2, p. 45 (determinism); §2.2.3, p. 48
+   (transition tables); p. 44 (inaccessible states); p. 67 (dead/trap
+   states).
+5. Dijkstra, E. W. (1975). "Guarded commands, nondeterminacy and formal
+   derivation of programs." *Communications of the ACM*, 18(8), 453–457.
+   doi:[10.1145/360933.360975](https://doi.org/10.1145/360933.360975)
+6. Harel, D. (1987). "Statecharts: a visual formalism for complex
+   systems." *Science of Computer Programming*, 8(3), 231–274. **[corpus]**
+   doi:[10.1016/0167-6423(87)90035-9](https://doi.org/10.1016/0167-6423(87)90035-9)
+7. Vanthienen, J., & Dries, E. (1992). *Developments in Decision Tables:
+   Evolution, Applications and a Proposed Standard.* Onderzoeksrapport
+   9227, Katholieke Universiteit Leuven. (Source of the 1957 first-report
+   date and of the ELSE-column critique.)
+8. Kavanagh, T. F. (1960). "TABSOL: a fundamental concept for
+   systems-oriented languages." In *Proceedings of the Eastern Joint
+   IRE-AIEE-ACM Computer Conference*, 117–136.
+   doi:[10.1145/1460512.1460522](https://doi.org/10.1145/1460512.1460522)
+9. IBM (1962). *Decision Tables: A Systems Analysis and Documentation
+   Technique.* IBM General Information Manual, form F20-8102. (Pagination
+   unverified; no DOI — a pre-DOI technical manual.)
+10. CODASYL (1982). *A Modern Appraisal of Decision Tables: A CODASYL
+    Report.* Report of the Decision Table Task Group. ACM. (The task group
+    was initiated in 1973 and reported in 1982 — it is frequently and
+    wrongly dated to the 1960s. Extent of 322 pp. is from a secondary
+    source.)
+11. Jorgensen, P. C. (2014). *Software Testing: A Craftsman's Approach*
+    (4th ed.), Ch. 7 "Decision Table-Based Testing", pp. 117–131. CRC
+    Press. (Source of the 2^n result, the rotated-truth-table framing, the
+    limited/extended-entry distinction, and the inconsistency example.
+    Jorgensen chaired the CODASYL task group 1975–1978.)
+12. Reinwald, L. T., & Soland, R. M. (1966). "Conversion of limited-entry
+    decision tables to optimal computer programs I: minimum average
+    processing time." *Journal of the ACM*, 13(3), 339–358. (Part II:
+    *JACM* 14(4), 1967, 742–755.) **[corpus — the Part I citation was read
+    from a bibliography in the PapersFast corpus, not from the paper.]**
+13. King, P. J. H. (1968). "Ambiguity in limited entry decision tables."
+    *Communications of the ACM*, 11(10), 680–684.
+    doi:[10.1145/364096.364113](https://doi.org/10.1145/364096.364113)
+14. Object Management Group (2024). *Decision Model and Notation (DMN),
+    Version 1.5.* OMG document formal/24-01-01. §8.1, §8.2.4, §8.2.9,
+    §8.2.11. <https://www.omg.org/spec/DMN/1.5/>
+
+### Prior work in this project
+
+The design research behind intrastate lives in the sibling
+`state-machines` repository, whose `research/state-machines-research.md`
+carries a reference list for the transition-system side — Harel, the
+actor and CSP lineage, state-machine replication, and the
+agent-as-state-machine literature.
+
+That list has **no decision-table entries**. The design research was
+state-machine-first, and the decision-table class arrived later without a
+literature pass. The decision-table references above are therefore new
+work rather than a restatement of that survey, which is also why the
+FSM-versus-decision-table contrast below could not be sourced from it.
+
+### A note on what is *not* cited
+
+No source here contrasts decision tables with finite state machines
+directly. The literatures developed separately — decision tables in
+commercial data processing, state machines in automata theory and circuit
+design — and the closest authoritative statement is DMN's, that decision
+modeling "complements process modeling," which is a contrast with BPMN
+process models rather than with FSMs. The framing in this document that
+the two classes answer different questions is therefore intrastate's own,
+not a claim borrowed from the literature.
