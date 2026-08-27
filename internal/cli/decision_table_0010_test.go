@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/newcoinc/intrastate/internal/cli/clierr"
 	"github.com/newcoinc/intrastate/internal/table"
 )
 
@@ -107,6 +108,21 @@ eq = "q"
 // dtEscapeModel0010 replaces the fourth ordinary rule with an escape row
 // rescuing `no_match`, carrying its OWN `[rule.emit]`. A plan rescued by
 // that row must carry the escape row's block (C4).
+//
+// It carries TWO escape rows, so both halves of REQ-44 are reachable:
+//
+//   - `otherwise` (`no_match`, HAS an emit block) — rescues the (y,q)
+//     request, which no ordinary row covers;
+//   - `bare-otherwise` (`ambiguous_match`, authors NO emit block) — rescues
+//     the (x,p) request, where `cell-xp` and `cell-xp-shadow` BOTH select.
+//
+// `cell-xp-shadow` exists only to make that second rescue reachable: an
+// `ambiguous_match` needs two rows selecting simultaneously
+// (`internal/resolve/resolve.go`), and with a single ordinary row the
+// `bare-otherwise` arm — REQ-44's "an escape row authoring no `[rule.emit]`
+// renders `{}`" clause — is structurally dead. It duplicates `cell-xp`'s
+// guard atoms exactly and touches no other cell, so the (y,q) `no_match`
+// selection above is undisturbed.
 const dtEscapeModel0010 = `outcomes = ["decide"]
 
 [model]
@@ -146,6 +162,17 @@ eq = "p"
 verdict = "alpha"
 
 [[rule]]
+id = "cell-xp-shadow"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "x"
+[rule.guard.all.b]
+eq = "p"
+[rule.emit]
+verdict = "shadow"
+
+[[rule]]
 id = "otherwise"
 escape = ["no_match"]
 [rule.match.recognized]
@@ -158,6 +185,77 @@ id = "bare-otherwise"
 escape = ["ambiguous_match"]
 [rule.match.recognized]
 eq = "decide"
+`
+
+// dtGateModel0010 is the gated decision-table fixture. It exists because
+// REQ-42's clause — "gate evaluation is unchanged and PRIOR to the emit
+// join … a deny is `flow-gate-denied`, so `emit` is never computed on a
+// denied selection" — has no witness on an ungated model: `dtModel0010`
+// declares no `[gate.*]` and no rule carries `gate = [...]`, so `gates` is
+// always `[]` and every loop over it is vacuous.
+//
+// The gates key the OBSERVED tag `a`, not an owned one. `0010:C2` forbids
+// only accessors whose `keys` name an OWNED tag, and
+// `internal/table/load.go::accessorTable` imposes no owned requirement on
+// gates while `checkAccessorBindings` arity-checks readers and writers
+// only — so a gate over an observed tag is authorable on this class. (This
+// overturns `verification.md` §Undecidable's REQ-42 entry; see
+// deviations.md D17.)
+//
+// The verdict a gate answers is its DECLARED PATH's suffix
+// (`internal/cli/flowbind/flowbind.go::verdictFor`), so the two rows below
+// differ only in which gate they carry.
+const dtGateModel0010 = `outcomes = ["decide"]
+
+[model]
+id = "dt"
+version = 1
+class = "decision-table"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.a]
+provenance = "observed"
+kind = "enum"
+domain = ["x", "y"]
+single_valued = true
+required = true
+
+[gate.ok]
+role = "state"
+path = "flow.gate.allow"
+keys = ["a"]
+timeout = "2s"
+
+[gate.nope]
+role = "state"
+path = "flow.gate.deny"
+keys = ["a"]
+timeout = "2s"
+
+[[rule]]
+id = "allowed"
+gate = ["ok"]
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "x"
+[rule.emit]
+verdict = "alpha"
+
+[[rule]]
+id = "denied"
+gate = ["nope"]
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "y"
+[rule.emit]
+verdict = "never-computed"
 `
 
 // dtExpandingModel0010 authors an emit block on an EXPANDING rule: a
@@ -416,26 +514,86 @@ func TestReq41_TheStateFieldsKeepTheirShapesAndAreEmpty(t *testing.T) {
 // a deny is `flow-gate-denied` — a refusal, never a payload, so `emit` is
 // never computed on a denied selection."
 // DOMAIN EDGE — negative REQ: no gate behaviour is added.
-func TestReq42_ASuccessPayloadsGatesIsAlwaysAnAllAllowList(t *testing.T) {
-	model := writeFlowModel(t, dtModel0010)
-	data := flowData(t, requireSuccess(t, "flow", "resolve",
-		"--model", model, "--outcome", "decide",
-		"--tag", "a=x", "--tag", "b=p", "--as=json"))
+//
+// Both halves are taken on the DECISION-TABLE class, over `dtGateModel0010`
+// (see that fixture on why a gate is authorable there). The allow half also
+// pins the wire spelling: `internal/cli/flow_exec.go::gateResult` serializes
+// `{id, result, reason?}` — there is no `verdict` key on the wire — and it
+// `t.Fatal`s on an empty `gates` list so this oracle can never again pass
+// vacuously.
+func TestReq42_GatesAreEvaluatedBeforeTheEmitJoin(t *testing.T) {
+	model := writeFlowModel(t, dtGateModel0010)
+	bind := artifactBinding(flowStateRole, newFlowArtifact(t, "state.artifact"))
 
-	gates, ok := data["gates"].([]any)
-	if !ok {
-		t.Fatalf("`gates` = %#v; it keeps its array shape", data["gates"])
-	}
-	for _, g := range gates {
-		obj, ok := g.(map[string]any)
+	t.Run("an allowing gate is reported and the emit join still runs", func(t *testing.T) {
+		data := flowData(t, requireSuccess(t, "flow", "resolve",
+			"--model", model, "--artifact", bind, "--outcome", "decide",
+			"--tag", "a=x", "--as=json"))
+
+		if data["rule"] != "allowed" {
+			t.Fatalf("`rule` = %#v; want %q", data["rule"], "allowed")
+		}
+		gates, ok := data["gates"].([]any)
 		if !ok {
-			continue
+			t.Fatalf("`gates` = %#v; it keeps its array shape", data["gates"])
 		}
-		if obj["verdict"] == "deny" {
-			t.Errorf("a SUCCESS payload carries a denying gate %#v; a deny "+
-				"is flow-gate-denied — a refusal, never a payload", obj)
+		if len(gates) == 0 {
+			t.Fatal("`gates` is empty on a row carrying `gate = [\"ok\"]`; " +
+				"an empty list makes every assertion below vacuous")
 		}
-	}
+		if len(gates) != 1 {
+			t.Fatalf("`gates` = %#v; the selected row carries exactly one gate",
+				gates)
+		}
+		obj, ok := gates[0].(map[string]any)
+		if !ok {
+			t.Fatalf("gate entry = %#v; want a JSON object", gates[0])
+		}
+		want := map[string]any{"id": "ok", "result": "allow"}
+		if !reflect.DeepEqual(obj, want) {
+			t.Errorf("gate entry = %#v; want %#v — `gateResult` serializes "+
+				"`{id, result, reason?}`; there is no `verdict` key on the "+
+				"wire, and a success payload's gates all allow", obj, want)
+		}
+
+		emit, ok := data["emit"].(map[string]any)
+		if !ok {
+			t.Fatalf("`emit` is not a JSON object: %#v", data["emit"])
+		}
+		if !reflect.DeepEqual(emit, map[string]any{"verdict": "alpha"}) {
+			t.Errorf("`emit` = %#v; the emit join runs on an ALLOWED "+
+				"selection", emit)
+		}
+	})
+
+	t.Run("a denying gate refuses and no emit is computed", func(t *testing.T) {
+		stdout, _, err := runCmd(t, "flow", "resolve",
+			"--model", model, "--artifact", bind, "--outcome", "decide",
+			"--tag", "a=y", "--as=json")
+		if err == nil {
+			t.Fatalf("the denied selection succeeded:\n%s", stdout)
+		}
+		var ce *clierr.CLIError
+		if !asCLIError(err, &ce) {
+			t.Fatalf("refusal is not a structured CLIError: %v", err)
+		}
+		if ce.Code != "flow-gate-denied" {
+			t.Fatalf("refusal code = %q; want %q — a deny is a refusal, "+
+				"never a payload", ce.Code, "flow-gate-denied")
+		}
+		if got := clierr.ExitCodeFor(err); got != 2 {
+			t.Errorf("exit code = %d; want 2", got)
+		}
+		// `emit` is never COMPUTED on a denied selection: the refusal
+		// envelope carries no payload at all, so the emit block the denied
+		// row authors cannot appear anywhere on the wire.
+		for _, leak := range []string{"never-computed", `"emit"`} {
+			if strings.Contains(stdout, leak) {
+				t.Errorf("the refusal wire carries %q; `emit` is never "+
+					"computed on a denied selection:\n%s", leak, stdout)
+			}
+		}
+	})
 }
 
 // REQ-44: "A plan rescued by an escape row carries that escape row's
@@ -446,28 +604,75 @@ func TestReq42_ASuccessPayloadsGatesIsAlwaysAnAllAllowList(t *testing.T) {
 func TestReq44_AnEscapedPlanCarriesTheEscapeRowsOwnEmit(t *testing.T) {
 	model := writeFlowModel(t, dtEscapeModel0010)
 
-	data := flowData(t, requireSuccess(t, "flow", "resolve",
-		"--model", model, "--outcome", "decide",
-		"--tag", "a=y", "--tag", "b=q", "--as=json"))
+	t.Run("an escape row's own authored block", func(t *testing.T) {
+		data := flowData(t, requireSuccess(t, "flow", "resolve",
+			"--model", model, "--outcome", "decide",
+			"--tag", "a=y", "--tag", "b=q", "--as=json"))
 
-	if data["escaped"] != true {
-		t.Fatalf("`escaped` = %#v; the (y,q) request has no ordinary row and "+
-			"is rescued by the `no_match` escape row", data["escaped"])
-	}
-	if data["rule"] != "otherwise" {
-		t.Fatalf("`rule` = %#v; want the rescuing escape row `otherwise`",
-			data["rule"])
-	}
-	emit, ok := data["emit"].(map[string]any)
-	if !ok {
-		t.Fatalf("`emit` is not a JSON object: %#v", data["emit"])
-	}
-	want := map[string]any{"verdict": "fallback"}
-	if !reflect.DeepEqual(emit, want) {
-		t.Errorf("`emit` = %#v; want the ESCAPE row's own block %#v — joined "+
-			"on the same `Plan.RuleID` path as any other selection",
-			emit, want)
-	}
+		if data["escaped"] != true {
+			t.Fatalf("`escaped` = %#v; the (y,q) request has no ordinary row "+
+				"and is rescued by the `no_match` escape row", data["escaped"])
+		}
+		if data["rule"] != "otherwise" {
+			t.Fatalf("`rule` = %#v; want the rescuing escape row `otherwise`",
+				data["rule"])
+		}
+		emit, ok := data["emit"].(map[string]any)
+		if !ok {
+			t.Fatalf("`emit` is not a JSON object: %#v", data["emit"])
+		}
+		want := map[string]any{"verdict": "fallback"}
+		if !reflect.DeepEqual(emit, want) {
+			t.Errorf("`emit` = %#v; want the ESCAPE row's own block %#v — "+
+				"joined on the same `Plan.RuleID` path as any other "+
+				"selection", emit, want)
+		}
+	})
+
+	// "An escape row authoring no `[rule.emit]` renders `{}` like any
+	// other." The (x,p) request selects `cell-xp` AND `cell-xp-shadow`, so
+	// the `ambiguous_match` escape row `bare-otherwise` rescues — and it
+	// authors no block. The assertion is that the join takes the SELECTED
+	// escape row's (absent) block, not some other row's: `cell-xp`,
+	// `cell-xp-shadow` and `otherwise` all author one, so a join reaching
+	// for any of them renders a populated object here.
+	t.Run("an escape row authoring no block renders {}", func(t *testing.T) {
+		stdout := requireSuccess(t, "flow", "resolve",
+			"--model", model, "--outcome", "decide",
+			"--tag", "a=x", "--tag", "b=p", "--as=json")
+		data := flowData(t, stdout)
+
+		if data["escaped"] != true {
+			t.Fatalf("`escaped` = %#v; the (x,p) request selects both "+
+				"`cell-xp` and `cell-xp-shadow` and is rescued by the "+
+				"`ambiguous_match` escape row", data["escaped"])
+		}
+		if data["rule"] != "bare-otherwise" {
+			t.Fatalf("`rule` = %#v; want the rescuing escape row "+
+				"`bare-otherwise`", data["rule"])
+		}
+		raw, present := data["emit"]
+		if !present {
+			t.Fatalf("`emit` is OMITTED on an escape row authoring none; it "+
+				"must be present as `{}` (payload keys: %v)", keysOf(data))
+		}
+		if raw == nil {
+			t.Fatal("`emit` is null on an escape row authoring none; it must " +
+				"be `{}`")
+		}
+		emit, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("`emit` is not a JSON object: %#v", raw)
+		}
+		if !reflect.DeepEqual(emit, map[string]any{}) {
+			t.Errorf("`emit` = %#v; want the EMPTY object — the rescuing "+
+				"escape row authors no block, and the join takes the "+
+				"SELECTED row's, not another row's", emit)
+		}
+		if !strings.Contains(stdout, `"emit":{}`) {
+			t.Errorf("the wire does not carry `\"emit\":{}`:\n%s", stdout)
+		}
+	})
 }
 
 // REQ-45 / REQ-99 / SC-5: "Text mode is **not** specified by this RDR:

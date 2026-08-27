@@ -507,3 +507,52 @@ The doc half of Phases 3/4 (D15) adds two more paths to that seam —
 Both are appended to the same 0010 block, with the same comment convention
 and the same property preserved: a file outside BOTH RDRs' lists still fails
 the guard, so what the oracle checks is unchanged.
+
+---
+
+## D17 — 2026-08-27 — `verification.md` §Undecidable's REQ-42 entry is corrected: the gate-deny witness IS authorable
+
+**REQs**: REQ-42.
+
+**Type**: VERIFICATION-CORRECTION. **Status**: resolved; recorded here rather
+than amended in place, per the never-amend-an-RDR-body convention.
+
+`verification.md` §Undecidable records REQ-42 (gate deny never computes
+`emit`) as having no decisive runtime witness: "authoring a denying gate on a
+decision-table row within this session's fixtures produced load refusals
+rather than a gate-deny path", so the clause was left "structurally satisfied
+by inspection".
+
+**That entry is wrong.** The load refusals it observed came from copying
+`flowGateDenyModel`'s `keys = ["status"]` — an **owned** tag, which `0010:C2`
+forbids on this class. But C2 forbids only accessors whose `keys` name an
+owned tag, and nothing narrows a **gate** further:
+`internal/table/load.go::accessorTable` requires only that a gate's keys be
+declared and not the reserved recognized key, and `checkAccessorBindings`
+arity-checks readers and writers only, never gates. A gate keying an
+**observed** tag is therefore legal on a decision table.
+
+**Probe evidence** (the shipped binary, over a hand-authored table declaring
+`[gate.ok] path = "flow.gate.allow"` and `[gate.nope] path =
+"flow.gate.deny"`, both `keys = ["a"]` on the observed enum tag `a`):
+
+- the deny arm refuses `flow-gate-denied` at exit 2, one finding, **no
+  payload** — so `emit` is never computed on a denied selection, as the
+  clause says;
+- the allow arm succeeds with `"gates":[{"id":"ok","result":"allow"}]` and
+  `"emit":{"verdict":"alpha"}`, so the emit join still runs behind an
+  allowing gate.
+
+The verdict a fixture gate answers is its declared path's suffix
+(`internal/cli/flowbind/flowbind.go::verdictFor`), which is why the two arms
+differ only in which gate the row carries.
+
+Both halves of REQ-42 are consequently **dischargeable on the
+decision-table class**; there is no second undecidable and no fallback to a
+state-machine model. The witness now lives in
+`internal/cli/decision_table_0010_test.go` as `dtGateModel0010` plus
+`TestReq42_GatesAreEvaluatedBeforeTheEmitJoin`, which also corrects that
+test's pre-existing `obj["verdict"]` read — `flow_exec.go::gateResult`
+serializes `{id, result, reason?}`, so no `verdict` key has ever been on the
+wire — and `t.Fatal`s on an empty `gates` list so the oracle can never again
+pass vacuously.

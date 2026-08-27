@@ -111,6 +111,30 @@ read_back = true
 		}
 	})
 
+	// `normalize.go::renderWrites` names this arm by name: "a clear on a
+	// decision table names a non-owned tag by construction and refuses
+	// through 0002's existing `write to non-owned tag` arm, which is what
+	// C2 relies on." Every other clear-refusal test in the corpus is taken
+	// on a STATE-MACHINE fixture, so the decision-table half of that claim
+	// had no assertion.
+	t.Run("a clear list on a decision-table rule refuses", func(t *testing.T) {
+		// `clear` is a RULE-level key, so it must precede the first
+		// sub-table; appending it after `[rule.guard.all.b]` would author a
+		// guard key named `clear` instead.
+		src := strings.Replace(dtComplete,
+			"id = \"cell-xp\"\n", "id = \"cell-xp\"\nclear = [\"a\"]\n", 1)
+		if src == dtComplete {
+			t.Fatal("the clear-list substitution did not apply")
+		}
+		f := refuseSource(t, src, "dt-clear-list.toml")
+		if f.Category != table.CatWriteToNonOwnedTag {
+			t.Errorf("category = %q; want %q — a clear on a decision-table "+
+				"rule names a non-owned tag by construction and refuses "+
+				"through 0002's existing arm, which is what C2 relies on",
+				f.Category, table.CatWriteToNonOwnedTag)
+		}
+	})
+
 	t.Run("a write block naming a non-owned tag refuses", func(t *testing.T) {
 		src := strings.Replace(dtComplete,
 			"[rule.emit]\nverdict = \"alpha\"\n",
@@ -192,6 +216,38 @@ verdict = "sm-answer"
 		got, _ := emitOf(rowByRuleID(t, m, "advance"))
 		if got["verdict"] != "sm-answer" {
 			t.Errorf("state-machine row emit = %v; want verdict=sm-answer", got)
+		}
+	})
+
+	// The fourth quadrant. The three above cover dt/ordinary, dt/escape and
+	// sm/ordinary; without this one "either class, either rule kind" is
+	// asserted for three of the four combinations, and the arm that admits
+	// an emit block on a state-machine ESCAPE row — the row that carries
+	// neither a write block nor a clear list — is unexercised.
+	t.Run("escape rule, state-machine class", func(t *testing.T) {
+		src := smHeader + `
+[[rule]]
+id = "advance"
+[rule.match.recognized]
+eq = "decide"
+[rule.match.status]
+eq = "draft"
+[rule.write]
+status = "done"
+
+[[rule]]
+id = "sm-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "decide"
+[rule.emit]
+verdict = "sm-fallback"
+`
+		m := loadSource(t, src, "sm-escape-emit.toml")
+		got, _ := emitOf(rowByRuleID(t, m, "sm-otherwise"))
+		if got["verdict"] != "sm-fallback" {
+			t.Errorf("state-machine ESCAPE row emit = %v; want "+
+				"verdict=sm-fallback", got)
 		}
 	})
 }

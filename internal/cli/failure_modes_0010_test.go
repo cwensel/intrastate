@@ -9,8 +9,10 @@ package cli
 // "the rejected shape is absent".
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -145,6 +147,10 @@ func TestReq76_DroppingTheClassRecoversAndNothingPersistentIsWritten(t *testing.
 		}
 	})
 
+	// The oracle is a CONTENT-AND-IDENTITY snapshot, not an entry count: an
+	// overwrite of `dt.toml` in place, a rename, or any one-for-one
+	// replacement leaves the count unchanged and would pass a `len(after)
+	// != len(before)` compare while having written something persistent.
 	t.Run("resolve writes nothing persistent", func(t *testing.T) {
 		dir := t.TempDir()
 		model := filepath.Join(dir, "dt.toml")
@@ -152,22 +158,28 @@ func TestReq76_DroppingTheClassRecoversAndNothingPersistentIsWritten(t *testing.
 			t.Fatalf("write model: %v", err)
 		}
 
-		before, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatalf("read dir: %v", err)
-		}
+		before := snapshotDir(t, dir)
 
 		requireSuccess(t, "flow", "resolve", "--model", model,
 			"--outcome", "decide", "--tag", "a=x", "--tag", "b=p", "--as=json")
 
-		after, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatalf("read dir: %v", err)
+		after := snapshotDir(t, dir)
+		if !reflect.DeepEqual(after, before) {
+			t.Errorf("`flow resolve` over a decision table changed the "+
+				"directory; nothing persistent is written by this RDR\n"+
+				"before: %#v\nafter:  %#v", before, after)
 		}
-		if len(after) != len(before) {
-			t.Errorf("`flow resolve` over a decision table left %d entries "+
-				"where there were %d; nothing persistent is written by this "+
-				"RDR", len(after), len(before))
+
+		// The model's BYTES specifically: an in-place rewrite of identical
+		// length and mode would survive the walk above on a filesystem with
+		// coarse mtimes.
+		got, err := os.ReadFile(model)
+		if err != nil {
+			t.Fatalf("re-read model: %v", err)
+		}
+		if string(got) != dtModel0010 {
+			t.Errorf("`dt.toml` was rewritten by `flow resolve`; the model " +
+				"file is read-only input")
 		}
 	})
 }
@@ -344,3 +356,49 @@ eq = "x"
 [rule.emit]
 verdict = "x"
 `
+
+// dirEntrySnapshot is one filesystem entry's identity: the fields a
+// persistent write would have to disturb. Name alone is not enough — an
+// in-place overwrite keeps it — so size, mode, and mtime ride along.
+type dirEntrySnapshot struct {
+	Size  int64
+	Mode  fs.FileMode
+	MTime int64
+	IsDir bool
+}
+
+// snapshotDir walks dir and records every entry's relative path and
+// identity, so "nothing persistent is written" can be asserted as an
+// equality on the whole tree rather than as an entry COUNT.
+func snapshotDir(t *testing.T, dir string) map[string]dirEntrySnapshot {
+	t.Helper()
+
+	out := map[string]dirEntrySnapshot{}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		out[rel] = dirEntrySnapshot{
+			Size:  info.Size(),
+			Mode:  info.Mode(),
+			MTime: info.ModTime().UnixNano(),
+			IsDir: d.IsDir(),
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot %s: %v", dir, err)
+	}
+	return out
+}
