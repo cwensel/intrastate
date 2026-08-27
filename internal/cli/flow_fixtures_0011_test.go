@@ -929,6 +929,169 @@ eq = "stop"
 status = "final"
 `
 
+// flowMatchOnlyOwnedSoloModel is `flowMatchOnlyOwnedModel` with the
+// BREAKING arm's second `go` row removed, so `flow resolve --outcome go`
+// has exactly ONE row and its three arms (plan / role-unbound / refusing)
+// are separable from the ambiguity the two-row fixture deliberately
+// creates.
+//
+// The two fixtures answer two different questions and both are S8's: this
+// one asks what the demand-set term BUYS (`resolve` stops refusing
+// `flow-no-match` for want of a reader it never invoked), the two-row one
+// asks what it COSTS (a run whose selected row does not need the key turns
+// from a plan into exit 2/3).
+const flowMatchOnlyOwnedSoloModel = `outcomes = ["go", "stop"]
+terminal = ["done"]
+
+[model]
+id = "matchonlysolo"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.mode]
+provenance = "owned"
+kind = "enum"
+domain = ["fast", "slow"]
+single_valued = true
+
+[tags.extra]
+provenance = "owned"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+
+[read.side]
+role = "side"
+path = "flow.side"
+keys = ["mode", "extra"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "mode-row"
+[rule.match.mode]
+eq = "fast"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "final"
+
+[[rule]]
+id = "stop-row"
+[rule.match.status]
+eq = "draft"
+[rule.match.recognized]
+eq = "stop"
+[rule.write]
+status = "final"
+`
+
+// flowSideWriterModel establishes the match-only owned keys `mode` and
+// `extra` on the `side` artifact.
+//
+// `flowMatchOnlyOwnedModel` declares NO writer for the `side` role — that
+// is the whole point of the fixture: `mode` is match-only, so nothing
+// writes it. But the value still has to be established through the
+// PRODUCTION write path, never by a test writing a file whose format it
+// claims to understand (the 0005 harness rule). This sibling model declares
+// a writer over the same role and path, so the artifact the reader reads is
+// one the CLI itself wrote.
+const flowSideWriterModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "sidewriter"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.mode]
+provenance = "owned"
+kind = "enum"
+domain = ["fast", "slow"]
+single_valued = true
+required = true
+
+[tags.extra]
+provenance = "owned"
+kind = "scalar"
+
+[read.side]
+role = "side"
+path = "flow.side"
+keys = ["mode", "extra"]
+timeout = "2s"
+
+[write.side]
+role = "side"
+path = "flow.side"
+keys = ["mode", "extra"]
+timeout = "2s"
+read_back = true
+
+[initial]
+mode = "fast"
+
+[context.done]
+[context.done.match.mode]
+eq = "slow"
+
+[[rule]]
+id = "side-advance"
+[rule.match.mode]
+eq = "fast"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+mode = "slow"
+`
+
+// flowRefusingSideReaderModel is S8's exit-3 arm: the same model with the
+// match-only owned key's reader pointed at a locator the binding CANNOT
+// reach (`internal/cli/flowbind`'s `.unreachable` suffix).
+//
+// C1 names three `flow resolve` arms after the demand-set term: a plan, the
+// reader's ROLE unbound (`flow-artifact-missing`, exit 2), and the reader's
+// OWN refusal (exit 3). A15 records the third's observed code as
+// `flow-accessor-failed` and its own limit: "another refusal mechanism
+// would take a different exit-3 code, so what is verified is the exit code
+// and the not-a-`flow-no-match` property, not a single code" (REQ-93).
+var flowRefusingSideReaderModel = strings.ReplaceAll(
+	flowMatchOnlyOwnedSoloModel, `path = "flow.side"`, `path = "flow.side.unreachable"`)
+
 // flowZeroOwnedMatchModel is S8's negative control (REQ-21, REQ-115): a
 // model where NO row match-owns a key, so C1's added demand term finds
 // nothing and the invoked reader set is unchanged.
