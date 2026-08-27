@@ -323,6 +323,21 @@ func (a *analysis) checkDeadEnd() {
 		// reliance on an inferred terminal — not a dead end at every node.
 		return
 	}
+	// `0010:C5` lists dead end among the machine-only invariants that are
+	// "vacuous by construction over this class and MUST NOT emit". Before
+	// this RDR the `len(a.nodes) == 0` disjunct delivered that silence for
+	// every rootless model; the ∅-root seeding makes it false for every
+	// decision table, so the silence is keyed on the CLASS instead.
+	//
+	// The `terminal` disjunct is not enough on its own: `0010:C2` forbids a
+	// decision table from declaring `terminal`, but enforces the
+	// prohibition AT LINT (`checkDanglingEdge`'s terminal arm), so such a
+	// model loads and arrives here with a non-empty `Terminal`. Without
+	// this test it would take a second, unlicensed finding accusing the ∅
+	// owned-state of being a dead end.
+	if table.IsDecisionTable(a.model) {
+		return
+	}
 
 	keys := a.terminalKeys()
 	seen := map[string]bool{}
@@ -471,6 +486,20 @@ func (a *analysis) hasOutgoingOrdinaryRow(n Node) bool {
 // model a defect rather than a silently-accepted shape.
 func (a *analysis) checkTerminalEscape() {
 	if len(a.nodes) == 0 {
+		return
+	}
+	// `0010:C5` requires declared-terminal handling and its escape arm to
+	// stay silent over a decision table. The record reasons that they "key
+	// on a declared terminal, which C2 forbids" — but this check keys on
+	// nothing except the traversal finding a node, and the ∅-root seeding
+	// makes that true for every decision table. The silence C5 mandates is
+	// therefore keyed on the CLASS here, the same way `reach`'s seed and
+	// `checkDanglingEdge`'s root arm are.
+	//
+	// The finding's remedy makes the leak worse than noise: "declare it in
+	// the root `terminal` list" is the declaration `0010:C2` prohibits for
+	// this class, so following it yields `graph-dangling-edge` instead.
+	if table.IsDecisionTable(a.model) {
 		return
 	}
 
