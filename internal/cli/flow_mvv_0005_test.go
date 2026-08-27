@@ -43,7 +43,7 @@ func TestMVV_AllFourVerbsProveOutOverOneFixtureBackedFlow(t *testing.T) {
 	orphanBind := artifactBinding(flowOrphanRole, art)
 
 	// `flow next` returns the legal outcome alphabet with gate ids as
-	// unresolved facts.
+	// unknown facts.
 	t.Run("next", func(t *testing.T) {
 		data := flowData(t, requireSuccess(t, "flow", "next",
 			"--model", model, "--artifact", stateBind, "--as=json"))
@@ -59,19 +59,24 @@ func TestMVV_AllFourVerbsProveOutOverOneFixtureBackedFlow(t *testing.T) {
 			}
 		}
 
-		// Gate ids appear as UNRESOLVED facts, because no gate ran.
+		// Gate ids appear as UNKNOWN facts, because no gate ran.
 		candidates, _ := objectsAt(data, "candidates")
 		var gateListed bool
 		for _, c := range candidates {
-			unresolved, _ := stringsAt(c, "unresolved")
-			if slices.Contains(unresolved, "approval") {
+			unknown, ok := unknownAt(c, "unknown")
+			if !ok {
+				t.Fatalf("candidate %v carries no `unknown` list of "+
+					"{key, reason} pairs: %#v", c["rule"], c["unknown"])
+			}
+			if hasUnknown(unknown, "approval", "not-evaluated") {
 				gateListed = true
 			}
 		}
 		if !gateListed {
 			t.Error("no candidate lists the gate id `approval` as an " +
-				"unresolved fact; without --evaluate-gates the gate does " +
-				"not run and its id is what the caller sees")
+				"unknown fact {approval, not-evaluated}; without " +
+				"--evaluate-gates the gate does not run and its id is what " +
+				"the caller sees")
 		}
 	})
 

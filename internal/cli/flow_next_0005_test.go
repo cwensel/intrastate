@@ -5,10 +5,21 @@ package cli
 // and the gate-disposition mini-check that separates enumeration from
 // selection (REQ-43, REQ-46).
 //
-// The load-bearing distinction across this file: `next` ENUMERATES. Every
-// oracle that could be satisfied by a verb which merely selects is written
-// so that selection-like behaviour FAILS it — a gate deny still exits 0,
-// gates run only on opt-in, and a guard-excluded row's gate never runs.
+// RDR 0011 OVERRIDES 0005's candidate clause and is the source of the
+// verb's default: a candidate is now a row whose MATCH atoms over keys
+// present in the assembled view hold, not every row the guards leave
+// undecided. `--all` restores the 0005 predicate. RDR 0011 also renames
+// the per-candidate undecided-fact list to `unknown` and types its entries
+// `{key, reason}`, which is why the reads below name that field. Every
+// other 0005 obligation on `flow next` is unchanged and rides in both
+// modes; a green run of this file is NOT evidence RDR 0011's predicate
+// shipped — the `*_0011_test.go` oracles are.
+//
+// The load-bearing distinction across this file: `next` REPORTS and does
+// not select. Every oracle that could be satisfied by a verb which merely
+// selects is written so that selection-like behaviour FAILS it — a gate
+// deny still exits 0, gates run only on opt-in, and a guard-excluded row's
+// gate never runs.
 
 import (
 	"slices"
@@ -20,7 +31,7 @@ import (
 
 // REQ-40: "flow next MUST return the legal recognized-outcome alphabet for
 // the supplied state, plus candidate summaries containing source rule
-// identity, required facts, unresolved guard/gate facts, and preview next
+// identity, required facts, unknown guard/gate facts, and preview next
 // tags, write targets, and clear keys when those can be read from
 // normalized model data without evaluating missing facts."
 // REQ-74: `next` data minimum — "`model` (id or path) and `revision`,
@@ -63,7 +74,7 @@ func TestReq40And74_NextPayloadCarriesTheAlphabetAndCandidateSummaries(t *testin
 }
 
 // REQ-75: "Each candidate carries source rule identity, the outcome it
-// belongs to, required facts, unresolved guard/gate facts, evaluated gate
+// belongs to, required facts, unknown guard/gate facts, evaluated gate
 // results when `--evaluate-gates` was given, and preview next tags, write
 // targets, and clear keys when the normalized model exposes them without
 // evaluating missing facts."
@@ -100,8 +111,9 @@ func TestReq75And118_CandidateSummariesAreReadFromNormalizedModelData(t *testing
 		if _, present := c["required"]; !present {
 			t.Errorf("candidate[%d] carries no `required` facts", i)
 		}
-		if _, present := c["unresolved"]; !present {
-			t.Errorf("candidate[%d] carries no unresolved guard/gate facts", i)
+		if _, ok := unknownAt(c, "unknown"); !ok {
+			t.Errorf("candidate[%d] carries no `unknown` list of "+
+				"{key, reason} guard/gate facts", i)
 		}
 
 		if c["rule"] == "advance-draft" {
@@ -132,15 +144,15 @@ func TestReq75And118_CandidateSummariesAreReadFromNormalizedModelData(t *testing
 }
 
 // REQ-41: "It MUST run gate accessors only when --evaluate-gates is given;
-// otherwise it MUST list gate ids as unresolved facts."
+// otherwise it MUST list gate ids as unknown facts."
 // REQ-46: "gates not requested (`next` default)" → "not run; gate ids
-// listed as unresolved facts".
+// listed as unknown facts".
 // REQ-57: "`flow next` stays effect-free by default".
 // REQ-123 / `0005:S1`: "`flow next` over the fixture model in `--as=json`
 // and `--as=text`, with and without `--evaluate-gates`" — "without the flag
-// no gate accessor runs and gate ids appear as unresolved facts".
+// no gate accessor runs and gate ids appear as unknown facts".
 // HAPPY PATH — the default arm.
-func TestReq41And46And57_WithoutTheFlagGateIdsAreUnresolvedFactsNotResults(t *testing.T) {
+func TestReq41And46And57_WithoutTheFlagGateIdsAreUnknownFactsNotResults(t *testing.T) {
 	model := writeFlowModel(t, flowMVVModel)
 	art := seedArtifact(t, model, "status=draft")
 
@@ -159,16 +171,18 @@ func TestReq41And46And57_WithoutTheFlagGateIdsAreUnresolvedFactsNotResults(t *te
 			continue
 		}
 		checked = true
-		// The gate id appears as an UNRESOLVED fact …
-		unresolved, ok := stringsAt(c, "unresolved")
+		// The gate id appears as an UNKNOWN fact, carrying the reason
+		// RDR 0011 mints for the gate class …
+		unknown, ok := unknownAt(c, "unknown")
 		if !ok {
-			t.Fatalf("candidate `unresolved` is not an array of ids: %#v",
-				c["unresolved"])
+			t.Fatalf("candidate `unknown` is not an array of {key, reason} "+
+				"pairs: %#v", c["unknown"])
 		}
-		if !slices.Contains(unresolved, "approval") {
-			t.Errorf("gate id `approval` is not listed among the unresolved "+
-				"facts %v; without --evaluate-gates the gate does not run "+
-				"and its id is what the caller sees", unresolved)
+		if !hasUnknown(unknown, "approval", "not-evaluated") {
+			t.Errorf("gate id `approval` is not listed among the unknown "+
+				"facts %v as {approval, not-evaluated}; without "+
+				"--evaluate-gates the gate does not run and its id is what "+
+				"the caller sees", unknown)
 		}
 		// … and NO gate result is reported, because no gate ran.
 		if gates, present := c["gates"]; present {
@@ -380,7 +394,7 @@ func TestReq43And46_ADenyUnderNextIsReportedAndStillExitsZero(t *testing.T) {
 // REQ-44: "It MUST NOT invent guard facts that were neither supplied, read,
 // nor produced by a declared gate accessor."
 // must not be materialized as a value.
-// ADVERSARIAL — a fact absent from every channel must stay unresolved and
+// ADVERSARIAL — a fact absent from every channel must stay unknown and
 func TestReq44_NextInventsNoGuardFactAbsentFromEveryChannel(t *testing.T) {
 	model := writeFlowModel(t, flowGatedNextModel)
 	// `flag` is owned and NOT seeded, so no reader supplies it, no --tag
@@ -397,15 +411,19 @@ func TestReq44_NextInventsNoGuardFactAbsentFromEveryChannel(t *testing.T) {
 		}
 	}
 
-	// The rows guarded on `flag` must report it as UNRESOLVED rather than
+	// The rows guarded on `flag` must report it as UNKNOWN rather than
 	// being silently decided either way.
 	candidates, _ := objectsAt(data, "candidates")
 	for _, c := range candidates {
-		unresolved, _ := stringsAt(c, "unresolved")
-		if !slices.Contains(unresolved, "flag") {
+		unknown, ok := unknownAt(c, "unknown")
+		if !ok {
+			t.Fatalf("candidate %v carries no `unknown` list of "+
+				"{key, reason} pairs: %#v", c["rule"], c["unknown"])
+		}
+		if !hasUnknown(unknown, "flag", "absent") {
 			t.Errorf("candidate %v is guarded on `flag`, which nothing "+
-				"supplied, but does not list it as an unresolved fact "+
-				"(unresolved = %v)", c["rule"], unresolved)
+				"supplied, but does not list it as an unknown fact "+
+				"{flag, absent} (unknown = %v)", c["rule"], unknown)
 		}
 	}
 }

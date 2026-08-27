@@ -443,11 +443,15 @@ func TestAdv2_AReaderServingOnlyAGuardsOwnedKeyIsStillInvoked(t *testing.T) {
 			t.Fatalf("`candidates` is empty: %#v", data["candidates"])
 		}
 		for _, c := range candidates {
-			unresolved, _ := stringsAt(c, "unresolved")
-			if containsString(unresolved, "flag") {
-				t.Errorf("candidate %v reports `flag` unresolved, but a "+
+			unknown, ok := unknownAt(c, "unknown")
+			if !ok {
+				t.Fatalf("candidate %v carries no `unknown` list of "+
+					"{key, reason} pairs: %#v", c["rule"], c["unknown"])
+			}
+			if unknownKeys(unknown, "flag") {
+				t.Errorf("candidate %v reports `flag` unknown, but a "+
 					"declared reader over a bound role holds it: `next` "+
-					"reports a fact unresolved that the invoked set was "+
+					"reports a fact unknown that the invoked set was "+
 					"required to establish (REQ-35, REQ-44)", c["rule"])
 			}
 		}
