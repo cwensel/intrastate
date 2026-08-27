@@ -317,3 +317,97 @@ correct; no test was added, because a test that passes catches nothing.
 - **A gate id colliding with a match key name.** Emits both
   `{k, absent}` and `{k, not-evaluated}` — correct, and precisely why C1
   dedups on the `{key, reason}` PAIR rather than on the key.
+
+## Phase 3c — fixup
+
+**Outcome: all three Phase 3b adversarial oracles resolved; `make check`
+green; 130/130 REQ oracles still green; `internal/resolve` untouched
+(`git diff --stat internal/resolve` empty).**
+
+### The defect
+
+C1's demand-set term added each row's match-block owned keys to
+`internal/cli/flow_exec.go::invokedReaders` over EVERY row of the model,
+escape rows included. `0002:C4` makes a match block mandatory on every
+rule, escape rules included, so the class is reachable by ordinary
+authoring rather than exotic.
+
+### The reading taken
+
+The match-owned demand term runs over the rows the INVOKING VERB can
+actually consult: for `next`, its non-escape rows; for `resolve`, every
+row of the requested outcome, escape rows included. Implemented as one
+predicate in one function — `if outcome != "" || len(row.Escape) == 0`.
+Recorded as DEV-8 (`SPEC-UNDER`).
+
+**Evidence quoted from the record.** For the `next` half:
+
+- C1 fixes the predicate over "each **non-escape** row of the requested
+  model".
+- C1 justifies the term by "the assembled view MUST actually carry the
+  keys **the predicate reads**" and "a row cannot be match-decided without
+  the key".
+- The Joint-check line: "`runFlowNext` never lists escape rows."
+- F7: "**Recovery**: none needed — `next` is effect-free in both modes" —
+  and C1 itself records the key is owned, so `--tag` is refused
+  `flow-tag-owned` and "no other flag or ambient channel can supply it".
+- F1's diagnostic is a two-run default-vs-`--all` diff, which a
+  pre-row-loop refusal denies in both modes.
+
+For the `resolve` half — escape rows STAY in the demand set:
+
+- C1: "the reader is invoked **even when the row `resolve` would select
+  does not itself match on the key**: over an UNBOUND or REFUSING reader
+  such a run turns from a plan into exit 2/3, before the kernel and
+  **above the escape phase** — a class this contract NAMES AND ACCEPTS
+  here … it is not denied."
+- F6 scopes that class as "the requested outcome has a row on that key";
+  `rescue-row` binds `go` and matches on `mode`, so the ADV-2 fixture is
+  inside F6's scope.
+- Independently: `internal/resolve.escapeOrRefuse` evaluates
+  `view.matches(row.Match)` on every escape row binding the requested
+  outcome, that phase's reachability is unknowable before the kernel runs,
+  and `TagSet.matches` is two-valued — so narrowing `resolve` would let an
+  absent key silently fail a rescue into `no_match` over an artifact that
+  holds the fact, reinstating the hidden-fact defect the term removes.
+
+### Per-oracle disposition
+
+- **ADV-1** — FIXED in production. `flow next` no longer refuses
+  `flow-artifact-missing` for an escape row's match-owned key; `readers`
+  excludes `side`; `candidates` is exactly `[plain-row]`.
+- **ADV-3** — FIXED by the same term (both subtests). Default and `--all`
+  each emit a payload carrying `candidates`, restoring F1's two-run
+  diagnostic.
+- **ADV-2** — TEST-FIXTURE correction (DEV-9). The assertion contradicted
+  the clause it cited; C1 names and accepts the class verbatim. The oracle
+  is re-anchored to pin the BOUNDARY: `resolve` still demands the escape
+  row's reader, and the refusal is `flow-artifact-missing` naming the
+  `side` role — the remedy F6 prescribes. Fixture, model, and run
+  unchanged; the oracle still fails a narrowed build and a build whose
+  refusal does not name the role.
+
+### Contract-collision check
+
+None. No REQ oracle changed disposition. REQ-17's "MUST NOT be scoped to
+`next`" is preserved verbatim — the term still binds both callers; it is
+the escape-row CLASS that is scoped, not the verb — and
+`TestReq17And117`'s fixture carries no escape rows, so its reader-set
+agreement is unaffected. C1's mode-independence holds: `--all` and the
+default consult the same row set and only the predicate over it differs.
+
+### Pre-existing failure found and repaired
+
+`TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec` was **already
+red at the Phase 3b commit** (`2271b75`), verified by stashing the Phase 3c
+edit and re-running. Its cause was Phase 3b's file NAME:
+`flow_adversarial_0011_adv_test.go` ends `_adv_test.go` and matched neither
+REQ-120's allow-list nor its `_0011_test.go` exemption. Renamed to
+`flow_adversarial_adv_0011_test.go`; the oracle and its allow-list are
+untouched. Recorded under DEV-9.
+
+### Green status
+
+`make check` passes end to end (fmt-check, vet, `golangci-lint` 0 issues,
+build, `lint --model models/rdr.toml` 0 findings, `go test -race` all
+packages). `internal/cli` coverage 89.2%. No new public surface.

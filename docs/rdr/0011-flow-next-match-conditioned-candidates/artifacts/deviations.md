@@ -334,6 +334,154 @@ vacuously.
 
 ---
 
+## DEV-8 — C1 leaves the ESCAPE-row case of the demand-set term open
+
+- **Type**: `SPEC-UNDER`
+- **Status**: `derived from the record`
+- **Bears on**: `0011:C1` (demand-set paragraph), `0011:F1`, `0011:F6`,
+  `0011:F7`, REQ-16, REQ-17, REQ-18
+- **Found in**: Phase 3c, against the Phase 3b adversarial oracles ADV-1,
+  ADV-2, ADV-3
+
+**The clause.** C1: "the assembled view MUST actually carry the keys the
+predicate reads, so `internal/cli/flow_exec.go::invokedReaders` MUST add
+each row's MATCH-block owned keys to its demand set". The Phase 2 build
+read "each row" literally, over EVERY row of the model.
+
+**What the record leaves open.** C1 never says whether an ESCAPE row is
+one of "each row" for this term. `0002:C4` makes a match block mandatory
+on every rule, escape rules included, so the case is not exotic — a model
+author cannot avoid it by omitting the block. The record's own elements
+answer the question in opposite directions for the two verbs, and the
+Phase 2 build applied one answer to both.
+
+**`flow next` — escape rows are OUT.** Three quotes settle it:
+
+1. C1 fixes the predicate over "each **non-escape** row of the requested
+   model".
+2. C1 justifies the term by "the assembled view MUST actually carry the
+   keys **the predicate reads**", elaborated as "a row cannot be
+   match-decided without the key".
+3. The RDR's Joint-check line states it flatly: "`runFlowNext` never
+   lists escape rows."
+
+`runFlowNext`'s row loop does `if len(row.Escape) != 0 { continue }`
+before `probeRow`, so an escape row's match atoms never reach a probe and
+`next` never match-decides one. Demanding a reader for such a key made
+`flow next` refuse `flow-artifact-missing` (exit 2) in `runReaders`,
+ABOVE the row loop, for a fact no reported row could consume.
+
+That refusal has no home in the record. No Failure Mode contemplates
+`flow next` refusing; F7 states "**Recovery**: none needed — `next` is
+effect-free in both modes; re-run with the corrected inputs" — and there
+is nothing to re-run with, because C1 itself records that the key is
+`provenance = "owned"`, so `--tag` is refused `flow-tag-owned` and "no
+other flag or ambient channel can supply it". F1 prescribes `--all` as
+the whole diagnostic for an absent candidate, but C1 requires the demand
+set to be mode-independent, so `--all` inherits the identical pre-row-loop
+refusal and F1's two-run protocol has no second run.
+
+**`flow resolve` — escape rows are IN.** `internal/resolve.escapeOrRefuse`
+evaluates `view.matches(row.Match)` on every escape row binding the
+requested outcome, so `resolve` genuinely consults them; and whether
+`Resolve` reaches that phase is not knowable until after the kernel has
+run. `TagSet.matches` is two-valued, so an absent key makes the escape row
+simply not match and the rescue fails silently into the original
+`no_match` — over an artifact that HOLDS the fact, which is precisely the
+hidden-fact defect C1's term exists to remove. Narrowing `resolve` would
+trade a named exit-2 for a mute mis-refusal in the rescue phase.
+
+**The reading taken.** The match-owned demand term runs over the rows the
+INVOKING VERB can actually consult: for `next`, its non-escape rows; for
+`resolve`, every row of the requested outcome, escape rows included. One
+predicate in one function, `if outcome != "" || len(row.Escape) == 0`.
+
+REQ-17's obligation — "It therefore binds BOTH callers … and MUST NOT be
+scoped to `next`" — is preserved verbatim: the term still binds both
+callers, and it is the ESCAPE-row class that is scoped, not the verb.
+`TestReq17And117`'s fixture has no escape rows, so its reader-set
+agreement is unchanged. C1's mode-independence is likewise untouched:
+`--all` and the default consult the same row set; only the predicate over
+it differs.
+
+**Why `SPEC-UNDER` and not `SPEC-DEFECT`.** The record does not contradict
+itself — it simply never surveyed a model whose escape row match-owns a
+key. Every element needed to close the case (C1's "non-escape" scope, its
+"the predicate reads" justification, the Joint-check's "never lists escape
+rows", F7's "none needed", F1's two-run protocol) is already written; the
+derivation reads them rather than inventing a rule. No new public surface
+is added.
+
+**Pinned by**: `TestAdv1_NextDoesNotRefuseForAnEscapeRowsMatchOwnedKey`,
+`TestAdv3_AllRemainsF1sDiagnosticOverAnEscapeRowDemand` (both subtests),
+and `TestAdv2_ResolveKeepsItsPlanWhenOnlyAnEscapeRowDemandsTheReader` in
+its DEV-9 form, which pins the `resolve` half so a later phase cannot
+narrow it without failing a named oracle.
+
+---
+
+## DEV-9 — ADV-2 denied a class `0011:C1` names and accepts verbatim
+
+- **Type**: `TEST-FIXTURE`
+- **Status**: `mechanical translation`
+- **Bears on**: `0011:C1` (demand-set paragraph), `0011:F6`, REQ-20, REQ-120
+- **Found in**: Phase 3c, against the Phase 3b adversarial oracle ADV-2
+
+**The assertion.** Phase 3b's
+`TestAdv2_ResolveKeepsItsPlanWhenOnlyAnEscapeRowDemandsTheReader` asserted
+that `flow resolve --outcome go` MUST return a plan when the only unbound
+reader demand comes from an escape row, reasoning that the rescue phase is
+provably unreachable on a run whose ordinary rows select exactly one.
+
+**What the record says.** C1's demand-set paragraph names that exact shape
+and accepts it, in its own emphasis:
+
+> The demand set is a union over the outcome's rows, so the reader is
+> invoked **even when the row `resolve` would select does not itself match
+> on the key**: over an UNBOUND or REFUSING reader such a run turns from a
+> plan into exit 2/3, before the kernel and **above the escape phase** — a
+> class this contract NAMES AND ACCEPTS here … That class is named in
+> Consequences and pinned by S8; it is not denied.
+
+"Above the escape phase" is not incidental: it is the record contemplating
+a run whose rescue phase is never entered and stating that the exit-2
+there is accepted. F6, the anchor ADV-2 itself cited, scopes the class as
+"the model matches on an owned key no rule writes, **the requested outcome
+has a row on that key**, and its declared reader is unbound or refusing".
+`rescue-row` binds `go` and matches on `mode`, so the fixture is INSIDE
+F6's scope, not outside it. ADV-2's premise — that F6's warrant "does not
+reach an escape row" — is not supported by F6's text.
+
+The implementation reason points the same way (DEV-8): `escapeOrRefuse`
+does consult escape-row match tags, reachability is unknowable before the
+kernel runs, and `TagSet.matches` is two-valued, so narrowing `resolve`
+would silently break rescues.
+
+**The reading taken.** The oracle is re-anchored to pin the BOUNDARY
+rather than deny the class. It now asserts the two facts that actually
+discriminate a correct build: that `resolve` still demands the escape
+row's reader (a narrowed build fails here), and that the refusal is
+`flow-artifact-missing` naming the `side` role — the remedy F6 prescribes,
+and not the mute `flow-no-match` the term replaced. The fixture, the
+model, and the run are unchanged.
+
+**Why mechanical.** No contract obligation is weakened; an assertion that
+contradicted its own cited anchor is re-pointed at what that anchor
+states. The oracle remains adversarial and remains capable of failing: it
+fails a build that narrows `resolve`'s demand set, and it fails a build
+whose refusal does not name the unbound role.
+
+**Ancillary, same entry.** The file was renamed
+`flow_adversarial_0011_adv_test.go` → `flow_adversarial_adv_0011_test.go`.
+`TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec` bounds the
+production diff and exempts paths matching `_0011_test.go`; the Phase 3b
+name ended `_adv_test.go` and matched neither that pattern nor the
+allow-list, so REQ-120 was **already red at the Phase 3b commit**, before
+any Phase 3c edit. The rename restores it without touching the oracle or
+its allow-list.
+
+---
+
 ## Non-deviations, recorded so a later phase does not re-open them
 
 - **The C3 census reconciles exactly.** REQ-54's five `file:line` citations
