@@ -89,6 +89,14 @@ jobs:
             exit 1
           fi
 
+      # The step above covers only $(MODEL). `make graph-lint` also lints
+      # EXAMPLE_MODELS -- the worked examples docs/model-authoring.md walks
+      # through -- so a broken one cannot silently falsify the authoring
+      # doc. The subject list stays in the Makefile alone, so CI and local
+      # `make check` cannot drift apart again.
+      - name: Lint the example models
+        run: make graph-lint
+
   # The generated-docs staleness gate. docs/cli-reference.md and llms.txt
   # are emitted from the live command tree, so a renamed finding code or a
   # reworded help body must not land with stale markdown beside it. The
