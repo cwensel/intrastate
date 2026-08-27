@@ -311,7 +311,7 @@ Flags:
       --all                    report every row the guards do not exclude, regardless of match
       --artifact stringArray   artifact role binding, as role=path (repeatable)
       --evaluate-gates         run the reported candidates' gate accessors and report each result
-      --flow string            flow id, resolved through config discovery
+      --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
@@ -396,7 +396,7 @@ Usage:
 
 Flags:
       --artifact stringArray   artifact role binding, as role=path (repeatable)
-      --flow string            flow id, resolved through config discovery
+      --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
 
@@ -480,7 +480,7 @@ Usage:
 
 Flags:
       --artifact stringArray   artifact role binding, as role=path (repeatable)
-      --flow string            flow id, resolved through config discovery
+      --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
       --outcome string         the recognized outcome tag to resolve
@@ -585,7 +585,7 @@ Usage:
 Flags:
       --artifact stringArray   artifact role binding, as role=path (repeatable)
       --clear stringArray      owned tag key to remove (repeatable)
-      --flow string            flow id, resolved through config discovery
+      --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
@@ -678,7 +678,7 @@ Usage:
   intrastate lint [flags]
 
 Flags:
-      --flow string    flow id to lint, resolved through config discovery
+      --flow string    flow id to lint (reserved; this build resolves none — use --model)
       --help-all       show extended help (vocabulary, wire shapes, exit codes)
       --model string   path to the transition model to lint
 

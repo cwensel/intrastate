@@ -54,7 +54,7 @@ constants, not per-model inputs):
 		RunE:          runLint,
 	}
 	cmd.Flags().String("model", "", "path to the transition model to lint")
-	cmd.Flags().String("flow", "", "flow id to lint, resolved through config discovery")
+	cmd.Flags().String("flow", "", "flow id to lint (reserved; this build resolves none — use --model)")
 	withExtendedHelp(cmd, lintExtendedDesc())
 	return cmd
 }

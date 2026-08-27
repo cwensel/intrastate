@@ -156,7 +156,7 @@ Environment failures
 // The pair is mutually exclusive and one is required (REQ-22).
 func registerSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().String("model", "", "path to the transition model")
-	cmd.Flags().String("flow", "", "flow id, resolved through config discovery")
+	cmd.Flags().String("flow", "", "flow id (reserved; this build resolves none — use --model)")
 	cmd.Flags().StringArray("artifact", nil,
 		"artifact role binding, as role=path (repeatable)")
 }
