@@ -1,8 +1,8 @@
-RDR: 0011-flow-next-match-conditioned-candidates | phase: 2 — implementation | state: IN-PROGRESS
-last: Phase 2 green — 130/130 REQ, make check passes, MVV 3-9 recorded; 2 TEST-FIXTURE deviations, 0 open author decisions
+RDR: 0011-flow-next-match-conditioned-candidates | phase: 3c — fixup | state: COMPLETE
+last: Phase 3c resolved ADV-1/ADV-3 in production (demand term scoped to consultable rows) and re-anchored ADV-2 as TEST-FIXTURE; make check green
 blocker: none
-changed: internal/cli/flow_next.go, internal/cli/flow_exec.go, docs/cli-output-contract.md, README.md, 5 re-homed 0005 assertions
+changed: internal/cli/{flow_next,flow_exec}.go, 8 *_0011*_test.go, 5 re-homed 0005 assertions, docs/cli-output-contract.md, README.md, artifacts/*.md
 validate: make check
-next: Phase 3a (CoVe) + 3b (adversarial) in parallel, then 3c fixup if needed
+next: roborev triage, then land (rdr-implement-triage --close-and-flight)
 session: 2026-08-26 | rdr-implement-triage rdr-0011
 artifacts: req-list.md coverage.md verification.md deviations.md
