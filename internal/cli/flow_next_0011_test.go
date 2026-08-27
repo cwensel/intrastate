@@ -14,7 +14,6 @@ package cli
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/newcoinc/intrastate/internal/cli/clierr"
@@ -723,14 +722,16 @@ func TestReq32And33And69And74_TheAlphabetIsTheFullDeclaredSetInBothModes(t *test
 // the kernel's match seam stays two-valued, its selection and escape phases
 // are untouched, `0007:REQ-78` stays deferred, `0007:C8`'s payload is not
 // widened, and no sixth `RefusalKind` is minted (`0007:REQ-79`)."
-// REQ-107 / `0011:S5`: "the kernel is untouched — the ONE mechanically
-// checkable form of that claim is MVV 9's `git diff --stat internal/resolve`
-// empty, and it is the form the build asserts".
 // REQ-130: "`0007:REQ-78` (the two-valued match seam) is left deferred".
-// ADVERSARIAL — a claim about the DIFF, asserted against the merge base so
-// a kernel edit smuggled in with this work fails here rather than passing
-// unnoticed under a green suite.
-func TestReq34And107And130_TheKernelPackageIsUntouchedByThisContract(t *testing.T) {
+// ADVERSARIAL — the RUNTIME half of REQ-34, which survives the merge: the
+// refusal-kind set read back through the kernel's own enumerator.
+//
+// REQ-107's diff form (`0011:S5`, MVV 9's `git diff --stat internal/resolve`
+// empty) was a build-time PROOF OBLIGATION over this contract's changeset,
+// discharged at review in the landing commit — `0011:S6` places diff claims
+// on the discharged-at-review side. It is not restated here: post-merge
+// there is no branch point, so no test can observe it.
+func TestReq34And130_TheKernelPackageIsUntouchedByThisContract(t *testing.T) {
 	// The refusal-kind set is the kernel's own closure and is the wire
 	// half of "no sixth RefusalKind is minted". `RefusalKinds()` is
 	// exported and the five spellings are `0007`'s.
@@ -746,18 +747,6 @@ func TestReq34And107And130_TheKernelPackageIsUntouchedByThisContract(t *testing.
 	if !slices.Equal(got, want) {
 		t.Errorf("RefusalKinds() = %v; want the five `0007` fixes %v — this "+
 			"contract mints no sixth kind (`0007:REQ-79`)", got, want)
-	}
-
-	// The mechanically checkable form of "the kernel is untouched": the
-	// diff of `internal/resolve` against the branch point is EMPTY. A
-	// green kernel suite is corroboration, not this criterion — "a green
-	// suite cannot by itself prove nothing changed" (S5).
-	diff := strings.TrimSpace(gitDiffStat(t, "internal/resolve"))
-	if diff != "" {
-		t.Errorf("`git diff --stat internal/resolve` is NOT empty:\n%s\n"+
-			"C1 changes nothing in the kernel PACKAGE; a probe-shape change "+
-			"in `internal/cli` plus one demand-set term is the whole diff "+
-			"this contract authorizes there", diff)
 	}
 }
 
@@ -906,92 +895,5 @@ func TestReq2And67_TheProbeBindsItsOwnOutcomeStripsEscapeAndKeepsTheResult(t *te
 			"discards it before `summarize` can read it. The signature "+
 			"change is the reason the probe Result is kept rather than "+
 			"discarded", pairs)
-	}
-}
-
-// REQ-120 / PH 1: "in `flow_exec.go::invokedReaders`, add each row's
-// match-block owned keys to the demand set — a term both callers take … —
-// the one edit outside `flow_next.go`"
-// ADVERSARIAL — a SCOPE claim about the production diff. Phase 1's intent
-// bounds where the change may land, and a build that spread the predicate
-// across other files has not honoured it. Asserted as a diff, because no
-// runtime observation can see file boundaries.
-func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
-	// The two production files this contract authorizes to change, plus
-	// the two shipped user-facing descriptions C3 corrects (REQ-56) and
-	// the 0005 test files C3 re-homes (REQ-54, REQ-60).
-	allowed := map[string]bool{
-		"internal/cli/flow_next.go":                  true,
-		"internal/cli/flow_exec.go":                  true,
-		"docs/cli-output-contract.md":                true,
-		"README.md":                                  true,
-		"internal/cli/flow_next_0005_test.go":        true,
-		"internal/cli/flow_adversarial_0005_test.go": true,
-		"internal/cli/flow_mvv_0005_test.go":         true,
-		"internal/cli/flow_surface_0005_test.go":     true,
-	}
-
-	// RDR 0010's Technical Design names these production files, and they are
-	// listed HERE rather than folded into the check above because this
-	// guard's premise — "the only in-flight change is 0011's" — stops
-	// holding once a sibling RDR lands on the same branch. The allow-list
-	// is EXTENDED with a second RDR's named seams rather than relaxed to a
-	// permissive check: a file outside BOTH lists still fails, so what this
-	// oracle checks is unchanged (0010 deviations.md D7).
-	for _, path := range []string{
-		"internal/table/model.go",
-		"internal/table/source.go",
-		"internal/table/load.go",
-		"internal/table/normalize.go",
-		"internal/table/dump.go",
-		"internal/graphlint/reach.go",
-		"internal/graphlint/analysis.go",
-		"internal/graphlint/coverage.go",
-		"internal/graphlint/taxonomy.go",
-		"internal/cli/flow_resolve.go",
-		// 0010's Phase-3/4 doc seam (its REQ-104/105/106): the output
-		// contract gains the `emit` field and a decision-table
-		// invocation, and the model authoring doc — new — carries the
-		// class, the `[rule.guard.all.<key>]` guidance, and the
-		// escape-row "otherwise" idiom.
-		"docs/model-authoring.md",
-		"docs/README.md",
-	} {
-		allowed[path] = true
-	}
-
-	// The test-side surface RDR 0010 changes: its own suite, the fixture
-	// corpus whose `[dump]` lists must gain `emit` or stop loading, and the
-	// checked-in expectations 0010's own Done clause licenses by shape (its
-	// REQ-87 (ii), (iii) and (iv), plus deviations D3, D4 and D10). Each is
-	// named or bounded rather than waved through, so an unrelated test edit
-	// still fails this guard.
-	allowedTest := func(path string) bool {
-		switch path {
-		case "internal/table/helpers_test.go",
-			"internal/table/dump_test.go",
-			"internal/table/roundtrip_test.go",
-			"internal/graphlint/findings_0006_test.go",
-			"internal/graphlint/fixtures_0006_test.go",
-			"internal/cli/flow_demand_0011_test.go":
-			return true
-		}
-		return strings.Contains(path, "_0010_test.go") ||
-			strings.HasPrefix(path, "internal/table/testdata/")
-	}
-
-	for _, path := range changedFilesSince(t) {
-		if allowed[path] || allowedTest(path) ||
-			strings.Contains(path, "_0011_test.go") ||
-			strings.HasPrefix(path, "docs/rdr/") {
-			continue
-		}
-		t.Errorf("`%s` changed; Phase 1 names ONE edit outside "+
-			"`flow_next.go` — the `invokedReaders` demand-set term in "+
-			"`flow_exec.go` — and Phases 2 and 3 add the flag, the help, "+
-			"C3's fixtures, and the two shipped descriptions. A predicate "+
-			"spread wider than that has not honoured the placement this "+
-			"RDR decided: PRESENCE in the CLI, EQUALITY in the kernel, "+
-			"`internal/resolve` not modified", path)
 	}
 }

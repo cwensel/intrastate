@@ -39,6 +39,18 @@ JDR 0001 §D13 moved the set-value encoding declaration to 0002 and that is what
 broke the 0007↔0003 cycle. Neither open joint decision (§JD-5, §JD-18) blocks
 any run.
 
+## Landing
+
+An RDR's build-time **diff oracles** — tests asserting `git diff` against the
+branch point, the checkable form of an "X is untouched" claim — are deleted in
+the landing commit. They are discharged proof obligations over one branch's
+changeset (`0011:S6`: a claim about the DIFF "is discharged at review by
+reading the changed test files"), not standing invariants: post-merge there is
+no branch point, so they are unrunnable by construction. Deleting one does not
+retract the claim; the proof is in git history. A property that must hold going
+forward is written as a durable tree/runtime assertion instead — see
+`internal/cli/mvv_0010_test.go::TestReq85_TheCheckedInNavigatorModelIsUntouched`.
+
 ## Status legend
 
 - **Draft** — during the planning/research phase

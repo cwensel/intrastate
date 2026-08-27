@@ -19,7 +19,6 @@ package cli
 // can take is reported, and every row it excludes is absent.
 
 import (
-	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -410,45 +409,5 @@ func TestReq92_MVV8TheMatchOnlyOwnedKeyIsReadAndDecidedInBothModes(t *testing.T)
 	if a, b := readersOf(t, def), readersOf(t, all); !slices.Equal(a, b) {
 		t.Errorf("readers under default = %v, under --all = %v; the demand "+
 			"set is mode-independent", a, b)
-	}
-}
-
-// REQ-94 / MVV 9: "`make check` passes; `go test ./internal/resolve` passes
-// with no test changed and `git diff --stat internal/resolve` empty; the
-// 0005 `next` suite passes with only C3's five mechanical
-// `unresolved`→`unknown` re-homings (ok-bool asserted), and the file header
-// names this RDR."
-// REQ-119 / `0011:S8`: "Done: S1–S8 green and `make check` passes."
-// ADVERSARIAL — the two mechanically checkable halves. `make check` itself
-// is the build's gate rather than an oracle, so what is asserted here is
-// the kernel's untouchedness in both of the forms MVV 9 names.
-func TestReq94And119_MVV9TheKernelIsUntouchedInBothOfTheFormsTheMVVNames(t *testing.T) {
-	// (i) `git diff --stat internal/resolve` empty — the ONE mechanically
-	// checkable form of "the kernel is untouched".
-	if diff := strings.TrimSpace(gitDiffStat(t, "internal/resolve")); diff != "" {
-		t.Errorf("`git diff --stat internal/resolve` is NOT empty:\n%s",
-			diff)
-	}
-
-	// (ii) NO test file under `internal/resolve` changed. A green kernel
-	// suite is corroboration, "not a second criterion, since a green suite
-	// cannot by itself prove nothing changed" — so this asserts the DIFF
-	// of the test files rather than running them.
-	root := repoRootFor(t)
-	names, err := exec.Command("git", "-C", root, "diff", "--name-only",
-		diffBase(t), "--", "internal/resolve").Output()
-	if err != nil {
-		t.Skipf("`git diff --name-only` failed: %v", err)
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(names)), "\n") {
-		if line == "" {
-			continue
-		}
-		t.Errorf("`%s` changed; MVV 9 requires `go test ./internal/resolve` "+
-			"to pass with NO test changed. `TestReq78_MatchPatternStill"+
-			"FoldsAbsenceIntoNonMatch`, the `match_conflicted_test.go` "+
-			"oracles, and the reason-set pins `TestReq49`/`TestReq47` stay "+
-			"green AS SHIPPED — a kernel diff in the build is a defect, not "+
-			"an expected inversion", line)
 	}
 }
