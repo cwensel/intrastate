@@ -160,13 +160,22 @@ snapshot:
 #
 # Runs against the freshly built dist/, so it must follow a goreleaser run;
 # CI invokes it directly after one.
+# The binary under test must be the one for THIS host: dist/ holds every
+# target, and running a foreign one dies with "Exec format error", whose
+# empty output reads as drift and reports the wrong cause. goreleaser names
+# the per-target dirs `intrastate_<goos>_<goarch>...`, so ask the toolchain
+# what host it is and match that prefix.
 release-check:
-	@bin=$$(find dist -type f -name intrastate -perm -u+x 2>/dev/null | head -1); \
+	@goos=$$($(GO) env GOOS); goarch=$$($(GO) env GOARCH); \
+	bin=$$(find dist -type f -name intrastate -path "*_$${goos}_$${goarch}*" 2>/dev/null | head -1); \
 	if [ -z "$$bin" ]; then \
-		echo "error: no built binary under dist/ — run 'make snapshot' first" >&2; \
+		echo "error: no $${goos}/$${goarch} binary under dist/ — run 'make snapshot' first" >&2; \
 		exit 1; \
 	fi; \
-	out=$$("$$bin" version); \
+	if ! out=$$("$$bin" version 2>&1); then \
+		echo "error: could not execute $$bin: $$out" >&2; \
+		exit 1; \
+	fi; \
 	echo "$$out"; \
 	commit=$$(printf '%s' "$$out" | sed -n 's/.*commit \([0-9a-f]*\).*/\1/p'); \
 	if [ $${#commit} -ne 40 ]; then \
@@ -174,7 +183,7 @@ release-check:
 		echo "it fell back to VCS stamps: the -X paths in .goreleaser.yaml no longer match the module path in go.mod" >&2; \
 		exit 1; \
 	fi; \
-	echo "release-check: build identity stamped by ldflags"
+	echo "release-check: build identity stamped by ldflags ($${goos}/$${goarch})"
 
 clean:
 	rm -rf $(BIN_DIR) coverage.out dist
