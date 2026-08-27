@@ -179,7 +179,7 @@ a closed set:
 
 ```json
 {"rule":"prelock","outcome":"advance","required":["stage"],
- "unknown":[{"key":"gate_passed","reason":"absent"},
-            {"key":"approval","reason":"not-evaluated"}],
+ "unknown":[{"key":"approval","reason":"not-evaluated"},
+            {"key":"gate_passed","reason":"absent"}],
  "next":{"stage":"prelocked"},"writes":{"stage":"prelocked"},"clear":[]}
 ```

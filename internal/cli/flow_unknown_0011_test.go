@@ -460,13 +460,17 @@ func TestReq72And73_TextModeCarriesBothMembersThroughTheSharedFlattener(t *testi
 		"--artifact", bind, "--as=text")
 
 	// Both MEMBERS of the pair must reach the text caller, so the
-	// diagnosis travels with the symptom.
-	for _, member := range []string{"wanted", "absent"} {
-		if !strings.Contains(text, member) {
-			t.Errorf("text mode does not carry %q:\n%s\nThe text caller "+
-				"gets BOTH members of each pair — the diagnosis and not "+
-				"just the symptom — which is the property that matters",
-				member, text)
+	// diagnosis travels with the symptom. Assert the PATH-QUALIFIED leaf,
+	// not a bare substring: this fixture's rule ids (`absent-row`,
+	// `all-absent`) carry the word "absent" on their own, so a build that
+	// dropped every `reason` leaf would satisfy a member scan while
+	// reporting a symptom with no diagnosis attached.
+	for _, leaf := range []string{"key: wanted", "reason: absent"} {
+		if !strings.Contains(text, leaf) {
+			t.Errorf("text mode does not carry the %q leaf:\n%s\nThe text "+
+				"caller gets BOTH members of each pair — the diagnosis and "+
+				"not just the symptom — which is the property that matters",
+				leaf, text)
 		}
 	}
 
