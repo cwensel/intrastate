@@ -95,7 +95,7 @@ N/A-bulleted). -->
 - **Priority**: High
 - **Related Issues**: intrastate#zdat (seed; stays open as the defect tracker), rdr#thsc (umbrella), rdr#tmxk (the consumer model that motivates this), intrastate#1mv1 (sibling seed, now RDR 0011 — `flow next` verb semantics; cross-cite, not a facet)
 - **Predecessors**: 0002-transition-table-as-reviewable-data, 0005-skill-integration-cli-contract, 0006-graph-lint-authority-and-guarantees
-- **Overrides**: 0002:C2 and 0002:C3 (the closed `[model]` layout gains an optional `class` key; the rule layout gains `[rule.emit]`) — additive; 0002:C4 ("an ordinary transition rule MUST contain a write block", `internal/table/normalize.go::normalizeRule`, category `malformed_rule_shape`) — conditioned on the `state-machine` class; 0002:C19 (closed dump column vocabulary gains `emit`); 0005:C1 (the `flow resolve` success payload gains `emit`; `--artifact` unrequired is a consequence of its own reader scoping, not an override); 0006:D-reachability-relation (the root is the declared initial owned state *or*, for the `decision-table` class, the empty owned-state node). Confirmed at propose as NOT overridden: 0006:C18 (missing root stays a blocking finding for the `state-machine` class, `internal/graphlint/analysis.go::checkDanglingEdge`), 0002:C2's write-only-owned-tag clause (unreachable with zero owned tags), 0005 DEV-8's demand set (`internal/cli/flow_exec.go::invokedReaders`, already empty over no owned keys).
+- **Overrides**: 0002:C2 and 0002:C3 (the closed `[model]` layout gains an optional `class` key; the rule layout gains `[rule.emit]`) — additive; 0002:C4 ("an ordinary transition rule MUST contain a write block", `internal/table/normalize.go::normalizeRule`, category `malformed_rule_shape`) — conditioned on the `state-machine` class; 0002:C19 (closed dump column vocabulary gains `emit`); 0005:C1 (the `flow resolve` success payload gains `emit`; `--artifact` unrequired is a consequence of its own reader scoping, not an override); 0006:D-reachability-relation (the root is the declared initial owned state *or*, for the `decision-table` class, the empty owned-state node); 0006's closed `reason` set for `graph-unprovable-coverage` (`internal/graphlint/taxonomy.go`, asserted exhaustively by `TestReq80`) — **appended, not conditioned**: a fourth member `no-participating-dimension` carries C5's group-level arm, and this is the one clause of this RDR that is not additive on its owner's grammar, so it needs 0006's assent (A14). Confirmed at propose as NOT overridden: 0006:C18 (missing root stays a blocking finding for the `state-machine` class, `internal/graphlint/analysis.go::checkDanglingEdge`), 0002:C2's write-only-owned-tag clause (unreachable with zero owned tags), 0005 DEV-8's demand set (`internal/cli/flow_exec.go::invokedReaders`, already empty over no owned keys).
 - **Seam Lineage**: no prior accretion
 
 ## Problem Statement
@@ -123,8 +123,13 @@ guard keys). The design question is whether a model with zero owned tags is a
 legal, first-class model class — and if so, what `flow resolve` returns over
 it (the selected row's identity, an authored `emit` block of literal
 key/values, or something else), and what each lint rule means when the owned
-set is empty. Exhaustiveness/coverage lint over observed dimensions must keep
-working unchanged — the PoC surfaced a 208/512 coverage hole in a partial
+set is empty. Exhaustiveness/coverage lint over the table's **guard**
+dimensions must keep working unchanged — guard atoms, not match atoms, are
+what `internal/guard/product.go::Dimensions` collects into the scoped product
+(`0006:C7`, `0003:C13`), so a decision table authors its discriminators as
+`[rule.guard.all.<key>]`; a match-discriminated table has an empty product
+and takes C5's `graph-unprovable-coverage` instead. The PoC surfaced a
+208/512 coverage hole in a partial
 table, which is the property that makes stateless tables worth supporting at
 all. Stateful models are unchanged; intrastate stays generic (no consumer
 knowledge, no artifact discovery).
@@ -213,6 +218,15 @@ knowledge, no artifact discovery).
     `loadDump` sets `DumpOrder = DumpColumns()`, so the default set picks up
     `emit` for free, satisfying C3's default-set clause. `models/rdr.toml`
     declares none — confirmed, and it is the only file in `models/`.
+    **The census counted TOML only, and that was the gap**: the vocabulary is
+    also asserted from Go, as a slice literal, at
+    `internal/table/dump_test.go::TestReq95_DumpColumnVocabularyIsClosedAndVerbatim`
+    — `want := []string{…}` compared by `reflect.DeepEqual` twice (against
+    `table.DumpColumns()` and against a fixture's decoded `DumpOrder`), under
+    a comment reading "the one place the record forbids re-derivation". So the
+    edit set is 103 TOML `order` lists **plus** that Go expectation; the
+    Testing Strategy's licensed-diff rule names both shapes (3 and 4) rather
+    than leaving the Go one to surface as a red test mid-sweep.
   - **If wrong**: every existing `[dump]` declaration refuses at load until
     edited, or `emit` is undumpable and the dump stops carrying "every
     field" of the normalized value.
@@ -230,23 +244,50 @@ knowledge, no artifact discovery).
     collect policy appears anywhere in that requirement. The corpus gap is
     real and stays declared: this is verified as *sufficient for the
     motivating consumer*, not as a general survey of hit policies.
+    **Reversibility, since the verification is single-consumer:** exact-one is
+    the kernel's existing policy for every class (`0001`), so this RDR locks
+    no new selection semantics and adds no policy key to the grammar. A later
+    first-hit or priority policy is therefore a grammar addition on `[model]`
+    or `[[rule]]` — the same additive shape `class` itself takes — and not a
+    reversal of anything decided here; a table authored today keeps meaning
+    what it means. That is why no extension point is reserved now: reserving
+    one would fix a shape for a policy nobody has specified.
   - **If wrong**: a decision table that relies on row precedence is refused
     `flow-ambiguous-match` and the class needs a selection rule the kernel
     does not have.
 - **A6 A flat, string-valued `[rule.emit]` table is sufficient for the
-  motivating consumer's answer.**
-  - **Status**: Verified
+  motivating consumer's answer, because every value that consumer needs from
+  the table is a fixed string known at authoring time — per-invocation data
+  (an RDR number, a path) is supplied by the caller, never interpolated by
+  the table.**
+  - **Status**: Pending
+    <!-- Was Verified; the critique lens found the supporting reading wrong
+    ("a flat string carries the rendered command whole" — it cannot, `0046`
+    is caller data). The narrowed claim above is the checkable one and is
+    re-verified at Stage 6 against rdr#tmxk's actual emit keys. -->
   - **Method**: Peer RDR
   - **Evidence**: rdr#tmxk states verbatim "the selected row (or an `emit`)
     is the answer", and the PoC carried the answer as a single enum value
     written to `next`. The consumer's actual answer shape was checked, not
     assumed: `rdr/skills/rdr-status/SKILL.md` renders "the exact command to
-    run, e.g. `Next: /rdr-prelock 0046 critique`" — a command with arguments,
-    which a flat string carries whole. That is precisely the limit this
-    assumption's "If wrong" already names, so the claim holds *with its
-    limit made concrete*: sufficiency rests on the consumer treating the
-    command as one opaque string, and a consumer needing the verb and its
-    arguments as separate fields is the widening A6 defers.
+    run, e.g. `Next: /rdr-prelock 0046 critique`". **The earlier reading of
+    this example — "a flat string carries it whole" — was wrong, and the
+    correction narrows the claim rather than widening the type.** `0046` is
+    the RDR number the *caller* supplied; it is not knowable when the table
+    is authored, so no literal emit value can contain that rendered command.
+    What the table can emit is the invariant part — the verb, `/rdr-prelock`,
+    and the lens, `critique` — as separate string-valued keys, with the
+    caller substituting its own argument. That is exactly what the PoC did
+    (a single enum written to `next`, the caller supplying context) and what
+    rdr#tmxk asks for ("the selected row (or an `emit`) is the answer").
+    Sufficiency therefore rests on a narrower and checkable claim: **every
+    value the motivating consumer needs from the table is a fixed string
+    known at authoring time**, with per-invocation data supplied by the
+    caller and never by the table. A consumer needing the table itself to
+    interpolate — a template language in an emit value — is the widening A6
+    defers, and this RDR does not provide one: emit values are uninterpreted
+    and compared by exact byte equality (C3), so a `{id}` in a value is
+    literal text, not a substitution.
   - **If wrong**: consumers pack structure into strings (a command with
     arguments is one string today), and the wire shape needs an `any`-typed
     value later (a widening, not a break).
@@ -317,7 +358,17 @@ knowledge, no artifact discovery).
     **Consequence carried, not restated:** `0002:C5` scopes rescue per
     outcome, so "the otherwise row" is per-outcome — a table over an
     N-outcome alphabet needs N escape rows (or one `in`-atom rule expanding
-    to N), which the Phase 4 authoring docs must say.
+    to N), which the Phase 4 authoring docs must say. **Why this gets a doc
+    where the match-atom mistake gets a fence (C5):** the two are not the
+    same shape at lint. A missing rescue row is *already reported* — the
+    unrescued outcome's group takes its ordinary `graph-coverage-gap`,
+    because `internal/graphlint/coverage.go::bareEscapeFor` is scoped per
+    group and per rescued class, so no rescue is found and nothing closes the
+    claim. The match-discriminated table, by contrast, closes **clean** and
+    reports nothing at all — a silent green, which is why it needed a new
+    arm. Here lint names the symptom and the doc names the remedy; a
+    dedicated "outcome has no rescue row" code would be a 0006 taxonomy
+    addition for a case 0006 already reports, so it is not taken.
   - **If wrong**: authors reach for an overlapping catch-all ordinary row
     and hit `flow-ambiguous-match`, or a default row hides a coverage hole.
 - **A10 Every one of the fourteen 0006 finding codes is, over a
@@ -347,12 +398,21 @@ knowledge, no artifact discovery).
     (`internal/graphlint/coverage.go` for the group product,
     `internal/graphlint/analysis.go::checkNodeCeiling` for the traversal).
     The silent bucket is grounded per code: `checkSingleValuedState` iterates
-    an empty `writesOf`; `checkOwnedBeforeMatch` and `checkAlwaysPresentOwned`
-    filter on `ProvenanceOwned` and find none; `checkDeadEnd` and
+    an empty `writesOf`; `checkOwnedBeforeMatch` filters on `ProvenanceOwned`
+    and finds none; `checkDeadEnd` and
     `checkTerminalEscape` return early on absent terminals; `checkVacuousAtoms`
     requires a `guard` atom with `exists` over a `Required` tag, which a match
-    atom never is; `checkUnreachableRules` is silent because C5's single ∅
-    node satisfies every context vacuously.
+    atom never is. **Two codes are silent for a reason this RDR does not
+    control, and the distinction matters**: `checkUnreachableRules`
+    (`internal/graphlint/analysis.go`) and `checkAlwaysPresentOwned` (same
+    file) each return early on `len(a.model.Initial) == 0` — *before* reaching
+    the reachable set or the provenance filter. A decision table still has an
+    empty `[initial]` under C5 (the class supplies a traversal root, it does
+    not populate `Initial`), so both stay silent — but by the old key, not by
+    the class and not by the ∅ node satisfying every context. That is why C5
+    lists them as vacuous rather than class-keying them, and it is a
+    standing trap: converting either site to the class accessor would flip it
+    live over every decision table.
     **The load-bearing correction:** the six "exercised unchanged" codes are
     unchanged *only because C5 supplies the root* — this is a property of
     C5, not of the zero-write model. On shipped source
@@ -426,26 +486,51 @@ knowledge, no artifact discovery).
     prohibition then needs either a load-time check (a new refusal C1's
     agreement check would have to grow) or a taxonomy addition 0006 owns.
 - **A13 A decision-table group with zero participating guard dimensions can
-  take `graph-unprovable-coverage` without a taxonomy change and without
-  disturbing the state-machine class, where a zero-dimension group is
-  legitimate and stays silent.**
+  take `graph-unprovable-coverage` from inside `checkCoverage`'s
+  `len(dims) == 0` branch, ahead of `emitCoverageArms`, without disturbing
+  the state-machine class, where a zero-dimension group is legitimate and
+  stays silent.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: to verify. The mechanism is grounded — the zero-dimension
-    branch is explicit at `internal/graphlint/coverage.go::checkCoverage`
-    (`len(dims) == 0` → `emitCoverageArms`, which closes the arm because the
-    empty product carries one empty assignment that any ordinary row's union
-    equals), and `internal/guard/product.go::Dimensions` collects guard atoms
-    only. What is unverified: whether `emitStructurallyUnprovable`'s existing
-    per-dimension shape admits a group-level emission with no dimension to
-    name (its `Dimension` field would be empty), and whether any checked-in
-    state-machine fixture has a zero-dimension group that would newly fire if
-    the arm were keyed wrongly. Verify by adding the class-keyed arm and
-    running the 0006 graph-lint suite plus the full fixture sweep.
-  - **If wrong**: the fence needs a new finding code (which 0006 owns, making
-    it a route-back) or must be enforced at load rather than lint — and until
-    then C5's coverage guarantee stays conditional on the guard authoring
-    shape, which is the outcome the Problem Statement claims.
+  - **Evidence**: to verify. The mechanism is grounded, and the *site* is now
+    pinned rather than guessed — the zero-dimension branch is explicit at
+    `internal/graphlint/coverage.go::checkCoverage` (`len(dims) == 0` →
+    `emitCoverageArms` → **return**), and `internal/guard/product.go::Dimensions`
+    collects guard atoms only. The site this assumption previously named was
+    unreachable: `emitStructurallyUnprovable` is a loop over
+    `guard.Dimensions`, which is empty in exactly this case, and it is called
+    only below the early return — so it can never fire here, and "does its
+    per-dimension shape admit a group-level emission" was unanswerable as
+    posed. What is unverified: whether emitting from inside the branch ahead
+    of `emitCoverageArms` yields the finding without double-reporting against
+    `graph-coverage-closed-by-escape` (C5 fixes the precedence; this confirms
+    it), and whether any checked-in state-machine fixture has a zero-dimension
+    group that would newly fire if the arm were keyed wrongly. Verify by
+    adding the class-keyed arm and running the 0006 graph-lint suite plus the
+    full fixture sweep.
+  - **If wrong**: the fence must be enforced at load rather than lint — and
+    until then C5's coverage guarantee stays conditional on the guard
+    authoring shape, which is the outcome the Problem Statement claims.
+- **A14 `no-participating-dimension` can be appended to 0006's closed
+  `reason` set without breaking `TestReq80`'s exhaustive assertion or any
+  other consumer of `graphlint.Reasons()`, and 0006 accepts the append.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: to verify. The set is closed and **append-only** by 0006's
+    own declaration (`internal/graphlint/taxonomy.go`, "The closed,
+    append-only `reason` set"), which is what makes an append the sanctioned
+    move rather than a break; `TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet`
+    asserts the set by sorted literal *and* asserts every
+    `graph-unprovable-coverage` emission carries a member, so the test updates
+    with the append and the second half then covers the new arm. Verify by
+    appending the value, updating that literal, and running the 0006 suite.
+    **This is the one clause of this RDR that is not additive on its owner's
+    grammar** — the reason vocabulary is 0006's, so the append needs 0006's
+    assent; if refused, C5's fence needs a different discriminator or a new
+    code, and that is a route-back 0006 owns.
+  - **If wrong**: C5's fence cannot carry a truthful `reason`, so it either
+    fails REQ-80 or states a remedy that does not apply; the fence then moves
+    to load-time or waits on a 0006 taxonomy change.
 
 ## Proposed Solution
 
@@ -454,8 +539,12 @@ knowledge, no artifact discovery).
 A model declares its **class** in `[model]`: `class = "state-machine"` (the
 default when the key is absent — every existing model is unchanged) or
 `class = "decision-table"`. A decision-table model declares **zero owned
-tags**, and the loader refuses a class that disagrees with the owned set in
-either direction. Everything a state machine needs *because it has owned
+tags**, and the loader refuses a `"decision-table"` model that declares any
+owned tag. The check is **one-directional** (C1): a zero-owned
+`"state-machine"` model still loads and is left to lint, because refusing it
+would convert `0006:C18`'s missing-root finding into a load failure for every
+rootless machine — and would make this RDR's own class-omitted negative
+control (MVV step 6) unwritable. Everything a state machine needs *because it has owned
 state* — `[initial]`, `terminal`, owned readers and writers, the write block
 on every ordinary rule, `--artifact` at resolve — is absent from a decision
 table by construction, and each absence is enforced by a rule 0002/0005/0006
@@ -466,7 +555,8 @@ literal string key/values on any rule of either class; the normalized row
 carries it, the dump renders it, and the `flow resolve` payload returns it
 beside the selected `rule`. Lint treats the decision-table class as a graph
 with one node — the empty owned-state — so 0006's reachability filter admits
-every group and overlap/coverage run unchanged over the observed dimensions;
+every group and overlap/coverage run unchanged over the authored guard
+dimensions (`0006:C7`; match atoms scope the group and contribute none);
 the machine-only invariants (root, dead end, always-present, owned-before-
 match, terminal handling) are vacuous by construction and stay silent. The
 missing-root finding (`0006:C18`) is untouched for the state-machine class.
@@ -480,7 +570,9 @@ per-model; nothing in the tree infers a
 class from an absence, and 0006 rests on exactly the rule that an absent root
 is a defect, never an empty graph (`0006:C18`). ⇒ inferring "decision table"
 from "no owned tags" would turn a forgotten `provenance = "owned"` into a
-lint-clean table; declaring it makes the mismatch a load failure both ways.
+lint-clean table; declaring it makes the mismatch a load failure on the
+arm that matters — a declared decision table carrying owned state — while a
+zero-owned machine stays a lint finding, not a load refusal (C1).
 
 ### Technical Design
 
@@ -495,9 +587,18 @@ Three seams change, each additively on its owner's grammar:
    `dumpColumns` gains `emit`, appended last. `table.Model` gains the class
    as a field with an accessor whose **zero value is `state-machine`**, so a
    hand-constructed `table.Model` that never passed the loader keeps today's
-   behaviour rather than silently becoming a decision table; every site that
-   today asks `len(Initial) == 0` or would ask `len(owned) == 0` reads that
-   accessor, so there is exactly one place the question is answered. The
+   behaviour rather than silently becoming a decision table. **The accessor is
+   the single source for "what class is this" — not for "is there a root",
+   which stays a separate question.** Of the four shipped
+   `len(Initial) == 0` sites, exactly two become class-aware:
+   `internal/graphlint/reach.go::reach` and `checkDanglingEdge`'s missing-root
+   arm, both *augmenting* that test per C5. The other two,
+   `checkAlwaysPresentOwned` and `checkUnreachableRules`
+   (`internal/graphlint/analysis.go`), keep the bare `len(Initial)` test —
+   they are silent over a decision table by that key, and class-keying them
+   would flip them live on every row (A10). Any site asking "is this a
+   decision table" reads the accessor and never re-derives it from
+   `len(owned) == 0`. The
    kernel row (`internal/resolve/resolve.go::Row`) is
    untouched — `emit` never crosses the kernel boundary; the CLI joins it
    back on `Plan.RuleID`, which is unique per *rule* and shared by that
@@ -508,8 +609,12 @@ Three seams change, each additively on its owner's grammar:
    `len(Initial) == 0` early return rather than replacing it, so a rootless
    state machine still traverses nothing; `checkDanglingEdge`'s missing-root
    arm keys on class the same way. `checkCoverage`'s zero-dimension branch
-   gains the class-keyed `graph-unprovable-coverage` arm (C5, A13). No
-   taxonomy change — every code already exists.
+   gains the class-keyed `graph-unprovable-coverage` arm, emitted inside the
+   `len(dims) == 0` branch ahead of `emitCoverageArms` (C5, A13). No new
+   finding **code** — but the `reason` discriminator that code carries gains
+   a fourth member, `no-participating-dimension`, appended to 0006's closed
+   set (C5, A14). That append is the one non-additive edge in this RDR: the
+   reason vocabulary is 0006's, so it needs 0006's assent.
 3. **CLI** (`internal/cli`): `resolvePayload` gains `emit` and nothing else —
    text mode falls out of 0005's generic payload renderer with no change to
    it (C4). `invokedReaders` and `runReaders` are unchanged — the empty demand set
@@ -519,7 +624,7 @@ Three seams change, each additively on its owner's grammar:
 
 Data flow for a decision table: TOML → loader (class check, no owned tags,
 rows with empty `RequiresOwned`/`Writes`/`NextTags`, populated `Emit`) →
-lint (root ∅, groups over observed dimensions) → `flow resolve --outcome
+lint (root ∅, groups over the authored guard dimensions) → `flow resolve --outcome
 <o> --tag k=v…` → kernel exact-one → payload `{rule, emit, next: {},
 writes: {}, …}`.
 
@@ -658,7 +763,15 @@ carrier of the answer (0002's premise); the kernel stays JDR 0001-shaped.
 ```normative
 The `flow resolve` success payload MUST carry `emit`: a JSON object of
 string values, keys in byte order, present as `{}` — never `null`, never
-omitted — when the selected row authored none. `next`, `writes`, `clear`, `owned`, and `readers` keep their
+omitted — when the selected row authored none. Its **position is fixed**:
+`emit` is declared immediately after `Rule` in
+`internal/cli/flow_resolve.go::resolvePayload`, whose thirteen-field
+declaration order is the JSON key order Go's encoder emits. Position is
+specified for the same reason C3 fixes the dump column's ("appended last,
+after `escape`") — the repo asserts payload JSON inline in Go tests, so an
+unfixed position is an unlicensed diff waiting on whichever implementer
+guesses differently. `emit` sits beside `rule` because the two are one
+answer: the row selected, and what it says. `next`, `writes`, `clear`, `owned`, and `readers` keep their
 `0005:C1` shapes and are empty over a decision-table model. Text mode is
 **not** specified by this RDR: `emit` is a payload field like any other and
 renders through the generic payload renderer 0005 owns
@@ -698,17 +811,51 @@ missing-root finding, so the seeding predicate is "decision-table class OR a
 non-empty declared root", never "class alone". Overlap (invariant 3),
 coverage and withholding (invariant 4), the redundant-row, vacuous-atom, and
 unreachable-rule advisories, the node ceiling, and the product bound MUST run
-unchanged over the authored observed dimensions.
+unchanged over the authored **guard** dimensions — the ones
+`internal/guard/product.go::Dimensions` collects from `guard.all`/`guard.unless`
+alone (`0006:C7`, `0003:C13`), not the tags' `observed` provenance, which is
+orthogonal to whether an atom participates in the product.
 
 A `"decision-table"` group whose scoped product has **zero participating
 dimensions** MUST take `graph-unprovable-coverage` naming the group, and MUST
-NOT be reported as covered. This is the one fence the class needs and it is
-not a new code: a table that discriminates with `[rule.match.<key>]` atoms
+NOT be reported as covered. The code is existing; the **`reason`
+discriminator it carries is not**, and that is a dependency on 0006, not a
+free reuse. `0006` fixes `reason` as a closed, append-only three-value set
+(`dimension-not-finite`, `tag-not-single-valued`, `row-can-refuse`;
+`internal/graphlint/taxonomy.go`), asserted exhaustively — and asserted to be
+carried by *every* emission of this code — by
+`internal/graphlint/findings_0006_test.go::TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet`.
+All three members are dimension-scoped and name a per-dimension remedy; a
+group-level emission has no dimension to name and its remedy ("author the
+discriminators as guard atoms") is not among them. This RDR therefore
+requires a **fourth reason value**, `no-participating-dimension`, appended to
+that set. The append is 0006's to make — it is the one clause here this RDR
+cannot land additively on its own — and it is booked as A14. `reason` is
+normative for this fence: an emission carrying `""` fails REQ-80 outright, and
+one borrowing a dimension-scoped member states a remedy that does not apply.
+
+The emission site is likewise fixed, because the obvious one cannot fire:
+`internal/graphlint/coverage.go::checkCoverage` returns from its
+`len(dims) == 0` branch after `emitCoverageArms`, **above**
+`emitUnprovableDimensions` and `emitWithholdings`, and
+`emitStructurallyUnprovable` is a loop over `guard.Dimensions`, which is empty
+in exactly this case — so the arm MUST be emitted inside the `len(dims) == 0`
+branch and MUST precede `emitCoverageArms`, whose `bareEscapeFor` path would
+otherwise close the group first. Where both would apply, this finding is
+reported and `graph-coverage-closed-by-escape` MUST NOT be: a group with no
+dimension to prove over is unproven whether or not an escape row rescues it.
+
+The class fence rests on a table that discriminates with `[rule.match.<key>]` atoms
 contributes no guard dimension (`0006:C7`, `0003:C13`;
 `internal/guard/product.go::Dimensions` collects from `guard.all`/
 `guard.unless` alone), so its scoped product is the empty product carrying a
 single empty assignment, which any one ordinary row's coverage union equals —
-the group closes clean **whether or not the table is complete**. Over a state
+the group closes clean **whether or not the table is complete**. This
+paragraph's emission is **conditional on A13 and A14 at Stage 6**: the arm's
+site and its `reason` append are unverified, so the fence is a MUST this RDR
+commits to and not yet a demonstrated behaviour. If A14 is refused the fence
+moves to load-time or waits on a 0006 taxonomy change (A13/A14 "If wrong");
+the clause does not silently become optional. Over a state
 machine that shape is legitimate (a group may genuinely range over no guard
 dimension), which is why the clause binds the decision-table class only: for
 this class an exhaustiveness claim over nothing is precisely the vacuous
@@ -737,7 +884,7 @@ by construction: they key on a declared terminal, which C2 forbids. Over a
 unchanged.
 ```
 
-⇒ "unchanged coverage over observed dimensions" is a consequence of 0006's
+⇒ "unchanged coverage over the authored guard dimensions" is a consequence of 0006's
 own reachability filter (`internal/graphlint/groups.go::checkGroups` runs
 coverage only for reachable groups) once the root exists, not a parallel
 coverage path.
@@ -745,7 +892,12 @@ coverage path.
 #### Authority
 
 Cue: the class is one decision read at four sites that "must agree" (the
-drift risk below), and C1 fixes exactly one writer for it.
+drift risk below), and C1 fixes exactly one writer for it. Note the four
+class readers are **not** the four `len(Initial) == 0` sites — two of those
+(`checkAlwaysPresentOwned`, `checkUnreachableRules`) must stay root-keyed and
+never learn the class (A10, Technical Design item 1). Agreement is a review
+obligation, not a mechanized one: nothing in the build refuses a fifth site
+that re-derives the class from `len(owned) == 0`.
 
 | Input / decision | Writer (canonical) | Readers | Call sites | Sibling arms | Which is canonical |
 | --- | --- | --- | --- | --- | --- |
@@ -907,7 +1059,7 @@ class and what resolve answers over it*. Four answers were scored:
 | Criterion | A: mandatory owned state, documented dummy-tag convention | B: class inferred from the empty owned set | **C: class declared in `[model]`, owned set must agree** | D: separate model kind + `flow decide` verb |
 | --- | --- | --- | --- | --- |
 | Correctness fit (author writes the model as what it is) | fails — the scratch artifact and dummy accessor are the defect | fits | fits | fits, but duplicates the kernel's exact-one at a second verb |
-| Silent misclassification | n/a | a forgotten `provenance = "owned"` becomes a lint-clean table | refused at load both ways | refused (separate schema) |
+| Silent misclassification | n/a | a forgotten `provenance = "owned"` becomes a lint-clean table | refused at load on the misclassifying arm (a declared table carrying owned state); a zero-owned machine stays `0006:C18`'s lint finding, not a load refusal (C1) | refused (separate schema) |
 | Prior-art alignment | matches pytransitions' auto-injected `'initial'` state — the workaround peers had to add an opt-out for (K3) | SCXML's targetless transition is per-transition, not per-machine; no peer infers machine class from absence | DMN treats the table as a declared artifact (model prior, A5); 0006:C18's "absent root is a defect" preserved verbatim | no peer splits select from apply at the verb (K2) |
 | Overrides required | none | 0002:C4, 0002:C2/C19, 0005:C1, 0006:C18 + D-reachability | 0002:C2/C3/C4/C19 additively, 0005:C1 payload, 0006 D-reachability; **0006:C18 untouched** | a second grammar and verb; 0005:C1's four-verb closure |
 | Reversibility | n/a | → declared later is a grammar addition | → inferred later is dropping a key | hard — two schemas to converge |
@@ -990,8 +1142,10 @@ decision table, and every machine-only obligation is conditioned on
 - No adjacent path infers from absence: `Row.Kind` is inferred from the
   presence of `escape` (`internal/table/model.go::Row.Kind`), and per-row.
 
-**Reason for rejection**: one declared line buys a load-time refusal in both
-directions and keeps 0006's root rule intact.
+**Reason for rejection**: one declared line buys a load-time refusal on the
+misclassifying arm — a declared table carrying owned state — and keeps 0006's
+root rule intact for the zero-owned machine, which inference would silently
+reclassify (C1).
 
 ### Alternative 3: A separate model kind with its own `flow decide` verb
 
@@ -1164,7 +1318,10 @@ an absence) is the Approach's rationale for declaring the class.
   **Mitigation**: a contract, not documentation — C5 requires a
   decision-table group with zero participating dimensions to take
   `graph-unprovable-coverage`, so the silent-green path is closed by lint
-  rather than by authoring convention. The Illustrative Code, MVV step 1, and
+  rather than by authoring convention. **Carried, not yet demonstrated**: the
+  arm's emission site and the `reason` member it needs are A13 and A14,
+  both Pending — Stage 6 closes them, and A14 additionally needs 0006's
+  assent to append its closed set. The Illustrative Code, MVV step 1, and
   Testing Strategy scenario 4 still author the guard shape and carry the
   match-only control, which now asserts a *positive* finding and is thereby
   discriminable from a lint that never ran. This is the one behaviour change
@@ -1207,6 +1364,11 @@ an absence) is the Approach's rationale for declaring the class.
 - [ ] All Critical Assumptions verified (A1 spike first — it decides whether
   C5 needs more than the ∅ root)
 - [x] `flow next` ownership settled — cli/0011 is Final (A11 cites 0011:C1)
+- [ ] **0006 assents to appending `no-participating-dimension` to its closed
+  `reason` set (A14)** — the one clause of this RDR that is not additive on
+  its owner's grammar. Phase 2 cannot land the C5 fence without it; if
+  refused, C5's fence needs a different discriminator or a new code, and that
+  is a route-back 0006 owns.
 
 ### Minimum Viable Validation
 
@@ -1294,13 +1456,24 @@ prevents it. `models/rdr.toml` untouched.
 
 Done = the MVV passes end to end under `make check`, every scenario below
 has a green test, and every diff to a checked-in expectation is **licensed**
-by the mechanical rule: a changed line differs only by the addition of a
-trailing ` emit=[…]` dump cell or an `"emit":` payload member. Any other
-changed line is a regression, not a licensed diff. There is no golden-file
-tree in this repo — expectations live inline in Go tests and in `testdata`
-TOML/JSON — so "existing golden output" denotes exactly that set, and the
-103 `[dump]`-declaring fixtures under `internal/table/testdata/` (A4) are
-licensed diffs under the rule, not violations of it.
+by the mechanical rule. A changed line is licensed when it differs only by one
+of exactly four shapes, and by nothing else: (i) an added trailing
+` emit=[…]` dump cell; (ii) an added `"emit":` payload member; (iii) an added
+`"emit"` member inside a `[dump]` `order = [ … ]` list — the 103 fixtures
+under `internal/table/testdata/` (A4); or (iv) an added `"emit"` in a
+dump-vocabulary expectation **in Go**, namely
+`internal/table/dump_test.go::TestReq95_DumpColumnVocabularyIsClosedAndVerbatim`,
+which carries the ten-column vocabulary as a `want := []string{…}` literal
+under two `reflect.DeepEqual` assertions and which A4's TOML-only census did
+not see; it is the one expectation whose own comment forbids re-derivation, so
+it is edited deliberately and named here rather than discovered mid-sweep.
+
+Any other changed line is a regression, not a licensed diff. Shapes (iii) and
+(iv) are called out because the earlier line-shaped rule admitted neither,
+which would have classified every one of the required edits as a regression
+and so retired the gate exactly where it was load-bearing. There is no
+golden-file tree in this repo — expectations live inline in Go tests and in
+`testdata` TOML/JSON — so "existing golden output" denotes exactly that set.
 
 #### Oracle
 
@@ -1312,7 +1485,7 @@ oracle, the shape that goes green against a lint that stopped running.
 | 1 author the table | — (setup) | match-only variant: same table discriminating by `[rule.match.<key>]` has an empty scoped product (`0006:C7`) and takes C5's `graph-unprovable-coverage` **while incomplete** — a positive finding, so the control discriminates against a lint that never ran |
 | 2 partial → coverage finding | a *positive* finding naming the uncovered cell; fails if the ∅ root is missing, since `checkGroups` skips unreachable groups and the finding disappears (A1 arm B, executed) | the same model with `class` omitted → `graph-dangling-edge` at `element = model`, never a coverage finding |
 | 3 complete → `[]` at exit 0 | **absence oracle — discriminated only by step 2 preceding it.** Step 2's positive finding over the same fixture proves coverage ran; `[]` then means "closed", not "never ran" | step 2 itself is the control; additionally the escape variant must yield the `graph-coverage-closed-by-escape` advisory, never a bare green |
-| 4 resolve → `rule` + `emit` | fails if `emit` is dropped at the kernel boundary or joined on the wrong row; asserts `data.rule` is the *fourth* rule's id, not any row | a row authoring no emit block must return `{}`, never `null` (S5) |
+| 4 resolve → `rule` + `emit` | fails if `emit` is dropped at the kernel boundary or joined on the wrong row; asserts `data.rule` is the *fourth* rule's id, not any row | a row authoring no emit block must return `{}`, never `null` (S5); and a rule expanded by a multi-member `in` atom must carry its block on **every** expanded row — the arm that fails silently if `expand`'s seed literal omits `Emit` (S3) |
 | 5 dump + `flow next` | fails if `emit` is absent from the default column set, or if `next` demands an artifact | a `[dump]` list omitting `emit` refuses `malformed dump declaration` |
 | 6 negative controls | each names the exact refusal category, not merely non-zero exit | stray `terminal` → `graph-dangling-edge` at `element = terminal[0]` (C5's live arm) |
 
@@ -1325,17 +1498,24 @@ from the A1 spike (`evidence/spikes/a1-emptyroot.out`) and the cove spikes.
 | --- | --- | --- |
 | 1 load | C1 (class ⇄ owned-set agreement), C2 (no `[initial]`/`terminal`/write block), C3 (`[rule.emit]` normalizes key-sorted) | loads; zero owned tags, `Writes`/`NextTags`/`RequiresOwned` empty per row |
 | 2 lint (partial) | C5 (∅ root; overlap/coverage run unchanged), C2 (rule shape not refused), A10 (which codes may fire) | arm C of the A1 spike: 1 node, `graph-coverage-gap` 64/512 + `graph-redundant-row` — arm A's set cell-for-cell |
-| 2″ lint (match-discriminated) | C5 (zero participating dimensions ⇒ `graph-unprovable-coverage`), A13 | **unwitnessed — A13 is Pending.** The mechanism is grounded (`checkCoverage`'s `len(dims) == 0` branch; `guard.Dimensions` over guard atoms only) but the emission is not yet executed; this is the one Trace row with no witness |
+| 2″ lint (match-discriminated) | C5 (zero participating dimensions ⇒ `graph-unprovable-coverage` carrying `reason = no-participating-dimension`, emitted ahead of `emitCoverageArms`), A13, A14 | **unwitnessed — A13 and A14 are Pending.** The mechanism and now the *site* are grounded (`checkCoverage` returns from its `len(dims) == 0` branch above `emitUnprovableDimensions`, so the arm goes inside that branch), but the emission is not executed and the `reason` member does not yet exist in 0006's closed set |
 | 2′ lint (stray `terminal`) | C2 (prohibition), C5 (root arm silent, terminal arm live) | `evidence/spikes/cove-dt-terminal/`: `graph-dangling-edge` at `element = terminal[0]` fires while `element = model` is overridden — **the row that was a CONTRADICTION before this pass; C5 now scopes the override to the root arm** |
 | 3 lint (complete) | C5 (coverage closes), A9 (escape variant → advisory only) | findings `[]`, exit 0; escape variant → `graph-coverage-closed-by-escape` |
-| 4 resolve | C4 (payload carries `emit`, `{}` never `null`), A2 (no reader invoked), A3 (kernel plans over empty owned view) | `{"rule":…,"emit":{…},"next":{},"writes":{},"owned":{},"readers":[]}` |
+| 4 resolve | C4 (payload carries `emit` positioned after `rule`, `{}` never `null`), A2 (no reader invoked), A3 (kernel plans over empty owned view) | `{"rule":…,"emit":{…},"next":{},"writes":{},"owned":{},"readers":[]}` |
+| 4′ resolve (expanded row) | C3 (`Emit` carried through `expand`; `rowByID` first-match join sound only if every expanded row carries the block) | **unwitnessed — new in this pass.** `normalize.go::expand` builds each row from an eight-field seed literal with no struct copy, so the carry-through is an obligation, not a property; S3 now asserts it on a multi-member `in` rule |
 | 5 dump / `next` | C3 (`emit` in the default column set), A11 (`required` empty, serializes `[]`) | dump renders the `emit` column; `next` exit 0 with no `--artifact` |
 
-No CONTRADICTION row survives: the C2 × C5 contradiction this trace found at
-step 2′ is fixed in C5 and A10 in this pass, with A12 booking the one
-remaining unverified consequence (that the arms can be split without a
-taxonomy change). Step 2″ is new in the 3amigo pass and is the trace's only
-unwitnessed row — A13 carries it to Stage 6.
+No CONTRADICTION row survives. The C2 × C5 contradiction this trace found at
+step 2′ was fixed in C5 and A10, with A12 booking the one remaining
+unverified consequence (that the arms can be split without a taxonomy
+change). The critique pass fixed two further contradictions that were not in
+this table because they were contradictions of *prose against contract*, not
+of contract against contract: C1's one-directional agreement check against
+three narrative passages that said "both directions", and "coverage over
+observed dimensions" against coverage's actual guard-dimension basis — the
+latter appearing inside C5 itself, so C5 ¶1 disagreed with C5 ¶2. Two rows
+are unwitnessed and both carry to Stage 6: step 2″ (A13, A14) and step 4′
+(the `expand` carry-through).
 
 1. **Scenario**: loader table tests over `class` — absent, each admitted
    value, an unknown value, the one disagreement direction
@@ -1355,7 +1535,14 @@ unwitnessed row — A13 carries it to Stage 6.
 3. **Scenario**: `[rule.emit]` normalization — unordered keys, a non-string
    value, a nested table (`[rule.emit.sub]`), an absent block, a **present
    but empty** block; dump with and without an
-   explicit `[dump]` naming `emit`; `[rule.match.<emit-key>]`. No
+   explicit `[dump]` naming `emit`; `[rule.match.<emit-key>]`; and an emit
+   block on an **expanding** rule — a multi-member `in` match atom, so
+   `normalize.go::expand` mints several rows from one rule. That case is
+   mandatory, not optional: `expand` builds each row from an eight-field seed
+   literal rather than copying `base`, so an uncarried `Emit` is dropped
+   silently, and `flow_resolve.go::rowByID` is first-match, so the join then
+   returns `{}` on a rule that authored an answer — a wrong answer with no
+   refusal anywhere. No
    duplicate-key case: a TOML table refuses duplicates in the decoder, so
    the case is unauthorable and no dedup arm exists to test.
    **Expected**: key-sorted sequence; the non-string value and the nested
@@ -1366,7 +1553,10 @@ unwitnessed row — A13 carries it to Stage 6.
    refuse on presence); `emit` renders `key=value` in key order as the dump's
    last column and a `[dump]`
    omitting it refuses `malformed dump declaration`; the match refuses
-   `unknown tag` (C3, A4).
+   `unknown tag`; and **every** row expanded from the `in`-atom rule carries
+   the authored block byte-for-byte, asserted on the expanded rows and again
+   through `flow resolve` on a selection that lands on a non-first expanded
+   row (C3, A4).
 4. **Scenario**: graph-lint fixture pair (partial → one coverage finding
    naming the cell; complete, closed by a fourth *ordinary* rule → `[]`),
    the escape-"otherwise" variant, the class-omitted control, a fingerprint
