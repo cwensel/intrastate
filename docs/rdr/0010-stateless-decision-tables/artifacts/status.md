@@ -1,8 +1,8 @@
-RDR: 0010-stateless-decision-tables | phase: 1 — tests first | state: IN-PROGRESS
-last: 81 tests across table/graphlint/cli; 105/110 REQs covered; RED confirmed (3 pkgs do not compile against main); 10 characterization tests verified green on main in isolation
+RDR: 0010-stateless-decision-tables | phase: 2 — implementation | state: COMPLETE
+last: all 110 REQs implemented; go test ./... and make check both GREEN; REQ-MVV run end to end through the built binary and recorded in coverage.md
 blocker: none
-changed: internal/table/{fixtures,class,emit,emit_shape}_0010_test.go, internal/graphlint/class_0010_test.go, internal/cli/{decision_table,mvv,failure_modes}_0010_test.go, docs/rdr/0010-stateless-decision-tables/artifacts/{coverage,deviations,status}.md
-validate: go test ./...
-next: Phase 2 — implementation
-session: phase-1
+changed: internal/table/{model,source,load,normalize,dump}.go, internal/graphlint/{reach,analysis,coverage,taxonomy}.go, internal/cli/flow_resolve.go, 100 internal/table/testdata fixtures, licensed expectations in internal/table/{helpers,dump,roundtrip}_test.go + internal/graphlint/findings_0006_test.go + internal/cli/flow_{demand,next}_0011_test.go
+validate: go test ./... && make check
+next: Phase 3 — self-verification
+session: phase-2
 artifacts: req-list.md coverage.md verification.md deviations.md
