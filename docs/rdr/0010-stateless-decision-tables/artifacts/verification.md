@@ -195,3 +195,135 @@ clean, `golangci-lint` 0 issues, `bin/intrastate lint --model models/rdr.toml
 - **REQ-101** (no two-toolchain test) and **REQ-86..88** (the licensed-diff
   rule) are scope obligations over the test corpus, which this phase is
   forbidden from reading. Not assessed.
+
+
+## Phase 3b — Adversarial review (independent)
+
+Written without reading Phase 1's test files or Phase 3a's findings. Every
+fixture below is authored TOML handed to the real `internal/table` loader
+and driven through the real `graphlint.Run` / `table.Load`; nothing is
+mocked. All four assertions were run against the current implementation and
+the failing/passing state recorded is the observed one, not a prediction.
+
+### ADV-1 — invariant 7 (declared-terminal / escape handling) fires over a decision-table model
+
+- **Failure mode.** The ∅-root seeding admits a machine-only invariant it
+  should refuse. `internal/graphlint/analysis.go::checkTerminalEscape` gates
+  on `len(a.nodes) == 0` and on nothing else. Before this RDR that gate was
+  true for every rootless model; after it, `reach` seeds the ∅ node for the
+  decision-table class, so `len(a.nodes) == 1` and invariant 7 walks that
+  node, finds no outgoing ordinary row, and reports
+  `graph-terminal-escape` against a stateless table.
+- **RDR anchor.** `Trade-offs / Failure Modes`, the **Silent (guarded)**
+  bullet: the record guards the ∅-root regression in the direction where
+  "the traversal seeds nothing, `checkGroups` skips every group" and leaves
+  the opposite direction — seeding admitting too much — unguarded.
+  `0010:C5` states the intended silence outright: "Declared-terminal
+  handling (7) proper, and the escape arm of it, stay silent by
+  construction: they key on a declared terminal, which C2 forbids."
+  `checkTerminalEscape` does **not** key on a declared terminal, so that
+  premise is false and the silence does not follow.
+- **Aggravating.** The finding's remedy reads "declare it in the root
+  `terminal` list" — the declaration `0010:C2` forbids this class. Following
+  the finding's own advice yields `graph-dangling-edge` instead. The
+  `Recovery` bullet names the only two real remedies ("drop `class`" or add
+  owned state and an `[initial]`); the finding states neither.
+- **Test added.** `internal/graphlint/adversarial_0010_test.go::TestAdv0010_TerminalEscapeStaysSilentOverADecisionTable`
+  (escape-only decision table) and
+  `…::TestAdv0010_TerminalEscapeSilentOnARuleFreeDecisionTable` (the
+  smallest reproducer: a decision table with no rules at all — nothing to
+  blame, no terminal to point at).
+- **Currently fails:** YES, both.
+
+### ADV-2 — invariant 2 (dead end) fires over a decision-table model
+
+- **Failure mode.** The second half of the same over-admission.
+  `checkDeadEnd` gates on `len(a.model.Terminal) == 0 || len(a.nodes) == 0`.
+  `0010:C2` forbids a decision table from declaring `terminal`, but it
+  enforces that **at lint** — "a terminal predicate over a non-owned tag is
+  0006's `graph-dangling-edge` terminal arm, which C5 keeps live for exactly
+  this reason" — so such a model **loads** and reaches the engine with a
+  non-empty `Terminal`. With the ∅ node seeded the second disjunct is false
+  too, and invariant 2 accuses the ∅ owned-state of being a dead end. The
+  author reads two blocking findings for one authoring mistake, only one of
+  which (`graph-dangling-edge`) `0010:C2` licenses.
+- **RDR anchor.** `0010:C5`: "The missing-root arm of invariant 1
+  (`0006:C18`), **dead end (2)**, always-present-owned (5),
+  owned-set-before-match (6), and single-valued state are vacuous by
+  construction over this class and **MUST NOT emit**." Also the `Approach`
+  paragraph: "the machine-only invariants (root, dead end, always-present,
+  owned-before-match, terminal handling) are vacuous by construction and
+  stay silent."
+- **Test added.** `internal/graphlint/adversarial_0010_test.go::TestAdv0010_DeadEndStaysSilentOverADecisionTable`.
+- **Currently fails:** YES.
+
+*Scope note.* The other invariants `0010:C5` names silent were probed and
+**are** silent for the right reason, not by luck: `checkAlwaysPresentOwned`
+and `checkUnreachableRules` keep the bare `len(Initial)` test (A10);
+`checkOwnedBeforeMatch`'s `ownedReadSet` is empty with zero owned tags;
+`checkSingleValuedState` has no write block to read; `checkNodeCeiling` is
+complete at one node. Overlap (3), coverage (4), redundant-row and
+vacuous-atom all run, and `graph-unprovable-coverage` /
+`no-participating-dimension` was confirmed to fire only for the
+decision-table class and never for a zero-dimension state-machine group.
+
+### ADV-3 — the class/owned-set check pre-empts the undeclared-tag refusal C1 orders ahead of it
+
+- **Failure mode.** `checkClassAgreement` was inserted immediately after
+  `loadTags` — the **earliest** point in `0010:C1`'s window — which places
+  it seven steps ahead of `normalizeRules`, where a rule's undeclared-tag
+  refusal is raised. A model that both declares an owned tag under
+  `class = "decision-table"` and matches an undeclared tag refuses
+  `malformed_model_declaration`, hiding the `unknown_tag`.
+- **RDR anchor.** `Trade-offs / Failure Modes`, the **Visible** bullet, is
+  what the check delivers (`flow-model-invalid`, the class and the
+  `owned=<n>` token — all confirmed present). What is not delivered is the
+  order that visible failure is fixed against. `0010:C1`: "The class is read
+  in `loadModelHeader` … and the agreement is checked in a step at or after
+  `loadTags`, **so an undeclared-tag refusal precedes a class-disagreement
+  refusal under `run`'s fail-fast order.**" C1 fixes the window at both
+  ends; the floor's stated consequence and the ceiling's determinacy
+  requirement are jointly satisfiable **only** by a step between
+  `normalizeRules` and `checkAccessorBindings`. The chosen position
+  satisfies the ceiling and breaks the floor's consequence.
+- **Author-visible cost.** The reported category is the reverse of what C1
+  tells an author to expect: they fix the class, reload, and meet a second
+  refusal C1 promised would have come first.
+- **Test added.** `internal/table/adversarial_0010_test.go::TestAdv0010_UndeclaredTagPrecedesTheClassDisagreement`.
+- **Currently fails:** YES.
+- **Companion pin (passes, deliberately kept).**
+  `…::TestAdv0010_ClassDisagreementStillWinsOverAccessorBinding` asserts
+  C1's ceiling — a decision table declaring both an owned tag and
+  `[initial]` refuses on the class carrying `owned=1`, never on the
+  writer-arity diagnostic `0010:C2` calls "survivable but not
+  self-explanatory". It passes today and is kept so a fix for ADV-3 cannot
+  trade the ceiling away by moving the check past `checkAccessorBindings`.
+
+### Attacked and found sound (no test added)
+
+Probed against the real loader/engine/CLI and **not** defective, so no
+failing test could be written for them:
+
+- `emit` on the resolve payload: position immediately after `gates`, `{}`
+  and never `null` when unauthored, byte-ordered keys, text mode via
+  `flatten`'s empty-container arm rendering `emit: (none)` with no per-verb
+  special case (`0010:C4`).
+- The escape-rescue join: a plan rescued by an escape row carries **that
+  row's** own `emit` on the `Plan.RuleID` path, with `escaped: true` and
+  `escape_class` intact.
+- `emit` carried onto **every** row a multi-member match block expands to,
+  and onto escape rows; excluded from `graphlint.Fingerprint` per the
+  Load-Bearing Decisions.
+- Strict decode: a non-string `emit` value (int, bool, array) and a nested
+  `[rule.emit.sub]` all refuse `malformed_toml`, never `unknown_schema_field`
+  (`0010:C3`); an adjacent unknown `[model]` key and a misspelled
+  `[rule.emitt]` both refuse `unknown_schema_field`.
+- A present-but-empty `[rule.emit]` normalizes to the empty sequence and
+  dumps as `emit=[]` — no refusal, the deliberate divergence from the
+  write/clear/gate blocks.
+- The dump column: appended last after `escape`, `; `-separated like
+  `writes` and `atoms`, values raw; an explicit `[dump]` list omitting only
+  `emit` refuses `malformed_dump_declaration`.
+- `class = ""` refuses `malformed_model_declaration`; a zero-owned
+  `state-machine` is never refused at load; the `owned=<n>` count is exact.
+- `flow next` carries no `emit` (`0010:BR4`, deliberate).
