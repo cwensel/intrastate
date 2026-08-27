@@ -23,9 +23,13 @@ package cli
 
 import (
 	"encoding/json"
+	"os/exec"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
+
+	"github.com/newcoinc/intrastate/internal/resolve"
 )
 
 // --- fixture role identities ---------------------------------------------
@@ -1261,4 +1265,45 @@ func jsonRoundTrip(t *testing.T, v any) string {
 		t.Fatalf("re-encoding the payload failed: %v", err)
 	}
 	return string(b)
+}
+
+// --- kernel-untouched helpers --------------------------------------------
+
+// resolveRefusalKindStrings returns the kernel's closed refusal-kind set as
+// strings. `RefusalKinds()` is the kernel's own enumerator, so reading it
+// here asserts the closure without reaching into `internal/resolve` or
+// changing anything under it.
+func resolveRefusalKindStrings() []string {
+	kinds := resolve.RefusalKinds()
+	out := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+	return out
+}
+
+// gitDiffStat returns `git diff --stat <base> -- <path>` against the branch
+// point, which is the ONE mechanically checkable form of "the kernel is
+// untouched" (`0011:S5`, MVV 9). A green kernel suite is its corroboration,
+// not a second criterion.
+//
+// It resolves the base as the merge base with the default branch and skips
+// rather than fails when git is unavailable or the tree is not a checkout:
+// the claim is about a DIFF, and a harness that cannot see one has nothing
+// to report either way.
+func gitDiffStat(t *testing.T, path string) string {
+	t.Helper()
+
+	root := repoRootFor(t)
+	base, err := exec.Command("git", "-C", root, "merge-base", "HEAD", "main").Output()
+	if err != nil {
+		t.Skipf("cannot resolve the merge base with `main`: %v — the "+
+			"kernel-diff claim needs a branch point to compare against", err)
+	}
+	out, err := exec.Command("git", "-C", root, "diff", "--stat",
+		strings.TrimSpace(string(base)), "--", path).Output()
+	if err != nil {
+		t.Skipf("`git diff --stat` failed: %v", err)
+	}
+	return string(out)
 }
