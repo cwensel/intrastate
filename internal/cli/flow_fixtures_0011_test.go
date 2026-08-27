@@ -1485,3 +1485,30 @@ func repoModelPath(t *testing.T) string {
 
 	return filepath.Join(repoRootFor(t), checkedInModelPath)
 }
+
+// changedFilesSince returns the repo-relative paths changed against the
+// branch point, which is how a SCOPE claim about the production diff is
+// asserted: no runtime observation can see file boundaries.
+func changedFilesSince(t *testing.T) []string {
+	t.Helper()
+
+	root := repoRootFor(t)
+	base, err := exec.Command("git", "-C", root,
+		"merge-base", "HEAD", "main").Output()
+	if err != nil {
+		t.Skipf("cannot resolve the merge base with `main`: %v — a diff "+
+			"claim needs a branch point to compare against", err)
+	}
+	out, err := exec.Command("git", "-C", root, "diff", "--name-only",
+		strings.TrimSpace(string(base))).Output()
+	if err != nil {
+		t.Skipf("`git diff --name-only` failed: %v", err)
+	}
+	var paths []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			paths = append(paths, line)
+		}
+	}
+	return paths
+}

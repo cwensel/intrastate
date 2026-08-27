@@ -293,6 +293,14 @@ func TestReq82And104_ARecognizedOnlyRowIsACandidateWithNoMatchFacts(t *testing.T
 // REQ-99 / `0011:S3`: "a dead row … ⇒ candidate with `{key, absent}` while
 // absent, excluded once the key is present at any value, with no CLI
 // literal comparison (A12)."
+// REQ-8: "A probe row MAY carry several match tags on one key" — the filter
+// MUST tolerate it; `atomsFromBlock`'s `eq`+`in` pairing is the shipped
+// producer.
+// REQ-9: "Whether a key's tags hold TOGETHER is the kernel's conjunction
+// (`TagSet.matches` is all-must-hold), never the CLI's: a dead row is a
+// candidate carrying `{k, absent}` while `k` is absent, exactly as any
+// undecided row is, and is excluded by the kernel once `k` is present at any
+// value, exactly as `flow resolve` never selects it."
 // REQ-100: "the oracle asserts two match tags on the DEAD row only — the
 // pairing's other expanded row collapses to one tag and is live".
 // ADVERSARIAL — the dead row is the case a CLI that reasoned about literals
@@ -615,5 +623,114 @@ func TestReq34And107And130_TheKernelPackageIsUntouchedByThisContract(t *testing.
 			"C1 changes nothing in the kernel PACKAGE; a probe-shape change "+
 			"in `internal/cli` plus one demand-set term is the whole diff "+
 			"this contract authorizes there", diff)
+	}
+}
+
+// REQ-2: "Both verdicts MUST be the kernel's, asked over a one-row probe
+// table that carries the row's match atoms RESTRICTED to keys present in the
+// CLI's assembled view …, no escape list, and `Recognized` bound to the
+// row's own outcome — the binding that keeps the probe modelling its own
+// outcome, so `unmodeled_outcome` is unreachable."
+// A-7: "no escape list" means `probe.Escape = nil`, the shipped strip
+// retained unchanged in both modes; only `probe.Match` changes.
+// A-8: "`Outcomes: []string{row.Outcome}` is retained alongside
+// `Recognized: row.Outcome`, so `Table.models` holds trivially — C1's probe
+// builder MUST preserve that pairing."
+// REQ-67: "`excluded` must return the kernel's `Result` (not a `bool`) so
+// `summarize` can read the `guard_unevaluable` payload; this is the one
+// signature change in the file"
+// ADVERSARIAL — the probe's three non-match properties, each observable
+// through the payload rather than through the builder.
+func TestReq2And67_TheProbeBindsItsOwnOutcomeStripsEscapeAndKeepsTheResult(t *testing.T) {
+	// (i) `Recognized` bound to the row's OWN outcome: `unmodeled_outcome`
+	// is unreachable, so `flow next` never refuses it however many
+	// outcomes the model declares. A builder that bound the requested
+	// outcome (there is none on `next`) or left it empty would refuse.
+	model := writeFlowModel(t, flowMatchClassesModel)
+	bind := seedMatchArtifact(t, model, "status=draft")
+
+	data := runNext(t, model, []string{bind})
+	for _, c := range nextCandidates(t, data) {
+		outcome, _ := c["outcome"].(string)
+		if outcome == "" {
+			t.Errorf("candidate %v names no outcome; the probe binds "+
+				"`Recognized` to the ROW's own outcome, which is what keeps "+
+				"it modelling itself", c["rule"])
+		}
+	}
+
+	// (ii) the escape list is STRIPPED: an escape row is never reported as
+	// a candidate, and its presence never rescues a row the match
+	// predicate excluded. `flowEscapeModel` authors one for `bail`.
+	esc := writeFlowModel(t, flowEscapeModel)
+	escBind := artifactBinding(flowStateRole, seedArtifact(t, esc, "status=draft"))
+	escData := runNext(t, esc, []string{escBind})
+	if c := candidateNamed(t, escData, "bail-escape"); c != nil {
+		t.Errorf("the escape row `bail-escape` is reported as a candidate: "+
+			"%#v\nC1 reports exactly each NON-ESCAPE row, and the probe "+
+			"carries no escape list — the stripped list leaves "+
+			"`escapeOrRefuse` no rescue row, so it passes the original "+
+			"refusal through", c)
+	}
+
+	// (iii) `excluded` returns the kernel's `Result` rather than a `bool`:
+	// the observable consequence is that a `guard_unevaluable` refusal's
+	// payload REACHES `summarize`. Today `excluded` reduces the Result to
+	// a bool and the payload never arrives, which is why `uncomparable`
+	// cannot appear on `next` at all.
+	writer := writeFlowModel(t, flowLooseWriterModel)
+	art := newFlowArtifact(t, "loose.artifact")
+	lbind := artifactBinding(flowStateRole, art)
+	requireSuccess(t, "flow", "set-state", "--model", writer,
+		"--artifact", lbind, "--write", "status=draft",
+		"--write", "size=notanint", "--as=json")
+
+	reader := writeFlowModel(t, flowUncomparableGuardModel)
+	uncomparable := runNext(t, reader, []string{lbind})
+	pairs := candidateUnknown(t, requireCandidate(t, uncomparable, "uncomparable-row"))
+	if !hasUnknown(pairs, "size", "uncomparable") {
+		t.Errorf("no `uncomparable` fact reached the payload: %#v\nThat "+
+			"fact exists ONLY on the kernel's `guard_unevaluable` refusal "+
+			"payload, so a build whose probe helper still returns a `bool` "+
+			"discards it before `summarize` can read it. The signature "+
+			"change is the reason the probe Result is kept rather than "+
+			"discarded", pairs)
+	}
+}
+
+// REQ-120 / PH 1: "in `flow_exec.go::invokedReaders`, add each row's
+// match-block owned keys to the demand set — a term both callers take … —
+// the one edit outside `flow_next.go`"
+// ADVERSARIAL — a SCOPE claim about the production diff. Phase 1's intent
+// bounds where the change may land, and a build that spread the predicate
+// across other files has not honoured it. Asserted as a diff, because no
+// runtime observation can see file boundaries.
+func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
+	// The two production files this contract authorizes to change, plus
+	// the two shipped user-facing descriptions C3 corrects (REQ-56) and
+	// the 0005 test files C3 re-homes (REQ-54, REQ-60).
+	allowed := map[string]bool{
+		"internal/cli/flow_next.go":                  true,
+		"internal/cli/flow_exec.go":                  true,
+		"docs/cli-output-contract.md":                true,
+		"README.md":                                  true,
+		"internal/cli/flow_next_0005_test.go":        true,
+		"internal/cli/flow_adversarial_0005_test.go": true,
+		"internal/cli/flow_mvv_0005_test.go":         true,
+		"internal/cli/flow_surface_0005_test.go":     true,
+	}
+
+	for _, path := range changedFilesSince(t) {
+		if allowed[path] || strings.Contains(path, "_0011_test.go") ||
+			strings.HasPrefix(path, "docs/rdr/") {
+			continue
+		}
+		t.Errorf("`%s` changed; Phase 1 names ONE edit outside "+
+			"`flow_next.go` — the `invokedReaders` demand-set term in "+
+			"`flow_exec.go` — and Phases 2 and 3 add the flag, the help, "+
+			"C3's fixtures, and the two shipped descriptions. A predicate "+
+			"spread wider than that has not honoured the placement this "+
+			"RDR decided: PRESENCE in the CLI, EQUALITY in the kernel, "+
+			"`internal/resolve` not modified", path)
 	}
 }
