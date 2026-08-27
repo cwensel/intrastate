@@ -56,13 +56,16 @@ func Load(src []byte, sourceID string) (*Model, error) {
 		return nil, err
 	}
 
-	ld := &loader{doc: &doc, sourceID: sourceID}
+	ld := &loader{doc: &doc, src: src, sourceID: sourceID}
 	return ld.run()
 }
 
 // loader carries one document through validation and normalization.
 type loader struct {
-	doc      *sourceDoc
+	doc *sourceDoc
+	// src is the document's own bytes, kept for the ONE thing the decoded
+	// structs cannot supply: where in the source a declaration was written.
+	src      []byte
 	sourceID string
 
 	model *Model
@@ -160,12 +163,55 @@ func (l *loader) loadOutcomes() error {
 
 // ---------------------------------------------------- tags and accessors
 
+// tagHeaderLine reports the 1-based line of the `[tags.<key>]` header
+// declaring `key`, or ZERO where it cannot be identified.
+//
+// The scan is textual and deliberately narrow. It recognizes exactly the
+// standard-table authoring, `[tags.<key>]` on a line of its own, with the
+// key either bare or quoted. Every other authoring TOML permits — an inline
+// table under `[tags]`, a dotted key, a key whose own text contains a
+// bracket — falls outside it and yields zero.
+//
+// Zero on anything ambiguous is the point, not a gap. A line number is a
+// pointer the author follows to source text; pointing at the wrong text
+// costs more than pointing at no text, and the caller renders zero as a
+// file-only locator that is honest about what it does not know. So a key
+// matched zero times OR more than once declines: a second match means the
+// scan cannot tell which header the refusal belongs to.
+func tagHeaderLine(src []byte, key string) int {
+	bare := "[tags." + key + "]"
+	quoted := "[tags." + strconv.Quote(key) + "]"
+
+	line, matches := 0, 0
+	for i, raw := range strings.Split(string(src), "\n") {
+		// Trailing comments and surrounding space are the only decoration a
+		// header line may carry; anything else is not this header.
+		text := raw
+		if hash := strings.IndexByte(text, '#'); hash >= 0 {
+			text = text[:hash]
+		}
+		text = strings.TrimSpace(text)
+		if text != bare && text != quoted {
+			continue
+		}
+		matches++
+		line = i + 1
+	}
+	if matches != 1 {
+		return 0
+	}
+	return line
+}
+
 func (l *loader) loadTags() error {
 	decls := make(map[string]TagDecl, len(l.doc.Tags))
 	for key, src := range l.doc.Tags {
 		decl, err := tagDecl(key, src)
 		if err != nil {
-			return err
+			// The declaration's own `[tags.<key>]` header is the only
+			// position the decoded struct leaves recoverable, and this is
+			// the only place that still holds both the key and the source.
+			return atLine(err, tagHeaderLine(l.src, key))
 		}
 		decls[key] = decl
 	}
@@ -260,6 +306,13 @@ func (l *loader) checkClassAgreement() error {
 			ProvenanceOwned))
 }
 
+// kindFieldMapping names, for every kind that declares a type field, the
+// field it takes. It is appended to all three kind/field mismatch refusals
+// so the trio stays symmetric and an author who tripped one arm reads the
+// mapping whole.
+const kindFieldMapping = "only an enum declares domain, a set declares " +
+	"elements = [...], an int declares min/max"
+
 func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {
 	bad := func(detail string) (TagDecl, error) {
 		return TagDecl{}, fail(CatMalformedTagDeclaration, "tag "+key+": "+detail)
@@ -278,14 +331,23 @@ func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {
 
 	// The type model's fields are per kind: only an enum carries a domain,
 	// only an int carries bounds, and only a set carries elements.
+	//
+	// Each arm carries the WHOLE mapping, not the one field its own kind
+	// takes. The three arms are shared across kinds — `admits no domain`
+	// fires for `set`, `int`, and `scalar` alike — so a hint answering for
+	// a single kind would be wrong advice on the others. Stating "a set
+	// declares elements" on the domain arm is also what turns a true but
+	// useless refusal into an actionable one: read alone, "kind set admits
+	// no domain" says a set cannot be finite, which is the opposite of the
+	// truth.
 	if len(src.Domain) > 0 && src.Kind != "enum" {
-		return bad("kind " + src.Kind + " admits no domain")
+		return bad("kind " + src.Kind + " admits no domain; " + kindFieldMapping)
 	}
 	if (src.Min != nil || src.Max != nil) && src.Kind != "int" {
-		return bad("kind " + src.Kind + " admits no min or max")
+		return bad("kind " + src.Kind + " admits no min or max; " + kindFieldMapping)
 	}
 	if len(src.Elements) > 0 && src.Kind != "set" {
-		return bad("kind " + src.Kind + " admits no elements")
+		return bad("kind " + src.Kind + " admits no elements; " + kindFieldMapping)
 	}
 	// The single-valued marker is meaningful only where the kind has both a
 	// single-valued and a non-single-valued assignment count. A `set` holds

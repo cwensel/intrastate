@@ -99,6 +99,20 @@ type Failure struct {
 	// the category fired — RuleKernelOwned or RuleAuthorMustRename. It is for
 	// golden assertions and remediation lookup, never for category dispatch.
 	Rule string
+
+	// Line is the 1-based source line the refusal is attributed to, or ZERO
+	// where the loader cannot ground one. Zero is the common case and it
+	// means UNKNOWN, never line 1: most categories are decided against
+	// already-decoded structs, from which no position survives, and the
+	// decoder itself reports a position only for its own syntax failures.
+	//
+	// A renderer chooses its own fallback for zero. Line is diagnostic, not
+	// identity: RDR 0002's round-trip invariant compares a locator's
+	// presence and its rule-identifying part but EXCLUDES the optional
+	// line/column detail, precisely because that detail moves when
+	// unrelated source text is edited. Adding a real line is therefore a
+	// diagnostic improvement, not a contract change.
+	Line int
 }
 
 // The two direction-specific rule identifiers `0008:C3` fixes. Both sit inside
@@ -129,7 +143,28 @@ func CategoryOf(err error) (Category, bool) {
 	return "", false
 }
 
-// fail builds a categorized refusal.
+// fail builds a categorized refusal carrying no source position.
 func fail(cat Category, detail string) error {
 	return &Failure{Category: cat, Detail: detail}
+}
+
+// atLine stamps a source line onto a refusal that already carries its
+// category and detail, and returns it unchanged when the line is not
+// grounded or the error is not a *Failure.
+//
+// It is a post-hoc stamp rather than a `fail` parameter on purpose: the
+// position is recoverable at ONE seam — the caller that still holds the
+// source bytes — while the refusals themselves are minted deep in checks
+// that ran against decoded structs. Threading a position every `fail` site
+// cannot supply would buy nothing but a wider signature.
+func atLine(err error, line int) error {
+	if line <= 0 {
+		return err
+	}
+	var f *Failure
+	if !errors.As(err, &f) {
+		return err
+	}
+	f.Line = line
+	return err
 }

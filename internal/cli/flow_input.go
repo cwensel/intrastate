@@ -175,9 +175,13 @@ func loadFailure(path string, err error) *clierr.CLIError {
 // structured field, the category slug as the inner discriminator, and the
 // per-category payload the loader populated.
 //
-// `locator` is `file:1`: the loader attributes no line, and a reader still
-// needs the file to act on. When lint gains source positions, both call sites
-// improve together.
+// `locator` is `file:<line>` where the loader grounded a source position,
+// and `file:1` where it did not. The loader attributes a line only to the
+// refusals it can honestly place — a malformed `[tags.<key>]` declaration
+// locates at its own header — and reports zero, meaning unknown, for the
+// rest. `:1` is the documented fallback for that zero, not a claim about
+// the defect: a reader still needs the file to act on, and inventing a line
+// would point them at innocent source text.
 func loadFindings(path string, err error) []clierr.Finding {
 	category, ok := table.CategoryOf(err)
 	if !ok {
@@ -186,10 +190,18 @@ func loadFindings(path string, err error) []clierr.Finding {
 		// second code for it would break the one-code rule.
 		category = "unknown"
 	}
+	// The line is read before the `Rule` gate below, because a position and
+	// the reserved-key payload are independent: any load category may carry
+	// a line, only one carries a rename remedy.
+	line := 1
+	var located *table.Failure
+	if errors.As(err, &located) && located.Line > 0 {
+		line = located.Line
+	}
 	finding := clierr.Finding{
 		Code:    string(category),
 		Message: err.Error(),
-		Locator: path + ":1",
+		Locator: path + ":" + strconv.Itoa(line),
 	}
 
 	// RDR 0008 `0008:C3` — the three-field `reserved_tag_key` payload rides
