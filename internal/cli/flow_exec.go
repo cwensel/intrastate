@@ -107,6 +107,14 @@ func invokedReaders(m *table.Model, outcome string) []string {
 		for _, key := range guardOwnedKeys(m, row) {
 			demanded[key] = true
 		}
+		// RDR 0011 C1: each row's MATCH-block owned keys join the demand
+		// set, so the assembled view actually carries the keys `flow next`'s
+		// candidate predicate reads. The term binds BOTH callers and is NOT
+		// scoped to `next` (`0011:BR6`): a `next`-only term would have the
+		// two verbs assemble different views over one model.
+		for _, key := range matchOwnedKeys(m, row) {
+			demanded[key] = true
+		}
 	}
 
 	var out []string
@@ -129,9 +137,31 @@ func invokedReaders(m *table.Model, outcome string) []string {
 // recognized key a guard reads demands no reader — the caller supplies it
 // through `--tag`, and no reader serves it.
 func guardOwnedKeys(m *table.Model, row table.Row) []string {
+	return ownedAtomKeys(m, row, table.BlockAll, table.BlockUnless)
+}
+
+// matchOwnedKeys returns the OWNED tag keys one row's MATCH atoms
+// reference — RDR 0011 C1's demand-set term.
+//
+// `flow next` decides a match atom's PRESENCE against the assembled view,
+// so a key no invoked reader establishes has its atom omitted from every
+// probe and the row comes back a candidate carrying `{key, absent}`. Over a
+// model that matches on an owned key it never writes, clears, or guards
+// that degrades the default to `--all`. Adding the term is what makes the
+// predicate real, and it invokes no reader the model did not already
+// declare.
+func matchOwnedKeys(m *table.Model, row table.Row) []string {
+	return ownedAtomKeys(m, row, table.BlockMatch)
+}
+
+// ownedAtomKeys returns the OWNED tag keys the row's atoms reference from
+// any of the named blocks. Provenance comes from the model's own
+// `[tags.<key>]` declaration, so an observed or recognized key demands no
+// reader — the caller supplies it through `--tag`, and no reader serves it.
+func ownedAtomKeys(m *table.Model, row table.Row, blocks ...table.Block) []string {
 	var out []string
 	for _, atom := range row.Atoms {
-		if atom.Block != table.BlockAll && atom.Block != table.BlockUnless {
+		if !slices.Contains(blocks, atom.Block) {
 			continue
 		}
 		if m.Tags[atom.Key].Provenance != table.ProvenanceOwned {
