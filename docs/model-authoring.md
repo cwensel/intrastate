@@ -27,7 +27,7 @@ reports as `graph-dangling-edge`.
 
 ## Authoring a decision table
 
-A decision table's rows are cells. Each row binds the outcome with a
+A decision table's rows claim cells. Each row binds the outcome with a
 `[rule.match.recognized]` atom and discriminates the cell with **guard**
 atoms:
 
@@ -74,8 +74,10 @@ dpa = "required"
 
 This snippet shows one row of the table's shape, not a complete model:
 `tier × region` has four cells and only `free-eu` is claimed, so linting
-it as written yields a blocking `graph-coverage-gap`. A real table authors
-all four rows, or closes the rest with the escape row below.
+it as written yields a blocking `graph-coverage-gap`. A real table covers
+all four cells, whether with one row per cell or with rows whose guard
+atoms pin fewer dimensions and so span several, and closes any remainder
+with the escape row below.
 
 `[rule.emit]` is the row's answer: a flat block of string values, returned
 by `flow resolve` under the `emit` key. Its keys are not tags — nothing
