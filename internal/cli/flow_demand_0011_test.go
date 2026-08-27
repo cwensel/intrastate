@@ -916,13 +916,15 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		// not produce both.
 		name: "flowUnknownPairModel", model: flowUnknownPairModel,
 		outcome: "advance",
-		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		tags:    []string{"beta=b", "alpha=a"},
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "size=9"}}},
+		tags: []string{"beta=b", "alpha=a"},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{"alpha":"a","beta":"b"},` +
-			`"owned":{"status":"draft"},"readers":["state"],` +
+			`"owned":{"size":"9","status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"pair-row",` +
-			`"gates":[{"id":"beta","result":"allow"}],"emit":{},` +
+			`"gates":[{"id":"beta","result":"allow"},` +
+			`{"id":"size","result":"allow"}],"emit":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -977,6 +979,21 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowLooseWriterModel", model: flowLooseWriterModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The pair fixture's loose WRITER, structurally the same hop as
+		// `flowLooseWriterModel` above: `size` is a `scalar` here so the
+		// production write path accepts the non-integer the pair model
+		// then guards with `gt`. Its own `seed-row` carries no guard, so
+		// it plans and owes a payload.
+		name: "flowUnknownPairWriterModel", model: flowUnknownPairWriterModel,
+		outcome: "advance",
+		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},` +

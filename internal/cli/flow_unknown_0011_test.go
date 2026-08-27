@@ -364,9 +364,18 @@ func TestReq29And113_UnknownIsSortedByKeyThenReasonAndDedupedOnThePair(t *testin
 // sources — which `flowUnknownPairModel` gets from a deliberate tag-key /
 // gate-id namespace collision.
 func TestReq29_DedupAndSortDiscriminateOnTheReasonNotOnlyTheKey(t *testing.T) {
-	model := writeFlowModel(t, flowUnknownPairModel)
-	bind := seedMatchArtifact(t, model, "status=draft")
+	// `size` is established at a PRESENT non-integer through the writer
+	// model, where it is a `scalar`; the pair model below declares it an
+	// `int` and guards it with `gt`, so the operator cannot parse it and
+	// the kernel reports `{size, uncomparable}`.
+	writer := writeFlowModel(t, flowUnknownPairWriterModel)
+	art := newFlowArtifact(t, "pair.artifact")
+	bind := artifactBinding(flowMatchRole, art)
+	requireSuccess(t, "flow", "set-state", "--model", writer,
+		"--artifact", bind, "--write", "status=draft",
+		"--write", "size=notanint", "--as=json")
 
+	model := writeFlowModel(t, flowUnknownPairModel)
 	data := runNext(t, model, []string{bind})
 	pairs := candidateUnknown(t, requireCandidate(t, data, "pair-row"))
 
@@ -410,13 +419,35 @@ func TestReq29_DedupAndSortDiscriminateOnTheReasonNotOnlyTheKey(t *testing.T) {
 		{Key: "alpha", Reason: "absent"},
 		{Key: "beta", Reason: "absent"},
 		{Key: "beta", Reason: "not-evaluated"},
+		{Key: "size", Reason: "not-evaluated"},
+		{Key: "size", Reason: "uncomparable"},
 	}
 	if !slices.Equal(pairs, want) {
 		t.Errorf("`unknown` = %#v; want %#v\nSorted by `(key, reason)` the "+
 			"list is total: `alpha` before both `beta` entries (the KEY "+
-			"comparison), and within `beta` the reason `absent` before "+
-			"`not-evaluated` (the REASON tiebreak). A build comparing only "+
-			"the key leaves the second comparison undefined", pairs, want)
+			"comparison), and within a key the REASON breaks the tie. The "+
+			"`size` pair is the DISCRIMINATING one — it is minted "+
+			"`uncomparable` by the undecided-atom read (step 3) and "+
+			"`not-evaluated` by the gate loop (step 4), and since "+
+			"`not-evaluated` < `uncomparable` the LATER source contributes "+
+			"the smaller reason, so emission order is the REVERSE of "+
+			"sorted order. A build comparing only the key cannot restore "+
+			"it: over two entries sharing a key a key-only comparison "+
+			"returns 0 and `slices.SortFunc` is NOT stable, so the answer "+
+			"is undefined (REQ-29, `0011:C1`)", pairs, want)
+	}
+
+	// (iv) the reason tiebreak is load-bearing, not incidental: on `size`
+	// the required order is the OPPOSITE of the order the sources mint it
+	// in, so a key-only comparator cannot produce this sequence by
+	// preserving emission order the way it can for `beta`.
+	iNot := slices.Index(pairs, unknownPair{Key: "size", Reason: "not-evaluated"})
+	iUnc := slices.Index(pairs, unknownPair{Key: "size", Reason: "uncomparable"})
+	if iNot < 0 || iUnc < 0 || iNot > iUnc {
+		t.Errorf("`size` entries are not ordered `not-evaluated` before "+
+			"`uncomparable`: %#v\nBoth must be present — the pair dedup "+
+			"keeps them apart — and the REASON orders them against their "+
+			"emission order, which mints `uncomparable` first", pairs)
 	}
 }
 

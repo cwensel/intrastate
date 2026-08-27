@@ -755,6 +755,16 @@ status = "final"
 // established), then the gate-id loop contributes the gate id `beta` with
 // reason `not-evaluated`. Sorted by `(key, reason)` the list is
 // `alpha`, `beta`, `mid`, `zebra` — an order NO single source produces.
+//
+// `blank-match-row` serves REQ-4's OTHER presence site. `mid` is owned and
+// WRITTEN, so it reaches presence only through the owned-key walk
+// (`RequiresOwned`); `blank` is owned and MATCHED, so it reaches presence
+// through `presentMatchTags`, which restricts the probe's match pattern to
+// the keys the view holds. Both read presence as map membership, and only
+// a match key can discriminate the `presentMatchTags` half: held at the
+// empty string, `blank` must still be COMPARED (so the row is excluded
+// against `eq = "set"`), while a build testing `view[k] != ""` would drop
+// the atom and leave the row an unconditional candidate.
 const flowSortOrderModel = `outcomes = ["advance"]
 terminal = ["done"]
 
@@ -779,6 +789,10 @@ required = true
 provenance = "owned"
 kind = "scalar"
 
+[tags.blank]
+provenance = "owned"
+kind = "scalar"
+
 [tags.zebra]
 provenance = "observed"
 kind = "scalar"
@@ -790,13 +804,13 @@ kind = "scalar"
 [read.state]
 role = "state"
 path = "flow.state"
-keys = ["status", "mid"]
+keys = ["status", "mid", "blank"]
 timeout = "2s"
 
 [write.state]
 role = "state"
 path = "flow.state"
-keys = ["status", "mid"]
+keys = ["status", "mid", "blank"]
 timeout = "2s"
 read_back = true
 
@@ -825,6 +839,15 @@ eq = "advance"
 [rule.write]
 mid = "m"
 status = "final"
+
+[[rule]]
+id = "blank-match-row"
+[rule.match.blank]
+eq = "set"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"
 `
 
 // flowUnknownPairModel is REQ-29's PAIR fixture: one candidate carrying two
@@ -842,13 +865,32 @@ status = "final"
 // `pair-row` then mints `beta` twice from two different sources: the atom
 // walk contributes `{beta, absent}` (an observed match key nothing supplies)
 // and the un-run gate loop contributes `{beta, not-evaluated}`. A build
-// deduplicating by KEY collapses them to one; a build sorting by KEY alone
-// leaves their relative order to emission order, which is the reverse of
-// `(key, reason)` order because the gate loop runs LAST (`0011:C1`, REQ-29).
+// deduplicating by KEY collapses them to one, so `beta` is what pins the
+// PAIR dedup. It does NOT pin the sort tiebreak: `absent` < `not-evaluated`
+// and the atom walk runs before the gate loop, so emission order already
+// equals `(key, reason)` order and a key-only comparator preserves it.
+// `size` below supplies that half (`0011:C1`, REQ-29).
 //
 // `alpha` is a second absent match key so the CROSS-key sort stays exercised
-// on the same candidate: sorted, the list is `alpha/absent`, `beta/absent`,
-// `beta/not-evaluated`.
+// on the same candidate.
+//
+// A SECOND collision supplies the reason tiebreak's discriminating input,
+// which the `beta` pair alone cannot, for the reason just given. `size`
+// reverses the emission order. It is both
+// an `int`-declared owned key the row guards with `gt` over a PRESENT
+// non-integer — which `undecidedFacts` (step 3) reports `uncomparable` —
+// and an un-run gate id the gate loop (step 4) reports `not-evaluated`.
+// Since `not-evaluated` < `uncomparable`, the LATER source contributes the
+// lexically SMALLER reason, so the pair is minted in REVERSE of
+// `(key, reason)` order and only a build applying the reason tiebreak
+// restores it.
+//
+// The non-integer is established through `flowUnknownPairWriterModel`
+// below, for the reason A13 records for the `uncomparable` pair: no single
+// model can both hold a non-integer and guard it with `gt`.
+//
+// Sorted, the full list is `alpha/absent`, `beta/absent`,
+// `beta/not-evaluated`, `size/not-evaluated`, `size/uncomparable`.
 const flowUnknownPairModel = `outcomes = ["advance"]
 terminal = ["done"]
 
@@ -877,20 +919,30 @@ kind = "scalar"
 provenance = "observed"
 kind = "scalar"
 
+[tags.size]
+provenance = "owned"
+kind = "int"
+
 [read.state]
 role = "state"
 path = "flow.state"
-keys = ["status"]
+keys = ["status", "size"]
 timeout = "2s"
 
 [write.state]
 role = "state"
 path = "flow.state"
-keys = ["status"]
+keys = ["status", "size"]
 timeout = "2s"
 read_back = true
 
 [gate.beta]
+role = "state"
+path = "flow.gate"
+keys = ["status"]
+timeout = "2s"
+
+[gate.size]
 role = "state"
 path = "flow.gate"
 keys = ["status"]
@@ -905,11 +957,75 @@ eq = "final"
 
 [[rule]]
 id = "pair-row"
-gate = ["beta"]
+gate = ["beta", "size"]
 [rule.match.beta]
 eq = "b"
 [rule.match.alpha]
 eq = "a"
+[rule.match.recognized]
+eq = "advance"
+[rule.guard.all.size]
+gt = "3"
+[rule.write]
+status = "final"
+`
+
+// flowUnknownPairWriterModel establishes the PRESENT non-integer `size`
+// that `flowUnknownPairModel` then guards with `gt`, over the same
+// caller-owned artifact. `size` is a `scalar` here, so `notanint` conforms
+// and the production write path accepts it; under the pair model the same
+// key is an `int` whose `gt` guard the operator cannot parse, so the seam
+// answers unevaluable and the kernel reports `{size, uncomparable}`. This
+// is the same two-model hop `flowLooseWriterModel` /
+// `flowUncomparableGuardModel` document, for the same recorded reason.
+const flowUnknownPairWriterModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "unknownpairwriter"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.size]
+provenance = "owned"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "size"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "size"]
+timeout = "2s"
+read_back = true
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "seed-row"
+[rule.match.status]
+eq = "draft"
 [rule.match.recognized]
 eq = "advance"
 [rule.write]

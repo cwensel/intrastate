@@ -515,7 +515,7 @@ func TestReq4_AnEmptyButPresentOwnedValueIsPresentNotAbsent(t *testing.T) {
 	// presence test under oracle: it emits `{mid, absent}` for a key the
 	// view does not hold.
 	empty := runNext(t, model, []string{seedRawMatchArtifact(t,
-		map[string]string{"status": "draft", "mid": ""})})
+		map[string]string{"status": "draft", "mid": "", "blank": ""})})
 	c := requireCandidate(t, empty, "sort-row")
 
 	if pairs := candidateUnknown(t, c); hasUnknown(pairs, "mid", "absent") {
@@ -552,6 +552,46 @@ func TestReq4_AnEmptyButPresentOwnedValueIsPresentNotAbsent(t *testing.T) {
 			"DIFFERENT inputs with different verdicts; this arm is what "+
 			"keeps the empty-string assertion above from passing "+
 			"vacuously", pairs)
+	}
+
+	// THE OTHER PRESENCE SITE. `mid` above is owned and WRITTEN, so it
+	// reaches presence only through the owned-key walk; the arms above
+	// therefore pin `summarize`'s walk and leave `presentMatchTags`
+	// — which restricts the probe's match pattern to the keys the view
+	// holds — unpinned, and a build changing only THAT to `view[k] != ""`
+	// stays green over them. `blank` is owned and MATCHED, so it is
+	// decided by `presentMatchTags` alone.
+	//
+	// Held at the empty string, `blank` is PRESENT, so the atom survives
+	// the restriction, is handed to the kernel, and EXCLUDES the row
+	// against `eq = "set"` — the CLI never compares it itself (REQ-3,
+	// REQ-5). A non-empty test would drop the atom, leaving `blank-match-row`
+	// probed with an empty match pattern, which matches unconditionally.
+	if c := candidateNamed(t, empty, "blank-match-row"); c != nil {
+		t.Errorf("`blank-match-row` survives while `blank` is established "+
+			"at the empty string: %#v\nThe empty string is PRESENT, so "+
+			"`presentMatchTags` KEEPS the atom and the kernel decides it "+
+			"unequal to `set`, pruning the row. A build restricting the "+
+			"match pattern with `view[key] != \"\"` drops the atom instead, "+
+			"and a row with no surviving match atom matches "+
+			"unconditionally (REQ-4, A-1, `0011:A11`)", c)
+	}
+	if pairs := candidateUnknown(t, requireCandidate(t, empty, "sort-row")); hasUnknown(pairs, "blank", "absent") {
+		t.Errorf("`blank` is reported `{blank, absent}` while established "+
+			"at the empty string: %#v", pairs)
+	}
+
+	// NEGATIVE CONTROL for that arm: OMIT `blank` and the row IS a
+	// candidate, carrying `{blank, absent}`. Without this the assertion
+	// above passes against a build that never reports the row at all.
+	blankOmitted := runNext(t, model, []string{seedRawMatchArtifact(t,
+		map[string]string{"status": "draft", "mid": "m"})})
+	c2 := requireCandidate(t, blankOmitted, "blank-match-row")
+	if pairs := candidateUnknown(t, c2); !hasUnknown(pairs, "blank", "absent") {
+		t.Errorf("`blank-match-row` does not carry `{blank, absent}` when "+
+			"the reader OMITS `blank`: %#v\nAn absent match key is omitted "+
+			"from the probe and reported instead — which is the verdict "+
+			"the EMPTY-STRING case above must NOT share", pairs)
 	}
 }
 
