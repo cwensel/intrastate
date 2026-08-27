@@ -72,10 +72,10 @@ func Accepts(operator, kind string) bool {
 // LiteralShape returns the operator's published literal shape.
 func LiteralShape(operator string) Shape { return matrix[operator].shape }
 
-// isSingleValueOperator reports whether the operator narrows the tag's
+// SingleValueOperator reports whether the operator narrows the tag's
 // SINGLE held value: `eq`, `in`, and the four integer comparisons. Such an
 // atom projects only over a key the model declares single-valued.
-func isSingleValueOperator(operator string) bool {
+func SingleValueOperator(operator string) bool {
 	switch operator {
 	case "eq", "in", "lt", "lte", "gt", "gte":
 		return true

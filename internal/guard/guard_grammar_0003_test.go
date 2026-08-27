@@ -457,3 +457,57 @@ func TestReq12_OperatorSemanticsAreAsStated(t *testing.T) {
 		})
 	}
 }
+
+// A21: a provable value atom requires the tag's `single_valued` marker,
+// which makes "which operators narrow the tag's single held value" a
+// classification of the closed vocabulary, not a property of one operator.
+// `SingleValueOperator` publishes it so consumers read it rather than copy
+// it.
+//
+// The assertion ranges over the WHOLE vocabulary, so an operator added to
+// `Operators()` and left unclassified fails here rather than silently
+// joining the not-single-value arm. That arm is not a default: `exists`
+// reads presence and `contains` reads set membership, and each is excluded
+// for a stated reason, not by omission.
+// BOUNDARY
+func TestReq2_SingleValueOperatorsAreClassifiedOverTheWholeVocabulary(t *testing.T) {
+	singleValue := []string{"eq", "in", "lt", "lte", "gt", "gte"}
+	notSingleValue := []string{"exists", "contains"}
+
+	// The two arms must PARTITION the vocabulary. Without this, adding an
+	// operator to `Operators()` and to neither list below would leave the
+	// loop asserting nothing about it.
+	classified := slices.Sorted(slices.Values(
+		append(slices.Clone(singleValue), notSingleValue...)))
+	if got := slices.Sorted(slices.Values(guard.Operators())); !slices.Equal(got, classified) {
+		t.Fatalf("Operators() = %v but this test classifies %v; every "+
+			"operator in the closed vocabulary MUST be placed in exactly "+
+			"one arm — an unclassified operator is the drift this "+
+			"assertion exists to catch", got, classified)
+	}
+
+	for _, op := range singleValue {
+		if !guard.SingleValueOperator(op) {
+			t.Errorf("SingleValueOperator(%q) = false; %q narrows the tag's "+
+				"single held value, so an atom spelling it projects only "+
+				"over a key the model declares single-valued (A21)", op, op)
+		}
+	}
+	for _, op := range notSingleValue {
+		if guard.SingleValueOperator(op) {
+			t.Errorf("SingleValueOperator(%q) = true; %q does not narrow "+
+				"the tag's single held value, so requiring the "+
+				"`single_valued` marker for it would name a remedy that "+
+				"does not fix anything", op, op)
+		}
+	}
+
+	// An operator outside the closed vocabulary narrows nothing, exactly as
+	// it is accepted by no kind.
+	for _, unknown := range []string{"neq", "matches", "", "EQ"} {
+		if guard.SingleValueOperator(unknown) {
+			t.Errorf("SingleValueOperator(%q) = true; the vocabulary is "+
+				"closed and a non-operator classifies as nothing", unknown)
+		}
+	}
+}

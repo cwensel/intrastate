@@ -252,7 +252,7 @@ func structurallyUnprojectable(m *table.Model, g Group, key string) bool {
 				// `exists` reads presence and always projects.
 				continue
 			}
-			if isSingleValueOperator(atom.Operator) && !decl.SingleValued {
+			if SingleValueOperator(atom.Operator) && !decl.SingleValued {
 				return true
 			}
 			if atom.Operator == "contains" && decl.Kind != "set" {
@@ -478,7 +478,7 @@ func Denotation(m *table.Model, key string, atom table.Atom) AssignmentSet {
 	if !ok {
 		return AssignmentSet{}
 	}
-	if isSingleValueOperator(atom.Operator) && !decl.SingleValued {
+	if SingleValueOperator(atom.Operator) && !decl.SingleValued {
 		return AssignmentSet{}
 	}
 	if atom.Operator == "contains" && decl.Kind != "set" {

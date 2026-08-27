@@ -10,12 +10,6 @@ import (
 	"github.com/newcoinc/intrastate/internal/table"
 )
 
-// singleValueOperators are the operators whose right-hand side is the tag's
-// single held value. An atom over a tag NOT declared single-valued has no
-// projection and takes the blocking inability-to-prove outcome
-// (`0003::A21`).
-var singleValueOperators = []string{"eq", "in", "lt", "lte", "gt", "gte"}
-
 // checkCoverage runs invariant 4 over one reachable group: the guard
 // exhaustiveness claim, the three withholding triggers, and the per-class
 // coverage arms.
@@ -205,9 +199,13 @@ func (a *analysis) emitStructurallyUnprovable(g guard.Group) bool {
 		if decl.SingleValued {
 			continue
 		}
+		// `guard.SingleValueOperator` is the one authoritative
+		// classification: an atom over the tag's single held value has no
+		// projection when the tag is NOT declared single-valued, and takes
+		// the blocking inability-to-prove outcome (`0003::A21`).
 		atoms := a.groupAtomsOver(g, key)
 		for i := range atoms {
-			if !slices.Contains(singleValueOperators, atoms[i].Operator) {
+			if !guard.SingleValueOperator(atoms[i].Operator) {
 				continue
 			}
 			any = true
@@ -250,7 +248,7 @@ func (a *analysis) unprovableReason(g guard.Group, key string) (string, *table.A
 	atoms := a.groupAtomsOver(g, key)
 	if !decl.SingleValued {
 		for i := range atoms {
-			if slices.Contains(singleValueOperators, atoms[i].Operator) {
+			if guard.SingleValueOperator(atoms[i].Operator) {
 				return ReasonTagNotSingleValued, &atoms[i]
 			}
 		}
