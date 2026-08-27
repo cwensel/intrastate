@@ -260,34 +260,36 @@ knowledge, no artifact discovery).
   the table is a fixed string known at authoring time — per-invocation data
   (an RDR number, a path) is supplied by the caller, never interpolated by
   the table.**
-  - **Status**: Pending
-    <!-- Was Verified; the critique lens found the supporting reading wrong
-    ("a flat string carries the rendered command whole" — it cannot, `0046`
-    is caller data). The narrowed claim above is the checkable one and is
-    re-verified at Stage 6 against rdr#tmxk's actual emit keys. -->
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: rdr#tmxk states verbatim "the selected row (or an `emit`)
-    is the answer", and the PoC carried the answer as a single enum value
-    written to `next`. The consumer's actual answer shape was checked, not
-    assumed: `rdr/skills/rdr-status/SKILL.md` renders "the exact command to
-    run, e.g. `Next: /rdr-prelock 0046 critique`". **The earlier reading of
-    this example — "a flat string carries it whole" — was wrong, and the
-    correction narrows the claim rather than widening the type.** `0046` is
-    the RDR number the *caller* supplied; it is not knowable when the table
-    is authored, so no literal emit value can contain that rendered command.
-    What the table can emit is the invariant part — the verb, `/rdr-prelock`,
-    and the lens, `critique` — as separate string-valued keys, with the
-    caller substituting its own argument. That is exactly what the PoC did
-    (a single enum written to `next`, the caller supplying context) and what
-    rdr#tmxk asks for ("the selected row (or an `emit`) is the answer").
-    Sufficiency therefore rests on a narrower and checkable claim: **every
-    value the motivating consumer needs from the table is a fixed string
-    known at authoring time**, with per-invocation data supplied by the
-    caller and never by the table. A consumer needing the table itself to
-    interpolate — a template language in an emit value — is the widening A6
-    defers, and this RDR does not provide one: emit values are uninterpreted
-    and compared by exact byte equality (C3), so a `{id}` in a value is
-    literal text, not a substitution.
+  - **Evidence**: re-verified at Stage 6 against the consumer's **actual emit
+    keys**, not against the rendered example the critique lens refuted
+    (`evidence/spikes/a6-emit-keys.md`). rdr#tmxk states verbatim "the
+    selected row (or an `emit`) is the answer", and its answer is one
+    *routing decision*. That decision's rendered form is
+    `rdr/skills/rdr-status/SKILL.md:168` — "the exact command to run, e.g.
+    `Next: /rdr-prelock 0046 critique`" — which decomposes into exactly three
+    parts: the **stage verb** (`/rdr-prelock`, a closed set of skill names),
+    the **lens** (`critique`, the closed set `grounding|cove|3amigo|critique|
+    repeatability`), and the **record number** (`0046`). The first two are
+    fixed strings known when the table is authored; the third is the argument
+    the caller already holds — the user typed it — so it is never a table
+    value and the table never interpolates it. **The earlier reading — "a
+    flat string carries the rendered command whole" — was wrong, and the
+    correction narrows the claim rather than widening the type.** The match
+    side confirms the same shape: every fact the routing table keys on is a
+    closed enum of authoring-time literals
+    (`rdr/models/rdr-facts.toml:79,99,144,257,552` — Status, qualifier,
+    Profile, CA-plan, gate state), and facts are `probe`/`field` *inputs*,
+    never values the table must render. Judgment cells route to a
+    stop-packet row, again a fixed `stopped:<code>` string. So sufficiency
+    rests on the narrower, now-checked claim: **every value the motivating
+    consumer needs from the table is a fixed string known at authoring
+    time**, with per-invocation data supplied by the caller. A consumer
+    needing the table itself to interpolate — a template language in an emit
+    value — is the widening A6 defers, and this RDR does not provide one:
+    emit values are uninterpreted and compared by exact byte equality (C3),
+    so a `{id}` in a value is literal text, not a substitution.
   - **If wrong**: consumers pack structure into strings (a command with
     arguments is one string today), and the wire shape needs an `any`-typed
     value later (a widening, not a break).
@@ -469,18 +471,39 @@ knowledge, no artifact discovery).
   taxonomy change: the missing-root arm can be class-keyed while the
   terminal-predicate arm stays unconditional, and no consumer of the finding
   set distinguishes the two by code alone.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: to verify. Both arms live in one function
-    (`internal/graphlint/analysis.go::checkDanglingEdge`) and emit one code,
-    distinguished only by `element` (`model` vs `terminal[i]`) — executed,
-    both firing on one model:
-    `evidence/spikes/cove-dt-terminal/result.md`. What is unverified is the
-    consumer side: whether any golden fixture, exit-code path, or 0006
-    conformance test keys on `graph-dangling-edge` as a whole rather than on
-    its element, such that keeping one arm live changes an existing
-    expectation. Verify by class-keying the root arm only and running the
-    0006 graph-lint suite.
+  - **Evidence**: both halves now executed. *Mechanism*: both arms live in one
+    function (`internal/graphlint/analysis.go::checkDanglingEdge`, emitting at
+    :118 and :139) and emit one code, distinguished only by `element` (`model`
+    vs `terminal[i]`) — both firing on one model,
+    `evidence/spikes/cove-dt-terminal/result.md`. *Consumer side* (the half
+    that was open, now closed at `evidence/spikes/a12-consumers.md`): **twelve
+    consumers enumerated**, none broken. The decisive structural fact is that
+    `table.Model` has **no `Class` field today and no `class` layout key
+    exists**, so every checked-in fixture is state-machine class by
+    construction and C5's predicate is *bit-identical* to today's behaviour
+    over all of them. Root-arm consumers (`invariants_0006_test.go:70,206,893`,
+    `findings_0006_test.go:102`, `lint_fixtures_0006_test.go:112`,
+    `lint_gate_0006_test.go:25,155`, `lint_mvv_0006_test.go:128`) all assert on
+    **code only** over models declaring no `class`, so class-keying cannot
+    reach them. The terminal arm's sole consumer (`TestReq129`) runs a **rooted**
+    model, where the root arm was already silent — so keeping the terminal arm
+    unconditional changes nothing there either. `taxonomy.go:25,67` and
+    `findings_0006_test.go:251-261` (REQ-73's blocking-set literal) are
+    membership assertions over an unchanged code string. The one rootless
+    checked-in fixture, `pos-no-initial.toml`, is consumed by
+    `internal/table` **loader** tests only (`accessors_test.go:498`,
+    `roundtrip_test.go:1023`), never by graph lint, so it carries no lint
+    expectation to break. Baseline green: `go test ./internal/graphlint/...`
+    → `ok 3.499s`.
+    **Implementation trap this verification surfaced, carried into Phase 2:**
+    the root-arm predicate must be spelled as the *augmenting OR* —
+    `class == "decision-table" || len(Initial) > 0` — never as the class test
+    alone. Spelled as class alone it would silence the root arm for every
+    rootless *state-machine* model, flipping `TestReq32` and the `0006:C18`
+    guarantee; spelled as the OR it is additive, which is what makes A12's
+    "without a taxonomy change" true.
   - **If wrong**: the arms cannot be split without a new finding code, and
     C2's "none of these is a new refusal" fails for `terminal` — the
     prohibition then needs either a load-time check (a new refusal C1's
@@ -490,44 +513,116 @@ knowledge, no artifact discovery).
   `len(dims) == 0` branch, ahead of `emitCoverageArms`, without disturbing
   the state-machine class, where a zero-dimension group is legitimate and
   stays silent.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: to verify. The mechanism is grounded, and the *site* is now
-    pinned rather than guessed — the zero-dimension branch is explicit at
+  - **Evidence**: `evidence/spikes/a13-zerodim.md`, executed against the
+    **real** loader and engine (`table.Load` +
+    `graphlint.Run(graphlint.NewRequest(m))`) from a spike package under the
+    evidence dir; `internal/` untouched (`git status --porcelain internal/`
+    empty), baseline green
+    (`go test ./internal/graphlint/... ./internal/table/...`). The site was
+    already pinned at pre-lock — the zero-dimension branch is explicit at
     `internal/graphlint/coverage.go::checkCoverage` (`len(dims) == 0` →
-    `emitCoverageArms` → **return**), and `internal/guard/product.go::Dimensions`
-    collects guard atoms only. The site this assumption previously named was
-    unreachable: `emitStructurallyUnprovable` is a loop over
-    `guard.Dimensions`, which is empty in exactly this case, and it is called
-    only below the early return — so it can never fire here, and "does its
-    per-dimension shape admit a group-level emission" was unanswerable as
-    posed. What is unverified: whether emitting from inside the branch ahead
-    of `emitCoverageArms` yields the finding without double-reporting against
-    `graph-coverage-closed-by-escape` (C5 fixes the precedence; this confirms
-    it), and whether any checked-in state-machine fixture has a zero-dimension
-    group that would newly fire if the arm were keyed wrongly. Verify by
-    adding the class-keyed arm and running the 0006 graph-lint suite plus the
-    full fixture sweep.
+    `emitCoverageArms` → **return**), and
+    `internal/guard/product.go::Dimensions` collects guard atoms only. Both
+    open halves are now demonstrated.
+    **Q1 — no double-report, but the early `return` is load-bearing.** Traced
+    and executed: over a zero-dimension group the product is the *empty*
+    product (one empty assignment) and IS projectable, so
+    `emitCoverageArms`'s `!Projectable()` guard does not fire;
+    `coverageUnionFor` takes its own `len(Dimensions) == 0` arm
+    (`coverage.go:415`), where membership alone decides, so **every**
+    zero-dimension group closes every arm, and `bareEscapeFor` then emits
+    `graph-coverage-closed-by-escape`. A gap can never accompany it (the union
+    equals the product by construction). So a *naive* insertion — emit, then
+    fall through — **would double-report** exactly the pair C5 forbids. C5's
+    precedence is achievable at the site and cheaply: the branch is a
+    self-contained `emitCoverageArms(g); return` pair
+    (`coverage.go:34-42`), so the class-keyed arm emits and **returns**,
+    suppressing the closure advisory. Demonstrated that this forfeits nothing
+    else: `TestQ1b_ZeroDimBranchEmitsOnlyTheClosureArm` establishes the
+    closure advisory is the **only** invariant-4 output over a zero-dimension
+    group — no gap, no withholding, no bound refusal can arise on this path.
+    The state-machine limb stays byte-identical to today's.
+    **Q2 — the sweep, and the blast radius is total.**
+    `TestQ2_FixtureSweepForZeroDimensionGroups` walked every checked-in
+    fixture root: **151 zero-dimension groups across 37 of 37 loadable
+    fixtures** — every one of them, including the production model
+    `models/rdr.toml` (its `draft-no-match-escape` and `terminal-archive`
+    groups). The 67 refusals are `testdata/neg/`, deliberate loader-negatives
+    that never reach lint. **None declares `[model].class`**, so all 151 sit
+    in the state-machine default and must stay silent. This confirms A13's
+    "legitimate and stays silent" clause empirically and converts the
+    class-keying from a design preference into a hard requirement with a
+    measured cost: an unconditionally-keyed arm would newly fire a **blocking**
+    code on 151 groups, turning every fixture and the production model red at
+    once. Loud rather than silent — the 0006 suite would fail immediately —
+    but this is the measurement that makes the fence's scoping non-negotiable.
   - **If wrong**: the fence must be enforced at load rather than lint — and
     until then C5's coverage guarantee stays conditional on the guard
     authoring shape, which is the outcome the Problem Statement claims.
 - **A14 `no-participating-dimension` can be appended to 0006's closed
   `reason` set without breaking `TestReq80`'s exhaustive assertion or any
   other consumer of `graphlint.Reasons()`, and 0006 accepts the append.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: MVV Test
-  - **Evidence**: to verify. The set is closed and **append-only** by 0006's
-    own declaration (`internal/graphlint/taxonomy.go`, "The closed,
-    append-only `reason` set"), which is what makes an append the sanctioned
-    move rather than a break; `TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet`
-    asserts the set by sorted literal *and* asserts every
-    `graph-unprovable-coverage` emission carries a member, so the test updates
-    with the append and the second half then covers the new arm. Verify by
-    appending the value, updating that literal, and running the 0006 suite.
-    **This is the one clause of this RDR that is not additive on its owner's
-    grammar** — the reason vocabulary is 0006's, so the append needs 0006's
-    assent; if refused, C5's fence needs a different discriminator or a new
-    code, and that is a route-back 0006 owns.
+  - **Evidence**: `evidence/spikes/a14-reason-append.md`; all three halves
+    verified, the append **demonstrated green**, and committed `internal/`
+    never modified (the experiment ran on a scratch copy;
+    `git status --porcelain internal/` empty throughout).
+    **Mechanical**: the set is declared closed and append-only in shipped
+    source (`internal/graphlint/taxonomy.go:56-63`, `:87-92`), and `Reasons()`
+    returns `slices.Clone(reasons)` (`:103-104`), so no consumer can alias
+    kernel state. Consumers enumerated: **exactly one** in the tree is
+    append-sensitive — `TestReq80`'s sorted literal. Every production site
+    either assigns rather than enumerates (`coverage.go:120,162,166,277`,
+    `engine.go:109`, `clierr.Finding.Reason`) or switches **with a
+    `default`** (`coverage.go::unprovableMessage`, :235-247), and Go has no
+    exhaustiveness check on string constants; no JSON golden pins the set.
+    ⚠ **False-positive warning for anyone grepping `Reasons()`**:
+    `internal/resolve/guard.go:81` is a *different, unrelated* two-member set
+    (`absent`/`uncomparable`, `0007:C8`); graphlint neither imports nor
+    references it, and 0011 explicitly keeps that seam unchanged.
+    **Test**: `TestReq80` (`findings_0006_test.go:511-543`) asserts three
+    things — the sorted-literal set, that every `graph-unprovable-coverage`
+    emission carries a member (the half that later covers C5's arm, and that
+    fails outright on `""`), and that no other code carries a reason
+    (unaffected). The update is a two-line source append plus one sorted-position
+    literal edit; on the scratch copy `go build ./...` and `go test ./...`
+    came back **fully green** across all nine packages.
+    **Owner assent — structural, no reopen, NOT a route-back.** 0006 is
+    `Implemented`, `Overrides: None`. The set is normative via **REQ-80**
+    (0006 `§technical-design`'s reason table;
+    `0006/artifacts/req-list.md:217`), not via any numbered C-contract
+    (checked C8, C13, C17, BR5). The decisive reading is 0006's own contrasting
+    vocabulary: where it means a set that may **not** grow it writes "closed
+    **at**" and names the members (`0006:C17`, the advisory tier; echoed at
+    `taxonomy.go:37-38`); where it means a set that may grow it writes
+    **append-only** (`0006:C14`, `0006:D-wire-byte-format`). So `closed` =
+    no value outside the set is legal, `append-only` = the set may be
+    extended but never reordered, narrowed, or redefined. **An append is the
+    sanctioned evolution, and 0006 pre-authorized it**; no 0006 sentence
+    becomes false (the three members keep spelling, trigger, remedy, and
+    order; REQ-81 untouched; `reason` stays scoped to this code alone). The
+    table's framing — "one code, three triggers, each with a *different*
+    remedy" — grounds the set in remedy distinctness, not the number three,
+    and the fourth trigger's remedy ("author the discriminators as guard
+    atoms") is genuinely distinct. Peer precedent for the house pattern:
+    **0008** (Implemented) added a validation category on 0002's
+    "including at minimum" extensible list, and **0011** (Final) added the
+    reason token `not-evaluated` on a CLI list while explicitly declining to
+    widen the adjacent closed kernel set — the project already distinguishes
+    an authorized append from a prohibited one and books each in Overrides.
+    Honest caveat: after the append 0006's TD table enumerates three of four
+    members. That is inherent to any append-only set owned by a locked record,
+    and is what "code is the source of truth; RDRs give the history"
+    contemplates — `taxonomy.go` is authoritative for the set, and this RDR's
+    Overrides metadata is the durable record of the fourth member.
+    **Implementation constraint this verification fixes** (belongs to C5's arm,
+    surfaced here): the new arm MUST supply its own message rather than routing
+    through `coverage.go::unprovableMessage`, whose `default` limb would
+    otherwise phrase it as "declare the domain" — a remedy for a dimension that
+    does not exist.
   - **If wrong**: C5's fence cannot carry a truthful `reason`, so it either
     fails REQ-80 or states a remedy that does not apply; the fence then moves
     to load-time or waits on a 0006 taxonomy change.
@@ -535,19 +630,32 @@ knowledge, no artifact discovery).
   `state-machine` is sufficient for the four class readers, and the
   agreement check has a step available in the window at/after `loadTags`
   and before `checkAccessorBindings`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: pending. Grounded so far at pre-lock: `table.Model`
-    carries thirteen exported fields and one projection method
-    (`internal/table/model.go::KernelTable`) with no field accessor, so an
-    exported field is the type's existing convention and an accessor would
-    be its sole exception; `internal/table/load.go::run` fixes the step
-    slice `loadModelHeader, loadOutcomes, loadTags, loadAccessors,
-    loadDump, loadContexts, loadInitial, loadTerminal, normalizeRules,
-    checkAccessorBindings`, so the C1 window is non-empty and
-    `checkAccessorBindings` is genuinely `run`'s last step. What remains is
-    to confirm each of the four readers can reach the field where it runs
-    and that no reader needs the class before `loadModelHeader` sets it.
+  - **Evidence**: `evidence/spikes/a15-class-readers.md`. The convention half
+    was already grounded at pre-lock: `table.Model`
+    (`internal/table/model.go:369`) carries thirteen exported fields and one
+    projection method (`::KernelTable`, :398) with no field accessor, so an
+    exported field is the type's existing convention and an accessor would be
+    its sole exception. **What was open — reader reach — is now traced, and
+    all four readers reach the model where they run:** `normalizeRule` via
+    `*loader.model` (`internal/table/normalize.go:282,335`), `reach` via its
+    own `*table.Model` parameter (`internal/graphlint/reach.go:90`), and both
+    graph-lint checks (`checkDanglingEdge` :112, `checkCoverage`
+    `coverage.go:33`) via `analysis.model` (`analysis.go:29,63`). **The
+    load-bearing risk was the projection, and it does not bite:**
+    `graphlint.Request` carries the **full `*table.Model`**
+    (`internal/graphlint/engine.go:13,19,59`), never the `KernelTable`
+    projection — so an exported field on `Model` is genuinely sufficient and
+    no projection needs widening. Ordering holds: `loadModelHeader` is `run`'s
+    **first** step (`internal/table/load.go:68`), `normalizeRules` its ninth
+    (:201), and the graph-lint readers run only after load completes entirely
+    (`internal/cli/lint.go:99,115`) — so no reader can observe the class
+    before it is set. The C1 window is confirmed as stated: the step slice
+    matches, and the window at/after `loadTags` (:99) and before
+    `checkAccessorBindings` (:360, genuinely `run`'s last step) spans **six**
+    insertion points, at every one of which the parsed class and the loaded
+    tags are both present.
   - **If wrong**: the class needs an accessor (or an unexported field) after
     all, and C1's storage clause plus the *Authority* ownership row change
     shape — a normative edit, not an implementation detail.
@@ -926,6 +1034,14 @@ branch and MUST precede `emitCoverageArms`, whose `bareEscapeFor` path would
 otherwise close the group first. Where both would apply, this finding is
 reported and `graph-coverage-closed-by-escape` MUST NOT be: a group with no
 dimension to prove over is unproven whether or not an escape row rescues it.
+Precedence is delivered by **returning** from the class-keyed arm, not by
+ordering alone: emitting and then falling through to `emitCoverageArms` yields
+*both* findings over a zero-dimension group carrying a bare escape row, which
+is the double-report this clause forbids (executed, A13,
+`evidence/spikes/a13-zerodim.md`). The early return forfeits nothing, because
+the closure advisory is the only invariant-4 output reachable on this path —
+no gap, no withholding, and no bound refusal can arise where the union equals
+the product by construction.
 
 The class fence rests on a table that discriminates with `[rule.match.<key>]` atoms
 contributes no guard dimension (`0006:C7`, `0003:C13`;
@@ -933,11 +1049,17 @@ contributes no guard dimension (`0006:C7`, `0003:C13`;
 `guard.unless` alone), so its scoped product is the empty product carrying a
 single empty assignment, which any one ordinary row's coverage union equals —
 the group closes clean **whether or not the table is complete**. This
-paragraph's emission is **conditional on A13 and A14 at Stage 6**: the arm's
-site and its `reason` append are unverified, so the fence is a MUST this RDR
-commits to and not yet a demonstrated behaviour. If A14 is refused the fence
-moves to load-time or waits on a 0006 taxonomy change (A13/A14 "If wrong");
-the clause does not silently become optional. Over a state
+paragraph's emission was conditional on A13 and A14; **both closed Verified at
+Stage 6**, so the fence is a demonstrated behaviour and not only a MUST this
+RDR commits to. The site admits the arm, and the early `return` is what
+delivers the precedence stated above (A13, executed against the real engine);
+the `reason` append runs green across the whole suite, and 0006's assent is
+structural rather than solicited — its owner declared the set append-only,
+which is the sanctioned growth path (A14). The arm MUST supply its **own
+message** rather than routing through
+`internal/graphlint/coverage.go::unprovableMessage`, whose `default` limb
+would phrase the remedy as "declare the domain" — a remedy for a dimension
+that does not exist. Over a state
 machine that shape is legitimate (a group may genuinely range over no guard
 dimension), which is why the clause binds the decision-table class only: for
 this class an exhaustiveness claim over nothing is precisely the vacuous
@@ -1400,10 +1522,15 @@ an absence) is the Approach's rationale for declaring the class.
   **Mitigation**: a contract, not documentation — C5 requires a
   decision-table group with zero participating dimensions to take
   `graph-unprovable-coverage`, so the silent-green path is closed by lint
-  rather than by authoring convention. **Carried, not yet demonstrated**: the
-  arm's emission site and the `reason` member it needs are A13 and A14,
-  both Pending — Stage 6 closes them, and A14 additionally needs 0006's
-  assent to append its closed set. The Illustrative Code, MVV step 1, and
+  rather than by authoring convention. **Demonstrated at Stage 6**: the arm's
+  emission site (A13) and the `reason` member it needs (A14) are both
+  Verified against the real engine — the site admits the arm with an early
+  `return` that delivers C5's precedence, and the append runs green across
+  the suite with 0006's assent structural rather than solicited (`append-only`
+  is 0006's own sanctioned growth path). The measured stake: **151
+  zero-dimension groups across 37 of 37 loadable fixtures**, all
+  state-machine class, so the class-keying is a hard requirement — an
+  unconditional arm would redden every fixture and the production model. The Illustrative Code, MVV step 1, and
   Testing Strategy scenario 4 still author the guard shape and carry the
   match-only control, which now asserts a *positive* finding and is thereby
   discriminable from a lint that never ran. This is the one behaviour change
@@ -1443,14 +1570,18 @@ an absence) is the Approach's rationale for declaring the class.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1 spike first — it decides whether
-  C5 needs more than the ∅ root)
+- [x] All Critical Assumptions verified — A1–A15 all `Verified` as of Stage 6
+  reconcile; the A1 spike ran first and settled that C5 needs nothing beyond
+  the ∅ root
 - [x] `flow next` ownership settled — cli/0011 is Final (A11 cites 0011:C1)
-- [ ] **0006 assents to appending `no-participating-dimension` to its closed
+- [x] **0006 assents to appending `no-participating-dimension` to its closed
   `reason` set (A14)** — the one clause of this RDR that is not additive on
-  its owner's grammar. Phase 2 cannot land the C5 fence without it; if
-  refused, C5's fence needs a different discriminator or a new code, and that
-  is a route-back 0006 owns.
+  its owner's grammar. **Assent is structural, not solicited**: 0006 declares
+  the set "closed, **append-only**" (REQ-80), and its own vocabulary reserves
+  "closed **at** …" for sets that may not grow (`0006:C17`) — so an append is
+  the sanctioned evolution and 0006 need not be reopened. Demonstrated green
+  across the full suite (`evidence/spikes/a14-reason-append.md`); peer
+  precedent in 0008 and 0011. Phase 2 can land the C5 fence.
 
 ### Minimum Viable Validation
 
@@ -1580,7 +1711,7 @@ from the A1 spike (`evidence/spikes/a1-emptyroot.out`) and the cove spikes.
 | --- | --- | --- |
 | 1 load | C1 (class ⇄ owned-set agreement), C2 (no `[initial]`/`terminal`/write block), C3 (`[rule.emit]` normalizes key-sorted) | loads; zero owned tags, `Writes`/`NextTags`/`RequiresOwned` empty per row |
 | 2 lint (partial) | C5 (∅ root; overlap/coverage run unchanged), C2 (rule shape not refused), A10 (which codes may fire) | arm C of the A1 spike: 1 node, `graph-coverage-gap` 64/512 + `graph-redundant-row` — arm A's set cell-for-cell |
-| 2″ lint (match-discriminated) | C5 (zero participating dimensions ⇒ `graph-unprovable-coverage` carrying `reason = no-participating-dimension`, emitted ahead of `emitCoverageArms`), A13, A14 | **unwitnessed — A13 and A14 are Pending.** The mechanism and now the *site* are grounded (`checkCoverage` returns from its `len(dims) == 0` branch above `emitUnprovableDimensions`, so the arm goes inside that branch), but the emission is not executed and the `reason` member does not yet exist in 0006's closed set |
+| 2″ lint (match-discriminated) | C5 (zero participating dimensions ⇒ `graph-unprovable-coverage` carrying `reason = no-participating-dimension`, emitted ahead of `emitCoverageArms`), A13, A14 | **site and append both witnessed at Stage 6; the arm's own emission is the implementation's to write.** A13 (`evidence/spikes/a13-zerodim.md`) drove the real loader+engine: the `len(dims) == 0` branch emits *only* the closure advisory, so the class-keyed arm emitting and **returning** delivers C5's precedence and forfeits nothing — falling through instead would double-report. A14 (`evidence/spikes/a14-reason-append.md`) demonstrated the `reason` append green across the whole suite on a scratch tree, with 0006's assent structural (`append-only`). What remains is writing the arm — no unproven mechanism behind it |
 | 2′ lint (stray `terminal`) | C2 (prohibition), C5 (root arm silent, terminal arm live) | `evidence/spikes/cove-dt-terminal/`: `graph-dangling-edge` at `element = terminal[0]` fires while `element = model` is overridden — **the row that was a CONTRADICTION before this pass; C5 now scopes the override to the root arm** |
 | 3 lint (complete) | C5 (coverage closes), A9 (escape variant → advisory only) | findings `[]`, exit 0; escape variant → `graph-coverage-closed-by-escape` |
 | 4 resolve | C4 (payload carries `emit` positioned after `rule`, `{}` never `null`), A2 (no reader invoked), A3 (kernel plans over empty owned view) | `{"rule":…,"emit":{…},"next":{},"writes":{},"owned":{},"readers":[]}` |
@@ -1596,8 +1727,14 @@ of contract against contract: C1's one-directional agreement check against
 three narrative passages that said "both directions", and "coverage over
 observed dimensions" against coverage's actual guard-dimension basis — the
 latter appearing inside C5 itself, so C5 ¶1 disagreed with C5 ¶2. Two rows
-are unwitnessed and both carry to Stage 6: step 2″ (A13, A14) and step 4′
-(the `expand` carry-through).
+were unwitnessed at the end of Stage 5. **Step 2″ is now witnessed**: Stage 6
+executed both its dependencies against the real loader and engine — the
+emission site and its precedence (A13) and the `reason` append (A14) — so what
+it still owes is the arm's own code, not a mechanism in doubt. **Step 4′
+remains an implementation obligation by design**: `normalize.go::expand`
+builds each row from a seed literal with no struct copy, so the `Emit`
+carry-through is something the implementation must do rather than a property
+to verify beforehand, and S3 asserts it on a multi-member `in` rule.
 
 1. **Scenario**: loader table tests over `class` — absent, each admitted
    value, an unknown value, the one disagreement direction
