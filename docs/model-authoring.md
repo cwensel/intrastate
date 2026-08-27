@@ -72,14 +72,20 @@ plan = "basic"
 dpa = "required"
 ```
 
+This snippet shows one row of the table's shape, not a complete model:
+`tier × region` has four cells and only `free-eu` is claimed, so linting
+it as written yields a blocking `graph-coverage-gap`. A real table authors
+all four rows, or closes the rest with the escape row below.
+
 `[rule.emit]` is the row's answer: a flat block of string values, returned
 by `flow resolve` under the `emit` key. Its keys are not tags — nothing
 declares them, nothing writes them, and they take no part in selection.
 
-### Discriminate with `[rule.guard.all.<key>]`, not `[rule.match.<key>]`
+### Discriminate with guard atoms, not `[rule.match.<key>]`
 
 **A decision table's discriminating dimensions must be authored as
-`[rule.guard.all.<key>]` atoms.** This is the one authoring choice that
+guard atoms — `[rule.guard.all.<key>]` or `[rule.guard.unless.<key>]` — not
+as `[rule.match.<key>]`.** This is the one authoring choice that
 lint cannot forgive quietly, and it is easy to get wrong because both block
 kinds accept the same operators over the same tags.
 
@@ -100,9 +106,10 @@ naming the group and pointing at the guard-atom remedy. Over a
 group may genuinely range over no guard dimension.
 
 With the dimensions authored as guards, lint proves the table for real:
-`graph-coverage-gap` names each uncovered cell, `graph-overlap` names two
-rows that both claim one, and the table is only green when every cell is
-claimed exactly once.
+`graph-coverage-gap` reports, per unclosed failure-class arm, how many of
+the product's cells are uncovered and over which dimensions; `graph-overlap`
+names two rows that both claim one, and the table is only green when every
+cell is claimed exactly once.
 
 ### The escape row: the "otherwise" idiom
 
