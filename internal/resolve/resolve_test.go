@@ -381,10 +381,6 @@ func TestReq10_RefusalCarriesInputTupleIdentityAndTableRevision(t *testing.T) {
 // filesystem packages. The import graph is the checkable trace of that.
 func TestReq11_KernelImportsNoCLIOutputOrPersistenceFacility(t *testing.T) {
 	forbidden := []string{
-		"github.com/newcoinc/intrastate/internal/cli",
-		"github.com/newcoinc/intrastate/internal/cli/respond",
-		"github.com/newcoinc/intrastate/internal/cli/clierr",
-		"github.com/newcoinc/intrastate/internal/cli/config",
 		"github.com/spf13/cobra",
 		"github.com/spf13/pflag",
 		"os",
@@ -397,6 +393,14 @@ func TestReq11_KernelImportsNoCLIOutputOrPersistenceFacility(t *testing.T) {
 	for _, f := range forbidden {
 		if imports[f] {
 			t.Errorf("resolver kernel imports %q; the kernel must not print output, inspect CLI flags, discover ambient state, or execute persistence", f)
+		}
+	}
+	// The CLI tree is checked by prefix rather than by name: an enumeration
+	// goes stale as CLI packages are added or deleted, and REQ-11 prohibits a
+	// class of behaviour, not a fixed list of packages.
+	for imp := range imports {
+		if isCLIPackage(imp) {
+			t.Errorf("resolver kernel imports CLI package %q; the kernel must not print output or inspect CLI flags", imp)
 		}
 	}
 }
