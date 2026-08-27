@@ -267,11 +267,11 @@ func TestReq9_AnUndeclaredTagRefusalPrecedesTheClassDisagreement(t *testing.T) {
 	}
 
 	f := refuseSource(t, src, "dt-owned-and-unknown-tag.toml")
-	if f.Category != table.CatMalformedModelDeclaration {
-		t.Errorf("category = %q; want %q — the agreement check runs at or "+
-			"after loadTags, so a document that is doubly malformed refuses "+
-			"on whichever of the two `run` reaches first",
-			f.Category, table.CatMalformedModelDeclaration)
+	if f.Category != table.CatUnknownTag {
+		t.Errorf("category = %q; want %q — C1 draws this consequence from "+
+			"the window's floor verbatim: \"an undeclared-tag refusal "+
+			"precedes a class-disagreement refusal under `run`'s fail-fast "+
+			"order\"", f.Category, table.CatUnknownTag)
 	}
 }
 

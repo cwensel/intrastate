@@ -79,13 +79,13 @@ func (l *loader) run() (*Model, error) {
 		l.loadModelHeader,
 		l.loadOutcomes,
 		l.loadTags,
-		l.checkClassAgreement,
 		l.loadAccessors,
 		l.loadDump,
 		l.loadContexts,
 		l.loadInitial,
 		l.loadTerminal,
 		l.normalizeRules,
+		l.checkClassAgreement,
 		l.checkAccessorBindings,
 	} {
 		if err := step(); err != nil {
@@ -232,8 +232,12 @@ func (l *loader) loadTags() error {
 // `loadModelHeader`; and it must precede `checkAccessorBindings`, `run`'s
 // last step, so a decision table that declares both an owned tag and
 // `[initial]` refuses on the CLASS rather than on the writer-arity
-// diagnostic. Anywhere in that window satisfies the clause; immediately
-// after `loadTags` is the earliest point at which it is decidable.
+// diagnostic. C1 draws a second consequence from the window's floor — "an
+// undeclared-tag refusal precedes a class-disagreement refusal under
+// `run`'s fail-fast order" — and that refusal is minted by
+// `normalizeRules`. The two clauses are jointly satisfiable at exactly one
+// place in the window: AFTER `normalizeRules` and before
+// `checkAccessorBindings`, which is where this step runs.
 func (l *loader) checkClassAgreement() error {
 	if !IsDecisionTable(l.model) {
 		return nil
