@@ -323,7 +323,10 @@ Global Flags:
 ```
 Reading the output
 
-  candidate[]  one entry per row the supplied state does not exclude,
+  outcomes[]   the model's declared recognized alphabet — every outcome
+               that can be asked of it, not only those with a surviving
+               candidate row.
+  candidates[] one entry per row the supplied state does not exclude,
                each naming its rule id, its outcome, and its verdict.
   unknown[]    per candidate, the keys that left the row undecided and
                the reason each is unsettled. This is the actionable

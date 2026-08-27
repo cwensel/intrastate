@@ -66,8 +66,22 @@ lint: $(GOLANGCI_LINT)
 # different things and neither is reusable for the other.
 MODEL ?= models/rdr.toml
 
+# The worked examples docs/model-authoring.md walks through, one per
+# model class. They are linted here for the same reason the subject
+# above is: a documented model that the loader or the analysis has since
+# stopped accepting is worse than no example, and prose cannot catch
+# that. Both are expected to lint at exit 0 — the state machine carries
+# `graph-coverage-closed-by-escape` advisories, which do not fail.
+EXAMPLE_MODELS = \
+	models/examples/pricing-decision-table.toml \
+	models/examples/review-state-machine.toml
+
 graph-lint: build
 	$(BIN) lint --model $(MODEL) --as=json
+	@for m in $(EXAMPLE_MODELS); do \
+		echo "lint $$m"; \
+		$(BIN) lint --model $$m --as=json || exit 1; \
+	done
 
 # Reference docs are GENERATED from the command tree (`internal/cli/docs.go`),
 # never hand-edited: the binary already carries the flag grammar, the finding

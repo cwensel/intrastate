@@ -1,0 +1,97 @@
+# A decision table: stateless, total, one answer per situation.
+#
+# Referenced by docs/model-authoring.md. Linted by `make graph-lint`, so
+# a change to the loader or the analysis that invalidates this document
+# fails CI rather than leaving the documentation describing a model the
+# tool no longer accepts.
+#
+# The table is `tier x region`, a 2x2 product with all four cells
+# claimed exactly once, so it lints with an EMPTY findings list — no
+# gap, no overlap, and no escape row needed. That is the shape to copy:
+# a table whose coverage is PROVED over its declared domains rather than
+# closed by a default.
+#
+# What makes it a decision table, structurally:
+#   - class = "decision-table" is DECLARED, never inferred
+#   - zero tags of provenance "owned" (declaring one is refused at load)
+#   - no [initial], no terminal, no accessors
+#   - every ordinary row carries [rule.emit] and no write block
+#
+# The discriminating dimensions are GUARD atoms. Authoring them as
+# [rule.match.<key>] instead is the one mistake lint cannot forgive
+# quietly -- see docs/model-authoring.md.
+
+outcomes = ["decide"]
+
+[model]
+id = "pricing"
+version = 1
+class = "decision-table"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.tier]
+provenance = "observed"
+kind = "enum"
+domain = ["free", "paid"]
+single_valued = true
+required = true
+
+[tags.region]
+provenance = "observed"
+kind = "enum"
+domain = ["eu", "us"]
+single_valued = true
+required = true
+
+[[rule]]
+id = "free-eu"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "free"
+[rule.guard.all.region]
+eq = "eu"
+[rule.emit]
+plan = "basic"
+dpa = "required"
+
+[[rule]]
+id = "free-us"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "free"
+[rule.guard.all.region]
+eq = "us"
+[rule.emit]
+plan = "basic"
+dpa = "none"
+
+[[rule]]
+id = "paid-eu"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "paid"
+[rule.guard.all.region]
+eq = "eu"
+[rule.emit]
+plan = "pro"
+dpa = "required"
+
+[[rule]]
+id = "paid-us"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "paid"
+[rule.guard.all.region]
+eq = "us"
+[rule.emit]
+plan = "pro"
+dpa = "none"

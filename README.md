@@ -5,7 +5,7 @@ reviewable, and deterministic.
 
 The project is built around a simple idea: a flow should be navigated from
 declared state and recognized outcomes, not reimplemented ad hoc in every skill,
-script, or agent. intrastate will provide a small resolver kernel, a reviewable
+script, or agent. intrastate provides a small resolver kernel, a reviewable
 transition-table format, static graph lint, and a CLI surface that lets callers
 ask what can happen next, resolve a recognized outcome, and safely read or
 persist owned state.
@@ -20,6 +20,48 @@ or illegal graphs are caught during review and CI.
 At runtime, intrastate refuses unsafe guesses. Given the same transition table,
 state snapshot, observed tags, and recognized outcome, the resolver returns the
 same result: one legal transition plan or one typed refusal.
+
+## Two Model Classes
+
+A model declares its class in `[model]`, and the class says what kind of
+question the model answers.
+
+**State machine** (`class = "state-machine"`, the default) — the model owns
+state and advances it. It declares owned tags, a root `[initial]` state,
+accessors that read and write that state, and terminal predicates that say
+where it stops. Its rules carry writes, and `flow resolve` answers with the
+plan for the next state. This is the classical transition system: a
+tag-valued state, a recognized-outcome alphabet, and a transition relation
+authored as rows.
+
+**Decision table** (`class = "decision-table"`) — the model owns no state
+and advances nothing. It maps a supplied situation to an answer. It
+declares zero owned tags, no root, no terminals, and no accessors; its
+rules carry `[rule.emit]` instead of writes, and `flow resolve` answers
+with that row's emit block. This is the classical decision table: condition
+dimensions spanning a product, one row per cell, one answer per cell.
+
+Both ship, both are authored in one grammar, and both are checked by the
+same analysis. What they share is the part worth stating plainly:
+
+- **Coverage is proved, per outcome, for both.** Rules are grouped by the
+  outcome they match; the group's guard atoms span a product of their
+  declared domains; every assignment must be claimed. An unclaimed
+  assignment is `graph-coverage-gap` and the model does not lint. This is
+  the decision table's completeness check, and a state machine gets it too.
+- **Exactly one row, or a refusal.** Two rows enabled by the same
+  assignment is `graph-overlap` at lint and `flow-ambiguous-match` at
+  runtime. Nothing resolves the tie by row order, priority, or authoring
+  position — picking one would be a decision the model never made.
+- **The escape row is the only default.** An ordinary catch-all row
+  overlaps everything it means to catch. An escape row is the construct
+  that closes the remainder, and a group closed that way carries an
+  advisory saying so.
+
+Worked, CI-linted examples of both live in
+[`models/examples/`](models/examples/), and
+[docs/model-authoring.md](docs/model-authoring.md) walks through authoring
+each.
 
 ## Install
 

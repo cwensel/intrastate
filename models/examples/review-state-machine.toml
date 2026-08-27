@@ -1,0 +1,120 @@
+# A state machine: stateful, one owned tag advanced by recognized
+# outcomes.
+#
+# Referenced by docs/model-authoring.md. Linted by `make graph-lint`, so
+# a change to the loader or the analysis that invalidates this document
+# fails CI rather than leaving the documentation describing a model the
+# tool no longer accepts.
+#
+# draft -> submitted -> approved | rejected. `status` is the owned state;
+# the [read.*] / [write.*] pair is what lets the CLI observe and advance
+# it. An owned tag served by zero readers is refused at load.
+#
+# NOTE the three escape rows. Coverage is proved PER OUTCOME over the
+# guarded dimensions, for a state machine exactly as for a decision
+# table: `submit` is guarded on status="draft", which leaves the other
+# three values of the 4-value domain unaccounted for, and lint reports
+# `graph-coverage-gap` until something covers them. The escape rows
+# close that -- an `approve` asked of a draft resolves to
+# `approve-otherwise` with escaped=true and escape_class="no_match"
+# rather than refusing.
+#
+# Each therefore carries the `graph-coverage-closed-by-escape` advisory:
+# informational, exit 0, and the signal that this model leans on its
+# defaults instead of enumerating. Pinning the remaining transitions
+# explicitly would clear it.
+#
+# Terminals are [context.<name>] PREDICATES over owned tags, never bare
+# state names: `terminal = ["approved"]` without the matching
+# [context.approved] block is refused as unknown_context.
+
+outcomes = ["submit", "approve", "reject"]
+terminal = ["approved", "rejected"]
+
+[model]
+id = "review"
+version = 1
+
+[initial]
+status = "draft"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "submitted", "approved", "rejected"]
+single_valued = true
+required = true
+
+[read.review-state]
+role = "review"
+path = "review.status"
+keys = ["status"]
+timeout = "5s"
+
+[write.review-state]
+role = "review"
+path = "review.status"
+keys = ["status"]
+timeout = "5s"
+read_back = true
+
+[context.approved]
+[context.approved.match.status]
+eq = "approved"
+
+[context.rejected]
+[context.rejected.match.status]
+eq = "rejected"
+
+[[rule]]
+id = "submit"
+[rule.match.recognized]
+eq = "submit"
+[rule.guard.all.status]
+eq = "draft"
+[rule.write]
+status = "submitted"
+
+[[rule]]
+id = "approve"
+[rule.match.recognized]
+eq = "approve"
+[rule.guard.all.status]
+eq = "submitted"
+[rule.write]
+status = "approved"
+
+[[rule]]
+id = "reject"
+[rule.match.recognized]
+eq = "reject"
+[rule.guard.all.status]
+eq = "submitted"
+[rule.write]
+status = "rejected"
+
+# One escape row per outcome: the request is legal but the state does not
+# admit the transition. Escape rows carry no write block.
+[[rule]]
+id = "submit-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "submit"
+
+[[rule]]
+id = "approve-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "approve"
+
+[[rule]]
+id = "reject-otherwise"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "reject"
