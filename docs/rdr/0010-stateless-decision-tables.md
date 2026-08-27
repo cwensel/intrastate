@@ -208,7 +208,7 @@ knowledge, no artifact discovery).
     every existing declaration at load until edited. **Count confirmed exact:
     103** files under `internal/table/testdata/` declare `[dump]`, all 103
     with an explicit `order =` list (`grep -rl '^\[dump\]' internal/table/testdata/ | wc -l`);
-    the 75 further repo-wide matches are all under
+    the 73 further repo-wide matches (176 repo-wide, less the 103) are all under
     `docs/rdr/0002-*/evidence/`, i.e. 0002's spike fixtures. Absent `[dump]`,
     `loadDump` sets `DumpOrder = DumpColumns()`, so the default set picks up
     `emit` for free, satisfying C3's default-set clause. `models/rdr.toml`
@@ -325,9 +325,12 @@ knowledge, no artifact discovery).
   (`graph-overlap`, `graph-coverage-gap`, `graph-unprovable-coverage`,
   `graph-redundant-row`, `graph-coverage-closed-by-escape`,
   `graph-product-too-large` — both its group and traversal arms) or provably
-  silent (`graph-dangling-edge`, `graph-dead-end`, `graph-always-present-owned`,
+  silent (`graph-dead-end`, `graph-always-present-owned`,
   `graph-owned-before-write`, `graph-single-valued-state`,
-  `graph-terminal-escape`, `graph-unreachable-rule`, `graph-vacuous-atom`).**
+  `graph-terminal-escape`, `graph-unreachable-rule`, `graph-vacuous-atom`).
+  `graph-dangling-edge` is the one code that splits by arm: its missing-root
+  arm is silent under C5's override of `0006:C18`, its terminal-predicate arm
+  stays live and is C2's enforcement of the `terminal` prohibition.**
   - **Status**: Verified
   - **Method**: MVV Test
   - **Evidence**: the taxonomy was enumerated rather than paraphrased —
@@ -356,9 +359,20 @@ knowledge, no artifact discovery).
     `internal/graphlint/analysis.go::checkDanglingEdge` fires its root arm
     unconditionally — so the shipped behaviour over a rootless model is one
     `graph-dangling-edge` and silence everywhere else. Executed in the A1
-    spike, arm B (`evidence/spikes/a1-emptyroot.out`). `graph-dangling-edge`
-    is therefore silent here by C5's override of `0006:C18`, which is scoped
+    spike, arm B (`evidence/spikes/a1-emptyroot.out`). That root arm is
+    therefore silent here by C5's override of `0006:C18`, which is scoped
     to this class alone — not by the model's zero writes.
+    **The code has a second arm, and it does not go silent with the first:**
+    `checkDanglingEdge` also emits over each terminal predicate reading a
+    non-owned tag, at `element = terminal[i]` rather than `element = model`.
+    Executed, both arms firing on one model:
+    `evidence/spikes/cove-dt-terminal/result.md`. `0006:C3` carries dangling
+    edge and declared terminal/escape handling as distinct classes and
+    `0006:C18` names only the absent root, so the override reaches the root
+    arm alone. The terminal arm cannot false-positive over a zero-owned model
+    — every terminal predicate necessarily reads a non-owned tag — so it is
+    live by design and is what makes C2's `terminal` prohibition a refusal
+    0006 already owns rather than a new one.
   - **If wrong**: a machine-only invariant fires on every decision table, or
     stays silent on a defect it should report.
 - **A11 `flow next` over a decision-table model succeeds unchanged — no
@@ -388,6 +402,27 @@ knowledge, no artifact discovery).
   - **If wrong**: `next` over a decision table refuses or reports nonsense,
     and this RDR owes a class-specific clause on 0011's seam.
 
+- **A12 Splitting `graph-dangling-edge` by arm is implementable without a
+  taxonomy change: the missing-root arm can be class-keyed while the
+  terminal-predicate arm stays unconditional, and no consumer of the finding
+  set distinguishes the two by code alone.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: to verify. Both arms live in one function
+    (`internal/graphlint/analysis.go::checkDanglingEdge`) and emit one code,
+    distinguished only by `element` (`model` vs `terminal[i]`) — executed,
+    both firing on one model:
+    `evidence/spikes/cove-dt-terminal/result.md`. What is unverified is the
+    consumer side: whether any golden fixture, exit-code path, or 0006
+    conformance test keys on `graph-dangling-edge` as a whole rather than on
+    its element, such that keeping one arm live changes an existing
+    expectation. Verify by class-keying the root arm only and running the
+    0006 graph-lint suite.
+  - **If wrong**: the arms cannot be split without a new finding code, and
+    C2's "none of these is a new refusal" fails for `terminal` — the
+    prohibition then needs either a load-time check (a new refusal C1's
+    agreement check would have to grow) or a taxonomy addition 0006 owns.
+
 ## Proposed Solution
 
 ### Approach
@@ -415,7 +450,9 @@ missing-root finding (`0006:C18`) is untouched for the state-machine class.
 The class is **declared, not inferred** from the empty owned set. The
 sibling discriminator in this codebase — `Row.Kind` (ordinary vs escape,
 dump column `kind`) — is inferred from the *presence* of an `escape` list
-(`internal/table/normalize.go::normalizeRule`); nothing in the tree infers a
+(`internal/table/model.go::Row.Kind`, `len(r.Escape) > 0`; `normalizeRule`
+validates escape shape but never computes the kind), and it is per-row, not
+per-model; nothing in the tree infers a
 class from an absence, and 0006 rests on exactly the rule that an absent root
 is a defect, never an empty graph (`0006:C18`). ⇒ inferring "decision table"
 from "no owned tags" would turn a forgotten `provenance = "owned"` into a
@@ -479,9 +516,11 @@ accessor whose `keys` name an owned tag, and its ordinary rules MUST NOT
 carry a write block or a clear list. None of these is a new refusal: each is
 already unauthorable once the owned set is empty — an `[initial]` key or a
 write/clear key that is not a declared owned tag refuses as `unknown tag`
-(undeclared), `malformed accessor binding`, or `write to non-owned tag`
-(declared, non-owned), and a terminal predicate over a non-owned tag is
-0006's `graph-dangling-edge` terminal arm. `0002:C4`'s "an ordinary
+(undeclared) or, once declared and non-owned, as `malformed accessor
+binding` (an `[initial]` key is a written tag demanding exactly one writer,
+which a decision table declares none of) or `write to non-owned tag`; and a
+terminal predicate over a non-owned tag is 0006's `graph-dangling-edge`
+terminal arm, which C5 keeps live for exactly this reason. `0002:C4`'s "an ordinary
 transition rule MUST contain a write block" is conditioned on class: it binds
 the `"state-machine"` class only, and the `malformed rule shape` arm that
 enforces it MUST NOT fire for a `"decision-table"` model. Rule ids, the
@@ -502,7 +541,14 @@ undeclared, uninterpreted, compared by exact byte equality, and MUST NOT be
 matched, guarded, written, or read by any accessor — the same carried-through
 treatment `[model.metadata]` receives under `0002:C2`. Normalization MUST
 carry the block on the row as a key-sorted, duplicate-free sequence; an
-absent block normalizes to an empty sequence. `emit` MUST join the closed
+absent block normalizes to an empty sequence, and a **present but empty**
+`[rule.emit]` normalizes to the same empty sequence rather than refusing —
+`emit` keys on length, not on key presence, which is the opposite of the
+escape-block rule in the same function (`internal/table/normalize.go`
+refuses a write/clear/gate block "EVEN AN EMPTY ONE" under `0002:C4`). The
+divergence is deliberate: an empty write block is an authoring error because
+a transition must write, while an empty emit block is a row that answers
+nothing, which C4 already renders as `{}`. `emit` MUST join the closed
 dump column vocabulary (`0002:C19`), rendered as `key=value` pairs in key
 order, so a `[dump]` column list MUST name it, and the default column set
 used when `[dump]` is absent MUST include it for both classes. `emit` MUST
@@ -540,16 +586,37 @@ coverage and withholding (invariant 4), the redundant-row, vacuous-atom, and
 unreachable-rule advisories, the node ceiling, and the product bound MUST run
 unchanged over the authored observed dimensions. The missing-root arm of
 invariant 1 (`0006:C18`), dead end (2), always-present-owned (5),
-owned-set-before-match (6), single-valued state, and declared-terminal
-handling (7) are vacuous by construction over this class and MUST NOT emit; lint MUST NOT report the
-class as a finding of any severity. Over a `"state-machine"` model every
-0006 invariant, `0006:C18` included, is unchanged.
+owned-set-before-match (6), and single-valued state are vacuous by
+construction over this class and MUST NOT emit; lint MUST NOT report the
+class as a finding of any severity. Invariant 1's **terminal-predicate arm**
+MUST stay live: `0006:C18` scopes the override to the absent root, and
+`0006:C3` carries dangling edge and declared terminal/escape handling as
+distinct invariant classes, so silencing the code wholesale would remove
+C2's enforcement of the `terminal` prohibition. Over a decision table the arm
+cannot false-positive — with zero owned tags every terminal predicate reads a
+non-owned tag — so it is the refusal C2 relies on, not a vacuous check.
+Declared-terminal handling (7) proper, and the escape arm of it, stay silent
+by construction: they key on a declared terminal, which C2 forbids. Over a
+`"state-machine"` model every 0006 invariant, `0006:C18` included, is
+unchanged.
 ```
 
 ⇒ "unchanged coverage over observed dimensions" is a consequence of 0006's
 own reachability filter (`internal/graphlint/groups.go::checkGroups` runs
 coverage only for reachable groups) once the root exists, not a parallel
 coverage path.
+
+#### Authority
+
+Cue: the class is one decision read at three sites that "must agree" (the
+drift risk below), and C1 fixes exactly one writer for it.
+
+| Input / decision | Writer (canonical) | Readers | Call sites | Sibling arms | Which is canonical |
+| --- | --- | --- | --- | --- | --- |
+| model class | `loadModelHeader` (C1 agreement check) | `normalizeRule`, `reach`, `checkDanglingEdge` root arm | one per reader | the owned tag set (`len(owned) == 0`) | **the declared `class` on the loaded model**; the owned set is never re-derived downstream (C1) |
+| row kind (ordinary/escape) | `normalizeRule` (validates shape) | `Row.Kind()` derives it | dump `kind` column, `bareEscapeFor` | — | `internal/table/model.go::Row.Kind`, presence-inferred, per-row — the contrast case, not a reusable mechanism |
+| the answer (`emit`) | `[rule.emit]` on the authored row | dump column, `resolvePayload` | joined by `Plan.RuleID` after selection | the kernel row's `NextTags` (the PoC's pseudo-owned shape, BR2) | **the normalized row's `Emit`**; never the kernel row (C3) |
+| reachability root | `reach` | `contextReachable` → `checkGroups` | one | `[initial]` (state-machine) vs ∅ (decision-table) | the class, per C5 — not `len(Initial)` |
 
 #### Load-Bearing Decisions
 
@@ -785,7 +852,7 @@ decision table, and every machine-only obligation is conditioned on
   forbid.
 - Overrides `0006:C18` itself, where the chosen approach leaves it verbatim.
 - No adjacent path infers from absence: `Row.Kind` is inferred from the
-  presence of `escape`.
+  presence of `escape` (`internal/table/model.go::Row.Kind`), and per-row.
 
 **Reason for rejection**: one declared line buys a load-time refusal in both
 directions and keeps 0006's root rule intact.
@@ -1063,6 +1130,39 @@ Done = the MVV passes end to end under `make check`, every scenario below
 has a green test, and no existing golden output changes except for the
 `emit` payload field and dump column.
 
+#### Oracle
+
+Cue: MVV step 3 passes on findings `[]` at exit 0 — an absence-of-error
+oracle, the shape that goes green against a lint that stopped running.
+
+| MVV step | Fails if X is wrong because Y | Negative / failing control |
+| --- | --- | --- |
+| 1 author the table | — (setup) | match-only variant: same table discriminating by `[rule.match.<key>]` has an empty scoped product (`0006:C7`) and lints clean **while incomplete** |
+| 2 partial → coverage finding | a *positive* finding naming the uncovered cell; fails if the ∅ root is missing, since `checkGroups` skips unreachable groups and the finding disappears (A1 arm B, executed) | the same model with `class` omitted → `graph-dangling-edge` at `element = model`, never a coverage finding |
+| 3 complete → `[]` at exit 0 | **absence oracle — discriminated only by step 2 preceding it.** Step 2's positive finding over the same fixture proves coverage ran; `[]` then means "closed", not "never ran" | step 2 itself is the control; additionally the escape variant must yield the `graph-coverage-closed-by-escape` advisory, never a bare green |
+| 4 resolve → `rule` + `emit` | fails if `emit` is dropped at the kernel boundary or joined on the wrong row; asserts `data.rule` is the *fourth* rule's id, not any row | a row authoring no emit block must return `{}`, never `null` (S5) |
+| 5 dump + `flow next` | fails if `emit` is absent from the default column set, or if `next` demands an artifact | a `[dump]` list omitting `emit` refuses `malformed dump declaration` |
+| 6 negative controls | each names the exact refusal category, not merely non-zero exit | stray `terminal` → `graph-dangling-edge` at `element = terminal[0]` (C5's live arm) |
+
+#### Trace
+
+Cue: five contracts bear on the MVV's end-state. Walked stepwise; witnesses
+from the A1 spike (`evidence/spikes/a1-emptyroot.out`) and the cove spikes.
+
+| MVV step | Assertions in force | Witness |
+| --- | --- | --- |
+| 1 load | C1 (class ⇄ owned-set agreement), C2 (no `[initial]`/`terminal`/write block), C3 (`[rule.emit]` normalizes key-sorted) | loads; zero owned tags, `Writes`/`NextTags`/`RequiresOwned` empty per row |
+| 2 lint (partial) | C5 (∅ root; overlap/coverage run unchanged), C2 (rule shape not refused), A10 (which codes may fire) | arm C of the A1 spike: 1 node, `graph-coverage-gap` 64/512 + `graph-redundant-row` — arm A's set cell-for-cell |
+| 2′ lint (stray `terminal`) | C2 (prohibition), C5 (root arm silent, terminal arm live) | `evidence/spikes/cove-dt-terminal/`: `graph-dangling-edge` at `element = terminal[0]` fires while `element = model` is overridden — **the row that was a CONTRADICTION before this pass; C5 now scopes the override to the root arm** |
+| 3 lint (complete) | C5 (coverage closes), A9 (escape variant → advisory only) | findings `[]`, exit 0; escape variant → `graph-coverage-closed-by-escape` |
+| 4 resolve | C4 (payload carries `emit`, `{}` never `null`), A2 (no reader invoked), A3 (kernel plans over empty owned view) | `{"rule":…,"emit":{…},"next":{},"writes":{},"owned":{},"readers":[]}` |
+| 5 dump / `next` | C3 (`emit` in the default column set), A11 (`required` empty, serializes `[]`) | dump renders the `emit` column; `next` exit 0 with no `--artifact` |
+
+No CONTRADICTION row survives: the C2 × C5 contradiction this trace found at
+step 2′ is fixed in C5 and A10 in this pass, with A12 booking the one
+remaining unverified consequence (that the arms can be split without a
+taxonomy change).
+
 1. **Scenario**: loader table tests over `class` — absent, each admitted
    value, an unknown value, and each disagreement direction (decision-table
    with an owned tag; state-machine with none).
@@ -1074,30 +1174,48 @@ has a green test, and no existing golden output changes except for the
    **Expected**: `malformed rule shape` for `state-machine`; loads with
    empty `Writes`/`NextTags`/`RequiresOwned` for `decision-table` (C2).
 3. **Scenario**: `[rule.emit]` normalization — unordered keys, duplicate
-   keys, a non-string value, an absent block; dump with and without an
+   keys, a non-string value, an absent block, a **present but empty** block;
+   dump with and without an
    explicit `[dump]` naming `emit`; `[rule.match.<emit-key>]`.
    **Expected**: key-sorted duplicate-free sequence; non-string refuses;
-   absent → empty; `emit` renders `key=value` in key order and a `[dump]`
+   absent → empty, and present-but-empty → empty *without* refusing (the
+   arm that distinguishes `emit` from the write/clear/gate blocks, which
+   refuse on presence); `emit` renders `key=value` in key order and a `[dump]`
    omitting it refuses `malformed dump declaration`; the match refuses
    `unknown tag` (C3, A4).
 4. **Scenario**: graph-lint fixture pair (partial → one coverage finding
    naming the cell; complete, closed by a fourth *ordinary* rule → `[]`),
    the escape-"otherwise" variant, the class-omitted control, a fingerprint
-   test editing only an emit block, and a **match-only negative control** —
+   test editing only an emit block, a **match-only negative control** —
    the same table discriminating by `[rule.match.<key>]` instead of guard
-   atoms.
+   atoms — a **two-outcome escape control** (one escape row over a
+   two-outcome alphabet, which rescues one outcome and leaves the other's
+   coverage open, per `0002:C5`'s per-outcome rescue scoping; A9), and a
+   **stray-`terminal` control** — a decision table declaring `terminal` over
+   an observed tag.
    **Expected**: exact finding lists against the full taxonomy (A10, A9);
    the escape variant yields exactly the `graph-coverage-closed-by-escape`
    advisory at exit 0, never a bare green (`internal/graphlint/coverage.go`);
-   `graph-dangling-edge` on the class-omitted control (0006:C18 unchanged);
+   `graph-dangling-edge` at `element = model` on the class-omitted control
+   (0006:C18 unchanged);
    fingerprints equal (A7); the match-only control lints clean **while
-   incomplete**, pinning why the fixtures must author guard atoms (C5).
+   incomplete**, pinning why the fixtures must author guard atoms (C5); the
+   two-outcome escape control reports the unrescued outcome's coverage gap,
+   pinning that "the otherwise row" is per-outcome (A9); and the
+   stray-`terminal` control reports `graph-dangling-edge` at
+   `element = terminal[0]` — the arm C5 keeps live, distinguishing it from
+   the silenced root arm by `element` rather than by code (C2, C5).
 5. **Scenario**: `flow resolve` and `flow next` over the fixture with no
    `--artifact`, and with an `--artifact` bound to an uninvoked role, in
-   JSON and text modes.
+   JSON and text modes. The fixture MUST include one selectable row
+   authoring **no** `[rule.emit]` block, and the `{}`-never-`null`
+   assertion MUST be taken on that row's resolve — it is the only arm on
+   which `"emit": null` can surface, and the MVV's table (every ordinary
+   rule carrying an emit block) cannot exhibit it.
    **Expected**: exit 0; `emit` present (`{}` when unauthored, never
    `null`); `next`/`writes`/`clear`/`owned` empty, `readers` `[]`; the
-   stray binding ignored; text renders one `key=value` line per pair (C4,
+   stray binding ignored; text renders one `key=value` line per pair, and
+   no line at all for an unauthored block (C4,
    A2, A11).
 6. **Scenario**: regression sweep — every checked-in model and fixture
    (`models/rdr.toml` included) under `make check`.
