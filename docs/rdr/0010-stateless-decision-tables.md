@@ -93,7 +93,7 @@ N/A-bulleted). -->
   Gate locks it at Draft → Final. Never skip lenses off a
   Draft Profile until Resolve has run. -->
 - **Priority**: High
-- **Related Issues**: intrastate#zdat (seed; stays open as the defect tracker), rdr#thsc (umbrella), rdr#tmxk (the consumer model that motivates this), intrastate#1mv1 (sibling seed on `flow next` verb semantics — cross-cite, not a facet)
+- **Related Issues**: intrastate#zdat (seed; stays open as the defect tracker), rdr#thsc (umbrella), rdr#tmxk (the consumer model that motivates this), intrastate#1mv1 (sibling seed, now RDR 0011 — `flow next` verb semantics; cross-cite, not a facet)
 - **Predecessors**: 0002-transition-table-as-reviewable-data, 0005-skill-integration-cli-contract, 0006-graph-lint-authority-and-guarantees
 - **Overrides**: 0002:C2 and 0002:C3 (the closed `[model]` layout gains an optional `class` key; the rule layout gains `[rule.emit]`) — additive; 0002:C4 ("an ordinary transition rule MUST contain a write block", `internal/table/normalize.go::normalizeRule`, category `malformed_rule_shape`) — conditioned on the `state-machine` class; 0002:C19 (closed dump column vocabulary gains `emit`); 0005:C1 (the `flow resolve` success payload gains `emit`; `--artifact` unrequired is a consequence of its own reader scoping, not an override); 0006:D-reachability-relation (the root is the declared initial owned state *or*, for the `decision-table` class, the empty owned-state node). Confirmed at propose as NOT overridden: 0006:C18 (missing root stays a blocking finding for the `state-machine` class, `internal/graphlint/analysis.go::checkDanglingEdge`), 0002:C2's write-only-owned-tag clause (unreachable with zero owned tags), 0005 DEV-8's demand set (`internal/cli/flow_exec.go::invokedReaders`, already empty over no owned keys).
 - **Seam Lineage**: no prior accretion
@@ -246,16 +246,16 @@ knowledge, no artifact discovery).
   - **If wrong**: a machine-only invariant fires on every decision table, or
     stays silent on a defect it should report.
 - **A11 `flow next` over a decision-table model succeeds unchanged — no
-  owned demand, empty `required`/`next`/`writes` per candidate — and needs
-  no refusal; re-verified against cli/0011's candidate predicate once 0011
-  locks.**
+  owned demand, empty `required`/`next`/`writes` per candidate, every rule
+  a candidate — under cli/0011:C1's candidate predicate.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: `0005:C1` next preview reads normalized data only; the
-    MVV's `flow next` step asserts exit 0 with empty `required` per
-    candidate. The candidate predicate is owned by the sibling seed on
-    `flow next` (intrastate#1mv1), proposed after this RDR — its element
-    is cited once it has one.
+  - **Evidence**: cli/0011:C1 (Final) owns the predicate and states its
+    demand-set term "is empty over a model with zero owned tags
+    (`0010:C4`)"; a decision-table row's match atoms are all over observed
+    `--tag` keys, so each is present or `{key, absent}`, never excluding.
+    The MVV's `flow next` step asserts exit 0 with empty `required` per
+    candidate.
   - **If wrong**: `next` over a decision table refuses or reports nonsense,
     and this RDR owes a class-specific clause on 0011's seam.
 
@@ -270,8 +270,9 @@ tags**, and the loader refuses a class that disagrees with the owned set in
 either direction. Everything a state machine needs *because it has owned
 state* — `[initial]`, `terminal`, owned readers and writers, the write block
 on every ordinary rule, `--artifact` at resolve — is absent from a decision
-table by construction, and each absence is enforced by a rule 0002/0005
-already have rather than by a new one. The one thing a decision table cannot
+table by construction, and each absence is enforced by a rule 0002/0005/0006
+already have rather than by a new one (C2); the only new refusal is the
+class/owned-set agreement check (C1). The one thing a decision table cannot
 express today, an *answer*, is authored as an optional `[rule.emit]` table of
 literal string key/values on any rule of either class; the normalized row
 carries it, the dump renders it, and the `flow resolve` payload returns it
@@ -312,7 +313,7 @@ Three seams change, each additively on its owner's grammar:
    it. `invokedReaders` and `runReaders` are unchanged — the empty demand set
    already makes `--artifact` unrequired (0005:C1 "A reader no candidate row
    needs MUST NOT run"). `flow next` is not touched by this RDR (its
-   candidate predicate is cli/0011's).
+   candidate predicate is cli/0011:C1; A11).
 
 Data flow for a decision table: TOML → loader (class check, no owned tags,
 rows with empty `RequiresOwned`/`Writes`/`NextTags`, populated `Emit`) →
@@ -568,43 +569,28 @@ declared line, and that line is what lets `0006:C18` stand unchanged and
 makes the class reviewable in the artifact. A is the status quo the problem
 statement rejects; D pays for a verb the kernel already provides.
 
-For the answer, three shapes: row identity alone (already in the payload —
-kept, insufficient alone because the consumer then needs an out-of-band map),
-the PoC's pseudo-owned `next` tag (the defect itself), and an authored
-literal `emit` block (chosen; the sibling design doc's own "same row → same
-output" framing, K4).
+For the answer, an authored literal `emit` block is chosen over the two
+shapes Briefly Rejected names (row identity alone; the PoC's pseudo-owned
+tag): it is the sibling design doc's own "same row → same output" framing
+(K4), and it keeps the answer inside the reviewable artifact.
 
-Premortem: hardened (hardened) — critic verdict PASS, no switch forced;
-nine mitigations folded: A1 pins the hole cell set and the size
-suppression; A2 covers observed readers; A7/A8 become tests; A9 (the
-`no_match` escape "otherwise" row), A10 (full-taxonomy silence), A11
-(`flow next` over the class, re-verified after 0011) added; C3 fixes the
-default dump columns, C4 `{}`-never-`null`; one class accessor for every
-`len(...)==0` site. Ledger:
+Premortem: hardened — critic verdict PASS, no switch forced; ledger
 `docs/rdr/0010-stateless-decision-tables/evidence/propose-premortem/critic.md`.
-Ground-sweep: clean (33 anchors) — 18 source anchors, 11 peer-element
-quotes, 4 external prior-art quotes; two cosmetic corrections folded (the
-`[dump]` fixture count in A4; the refusal categories for a declared
-non-owned `[initial]` key in C2). Ledger:
+Ground-sweep: clean (33 anchors); ledger
 `docs/rdr/0010-stateless-decision-tables/evidence/grounding-sweep/sweep.md`.
-Joint-check: fired → 0011 (home: cli/0011:C1; disposition 2026-08-26: cite-don't-restate — 0011:C1 is the sole normative home, this RDR cites it via A11/C4 and adds no class clause). Open peers at depth 1 with
-Status Draft/Final: cli/0011 only (0001–0009 are `Implemented`). Recorded
-`clear` while 0011 was unwritten; re-run against 0011's written proposal
-(2026-08-26) it fires: shared modify-anchor
-`internal/cli/flow_exec.go::invokedReaders` (Reuse/unchanged in both),
-shared contract literal `no_match`, and the real coupling — A11 and MVV
-step 5 assert `flow next` over a no-tag decision table lists every rule,
-which holds only under cli/0011:C1's absent-match-key rule. This RDR
-leaves `flow next` to 0011 (C4); disposition pending the user:
-cite-don't-restate (A11 keeps citing cli/0011:C1) or declare a class
-clause here too. Absence arm: the refusals this RDR converts to acceptances — the
-no-write-block `malformed rule shape` arm and the missing-root
-`graph-dangling-edge` — are relied on by the `Implemented` predecessors
-0002 (C4) and 0006 (C18, S15), which are named under `Overrides` and
-conditioned on class here rather than removed; no Final peer exists to
-fire on, and the predecessor coupling rides to 7.1 through `Overrides`.
-Bridge sub-check: n/a — no sibling plan retires a surface this plan
-introduces, and no plan here retires one of 0011's.
+Joint-check: fires on cli/0011 (Final) — shared anchor
+`internal/cli/flow_exec.go::invokedReaders` (unchanged here, extended
+there), shared literal `no_match`, and the coupling that `flow next` over a
+no-tag decision table lists every rule only under cli/0011:C1's
+absent-match-key rule. Disposition: **cite-don't-restate** — cli/0011:C1 is
+the sole normative home for `flow next`; this RDR cites it (A11, C4) and
+adds no class clause. Absence arm: the refusals this RDR converts to
+acceptances — the no-write-block `malformed rule shape` arm and the
+missing-root `graph-dangling-edge` — are relied on by the `Implemented`
+predecessors 0002 (C4) and 0006 (C18, S15); they are named under
+`Overrides` and conditioned on class rather than removed, and the coupling
+rides to 7.1 through `Overrides`. Bridge sub-check: n/a — neither plan
+retires a surface the other introduces.
 
 ## Alternatives Considered
 
@@ -698,20 +684,15 @@ a fifth verb that evaluates it, leaving `flow resolve` machine-only.
 
 ### Background
 
-Discovered while authoring a consumer decision model (rdr#tmxk, under the
-rdr#thsc umbrella): the model's only owned tag was the write target, and
-`flow resolve --artifact role=<nonexistent>` refused with
-`flow-owned-state-unavailable`. Seeding a scratch artifact unblocked it, but
-only by inventing state the model does not have. The kata-triage comment on
-intrastate#zdat frames the fork: (a) keep owned state mandatory and document
-the dummy-tag/scratch-artifact convention; (b) make owned tags optional so a
-model with none is a decision table; (c) a separate model kind/verb (e.g.
-`decide`) rather than inference from zero owned tags. Triage also parked the
-`--outcome` single-outcome default as a separable plain kata (it applies to
-stateful models too) and ruled this seed is not a facet of intrastate#1mv1.
+The motivating consumer is a decision model under rdr#thsc (rdr#tmxk); the
+refusal it hit is the Problem Statement's. Kata triage on intrastate#zdat
+framed the three-way fork Alternatives Considered scores, parked the
+`--outcome` single-outcome default as a plain kata (it applies to both
+classes), and ruled this seed is not a facet of intrastate#1mv1 (now
+cli/0011).
 
-Constraints: RDRs are never amended; a decision change lands as this new
-RDR that supersedes named clauses. Keep intrastate generic. `make check`
+Constraints: locked RDRs are never amended — this RDR supersedes the named
+clauses of 0002/0005/0006 additively. Keep intrastate generic. `make check`
 gates every change.
 
 ### Technical Environment
@@ -735,25 +716,19 @@ peer state-machine engines admit a transition that changes no state
 peers *require* an initial state, with pytransitions silently injecting a
 default one — the dummy-state workaround as prior art. ⚠ no prior-art
 coverage for decision-table hit policies (DMN) in the corpora; that claim is
-model prior and lives in A5. In-repo: `internal/graphlint/reach.go::reach`
-returns no nodes without a root and `internal/graphlint/groups.go::checkGroups`
-runs coverage only for reachable groups, so suppressing the missing-root
-finding alone would make coverage vacuous — the class needs a root defined;
-`internal/graphlint/analysis.go::nodeSatisfiesMatch` reads only owned atoms,
-so the ∅ node satisfies every decision-table context;
-`internal/cli/flow_exec.go::invokedReaders` already invokes nothing when no
-row demands an owned key; `internal/table/model.go::Model.Metadata` is the
-uninterpreted-literal precedent; and `internal/table/dump.go::dumpColumns`
-is closed, so an emit field is a dump column. Sibling-path check for a class
-discriminator: `Row.Kind` is inferred from the presence of `escape`
-(`internal/table/normalize.go::normalizeRule`); searched, no path infers a
-class from an absence.
+model prior and lives in A5. In-repo findings are listed under Key
+Discoveries and anchored in the Existing Infrastructure Audit; the
+sibling-path check for a class discriminator (no path infers a class from
+an absence) is the Approach's rationale for declaring the class.
 
 ### Key Discoveries
 
 - **Documented** — 0006's reachability filter, not its missing-root finding,
   is what would make coverage vacuous over a rootless model
-  (`internal/graphlint/groups.go::checkGroups`).
+  (`internal/graphlint/reach.go::reach` returns no nodes without a root;
+  `internal/graphlint/groups.go::checkGroups` runs coverage only for
+  reachable groups) — so suppressing the finding alone is not enough; the
+  class needs a root (C5).
 - **Documented** — `nodeSatisfiesMatch` consults owned atoms only, so a
   single ∅ node reaches every owned-atom-free context.
 - **Documented** — the seed's "0002 write-only-owned-tag clause" needs no
@@ -836,8 +811,7 @@ class from an absence.
 
 - [ ] All Critical Assumptions verified (A1 spike first — it decides whether
   C5 needs more than the ∅ root)
-- [ ] Peer cli/0011 proposed, so `flow next` ownership is settled before
-  Phase 3 touches `internal/cli`
+- [x] `flow next` ownership settled — cli/0011 is Final (A11 cites 0011:C1)
 
 ### Minimum Viable Validation
 
@@ -899,13 +873,46 @@ and the model authoring docs updated; `models/rdr.toml` untouched.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Done = the MVV passes end to end under `make check`, every scenario below
+has a green test, and no existing golden output changes except for the
+`emit` payload field and dump column.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: loader table tests over `class` — absent, each admitted
+   value, an unknown value, and each disagreement direction (decision-table
+   with an owned tag; state-machine with none).
+   **Expected**: absent reads as `state-machine`; unknown value and both
+   disagreements refuse `malformed model declaration` with the class and
+   count in the detail (C1).
+2. **Scenario**: rule-shape normalization over an ordinary rule with no
+   write block, in each class.
+   **Expected**: `malformed rule shape` for `state-machine`; loads with
+   empty `Writes`/`NextTags`/`RequiresOwned` for `decision-table` (C2).
+3. **Scenario**: `[rule.emit]` normalization — unordered keys, duplicate
+   keys, a non-string value, an absent block; dump with and without an
+   explicit `[dump]` naming `emit`; `[rule.match.<emit-key>]`.
+   **Expected**: key-sorted duplicate-free sequence; non-string refuses;
+   absent → empty; `emit` renders `key=value` in key order and a `[dump]`
+   omitting it refuses `malformed dump declaration`; the match refuses
+   `unknown tag` (C3, A4).
+4. **Scenario**: graph-lint fixture pair (partial → one coverage finding
+   naming the cell; complete → `[]`), the escape-"otherwise" variant, the
+   class-omitted control, and a fingerprint test editing only an emit
+   block.
+   **Expected**: exact finding lists against the full taxonomy (A10, A9);
+   `graph-dangling-edge` on the control (0006:C18 unchanged); fingerprints
+   equal (A7) (C5).
+5. **Scenario**: `flow resolve` and `flow next` over the fixture with no
+   `--artifact`, and with an `--artifact` bound to an uninvoked role, in
+   JSON and text modes.
+   **Expected**: exit 0; `emit` present (`{}` when unauthored, never
+   `null`); `next`/`writes`/`clear`/`owned` empty, `readers` `[]`; the
+   stray binding ignored; text renders one `key=value` line per pair (C4,
+   A2, A11).
+6. **Scenario**: regression sweep — every checked-in model and fixture
+   (`models/rdr.toml` included) under `make check`.
+   **Expected**: byte-identical lint, resolve, and dump output apart from
+   the `emit` field/column; a pre-change binary refuses the fixture
+   `unknown_schema_field` (A8).
 
 ## Finalization Gate
 
