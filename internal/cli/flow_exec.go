@@ -112,8 +112,41 @@ func invokedReaders(m *table.Model, outcome string) []string {
 		// candidate predicate reads. The term binds BOTH callers and is NOT
 		// scoped to `next` (`0011:BR6`): a `next`-only term would have the
 		// two verbs assemble different views over one model.
-		for _, key := range matchOwnedKeys(m, row) {
-			demanded[key] = true
+		//
+		// It IS scoped to the rows the CALLER can consult, which for the
+		// match term excludes an ESCAPE row under `next` (DEV-9). C1 fixes
+		// `next`'s predicate over "each NON-ESCAPE row", and justifies the
+		// term by "the assembled view MUST actually carry the keys THE
+		// PREDICATE READS" — "a row cannot be match-decided without the
+		// key". `runFlowNext`'s row loop skips every escape row
+		// (`if len(row.Escape) != 0 { continue }`) before `probeRow`, so an
+		// escape row's match atoms never reach a probe and `next` never
+		// match-decides one; the RDR's own joint-check states it flatly:
+		// "`runFlowNext` never lists escape rows". Demanding a reader for
+		// such a key made `next` refuse `flow-artifact-missing` (exit 2)
+		// above the row loop for a fact no reported row could consume — a
+		// refusal no Failure Mode contemplates and one C1 leaves the caller
+		// no remedy for, since the key is owned (`--tag` is refused
+		// `flow-tag-owned`) and `--all` inherits the same pre-loop refusal,
+		// denying F1 its two-run diagnostic.
+		//
+		// `resolve` keeps escape rows: `internal/resolve.escapeOrRefuse`
+		// evaluates `view.matches(row.Match)` on every escape row binding
+		// the requested outcome, and that phase's reachability is not
+		// knowable before the kernel runs. Dropping them would let an
+		// absent key silently fail a rescue through the kernel's two-valued
+		// `matches` — reinstating the hidden-fact defect this term exists
+		// to remove. The resulting exit 2/3 on a run that never reaches the
+		// rescue phase is the class C1 NAMES AND ACCEPTS verbatim: "such a
+		// run turns from a plan into exit 2/3, before the kernel and above
+		// the escape phase".
+		//
+		// Mode-independence (C1) is untouched: `--all` and the default
+		// consult the same row set — only the predicate over it differs.
+		if outcome != "" || len(row.Escape) == 0 {
+			for _, key := range matchOwnedKeys(m, row) {
+				demanded[key] = true
+			}
 		}
 	}
 
