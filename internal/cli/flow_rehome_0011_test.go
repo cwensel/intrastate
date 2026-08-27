@@ -96,6 +96,22 @@ func TestReq54And110_TheFiveShippedReadsOfUnresolvedAreReHomedToUnknown(t *testi
 // ADVERSARIAL — the ok-bool is what stops a re-homed read from passing
 // against a payload that carries no such field at all.
 func TestReq58_TheReHomedReadsAssertTheOkBoolRatherThanDiscardingIt(t *testing.T) {
+	// VACUITY GUARD. This clause is about the re-homed reads, so it says
+	// nothing until they exist: before the rename the files read the OLD
+	// key and the discarding forms below simply are not present, so the
+	// scan passes for the wrong reason. That is precisely the failure mode
+	// C3 warns about — "a green suite MUST NOT be cited as evidence that
+	// this contract was implemented" — so the guard is the assertion's
+	// first half, not decoration.
+	for _, file := range c3ReHomedFiles {
+		if strings.Contains(readRepoFile(t, file), `"unresolved"`) {
+			t.Fatalf("%s still reads the OLD key `unresolved`; the ok-bool "+
+				"clause is about the RE-HOMED reads and is not yet "+
+				"assertable. A pass here before the rename would be exactly "+
+				"the vacuous green C3 forbids citing", file)
+		}
+	}
+
 	for _, file := range c3ReHomedFiles {
 		src := readRepoFile(t, file)
 
@@ -130,6 +146,17 @@ func TestReq58_TheReHomedReadsAssertTheOkBoolRatherThanDiscardingIt(t *testing.T
 // change to readers the census never counted.
 func TestReq59_StringsAtKeepsItsShapeAndTheReHomingAddsASiblingHelper(t *testing.T) {
 	harness := readRepoFile(t, "internal/cli/flow_harness_0005_test.go")
+
+	// VACUITY GUARD: the fence is about the re-homing, so it bites only
+	// once the re-homing has happened. Before it, `stringsAt` trivially
+	// keeps its shape because nothing asked it to change.
+	for _, file := range c3ReHomedFiles {
+		if strings.Contains(readRepoFile(t, file), `"unresolved"`) {
+			t.Fatalf("%s still reads the OLD key `unresolved`; the harness "+
+				"fence is about the RE-HOMING and is not yet assertable",
+				file)
+		}
+	}
 
 	if !strings.Contains(harness, "func stringsAt(m map[string]any, key string) ([]string, bool)") {
 		t.Errorf("`stringsAt`'s signature changed in " +

@@ -146,6 +146,11 @@ func TestReq37And38And86_UnderAllTheMatchPatternTakesNoPartInTheVerdict(t *testi
 // a match key that is NOT in the row's `RequiresOwned`" — "asserted over a
 // matched-and-written key it fails on the very model MVV 4 runs, and
 // forcing it to pass would delete a shipped 0005 fact."
+// REQ-62: "That absent-key row MUST match on a key it does NOT write or
+// clear, writing some OTHER key instead" — "a matched-AND-written key enters
+// `RequiresOwned`, where C1's owned-key walk produces the same `{key,
+// absent}` pair that C2's --all filter does not touch, so the row would
+// report the pair in both modes and discriminate nothing."
 // A-4: the filter keys on the ATOM's `Block` field, not on a key-set
 // difference.
 // ADVERSARIAL — this is the ONE respect in which `--all` is not
