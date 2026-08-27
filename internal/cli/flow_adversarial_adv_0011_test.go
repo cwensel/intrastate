@@ -1,38 +1,45 @@
 package cli
 
-// RDR 0011 — Phase 3b adversarial failure-mode oracles.
+// RDR 0011 — Phase 3b adversarial failure-mode oracles, resolved in
+// Phase 3c.
 //
 // Phase 1's suite pins what C1/C2/C3 SAY. This file asks where the shipped
 // implementation of those clauses breaks on a model class the record did
 // not survey. Every oracle here is anchored in a `Trade-offs > Failure
-// Modes` element and is written to FAIL against the current build.
+// Modes` element and was written to FAIL against the Phase 2 build.
 //
 // The common thread across all three is the demand-set term. C1 adds each
-// row's MATCH-block owned keys to `invokedReaders`, and F6 names the
-// behaviour-change class that term carries — but it names it for
-// `flow resolve`, over "a row on that key" of "the requested outcome". The
-// term as shipped applies to EVERY row of the model, ESCAPE ROWS INCLUDED,
-// and an escape row is a row neither verb evaluates the way F6's remedy
-// assumes:
+// row's MATCH-block owned keys to `invokedReaders`, and the Phase 2 build
+// applied that term to EVERY row of the model, ESCAPE ROWS INCLUDED —
+// while the two verbs consult an escape row very differently:
 //
 //   - `flow next` SKIPS escape rows structurally (`flow_next.go`'s row loop
 //     `if len(row.Escape) != 0 { continue }`), so no probe is ever built
-//     from one and no candidate is ever reported for one. Yet its
-//     match-owned keys now demand a reader, and an unbound one refuses the
-//     WHOLE invocation exit 2 before the row loop runs.
-//   - `flow resolve` consults an escape row only in the RESCUE phase, which
-//     `internal/resolve.escapeOrRefuse` reaches only after the ordinary
-//     rows produce `no_match` or `ambiguous_match`. A run whose ordinary
-//     row yields a plan never reaches it — yet that run now refuses exit 2
-//     for the escape row's reader.
+//     from one and no candidate is ever reported for one. C1 fixes `next`'s
+//     predicate over "each NON-ESCAPE row" and justifies the demand-set
+//     term by "the assembled view MUST actually carry the keys THE
+//     PREDICATE READS"; the RDR's joint-check states it flatly —
+//     "`runFlowNext` never lists escape rows". Demanding a reader there
+//     refused the WHOLE invocation exit 2 above the row loop, for a fact no
+//     reported row could consume, with no remedy (the key is owned, so
+//     `--tag` is refused `flow-tag-owned`) and with `--all` inheriting the
+//     same refusal — denying F1 its two-run diagnostic. ADV-1 and ADV-3
+//     pinned that; Phase 3c scoped the match term to non-escape rows under
+//     `next` (DEV-9).
+//   - `flow resolve` DOES consult escape rows:
+//     `internal/resolve.escapeOrRefuse` evaluates `view.matches(row.Match)`
+//     on every escape row binding the requested outcome, and that phase's
+//     reachability is not knowable before the kernel runs. C1 names and
+//     ACCEPTS the resulting cost verbatim — such a run "turns from a plan
+//     into exit 2/3, before the kernel and above the escape phase". ADV-2
+//     originally denied that class; re-anchored in Phase 3c to pin its
+//     BOUNDARY instead (DEV-9).
 //
-// `0002:C4` makes this unavoidable rather than opt-in: EVERY rule, escape
-// rules included, MUST carry a local match block, and `normalizeRule`
-// refuses one that does not. DEV-8's guard term had the same shape but a
-// guard block is optional on an escape rule; a match block is not. The
-// `invokedReaders` doc comment already reasons about exactly this masking
-// hazard for the guard term and fences it with the OUTCOME filter alone —
-// a fence that is empty for `next`, which passes `outcome == ""`.
+// `0002:C4` makes the shape unavoidable rather than opt-in: EVERY rule,
+// escape rules included, MUST carry a local match block, and
+// `normalizeRule` refuses one that does not. DEV-8's guard term had the
+// same shape but a guard block is optional on an escape rule; a match block
+// is not.
 
 import (
 	"slices"
@@ -220,72 +227,88 @@ func TestAdv1_NextDoesNotRefuseForAnEscapeRowsMatchOwnedKey(t *testing.T) {
 
 // --- ADV-2 ---------------------------------------------------------------
 
-// FAILURE MODE: `flow resolve --outcome go` that returned a PLAN now exits
-// 2, because an ESCAPE row binding the same outcome matches on an owned key
-// whose reader is unbound. The rescue phase that would consult that row is
-// unreachable on this run — `escapeOrRefuse` is called only from the
-// `len(selected) == 0` and `default:` arms of `Resolve`'s selection switch,
-// and this run's ordinary row selects exactly one — so the reader is
-// demanded for a phase the run provably never enters.
+// BOUNDARY (Phase 3c: re-anchored; DEV-9). Phase 3b wrote this oracle to
+// assert that `flow resolve --outcome go` KEEPS its plan when only an
+// escape row demands the unbound reader. Against the record's own bytes
+// that assertion is wrong, and it is wrong against the very clause it
+// cited.
 //
-// RDR ANCHOR: `0011:F6`, at its boundary. F6's accepted class is stated
-// with a specific remedy and a specific reason: "the requested outcome has
-// a row on that key … bind the reader … Each of those names the remedy the
-// old refusal hid." C1 expands it: the class exists because "over a model
-// with a match-only owned key, `resolve` today never invokes the serving
-// reader and refuses `flow-no-match` for every row matching on that key,
-// over an artifact that HOLDS the fact" — the old refusal HID a fact the
-// caller could act on.
+// C1's demand-set paragraph names this exact shape and ACCEPTS it,
+// verbatim: "The demand set is a union over the outcome's rows, so the
+// reader is invoked even when the row `resolve` would select does not
+// itself match on the key: over an UNBOUND or REFUSING reader such a run
+// turns from a plan into exit 2/3, before the kernel and ABOVE THE ESCAPE
+// PHASE — a class this contract NAMES AND ACCEPTS here … That class is
+// named in Consequences and pinned by S8; it is not denied."
 //
-// That reasoning does not reach an escape row on a run that selects a plan.
-// There is no hidden `flow-no-match` to redeem: the run succeeded, and it
-// succeeded through `plain-row`, which needs nothing from `read.side`. C1's
-// own acceptance sentence scopes the cost to "a run whose selected row does
-// not itself match on the key" turning "from a plan into exit 2/3" — but it
-// reaches that scope through "The demand set is a union over the OUTCOME's
-// rows", reasoning about rows the SELECTION phase considers. `invokedReaders`
-// already fences exactly this hazard for escape rows one comment above the
-// new term ("an unbound or failing reader serving only that unrescuable row
-// now refuses the whole request at exit 3 — masking a valid plan"), and
-// fences it by OUTCOME alone — which does not exclude an escape row that
-// happens to bind the requested outcome.
+// "Above the escape phase" is not incidental wording: it is the record
+// contemplating precisely a run whose rescue phase is never reached and
+// stating that the exit-2 there is accepted. F6, the anchor Phase 3b cited,
+// scopes the class as "the requested outcome has a row on that key" —
+// `rescue-row` binds `go` and matches on `mode`, so this fixture is INSIDE
+// F6's scope, not outside it.
+//
+// The implementation reason is independent and points the same way.
+// `internal/resolve.escapeOrRefuse` evaluates `view.matches(row.Match)` on
+// every escape row binding the requested outcome, and `TagSet.matches` is
+// TWO-VALUED: an absent key makes the escape row simply not match, and the
+// rescue silently fails into the original `no_match`. Dropping escape rows
+// from `resolve`'s demand set would therefore reinstate, in the rescue
+// phase, the exact hidden-fact defect C1's term exists to remove — refusing
+// over an artifact that HOLDS the fact. And the CLI cannot condition the
+// demand on reachability: whether `Resolve` enters `escapeOrRefuse` is not
+// knowable until after the kernel has run.
+//
+// So this oracle now pins the BOUNDARY rather than denying the class. It
+// asserts the two halves that actually distinguish a correct build:
+//
+//  1. `resolve` still demands the escape row's reader — the accepted class
+//     holds, and a build that "fixed" ADV-2 by narrowing `resolve` would
+//     break the rescue path silently.
+//  2. The refusal is `flow-artifact-missing` (exit 2) naming the ROLE, the
+//     remedy F6 prescribes — not the mute `flow-no-match` the term
+//     replaced, and not the reader's own refusal.
+//
+// Recorded as DEV-9 (TEST-FIXTURE): the assertion, not the implementation,
+// contradicted the record.
 //
 // ADVERSARIAL
 func TestAdv2_ResolveKeepsItsPlanWhenOnlyAnEscapeRowDemandsTheReader(t *testing.T) {
 	model := writeFlowModel(t, flowEscapeMatchOwnedModel)
 	bind := escapeOwnedStateOnly(t, model)
 
-	stdout, _, err := runCmd(t, "flow", "resolve", "--model", model,
+	_, _, err := runCmd(t, "flow", "resolve", "--model", model,
 		"--artifact", bind, "--outcome", "go", "--as=json")
-	if err != nil {
-		var ce *clierr.CLIError
-		code := "<not a CLIError>"
-		if asCLIError(err, &ce) {
-			code = ce.Code
-		}
-		t.Fatalf("`flow resolve --outcome go` refused %s where it returns a "+
-			"PLAN through `plain-row`.\n\n"+
-			"`rescue-row` is an ESCAPE row. The kernel consults it only in "+
-			"`escapeOrRefuse`, reached from the `len(selected) == 0` and "+
-			"`default:` arms of Resolve's switch — never on a run whose "+
-			"ordinary rows select exactly one. This run selects "+
-			"`plain-row`, which matches on `status` alone.\n\n"+
-			"F6 accepts a class where \"a `flow resolve` that used to "+
-			"return a plan exits 2\" — but its stated warrant is that the "+
-			"old refusal HID a fact: `resolve` \"refuses `flow-no-match` "+
-			"for every row matching on that key, over an artifact that "+
-			"HOLDS the fact\". Nothing is hidden here; the plan is "+
-			"correct and complete without `mode`. `invokedReaders` already "+
-			"fences this masking hazard for escape rows — \"masking a "+
-			"valid plan\" is its own words — but fences it by OUTCOME "+
-			"only, which an escape row binding `go` passes.\n\n"+
-			"err = %v\nstdout = %s", code, err, stdout)
+	if err == nil {
+		t.Fatalf("`flow resolve --outcome go` returned a plan while the " +
+			"role serving `rescue-row`'s match-owned `mode` is UNBOUND.\n\n" +
+			"`escapeOrRefuse` evaluates `view.matches(row.Match)` on every " +
+			"escape row binding the requested outcome, and `TagSet.matches` " +
+			"is two-valued: an absent `mode` makes `rescue-row` silently " +
+			"not match, so a rescue fails into the original `no_match` over " +
+			"an artifact that HOLDS the fact — the hidden-fact defect C1's " +
+			"demand-set term exists to remove. Reachability of the rescue " +
+			"phase is not knowable before the kernel runs, so the demand " +
+			"cannot be conditioned on it.\n\n" +
+			"C1 NAMES AND ACCEPTS this cost verbatim: such a run \"turns " +
+			"from a plan into exit 2/3, before the kernel and above the " +
+			"escape phase\". Binding the `side` role restores the plan.")
 	}
 
-	data := flowData(t, stdout)
-	if rule, _ := data["rule"].(string); rule != "" && rule != "plain-row" {
-		t.Errorf("plan rule = %q; want `plain-row` — the ordinary row that "+
-			"needs nothing from `read.side`", rule)
+	var ce *clierr.CLIError
+	if !asCLIError(err, &ce) {
+		t.Fatalf("`flow resolve` failed with a non-CLIError: %v", err)
+	}
+	if ce.Code != "flow-artifact-missing" {
+		t.Errorf("`flow resolve` refused %q; want `flow-artifact-missing`. "+
+			"F6 prescribes the remedy — \"bind the reader\" — and the "+
+			"refusal must NAME the unbound role rather than surfacing as "+
+			"the mute `flow-no-match` this term replaced", ce.Code)
+	}
+	if ce.Param != "side" {
+		t.Errorf("refusal param = %q; want `side` — the role whose reader "+
+			"serves the escape row's match-owned `mode`. C1 accepts the "+
+			"exit only because it names what to bind", ce.Param)
 	}
 }
 
