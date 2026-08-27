@@ -284,19 +284,128 @@ func TestReq51And55And121_TheHelpStatesTheMatchConditionedDefaultAndTheAllFlag(t
 		}
 	}
 
-	// The three things C3's first paragraph requires the help to STATE.
-	for _, want := range []struct{ phrase, why string }{
-		{"candidate", "the help must say what the verb reports"},
-		{"unknown", "a match or guard key the state does not carry leaves " +
-			"a row a candidate with the key listed under `unknown`"},
-		{"--all", "--all reports every row the guards do not exclude " +
-			"regardless of match"},
+	// REQ-51 binds the PROSE, not the rendered blob. Cobra generates the
+	// `Flags:` listing from each flag's registered usage string, and
+	// `--all`'s registration in `flow_next.go` reads "report every row the
+	// guards do not exclude, regardless of match" — the clause verbatim.
+	// Asserting over the whole blob therefore passes even if the entire
+	// `--all` paragraph is deleted from `Long`, which is exactly the
+	// vacuity this oracle exists to close. Cut the generated sections off
+	// and assert against what the author wrote.
+	// Lower-cased: the shipped text shouts HOLD / UNDECIDED for emphasis,
+	// and emphasis is styling, not contract. Case must not decide whether
+	// a clause counts as stated.
+	prose := strings.ToLower(helpProse(t, help))
+
+	// Each clause is pinned by a SET of phrasings, not one golden string:
+	// the help was just rewritten and will be edited again, and an oracle
+	// that fails on any rewording gets weakened rather than fixed. Every
+	// alternative below states the same fact, so the set fails only when
+	// the CLAUSE is dropped — not when it is rephrased.
+	for _, want := range []struct {
+		clause string
+		anyOf  []string
+		why    string
+	}{
+		{
+			clause: "the match-conditioned predicate",
+			anyOf: []string{
+				"match and guard both hold or are undecided",
+				"match and its guards both hold or are undecided",
+				"whose match and guard both hold or are undecided",
+				"match and guards both hold or are undecided",
+			},
+			why: "REQ-51 requires the help to state WHAT a candidate is " +
+				"under the new default: a rule whose MATCH and GUARD both " +
+				"HOLD or are UNDECIDED. Naming `candidate` alone leaves " +
+				"the caller with 0005's enumerate-everything reading",
+		},
+		{
+			clause: "an absent key leaves the row a candidate",
+			anyOf: []string{
+				"does not carry does not exclude",
+				"the state does not carry does not exclude",
+				"absent key does not exclude",
+				"leaves the row a candidate",
+				"leaves it a candidate",
+			},
+			why: "REQ-51 requires the help to state that a match or guard " +
+				"key the state DOES NOT CARRY does not exclude the row. " +
+				"This is the clause that separates `next` from a filter: " +
+				"absence is undecided, not false",
+		},
+		{
+			clause: "the absent key is reported under `unknown` with its reason",
+			anyOf: []string{
+				"under unknown and its reason named",
+				"listed under unknown and its reason",
+				"under unknown with its reason",
+				"unknown and its reason named",
+			},
+			why: "REQ-51 requires BOTH halves: the key is listed under " +
+				"`unknown` AND its reason is named. `unknown` alone is a " +
+				"field name; without the reason the caller cannot tell " +
+				"an absent fact from an unevaluated gate",
+		},
+		{
+			clause: "`--all` reports guard-legal rows regardless of match",
+			anyOf: []string{
+				"--all reports every row the guards do not exclude, regardless of match",
+				"every row the guards do not exclude, regardless of match",
+				"regardless of match",
+			},
+			why: "REQ-51 requires the help to state that `--all` reports " +
+				"every row the GUARDS do not exclude REGARDLESS OF MATCH. " +
+				"Cobra's flag listing carries these words for free, so " +
+				"this is asserted against the authored prose only",
+		},
+		{
+			clause: "the `not-evaluated` reason",
+			anyOf: []string{
+				"not-evaluated",
+			},
+			why: "the reason vocabulary is half of the `unknown` contract: " +
+				"without `--evaluate-gates` a gate id is unknown for the " +
+				"reason `not-evaluated`, not because a fact is missing. " +
+				"C1 names the token, so the help must spell it",
+		},
 	} {
-		if !strings.Contains(help, want.phrase) {
-			t.Errorf("the help does not mention %q: %s\n%s",
-				want.phrase, want.why, help)
+		var stated bool
+		for _, phrase := range want.anyOf {
+			if strings.Contains(prose, phrase) {
+				stated = true
+				break
+			}
+		}
+		if !stated {
+			t.Errorf("the help's prose does not state %s: %s\n"+
+				"None of the accepted phrasings %q appear in:\n%s",
+				want.clause, want.why, want.anyOf, prose)
 		}
 	}
+}
+
+// helpProse returns the authored help body — everything cobra's template
+// emits BEFORE the generated `Usage:` / `Flags:` / `Global Flags:`
+// sections. Those sections are assembled from flag registrations, not
+// from `Long`, so a REQ-51 clause found only there is not help the author
+// wrote and is not evidence the clause is stated.
+func helpProse(t *testing.T, help string) string {
+	t.Helper()
+	const boundary = "\nUsage:"
+	i := strings.Index(help, boundary)
+	if i < 0 {
+		t.Fatalf("`flow next --help` has no `Usage:` section, so the "+
+			"authored prose cannot be separated from cobra's generated "+
+			"flag listing:\n%s", help)
+	}
+	prose := strings.TrimSpace(help[:i])
+	if prose == "" {
+		t.Fatalf("`flow next --help` renders no prose before `Usage:` — "+
+			"the command's `Long` is empty, and every REQ-51 clause is "+
+			"unstated:\n%s", help)
+	}
+	return prose
 }
 
 // REQ-52: "The help MUST also state that a candidate is a row the supplied
