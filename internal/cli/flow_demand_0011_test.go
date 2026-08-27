@@ -19,6 +19,12 @@ package cli
 // is asserted rather than discovered.
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -540,6 +546,9 @@ func TestReq35And118_ResolveOverTheCheckedInModelAndShippedFixturesIsUnchanged(t
 			for _, b := range binds {
 				args = append(args, "--artifact", b)
 			}
+			for _, tg := range tc.tags {
+				args = append(args, "--tag", tg)
+			}
 			stdout, _, err := runCmd(t,
 				append(args, "--outcome", tc.outcome, "--as=json")...)
 			if err != nil {
@@ -569,7 +578,12 @@ func TestReq35And118_ResolveOverTheCheckedInModelAndShippedFixturesIsUnchanged(t
 		for _, tc := range shippedResolveGoldens {
 			swept[tc.name] = true
 		}
-		for name := range shippedFixtureCorpus {
+		corpus := declaredFlowFixtures(t)
+		declared := map[string]bool{}
+		for _, name := range corpus {
+			declared[name] = true
+		}
+		for _, name := range corpus {
 			if swept[name] {
 				continue
 			}
@@ -586,10 +600,10 @@ func TestReq35And118_ResolveOverTheCheckedInModelAndShippedFixturesIsUnchanged(t
 		// The mirror: a name in the excluded set that is no longer a
 		// fixture, or that IS swept, means the two lists drifted apart.
 		for name := range unsweptShippedFixtures {
-			if _, ok := shippedFixtureCorpus[name]; !ok {
+			if !declared[name] {
 				t.Errorf("`%s` is named in `unsweptShippedFixtures` but is "+
-					"not in the fixture corpus; the exclusion outlived its "+
-					"fixture", name)
+					"not declared by any test source; the exclusion "+
+					"outlived its fixture", name)
 			}
 			if swept[name] {
 				t.Errorf("`%s` is BOTH swept and named excluded; the "+
@@ -659,7 +673,12 @@ type shippedFixtureGolden struct {
 	// model declares whose absence would refuse `flow-artifact-missing`
 	// before the payload exists.
 	bindOnly []string
-	golden   string
+	// tags are `--tag k=v` supplies for OBSERVED keys a row matches on.
+	// A fixture whose only match atoms are observed refuses
+	// `flow-no-match` unsupplied and reaches a plan supplied, so the
+	// supply is what makes the run a byte-identity subject at all.
+	tags   []string
+	golden string
 }
 
 // shippedResolveGoldens is S8/REQ-118's sweep: every shipped fixture with a
@@ -790,6 +809,153 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
 	},
 	{
+		// A set-valued write whose members carry `<` and `&` — the only
+		// entry whose golden pins the set wire form through the resolve
+		// envelope (`0005:MVV`, REQ-70, REQ-108). Reachable once BOTH
+		// owned keys are seeded; seeding only `status` refuses
+		// `flow-owned-state-unavailable`, which is why it once sat in the
+		// excluded set.
+		name: "flowSetPlanModel", model: flowSetPlanModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", `labels=["plain"]`}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"labels":"[\"plain\"]","status":"draft"},` +
+			`"readers":["state"],"outcome":"advance","rule":"advance",` +
+			`"gates":[],"emit":{},` +
+			`"next":{"labels":"[\"a<b\",\"x&y\"]","status":"final"},` +
+			`"writes":{"labels":"[\"a<b\",\"x&y\"]","status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The `side`-role writer. It is NOT in the changed class: its
+		// `side-advance` row matches on `mode` AND writes `mode`, so
+		// `mode` is already in `RequiresOwned` and the added term finds
+		// nothing (A15 iii, and the RDR's ground-sweep finding that no
+		// flow-reachable fixture carries a match-ONLY owned key). Its
+		// role adjacency to the changed class is not a reason to skip the
+		// byte-identity assertion S8 owes it.
+		name: "flowSideWriterModel", model: flowSideWriterModel, outcome: "advance",
+		seeds: []fixtureSeed{{flowSideRole, []string{"mode=fast"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"mode":"fast"},"readers":["side"],` +
+			`"outcome":"advance","rule":"side-advance","gates":[],"emit":{},` +
+			`"next":{"mode":"slow"},"writes":{"mode":"slow"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The guard fixture's SATISFIED arm. It refuses
+		// `flow-guard-unevaluable` only when `opt` is ABSENT; seeded
+		// `opt=p` the guard evaluates and the row plans, so the fixture
+		// does have a byte-identity subject. Its unevaluable arm stays
+		// pinned by the oracle that owns it.
+		name: "flowGuardUnevaluableModel", model: flowGuardUnevaluableModel,
+		outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "opt=p"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"opt":"p","status":"draft"},` +
+			`"readers":["state"],"outcome":"advance","rule":"guarded-advance",` +
+			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
+	},
+	{
+		// The zero-owned-match control's SUPPLIED arm. `hint-row` matches
+		// an OBSERVED key, so it refuses `flow-no-match` unsupplied and
+		// plans under `--tag hint=x`. This is also the sweep's only entry
+		// with a non-empty `observed` map, so the golden pins that field's
+		// wire form.
+		name: "flowZeroOwnedMatchModel", model: flowZeroOwnedMatchModel,
+		outcome: "advance",
+		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		tags:    []string{"hint=x"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{"hint":"x"},"owned":{"status":"draft"},` +
+			`"readers":["state"],"outcome":"advance","rule":"hint-row",` +
+			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
+	},
+	{
+		// Three observed match atoms, all supplied — the row plans. The
+		// `flow-no-match` its exclusion cited is the UNSUPPLIED arm only.
+		name: "flowMixedStateRowModel", model: flowMixedStateRowModel,
+		outcome: "advance",
+		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
+		tags:    []string{"holds=yes", "fails=yes", "missing=yes"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{"fails":"yes","holds":"yes","missing":"yes"},` +
+			`"owned":{"status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"mixed-row","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The sort-order fixture's supplied arm, and the sweep's ONLY
+		// entry whose `gates` array is non-empty — without it the gate
+		// result's wire form (`{"id","result"}`) is left to suite-green,
+		// exactly the gap A15 limit (b) names.
+		name: "flowSortOrderModel", model: flowSortOrderModel,
+		outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "mid=m"}}},
+		tags: []string{"zebra=z", "alpha=a"},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{"alpha":"a","zebra":"z"},` +
+			`"owned":{"mid":"m","status":"draft"},"readers":["state"],` +
+			`"outcome":"advance","rule":"sort-row",` +
+			`"gates":[{"id":"beta","result":"allow"}],"emit":{},` +
+			`"next":{"mid":"m","status":"final"},` +
+			`"writes":{"mid":"m","status":"final"},"clear":[],` +
+			`"escaped":false}}`,
+	},
+	{
+		// The uncomparable-guard fixture's COMPARABLE arm. `size` is an
+		// `int` tag and the guard's bound is the string `"3"`; the
+		// refusal its exclusion cited is that uncomparability, which the
+		// oracle owning it pins. Seeded, the row still plans, so the
+		// fixture has a payload S8 owes an assertion.
+		name: "flowUncomparableGuardModel", model: flowUncomparableGuardModel,
+		outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "size=9", "gone=ready"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"gone":"ready","size":"9",` +
+			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
+			`"rule":"uncomparable-row","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The same fixture's second outcome — `absent-guard-row`, whose
+		// guard is on `gone`. Seeded it evaluates and the row plans.
+		name: "flowUncomparableGuardModel", model: flowUncomparableGuardModel,
+		outcome: "hold",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "size=9", "gone=ready"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"gone":"ready","size":"9",` +
+			`"status":"draft"},"readers":["state"],"outcome":"hold",` +
+			`"rule":"absent-guard-row","gates":[],"emit":{},` +
+			`"next":{"status":"final"},"writes":{"status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
+		// The owned-unavailable fixture's AVAILABLE arm. Its reader
+		// serves all three owned keys, so seeding them makes the guard
+		// evaluable and the row plans; `flow-owned-state-unavailable` is
+		// the unseeded arm only.
+		name: "flowOwnedUnavailableModel", model: flowOwnedUnavailableModel,
+		outcome: "advance",
+		seeds: []fixtureSeed{{flowStateRole, []string{
+			"status=draft", "size=9", "missingowned=q"}}},
+		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+			`"observed":{},"owned":{"missingowned":"q","size":"9",` +
+			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
+			`"rule":"unavail-row","gates":[],"emit":{},` +
+			`"next":{"missingowned":"x","status":"final"},` +
+			`"writes":{"missingowned":"x","status":"final"},` +
+			`"clear":[],"escaped":false}}`,
+	},
+	{
 		name: "flowLooseWriterModel", model: flowLooseWriterModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
@@ -800,39 +966,65 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	},
 }
 
-// shippedFixtureCorpus is every shipped `flow*Model` fixture this repo
-// declares. The membership oracle reads it, so a fixture added later must
-// join this map and then land in the sweep or the excluded set.
-var shippedFixtureCorpus = map[string]string{
-	"flowMVVModel":                flowMVVModel,
-	"flowEscapeModel":             flowEscapeModel,
-	"flowAmbiguousModel":          flowAmbiguousModel,
-	"flowGatedNextModel":          flowGatedNextModel,
-	"flowInvalidModel":            flowInvalidModel,
-	"flowGateDenyModel":           flowGateDenyModel,
-	"flowGateFailModel":           flowGateFailModel,
-	"flowGuardUnevaluableModel":   flowGuardUnevaluableModel,
-	"flowReadBackFailModel":       flowReadBackFailModel,
-	"flowSetObservedModel":        flowSetObservedModel,
-	"flowSetPlanModel":            flowSetPlanModel,
-	"flowEscapeOtherOutcomeModel": flowEscapeOtherOutcomeModel,
-	"flowDomainModel":             flowDomainModel,
-	"flowMatchClassesModel":       flowMatchClassesModel,
-	"flowSetKindedMatchModel":     flowSetKindedMatchModel,
-	"flowMixedStateRowModel":      flowMixedStateRowModel,
-	"flowAbsentMatchKeyModel":     flowAbsentMatchKeyModel,
-	"flowFullyResolvedModel":      flowFullyResolvedModel,
-	"flowLooseWriterModel":        flowLooseWriterModel,
-	"flowUncomparableGuardModel":  flowUncomparableGuardModel,
-	"flowOwnedUnavailableModel":   flowOwnedUnavailableModel,
-	"flowSortOrderModel":          flowSortOrderModel,
-	"flowMatchOnlyOwnedModel":     flowMatchOnlyOwnedModel,
-	"flowMatchOnlyOwnedSoloModel": flowMatchOnlyOwnedSoloModel,
-	"flowSideWriterModel":         flowSideWriterModel,
-	"flowZeroOwnedMatchModel":     flowZeroOwnedMatchModel,
-	"flowTwoReadersOneKeyModel":   flowTwoReadersOneKeyModel,
-	"flowEscapeMatchOwnedModel":   flowEscapeMatchOwnedModel,
-	"flowRefusingSideReaderModel": flowRefusingSideReaderModel,
+// declaredFlowFixtures returns the name of every package-level
+// `flow*Model` identifier this package's test sources DECLARE, read from
+// the sources themselves with `go/parser`.
+//
+// The membership oracle below needs a source of truth that a new fixture
+// cannot silently escape. A hand-listed map is not one: a fixture omitted
+// from it escapes the sweep, the exclusions, AND the check that is
+// supposed to catch that — the oracle passes vacuously and S8 decays with
+// every fixture added. Nor is a shared registry variable, since a fixture
+// can simply not join it.
+//
+// The declarations are the one artifact a fixture cannot be used without
+// creating, so they are what this reads. A fixture added in any form —
+// `const`, `var`, computed by `strings.ReplaceAll` — is found by its
+// declaration, and the oracle fails until it is swept or named excluded.
+func declaredFlowFixtures(t *testing.T) []string {
+	t.Helper()
+	paths, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatalf("globbing this package's test sources: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("no `*_test.go` sources found; the membership oracle " +
+			"cannot derive the fixture corpus and would pass vacuously")
+	}
+	// This file's own tables NAME fixtures without declaring them; only
+	// declarations count.
+	want := regexp.MustCompile(`^flow[A-Za-z0-9]*Model$`)
+	fset := token.NewFileSet()
+	var names []string
+	for _, path := range paths {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		f, err := parser.ParseFile(fset, path, src, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", path, err)
+		}
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || (gen.Tok != token.CONST && gen.Tok != token.VAR) {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, id := range vs.Names {
+					if want.MatchString(id.Name) {
+						names = append(names, id.Name)
+					}
+				}
+			}
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
 }
 
 // unsweptShippedFixtures names every shipped fixture the golden sweep does
@@ -842,33 +1034,31 @@ var shippedFixtureCorpus = map[string]string{
 //
 // Two classes, and neither is a byte-identity subject:
 //
-//   - NO REACHABLE PLAN — the fixture exists to produce a REFUSAL, so it
-//     has no success payload to be byte-identical about. Its refusal code
-//     and exit are pinned by the oracles that own it.
+//   - NO REACHABLE PLAN — the fixture refuses on EVERY outcome under
+//     every seeding, so it has no success payload to be byte-identical
+//     about. Its refusal code and exit are pinned by the oracles that own
+//     it. The bar is that no seeding reaches exit 0, not that the
+//     fixture's headline oracle is a refusal: a fixture whose refusal is
+//     an UNSEEDED arm (an unevaluable guard, an unsupplied observed match
+//     key, an unavailable owned key) does plan when seeded, and belongs in
+//     the sweep above.
 //   - INSIDE THE CHANGED CLASS — 0011's own match-only-owned-key fixtures.
 //     A15 iii's warrant is that no shipped flow-reachable fixture is in the
 //     changed class; these are the deliberate exceptions the RDR BUILT, so
 //     asserting they are unchanged would assert the term did nothing.
 var unsweptShippedFixtures = map[string]string{
 	// --- no reachable plan: refusal fixtures ---
-	"flowInvalidModel":           "refuses `flow-model-invalid` at load",
-	"flowTwoReadersOneKeyModel":  "refuses `flow-model-invalid` at load",
-	"flowAmbiguousModel":         "refuses `flow-ambiguous-match`",
-	"flowGateDenyModel":          "refuses `flow-gate-denied` / `flow-gate-indeterminate` on every outcome",
-	"flowGateFailModel":          "refuses `flow-accessor-failed`",
-	"flowGuardUnevaluableModel":  "refuses `flow-guard-unevaluable`",
-	"flowUncomparableGuardModel": "refuses `flow-guard-unevaluable` on every outcome",
-	"flowReadBackFailModel":      "refuses `flow-read-incomplete`; its writer cannot even seed",
-	"flowOwnedUnavailableModel":  "refuses `flow-owned-state-unavailable`",
-	"flowSetPlanModel":           "refuses `flow-owned-state-unavailable` under `resolve`",
-	"flowMixedStateRowModel":     "refuses `flow-no-match` on its only outcome",
-	"flowSortOrderModel":         "refuses `flow-no-match` on its only outcome",
-	"flowZeroOwnedMatchModel":    "refuses `flow-no-match`; pinned by name as the zero-owned-match control",
+	"flowInvalidModel":          "refuses `flow-model-invalid` at load",
+	"flowTwoReadersOneKeyModel": "refuses `flow-model-invalid` at load",
+	"flowAmbiguousModel":        "refuses `flow-ambiguous-match`",
+	"flowGateDenyModel":         "refuses `flow-gate-denied` / `flow-gate-indeterminate` on every outcome",
+	"flowGateFailModel":         "refuses `flow-accessor-failed`",
+	"flowReadBackFailModel":     "refuses `flow-read-incomplete`; its writer cannot even seed",
+	"flowExpiredTimeoutModel":   "refuses `flow-accessor-timeout`; its reader's deadline is expired before it returns",
 
 	// --- inside the changed class: 0011's own demand-set fixtures ---
 	"flowMatchOnlyOwnedModel":     "match-only owned key — the changed class itself (S8's subject)",
 	"flowMatchOnlyOwnedSoloModel": "match-only owned key — the changed class itself (S8's subject)",
 	"flowEscapeMatchOwnedModel":   "escape-row match-only owned key — DEV-8/DEV-9's subject",
-	"flowSideWriterModel":         "the sibling writer for the changed class's `side` role",
 	"flowRefusingSideReaderModel": "a deliberately refusing reader — exit 3, no payload",
 }
