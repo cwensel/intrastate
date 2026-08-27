@@ -224,3 +224,80 @@ by the added `"emit":{}` member, and do not touch the surrounding
 assertions. This is the same class of edit as the 103 `[dump]` fixtures
 (ASSUMPTION-8) and should be verified the same way — against the licensed
 shape, not re-derived.
+
+---
+
+# Phase 2 (implementation)
+
+## D9 — RDR 0011's diff guard learns 0010's licensed shapes (resolves D7)
+
+**REQs**: REQ-87, REQ-88, REQ-102/REQ-104 (IP Phases 1 and 3).
+
+**Type**: DEPENDENCY-LIMIT. **Status**: mechanical translation.
+
+D7 recorded that `internal/cli/flow_next_0011_test.go::TestReq120_…` fires
+on this RDR's production edits. Resolved as D7 itself prescribed: the
+guard's allow-list is EXTENDED — never relaxed — with the ten production
+files RDR 0010's Technical Design names, plus a second, separately named
+predicate for the test-side surface (`_0010_test.go`,
+`internal/table/testdata/`, and the three checked-in expectations 0010's
+Done clause licenses by shape: `helpers_test.go`, `dump_test.go`,
+`findings_0006_test.go`).
+
+The guard's premise — "the only in-flight change is 0011's" — is what
+stopped holding; its CHECK is unchanged. A file outside both lists still
+fails it, and `internal/resolve` is in neither, so the kernel-untouched
+claim the guard exists for is still enforced. Evidence: D7's own prescribed
+shape, and the guard's pre-existing `_0011_test.go` exemption, which is the
+same "this RDR's own suite" carve-out taken for the sibling RDR.
+
+---
+
+## D10 — the promoted-fixture content pin needs the licensed `emit` append
+
+**REQs**: REQ-71, REQ-87 shape (iii), ASSUMPTION-8.
+
+**Type**: TEST-FIXTURE. **Status**: mechanical translation.
+
+**Found at Phase 2, not recorded at Phase 1.** Beyond the 100 `[dump]`
+lists themselves, `internal/table/roundtrip_test.go::TestReq118_PromotedFixtureSetIsNotNarrowed`
+leg 2 compares every promoted fixture BYTE FOR BYTE against its approved
+iter-2 spike copy under `docs/rdr/0002-…/evidence/spikes/`. Appending
+`"emit"` to a `[dump]` order list reddens 100 of them.
+
+The spike copies are RDR EVIDENCE and are never amended. Leg 2 already
+carries exactly one recorded normalization for exactly this situation — the
+`kind = "string"` → `kind = "scalar"` rename (0002 deviations.md D1) —
+applied to the SPIKE side so the promoted fixture stays compared byte for
+byte. The `emit` append is added the same way and nowhere else: the
+comparison is still byte-for-byte equality, and any other edit to a
+promoted fixture still fails.
+
+Grounded in the RDR's own text: REQ-71 states the dump vocabulary is "the
+one non-silent widening", A4 censused the 103 fixtures, and REQ-87 shape
+(iii) licenses precisely "an added `\"emit\"` member inside a `[dump]`
+`order = [ … ]` list". This is that diff reaching one more expectation than
+Phase 1 enumerated, not a new class of change.
+
+---
+
+## D11 — `TestReq6`'s class-omitted half must be the zero-owned document
+
+**REQs**: REQ-6, REQ-13, REQ-89.
+
+**Type**: TEST-FIXTURE. **Status**: mechanical translation.
+
+`TestReq6_ClassIsDeclaredNeverInferredFromTheOwnedSet` pairs a DECLARED
+decision table with a class-OMITTED model and closes with a fixture
+invariant: both must carry the same (empty) owned set, since that is what
+makes the pair discriminate an implementation inferring the class from
+`len(owned) == 0`. Phase 1 used `dtClassOmitted` for the omitted half — but
+D1 gives that fixture an owned tag and its accessors by necessity, so the
+invariant it asserts is false of it and the test failed on its own guard.
+
+The pair is repointed at `smZeroOwned` with its `class` line stripped —
+the same document `TestReq5`'s "class omitted" subtest already loads, and
+genuinely zero-owned. That STRENGTHENS the test: the shared empty owned set
+is now real rather than merely asserted, so the discrimination REQ-6 asks
+for actually holds. No assertion was relaxed; the closing invariant is
+unchanged and still fatal.

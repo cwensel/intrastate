@@ -298,7 +298,7 @@ func dumpColumn(t *testing.T, line, col string) string {
 func TestReq95_DumpColumnVocabularyIsClosedAndVerbatim(t *testing.T) {
 	want := []string{
 		"identity", "source", "kind", "outcome",
-		"atoms", "next", "writes", "requires_owned", "gate", "escape",
+		"atoms", "next", "writes", "requires_owned", "gate", "escape", "emit",
 	}
 	got := table.DumpColumns()
 	if !reflect.DeepEqual(got, want) {

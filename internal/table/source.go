@@ -28,6 +28,11 @@ type sourceDoc struct {
 type sourceModel struct {
 	ID      *string `toml:"id"`
 	Version *int    `toml:"version"`
+	// Class is the model class (`0010:C1`). It is a POINTER so absence is
+	// distinguishable from `class = ""`: an absent key reads as
+	// `state-machine`, while the empty string is a value outside the
+	// admitted set and refuses `malformed model declaration`.
+	Class *string `toml:"class"`
 	// Description is an admitted optional human annotation (`0002:C2`).
 	Description string `toml:"description"`
 	// Metadata is the one sanctioned extension namespace. It decodes as a
@@ -82,6 +87,19 @@ type sourceRule struct {
 	Match map[string]map[string]any `toml:"match"`
 	Guard *sourceGuard              `toml:"guard"`
 	Write *map[string]any           `toml:"write"`
+	// Emit is the `[rule.emit]` answer block (`0010:C3`): a FLAT table
+	// whose values MUST be strings.
+	//
+	// The map's value type is what enforces that. A non-string value — a
+	// nested `[rule.emit.sub]` included — is a decoder TYPE error, which
+	// decodeStrict maps to `malformed TOML`; no hand-written type check is
+	// added, and duplicate keys are refused by the TOML decoder before any
+	// of this code runs, which is why normalization carries no dedup pass.
+	//
+	// Unlike `write`/`clear`/`gate` this is NOT a pointer: `emit` keys on
+	// LENGTH rather than on key presence, so an absent block and a
+	// present-but-empty one are the same empty sequence.
+	Emit map[string]string `toml:"emit"`
 }
 
 type sourceGuard struct {

@@ -179,5 +179,5 @@ in = ["finalized", "verdict-flapping"]
 [dump]
 order = [
   "identity", "source", "kind", "outcome",
-  "atoms", "next", "writes", "requires_owned", "gate", "escape",
+  "atoms", "next", "writes", "requires_owned", "gate", "escape", "emit",
 ]

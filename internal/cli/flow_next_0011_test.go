@@ -720,8 +720,48 @@ func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
 		"internal/cli/flow_surface_0005_test.go":     true,
 	}
 
+	// RDR 0010's Technical Design names these production files, and they are
+	// listed HERE rather than folded into the check above because this
+	// guard's premise — "the only in-flight change is 0011's" — stops
+	// holding once a sibling RDR lands on the same branch. The allow-list
+	// is EXTENDED with a second RDR's named seams rather than relaxed to a
+	// permissive check: a file outside BOTH lists still fails, so what this
+	// oracle checks is unchanged (0010 deviations.md D7).
+	for _, path := range []string{
+		"internal/table/model.go",
+		"internal/table/source.go",
+		"internal/table/load.go",
+		"internal/table/normalize.go",
+		"internal/table/dump.go",
+		"internal/graphlint/reach.go",
+		"internal/graphlint/analysis.go",
+		"internal/graphlint/coverage.go",
+		"internal/graphlint/taxonomy.go",
+		"internal/cli/flow_resolve.go",
+	} {
+		allowed[path] = true
+	}
+
+	// The test-side surface RDR 0010 changes: its own suite, the fixture
+	// corpus whose `[dump]` lists must gain `emit` or stop loading, and the
+	// four checked-in expectations 0010's own Done clause licenses by shape
+	// (its REQ-87 (iii) and (iv), plus deviations D3 and D4). Each is named
+	// or bounded rather than waved through, so an unrelated test edit still
+	// fails this guard.
+	allowedTest := func(path string) bool {
+		switch path {
+		case "internal/table/helpers_test.go",
+			"internal/table/dump_test.go",
+			"internal/graphlint/findings_0006_test.go":
+			return true
+		}
+		return strings.Contains(path, "_0010_test.go") ||
+			strings.HasPrefix(path, "internal/table/testdata/")
+	}
+
 	for _, path := range changedFilesSince(t) {
-		if allowed[path] || strings.Contains(path, "_0011_test.go") ||
+		if allowed[path] || allowedTest(path) ||
+			strings.Contains(path, "_0011_test.go") ||
 			strings.HasPrefix(path, "docs/rdr/") {
 			continue
 		}

@@ -157,7 +157,18 @@ func TestReq5_ZeroOwnedStateMachineIsNotRefused(t *testing.T) {
 // same answer and fails here.
 func TestReq6_ClassIsDeclaredNeverInferredFromTheOwnedSet(t *testing.T) {
 	declared := loadSource(t, dtComplete, "dt-complete.toml")
-	omitted := loadSource(t, dtClassOmitted, "dt-class-omitted.toml")
+	// The class-omitted half is `smZeroOwned` with its `class` line
+	// stripped, NOT `dtClassOmitted`. deviations.md D1 gives
+	// `dtClassOmitted` owned-tag scaffolding — a zero-owned model's
+	// ordinary rule cannot carry the write block `0002:C4` still demands
+	// of a state machine — so that document does not share the DECLARED
+	// half's empty owned set and the pair below could not discriminate an
+	// implementation inferring the class from `len(owned) == 0`. The
+	// zero-owned escape-row document does share it, which makes the
+	// invariant real rather than merely asserted.
+	omitted := loadSource(t,
+		strings.Replace(smZeroOwned, "class = \"state-machine\"\n", "", 1),
+		"sm-zero-owned-implicit.toml")
 
 	if !table.IsDecisionTable(declared) {
 		t.Error("a model declaring `class = \"decision-table\"` does not read " +

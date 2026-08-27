@@ -48,6 +48,27 @@ const (
 	KindEscape Kind = "escape"
 )
 
+// The two admitted model classes (`0010:C1`). A `class` outside this set
+// is `malformed model declaration`; an ABSENT `class` reads as
+// ClassStateMachine, which is what makes the empty Model.Class a state
+// machine.
+const (
+	ClassStateMachine  = "state-machine"
+	ClassDecisionTable = "decision-table"
+)
+
+// IsDecisionTable reports whether m declares the decision-table class.
+//
+// It is the small helper `0010:C1` licenses for spelling the zero value —
+// "a reader MAY spell the zero value through a small helper rather than
+// repeating the empty-string comparison". The FIELD stays the storage: this
+// reads Model.Class and nothing else, and in particular never re-derives
+// the class from `len(owned) == 0`. It is exported because two of the four
+// class readers live in `internal/graphlint`.
+func IsDecisionTable(m *Model) bool {
+	return m != nil && m.Class == ClassDecisionTable
+}
+
 // Provenance is a tag declaration's provenance (`0002:C21`).
 type Provenance string
 
@@ -135,6 +156,19 @@ type TagValue struct {
 	Value []string
 }
 
+// EmitValue is one `[rule.emit]` pair (`0010:C3`).
+//
+// It is deliberately NOT a TagValue. An emit key is not a tag key: it is
+// undeclared, uninterpreted, and compared by exact byte equality, and its
+// value is one authored string rather than a member sequence — so the
+// `Value []string` a TagValue carries would invite the set semantics,
+// domain conformance, and `renderValue` quoting that none of this applies
+// to.
+type EmitValue struct {
+	Key   string
+	Value string
+}
+
 // Atom is one normalized predicate atom. Its identity is the full tuple
 // (key, block, operator token, literal) — the tuple the merge is a set
 // over and the dump sorts on — and the literal enters that identity as its
@@ -182,6 +216,18 @@ type Row struct {
 	// Escape lists the modeled resolver failure classes. A non-empty list
 	// is what discriminates an escape row.
 	Escape []string
+	// Emit is the authored `[rule.emit]` block, key-sorted (`0010:C3`).
+	//
+	// It is table data and never crosses the kernel seam: KernelRow does
+	// not carry it, and the CLI joins it back by rule id AFTER selection.
+	// An absent block and a present-but-empty one both normalize to the
+	// empty sequence — `emit` keys on LENGTH, not on key presence, which is
+	// the deliberate divergence from the write/clear/gate blocks.
+	//
+	// The sequence MAY be shared across the rows one rule expands to: it is
+	// read by the dump column and by the resolve payload join, and both are
+	// readers, so no defensive copy is taken.
+	Emit []EmitValue
 
 	// setKeys names the tag keys whose declared kind is `set`, sorted.
 	//
@@ -367,6 +413,13 @@ type Model struct {
 	ID          string
 	Version     int
 	Description string
+	// Class is the declared model class (`0010:C1`). Its zero value — the
+	// empty string — reads everywhere as ClassStateMachine, so a
+	// hand-constructed Model is a state machine without naming a class.
+	//
+	// The FIELD is the storage: no reader re-derives the class from the
+	// owned set, and nothing downstream infers it.
+	Class string
 	// Metadata is the one sanctioned extension namespace, carried through
 	// untouched and never interpreted (`0002:C2`).
 	Metadata map[string]any

@@ -258,6 +258,7 @@ func cloneRows(in []table.Row) []table.Row {
 		r.Writes = cloneTagValues(r.Writes)
 		r.RequiresOwned = slices.Clone(r.RequiresOwned)
 		r.Escape = slices.Clone(r.Escape)
+		r.Emit = slices.Clone(r.Emit)
 		out[i] = r
 	}
 	return out
@@ -296,7 +297,7 @@ func cloneAtoms(in []table.Atom) []table.Atom {
 // clonedRowSliceFields names every slice-typed field of table.Row that
 // cloneRows detaches.
 var clonedRowSliceFields = []string{
-	"Suffix", "Atoms", "Gate", "NextTags", "Writes", "RequiresOwned", "Escape", "setKeys",
+	"Suffix", "Atoms", "Gate", "NextTags", "Writes", "RequiresOwned", "Escape", "Emit", "setKeys",
 }
 
 // assertCloneRowsCoversEverySliceField fails if table.Row grows a slice

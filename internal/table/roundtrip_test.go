@@ -317,7 +317,18 @@ func TestReq118_PromotedFixtureSetIsNotNarrowed(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read spike fixture %s: %v", rel, err)
 			}
+			// Two recorded normalizations, both APPLIED TO THE SPIKE side
+			// so the promoted fixture is still compared byte for byte:
+			// the string-to-scalar kind rename (0002 deviations.md D1),
+			// and RDR 0010's `emit` append to an explicit `[dump]` order
+			// list. The second is `0010`'s licensed diff shape (iii) — the
+			// dump vocabulary is the one non-silent widening 0010 makes,
+			// and a `[dump]` list omitting `emit` refuses at load, so
+			// every one of these fixtures gains exactly that member and
+			// changes in no other way. Anything else still fails here.
 			want := strings.ReplaceAll(string(spikeData), `kind = "string"`, `kind = "scalar"`)
+			want = strings.ReplaceAll(want,
+				`"gate", "escape",`, `"gate", "escape", "emit",`)
 			if got := string(readFixture(t, rel)); got != want {
 				t.Errorf("promoted fixture %s differs from its approved spike content", rel)
 			}

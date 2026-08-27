@@ -10,9 +10,13 @@ import (
 // normative fixtures author it — `identity` (not `row_identity`), `source`
 // (not `source_locator`), `writes` (not `write`) — because those fixtures
 // are what implementation tests promote (`0002:C19`).
+// `emit` joins the vocabulary APPENDED LAST, after `escape` (`0010:C3`).
+// That is the only insertion that leaves every existing column at its
+// existing index, so an explicit `[dump]` list gains one member at the end
+// and changes in no other way.
 var dumpColumns = []string{
 	"identity", "source", "kind", "outcome",
-	"atoms", "next", "writes", "requires_owned", "gate", "escape",
+	"atoms", "next", "writes", "requires_owned", "gate", "escape", "emit",
 }
 
 // DumpColumns returns the closed dump column vocabulary in its canonical
@@ -93,6 +97,8 @@ func column(m *Model, r Row, col string) string {
 		return bracket(r.Gate, ",")
 	case "escape":
 		return bracket(r.Escape, ",")
+	case "emit":
+		return bracket(renderEmit(r.Emit), "; ")
 	default:
 		return ""
 	}
@@ -107,6 +113,23 @@ func renderAtoms(m *Model, r Row) []string {
 	for _, a := range r.Atoms {
 		out = append(out, fmt.Sprintf("%s.%s=%s@%s",
 			a.Key, a.Operator, renderValue(m, a.Key, a.Literal), a.Block))
+	}
+	return out
+}
+
+// renderEmit spells the emit block as `key=value` pairs in key order — the
+// sequence is already key-sorted at normalization — bracketed like `writes`
+// (`0010:C3`).
+//
+// The value is the RAW authored string and is deliberately NOT routed
+// through renderValue, whose quoting and bracketing key on a tag's declared
+// kind and member count. An emit key has neither: it is undeclared, so
+// there is no kind to consult, and its value is one string rather than a
+// member sequence. This is a READER — it never writes back into the row.
+func renderEmit(emit []EmitValue) []string {
+	out := make([]string, 0, len(emit))
+	for _, e := range emit {
+		out = append(out, e.Key+"="+e.Value)
 	}
 	return out
 }

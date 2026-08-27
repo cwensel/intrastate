@@ -79,6 +79,7 @@ func (l *loader) run() (*Model, error) {
 		l.loadModelHeader,
 		l.loadOutcomes,
 		l.loadTags,
+		l.checkClassAgreement,
 		l.loadAccessors,
 		l.loadDump,
 		l.loadContexts,
@@ -106,6 +107,21 @@ func (l *loader) loadModelHeader() error {
 	}
 	if m.Version == nil {
 		return fail(CatMalformedModelDeclaration, "[model] carries no version")
+	}
+
+	// The class is `[model]` data, so it is READ here — but the agreement
+	// with the owned set is checked later, in a step at or after loadTags,
+	// where the tag table exists (`0010:C1`).
+	if m.Class != nil {
+		switch *m.Class {
+		case ClassStateMachine, ClassDecisionTable:
+		default:
+			return fail(CatMalformedModelDeclaration,
+				"[model] class "+strconv.Quote(*m.Class)+
+					" is not "+strconv.Quote(ClassStateMachine)+
+					" or "+strconv.Quote(ClassDecisionTable))
+		}
+		l.model.Class = *m.Class
 	}
 
 	l.model.ID = *m.ID
@@ -200,6 +216,44 @@ func (l *loader) loadTags() error {
 
 	l.model.Tags = decls
 	return nil
+}
+
+// checkClassAgreement holds the declared class and the owned set to the
+// ONE-DIRECTIONAL agreement `0010:C1` fixes: a `decision-table` model MUST
+// declare zero owned tags.
+//
+// The second direction is deliberately absent. A `state-machine` model
+// declaring zero owned tags is rootless, not malformed, and `0006:C18`
+// already reports it as `graph-dangling-edge` at lint — growing an arm here
+// would make that model unauthorable and change behaviour this RDR leaves
+// untouched.
+//
+// POSITION (`0010:C1`): the check needs the tag table, so it cannot live in
+// `loadModelHeader`; and it must precede `checkAccessorBindings`, `run`'s
+// last step, so a decision table that declares both an owned tag and
+// `[initial]` refuses on the CLASS rather than on the writer-arity
+// diagnostic. Anywhere in that window satisfies the clause; immediately
+// after `loadTags` is the earliest point at which it is decidable.
+func (l *loader) checkClassAgreement() error {
+	if !IsDecisionTable(l.model) {
+		return nil
+	}
+	var owned int
+	for _, decl := range l.model.Tags {
+		if decl.Provenance == ProvenanceOwned {
+			owned++
+		}
+	}
+	if owned == 0 {
+		return nil
+	}
+	// The detail names the class and renders the count as the literal token
+	// `owned=<n>`, which C1 fixes verbatim so a consumer can key on it.
+	return fail(CatMalformedModelDeclaration,
+		fmt.Sprintf("[model] class %s declares owned=%d; a %s model declares "+
+			"zero tags of provenance %s",
+			strconv.Quote(ClassDecisionTable), owned, ClassDecisionTable,
+			ProvenanceOwned))
 }
 
 func tagDecl(key string, src sourceTagDecl) (TagDecl, error) {

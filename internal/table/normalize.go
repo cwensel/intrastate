@@ -360,9 +360,14 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 		if len(*rule.Escape) == 0 {
 			return nil, fail(CatMalformedEscapeDeclaration, "escape rule "+id+" models no failure class")
 		}
-	} else if rule.Write == nil {
+	} else if rule.Write == nil && !IsDecisionTable(l.model) {
 		// An ordinary transition rule MUST contain a write block
-		// (`0002:C4`).
+		// (`0002:C4`) — conditioned on CLASS by `0010:C2`. The arm binds
+		// the state-machine class only: a decision table owns no state, so
+		// there is nothing for an ordinary rule to write, and demanding a
+		// write block would make the class unauthorable. Every other rule
+		// obligation — the match block, the outcome binding, rule ids,
+		// gates, escape shape — is unchanged in both classes.
 		return nil, fail(CatMalformedRuleShape, "ordinary rule "+id+" carries no write block")
 	}
 
@@ -449,6 +454,7 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 	}
 
 	base := Row{
+		Emit:    emitSequence(rule.Emit),
 		ModelID: l.model.ID,
 		RuleID:  id,
 		// The locator is DERIVED from (model id, rule id), never from the
@@ -509,56 +515,64 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 	}
 
 	assignments := map[string][]string{}
-	for _, key := range slices.Sorted(maps.Keys(*rule.Write)) {
-		decl, ok := l.model.Tags[key]
-		if !ok {
-			return nil, nil, fail(CatUnknownTag, "rule "+id+" writes the undeclared tag "+key)
+	// A decision-table ordinary rule carries no write block (`0010:C2`), so
+	// there is nothing to render; the row normalizes to empty
+	// Writes/NextTags/RequiresOwned exactly as an escape row does. The
+	// `clear` list below still runs: a clear on a decision table names a
+	// non-owned tag by construction and refuses through 0002's existing
+	// `write to non-owned tag` arm, which is what C2 relies on.
+	if rule.Write != nil {
+		for _, key := range slices.Sorted(maps.Keys(*rule.Write)) {
+			decl, ok := l.model.Tags[key]
+			if !ok {
+				return nil, nil, fail(CatUnknownTag, "rule "+id+" writes the undeclared tag "+key)
+			}
+			// `write to non-owned tag` is a RULE-level refusal, decidable from
+			// one rule plus the declarations (Failure Modes). It is what
+			// `0002:C14` relies on when it derives `RequiresOwned` from the
+			// write block and clear list and asserts "by the
+			// write-to-non-owned-tag rule every such key is an owned tag" —
+			// and `RequiresOwned` is the kernel's owned-state gate, so a
+			// non-owned key reaching it is a runtime refusal load must
+			// pre-empt. Leaving it to the accessor arity count would report
+			// the model's wiring for a defect in the rule and collapse two
+			// categories `0002:C24` states separately.
+			if decl.Provenance != ProvenanceOwned {
+				return nil, nil, fail(CatWriteToNonOwnedTag,
+					"rule "+id+" writes the "+string(decl.Provenance)+" tag "+key)
+			}
+			raw := (*rule.Write)[key]
+			members, err := valueMembers(raw)
+			if err != nil {
+				return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
+			}
+			if slices.Contains(members, ClearSentinel) {
+				return nil, nil, fail(CatReservedTagValue,
+					"rule "+id+" write "+key+" authors the reserved value "+ClearSentinel)
+			}
+			// A write-block value's kind and domain conformance is filed under
+			// the declaration category (deviations.md D3): `0002:C24` names no
+			// dedicated category, and D3's check names this one.
+			if err := conform(decl, "eq", members); err != nil {
+				return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
+			}
+			// A write REPLACES: for a set kind the array literal is the whole
+			// new set, and it normalizes to a member-sorted sequence rather
+			// than a delimiter-joined string (`0002:C4`).
+			if decl.Kind == "set" {
+				members = slices.Compact(slices.Sorted(slices.Values(members)))
+			} else if len(members) != 1 {
+				// `0002:C4` gives the array literal a meaning for a `set` kind
+				// only. On any other kind a multi-member value is ill-formed
+				// for the declared kind and is refused rather than truncated
+				// at the seam, where `resolve.Tag.Value` is one string and
+				// RDR 0004's read-back compares it for equality.
+				return nil, nil, fail(CatMalformedTagDeclaration,
+					"rule "+id+" write "+key+": kind "+decl.Kind+
+						" holds one value, not a member sequence")
+			}
+			assignments[key] = members
 		}
-		// `write to non-owned tag` is a RULE-level refusal, decidable from
-		// one rule plus the declarations (Failure Modes). It is what
-		// `0002:C14` relies on when it derives `RequiresOwned` from the
-		// write block and clear list and asserts "by the
-		// write-to-non-owned-tag rule every such key is an owned tag" —
-		// and `RequiresOwned` is the kernel's owned-state gate, so a
-		// non-owned key reaching it is a runtime refusal load must
-		// pre-empt. Leaving it to the accessor arity count would report
-		// the model's wiring for a defect in the rule and collapse two
-		// categories `0002:C24` states separately.
-		if decl.Provenance != ProvenanceOwned {
-			return nil, nil, fail(CatWriteToNonOwnedTag,
-				"rule "+id+" writes the "+string(decl.Provenance)+" tag "+key)
-		}
-		raw := (*rule.Write)[key]
-		members, err := valueMembers(raw)
-		if err != nil {
-			return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
-		}
-		if slices.Contains(members, ClearSentinel) {
-			return nil, nil, fail(CatReservedTagValue,
-				"rule "+id+" write "+key+" authors the reserved value "+ClearSentinel)
-		}
-		// A write-block value's kind and domain conformance is filed under
-		// the declaration category (deviations.md D3): `0002:C24` names no
-		// dedicated category, and D3's check names this one.
-		if err := conform(decl, "eq", members); err != nil {
-			return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
-		}
-		// A write REPLACES: for a set kind the array literal is the whole
-		// new set, and it normalizes to a member-sorted sequence rather
-		// than a delimiter-joined string (`0002:C4`).
-		if decl.Kind == "set" {
-			members = slices.Compact(slices.Sorted(slices.Values(members)))
-		} else if len(members) != 1 {
-			// `0002:C4` gives the array literal a meaning for a `set` kind
-			// only. On any other kind a multi-member value is ill-formed
-			// for the declared kind and is refused rather than truncated
-			// at the seam, where `resolve.Tag.Value` is one string and
-			// RDR 0004's read-back compares it for equality.
-			return nil, nil, fail(CatMalformedTagDeclaration,
-				"rule "+id+" write "+key+": kind "+decl.Kind+
-					" holds one value, not a member sequence")
-		}
-		assignments[key] = members
 	}
 
 	// Clearing a tag is represented by an explicit rule-level `clear`
@@ -592,6 +606,29 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		writes = append(writes, TagValue{Key: key, Value: slices.Clone(assignments[key])})
 	}
 	return writes, slices.Clone(keys), nil
+}
+
+// emitSequence renders the authored `[rule.emit]` block as the key-sorted
+// pair sequence the row carries (`0010:C3`).
+//
+// It sorts and does nothing else. There is NO dedup pass: a TOML table
+// refuses duplicate keys in the decoder, so two pairs sharing a key never
+// reach here — writing one anyway would be dead code claiming to handle an
+// unauthorable case. Keys and values are carried byte for byte: they are
+// undeclared and uninterpreted, so no case folding, trimming, or value
+// coercion is applied.
+//
+// An absent block and a present-but-empty one both yield the empty
+// sequence, since `emit` keys on length rather than on key presence.
+func emitSequence(emit map[string]string) []EmitValue {
+	if len(emit) == 0 {
+		return nil
+	}
+	out := make([]EmitValue, 0, len(emit))
+	for _, key := range slices.Sorted(maps.Keys(emit)) {
+		out = append(out, EmitValue{Key: key, Value: emit[key]})
+	}
+	return out
 }
 
 // sortedList renders an optional authored list as a sorted slice, so map
@@ -643,6 +680,12 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 	// combos enumerates one chosen member per expanding atom, in sort
 	// order. A non-expanding atom contributes its own single member and no
 	// suffix element.
+	// The seed is a fresh literal rather than a copy of `base`, so every
+	// field a row must carry has to be named HERE — a field added to Row and
+	// set on `base` but omitted below reaches no expanded row at all. `Emit`
+	// is carried for exactly that reason, and it is carried by SHARING the
+	// one sequence across every row this rule expands to: nothing mutates it
+	// after normalization, so a clone would buy nothing (`0010:C3`).
 	rows := []Row{{
 		ModelID:       base.ModelID,
 		RuleID:        base.RuleID,
@@ -651,6 +694,7 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 		Gate:          base.Gate,
 		RequiresOwned: base.RequiresOwned,
 		Escape:        base.Escape,
+		Emit:          base.Emit,
 		setKeys:       base.setKeys,
 	}}
 	atomSets := [][]Atom{nil}
