@@ -23,6 +23,9 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -1446,26 +1449,129 @@ func resolveRefusalKindStrings() []string {
 	return out
 }
 
+// --- diff-base resolution --------------------------------------------------
+
+// errNoDiffBase reports that no candidate ref in the ladder resolved to a
+// merge base with HEAD. It is a SKIP locally and a FATAL under CI: a
+// developer on an odd checkout stays unblocked, but a CI run that cannot
+// see a branch point has not checked the kernel-untouched claim at all, and
+// the whole defect this guard closes is that such a run used to pass.
+var errNoDiffBase = errors.New("no diff base resolved")
+
+// errDiffBaseIsHEAD reports that the resolved base IS HEAD, so every diff
+// taken against it is necessarily empty. That is a broken harness, not a
+// clean kernel, and it is fatal in every environment — a push build on the
+// default branch would otherwise assert nothing while reporting green.
+var errDiffBaseIsHEAD = errors.New("diff base is HEAD")
+
+// diffBaseCandidates is the resolution ladder, most trustworthy first.
+//
+// `main` leads deliberately. In an ordinary clone the local branch tracks
+// the work under review while `origin/main` may be many commits stale, and
+// a stale base widens the diff to every file landed since the last fetch —
+// which would fail `TestReq120`'s allowlist and the kernel-diff oracles on
+// a developer's own `make check` for no defect at all. `origin/main`
+// follows as the fallback for checkouts that carry the remote ref but no
+// local branch.
+func diffBaseCandidates(baseRef string) []string {
+	cands := []string{"main", "origin/main"}
+	if baseRef != "" {
+		cands = append(cands, baseRef, "origin/"+baseRef)
+	}
+	return cands
+}
+
+// resolveDiffBase returns the merge base of HEAD with the first candidate
+// ref in the ladder that resolves, plus the ref it came from.
+//
+// It is a pure function of (`root`, `ciEnv`, `baseRef`) so the decision can
+// be table-tested over throwaway repositories rather than only observed
+// through whichever environment the suite happens to run in — the failure
+// mode this closes is precisely that the guard was never exercised in the
+// environment it was written for.
+//
+// Two fail-CLOSED outcomes:
+//
+//   - Nothing in the ladder resolves: `errNoDiffBase`. The caller skips
+//     when `ciEnv` is empty and fails when it is set.
+//   - The base equals HEAD: `errDiffBaseIsHEAD`, unconditionally. This is
+//     the vacuous-pass direction — a push to the default branch makes HEAD
+//     its own merge base, so `git diff <base>` is empty however much the
+//     commit changed. Same idiom as DEV-5's vacuity guard.
+func resolveDiffBase(root, ciEnv, baseRef string) (base, reason string, err error) {
+	head, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("%w: cannot read HEAD: %v", errNoDiffBase, err)
+	}
+	headSHA := strings.TrimSpace(string(head))
+
+	var tried []string
+	for _, ref := range diffBaseCandidates(baseRef) {
+		out, berr := exec.Command("git", "-C", root,
+			"merge-base", "HEAD", ref).Output()
+		if berr != nil {
+			tried = append(tried, ref)
+			continue
+		}
+		base = strings.TrimSpace(string(out))
+		if base == headSHA {
+			return "", "", fmt.Errorf(
+				"%w: `%s` resolves to HEAD (%s), so every diff taken "+
+					"against it is empty whatever the commit changed — a "+
+					"base of HEAD is a broken harness, not an untouched "+
+					"kernel", errDiffBaseIsHEAD, ref, base[:min(8, len(base))])
+		}
+		return base, ref, nil
+	}
+
+	return "", "", fmt.Errorf("%w: none of %v names a commit reachable from "+
+		"this checkout (ci=%q)", errNoDiffBase, tried, ciEnv)
+}
+
+// diffBase resolves the branch point the 0011 diff guards compare against,
+// mapping `resolveDiffBase`'s two errors onto the `*testing.T` verdicts.
+//
+// It is the ONE place these three oracles learn what "since the branch
+// point" means; before it existed each site re-derived the base inline with
+// a bare `merge-base HEAD main` and skipped on error, which made the
+// kernel-untouched claim (`0011:S5`, MVV 9) unenforced in every CI mode
+// this repo actually runs.
+func diffBase(t *testing.T) string {
+	t.Helper()
+
+	ci := os.Getenv("CI")
+	base, ref, err := resolveDiffBase(repoRootFor(t), ci, os.Getenv("GITHUB_BASE_REF"))
+	switch {
+	case errors.Is(err, errDiffBaseIsHEAD):
+		t.Fatalf("%v", err)
+	case errors.Is(err, errNoDiffBase) && ci != "":
+		t.Fatalf("%v — under CI a diff claim without a branch point is an "+
+			"UNCHECKED claim, not a satisfied one; fetch enough history "+
+			"(`actions/checkout` with `fetch-depth: 0`) so the base "+
+			"resolves", err)
+	case err != nil:
+		t.Skipf("%v — the kernel-diff claim needs a branch point to "+
+			"compare against; set CI to make this fatal", err)
+	}
+	t.Logf("diff base %s (via %s)", base[:min(8, len(base))], ref)
+	return base
+}
+
 // gitDiffStat returns `git diff --stat <base> -- <path>` against the branch
 // point, which is the ONE mechanically checkable form of "the kernel is
 // untouched" (`0011:S5`, MVV 9). A green kernel suite is its corroboration,
 // not a second criterion.
 //
-// It resolves the base as the merge base with the default branch and skips
-// rather than fails when git is unavailable or the tree is not a checkout:
-// the claim is about a DIFF, and a harness that cannot see one has nothing
-// to report either way.
+// It takes its base from `diffBase`, which fails rather than skips when no
+// branch point resolves under CI and when the base IS HEAD. Only the `git
+// diff` invocation itself still skips: a tree where `merge-base` answered
+// but `diff` did not is a broken git, not an unenforced claim.
 func gitDiffStat(t *testing.T, path string) string {
 	t.Helper()
 
 	root := repoRootFor(t)
-	base, err := exec.Command("git", "-C", root, "merge-base", "HEAD", "main").Output()
-	if err != nil {
-		t.Skipf("cannot resolve the merge base with `main`: %v — the "+
-			"kernel-diff claim needs a branch point to compare against", err)
-	}
 	out, err := exec.Command("git", "-C", root, "diff", "--stat",
-		strings.TrimSpace(string(base)), "--", path).Output()
+		diffBase(t), "--", path).Output()
 	if err != nil {
 		t.Skipf("`git diff --stat` failed: %v", err)
 	}
@@ -1489,18 +1595,17 @@ func repoModelPath(t *testing.T) string {
 // changedFilesSince returns the repo-relative paths changed against the
 // branch point, which is how a SCOPE claim about the production diff is
 // asserted: no runtime observation can see file boundaries.
+//
+// An empty return now means ONE thing — nothing changed since a real branch
+// point. It used to also mean "the base is HEAD", which is why the scope
+// oracle over it passed vacuously on every push build; `diffBase` fails that
+// case rather than returning it.
 func changedFilesSince(t *testing.T) []string {
 	t.Helper()
 
 	root := repoRootFor(t)
-	base, err := exec.Command("git", "-C", root,
-		"merge-base", "HEAD", "main").Output()
-	if err != nil {
-		t.Skipf("cannot resolve the merge base with `main`: %v — a diff "+
-			"claim needs a branch point to compare against", err)
-	}
 	out, err := exec.Command("git", "-C", root, "diff", "--name-only",
-		strings.TrimSpace(string(base))).Output()
+		diffBase(t)).Output()
 	if err != nil {
 		t.Skipf("`git diff --name-only` failed: %v", err)
 	}

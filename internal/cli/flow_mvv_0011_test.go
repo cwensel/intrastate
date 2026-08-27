@@ -433,13 +433,8 @@ func TestReq94And119_MVV9TheKernelIsUntouchedInBothOfTheFormsTheMVVNames(t *test
 	// cannot by itself prove nothing changed" — so this asserts the DIFF
 	// of the test files rather than running them.
 	root := repoRootFor(t)
-	base, err := exec.Command("git", "-C", root,
-		"merge-base", "HEAD", "main").Output()
-	if err != nil {
-		t.Skipf("cannot resolve the merge base with `main`: %v", err)
-	}
 	names, err := exec.Command("git", "-C", root, "diff", "--name-only",
-		strings.TrimSpace(string(base)), "--", "internal/resolve").Output()
+		diffBase(t), "--", "internal/resolve").Output()
 	if err != nil {
 		t.Skipf("`git diff --name-only` failed: %v", err)
 	}
