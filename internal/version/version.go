@@ -22,9 +22,9 @@ import (
 // Set via ldflags at build time (see the Makefile's LDFLAGS):
 //
 //	go build -ldflags "\
-//	  -X github.com/newcoinc/intrastate/internal/version.version=0.1.0 \
-//	  -X github.com/newcoinc/intrastate/internal/version.commit=abc1234 \
-//	  -X github.com/newcoinc/intrastate/internal/version.date=2026-06-17T00:00:00Z"
+//	  -X github.com/cwensel/intrastate/internal/version.version=0.1.0 \
+//	  -X github.com/cwensel/intrastate/internal/version.commit=abc1234 \
+//	  -X github.com/cwensel/intrastate/internal/version.date=2026-06-17T00:00:00Z"
 //
 // The zero-information defaults below are what the VCS fallback
 // replaces; they survive only when the build carries no VCS stamps

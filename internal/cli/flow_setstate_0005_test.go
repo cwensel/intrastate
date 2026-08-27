@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-60: "flow set-state MUST invoke only declared write accessors over

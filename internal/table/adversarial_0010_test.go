@@ -48,7 +48,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // advDoublyMalformed declares an owned tag under `class = "decision-table"`

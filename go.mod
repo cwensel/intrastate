@@ -1,4 +1,4 @@
-module github.com/newcoinc/intrastate
+module github.com/cwensel/intrastate
 
 go 1.26.3
 

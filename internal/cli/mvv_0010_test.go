@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // mvvPartial0010 is MVV step 1: `class = "decision-table"`, two observed

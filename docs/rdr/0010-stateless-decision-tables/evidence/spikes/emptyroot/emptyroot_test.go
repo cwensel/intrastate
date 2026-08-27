@@ -17,8 +17,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // strip removes every owned tag, the declared root, the terminals, and every

@@ -1,7 +1,7 @@
 package resolve_test
 
 import (
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // This file holds only fixture builders. Every fixture is a value the

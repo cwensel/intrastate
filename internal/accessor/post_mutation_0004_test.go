@@ -23,8 +23,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-61: "The read-back re-read is subject to read completeness." — the

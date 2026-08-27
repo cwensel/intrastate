@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // flowVerbs is the exact verb set REQ-1 and REQ-3 fix.

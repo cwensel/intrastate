@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-104: `flow-write-readback-incomplete` — "read-back returned an

@@ -47,7 +47,7 @@ package resolve_test
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // --- ADV-1 ---------------------------------------------------------------

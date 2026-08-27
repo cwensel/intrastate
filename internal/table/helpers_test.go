@@ -16,8 +16,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Fixture source ids. The locator is derived from (model id, rule id), so

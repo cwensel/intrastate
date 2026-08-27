@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // checkGroups runs the per-group invariants: determinism/overlap

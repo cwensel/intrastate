@@ -13,7 +13,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/graphlint"
 )
 
 // scalarGateDecls declares the owned `scalar` whose domain is not finite

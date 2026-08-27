@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-40: "flow next MUST return the legal recognized-outcome alphabet for

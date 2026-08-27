@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Node is one abstract owned-state: per owned tag, either absent, or held

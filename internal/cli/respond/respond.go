@@ -29,7 +29,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

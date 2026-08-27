@@ -18,9 +18,9 @@ import (
 	"errors"
 	"os"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/cli/respond"
-	"github.com/newcoinc/intrastate/internal/version"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/respond"
+	"github.com/cwensel/intrastate/internal/version"
 	"github.com/spf13/cobra"
 )
 

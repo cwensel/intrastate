@@ -20,8 +20,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-30: "A requested key the artifact genuinely does not carry MUST NOT

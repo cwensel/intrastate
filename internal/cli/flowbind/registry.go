@@ -3,8 +3,8 @@ package flowbind
 import (
 	"slices"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Registry builds the validated accessor registry for one loaded model,

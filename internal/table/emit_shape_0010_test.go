@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-21: "The assertion is on the category, never on upstream message

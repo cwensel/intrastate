@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // atomsFromBlock validates and renders one authored atom block —

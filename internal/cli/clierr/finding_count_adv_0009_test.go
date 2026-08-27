@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // RDR 0009 Phase 3b — ADVERSARIAL: the shared-record widening.

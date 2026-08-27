@@ -17,7 +17,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // The reserved key, written out rather than read from `table.RecognizedTagKey`.

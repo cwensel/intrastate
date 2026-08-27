@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-91: "The tool MUST normalize the sparse source into deterministic

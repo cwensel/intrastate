@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-113: "`parse ∘ normalize = expanded-table value identity` on valid

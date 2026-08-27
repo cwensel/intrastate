@@ -14,10 +14,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-MVV: "Add a fixture-backed lint invocation that uses the same

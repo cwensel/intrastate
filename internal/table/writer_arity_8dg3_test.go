@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // secondClusterWriter is a second `[write.<id>]` naming `cluster_ready` —

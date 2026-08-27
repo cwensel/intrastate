@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/graphlint"
 	"github.com/spf13/cobra"
 )
 

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // Shape names an operator's literal shape, as the operator/kind matrix

@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-14: "Finding MUST be one flat record with omitempty optional fields,

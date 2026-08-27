@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // dtHeader is the decision-table preamble: the class declaration, the

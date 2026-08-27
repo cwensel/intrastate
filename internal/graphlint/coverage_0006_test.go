@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/guard"
 )
 
 // REQ-19: "Coverage, overlap, and withholding MUST be decided per scoped

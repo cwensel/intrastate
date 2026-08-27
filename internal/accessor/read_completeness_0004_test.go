@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-13: "A read accessor MUST return typed tag values or a typed

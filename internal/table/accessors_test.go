@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-19: "Every entry carries `role`, `path`, `keys` (a non-empty list of

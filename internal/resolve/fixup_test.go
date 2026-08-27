@@ -27,7 +27,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // FAIL-1 sub-case 1d: a guarded escape edge must not rescue when the guard

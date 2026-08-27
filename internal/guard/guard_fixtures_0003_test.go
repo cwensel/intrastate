@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // --- model construction --------------------------------------------------

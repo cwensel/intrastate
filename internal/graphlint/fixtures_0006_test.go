@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // --- model construction --------------------------------------------------

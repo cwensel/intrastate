@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // runCmd builds a fresh root tree, captures stdout/stderr, and runs it

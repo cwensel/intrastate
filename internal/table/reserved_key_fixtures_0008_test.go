@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // reservedTagKeyFailure loads a fixture expected to refuse in the

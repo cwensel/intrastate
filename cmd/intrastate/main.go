@@ -3,7 +3,7 @@
 // subcommands, exit-code mapping) lives in one testable package.
 package main
 
-import "github.com/newcoinc/intrastate/internal/cli"
+import "github.com/cwensel/intrastate/internal/cli"
 
 func main() {
 	cli.Execute()

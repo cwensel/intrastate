@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/cli/flowbind"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/flowbind"
+	"github.com/cwensel/intrastate/internal/table"
 	"github.com/spf13/cobra"
 )
 

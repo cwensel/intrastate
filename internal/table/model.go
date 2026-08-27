@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // ClearSentinel is the reserved tag value an explicit `clear` entry

@@ -18,7 +18,7 @@ package resolve_test
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-76: TS-3 "a guard predicate and a match pattern both read the recognized

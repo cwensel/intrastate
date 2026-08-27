@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-MVV / `0005:MVV`: "Implement one fixture-backed flow and prove all

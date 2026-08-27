@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // mustResolve calls the kernel and fails the test if the Go error path was

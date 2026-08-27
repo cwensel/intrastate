@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-22: "Model selection MUST accept exactly one of --flow <id> or

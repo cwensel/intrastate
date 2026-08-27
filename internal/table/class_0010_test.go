@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-1: "`[model]` MAY carry `class`, a string whose only admitted values

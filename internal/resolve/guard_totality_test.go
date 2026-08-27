@@ -15,7 +15,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-18: "Value-comparing guard operators (equality, membership, bounded

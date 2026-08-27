@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // --- G. Doc-contract amendments authorized by this RDR -------------------

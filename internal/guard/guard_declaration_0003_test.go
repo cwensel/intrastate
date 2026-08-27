@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-13: "This RDR owns the **tag declaration model** — the typed

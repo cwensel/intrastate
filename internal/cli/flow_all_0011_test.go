@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-36: "flow next MUST accept a boolean flag --all, default false."

@@ -15,7 +15,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-70: "A hand-constructed table containing an escape row with populated

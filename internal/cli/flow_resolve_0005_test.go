@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-48: "flow resolve MUST return exactly one plan or exactly one CLIError

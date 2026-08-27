@@ -16,8 +16,8 @@ package cli
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-104: JDR 0001 §D8 "A `--tag` naming an **owned** key or `recognized` is

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-19: "Exit 3 MUST mean the environment could not be consulted and the

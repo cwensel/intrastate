@@ -45,7 +45,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // --- fixtures ------------------------------------------------------------

@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // A bare `flow` carries no behaviour of its own, so it is a usage refusal

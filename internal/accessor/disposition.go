@@ -3,7 +3,7 @@ package accessor
 import (
 	"time"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // Disposition is the recorded, replay-stable outcome of one invocation.

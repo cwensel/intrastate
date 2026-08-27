@@ -23,7 +23,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/graphlint"
 )
 
 // --- ADV-1: the successor join collapses divergent edges ------------------

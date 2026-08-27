@@ -17,7 +17,7 @@ import (
 // checked against the package's own source rather than against runtime
 // behaviour that a stub could fake.
 
-const kernelModulePath = "github.com/newcoinc/intrastate"
+const kernelModulePath = "github.com/cwensel/intrastate"
 
 // kernelImportPath is the import path of the resolver kernel package
 // under test.

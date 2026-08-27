@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-34: "This RDR's guard evaluator MUST decide value semantics over a

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-45: "Coverage and overlap checks MUST be scoped to a normalized row

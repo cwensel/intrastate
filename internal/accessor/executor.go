@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // Executor invokes validated accessor definitions against

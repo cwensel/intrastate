@@ -48,8 +48,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // advLint loads src through the real loader and runs the real engine.

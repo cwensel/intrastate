@@ -19,7 +19,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/accessor"
 )
 
 // REQ-35: "A gate accessor MUST return allow, deny, or indeterminate."

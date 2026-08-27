@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/guard"
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-112: "Visible failures should be typed load or lint failures: unknown
@@ -224,7 +224,7 @@ func TestReq117_NoNewThirdPartyDependencyIsIntroduced(t *testing.T) {
 		}
 		for _, imp := range f.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
-			if strings.HasPrefix(path, "github.com/newcoinc/intrastate/") {
+			if strings.HasPrefix(path, "github.com/cwensel/intrastate/") {
 				continue
 			}
 			if strings.Contains(strings.SplitN(path, "/", 2)[0], ".") {

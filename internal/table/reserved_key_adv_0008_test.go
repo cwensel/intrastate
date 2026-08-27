@@ -23,7 +23,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // advBothDirections is a model that breaches both reserved-key naming

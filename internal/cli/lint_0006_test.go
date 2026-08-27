@@ -17,8 +17,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/graphlint"
 )
 
 // asCLIError unwraps err to the structured CLIError the gateway returns.

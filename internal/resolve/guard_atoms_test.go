@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-1: "SEAM. A candidate row carries its guard as a slice of parsed

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-MVV (`0004:MVV`): "Build a fixture flow with one read accessor, one

@@ -14,8 +14,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-1: "Every accessor definition MUST declare exactly one capability:

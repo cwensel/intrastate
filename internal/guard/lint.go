@@ -3,8 +3,8 @@ package guard
 import (
 	"slices"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Code is one of RDR 0006's lint finding codes this RDR's semantics emit.

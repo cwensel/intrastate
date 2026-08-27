@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Assignment is one point of the scoped product: dimension to rendered

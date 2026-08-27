@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Selection is one selection context: the source state and the recognized

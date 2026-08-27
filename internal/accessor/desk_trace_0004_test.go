@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newcoinc/intrastate/internal/accessor"
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-101 / DESK step 2: nine assertions hold at once on ONE read

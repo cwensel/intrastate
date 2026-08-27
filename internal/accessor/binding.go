@@ -3,7 +3,7 @@ package accessor
 import (
 	"context"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // KeyValue is one key the binding resolved, with its readability

@@ -7,7 +7,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Declaration is one tag's declaration as this RDR reads it: the five

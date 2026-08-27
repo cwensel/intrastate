@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-16: "`0002:C4`'s \"an ordinary transition rule MUST contain a write

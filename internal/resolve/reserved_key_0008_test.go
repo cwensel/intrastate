@@ -16,7 +16,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // reservedKey is the literal this whole RDR is about. It is written out

@@ -19,7 +19,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // REQ-104 / REQ-110 — DOMAIN EDGE: a write whose read-back could not

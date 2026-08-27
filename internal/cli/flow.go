@@ -27,8 +27,8 @@ package cli
 //     denies.
 
 import (
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
-	"github.com/newcoinc/intrastate/internal/cli/respond"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/respond"
 	"github.com/spf13/cobra"
 )
 

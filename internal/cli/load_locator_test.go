@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // locatorDoc declares `[tags.flavors]` as a `set` carrying a `domain`, a

@@ -15,7 +15,7 @@ package graphlint
 import (
 	"slices"
 
-	"github.com/newcoinc/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/guard"
 )
 
 // --- the finding taxonomy ------------------------------------------------

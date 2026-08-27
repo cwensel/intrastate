@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/table"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-34: "Rule ids MUST be unique within a model, compared by exact byte

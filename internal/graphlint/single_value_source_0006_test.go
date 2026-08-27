@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/graphlint"
-	"github.com/newcoinc/intrastate/internal/guard"
+	"github.com/cwensel/intrastate/internal/graphlint"
+	"github.com/cwensel/intrastate/internal/guard"
 )
 
 // singleValueProbeDecls declares a FINITE dimension that carries NO

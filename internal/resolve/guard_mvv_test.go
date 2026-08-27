@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/resolve"
 )
 
 // REQ-59: "Row.RequiresOwned names the owned tag keys the row's post-guard
@@ -541,7 +541,7 @@ func TestReq73_ScenariosAreKernelTestsInPackageResolveTest(t *testing.T) {
 	// This file's own package declaration is the assertion's subject; a
 	// scenario written in package `resolve` would reach unexported state
 	// and stop testing the kernel's exported contract.
-	if got := reflect.TypeOf(resolve.Row{}).PkgPath(); got != "github.com/newcoinc/intrastate/internal/resolve" {
+	if got := reflect.TypeOf(resolve.Row{}).PkgPath(); got != "github.com/cwensel/intrastate/internal/resolve" {
 		t.Errorf("kernel package path = %q; the scenarios test internal/resolve", got)
 	}
 	// And the kernel is reachable only through its exported surface from

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newcoinc/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // flowInvocation is one named argv the suite drives through ExecuteAndEmit.
