@@ -206,3 +206,114 @@ per-key instead of per-atom, a dedup that runs before the `--all` filter, a
 demand set that reverts under `--all` or unions the wrong rows, a presence test
 that treats `""` as absent, a payload read off the wrong refusal kind, gates run
 for an excluded row — returned the specified behaviour.
+
+## Phase 3b — adversarial failure-mode review
+
+Three failure modes, each anchored in `## Trade-offs > ### Failure Modes`,
+with the test that catches it. All three currently FAIL against the shipped
+build. Tests live in `internal/cli/flow_adversarial_0011_adv_test.go` over
+one new fixture, `flowEscapeMatchOwnedModel`.
+
+The common root: C1's demand-set term adds each row's MATCH-block owned keys
+to `invokedReaders`, applied to EVERY row of the model — escape rows
+included. `0002:C4` makes a match block MANDATORY on every rule, escape
+rules included (`normalizeRule` refuses one without), so an escape row
+matching an owned key is not an exotic authoring choice a model author can
+avoid. DEV-8's guard term had the same shape but a guard block is optional
+on an escape rule; a match block is not.
+
+### ADV-1 — `flow next` refuses for an escape row it never reports
+
+- **Failure mode.** `flow next` exits 2 `flow-artifact-missing` over a model
+  whose only unbound-reader demand comes from an ESCAPE row. `flow_next.go`'s
+  row loop skips escape rows structurally (`if len(row.Escape) != 0 {
+  continue }`) before `probeRow`, so no probe is ever built from one and no
+  candidate is ever reported for one. The verb refuses to run at all for a
+  fact no reported row could consume.
+- **RDR anchor.** `0011:F6` — the record's ONE named behaviour-change class
+  for the demand-set term, scoped to `flow resolve` ("the requested outcome
+  has a row on that key"). C1 says the same in its own voice: "The
+  `flow resolve` VERB changes in exactly the one class the demand-set
+  paragraph names, and nowhere else", justified by "a row cannot be
+  match-decided without the key". An escape row is never match-decided by
+  `next`. No Failure Mode contemplates `flow next` REFUSING; `0011:F7` says
+  "Recovery: none needed" — and there is no recovery here, because C1 itself
+  records that an owned key cannot be supplied (`--tag` → `flow-tag-owned`,
+  "no other flag or ambient channel").
+- **Test.** `TestAdv1_NextDoesNotRefuseForAnEscapeRowsMatchOwnedKey`.
+- **Currently.** FAILS (`flow-artifact-missing`, role `side`).
+
+### ADV-2 — `flow resolve` loses a plan to an escape row's rescue-phase reader
+
+- **Failure mode.** `flow resolve --outcome go` that returns a plan through
+  an ordinary row now exits 2, because an ESCAPE row binding the same
+  outcome matches on an owned key whose reader is unbound. The rescue phase
+  that would consult that row is provably unreachable on this run:
+  `internal/resolve.escapeOrRefuse` is called only from the
+  `len(selected) == 0` and `default:` arms of `Resolve`'s selection switch,
+  and this run selects exactly one ordinary row.
+- **RDR anchor.** `0011:F6`, at its boundary. F6's accepted class carries a
+  stated warrant — the old refusal HID a fact ("`resolve` … refuses
+  `flow-no-match` for every row matching on that key, over an artifact that
+  HOLDS the fact"). Nothing is hidden here: the plan is correct and complete
+  without the key. `invokedReaders`'s own doc comment already names this
+  masking hazard for escape rows ("masking a valid plan") and fences it by
+  OUTCOME alone — a fence an escape row binding the requested outcome
+  passes, and one that is entirely empty for `next` (`outcome == ""`).
+- **Test.** `TestAdv2_ResolveKeepsItsPlanWhenOnlyAnEscapeRowDemandsTheReader`.
+- **Currently.** FAILS (`flow-artifact-missing`, role `side`).
+
+### ADV-3 — `--all` is not the escape hatch F1 prescribes
+
+- **Failure mode.** F1's remedy is a two-run protocol (run default, run
+  `--all`, diff) and presumes both runs emit a payload. Over this model
+  class neither does: C1 requires the demand set to be "a property of the
+  MODEL … not of the mode … identical under --all", so `--all` inherits the
+  same pre-row-loop refusal. The mode-independence C1 requires is exactly
+  what denies the remedy F1 promises.
+- **RDR anchor.** `0011:F1` — "Diagnose with `--all` … That eye-comparison
+  is the whole remedy today: `intrastate` ships no model-inspection verb …
+  and this RDR adds none." The caller has no verb left; `dump` is asserted
+  FOREIGN to the flow group at `flow_surface_0005_test.go:105`.
+- **Test.** `TestAdv3_AllRemainsF1sDiagnosticOverAnEscapeRowDemand`, which
+  asserts only that each mode returns a payload with a `candidates` key —
+  never which rows it holds — so it cannot be satisfied by weakening the
+  predicate.
+- **Currently.** FAILS in BOTH subtests (`default` and `all`).
+
+### Confirmed handled — modes probed that the implementation gets right
+
+These were investigated as candidate failure modes and the build proved
+correct; no test was added, because a test that passes catches nothing.
+
+- **A present-but-CONFLICTED key reaching the kernel.** C1's exactness rests
+  on this being unreachable (A3). `TagSet.matches` returns false for a
+  conflicted key WITHOUT comparing it, which would drop a row with nothing
+  in `unknown` explaining it — A1's "If wrong" exactly. Traced every channel
+  into `Owned`/`Observed`: `checkAccessorBindings` gives each owned key one
+  reader; `Executor.Read` classifies over `def.RequestedKeys()`, so one
+  reader cannot emit a key twice; `parseTags` refuses a repeated `--tag`
+  (`flow-tag-duplicate`), an owned one (`flow-tag-owned`), and the reserved
+  one (`flow-tag-reserved`). Unreachable as claimed.
+- **`probeRow`'s `err != nil` swallow** returning a zero `resolve.Result`,
+  which `excluded` reads as non-excluding and `summarize` reads as carrying
+  no kernel facts. Both error returns are vacuous on the probe as A1 claims:
+  `Table.CheckValid` keys on `len(Escape) != 0 && len(Writes) != 0` and the
+  probe strips `Escape`; `CheckInput`'s three channels need a `recognized`
+  key in `Owned`/`Observed`/`RequiresOwned`, and `renderWrites` refuses a
+  write to a non-owned tag while `outcomeBinding` lifts every `recognized`
+  match atom out of `Row.Atoms`.
+- **View precedence divergence.** `internal/cli::assembledView` merges owned
+  then observed (observed wins); `internal/resolve::assemble` merges
+  observed then owned (owned wins). Harmless: `flow-tag-owned` keeps the two
+  key sets disjoint, so the union is identical and no key takes a different
+  value.
+- **`--all` filter vs. a key that is BOTH a match atom and a guard atom on
+  one row.** The filter is per-ATOM on `atom.Block`, so the guard atom's
+  `{key, absent}` survives under `--all` — verified by direct run.
+- **`RequiresOwned` reached through a CLEAR list rather than a write block.**
+  The owned-key walk's `{key, absent}` survives `--all` there too, the same
+  way REQ-40's oracle proves it for a written key.
+- **A gate id colliding with a match key name.** Emits both
+  `{k, absent}` and `{k, not-evaluated}` — correct, and precisely why C1
+  dedups on the `{key, reason}` PAIR rather than on the key.
