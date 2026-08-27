@@ -288,3 +288,144 @@ as the `%#v` argument it names. The tree has NOT drifted. Both oracles are
 nonetheless written against the symbol and the count rather than the line, so
 they survive any later edit above them.
 
+
+---
+
+## Phase 2 — REQ-MVV run end to end (REQ-87..REQ-94)
+
+Run against the implemented build on branch `worktree-rdr-0011`. Every step
+below is the ACTUAL output, captured live, not a restatement of the
+expectation. `make check` passes (fmt-check, vet, golangci-lint `0 issues`,
+build, graph-lint, `go test -race ./...` all green).
+
+### MVV 3 — the default narrows `models/rdr.toml` (REQ-87, REQ-95)
+
+Artifact seeded through the CLI at `stage=resolved`, `status=draft`,
+`gate_passed=false`.
+
+```
+$ intrastate flow next --model models/rdr.toml --artifact rdr=<art> --as=json
+candidates: ['prelock', 'resolve-abandon', 'resolve-route-back']
+count:      3
+outcomes:   ['advance', 'revise', 'abandon']
+unknown[prelock]: []
+```
+
+Exactly the three rules MVV 3 names, one per outcome; no rule whose
+`match.stage` names another value survives, and `outcomes[]` is still the
+model's full declared alphabet. The pre-change build reported 21 here.
+
+### MVV 4 — `--all` restores the 21 (REQ-88)
+
+```
+$ intrastate flow next --model models/rdr.toml --artifact rdr=<art> --all --as=json
+count:    21
+outcomes: ['advance', 'revise', 'abandon']
+candidates: ['final-abandon', 'final-route-back', 'finalize-blocked',
+ 'implement', 'prelock', 'prelock-abandon', 'prelock-route-back', 'propose',
+ 'propose-abandon', 'propose-again', 'reconcile', 'reconcile-abandon',
+ 'reconcile-route-back', 'refine', 'refine-abandon', 'refine-again',
+ 'resolve-abandon', 'resolve-assumptions', 'resolve-route-back',
+ 'seed-abandon', 'seed-revise']
+```
+
+21 rows, the same `outcomes[]`. `finalize-pass` — the 22nd — is absent in
+BOTH modes, guard-excluded on `gate_passed`, exactly as MVV 4 predicts.
+
+### MVV 5 — guard exclusions and the added discriminating row (REQ-89, REQ-61, REQ-96)
+
+`TestReq61And89And96_MVV5GuardExclusionsAndTheAddedDiscriminatingRow`
+
+```
+--- PASS: .../guard-excluded-over-the-fixture-that-authors-it
+--- PASS: .../added-row-absent-by-default-present-under-all
+```
+
+### MVV 6 — the three pins that license the presence test (REQ-90, REQ-63, REQ-106)
+
+`TestReq63And90And106_MVV6TheThreePinsThatLicenseThePresenceTest`
+
+```
+--- PASS: .../two-readers-on-one-owned-key-is-refused-at-load
+--- PASS: .../repeated-tag-key-is-refused-flow-tag-duplicate
+--- PASS: .../tag-on-an-owned-key-is-refused-flow-tag-owned
+```
+
+The three match classes and the dead row are covered by
+`TestReq1And77And78And79` / `TestReq10And80And99And100`, both PASS.
+
+### MVV 7 — `unknown` present as `[]` rather than omitted (REQ-91)
+
+`TestReq91_MVV7UnknownIsEmptyOnAFullyResolvedCandidateInBothModes` — PASS.
+Confirmed on the wire: a candidate with nothing undecided emits
+`"unknown":[]`, in both modes, never an omitted field.
+
+### MVV 8 — the match-only owned key and the three `flow resolve` arms (REQ-92, REQ-93)
+
+`TestReq92_MVV8TheMatchOnlyOwnedKeyIsReadAndDecidedInBothModes` — PASS: the
+reader appears in `readers`, the key is in the view, and the row is
+match-decided rather than reported `{key, absent}`; the same `readers` set
+under `--all`.
+
+`TestReq19And93_ResolveSeparatesIntoThreeArmsAndRefusesFlowNoMatchInNone`
+
+```
+--- PASS: .../bound-and-answering-yields-a-plan
+--- PASS: .../role-unbound-yields-artifact-missing-not-no-match     (exit 2)
+--- PASS: .../reader-refusing-yields-exit-3-not-no-match            (exit 3)
+```
+
+`flow-no-match` in none of the three. `flow resolve` over `models/rdr.toml`
+and the shipped fixtures is byte-identical to the pre-change goldens
+(`TestReq35And118` — PASS, full-payload form).
+
+### MVV 9 — the kernel is untouched, and the 0005 suite (REQ-94)
+
+```
+$ make check
+golangci-lint run ./...   →  0 issues.
+go test -race ./...       →  every package ok
+   internal/cli       89.2% of statements
+   internal/resolve   95.5% of statements
+
+$ git diff --stat main -- internal/resolve
+(empty)
+
+$ go test ./internal/resolve
+ok   github.com/newcoinc/intrastate/internal/resolve
+
+$ git diff --stat main -- internal/cli/flow_{next,adversarial,mvv}_0005_test.go
+ internal/cli/flow_adversarial_0005_test.go | 12 +++--
+ internal/cli/flow_mvv_0005_test.go         | 17 +++++---
+ internal/cli/flow_next_0005_test.go        | 70 +++++++++++++++++++--------
+ 3 files changed, 63 insertions(+), 36 deletions(-)
+
+$ grep -c '"--all"' internal/cli/flow_next_0005_test.go
+0
+```
+
+The 0005 `next` suite passes with only C3's five mechanical re-homings
+(ok-bool asserted at every one), the prose sweep, and the header naming
+this RDR. **A4's MOVES-UNDER-`--all` = 0 holds** — no 0005 `next` oracle
+needed the flag, which `TestReq53And111` asserts as a negative.
+
+### Text-mode rendering (REQ-72, REQ-73)
+
+The shared generic flattener, not a per-verb template:
+
+```
+$ intrastate flow next --model <m> --artifact state=<a> --as=text
+candidates[0].unknown[0].key: wanted
+candidates[0].unknown[0].reason: absent
+candidates[1].unknown: (none)
+```
+
+Both members of the pair reach the text caller, path-qualified. No bespoke
+`key (reason)` form was minted.
+
+## Phase 2 result
+
+- **130/130 REQ green.** All 62 Phase-1 oracles pass; `make check` passes.
+- Two Phase-1 oracles were repointed off a shape their own fixture could not
+  reach (DEV-6) and off a vacuous decode (DEV-7). Neither weakens an
+  assertion; both are recorded in `deviations.md`.

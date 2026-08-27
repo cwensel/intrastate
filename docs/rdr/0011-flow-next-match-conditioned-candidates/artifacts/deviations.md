@@ -234,6 +234,106 @@ the resolution is the house pattern rather than a new one.
 
 ---
 
+## DEV-6 — REQ-117's reader-set agreement is unobservable on the two-row fixture
+
+- **Type**: `TEST-FIXTURE`
+- **Status**: `mechanical translation`
+- **Bears on**: REQ-17, REQ-117, `0011:S8`, DEV-4
+- **Found in**: Phase 2, implementing the demand-set term
+
+**The clause.** `0011:S8`: "Both verbs' `readers` over the same model and
+outcome are EQUAL (one `invokedReaders`, one view), asserted on a fixture
+whose reader serves several keys."
+
+**What the implemented build shows.** Phase 1 wrote
+`TestReq17And117_BothVerbsAgreeOnTheReaderSetOverOneModelAndOutcome` over
+`flowMatchOnlyOwnedModel` — the TWO-row fixture — with `mode=fast` and
+`--outcome go`. Once the demand-set term lands and `read.side` is invoked,
+`mode=fast` makes BOTH `go` rows match: `mode-row` on `mode` and
+`plain-row` on `status`. The kernel then refuses `ambiguous_match`
+(observed live: `flow-ambiguous-match`, naming both rules) and `flow
+resolve` emits a REFUSAL envelope, which carries no `readers` list at all.
+The oracle's comparison target does not exist on that input.
+
+This is the SAME collision DEV-4 already recorded in the other direction —
+"With the reader bound and answering `mode=fast`, BOTH `go` rows match …
+the kernel then refuses `ambiguous_match` rather than planning, so the plan
+arm is unreachable on the two-row model" — applied to the `readers`
+comparison rather than to the plan arm. DEV-4 split S8's arms across two
+fixtures for exactly this reason and simply did not carry the split through
+to this one oracle.
+
+**The reading taken.** The oracle moves to `flowMatchOnlyOwnedSoloModel`,
+which satisfies S8's stated fixture requirement verbatim: its `read.side`
+declares `keys = ["mode", "extra"]`, so the agreement IS "asserted on a
+fixture whose reader serves several keys" — the property S8 names — and
+`--outcome go` has exactly one row, so `flow resolve` plans and reports a
+`readers` set to compare. Verified: both verbs report `[side state]`.
+
+Nothing is weakened. The assertion still compares `next`'s `readers`
+against `resolve`'s over one model and outcome, still fails a `next`-only
+term, and still asserts `side` is present on the `resolve` side — the two
+halves REQ-17 and REQ-117 name. The two-row model keeps its own oracle,
+`TestReq20And116_TheBreakingArmIsPinnedAsAKnownCost`, which is the arm S8
+authors it for.
+
+**Why mechanical.** The clause names the fixture PROPERTY ("whose reader
+serves several keys"), not the fixture identity, and the solo model has
+that property. The change is a fixture repoint within the corpus DEV-4
+already established, with no contract wording touched.
+
+---
+
+## DEV-7 — REQ-125's element-type check is vacuous over an empty `unknown`
+
+- **Type**: `TEST-FIXTURE`
+- **Status**: `mechanical translation`
+- **Bears on**: REQ-125, `0011:G-cross-cutting`
+- **Found in**: Phase 2, against the implemented payload
+
+**The clause.** REQ-125: "Version marker: none minted — the payload field
+rename `unresolved` → `unknown` IS the break". Phase 1's
+`TestReq125_NoVersionMarkerIsMintedAndTheOldFieldIsGone` adds a third
+assertion beyond the clause's two: that `unknown` decodes as a list of
+OBJECTS, not of strings, spelled `if _, ok := stringsAt(c, "unknown"); ok`.
+
+**What the source shows.** `flow_harness_0005_test.go::stringsAt` returns
+`(out, true)` whenever the value is a `[]any` every element of which is a
+string — and an EMPTY `[]any` satisfies that vacuously, since the loop
+never runs. An empty JSON array carries no element type at all.
+
+The oracle runs over `flowAbsentMatchKeyModel`, whose `recognized-only`
+row matches only on `recognized` and writes `status`, which the reader
+establishes. Its `unknown` is therefore `[]` — verified on the wire:
+
+```
+{"rule":"recognized-only","outcome":"hold","required":["status"],
+ "unknown":[], ...}
+```
+
+So `stringsAt` returns `([], true)` and the assertion fires against a build
+whose payload is exactly what the contract requires. It would fire the same
+way against a `[]string` build, a `{key,reason}` build, and a build with no
+field at all — it discriminates nothing on that candidate.
+
+**The reading taken.** The check is scoped to a candidate that actually
+carries an entry, by `continue`ing past an empty list. `absent-row` on the
+same fixture carries `{wanted, absent}`, so the assertion still runs on
+real data every time and still fails a `[]string` build.
+
+The two assertions REQ-125 itself states — no `schema`/`version`/
+`payload_version`/`$schema` field, and no surviving `unresolved` field
+alongside `unknown` — are untouched and green.
+
+**Why mechanical.** The clause's own obligations are unchanged; only the
+supplementary type check is scoped away from an input that cannot express
+it. This is the same shape as DEV-5's vacuity guard, applied to the
+opposite polarity: DEV-5 added a guard so an assertion could not PASS
+vacuously, and this one adds a guard so an assertion cannot FAIL
+vacuously.
+
+---
+
 ## Non-deviations, recorded so a later phase does not re-open them
 
 - **The C3 census reconciles exactly.** REQ-54's five `file:line` citations
