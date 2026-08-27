@@ -441,3 +441,32 @@ the raw wire object. `owned` is `{}` and `readers` is `[]` on every cell —
 no owned state, no accessor, no artifact — and the shipped 0005
 state-machine fixture resolves to `advance-draft` with `owned.status=draft`
 exactly as it did, its `emit` the empty object.
+
+## Phase 3c — fixup
+
+**No test function was added.** Phase 3b's four adversarial assertions
+(three red, one deliberate ceiling pin) already covered ADV-1..ADV-3, and
+Phase 3c's obligation was to make the red ones pass honestly rather than to
+extend the suite. The counts above are unchanged apart from the four
+`_0010_test.go` adversarial functions Phase 3b contributed:
+
+| REQ | test | phase |
+| --- | --- | --- |
+| REQ-63, REQ-66, REQ-94 | `graphlint::TestAdv0010_TerminalEscapeStaysSilentOverADecisionTable` | 3b, green at 3c |
+| REQ-63, REQ-66, REQ-94 | `graphlint::TestAdv0010_TerminalEscapeSilentOnARuleFreeDecisionTable` | 3b, green at 3c |
+| REQ-63, REQ-94 | `graphlint::TestAdv0010_DeadEndStaysSilentOverADecisionTable` | 3b, green at 3c |
+| REQ-9, REQ-12 | `table::TestAdv0010_UndeclaredTagPrecedesTheClassDisagreement` | 3b, green at 3c |
+| REQ-10, REQ-11 | `table::TestAdv0010_ClassDisagreementStillWinsOverAccessorBinding` | 3b ceiling pin, green throughout |
+
+One existing assertion changed direction rather than strength:
+`TestReq9_AnUndeclaredTagRefusalPrecedesTheClassDisagreement` now pins
+`CatUnknownTag` instead of `CatMalformedModelDeclaration`, which is the
+category C1's own quoted sentence fixes and the one its test name already
+claimed (D14). The change narrows what the test admits — the old assertion
+passed for any placement at or before `normalizeRules`; the new one admits
+only the single position C1's floor and ceiling jointly allow.
+
+REQ-104/REQ-105/REQ-106 are documentation obligations with no test oracle in
+this repo; they are discharged by `docs/cli-output-contract.md` and the new
+`docs/model-authoring.md` (D15), with every quoted code, reason, message,
+and payload shape taken from the built binary rather than from source.

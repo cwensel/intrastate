@@ -738,6 +738,13 @@ func TestReq120_TheProductionDiffIsFlowNextPlusOneTermInFlowExec(t *testing.T) {
 		"internal/graphlint/coverage.go",
 		"internal/graphlint/taxonomy.go",
 		"internal/cli/flow_resolve.go",
+		// 0010's Phase-3/4 doc seam (its REQ-104/105/106): the output
+		// contract gains the `emit` field and a decision-table
+		// invocation, and the model authoring doc — new — carries the
+		// class, the `[rule.guard.all.<key>]` guidance, and the
+		// escape-row "otherwise" idiom.
+		"docs/model-authoring.md",
+		"docs/README.md",
 	} {
 		allowed[path] = true
 	}

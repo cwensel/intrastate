@@ -341,3 +341,169 @@ that emitted the closure advisory still reddens it. Evidence: the shipped
 partition (`internal/guard/product.go::selectionOf`, which builds the
 context from a row's match atoms) and `0006:C7`/`0003:C13`, which the RDR
 cites in the same terms ("match keys select a row's group").
+
+---
+
+## D13 — C5's stated REASON for invariant 2/7 silence is false; the obligation is implemented by class-keying (ADV-1, ADV-2)
+
+**REQs**: REQ-63 (the MUST-NOT-emit set), REQ-66, REQ-68 (the four
+`len(Initial)` sites), REQ-94, REQ-97.
+
+**Type**: SPEC-DEFECT. **Status**: resolved in code; the RDR's rationale
+sentence is wrong as written and is not amended (records are never amended).
+
+C5 states the obligation and its supposed mechanism in one breath:
+
+> The missing-root arm of invariant 1 (`0006:C18`), **dead end (2)**,
+> always-present-owned (5), owned-set-before-match (6), and single-valued
+> state are vacuous by construction over this class and **MUST NOT emit**.
+> … Declared-terminal handling (7) proper, and the escape arm of it, stay
+> silent by construction: **they key on a declared terminal, which C2
+> forbids.**
+
+The **obligation** is sound and is what this RDR wants. The **premise** is
+false against the shipped code, in two independent ways:
+
+1. `internal/graphlint/analysis.go::checkTerminalEscape` keys on nothing but
+   `len(a.nodes) == 0`. It has no terminal test at all. Before this RDR that
+   gate was true for every rootless model, which is what made the invariant
+   look terminal-keyed; C5's own ∅-root seeding makes it false for every
+   decision table, so invariant 7 walked the ∅ node and reported
+   `graph-terminal-escape` over a stateless table.
+2. `checkDeadEnd` does key on `len(a.model.Terminal) == 0` — but `0010:C2`
+   enforces the `terminal` prohibition **at lint**, not at load ("a terminal
+   predicate over a non-owned tag is 0006's `graph-dangling-edge` terminal
+   arm, which C5 keeps live for exactly this reason"). A decision table
+   declaring `terminal` therefore LOADS and reaches the engine with a
+   non-empty `Terminal`, defeating that disjunct while the ∅ node defeats
+   the other.
+
+A10 repeats the same false premise ("`checkTerminalEscape` return early on
+absent terminals") and lists both codes as "provably silent", so the defect
+is in the record's model of the code, not in a single sentence.
+
+**Aggravating, and why this is not merely noise.** Invariant 7's message
+reads "declare it in the root `terminal` list" — the declaration C2 forbids
+this class. An author following the finding's own remedy earns
+`graph-dangling-edge` instead. The record's `Recovery` bullet names the only
+two real remedies ("drop `class`", or add owned state and an `[initial]`),
+and the finding states neither.
+
+**Call made.** Implement the **obligation**, not the premise. Both checks now
+return early on `table.IsDecisionTable(a.model)`, mirroring the two sites C5
+already class-keys (`reach`'s seed and `checkDanglingEdge`'s root arm). The
+alternative — treating the false premise as licence to let the findings fire
+— was rejected: it contradicts an explicit MUST NOT, and it ships a finding
+whose remedy is an authoring error.
+
+**A10's partition is intact.** Neither edit touches a `len(Initial) == 0`
+site, so REQ-68's "exactly two of the four became class-aware" still holds,
+and `checkAlwaysPresentOwned` / `checkUnreachableRules` keep the bare root
+test A10 warns must never learn the class.
+
+Evidence: `internal/graphlint/adversarial_0010_test.go` —
+`TestAdv0010_TerminalEscapeStaysSilentOverADecisionTable`,
+`TestAdv0010_TerminalEscapeSilentOnARuleFreeDecisionTable`,
+`TestAdv0010_DeadEndStaysSilentOverADecisionTable`, all red before the edit
+and green after, with the existing state-machine corpus unchanged.
+
+---
+
+## D14 — the class-agreement check's position, and the Phase-1 test that pinned the wrong side of it (ADV-3)
+
+**REQs**: REQ-9, REQ-10, REQ-11, REQ-12.
+
+**Type**: TEST-FIXTURE. **Status**: mechanical translation.
+
+C1 fixes the check's window at both ends and draws a consequence from each:
+
+- the **ceiling** ("before `checkAccessorBindings`") makes the
+  doubly-malformed case refuse on the class, not on writer arity (REQ-11);
+- the **floor**'s stated consequence is that "an undeclared-tag refusal
+  precedes a class-disagreement refusal under `run`'s fail-fast order".
+
+The undeclared-tag refusal a rule mints is raised in `normalizeRules`,
+`run`'s second-to-last step. The implementation placed `checkClassAgreement`
+immediately after `loadTags` — inside the window, but seven steps ahead of
+`normalizeRules` — which satisfies the ceiling and breaks the floor's
+consequence. The two are jointly satisfiable at exactly one place: between
+`normalizeRules` and `checkAccessorBindings`. The step was moved there.
+REQ-12 ("any step in that window satisfies this clause; the RDR fixes the
+window, not the step's name") licenses the move without an override.
+
+`internal/table/class_0010_test.go::TestReq9_AnUndeclaredTagRefusalPrecedesTheClassDisagreement`
+asserted `CatMalformedModelDeclaration` — the opposite of both its own name
+and the C1 sentence quoted in its doc comment, whose rationale ("refuses on
+whichever of the two `run` reaches first") restates the implementation
+rather than the contract. It now pins `CatUnknownTag`. This is a
+tightening, not a relaxation: the test previously passed for any placement
+at or before `normalizeRules` and now admits only the one position C1's two
+clauses jointly allow.
+
+The ceiling pin
+`internal/table/adversarial_0010_test.go::TestAdv0010_ClassDisagreementStillWinsOverAccessorBinding`
+and `TestReq10_DoublyMalformedRefusesOnTheClassNotOnWriterArity` were both
+green before the move and remain green after it, which is the guard against
+"fixing" the floor by moving the check past `checkAccessorBindings`.
+
+---
+
+## D15 — the documentation half of Phases 3/4 (FAIL-1)
+
+**REQs**: REQ-104, REQ-105, REQ-106.
+
+**Type**: SPEC-UNDER. **Status**: resolved; one authoring choice recorded
+below.
+
+Phase 3a observed that no file under `docs/` outside this RDR's own
+artifacts directory had changed: `docs/cli-output-contract.md` carried no
+`emit` payload field and no decision-table invocation, and neither repo doc
+contained the string `decision-table` at all.
+
+`docs/cli-output-contract.md` now carries a `flow resolve` / `emit` section
+(the field's shape, its `{}`-never-`null` rule, its position after `gates`,
+the escape-rescue join, text-mode rendering, and why `flow next` carries
+none) and a decision-table invocation beside the existing state-machine one.
+
+**The authoring choice.** REQ-105/106 say "the model authoring docs", but the
+repo has none — `docs/` held only `cli-output-contract.md` and a `README.md`
+index that says "Add a `concepts.md` and per-feature docs here as the domain
+is defined". The obligation therefore names a document that does not exist.
+Options weighed: (a) fold the class into `cli-output-contract.md`, whose
+scope is explicitly "what the `respond` gateway emits" — authoring guidance
+is not that document's subject, and REQ-105 lists the two docs as separate
+obligations; (b) create the authoring doc the REQ presumes. **(b) was
+chosen**: `docs/model-authoring.md` is new and carries the class, the
+`[rule.guard.all.<key>]` guidance with the `0006:C7` rationale (match atoms
+scope the group and contribute no dimension, so a match-discriminated table
+closes clean over an empty product — the silent green C5's fence exists to
+refuse), and the escape-row "otherwise" idiom including A9's per-outcome
+rescue scoping and the `graph-coverage-closed-by-escape` advisory.
+`docs/README.md` gains its index entry.
+
+Every finding code, `reason`, message, and payload shape quoted in either
+document was taken from the **built binary** run over a hand-authored table,
+not from reading source — including the `no-participating-dimension`
+emission and its guard-atom remedy text, the `graph-coverage-gap` over an
+incomplete guard-discriminated table, the closed-by-escape advisory, and an
+escape-rescued payload carrying the escape row's own `emit` with
+`escaped: true`.
+
+---
+
+## D16 — RDR 0011's diff guard learns 0010's doc seam (extends D9)
+
+**REQs**: REQ-88, REQ-104, REQ-105, REQ-106.
+
+**Type**: DEPENDENCY-LIMIT. **Status**: mechanical translation.
+
+D7/D9 recorded that `internal/cli/flow_next_0011_test.go::TestReq120_…`
+fires on this RDR's production edits, and resolved it by EXTENDING that
+guard's allow-list with 0010's named seams rather than relaxing the check.
+The doc half of Phases 3/4 (D15) adds two more paths to that seam —
+`docs/model-authoring.md` (new) and `docs/README.md` (its index entry);
+`docs/cli-output-contract.md` was already allowed, as 0011 edits it too.
+
+Both are appended to the same 0010 block, with the same comment convention
+and the same property preserved: a file outside BOTH RDRs' lists still fails
+the guard, so what the oracle checks is unchanged.

@@ -327,3 +327,85 @@ failing test could be written for them:
 - `class = ""` refuses `malformed_model_declaration`; a zero-owned
   `state-machine` is never refused at load; the `owned=<n>` count is exact.
 - `flow next` carries no `emit` (`0010:BR4`, deliberate).
+
+---
+
+## Phase 3c — Fixup resolution
+
+Every FAIL-N / ADV-N above is resolved. `go test ./...` and `make check`
+are green end to end (`go vet` clean, `golangci-lint` 0 issues,
+`bin/intrastate lint --model models/rdr.toml --as=json` returning
+`{"type":"ok","data":{"findings":[]}}`, `go test -race` passing every
+package).
+
+### FAIL-1 (REQ-104, REQ-105, REQ-106) — RESOLVED
+
+The documentation half landed. `docs/cli-output-contract.md` gains a
+`flow resolve` / `emit` section (object of strings, byte-ordered keys,
+`{}` and never `null`, positioned after `gates`, the escape-rescue join,
+text-mode rendering via the generic renderer, and `flow next` carrying none
+by design) and a decision-table invocation beside the existing
+state-machine one.
+
+`docs/model-authoring.md` is **new** — the repo had no authoring doc, only
+an index inviting one — and carries the class and its one-directional
+agreement rule, the `[rule.guard.all.<key>]` guidance with the `0006:C7`
+rationale, the `graph-unprovable-coverage` /
+`no-participating-dimension` fence that refuses the match-discriminated
+silent green, and the escape-row "otherwise" idiom including `0002:C5`'s
+per-outcome rescue scoping and the `graph-coverage-closed-by-escape`
+advisory. `docs/README.md` gains its index entry. Recorded as **D15**,
+which states the authoring choice and the options weighed.
+
+Every code, `reason`, message, and payload shape quoted in either document
+was taken from the built binary over a hand-authored table, not from
+reading source.
+
+### ADV-1 (`graph-terminal-escape` over a decision table) — RESOLVED
+
+`checkTerminalEscape` returns early on `table.IsDecisionTable(a.model)`,
+mirroring the two sites C5 already class-keys. C5's stated premise — "they
+key on a declared terminal" — is false of this function, which keys on
+`len(a.nodes) == 0` alone; the **obligation** ("stay silent") is
+implemented, the false premise is not honoured. Recorded as **D13**
+(SPEC-DEFECT). Both red tests
+(`TestAdv0010_TerminalEscapeStaysSilentOverADecisionTable`,
+`TestAdv0010_TerminalEscapeSilentOnARuleFreeDecisionTable`) are green.
+
+### ADV-2 (`graph-dead-end` over a decision table) — RESOLVED
+
+`checkDeadEnd` gains the same class-keyed early return. Its
+`len(a.model.Terminal) == 0` disjunct is defeated because C2 enforces the
+`terminal` prohibition at lint rather than at load, so such a model reaches
+the engine with a non-empty `Terminal`. Recorded in **D13** alongside
+ADV-1. `TestAdv0010_DeadEndStaysSilentOverADecisionTable` is green.
+
+**A10's partition is intact:** neither edit touches a `len(Initial) == 0`
+site, so REQ-68's "exactly two of four became class-aware" still holds and
+`checkAlwaysPresentOwned` / `checkUnreachableRules` keep the bare root test.
+
+### ADV-3 (`checkClassAgreement` ordering) — RESOLVED
+
+The step moved from immediately after `loadTags` to between
+`normalizeRules` and `checkAccessorBindings` — the one position at which
+C1's floor consequence ("an undeclared-tag refusal precedes a
+class-disagreement refusal") and its ceiling (the doubly-malformed case
+refuses on the class) are jointly satisfied. REQ-12 licenses the move
+without an override.
+
+`TestReq9_AnUndeclaredTagRefusalPrecedesTheClassDisagreement` had asserted
+the opposite of its own name and of the C1 sentence in its own doc comment;
+it now pins `CatUnknownTag`, which is a tightening. Recorded as **D14**.
+
+**Ceiling pin confirmed green:**
+`TestAdv0010_ClassDisagreementStillWinsOverAccessorBinding` and
+`TestReq10_DoublyMalformedRefusesOnTheClassNotOnWriterArity` both passed
+before the move and both still pass, so the floor was not fixed by trading
+the ceiling away.
+
+### Collateral
+
+`internal/cli/flow_next_0011_test.go`'s cross-RDR diff guard fired on the
+two new doc paths. Its 0010 allow-list block is extended the way D7/D9
+already established — named seams appended, never a relaxed check, so a
+file outside both RDRs' lists still fails. Recorded as **D16**.

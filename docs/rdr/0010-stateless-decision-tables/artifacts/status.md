@@ -1,8 +1,8 @@
-RDR: 0010-stateless-decision-tables | phase: 2 — implementation | state: COMPLETE
-last: all 110 REQs implemented; go test ./... and make check both GREEN; REQ-MVV run end to end through the built binary and recorded in coverage.md
+RDR: 0010-stateless-decision-tables | phase: 3c — fixup | state: IN-PROGRESS
+last: FAIL-1 and ADV-1..ADV-3 all resolved; suite and make check green
 blocker: none
-changed: internal/table/{model,source,load,normalize,dump}.go, internal/graphlint/{reach,analysis,coverage,taxonomy}.go, internal/cli/flow_resolve.go, 100 internal/table/testdata fixtures, licensed expectations in internal/table/{helpers,dump,roundtrip}_test.go + internal/graphlint/findings_0006_test.go + internal/cli/flow_{demand,next}_0011_test.go
+changed: internal/table/load.go, internal/table/class_0010_test.go, internal/graphlint/analysis.go, internal/cli/flow_next_0011_test.go, docs/cli-output-contract.md, docs/model-authoring.md, docs/README.md, docs/rdr/0010-stateless-decision-tables/artifacts/{verification,coverage,deviations,status}.md
 validate: go test ./... && make check
-next: Phase 3 — self-verification
-session: phase-2
+next: completion gate
+session: phase-3c
 artifacts: req-list.md coverage.md verification.md deviations.md
