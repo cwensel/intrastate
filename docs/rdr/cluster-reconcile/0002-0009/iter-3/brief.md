@@ -8,7 +8,7 @@ this directory. Never edit an RDR, the JDR, or the README.
 
 ## Paths (absolute)
 
-- Records dir: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/`
+- Records dir: `./docs/rdr/`
   - 0002 `0002-transition-table-as-reviewable-data.md`
   - 0003 `0003-guard-predicate-exhaustiveness.md`
   - 0004 `0004-accessor-execution-safety-model.md`
@@ -18,7 +18,7 @@ this directory. Never edit an RDR, the JDR, or the README.
   - 0008 `0008-recognized-tag-key-ownership.md`
   - 0009 `0009-escape-row-shape-conformance-ownership.md`
   - (ignore `*-postmortem.md`; 0001 is Implemented — out of cluster)
-- **Home**: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/jdr/0001-resolve-kernel-seam.md`
+- **Home**: `./docs/jdr/0001-resolve-kernel-seam.md`
 - **Artifact of record for peer status**: `docs/rdr/README.md` Index table.
 - **Ledgers**: iteration 1 `../report.md`; iteration 2 `../iter-2/reconcile-report.md`
   (its findings table + tolerance table are what this iteration traces to).

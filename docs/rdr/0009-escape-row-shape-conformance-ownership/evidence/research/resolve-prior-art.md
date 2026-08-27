@@ -31,21 +31,21 @@ This pass extends that ledger with new queries and does not repeat them.
 Corpora not queried this pass: `StateMachineLit` (covered by Stage 2 query
 3, rejected), `DevRef` (budget stopped early — a decisive hit was found).
 
-Source-level follow-up (sibling repo `/Users/cwensel/sandbox/newcoinc/state-machines`,
+Source-level follow-up (sibling repo `../state-machines`,
 literal sweep, not a corpus query): scanned peer-engine markdown for
 load-time rejection language across `repos/xstate`, `repos/statewright`,
 `repos/StateSmith`, `repos/scxmlcc`, `study/uscxml`.
 
 ## Hits opened (5 of 6 budget)
 
-- `/Users/cwensel/sandbox/newcoinc/state-machines/repos/scxmlcc/doc/user-manual.md`
+- `../state-machines/repos/scxmlcc/doc/user-manual.md`
   — 11 `#### Valid Children` blocks. Documents a per-element child grammar
   (a load-time document shape), but states no rejection obligation.
   Rejected as a citation for A6.
-- `/Users/cwensel/sandbox/newcoinc/state-machines/study/uscxml/test/w3c/TESTS.md`
+- `../state-machines/study/uscxml/test/w3c/TESTS.md`
   — the W3C SCXML IRP conformance test matrix, whose `alt` attributes quote
   the normative spec assertion each test covers. **Accepted.** Decisive.
-- `/Users/cwensel/sandbox/newcoinc/state-machines/repos/state-machine-cat/docs/SCXML.md`,
+- `../state-machines/repos/state-machine-cat/docs/SCXML.md`,
   `repos/xstate/packages/core/CHANGELOG.md`,
   `repos/StateSmith/docs/plantuml-input.md` — surveyed; no normative
   statement about the enforcement point for structural conformance.

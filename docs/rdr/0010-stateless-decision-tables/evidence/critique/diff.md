@@ -13,7 +13,7 @@ correspond across passes; the `D-N` ids below are the reconciled, stable keys.
 | **B** | `evidence/critique/critique-modelB.md` | `claude-sonnet-5` | 8 (C-1…C-8) |
 
 Grounding was performed by this pass against shipped `main` at `65cf2ac` in
-`/Users/cwensel/sandbox/newcoinc/intrastate` (`internal/table`, `internal/graphlint`,
+`the repo root` (`internal/table`, `internal/graphlint`,
 `internal/cli`, `internal/guard`) and against the RDR's own decided text via
 `rdr inspect`. Pass A's source claims were re-derived from the files, not taken on trust.
 
@@ -50,7 +50,7 @@ depth (B argues from the record's own text; A additionally cites shipped source)
 
 ## Grounding notes, per finding
 
-All paths relative to `/Users/cwensel/sandbox/newcoinc/intrastate`; line numbers on `main` at `65cf2ac`.
+All paths relative to `the repo root`; line numbers on `main` at `65cf2ac`.
 
 ### D-1 — the closed `reason` set — **REAL**
 

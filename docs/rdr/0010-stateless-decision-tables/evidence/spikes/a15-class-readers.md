@@ -3,7 +3,7 @@ Model: claude-opus-5[1m]
 # A15 — four class readers can reach `Model.Class`; C1 window is real
 
 Read-only source verification. RDR read through
-`/Users/cwensel/sandbox/newcoinc/rdr/bin/rdr inspect` only.
+`rdr inspect` only.
 
 ## The four readers (from `0010:§authority`)
 

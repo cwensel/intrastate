@@ -22,7 +22,7 @@ scratch copy of the tree at
 
 ### The declaration (verbatim)
 
-`/Users/cwensel/sandbox/newcoinc/intrastate/internal/graphlint/taxonomy.go:56-63`
+`./internal/graphlint/taxonomy.go:56-63`
 
 ```go
 // The closed, append-only `reason` set `graph-unprovable-coverage`

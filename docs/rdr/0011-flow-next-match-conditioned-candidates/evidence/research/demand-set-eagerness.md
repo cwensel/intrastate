@@ -131,7 +131,7 @@ OpenTofu is the closest peer instance, and it lands on BOTH sides — deliberate
 at two different layers. This is the most useful finding in the ledger.
 
 - **Eager/total at the PLUGIN-PRESENCE layer.**
-  `/Users/cwensel/sandbox/langref/opentofu/internal/tofu/context.go:327-362`,
+  `../langref/opentofu/internal/tofu/context.go:327-362`,
   `checkConfigDependencies`, iterates `config.ProviderRequirements()` — the
   requirements of the WHOLE configuration — and errors per missing plugin:
 

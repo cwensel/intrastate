@@ -8,7 +8,7 @@ this directory. Never edit an RDR, the JDR, or the README.
 
 ## Paths (absolute)
 
-- Records dir: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/`
+- Records dir: `./docs/rdr/`
   - 0002 `0002-transition-table-as-reviewable-data.md`
   - 0003 `0003-guard-predicate-exhaustiveness.md`
   - 0004 `0004-accessor-execution-safety-model.md`
@@ -18,12 +18,12 @@ this directory. Never edit an RDR, the JDR, or the README.
   - 0008 `0008-recognized-tag-key-ownership.md`
   - 0009 `0009-escape-row-shape-conformance-ownership.md`
   - (ignore `*-postmortem.md`; 0001 is Implemented — code is truth, out of cluster)
-- **Home** (joint-decision registry): `/Users/cwensel/sandbox/newcoinc/intrastate/docs/jdr/0001-resolve-kernel-seam.md`
-- **Artifact of record for peer status**: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/README.md` (Index table). All eight members are `Final` today.
-- **Iteration-1 ledger**: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/cluster-reconcile/0002-0009/report.md` (2026-08-11) — its findings table is the origin ledger. Prior per-pair scan files sit beside it (`pairwise-<A>-<B>.md`).
-- Related later pass (0003·0006·0007 only, 2026-08-22): `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/cluster-reconcile/0003-0006-0007/reconcile-report.md`
-- Pairwise prompt: `/Users/cwensel/sandbox/newcoinc/intrastate/.claude/skills/rdr-cluster-reconcile/pairwise.md`
-- Whole-set critique prompt: `/Users/cwensel/sandbox/newcoinc/intrastate/.claude/skills/rdr-cluster-reconcile/2-critique.md` (whole-set variant)
+- **Home** (joint-decision registry): `./docs/jdr/0001-resolve-kernel-seam.md`
+- **Artifact of record for peer status**: `./docs/rdr/README.md` (Index table). All eight members are `Final` today.
+- **Iteration-1 ledger**: `./docs/rdr/cluster-reconcile/0002-0009/report.md` (2026-08-11) — its findings table is the origin ledger. Prior per-pair scan files sit beside it (`pairwise-<A>-<B>.md`).
+- Related later pass (0003·0006·0007 only, 2026-08-22): `./docs/rdr/cluster-reconcile/0003-0006-0007/reconcile-report.md`
+- Pairwise prompt: `./.claude/skills/rdr-cluster-reconcile/pairwise.md`
+- Whole-set critique prompt: `./.claude/skills/rdr-cluster-reconcile/2-critique.md` (whole-set variant)
 
 ## What changed since iteration 1
 
@@ -72,7 +72,7 @@ For EACH pair assigned:
 
 Write `pairwise-<A>-<B>.md` (A = lower number unless the brief names the file
 otherwise) into
-`/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/cluster-reconcile/0002-0009/iter-2/`,
+`./docs/rdr/cluster-reconcile/0002-0009/iter-2/`,
 starting with `Model: claude-fable-5`, then sections: Findings (prompt format,
 each with `LEDGER:`/`NET-NEW` tag), Ledger trace table, Peer-status sweep,
 Restatement check. Use `file:line` anchors throughout.

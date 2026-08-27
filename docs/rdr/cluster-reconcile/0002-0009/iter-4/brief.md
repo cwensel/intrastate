@@ -13,7 +13,7 @@ sub-agent, decides which.
 
 ## Paths (absolute)
 
-- Records dir: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/`
+- Records dir: `./docs/rdr/`
   - 0002 `0002-transition-table-as-reviewable-data.md` (re-locked 2026-08-24, `365bd66`; STAGE-SCOPED re-entry from iter-3)
   - 0003 `0003-guard-predicate-exhaustiveness.md` (re-locked 2026-08-24, `31bb9e4`; RE-LOCK-ONLY re-entry)
   - 0004 `0004-accessor-execution-safety-model.md` (re-locked 2026-08-24, `ffaf897`; RE-LOCK-ONLY re-entry)
@@ -23,7 +23,7 @@ sub-agent, decides which.
   - 0008 `0008-recognized-tag-key-ownership.md` (`567600f`, iter-3 status edit only)
   - 0009 `0009-escape-row-shape-conformance-ownership.md` (`567600f`, iter-3 status edit only)
   - (ignore `*-postmortem.md`; 0001 is Implemented — out of cluster)
-- **Home**: `/Users/cwensel/sandbox/newcoinc/intrastate/docs/jdr/0001-resolve-kernel-seam.md`
+- **Home**: `./docs/jdr/0001-resolve-kernel-seam.md`
   (`567600f` — moved since iter-3's recorded `4f9639c` ONLY by iter-3's own
   edits: JD-5 sharpened, JD-8 third carrier, JD-9 classification arm still
   open, JD-15/16/17 sibling-check notes, D7(ii) open note. **No new answer.**
@@ -36,8 +36,8 @@ sub-agent, decides which.
   `../iter-3/pairwise-*.md`; iter-3 answer checks `../iter-3/answer-check-*.md`.
 - Deviations already written (do not re-defer these): `0006-*/artifacts/deviations.md`
   D1, D2; `0008-*/artifacts/deviations.md` D1, D2.
-- Pairwise prompt: `/Users/cwensel/sandbox/newcoinc/intrastate/.claude/skills/rdr-cluster-reconcile/pairwise.md`
-- Whole-set critique prompt: `/Users/cwensel/sandbox/newcoinc/intrastate/.claude/skills/rdr-cluster-reconcile/2-critique.md`
+- Pairwise prompt: `./.claude/skills/rdr-cluster-reconcile/pairwise.md`
+- Whole-set critique prompt: `./.claude/skills/rdr-cluster-reconcile/2-critique.md`
 
 ## Delta scope
 

@@ -4,7 +4,7 @@ Model: claude-opus-5[1m]
 
 Owned set read: `C1`–`C5`, `D-identity`, `D-wire-byte-format`, `D-naming`,
 `D-selection-predicate`, and every `source-anchor` edge those land on. Source
-read on `main` at `/Users/cwensel/sandbox/newcoinc/intrastate`:
+read on `main` at `the repo root`:
 `internal/table/load.go`, `internal/table/model.go`, `internal/table/dump.go`,
 `internal/table/normalize.go`, `internal/table/source.go`,
 `internal/graphlint/reach.go`, `internal/graphlint/analysis.go`,

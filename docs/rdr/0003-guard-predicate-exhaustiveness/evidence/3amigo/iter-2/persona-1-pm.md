@@ -40,7 +40,7 @@ inability-to-prove finding for the non-finite and too-large cases. This new row
 is the only Loud row with no code. And it cannot borrow the existing one: RDR
 0006's `graph-unprovable-coverage` is bound in that document's finding table to
 "Required finite-domain proof unavailable"
-(`/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0006-graph-lint-authority-and-guarantees.md:302`)
+(`./docs/rdr/0006-graph-lint-authority-and-guarantees.md:302`)
 and its Testing Strategy scenario 3 scopes it to "a model claims closed coverage
 over an input dimension that is **not finite** under the predicate contract"
 (same file, lines 696–699). The narrowing case is by construction the opposite:
@@ -144,7 +144,7 @@ value kind, and optional accessor reference, with no optionality field ... RDR
 **Requested**".
 
 **Objection**: Verified against
-`/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0002-transition-table-as-reviewable-data.md:218`
+`./docs/rdr/0002-transition-table-as-reviewable-data.md:218`
 — the tag declaration is "value kind, and optional accessor reference for
 observed or owned read-back," with no optionality field, exactly as A7 says. The
 claim is accurate. The problem is the plan's shape: `Requested` is a status this
@@ -239,7 +239,7 @@ sequencing note rather than a change to A5.
   Capability Dependencies ("Requested alongside the set-valued element encoding
   RDR 0007 Phase 4 routes here") and in Phase 3 — it is charted, not missed.
 - A8's substance checks out against source: JDR 0001 §JD-4
-  (`/Users/cwensel/sandbox/newcoinc/intrastate/docs/jdr/0001-resolve-kernel-seam.md:238-241`)
+  (`./docs/jdr/0001-resolve-kernel-seam.md:238-241`)
   is open only as to the recording document, and RDR 0006's exhaustiveness
   clause (lines 344–350) covers only the non-finite case, exactly as A8 states.
   No finding on A8's accuracy — see P1-1 for its scope.

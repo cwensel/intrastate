@@ -23,10 +23,10 @@ its `{}`-never-`null` clause on the JSON payload only.
 Worse, both are refuted by the surface that would have to produce them.
 `flow resolve`'s text mode does not have a verb-specific renderer: the payload
 goes through the generic `writeTextPayload` in
-`/Users/cwensel/sandbox/newcoinc/intrastate/internal/cli/respond/text.go:42`,
+`./internal/cli/respond/text.go:42`,
 which round-trips the payload's JSON and emits path-qualified leaf lines via
 `flatten`/`label`/`join`. Over `resolvePayload` (declared at
-`/Users/cwensel/sandbox/newcoinc/intrastate/internal/cli/flow_resolve.go:31`)
+`./internal/cli/flow_resolve.go:31`)
 an emit block would render as `emit.next: propose` — path-qualified, `": "`
 separated — not `next=propose`. And `flatten`'s `map[string]any` arm at
 text.go:68 returns `label(path) + "(none)"` for an empty map, so an
@@ -63,7 +63,7 @@ sweep to "every checked-in model and fixture (`models/rdr.toml` included)
 under `make check`," and the Testing Strategy's Done clause makes `make check`
 the gate for every scenario. `make check` is `fmt-check vet lint build
 graph-lint test` over the working tree
-(`/Users/cwensel/sandbox/newcoinc/intrastate/Makefile`) — it builds exactly
+(`./Makefile`) — it builds exactly
 one binary, the post-change one. There is no second toolchain, no vendored
 prior binary, and no `git worktree`/`stash` step named anywhere in the four
 implementation phases. A8's own evidence was captured out-of-band as a spike
@@ -170,7 +170,7 @@ what a test would have to encode.
 **Finding**: C1 requires the disagreement refusal's "detail names the class
 and the offending count," and S1's Expected repeats "refuse `malformed model
 declaration` with the class and count in the detail." `Failure.Detail`
-(`/Users/cwensel/sandbox/newcoinc/intrastate/internal/table/category.go:79`)
+(`./internal/table/category.go:79`)
 is a free-text string, which is assertable by substring — but "the offending
 count" is not pinned to a quantity. In the decision-table-with-owned-tags
 direction the offending count is the owned tag count (≥1); in the

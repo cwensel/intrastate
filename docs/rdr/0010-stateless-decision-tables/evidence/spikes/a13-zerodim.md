@@ -12,8 +12,8 @@ Assumption under test (RDR 0010, A13):
 Read through the projector only:
 
 ```
-/Users/cwensel/sandbox/newcoinc/rdr/bin/rdr inspect --select 0010:A13 0010
-/Users/cwensel/sandbox/newcoinc/rdr/bin/rdr inspect --select 0010:C5 0010
+rdr inspect --select 0010:A13 0010
+rdr inspect --select 0010:C5 0010
 ```
 
 Method: a Go spike package under this evidence dir, driving the REAL
@@ -201,8 +201,8 @@ this and A13 does not depend on it for its site claim.
 ## Commands run
 
 ```
-/Users/cwensel/sandbox/newcoinc/rdr/bin/rdr inspect --select 0010:A13 0010
-/Users/cwensel/sandbox/newcoinc/rdr/bin/rdr inspect --select 0010:C5 0010
+rdr inspect --select 0010:A13 0010
+rdr inspect --select 0010:C5 0010
 go test ./internal/graphlint/... ./internal/table/...
 go test ./docs/rdr/0010-stateless-decision-tables/evidence/spikes/a13-zerodim/ -v \
   > docs/rdr/0010-stateless-decision-tables/evidence/spikes/a13-zerodim/a13-spike.out 2>&1

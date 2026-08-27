@@ -12,9 +12,9 @@ All GOROOT paths below are rooted at `/opt/local/lib/go-1.26/src`.
 
 Target under discussion, for grounding:
 
-- `/Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/resolve.go:204`
+- `./internal/resolve/resolve.go:204`
   — `type Table struct { Revision string; Outcomes []string; Rows []Row }`
-- `/Users/cwensel/sandbox/newcoinc/intrastate/internal/resolve/resolve.go:318`
+- `./internal/resolve/resolve.go:318`
   — `func Resolve(in Input) (Result, error)`
 - `resolve.go:293-296` — the current doc sentence: "A modeled refusal
   travels the Result value with a nil error; the error return is reserved
@@ -244,7 +244,7 @@ return e.errs[0].Error() }`), and every joined element stays assertable.
 
 ### Peer state-machine engines (sibling repo)
 
-`/Users/cwensel/sandbox/newcoinc/state-machines/repos/awf-cli` — a Go
+`../state-machines/repos/awf-cli` — a Go
 workflow/state-machine CLI, the closest domain peer found. It is
 **aggregate, and says so in its package doc**:
 
@@ -370,7 +370,7 @@ Note this one is **fail-fast** (each check `return`s immediately), which is
 a genuine split in the prior art on Q2 — see the honesty note below.
 
 **On the cost of defensive revalidation — Meyer, OOSC 2e §11.13**
-(`/Users/cwensel/Documents/References/DevRefGit/Books/Object Oriented
+(`References/DevRefGit/Books/Object Oriented
 Software Construction-Meyer.pdf`, printed pp. 396-397 = PDF pages 418-419):
 
 - p. 396 quotes Hoare (1973): "It is absurd to make elaborate security
