@@ -96,7 +96,7 @@ N/A-bulleted). -->
   Draft Profile until Resolve has run. -->
 - **Priority**: Medium
 - **Related Issues**: kata `intrastate#6cek` (1557); roborev job
-  6281; JDR 0001 §JD-5
+  6281; the open joint decision JD-5 in JDR 0001
 - **Predecessors**: 0008-recognized-tag-key-ownership,
   0009-escape-row-shape-conformance-ownership
 - **Seam Lineage**: no prior accretion
