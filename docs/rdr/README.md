@@ -21,6 +21,7 @@ engine README — this file is only the per-project index.
 | [0010](0010-stateless-decision-tables.md) | Owned state is optional: stateless decision tables are first-class | Implemented | High |
 | [0011](0011-flow-next-match-conditioned-candidates.md) | flow next selects by match; --all enumerates the alphabet | Implemented | High |
 | [0012](0012-declared-kind-carrier-at-the-guard-seam.md) | Declared-kind carrier at the guard value seam | Draft | Medium |
+| [0013](0013-ungated-proof-completion-observation-seam.md) | Ungated proof-completion observation seam | Draft | Low |
 
 ## Implementing
 
