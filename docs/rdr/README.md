@@ -29,6 +29,7 @@ engine README — this file is only the per-project index.
 | [0018](0018-dual-breach-precedence-and-error-carrier.md) | Dual-breach precondition precedence and error carrier | Draft | Medium |
 | [0019](0019-owned-state-initialization-semantics.md) | Owned-state initialization semantics | Draft | Low |
 | [0020](0020-undeclared-tag-key-admission.md) | Undeclared --tag key admission — what the zero TagDecl means | Draft | Medium |
+| [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Draft | Low |
 
 ## Implementing
 
