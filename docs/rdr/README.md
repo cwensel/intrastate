@@ -24,6 +24,7 @@ engine README — this file is only the per-project index.
 | [0013](0013-ungated-proof-completion-observation-seam.md) | Ungated proof-completion observation seam | Draft | Low |
 | [0014](0014-repository-gate-verification-oracle.md) | Repository gate verification oracle | Draft | Medium |
 | [0015](0015-dead-end-quantifier-over-merged-nodes.md) | Dead-end quantifier over merged nodes | Draft | Medium |
+| [0016](0016-artifact-role-reader-cardinality.md) | Reader cardinality of the artifact-role read binding | Draft | Medium |
 
 ## Implementing
 
