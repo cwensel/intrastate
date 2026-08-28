@@ -25,6 +25,7 @@ engine README — this file is only the per-project index.
 | [0014](0014-repository-gate-verification-oracle.md) | Repository gate verification oracle | Draft | Medium |
 | [0015](0015-dead-end-quantifier-over-merged-nodes.md) | Dead-end quantifier over merged nodes | Draft | Medium |
 | [0016](0016-artifact-role-reader-cardinality.md) | Reader cardinality of the artifact-role read binding | Draft | Medium |
+| [0017](0017-per-finding-code-identity.md) | Per-finding code identity on mixed-disposition rows | Draft | Medium |
 
 ## Implementing
 
