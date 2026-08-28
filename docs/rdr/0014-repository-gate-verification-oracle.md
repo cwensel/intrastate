@@ -110,14 +110,17 @@ stopped enforcing — ignored failures, validated the wrong output,
 linted a different model — would not be caught, because the Go tests
 assert on the gate's *text* rather than invoking the gate.
 
-The gate has three carriers with three different oracles and no
-invocation edge between them: the `graph-lint` job in
-`.github/workflows/ci.yml` (a bespoke inline shell block asserting on
-the JSON `code` field, never calling `make graph-lint`); the
-`Makefile` `graph-lint` target (asserting on the process exit
-integer); and `internal/cli/lint_gate_0006_test.go` (whole-file
-substring greps over both files, plus the REQ-120 adversarial calling
-`runCmd` in-process, touching neither CI nor Make).
+The gate has three carriers with three different oracles: the
+`graph-lint` job in `.github/workflows/ci.yml`, whose first step is a
+bespoke inline shell block asserting on the JSON `code` field and
+whose second step also runs `make graph-lint` — so the checked-in
+model is linted twice under two disagreeing oracles; the `Makefile`
+`graph-lint` target (asserting on the process exit integer); and
+`internal/cli/lint_gate_0006_test.go` (whole-file substring greps over
+both files, plus the REQ-120 adversarial calling `runCmd` in-process,
+touching neither CI nor Make). The only invocation edge is CI → Make
+for the example-models step; the tests invoke neither executable
+carrier.
 
 The decision: does a gate stated as a shell/CI artifact have exactly
 one executable carrier — a single script or Make target that CI
@@ -135,236 +138,334 @@ rather than settling it for graph-lint alone.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 A Go test can invoke the carrier as a subprocess — `make
+  graph-lint` from the repo root — and observe a non-zero exit, with
+  the `build` prerequisite staying test-tolerable via the Go build
+  cache, and concurrent invocation from parallel test packages either
+  safe or explicitly serialized (no clobbered-binary flake class).**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: pending — spike: a throwaway test invoking `make
+    graph-lint MODEL=<broken>.toml` via `os/exec`, timed cold and
+    warm, in a repo-root working directory resolved as
+    `lint_gate_0006_test.go::repoRootFor` already does; plus two
+    simultaneous invocations to expose the build-output race.
+  - **If wrong**: the behavioral predicate cannot live in `go test`
+    (or flakes and invites a quarantine skip — the gap reborn);
+    enforcement proof falls back to a separate CI step plus the
+    in-process adversarial, and C1's application to REQ-120 weakens to
+    the status quo.
+- **A2 The bespoke ci.yml step passes (exit 0) when `intrastate lint`
+  dies emitting no JSON: the `code=$(… | python3 …)` extraction fails,
+  `code` is empty, and with no `set -e` the step falls through to
+  success.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: pending — spike: run the step's shell verbatim with
+    the binary substituted by `false` (and by a stub emitting
+    non-JSON); record the step's exit status.
+  - **If wrong**: the fail-open rationale for making the exit integer
+    the carrier's pass/fail floor drops to duplication-removal alone;
+    C3's oracle clause is re-argued at Resolve, not silently kept.
+- **A3 Every refusal class the gate must catch surfaces as a non-zero
+  exit carrying a JSON `code`: blocking lint aggregates to
+  `graph-lint-failed` (`internal/graphlint/taxonomy.go::AggregateCode`)
+  and load/env failures carry their `clierr` codes, so the exit-code
+  ambiguity (`internal/cli/clierr/clierr.go::ExitCodeFor` maps
+  `GroupUserEnv` and `GroupInternal` both to 2) is resolved by the
+  reported `code`, whose writer is the failure envelope
+  (`internal/cli/clierr/clierr.go::CLIError.Code`, emitted through the
+  respond gateway per `docs/cli-output-contract.md`).**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: pending — Resolve walks the lint verb's failure
+    paths (loader refusal, schema refusal, blocking findings) to the
+    envelope and confirms each emits a `code` on stdout/stderr the
+    carrier can extract.
+  - **If wrong**: the carrier reports a missing or wrong diagnosis for
+    some refusal class and CI logs misattribute the failure; the gate
+    still fails closed on the exit integer.
+- **A4 `make graph-lint MODEL=<path>` lints the overridden model
+  first, and make aborts on its non-zero exit before the
+  example-models loop runs.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: pending — spike: run the override against a broken
+    model and confirm the exit is non-zero and no example-model lint
+    line follows (order/emission claim — never quote-confirmable).
+  - **If wrong**: the adversarial subject needs a dedicated entry
+    point (a variable or sub-target on the same carrier); only the
+    test's invocation shape changes, not the rule.
+- **A5 No lint outcome the gate must block emits a JSON `code` with
+  exit 0: advisory findings (e.g. `graph-coverage-closed-by-escape`,
+  which the `Makefile` comment records as "do not fail") exit 0
+  without a failure `code`, and every blocking class exits non-zero —
+  so deleting ci.yml's inline JSON-code step narrows nothing.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: pending — Resolve enumerates the lint verb's
+    exit/code matrix (blocking, advisory, load-refusal, env-failure
+    classes) from the disposition table and envelope emission, backed
+    by a fixture run per class.
+  - **If wrong**: an exit-0-with-code outcome exists that the old
+    inline step blocked; the carrier must then additionally fail on
+    any emitted failure `code`, and C3's oracle clause is re-cut
+    before the inline step may be deleted.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Adopt a repository-wide **single-carrier, behavioral-oracle rule** and
+apply it to the graph-lint gate. The rule: a requirement claiming a
+repository gate *enforces* something is verified by invoking the
+gate's one executable carrier over a defective subject and asserting
+refusal — never by grepping the carrier's text; text assertions are
+legal only for *wiring* claims (that a named invoker calls the
+carrier), and only on the invocation token. Applied here:
+`Makefile::graph-lint` becomes the gate's sole executable carrier,
+with the JSON `code` diagnosis folded into it; ci.yml's `graph-lint`
+job reduces to `make build` + `make graph-lint` (the bespoke inline
+shell block is deleted); and `lint_gate_0006_test.go`'s grep
+predicates are replaced by (a) a subprocess invocation of the carrier
+over a defective model asserting non-zero exit naming
+`graph-lint-failed`, and (b) one wiring assertion that ci.yml invokes
+`make graph-lint`. This is the repo's own stated convention — "CI
+invokes the same targets so local and remote runs share one source of
+truth" (`Makefile` header, lines 1–2) ⇒ the bespoke CI step is
+already a convention violation, not a design to preserve.
+
+RDR 0006 stays unamended: REQ-119's oracle clause ("the assertion
+reading the JSON `code` field, not the exit integer alone", 0006:A5)
+is *restated by this RDR* — the pass/fail floor becomes the carrier's
+exit integer (fail-closed even when no JSON is emitted), and the
+`code` field becomes the mandatory diagnosis reported on failure,
+preserving 0006:A5's reason for reading it: `ExitCodeFor` maps
+`GroupUserEnv` and `GroupInternal` both to exit 2, so only the `code`
+distinguishes refusal classes (`internal/cli/clierr/clierr.go::
+ExitCodeFor` ⇒ the carrier must surface `code`, not just fail).
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+One executable carrier, three invokers. The carrier
+(`Makefile::graph-lint`) owns the gate's logic: build the production
+binary (prerequisite edge already present), lint the checked-in model
+and the example models, fail closed on any non-zero lint exit, and
+report the JSON `code` on failure. CI's `graph-lint` job, local `make
+check`, and the Go gate test are pure invokers — none re-implements
+any part of the oracle. The gate test is the *verifier*: it invokes
+the carrier over a defective model (the same `[initial]`-drop defect
+REQ-120 uses today) and asserts refusal; a carrier that silently
+stops enforcing turns that test red, which is exactly the
+self-certification gap this RDR closes. If the recipe outgrows Make,
+the carrier may delegate to a script it owns — the target remains the
+single entry point, so no second carrier appears.
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
-
-**C1**
+**C1** — the verification-oracle rule (repository-wide)
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+A requirement claiming a repository gate ENFORCES a property is
+verified behaviorally: invoke the gate's executable carrier over a
+subject violating the property and assert refusal — a non-zero
+process exit, plus the refusal `code` where the carrier reports one.
+A text/shape assertion over a gate artifact may verify only a WIRING
+claim — that a named invoker calls the carrier — and is limited to
+the invocation token (e.g. `make graph-lint`), never the gate's
+logic, subject, or oracle.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2** — the single-carrier rule (repository-wide)
+
+```normative
+A gate stated as a shell/CI artifact has exactly ONE executable
+carrier. CI jobs, local entry points, and tests reach the gate only
+by invoking that carrier. Gate logic inlined in workflow YAML is a
+defect. In this repository the carrier class is a Makefile target; a
+carrier may delegate to a script it owns, and that script is not a
+second carrier.
+```
+
+Application to the graph-lint gate — restates RDR 0006
+REQ-119/120/121's verification, without amending 0006:
+
+**C3**
+
+```normative
+`Makefile::graph-lint` is the sole carrier of the RDR 0006 gate.
+- Oracle: the carrier fails on any non-zero `intrastate lint` exit
+  (fail-closed floor) and on failure reports the JSON `code` field
+  as diagnosis. This restates 0006:A5's "JSON `code`, never the exit
+  integer alone": the code moves from CI's inline assertion into the
+  carrier's report, preserving refusal-class discrimination.
+- ci.yml's `graph-lint` job reduces to `make build` +
+  `make graph-lint`; the bespoke inline JSON step is deleted only
+  after the exit/code matrix (A5) confirms deletion narrows nothing.
+- The gate test's predicates become: (a) BEHAVIORAL — invoking the
+  carrier as a subprocess over a defective checked-in-model variant
+  exits non-zero AND names `graph-lint-failed` (both conjuncts: the
+  code discriminates a lint refusal from a wrong-reason failure such
+  as a broken build or missing file), and the predicate MUST exercise
+  the invocation CI performs — the default no-override arm, with the
+  defective subject substituted in an isolated copy — not only a
+  `MODEL=` override arm; (b) WIRING — ci.yml's `graph-lint` job
+  invokes `make graph-lint` as a LIVE, GATING step (not commented,
+  no `continue-on-error`, no disqualifying `if:` guard) — the one
+  permitted artifact assertion under C1, checking gating-ness, not
+  token presence.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Naming** — the carrier and the CI job keep the name `graph-lint`
+  (the `lint` name stays golangci-lint's, settled by 0006:A5;
+  rejected: `lint-gate`, `model-lint` — renaming would break the
+  wiring token every invoker and the wiring assertion share).
+- **Selection / predicate** — among the candidate carrier homes
+  (inline workflow shell, a `scripts/` script, the Make target), the
+  **Make target** is canonical because the repo's stated convention
+  routes CI through Make targets (`Makefile` header: "CI invokes the
+  same targets so local and remote runs share one source of truth");
+  a script, if the recipe outgrows Make, is owned *by* the target and
+  invoked only through it.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative only — exact recipes and signatures sharpen at
+Resolve/Pre-Lock; tests must not assert these literally.
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```make
+# carrier shape: fail closed on exit, report code on failure
+graph-lint: build
+	run $(BIN) lint --model <subject> --as=json; \
+	on non-zero: extract and echo the JSON "code"; exit non-zero
+```
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
-
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+```go
+// verifier shape: behavioral predicate over the carrier
+out, err := exec.Command("make", "graph-lint",
+	"MODEL="+brokenModelPath).CombinedOutput()
+// want: err != nil, and out names graph-lint-failed
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Gate execution | `Makefile::graph-lint` | Exit-integer oracle only; no `code` report | Extend | Becomes the sole carrier; gains the `code` diagnosis (C3) |
+| CI enforcement | `.github/workflows/ci.yml` `graph-lint` job | Bespoke inline oracle duplicates the target | Replace (step) | Job reduces to `make build` + `make graph-lint` |
+| Gate verification | `internal/cli/lint_gate_0006_test.go` | Whole-file substring greps; in-process adversarial only | Replace (predicates) | Behavioral subprocess predicate + one wiring assertion |
+| Defective subject | `lint_gate_0006_test.go::dropInitialTable` | none | Reuse | Same minimal defect feeds the subprocess predicate |
+| Refusal taxonomy | `internal/graphlint/taxonomy.go::AggregateCode` | none | Reuse | The behavioral predicate's expected code |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+Scored matrix (approaches × deciding criteria; A = single carrier +
+behavioral oracle, B = plural carriers + shape-restated REQs, C =
+workflow-level e2e verification, D = in-process-only verification):
+
+| Criterion | A: single carrier | B: plural + shape REQs | C: workflow e2e (act/canary) | D: in-process only |
+| --- | --- | --- | --- | --- |
+| Correctness fit (catches a gate that stopped enforcing) | catches carrier neutering and wiring drift | catches nothing new; legitimizes the gap | catches everything incl. runner config | catches engine regressions only |
+| Prior-art alignment | matches the repo's Makefile convention and the peer pattern (beads/helm/roborev) | contradicts the repo's stated convention | no precedent in the peer set | partial (REQ-120 already does it) |
+| Reversibility | high — greps restorable | high | low — new dependency/infrastructure | high |
+| Blast radius | Makefile + ci.yml + one test file | REQ text only | CI infrastructure + new dependency | one test file |
+| Cost | subprocess `make`+build priced into `go test` (A1) | zero | act install or canary upkeep; flaky | zero |
+
+The correctness-fit and prior-art rows decide it: B and D cannot
+catch a silently-stopped-enforcing gate — the exact defect roborev
+job 6140 raised — so choosing them re-labels the problem instead of
+closing it; C is the only approach that also verifies the GitHub
+runner itself, but at a standing cost and flakiness the wiring
+assertion plus a real-runner activation run covers well enough. A
+wins with bounded cost (one subprocess invocation, A1) and is the
+only arm consistent with the repo's own single-source-of-truth
+convention. Rejections, one line each: B — restating REQs to shape
+concedes the gate is unverified; C — nektos/act or a canary branch is
+a heavy, flaky dependency, and its standing coverage of
+workflow-config semantics is instead taken by C3(b)'s gating-aware
+wiring assertion plus the activation checklist (required-checks
+membership); D — leaves CI/Make free to drift, the raised finding.
+
+Premortem: hardened (hardened) — critic ledger P-1…P-12
+(`evidence/propose-premortem/critic.md`) folded: default-arm
+predicate and wrong-reason conjunction into C3(a), gating-aware
+wiring assertion into C3(b), exit/code matrix as A5, subprocess
+concurrency into A1, shell-semantics disposition into Risks and
+Load-Bearing Decisions; no finding forced a switch.
+
+Ground-sweep: clean (19 anchors)
+
+Joint-check: clear (12 peers) — open peers 0012, 0013, 0015–0024;
+every `graph-lint` hit is the Predecessor slug
+`0006-graph-lint-authority-and-guarantees` or an engine mention,
+0019's `lint_gate_0006_test.go` citations are source-search evidence
+(it neither modifies the file nor the missing-`[initial]` refusal),
+and `models/rdr.toml` peers cite it as lint subject, which this RDR
+does not modify; absence arm N/A (no refusal converted to
+acceptance); bridge sub-check N/A (no Cluster membership).
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Plural carriers, REQs restated to shape
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Keep the three carriers and their three oracles;
+restate REQ-119/120/121 as artifact-*shape* claims so the existing
+substring greps become honest predicates. The repository rule would
+read: CI-gate requirements are verified by artifact shape plus an
+in-process behavioral adversarial.
 
 **Pros**:
 
-- [Advantage 1]
+- Zero code motion; no new cost in the test suite.
+- Honest about what the current tests actually prove.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Concedes the raised defect permanently: a CI job that silently
+  stopped enforcing still merges illegal models undetected.
+- Contradicts the repo's own convention (`Makefile` header) and every
+  peer-instance read; keeps the double-lint of the checked-in model
+  under two disagreeing oracles.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: fails the matrix's correctness-fit row —
+it re-labels the self-certification gap instead of closing it.
+
+### Alternative 2: Workflow-level end-to-end verification
+
+**Description**: Verify the CI wiring itself — run the actual
+`graph-lint` job locally under nektos/act in a test, or maintain a
+scheduled canary (a branch carrying a deliberately broken model)
+asserting the job goes red on a real runner.
+
+**Pros**:
+
+- The only arm that also verifies runner configuration and workflow
+  syntax — nothing is left to a wiring assertion.
+
+**Cons**:
+
+- Heavy standing dependency (act or canary upkeep), slow and flaky;
+  not runnable inside plain `go test`.
+- No precedent in the peer set (bounded sweep found none).
+
+**Reason for rejection**: the marginal coverage over A is the runner
+itself, which the one-time real-runner activation run (Operational
+Activation) plus the wiring assertion buys without a standing cost.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **In-process-only verification**: keep REQ-120's `runCmd`
+  adversarial as the sole behavioral proof and drop the greps — leaves
+  CI and Make free to drift, which is exactly the raised finding.
+- **Script as the carrier instead of the Make target**: what is
+  rejected is a second *entry point*, not script-housed logic — a
+  `set -euo pipefail` script owned and invoked solely by the target
+  is the sanctioned home for recipe logic that outgrows Make (see
+  Load-Bearing Decisions and the shell-semantics risk); a
+  freestanding `scripts/` entry point would invert the repo's
+  Make-first convention and re-pluralize the carrier.
 
 ## Context
 
@@ -375,11 +476,14 @@ implementation; tracked as kata `intrastate#9en6`
 (odc-type: test-oracle, odc-trigger: design-conformance). RDR 0006's
 deviation D4 discharged the *existence* of the CI job, the Make
 target, and the checked-in model — it says nothing about oracle
-*fidelity*, so this is beyond D4's disposition. Scope review confirmed
-the three carriers have no invocation edge at HEAD, and judged this
-RDR-shaped: closing it honestly is a gate-architecture or REQ-claim
-decision, not a test edit. Distinct from kata `5mhf` (which model is
-the gate's subject, vs how the gate is verified).
+*fidelity*, so this is beyond D4's disposition. Scope review judged
+this RDR-shaped: closing it honestly is a gate-architecture or
+REQ-claim decision, not a test edit. (At current HEAD one invocation
+edge exists — ci.yml's example-models step runs `make graph-lint`,
+added by `39aeb02` — which duplicates rather than replaces the bespoke
+step; the test still invokes no executable carrier.) Distinct from
+kata `5mhf` (which model is the gate's subject, vs how the gate is
+verified).
 
 ### Technical Environment
 
@@ -393,100 +497,187 @@ RDR 0006 (SC-7, REQ-119/120/121, deviation D4).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Read before enumerating (evidence:
+`evidence/research/prior-art.md`): the three carriers at HEAD
+(`.github/workflows/ci.yml` `graph-lint` job, `Makefile::graph-lint`,
+`internal/cli/lint_gate_0006_test.go`); RDR 0006's gate decision
+(0006:A5, SC-7) and its D4 disposition; the repo's conventions
+(`Makefile` header, `docs/cli-output-contract.md`); a peer-instance
+pass over the langref checkout set (gh-cli, helm, goreleaser,
+roborev, beads) asking how each verifies its own repository gates;
+and a bounded DevRef corpus pass (3 queries) on CI-scripts-as-single-
+carrier. Sibling-path check (exhibited): the behavioral-oracle
+discriminator already exists in adjacent gates —
+`Makefile::release-check` runs the built binary and asserts the
+stamp width (its comment records that a text-presence oracle was
+tried and shown unsound), `Makefile::docs-check` is
+regenerate-then-diff, and
+`lint_gate_0006_test.go::TestReq120_ADeliberatelyIllegalEditToTheCheckedInModelFailsTheGate`
+is already behavioral in-process ⇒ C1 generalizes an existing in-repo
+signal rather than inventing a parallel one.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — `Makefile` header: "CI invokes the same targets so
+  local and remote runs share one source of truth" ⇒ the bespoke CI
+  step is a standing violation of the repo's own convention; the
+  single-carrier arm restores it rather than introducing policy.
+- **Documented** — peer instance: beads'
+  `scripts/ci_capability_selector_test.go` subprocess-invokes the
+  exact script its CI runs (`exec.Command("bash", …
+  "ci-capability-selector.sh")`); helm and roborev CI run bare `make`
+  targets ⇒ the chosen predicate class is the peer norm.
+- **Documented** — a bounded sweep found no peer Go test asserting on
+  its own CI workflow text ⇒ the current grep oracle has no
+  precedent in the comparison set.
+- **Documented** — the checked-in model is linted twice in CI today:
+  the bespoke step (JSON `code` oracle) and `make graph-lint` (exit
+  integer, via the example-models step) ⇒ consolidation deletes a
+  duplicate *invocation*; that it deletes no unique *blocking power*
+  is exactly A5, proven before the step is removed, not assumed.
+- **Documented** — `internal/cli/clierr/clierr.go::ExitCodeFor` maps
+  `GroupUserEnv` and `GroupInternal` both to exit 2; the
+  discriminating `code` is written by
+  `internal/cli/clierr/clierr.go::CLIError.Code` through the respond
+  gateway ⇒ the carrier must report `code` as diagnosis even with an
+  exit-integer pass/fail floor (0006:A5's rationale preserved).
+- **Assumed** (A2, spike at Resolve) — the bespoke step's `code`
+  extraction fails open when the binary crashes emitting no JSON ⇒ if
+  confirmed, the exit integer is the only fail-closed floor.
+- **Assumed** (A1/A4, spikes at Resolve) — subprocess `make
+  graph-lint MODEL=<broken>` is test-tolerable and aborts before the
+  example-models loop.
+- ⚠ no prior-art coverage found for the *rule-as-policy* form (a
+  repository-wide written verification-oracle rule); the rule's
+  scope, beyond its graph-lint application, is from the model prior
+  grounded in the in-repo convention.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: one oracle, one carrier — CI/local/test drift at this
+  gate becomes structurally impossible, and the gate test verifies
+  enforcement instead of text.
+- Positive: the duplicate lint of the checked-in model in CI
+  disappears, and with it the bespoke step's python3 dependency.
+- Negative: the Go test suite gains a subprocess dependency on `make`
+  and a `go build` via the carrier's `build` edge (priced by A1);
+  environments without `make` cannot run the gate test.
+- Negative: the oracle's logic moves out of ci.yml into the Makefile
+  — workflow reviewers see only an invocation line.
+- C1/C2 bind future RDRs' CI-gate requirements: their tests must
+  invoke carriers, which is a (deliberate) constraint on how cheap a
+  future gate test can be.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: the subprocess predicate is slow or flaky in CI (cold
+  build, parallel `go test` packages both invoking make).
+  **Mitigation**: A1's spike times it before lock; the build cache
+  makes rebuilds incremental, and the predicate can serialize behind
+  a package-level lock if needed (Resolve decides).
+- **Risk**: restating REQ-119's oracle is read as amending Final RDR
+  0006.
+  **Mitigation**: 0006 is untouched; C3 records the restatement in
+  this RDR with 0006:A5 cited, the successor-record pattern already
+  used across 0001–0011.
+- **Risk**: the carrier's `code` extraction re-introduces a fail-open
+  path inside Make.
+  **Mitigation**: C3 fixes the pass/fail floor to the exit integer;
+  the `code` is diagnosis only, so a broken extraction can lose the
+  message but never the failure.
+- **Risk**: Make/shell semantics diverge across the carrier's two
+  runtimes (macOS GNU Make 3.81 + bash-as-sh locally, Make 4.x + dash
+  on ubuntu runners) — per-line recipe shells and loop status-masking
+  make the "single carrier" environmentally plural (critic P-2/P-6).
+  **Mitigation**: the recipe stays single-command-simple, or its
+  logic moves into a `set -euo pipefail` script the target owns and
+  invokes (the Load-Bearing Decisions escape hatch) — carrier
+  identity stays the Make target either way; Resolve picks when the
+  recipe crosses that line.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- Carrier neutered (recipe edited to a no-op): visible — the
+  behavioral gate test invokes the carrier over a defective model and
+  goes red when refusal doesn't happen; this was the silent case
+  under the grep oracle.
+- Carrier neutered in one arm only (a conditional on `MODEL` that
+  enforces under the test's override but no-ops on CI's default
+  invocation): visible — C3(a) requires the predicate to exercise the
+  default arm CI actually runs (critic P-3).
+- Wrong-reason non-zero exit (broken build, missing file) read as
+  refusal: prevented — C3(a)'s predicate is the conjunction of
+  non-zero exit AND `graph-lint-failed`, so a build breakage turns
+  the gate test red for the stated wrong reason instead of silently
+  green (critic P-7/P-11).
+- Vacuous pass (the subject path drifts and the carrier lints
+  nothing, exiting 0): the REQ-121 model-conformance test keeps
+  `models/rdr.toml` pinned and loadable, and the carrier names each
+  subject it lints; the vacuity-kill assertion's exact shape is
+  settled at Resolve (critic P-7).
+- CI invocation present but non-gating (`continue-on-error:`, a
+  disqualifying `if:`, commented out): C3(b)'s wiring assertion
+  checks gating-ness, not token presence; required-status-checks
+  membership is confirmed at Operational Activation (critic P-4/P-9).
+- `make` or the Go toolchain missing where the gate test runs, or
+  repo-root discovery failing after a package move: must fail loudly,
+  never skip silently — a skipped enforcement test is the
+  self-certification gap reborn; the skip/fail policy per environment
+  is settled at Resolve (critic P-12).
+- Diagnosis path: the test relays the carrier's combined output, so a
+  red run shows the lint envelope including the `code`; locally,
+  `make graph-lint MODEL=<path>` reproduces the exact gate.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A1–A4)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. Copy `models/rdr.toml`, drop its `[initial]` table (the REQ-120
+   defect); run `make graph-lint MODEL=<copy>` → non-zero exit,
+   output names `graph-lint-failed`.
+2. Run the converted gate test on HEAD → green.
+3. Neuter the carrier (stub the `graph-lint` recipe to a no-op) → the
+   same test goes red. This step is the RDR's point: under the old
+   grep oracle it stayed green.
+4. Restore the carrier; confirm `ci.yml`'s `graph-lint` job contains
+   only `make build` + `make graph-lint` (bespoke step gone) and
+   `make check` still reaches the gate through the same target.
 
-### Phase 1: Code Implementation
+### Phase 1: Carrier Consolidation
 
-#### Step 1: [Title]
+Fold the JSON-`code` diagnosis into `Makefile::graph-lint` (C3
+oracle) and reduce ci.yml's `graph-lint` job to `make build` +
+`make graph-lint`.
 
-[Conditional scaffold]
+### Phase 2: Test Conversion
 
-[Instructions]
+Replace `lint_gate_0006_test.go`'s substring-grep predicates with the
+behavioral subprocess predicate over the carrier — covering CI's
+default no-override arm as well as the override arm, plus the
+wrong-reason discrimination case — and the single gating-aware wiring
+assertion; keep the defective-subject helper and the REQ-121
+model-conformance check.
 
-#### Step 2: [Title]
+### Phase 3: Convention Codification
 
-[Conditional scaffold]
+Point future gate authors at C1/C2 from the contributor-facing
+conventions (one line in `CONTRIBUTING.md`), so the rule outlives
+this application.
 
-[Instructions]
+### Operational Activation
 
-### Phase 2: Operational Activation
-
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Push and watch the `graph-lint` job run green on a real runner —
+never declare the CI change done from local verification alone;
+exercise one scratch-branch run with a deliberately broken model to
+watch the job fail for the stated reason; and confirm the job's
+membership in the branch-protection required status checks (the one
+wiring fact no in-repo assertion can see — critic P-9).
 
 ## Validation
 
@@ -634,7 +825,17 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0006 (`0006:A5`, SC-7/S7; implementation artifacts
+  `req-list.md` REQ-119/120/121, `deviations.md` D4)
+- `.github/workflows/ci.yml` (`graph-lint` job), `Makefile`
+  (`graph-lint`, `release-check`, `docs-check`),
+  `internal/cli/lint_gate_0006_test.go`,
+  `internal/cli/clierr/clierr.go`, `internal/graphlint/taxonomy.go`,
+  `docs/cli-output-contract.md`
+- Peer-instance reads: langref checkouts (beads
+  `scripts/ci_capability_selector_test.go`; helm
+  `build-test.yml`; roborev `ci.yml`) — see
+  `evidence/research/prior-art.md`
+- Continuous Delivery (Humble & Farley) p.187; The DevOps 2.0
+  Toolkit p.226 (DevRef corpus)
+- kata `intrastate#9en6`; roborev job 6140 findings 1/2/3
