@@ -31,6 +31,7 @@ engine README — this file is only the per-project index.
 | [0020](0020-undeclared-tag-key-admission.md) | Undeclared --tag key admission — what the zero TagDecl means | Draft | Medium |
 | [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Draft | Low |
 | [0022](0022-terminal-reachability-liveness-invariant.md) | Terminal-reachability liveness invariant | Draft | Low |
+| [0023](0023-resolve-envelope-projection.md) | Resolve-envelope projection opt-out | Draft | High |
 
 ## Implementing
 
