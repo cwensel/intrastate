@@ -134,236 +134,413 @@ the cardinality answer — one RDR, one fork with a dependent clause.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 [No shipped model or test fixture binds two read accessors to
+  one artifact role, or a writer role its reader's keys do not cover]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: sweep every `[read.*]`/`[write.*]` table in
+    `models/**/*.toml` and the in-repo test fixtures for a repeated
+    `role` value among readers and for a writer key set not contained
+    in its role's reader key set; the Propose spot-check of
+    `models/rdr.toml` and `models/examples/*.toml` found one reader
+    per role with reader keys equal to writer keys.
+  - **If wrong**: C1/C2's load refusal invalidates a previously-valid
+    in-repo model or fixture; the implementing change must migrate it
+    (merge same-role readers, or widen the role reader's keys) before
+    tests pass.
+- **A2 [A write's planned keys are always bounded by the writer
+  binding's declared key set at execution]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/accessor/executor.go::nonOwnedPlanKeys`
+    refuses any planned key outside the writer definition's own
+    declared keys before the write command runs, so C2's coverage
+    over declared keys bounds every key the post-write compare can
+    request on the planned side.
+  - **If wrong**: a plan can carry an owned key the writer never
+    declared, C2 under-constrains, and the spurious
+    `read_back_incomplete` survives validation exactly as today.
+- **A3 [The post-write compared key set is exactly the planned keys
+  plus the resolved reader's declared protected keys]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/accessor/executor.go` builds the compared
+    set from `plannedKeys` united with `protectedKeys(reader, …)`
+    (the reader's own declared keys minus planned), fixed before the
+    write command runs; no third source — in particular not the keys
+    the external write command actually emits — feeds the re-read's
+    requested keys.
+  - **If wrong**: keys outside the single reader's declared obligation
+    enter the compare, and single-reader coverage (C2) is not the
+    complete totality condition — a reader-set statement would be
+    needed after all.
+- **A4 [C1/C2 leave RDR 0002's per-key authorability mitigation
+  intact]**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: `0002:§risks-and-mitigations`, final risk, quoted:
+    "A `keys` binding that must cover every declared key would make
+    `recognized` and caller-supplied `--tag` keys unauthorable. /
+    Mitigation: The binding validation is provenance-scoped — exactly
+    one reader per owned key, at most one per observed key, none for
+    `recognized`" — the recorded scope forbids *whole-key coverage
+    obligations* and says nothing about role cardinality; C1 counts
+    read bindings per role and C2 constrains only the keys a write
+    binding declares (owned by construction via
+    `write_non_owned_tag`), so neither imposes reader coverage on
+    recognized or observed keys. Resolve confirms the quote still
+    anchors and that no other 0002 element widens the mitigation.
+  - **If wrong**: this RDR silently re-fights a decided mitigation and
+    models carrying reader-less recognized/observed keys stop
+    loading.
+- **A6 [Every registry the executor acts on has passed
+  `accessor.Validate`]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: sweep every construction/entry path that hands a
+    `Registry` to the executor (flow execution, resume/replay if any,
+    lint/export) and show each routes through
+    `internal/accessor/validate.go::Validate` before a write can run;
+    also confirm `Validate` has no early return that can starve a
+    later arm (at Propose it appends findings and never returns
+    early).
+  - **If wrong**: a bypass path reaches `readerFor` with an
+    unvalidated registry — C4's fail-closed resolver is the designed
+    backstop, refusing rather than reverting to first-match.
+- **A5 [`readerFor` is the sole role→reader resolution point]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: sweep call sites of `Registry.readerFor` and any
+    other selection keyed on `Accessor.Role` over read definitions;
+    at Propose the only role-keyed selection found is
+    `internal/accessor/model.go::readerFor`, called from the
+    executor's post-write read-back.
+  - **If wrong**: another site keeps first-match-over-registry-order
+    selection and C1's determinism guarantee does not reach it.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Artifact role becomes an **arity-bearing coordinate of the read
+binding**, decided at the RDR 0002 load seam, with the totality half
+stated over the single reader.
+
+Cardinality: at most one read accessor binding per artifact role,
+enforced by a new walk in
+`internal/table/load.go::checkAccessorBindings` under the existing
+`malformed_accessor_binding` category ⇒ the phrase "the role's read
+definition" in `0004:C12`/`0004:C13` denotes a unique binding, and
+`internal/accessor/model.go::readerFor` — today first-match over
+registry order — becomes deterministic because at most one candidate
+can exist.
+
+Totality: every write accessor binding's role must be served by a
+read binding whose declared keys include every key the write binding
+declares. The executor already refuses any planned key outside the
+writer's own declared set
+(`internal/accessor/executor.go::nonOwnedPlanKeys`) ⇒ under this
+clause every key the post-write compare can request is one the
+resolved reader declares, so the spurious `read_back_incomplete`
+after a correct write is closed at validation, before any write runs.
+
+Mirror: `internal/accessor/validate.go::Validate` gains two arms
+deciding the same two defects over the registry the executor is
+actually handed, per the established load/execution split (its own
+doc comment: the loader refuses these shapes at load; execution
+re-decides them at the boundary).
+
+RDR 0004 is not overridden: `0004:C12`/`0004:C13` stand as written —
+this RDR makes their singular reading true by construction rather
+than restating them over a reader set.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+Two walks at the load seam (model admission), two mirror arms at the
+execution boundary (registry admission), a fail-closed resolution
+site, no change to executor control flow or refusal classes. Data
+flow: `[read.*]`/`[write.*]` tables → `loadAccessors` fills
+`Model.Readers`/`Model.Writers` (writer of the state the walks read)
+→ `checkAccessorBindings` walks them → at execution, the registry
+carries the same bindings and `Validate` re-decides.
+
+**Consistency corollary (premortem P-4).** Role-designation cannot
+diverge from RDR 0002's per-key designation; agreement is a theorem
+of the walks, not a fourth arm. For any owned key K a write binding
+W (role R) declares: C2 forces R's reader to declare K; 0002's
+existing walk forces *exactly one* reader to serve K
+(`internal/table/load.go::checkAccessorBindings`, whose writer is
+`loadAccessors` filling `Model.Readers` from the `[read.*]` tables);
+therefore R's reader **is** K's unique server. For an observed key in
+R's reader's declared set, the at-most-one walk makes it the only
+server likewise. A model in which the role-designated reader and the
+per-key server differ cannot pass both validations.
+
+**Compare-set membership (premortem P-2/P-5).** The post-write
+compared set is fixed *before* the write command runs — planned keys
+plus the resolved reader's declared protected keys — so keys an
+external write command *emits* beyond its declaration never enter the
+compare (A3 verifies the construction at Resolve). C2's coverage over
+the writer's declared keys is therefore the complete totality
+condition; recognized and observed keys stay reader-optional exactly
+as 0002 scoped them (A4).
 
 #### Normative Contracts
-
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+An artifact role MUST be named by at most one read accessor binding
+in a model. A model in which two or more read bindings carry the same
+role MUST fail load under category `malformed_accessor_binding`
+(`internal/table/load.go::checkAccessorBindings`), before any
+execution.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+Every write accessor binding's role MUST be served by a read accessor
+binding, and that reader's declared key set MUST include every key
+the write binding declares. A model violating either clause MUST fail
+load under category `malformed_accessor_binding`. Coverage is stated
+over the single role reader (per C1), never over a union of readers.
+```
+
+**C3**
+
+```normative
+`internal/accessor/validate.go::Validate` MUST decide the same two
+defects over the registry handed to the executor: two or more read
+definitions sharing a role → finding code `multiply_bound_role`; a
+write definition whose role no read definition serves with full
+declared-key coverage → finding code `unserved_writer_role`. One
+defect, one code; a registry with either finding never reaches a
+write.
+```
+
+**C4**
+
+```normative
+`0004:C12` and `0004:C13` stand as written; this RDR overrides
+nothing. Under C1, `internal/accessor/model.go::readerFor` resolves
+"the role's read definition" uniquely — and the resolution site MUST
+fail closed: presented with two or more candidate read definitions
+for one role, it MUST refuse (no reader found for read-back purposes,
+surfacing as the existing `read_back_incomplete` fail-safe), never
+select by registry order. Validation (C1/C3) is the primary
+mechanism; the fail-closed resolver is defense-in-depth so any future
+registry path that bypasses validation fails loudly instead of
+silently reverting to first-match.
+```
+
+Failure output rides the existing surfaces unchanged: C1/C2 report
+through RDR 0002's load-failure envelope (category + message naming
+the offending role, binding ids, and — for C2 — the uncovered keys);
+C3 reports through RDR 0004's validation-finding envelope. Exact
+message wording and finding-field payloads are Resolve/Pre-Lock
+detail.
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Identity** — an accessor's *registration* identity stays the
+  `(flow, name, capability)` triple (`0004`'s multiply-bound arm,
+  `internal/accessor/validate.go`); this RDR adds the read-back
+  *resolution* identity: the artifact role. Two read bindings sharing
+  a role are one collision defect, never two candidates.
+- **Naming** — execution-boundary finding codes
+  `multiply_bound_role` and `unserved_writer_role` (rejected:
+  overloading `multiply_bound_accessor`, which names the
+  identity-triple defect); load-time failures reuse
+  `malformed_accessor_binding` (rejected: a new category — per-role
+  arity is the same defect class as the existing per-key arity
+  walks).
+- **Selection / predicate** — when N read bindings share a role,
+  *none* is chosen: the model is refused at load and the registry at
+  the execution boundary. When N=1, the sole binding is the role's
+  read definition. Registry order never participates in selection.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative only — intent, not fixture text:
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```toml
+# Refused by C1: two read bindings, one role.
+[read.status-a]
+role = "rdr"
+keys = ["stage"]
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+[read.status-b]
+role = "rdr"
+keys = ["status"]
+```
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+```toml
+# Refused by C2: the writer's role is served, but coverage is short —
+# "status" is plannable yet unservable by the role's reader, which is
+# exactly the shape that today yields read_back_incomplete after a
+# correct write.
+[read.status]
+role = "rdr"
+keys = ["stage"]
 
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+[write.status]
+role = "rdr"
+keys = ["stage", "status"]
+read_back = true
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Load-time binding arity walk | `internal/table/load.go::checkAccessorBindings` | walks per-key counts, not roles | Extend | C1 role walk + C2 coverage walk, same function and category |
+| Execution-boundary validation | `internal/accessor/validate.go::Validate` | eight arms, none role-keyed | Extend | C3's two arms and finding codes |
+| Role→reader resolution | `internal/accessor/model.go::readerFor` | first-match over registry order | Reuse | mechanics unchanged; C1 bounds candidates at ≤1 |
+| Post-write compare | `internal/accessor/executor.go` | may request keys the resolved reader never declared | Reuse | unchanged; C2 makes every requestable key servable |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+Scored QOC matrix (0 = fails the criterion, 1 = partial, 2 = full;
+approaches from the prior-art read in Research Findings):
+
+| Criterion | A: role arity + writer coverage (chosen) | B: reader-set semantics | C: deterministic tiebreak | D: execution-time refusal |
+| --- | --- | --- | --- | --- |
+| Correctness fit (closes nondeterminism AND spurious `read_back_incomplete`) | 2 — both, statically, pre-execution | 2 — both, but decided inside the executor | 0 — determinism only; an ordered pick can still not serve the compared keys | 1 — refusal is deterministic but the coverage hazard needs C2 anyway |
+| Prior-art alignment | 2 — registration-refusal (ServeMux) plus three in-repo arity walks | 0 — no read peer aggregates same-key handlers across a set | 1 — SCXML-style document order exists, but its conflicting candidates are interchangeable; same-role readers are not | 1 — right refusal posture, wrong site |
+| Reversibility | 2 — a validation can be relaxed to B later; every A-valid model is B-valid | 0 — aggregation and refusal-attribution semantics become locked contract | 2 — an ordering rule is droppable | 1 — a runtime refusal class, once shipped, is contract |
+| Blast radius | 1 — refuses model shapes that load today (none shipped; A1) | 0 — executor rewrite plus an override of `0004:C12`/`C13` | 2 — admits everything | 1 — new runtime refusal class on the write path |
+| Cost | 2 — two load walks, two validate arms | 0 — multi-reader read aggregation, per-reader refusal attribution, contract restatement | 2 — one sort | 1 — resolution-site rework plus C2 anyway |
+| **Total** | **9** | **2** | **7** | **5** |
+
+The deciding rows are correctness fit and reversibility: C's total is
+close but its correctness score is 0 — determinism without coverage
+leaves the exact user-visible defect (spurious `read_back_incomplete`)
+that motivates the RDR, so its cheapness buys nothing; B is the only
+other approach that closes both hazards, and it loses on every other
+row while requiring an override of two implemented contracts. A is
+also the codebase's own answer everywhere the same question has come
+up (the three arity walks in the sibling-path exhibit) — choosing B
+or C would introduce a second candidate-resolution philosophy beside
+them.
+
+Sibling-path exhibit (step-5 check — does an adjacent path already
+make this decision?): yes, three do, and A reuses their signal shape
+rather than inventing a parallel one:
+`internal/accessor/validate.go` (`multiply_bound_accessor` — same
+identity triple bound twice is refused, not tiebroken),
+`internal/table/load.go::checkAccessorBindings` ("owned tag … served
+by %d readers; want exactly one"), and
+`internal/cli/flow_state.go::writerFor` (exactly one `[write.<id>]`
+per key, kata 8dg3). No adjacent path resolves N candidates by
+ordering.
+
+The hardened premortem
+(`evidence/propose-premortem/critic.md`, findings P-1…P-11) did not
+overturn the choice but forced four hardenings, folded above: C4 now
+requires a fail-closed resolution site (P-7/P-10 — validation-bypass
+paths must refuse, never first-match; the rejected execution-time
+refusal returns as defense-in-depth, not primary mechanism); the
+consistency corollary and compare-set membership paragraphs answer
+P-2/P-4/P-5/P-11 from the shipped walk structure; A6 was added for
+registry-path coverage; and P-3/P-6 (load-refusal of never-writes
+models carrying duplicate-role readers) is answered by in-repo
+precedent rather than scoping C1 to write-referenced roles —
+`internal/table/load.go` already holds arity defects malformed
+regardless of use ("a two-writer key outside `written` is malformed
+even though nothing in the model writes it"), and A1's corpus sweep
+is the evidence obligation that the refused set is empty, with
+fixture migration in-plan if it is not.
+
+Premortem: hardened (hardened)
+Ground-sweep: clean (16 anchors)
+Joint-check: clear (12 peers)
+
+Joint-check context (not a fire): of the fourteen anchor/literal
+tokens swept, the sole peer hit is 0024's Technical Environment
+naming bare `internal/table/load.go` for a different locus ("the tag
+declaration grammar to mirror" — `loadTags`, not
+`checkAccessorBindings`), with no shared contract literal.
+Absence arm: not applicable — this proposal converts no refusal into
+an acceptance; it adds refusals.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Reader-set semantics (B)
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Keep role non-counted. Override `0004:C12`/`C13`
+with a restatement over the *set* of read definitions sharing the
+write binding's role: read-back selects per compared key the reader
+whose declared keys serve it, aggregates the reads, and attributes a
+per-reader refusal on incompleteness. The totality half becomes a
+union obligation: the same-role readers' declared keys must jointly
+cover the writer's declared keys.
 
 **Pros**:
 
-- [Advantage 1]
+- Admits every model shape the current loader admits — zero admission
+  blast radius.
+- Lets one role split cheap and expensive reads across two commands.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Overrides two contracts of an Implemented RDR (`0004:C12`,
+  `0004:C13`) that are otherwise correct as written.
+- Adds multi-reader aggregation, partial-read ordering, and
+  per-reader refusal-attribution semantics to the executor — new
+  locked contract surface for a shape no in-repo model uses (A1
+  sweeps model *shapes*, not file presence, precisely to keep this
+  rejection evidence-based rather than asserted).
+- Diverges from every adjacent candidate-arity decision in the
+  codebase (sibling-path exhibit in Decision Rationale), introducing
+  a second resolution philosophy.
+- Near-irreversible once shipped: aggregation behavior becomes
+  observable contract; the cardinality arm stays freely relaxable in
+  the other direction.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: loses every QOC row except correctness;
+the only shape it preserves is one nothing uses, at the price of
+overriding implemented contracts.
+
+### Alternative 2: Deterministic tiebreak (C)
+
+**Description**: Keep multiple same-role readers legal; define a
+total selection order (e.g. lexicographic binding id) at `readerFor`
+so selection is deterministic and registry order never shows through.
+
+**Pros**:
+
+- Cheapest change; admits everything; droppable later.
+
+**Cons**:
+
+- Determinism alone leaves the RDR's motivating defect: the
+  deterministically chosen reader can still lack the compared keys,
+  so the spurious `read_back_incomplete` survives — and the writer
+  key-coverage obligation would still have to be stated against
+  *some* reader, which is the cardinality question again.
+- The statecharts-style document-order precedent does not transfer:
+  its conflicting candidates are interchangeable resolutions of one
+  event, while same-role readers with different key sets are not
+  interchangeable for a compare.
+
+**Reason for rejection**: scores 0 on correctness fit — it answers
+the nondeterminism symptom while preserving the hazard the RDR
+exists to close.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Execution-time-only ambiguity refusal (D)**: defers to the write
+  moment a defect fully decidable from declarations before any
+  command runs (both C1 and C2 are static); it survives *as
+  defense-in-depth* in C4's fail-closed resolver, but as the primary
+  mechanism it reports the model's defect only when a write finally
+  exercises the role.
+- **Codify registry order as normative**: locks an accident of load
+  order into contract and still leaves coverage undecided.
+- **Documentation-only ("authors should avoid duplicate roles")**:
+  the loader is the project's established enforcement point for
+  binding arity; advice is not a validation.
 
 ## Context
 
@@ -401,100 +578,156 @@ REQ-50, REQ-102, deviation D14).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Prior art was read before enumeration (queries and rejected branches
+in `evidence/research/propose-prior-art.md`). ⚠ no prior-art coverage
+in the indexed corpora (`StateMachineRes`, `DevRef`,
+`StateMachineLit`) for handler-cardinality-at-registration — the
+corpus hits were heading-only or off-domain, so the class read rests
+on an openable local source and in-repo precedent instead. Go's
+stdlib mux refuses a conflicting registration at bind time —
+`net/http/server.go::ServeMux.registerErr` (go1.26.6): "pattern %q
+(registered at %s) conflicts with pattern %q (registered at %s)" —
+ambiguity no specificity rule resolves is refused at registration,
+never resolved by registration order at serve time ⇒ supports
+refusing same-role duplicates at model load over a runtime tiebreak.
+In-repo, the same question has three prior answers, all refusal:
+`internal/accessor/validate.go` (`multiply_bound_accessor`),
+`internal/table/load.go::checkAccessorBindings` per-key arity walks
+(state written by `loadAccessors` from the `[read.*]`/`[write.*]`
+tables), and `internal/cli/flow_state.go::writerFor` (kata 8dg3) ⇒
+role arity as a fourth refusal walk is signal reuse, not invention.
+Code paths shaping the totality half:
+`internal/accessor/executor.go::nonOwnedPlanKeys` (plan keys bounded
+by the writer's declared keys) and the pre-invocation compared-set
+construction ⇒ single-reader declared-key coverage is the complete
+condition.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — `internal/accessor/model.go::readerFor` selects
+  first-match over `Definitions` order on
+  `Capability==CapRead && Accessor.Role==role`; nothing counts
+  same-role readers anywhere.
+- **Documented** — `internal/accessor/validate.go::Validate` runs
+  eight arms, none role-keyed, and never early-returns (findings
+  accumulate), so mirror arms cannot be starved by ordering.
+- **Documented** — `internal/accessor/executor.go::nonOwnedPlanKeys`
+  refuses planned keys outside the writer's declared set before the
+  command runs; the compared set is fixed pre-invocation from
+  planned ∪ reader-declared keys.
+- **Documented** — every shipped model (`models/rdr.toml`,
+  `models/examples/*.toml`) binds one reader per role with reader
+  keys equal to writer keys — C1/C2 refuse none of them.
+- **Documented** — `internal/table/load.go` enforces binding arity
+  regardless of use ("a two-writer key outside `written` is
+  malformed even though nothing in the model writes it") ⇒ global C1
+  (not scoped to write-referenced roles) is the established
+  admission philosophy.
+- **Assumed** — no *test fixture* relies on same-role duplicate
+  readers or uncovered writer roles (A1); and no registry path
+  reaches the executor unvalidated (A6).
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: the spurious `read_back_incomplete` after a correct
+  write becomes a load-time message naming the binding and the
+  uncovered keys — caught at authoring, not at the first write.
+- Positive: `readerFor` is deterministic (≤1 candidate) and, for
+  every write binding's role, resolvable with full coverage — the
+  singular reading of `0004:C12`/`C13` holds by construction, with
+  no executor or contract change.
+- Negative: two model shapes that load today stop loading — same-role
+  duplicate readers, and writer roles whose reader under-covers.
+  Both are breaking admission changes (project convention: no
+  back-compat); the second shape was already broken at run time.
+- Negative: a role's single reader must declare the union of keys
+  its writers need — one larger read command instead of several
+  narrow ones.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: an in-repo fixture depends on a shape C1/C2 refuse.
+  **Mitigation**: A1's corpus sweep at Resolve; Step 4 migrates any
+  hit in the implementing change.
+- **Risk**: the coverage clause creeps onto recognized/observed keys,
+  re-fighting 0002's recorded scoping mitigation.
+  **Mitigation**: C2 is stated over the keys the write binding
+  declares, owned by construction (`write_non_owned_tag`); A4 quotes
+  the 0002 clause and Resolve re-anchors it.
+- **Risk**: a registry path bypasses validation and reaches the
+  resolver with duplicates.
+  **Mitigation**: A6 sweeps construction paths; C4's fail-closed
+  resolver refuses rather than first-matching.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- Visible at load: `malformed_accessor_binding` naming the role and
+  the duplicate read bindings (C1), or the writer id, role, and
+  uncovered keys (C2). Diagnosis is the message; recovery is a model
+  edit (merge same-role readers; widen the role reader's keys). No
+  state migration — validation only.
+- Visible at the execution boundary: `multiply_bound_role` /
+  `unserved_writer_role` findings when a registry that skipped load
+  validation is handed to the executor (C3), and a fail-closed
+  refusal at the resolution site under C4 if both nets are somehow
+  bypassed.
+- Residual runtime refusal (unchanged, by design): a reader that
+  *declares* a key its external command cannot actually produce
+  still yields `read_back_incomplete` at run time — static
+  validation cannot prove external-tool behavior; `0004:C13` remains
+  the fail-safe backstop for declared-but-unreadable keys.
+- Partial-implementation hazard: C1 without C2 removes the
+  nondeterminism but leaves the spurious `read_back_incomplete`; the
+  MVV's coverage leg exists to make that half-ship fail its own
+  validation.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A1–A6)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. Author a fixture model: reader role `r` with keys `["a"]`; writer
+   role `r` with keys `["a", "b"]`, `read_back = true`. Load MUST
+   fail with the C2 coverage message naming the writer and key `b`.
+2. Add `b` to the reader's keys; the model loads. Drive a flow write
+   of the owned keys through stub accessor commands; the write
+   completes with a green read-back — no `read_back_incomplete`.
+3. Duplicate the reader under a second binding id with the same
+   role; load MUST fail with the C1 role-arity message.
+
+End state: both refusals observed at load with messages naming the
+offending binding, and the corrected model's write verifies green
+end-to-end — the pre-fix behavior (step 1's shape loading fine and
+refusing at run time) is no longer reachable.
 
 ### Phase 1: Code Implementation
 
-#### Step 1: [Title]
+#### Step 1: Role-arity walk at the load seam
 
-[Conditional scaffold]
+Extend `internal/table/load.go::checkAccessorBindings` with the
+≤1-reader-per-role walk (C1).
 
-[Instructions]
+#### Step 2: Writer-role coverage walk
 
-#### Step 2: [Title]
+Same function: resolve each write binding's role to its (now unique)
+reader and require declared-key coverage of the writer's declared
+keys (C2).
 
-[Conditional scaffold]
+#### Step 3: Execution-boundary mirror arms and fail-closed resolver
 
-[Instructions]
+Add the two arms and finding codes to
+`internal/accessor/validate.go::Validate` (C3); make the resolution
+site refuse on plural candidates (C4).
 
-### Phase 2: Operational Activation
+#### Step 4: Fixture migration
 
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Repair any in-repo model or test fixture A1's sweep surfaces (merge
+same-role readers; widen role-reader key sets).
 
 ## Validation
 
@@ -642,7 +875,18 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0002 (`0002:§risks-and-mitigations` final risk — the per-key
+  scoping mitigation A4 quotes); RDR 0004 elements `0004:C5`,
+  `0004:C12`, `0004:C13`, `0004:C14`.
+- Source reviewed: `internal/table/load.go::checkAccessorBindings`,
+  `internal/accessor/validate.go::Validate`,
+  `internal/accessor/model.go::readerFor`,
+  `internal/accessor/executor.go` (`nonOwnedPlanKeys`,
+  compared-set construction), `internal/cli/flow_state.go::writerFor`,
+  `models/rdr.toml`, `models/examples/*.toml`.
+- Prior art: Go stdlib `net/http/server.go::ServeMux.registerErr`
+  (go1.26.6) — registration-time conflict refusal. Search record:
+  `evidence/research/propose-prior-art.md`.
+- Premortem: `evidence/propose-premortem/critic.md` (P-1…P-11).
+- Related: kata `intrastate#p63c` (1544); roborev jobs 6215
+  (ref 7932928), 6220.
