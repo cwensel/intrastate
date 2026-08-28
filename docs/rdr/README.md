@@ -20,6 +20,7 @@ engine README — this file is only the per-project index.
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Implemented | Medium |
 | [0010](0010-stateless-decision-tables.md) | Owned state is optional: stateless decision tables are first-class | Implemented | High |
 | [0011](0011-flow-next-match-conditioned-candidates.md) | flow next selects by match; --all enumerates the alphabet | Implemented | High |
+| [0012](0012-declared-kind-carrier-at-the-guard-seam.md) | Declared-kind carrier at the guard value seam | Draft | Medium |
 
 ## Implementing
 
