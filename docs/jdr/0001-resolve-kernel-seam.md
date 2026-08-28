@@ -938,6 +938,25 @@ not a negotiation.
   0002×0004 F-A, critique Q-5, iteration 4)*
 
   **DECIDED 2026-08-24 by §D13** — canonical sorted, deduplicated JSON array in `Tag.Value`, declared by 0002.
+- **JD-23 Merged-node liveness quantifier.** One doctrine governs how both
+  liveness-shaped invariants — invariant 2 (`graph-dead-end`) and 0022's
+  invariant 8 (`graph-terminal-unreachable`) — quantify over merged nodes:
+  the check ranges over **split nodes**, each reachable merged node split on
+  the terminal-participating keys and never the whole lattice; terminal
+  satisfaction is universal per split node; path/edge existence is
+  existential over ordinary-row edges, so the abstraction's imprecision runs
+  only in the miss direction and never yields a false accusation. 0022
+  codifies that bound and accepts its D12-class residual — stuck states
+  separable only on merged non-terminal-participating keys — as a declared,
+  path-scoped miss of the guarantee, and carves its population disjoint
+  from `graph-dead-end`'s. **Ranking and classifying that residual class is
+  RDR 0015's charter**: whether to confirm the bound, relax it toward
+  REQ-111 exactness, or cost correlation tracking at a narrower scope is
+  0015's decision, not made here — but whichever arm it picks binds both
+  invariants through this anchor; neither record widens or narrows the
+  split unilaterally. Both records cite this entry and neither restates the
+  other's contract. Siblings: 0015, 0022. *(0022×0015 Stage-2 symmetric
+  fire, homed 2026-08-28)*
 
 **Withdrawn — JD-11 Escape-row identity across the dump.** Re-triaged as a
 single-RDR defect: 0002's round-trip invariant requires the dump to preserve

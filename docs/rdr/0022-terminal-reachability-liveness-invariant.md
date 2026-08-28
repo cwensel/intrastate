@@ -312,7 +312,8 @@ invariant 7's) population and MUST NOT take this code.
 **C2**
 
 ```normative
-Quantifier and abstraction: the check runs over split nodes — each
+Quantifier and abstraction (shared doctrine homed at JDR 0001
+§JD-23): the check runs over split nodes — each
 reachable merged node split on the terminal-participating keys exactly
 as invariant 2 (`splitNode` over `terminalKeys`). Terminal satisfaction
 is UNIVERSAL per split node and reuses `satisfiesSomeTerminal`
@@ -496,7 +497,7 @@ Ground-sweep: clean (34 anchors)
 carries inline finding-code prose, not a table — fixed inline in C4 and
 A5).
 
-Joint-check: fired → 0015 (home: OPEN). Context: RDR 0015 (Draft,
+Joint-check: fired → 0015 (home: JDR 0001 §JD-23). Context: RDR 0015 (Draft,
 unproposed) owns the ranking of D12's two record-supported readings of
 invariant 2's merged-node quantifier and anticipates "a successor
 clause naming the quantifier explicitly"; this RDR's C1 carves its
@@ -505,9 +506,8 @@ terminal-participating-key split bound with the D12-class residual
 accepted for invariant 8 — the same doctrine 0015 may relax
 (REQ-37→REQ-111), replace (correlation tracking), or confirm. The
 joint question: one quantifier doctrine must govern both liveness-
-shaped invariants, and its normative home (an umbrella successor
-clause both cite, or explicitly coordinated clauses in both records)
-is undecided. Non-fires adjudicated as context: 0021 (reads the same
+shaped invariants, and its normative home is the umbrella clause both
+records cite: JDR 0001 §JD-23. Non-fires adjudicated as context: 0021 (reads the same
 relation for export; both records declare mutual independence),
 0012/0019 (read `atomAdmitsValue` / own `checkDanglingEdge` root
 semantics — adjacent surfaces, no shared decision), 0014 (cites
