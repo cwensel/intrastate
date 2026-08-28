@@ -332,6 +332,17 @@ ruled out. Closes with Stage 2's two greppable verdict
 lines — `Premortem:` and `Joint-check:` — whose absence
 means the check never ran.]
 
+Joint-check: fired → 0022 (home: OPEN). Context (recorded at 0022's
+Stage-2 joint-decision check; symmetric fire): RDR 0022 codifies the
+terminal-participating-key split bound with a D12-class accepted
+residual for its new `graph-terminal-unreachable` invariant, and
+carves that finding's population against `graph-dead-end`'s — the
+same quantifier doctrine this RDR's arms may relax, replace, or
+confirm. One doctrine must govern both liveness-shaped invariants;
+its normative home is undecided (umbrella successor clause both cite,
+or coordinated clauses in both records). This peer may not later
+record `clear` against 0022.
+
 ## Alternatives Considered
 
 [Full analysis for seriously evaluated alternatives.
