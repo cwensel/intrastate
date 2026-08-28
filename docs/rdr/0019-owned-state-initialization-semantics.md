@@ -136,236 +136,424 @@ the lint already is: RDR 0010's `decision-table` class has no
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 No runtime path reads `Model.Initial`, so making the init verb its
+  sole runtime consumer conflicts with nothing.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: grep over `internal/cli` and `internal/resolve` for
+    `Initial` hits tests only (`lint_gate_0006_test.go`,
+    `mvv_0010_test.go`); re-verify at Resolve.
+  - **If wrong**: a hidden reader already assigns `[initial]` different
+    runtime semantics and the clause here contradicts shipped behavior.
+- **A2 The `set-state` write path can carry model-sourced values: a
+  `table.TagValue` from `Model.Initial` renders to the same canonical wire
+  form `parseWrites` produces for a request value, so read-back equality
+  (REQ-107's value-for-value form) holds for seeded keys.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: needed — table-driven over EVERY value kind `[initial]`
+    admits: seed each through
+    `internal/cli/flow_state.go::groupByWriter` and the executor into a
+    fresh artifact, `set-state --write` the equivalent argv value into a
+    second fresh artifact, assert the two artifacts byte-identical
+    (premortem P-2/P-3: `--write` values enter as argv strings through
+    `parseWrites` coercion; `Model.Initial` values arrive
+    loader-typed — the premise that both reach one canonical wire form
+    is exactly the refuted-normalization-premise defect class and is
+    verified, not assumed).
+  - **If wrong**: init's read-back mismatches on lint-clean models — or,
+    worse, passes while persisting a form a manual `set-state` would not
+    — and the verb needs an explicit route through the same coercion
+    stage `--write` uses, changing the design's reuse claim.
+- **A3 Every `[initial]` key of a lint-certified state-machine model is
+  served by EXACTLY ONE declared `[write.<id>].keys` writer — existence
+  AND uniqueness — so init can route every seed through
+  `internal/cli/flow_state.go::writerFor` (which refuses both the
+  zero-writer and the multi-writer arm) without a bypass.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: needed — the premortem (P-4) flagged this as the
+    missing-veto-clause class: lint certifies REACHABILITY of `[initial]`
+    keys, not WRITABILITY, and no cited clause ties `[initial]` (or
+    `graphlint` `ownedRequiredKeys`) to writer coverage. Find and quote
+    the governing lint/loader clause, or establish that none exists.
+  - **If wrong**: a lint-certified model refuses at seed time
+    (`flow-write-unbound`/multi-writer arm) — caught with zero writes
+    committed by C2's plan-level validation, but still a wall; the
+    clause then needs a companion lint arm making writer
+    existence-and-uniqueness for `[initial]` keys a certification
+    requirement (the preferred cure — fail at lint time), or a decided
+    direct-write bypass.
+- **A4 Extending 0005:C1's closed verb enumeration by one verb is a
+  recordable override of a Final peer's clause.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: needed — the premortem (P-5) flagged the borrowed-
+    authority class: an override's EXISTENCE (`0010:C5`'s override of
+    `0006:C18`, per `0010:A10`) does not show that an override may
+    extend a closed ENUMERATION. Resolve must quote the override provision's
+    actual text against the enumeration case, and enumerate the
+    enumeration's consumers this override must update — `flow` command
+    registration, `--help-all`, docs generation, and the `flow-*` code
+    taxonomy for the verb's new failure classes (P-6).
+  - **If wrong**: the verb cannot be added without re-opening RDR 0005,
+    and the carrier falls back to the rejected flag-on-`set-state` form.
+- **A5 The empty-store predicate preserves cleared keys under
+  unconditional automated re-invocation: after any first write, the
+  store is non-empty, so every later `init-state` — including one in a
+  deploy script or CI bootstrap that runs it every time — writes
+  nothing, and a cleared key stays absent for every reader AND every
+  writer path this RDR introduces.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: needed — MVV steps 6–8 (clear one key on a seeded
+    artifact, read-back absent, re-init is a no-op success whose payload
+    reports the key absent-from-`[initial]` and whose artifact bytes are
+    unchanged).
+  - **If wrong**: some path still seeds into a non-empty store and the
+    resurrect hazard the premortem (P-7) disqualified per-key seeding
+    for returns; the predicate, not the disclosure, is the safety
+    property, so the fix is in the predicate.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Decide the fork as: **`[initial]` is both the lint-time reachability root
+and the runtime bootstrap source for owned state, and the carrier is an
+explicit, persisting init verb** — `flow init-state`, a `set-state`-family
+verb that writes the model's `[initial]` assignments through the declared
+write accessors with read-back, exactly on the existing
+`internal/cli/flow_state.go::groupByWriter` → executor → read-back path
+⇒ the read path stays pure and the kernel's never-fill rule is untouched:
+no read verb, and no artifact load
+(`internal/cli/flowbind/flowbind.go::load`, whose absent-file-is-empty
+rule is what makes a first write possible at all), ever synthesizes state.
+
+This is the shape every read peer engine uses: initialization is an
+explicit lifecycle step at session start, never a read-time fallback,
+and the initial-vs-existing fork is decided whole-snapshot, never as a
+per-key merge (see Investigation). Per-key semantics follow:
+init seeds if and only if the bound artifact is EMPTY, and then seeds
+every `[initial]` key; a non-empty artifact is a no-op success whose
+payload reports the `[initial]` keys the store lacks — so a cleared
+key is never resurrected by any re-invocation (the premortem's
+decisive finding, P-7), a torn seed is visible without being silently
+half-repaired, and the key-added-after-seeding case is answered by
+explicit `set-state` guided by that report. Class-keyed like the lint:
+a `decision-table` model (`internal/table/model.go::IsDecisionTable`
+⇒ the existing class discriminator is reused, no parallel predicate)
+has no `[initial]` (`0010:C2` forbids it) and the verb refuses.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The verb sits entirely on shipped surfaces: model selection and request
+assembly via the shared `flow` path (`internal/cli/flow_exec.go`),
+mutation routing via `writerFor`/`groupByWriter`, application and
+commit-time verification via the accessor executor's write + read-back
+(RDR 0004's model — read-back is the only commit check, no cross-writer
+atomicity, and this verb inherits both statements verbatim). The only new
+data flow is the *source* of the planned writes: `Model.Initial`
+(`internal/table/model.go::Model.Initial`, today written by the loader
+and read by lint only) instead of `--write`/`--clear` request flags —
+which is precisely why it is a new verb and not a `set-state` flag: a
+`set-state` payload echoes the request's planned writes, while init's
+plan comes from the model.
 
 #### Normative Contracts
-
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+SEMANTICS. `[initial]` is BOTH the lint-time reachability root
+(0006:C18 unchanged — a state-machine model declaring none stays a
+blocking finding) AND the runtime bootstrap source for owned state.
+Materializing it is an EXPLICIT, PERSISTING act: no read verb, no
+artifact load, and no accessor read path may synthesize, default, or
+fall back to `[initial]` values when a key is absent — a cleared key
+reads back absent for every reader (REQ-107 unchanged), and owned
+state is assembled only from caller-bound artifacts (0004:C3
+unchanged). A `decision-table` model has no `[initial]` (0010:C2) and
+therefore no bootstrap to materialize; initialization MUST refuse for
+that class rather than succeed vacuously.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+CARRIER. The `flow` group gains one verb, `init-state` — an override
+extending 0005:C1's verb enumeration and 0005:D-naming's verb list by
+exactly this spelling. It takes the shared selection flags
+(`--flow`|`--model`), explicit `--artifact role=path` bindings, and no
+write grammar: its planned writes are the model's `[initial]`
+assignments. It MUST route every seed through the declared write
+accessors with commit-time read-back, on the same
+writer-routing/no-cross-writer-atomicity terms as `set-state`
+(0005:C1); it MUST NOT write an artifact directly.
+
+Seeding is ALL-OR-NOTHING over an EMPTY store, never a per-key merge:
+init-state seeds if and only if the bound artifact carries NO key, and
+then it seeds every `[initial]` key. A non-empty artifact — torn,
+partially seeded, post-clear, or fully seeded alike — is a NO-OP
+SUCCESS: zero writes, and the payload reports which `[initial]` keys
+the store does not carry (informational, so a torn or post-clear state
+is visible without being repaired, resurrected, or failed on).
+Consequences fixed here: a cleared key is NEVER re-established by
+init-state under any invocation pattern, including unconditional
+automated re-runs (the artifact is non-empty, so nothing writes); and
+a key added to `[initial]` after seeding is re-established by explicit
+`set-state`, not by init — the payload's absent-key report names it.
+The payload MUST distinguish the seeded-all case from the no-op case,
+and its scope is exactly the `[initial]` key set — the verb claims
+nothing about owned keys `[initial]` does not assign.
+
+The ENTIRE plan is validated before any write: every `[initial]` key
+must route to exactly one declared writer and every needed artifact
+role must be bound, or the verb refuses with ZERO writes committed —
+per-key commit has no atomicity across writers, so plan-level
+validation is where the all-or-nothing property lives. A read-back
+mismatch is a distinct terminal refusal naming the key as
+PRESENT-AND-UNVERIFIED; the store is then non-empty, so a re-run is a
+no-op that does NOT repair it and MUST NOT be documented as its
+recovery — recovery is an explicit `set-state` (or discarding the
+artifact and re-running init). Against a `decision-table` model the
+verb refuses before any accessor runs — a refusal (exit 2), not a
+no-op success — with a dedicated code in the `flow-*` family (spelling
+sharpened pre-lock); shared refusal classes (model selection, artifact
+binding, writer routing, read-back) reuse the existing `flow-*` codes
+unchanged, and the classes new to this verb get codes recorded in the
+0005:C1 taxonomy extension this override carries.
+```
+
+Exact payload field names, the refusal-code spelling, and help text are
+deliberately deferred to Resolve/Pre-Lock; C1/C2 fix the semantics and
+the carrier, which is the fork this RDR exists to close.
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
+- **Identity** — a seeded value's read-back equality is REQ-107's
+  form: value-for-value over the keys init planned to seed, canonical
+  wire form for set values — the identical equality `set-state`
+  already verifies, not a new one (A2 verifies the rendering path).
+- **Wire / byte format** — none new; artifacts keep
+  `internal/cli/flowbind` shape, and the success payload rides the
+  0005:C1 envelope. Field names deferred to Resolve/Pre-Lock, owned
+  here.
+- **Naming** — `init-state`, completing the `read-state`/`set-state`
+  family. Rejected: `init` (reads as scaffolding a model file, not
+  seeding state), `seed` (outside the `*-state` family the group
+  established), and a `--from-initial` flag on `set-state` (a
+  `set-state` payload echoes the request's planned writes; init's plan
+  comes from the model — one verb with two write-plan sources muddies
+  both grammars and REQ-3's flag list anyway).
+- **Selection / predicate** — per store, not per key: seed (all
+  `[initial]` keys) iff the bound artifact carries no key (the store's
+  own presence answer, `internal/cli/flowbind/flowbind.go::store` —
+  whose writer is any prior committed `set-state`/init write; an
+  empty store means never-written or explicitly emptied, and both
+  read as "initializable" — the ambiguity the premortem's P-7 showed
+  is only safe at whole-store granularity, where a single surviving
+  key blocks seeding); class: refuse iff
+  `internal/table/model.go::IsDecisionTable` — the shipped
+  discriminator (its writer is the loader materializing `[model]
+  class`, `0010:C1`), never a re-derivation from `len(owned)`.
 
 #### Round-Trip / Inverse Invariants
 
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- `read-state ∘ init-state = [initial] on the empty-store class`:
+  after a seeding init over role R, `flow read-state` over R reports
+  every `[initial]` key with its declared value — value-for-value in
+  canonical form, the REQ-107 equality, not merely exit 0.
+- `init-state ∘ init-state = init-state` (idempotence on any store):
+  the second run writes nothing, succeeds, and the artifact bytes are
+  unchanged.
+- Equivalence with the manual path: `init-state` into a fresh
+  artifact and the `set-state --write` transcription of the same
+  `[initial]` assignments into a second fresh artifact produce
+  byte-identical artifacts, for every value kind `[initial]` admits
+  (the A2 spike's table; catches both the hard read-back divergence
+  and the silent canonical-form divergence, premortem P-2/P-3).
+- Cleared-key preservation: `init-state ∘ (set-state --clear k)` on a
+  seeded artifact writes nothing and `read-state` still reports k
+  absent — init never re-establishes a cleared key (REQ-107's reader
+  guarantee stays untouched, and the writer-side hazard the premortem
+  named is closed by the empty-store predicate); re-establishment is
+  explicit `set-state`.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative only:
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
-
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
-
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+```
+intrastate flow init-state --model flow.toml \
+    --artifact state=state.json --as json
+# empty store  → ok payload: every [initial] key seeded
+# non-empty    → ok payload: zero writes; reports [initial] keys
+#                the store does not carry
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Initial assignments in the normalized model | `internal/table/model.go::Model.Initial` (loader-validated, `CatMalformedInitialDeclaration`) | today read by lint only (A1) | Reuse | none — no schema change |
+| Class discrimination | `internal/table/model.go::IsDecisionTable` | none | Reuse | C2's class refusal keys on it |
+| Writer routing | `internal/cli/flow_state.go::writerFor`, `::groupByWriter` | requires exactly one writer per key (A3) | Reuse | init refuses writerless `[initial]` keys unless A3 forces a lint arm |
+| Write + read-back | accessor executor (`accessor.NewExecutor`, `Write`) | no cross-writer atomicity (stated, inherited) | Reuse | C2 inherits `set-state`'s terms verbatim |
+| Request assembly / selection flags | shared `flow` path (`internal/cli/flow_exec.go::buildRequest`) | none | Reuse | new verb registers like the four shipped verbs |
+| Verb surface | `flow` group (0005:C1 closed verb enum) | closed enumeration | Extend | recorded override adding `init-state` (A4) |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+The question, scored (approaches: A lint-only status quo, B implicit
+read-fallback, C opt-in ephemeral flag on `next`/`resolve`, D explicit
+persisting init verb, empty-store predicate). The last criterion row
+was added by the premortem loop: the critic's P-7 showed the
+first-draft per-key variant of D (seed every absent key) resurrects
+cleared keys under unconditional automated re-invocation — the same
+axis that disqualified B — forcing the choice to be re-scored with
+that axis applied to every column, chosen included:
+
+| Criterion | A lint-only | B read-fallback | C flag on read verbs | D init verb (empty-store) |
+| --- | --- | --- | --- | --- |
+| Cleared ≠ unseeded (REQ-107) | holds | breaks — cleared keys silently resurrect on read | ambiguous per invocation | holds — no read path synthesizes |
+| Read purity (0004:C3, never-fill kernel) | intact | broken — a fact no accessor established | broken inside read verbs | intact — write path only |
+| Prior-art alignment | diverges — every peer materializes initial at session start | diverges — no peer read-time fallback | partial — XState's restore fork is at creation, not per read | aligns — explicit whole-snapshot lifecycle step (stateless ctor, `createActor`, SCXML doc start) |
+| First-run wall removed | no | yes | partially — state never persists | yes |
+| Blast radius on decided contracts | none | 0004:C3 + REQ-107 both violated, silently | REQ-3 flag list + 0005:C1's "read verbs MUST NOT run write accessors" | 0005:C1 verb enum: one recorded addition |
+| Key-added-after-seeding case | manual `set-state` | uncontrolled | uncontrolled | decided — explicit `set-state`, guided by init's absent-key report |
+| Reversibility | — | hard: implicitly materialized state everywhere | medium | easy: remove the verb; artifacts stay valid |
+| Cleared-key survival under unconditional automated re-invocation | holds (nothing writes) | fails — every read resurrects | fails — every flagged call resurrects | holds — non-empty store means zero writes, so re-runs cannot resurrect |
+
+The deciding rows are the first two, prior-art alignment, and the
+premortem's added row: B and C lose on contract violations that are
+the seed's own collision analysis (REQ-107 resurrect; 0004:C3
+synthesis; C additionally puts write authority or phantom state inside
+read verbs), and A answers the fork honestly but leaves the user
+outcome unmet while shipping docs (`docs/model-authoring.md`:
+"`[initial]` declares the owned state a model starts from") already
+promise start-state semantics the runtime does not deliver. D under
+the empty-store predicate is the only column that removes the wall,
+survives the automation axis, and leaves every decided clause intact
+except one enumerated, recordable-override addition. The re-pricing is
+honest about D's costs: it pays a new payload shape (the cost the
+`--from-initial` variant was partly rejected for — the rejection
+stands on the two-plan-sources-in-one-verb grammar muddle, not on
+payload count), and it trades the per-key variant's automatic
+schema-evolution reseed for one explicit `set-state`.
+
+Premortem: switched (hardened) — the init-verb approach survived; its
+per-key seeding rule was switched to the empty-store predicate on the
+critic's P-7, and P-2..P-6, P-9..P-12 folded into C2, A2–A5, and
+Failure Modes.
+Ground-sweep: clean (22 anchors)
+Joint-check: clear (12 peers) — context beside the verdict: 0021
+mentions `[initial]` solely in its lint-root role (the reachability
+relation lint already computes), which C1 leaves unchanged; 0016's
+read-back and 0023's `set-state` mentions are closed-0004/0005
+vocabulary (reader cardinality and the four-verb list), not this RDR's
+initialization decision. Absence arm vacuous: no open peer is `Final`,
+and every closed record is `Implemented` (outside the peer set); the
+refusal this RDR converts (unconsumed `Model.Initial` at runtime) is
+relied on by no peer text found.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Lint-only — keep the status quo and document it
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Answer the fork with "`[initial]` is a reachability
+declaration only"; the first run stays a manual `set-state`
+transcription of `[initial]`, and docs stop implying start-state
+semantics.
 
 **Pros**:
 
-- [Advantage 1]
+- Zero contract motion: REQ-3, 0005:C1, 0004:C3, REQ-107 all untouched.
+- The kernel's never-fill property needs no new argument.
 
 **Cons**:
 
-- [Disadvantage 1]
+- The user outcome (remove the first-run wall) is unmet; every
+  state-machine flow's first run stays a hand-typed duplication of data
+  the model declares, with transcription drift as the failure mode.
+- Diverges from all read prior art — every peer engine materializes the
+  declared initial state via some explicit runtime step — and from the
+  project's own authoring docs.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: it decides the fork by forfeiting the
+problem; acceptable only if every materializing carrier were
+contract-breaking, and D is not.
+
+### Alternative 2: Implicit read-fallback
+
+**Description**: An absent artifact (or absent key) reads as its
+`[initial]` value inside the read path.
+
+**Pros**:
+
+- No new surface at all; first run just works.
+
+**Cons**:
+
+- A cleared owned tag silently resurrects — "cleared" and "unseeded"
+  become indistinguishable, inverting REQ-107's read-back guarantee.
+- A synthesized value is a fact no accessor established — 0004:C3's
+  ambient-discovery ban in spirit and letter.
+- No peer engine does read-time fallback; the restored-vs-initial fork
+  is uniformly decided once, at session start.
+
+**Reason for rejection**: breaks two decided contracts silently; the
+worst reversibility of the four (implicitly materialized state
+everywhere, no record of which values were real).
+
+### Alternative 3: Opt-in flag on `next`/`resolve`
+
+**Description**: e.g. `--assume-initial`: the read verbs treat absent
+owned keys as holding `[initial]` values for this invocation
+(ephemeral), or persist them (write-through).
+
+**Pros**:
+
+- One flag, no verb-surface change; the caller controls when it
+  applies.
+
+**Cons**:
+
+- Ephemeral form: the plan is computed over state that does not exist —
+  a following `set-state` read-back and every parallel reader see
+  different facts, and the cleared-vs-unseeded ambiguity recurs on
+  every invocation that passes the flag.
+- Persisting form: read verbs gain write authority, directly against
+  0005:C1 ("MUST NOT run write accessors" for `next`/`resolve`).
+- Either form extends REQ-3's closed flag list on two verbs rather
+  than the verb enumeration once.
+
+**Reason for rejection**: both variants trade a one-time explicit act
+for a per-invocation semantic mode inside verbs whose purity is a
+decided property.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Per-key absent-only seeding (the first-draft variant of the chosen
+  verb)**: a write predicate of "key is absent" is the very observable
+  a clear produces, so an automated re-run resurrects cleared keys —
+  the premortem's P-7 showed this is the read-fallback rejection
+  reason relocated, and its re-run recovery story silently skips a
+  present-and-wrong key after a read-back mismatch (P-10).
+- **Cleared-key tombstones in the artifact**: would let per-key
+  seeding distinguish cleared from never-set, but changes the artifact
+  wire format every reader and RDR 0004's read-back comparison touch —
+  a cross-verb blast radius out of proportion to a first-run verb.
+- **`--from-initial` flag on `set-state`**: one verb with two
+  write-plan sources (request vs model) muddies the payload's
+  writes-echo-the-request grammar; see Load-Bearing Decisions
+  (Naming).
+- **Seed at artifact creation by an external tool/wrapper**: pushes the
+  contract outside the CLI where lint and read-back cannot see it —
+  ambient by construction.
+- **Auto-init on first `set-state`**: makes an unrelated write
+  implicitly materialize every `[initial]` key — implicit again, just
+  relocated.
 
 ## Context
 
@@ -402,100 +590,178 @@ REQ-107), RDR 0006 (A6, C18), RDR 0010 (model-class split).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Prior art was read before enumeration (evidence:
+`evidence/research/prior-art.md` — queries, accepted citations,
+rejected branches). The class read is uniform: a declared initial
+state is materialized by an explicit lifecycle step at session start,
+never a read-time fallback. Instance reads: qmuntal/stateless
+(`repos/qmuntal-stateless/statemachine.go`, `state-machines` checkout)
+takes the initial state as an explicit constructor argument —
+`func NewStateMachine(initialState State) *StateMachine` — and its
+external-storage form hands current-state supply to an explicit
+accessor, never a library fallback; XState v5
+(`repos/xstate/packages/core/src/createActor.ts`,
+`this._initState(options?.snapshot ?? options?.state)`) decides
+restored-vs-initial once at actor creation ⇒ "cleared" vs "unseeded"
+is resolved by which explicit path the caller invoked, the exact
+distinction option B destroys; SCXML (`repos/scxmlcc/doc/user-manual.md`,
+`<scxml initial="hello" ...>`) enters the initial configuration at
+document start. On the code side, the shaping constraints are the
+shipped write path (`internal/cli/flow_state.go::runFlowSetState` —
+writer routing, read-back as the only commit check) and
+`internal/cli/flowbind/flowbind.go::load`'s absent-file-is-empty rule,
+whose stated purpose is making the first write possible ⇒ the
+first-run seam was already designed to be crossed by a *write*, and D
+is that write with the model as its plan source.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — no `internal/cli` runtime code reads
+  `Model.Initial`; the only non-lint consumers are tests
+  (`lint_gate_0006_test.go`, `mvv_0010_test.go`). The fork is genuinely
+  undecided in code, not decided-by-accident.
+- **Documented** — peer engines uniformly make initialization an
+  explicit session-start act (citations above); none defaults absent
+  persisted state on read.
+- **Documented** — `docs/model-authoring.md` already tells authors
+  "`[initial]` declares the owned state a model starts from": the
+  user-facing framing is bootstrap semantics, so option A would owe a
+  doc retraction, not just a no-op.
+- **Documented** — lint already class-keys the root arm
+  (`internal/graphlint/analysis.go::checkDanglingEdge` augments
+  `len(Initial)` with `!table.IsDecisionTable`), and
+  `checkAlwaysPresentOwned` enforces that `[initial]` establishes every
+  always-present owned key — so for the always-present subset, seeding
+  from `[initial]` is guaranteed complete by certification.
+- **Assumed** — canonical-form fidelity of model-sourced values through
+  the set-state write path (A2) and writer coverage of `[initial]` keys
+  (A3) need Resolve verification before the reuse claim is load-bearing.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: the first run of a state-machine flow becomes one explicit
+  command; `[initial]` values are never hand-transcribed, so seed drift
+  disappears.
+- Positive: every read path keeps its purity argument unchanged —
+  reviewers of `next`/`resolve` never need to reason about
+  initialization.
+- Negative: the `flow` verb surface grows by one, via a recorded
+  override of a Final peer's closed enumeration (A4) — precedent-setting
+  for how 0005's surface evolves.
+- Negative: first-run UX is two commands (init, then work) where option
+  B/C would have been zero/one — the explicitness is bought with a step.
+- Negative: init helps exactly once per artifact (empty-store
+  predicate); a key added to `[initial]` after seeding is a manual
+  `set-state` — the disclosed price of cleared-key safety under
+  automated re-invocation.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: a lint-certified model whose `[initial]` names a writerless
+  (or multi-writer) key makes init refuse, re-creating the wall it
+  exists to remove (A3, premortem P-4).
+  **Mitigation**: C2's plan-level validation guarantees the refusal
+  lands with zero writes committed; Resolve verifies writer coverage,
+  and if uncovered the clause gains a companion lint arm (writer
+  existence-and-uniqueness for `[initial]` keys joins certification)
+  rather than a direct-write bypass.
+- **Risk**: operators read init as "reset to initial".
+  **Mitigation**: the empty-store predicate makes init structurally
+  incapable of touching existing state; reset stays `set-state`'s job.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- **Visible**: init on a decision-table model refuses with the C2 class
+  code before any accessor runs; a writerless or multi-writer
+  `[initial]` key refuses at plan validation with zero writes
+  committed; read-back disagreement is a terminal refusal naming the
+  key present-and-unverified at exit 2; incomplete read-back exits 3
+  with the write possibly applied (inherited `set-state` semantics).
+- **Torn (multi-writer)**: no cross-writer atomicity — a failed writer
+  can leave the artifact seeded for some keys only. The store is then
+  non-empty, so a re-run is a NO-OP whose payload lists the missing
+  `[initial]` keys (visible, premortem P-10's silent-skip hazard
+  designed out) — but it does NOT repair them: recovery is explicit
+  `set-state` of the listed keys, or discarding the artifact and
+  re-running init. The same holds for a present-and-wrong key after a
+  read-back mismatch: no re-run ever overwrites it, and no payload ever
+  calls it correct.
+- **Scope gap (disclosed)**: init's claim covers exactly the
+  `[initial]` key set (C2); an owned key `[initial]` does not assign
+  can still surface `unknown[].reason: absent` in `flow next` after a
+  successful init (premortem P-9). The payload's fixed scope plus
+  `flow next`'s own unknown report are the diagnosis surface; the cure
+  is authoring the key into `[initial]` (lint's
+  `checkAlwaysPresentOwned` already forces exactly that for
+  always-present keys).
+- **Residual wall (accepted, explicit)**: a key added to `[initial]`
+  after seeding is not materialized by any automatic path — one
+  explicit `set-state`, guided by init's absent-key report. Accepted
+  as the price of cleared-key safety under automation.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A2's canonical-form spike and
+      A3's writer-coverage audit gate the design's reuse claim)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+Over a fixture state-machine model declaring `[initial]` with one
+always-present owned key and one plain owned key, both writer-served:
+
+1. `flow lint` certifies the model (0006 arms all green).
+2. `flow init-state --artifact state=<fresh path>` exits 0; payload
+   reports the empty-store seeding arm with both keys seeded.
+3. `flow read-state` reports both keys at their `[initial]` values
+   (canonical form) — round-trip invariant 1.
+4. `flow next` over the same artifact reports candidates with no
+   `unknown[].reason: absent` entry for either key — the first-run wall
+   is gone.
+5. Re-run `flow init-state`: exit 0, zero writes, artifact bytes
+   unchanged — invariant 2.
+6. `flow set-state --clear <plain key>`; `flow read-state` reports it
+   absent — REQ-107 held.
+7. `flow init-state` again (the unconditional-automation pattern):
+   exit 0, ZERO writes, payload reports the cleared key as an absent
+   `[initial]` key, `flow read-state` still reports it absent —
+   invariant 4 / A5.
+8. `flow init-state` against a decision-table model refuses (exit 2)
+   with the C2 class code; against the fixture with an unbound artifact
+   role it refuses in the existing artifact-binding family with zero
+   writes committed.
 
 ### Phase 1: Code Implementation
 
-#### Step 1: [Title]
+#### Step 1: Verb skeleton
 
-[Conditional scaffold]
+`newFlowInitStateCmd` beside the four shipped verbs in `internal/cli`:
+shared selection/tag/artifact registration, `ValidateMode`/respond
+gateway, class refusal via `table.IsDecisionTable` before any accessor.
 
-[Instructions]
+#### Step 2: Predicate and plan
 
-#### Step 2: [Title]
+Read the bound store; non-empty → the no-op arm (report absent
+`[initial]` keys, write nothing). Empty → plan every `[initial]`
+assignment and validate the WHOLE plan (`writerFor` per key, artifact
+roles bound) before any accessor runs.
 
-[Conditional scaffold]
+#### Step 3: Apply and report
 
-[Instructions]
+Execute per writer with read-back (the `runFlowSetState` execution
+shape); assemble the payload distinguishing the seeded arm from the
+no-op arm.
 
 ### Phase 2: Operational Activation
 
-[Conditional scaffold]
+#### Activation Step 1: Contract and reference docs
 
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+`docs/cli-output-contract.md` (verb I/O, refusal codes),
+`docs/cli-reference.md`, `docs/model-authoring.md` (the start-state
+sentence gains its runtime carrier), `--help-all` text.
 
 ## Validation
 
