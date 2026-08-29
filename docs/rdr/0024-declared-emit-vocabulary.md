@@ -457,16 +457,26 @@ are model-authored.
     site at HEAD (`internal/table/load.go:214`, in `loadTags`, fed by
     `tagHeaderLine(l.src, key)`), so without an analogue every emit
     refusal renders line 0/1 and the Failure Modes' "offending file in
-    `locator`" is false. What is NOT established is that the same
-    technique reaches an emit declaration: `tagHeaderLine`'s method of
-    locating a `[tags.<key>]` header in `l.src` has not been read, and
-    a rule's `[rule.emit]` block is nested one level deeper than a
-    top-level declaration table, so the rule-scoped locator may need a
-    different anchor than the declaration-scoped one.
+    `locator`" is false. **The two legs now separate, and only the
+    first is closed.** `tagHeaderLine(src []byte, key string) int`
+    (`internal/table/load.go:181`) splits the source into lines, strips
+    trailing `#` comments and whitespace, and exact-matches the literal
+    bracketed header (bare or TOML-quoted), returning 0 unless exactly
+    one line matches. Nothing in it special-cases `[tags.*]`, so the
+    DECLARATION leg reaches `[emit.<key>]` unchanged — the technique is
+    generic over the header text. The RULE-SIDE leg does NOT: the
+    function matches top-level headers per line and carries no nesting
+    or indentation logic, so a rule's `[rule.emit]` block needs a
+    different anchor, which has not been written or read. That leg is
+    what keeps this Pending, and C2 now makes both lines normative
+    rather than a Phase 1 aspiration. Verify at implementation by
+    writing the rule-side locator and asserting a nonzero line in the
+    MVV's step 2.
   - **If wrong**: the locator promise narrows to whatever is
-    recoverable (declaration-level only, or file-level), and the
-    Failure Modes and MVV step 2 say so instead of promising a line;
-    surfaces as a refusal pointing at `:1` in the MVV.
+    recoverable (declaration-level only, or file-level), and C2's
+    all-three-categories clause, the Failure Modes, and MVV step 2 say
+    so instead of promising a line; surfaces as a refusal pointing at
+    `:1` in the MVV.
 
 ## Proposed Solution
 
@@ -529,19 +539,31 @@ surface (grammar, proof, carry, envelope), not four independent seams.
 ```normative
 GRAMMAR. A model MAY declare its emit vocabulary in a top-level
 `[emit]` TOML table, one sub-table per emit key: `[emit.<key>]`.
-Each declaration carries:
+**The opt-in trigger is the COUNT of declared keys, never the
+presence of the `[emit]` table** (a bare table with zero sub-tables is
+a zero-declaration model; the tail of this contract gives the
+reasoning). Each declaration carries:
 
 - `kind` (required): one of `enum | bool | int | scalar` — RDR 0003's
   token spellings reused verbatim (`internal/table/model.go::
   declaredKinds` is the adjacent vocabulary; `set` is excluded because
   an emit value is one authored string, `0010:C3`).
-- a domain, `enum` only, in exactly one of two forms:
+- a domain, `enum` only, authored in either of two TOML spellings of
+  the SAME `domain` key:
   - `domain = [ ... ]` — a flat member array, no dispositions; or
   - `[emit.<key>.domain]` — a sub-table whose keys are MODEL-AUTHORED
     disposition tokens (e.g. `route`, `stop`, `terminal` — intrastate
     fixes no vocabulary) and whose values are member arrays. The
     key's domain is the union; each member carries the one disposition
     it is listed under.
+
+  **These are two spellings of one key, not two coexisting fields, so
+  "both present" is not a refusal arm this contract owns** — authoring
+  both is a duplicate-key error the TOML decoder raises before any
+  check here runs. An implementer must not add a hand-written arm for
+  it, for the same reason the no-usable-domain ruling below collapses
+  three authorings into one arm: the grammar refuses what is
+  reachable, never what the decoder already caught.
 - `bool` fixes the implicit domain `true | false`; `int` constrains
   the value to a base-10 integer literal; `scalar` is the
   declared-but-unvalidated escape hatch — the key is admitted, the
@@ -563,10 +585,15 @@ rules by construction, which is the point of the reuse — emit values
 are answers and are never compared against the domain at evaluation.
 
 Because `domain` is two-shaped, its decoded field is the ONE place in
-the source schema that cannot be concretely typed, so
-`DisallowUnknownFields` stops descending at it — the same carve-out
-`internal/table/source.go`'s `sourceModel.Metadata` documents ("a
-free-form map so strict decoding descends no further"). Strictness
+the source schema that cannot be concretely typed: it is declared
+**`any`** on the source-schema struct, mirroring
+`internal/table/source.go`'s `sourceModel.Metadata` ("a free-form map
+so strict decoding descends no further"). **The carve-out is that
+field type, NOT a decoder option** — `pelletier/go-toml/v2` has no
+per-subtree strictness switch, and `DisallowUnknownFields` stays set
+for the whole document; it simply has no typed fields to check once it
+reaches an `any`. An implementer who reads this as a decoder setting
+to toggle will look for an API that does not exist. Strictness
 still catches a typo at the DECLARATION level (`domaim = [...]`
 refuses), but inside the domain sub-table the decoder catches
 nothing, so this contract must refuse by hand what strictness gives
@@ -652,7 +679,19 @@ carrier) then `checkRuleEmit` (this contract's two cross-checks over
 every `sourceRule.Emit`). `loadEmitDecls` MUST precede
 `checkRuleEmit` — the cross-check reads the carrier the first step
 builds — and both are inserted immediately after `loadTags` in
-`load.go::run`'s step slice. The five steps between `loadTags` and
+`load.go::run`'s step slice. **Both are methods on `*loader` taking no
+arguments and returning `error`** — `func (l *loader) loadEmitDecls()
+error` and `func (l *loader) checkRuleEmit() error` — because that
+slice is `[]func() error` holding BOUND METHOD VALUES
+(`l.loadModelHeader, l.loadOutcomes, l.loadTags, …`), the shape
+`loadTags` already has. A free function taking the source document or
+the model is not insertable there without a wrapper, and the loader
+already carries the source (`l.src`), the decoded document, and the
+model under construction, so no parameter is needed. **The
+zero-declaration opt-in gate is evaluated INSIDE each step**, not by
+the caller: the step slice is uniform and has no room for a
+conditional call, so both steps run unconditionally and return `nil`
+early when no key is declared. The five steps between `loadTags` and
 `normalizeRules` (`loadAccessors`, `loadDump`, `loadContexts`,
 `loadInitial`, `loadTerminal`) are independent of both: emit
 declarations bind no accessor, no dump column, and no state, so no
@@ -671,6 +710,25 @@ The refusals:
 - `emit_value_out_of_domain` — an authored value that is not a member
   of its key's declared enum domain, not a `bool` token, or not an
   `int` literal, per C1's kinds (`scalar` values are never refused).
+
+**All three categories MUST carry a source line**, stamped through
+`internal/table/category.go::atLine` the way `loadTags` stamps a tag
+refusal. This is normative here rather than an implementation detail
+because the Failure Modes' "offending file in `locator`" and the MVV's
+"each carrying the offending block's SOURCE LINE, not `:1`" both rest
+on it, and `atLine` is wired at exactly ONE loader site at HEAD
+(`load.go`'s `loadTags`, fed by `tagHeaderLine(l.src, key)`) — so
+without an analogue every emit refusal renders line 0/1 and both
+promises are false. **Two keying strategies are required, not one**:
+a declaration defect keys on the top-level `[emit.<key>]` header,
+which `tagHeaderLine`'s technique reaches unchanged (it scans lines
+for a literal bracketed header, comment-stripped, and is generic over
+the header text); a rule-side defect (`unknown_emit_key`,
+`emit_value_out_of_domain`) keys on the offending rule's `[rule.emit]`
+block, which that technique does NOT reach — it matches top-level
+headers only and carries no nesting logic. Whether that is one helper
+taking the header text or two is an implementation choice; recovering
+BOTH lines is not. A9 carries the rule-side leg as Pending.
 
 These two categories and C1's `malformed_emit_declaration` join
 `0002:C24`'s data-level set (that list is "at minimum", and
@@ -776,9 +834,21 @@ the same declaration the author wrote"). The carried form is a new
 model-level type, deliberately NOT `TagDecl` (the mirror of
 `EmitValue` not being `TagValue`, `0010:C3`). It is carried at
 `Model.EmitDecls map[string]EmitDecl`, keyed by emit key — the
-sibling of `Model.Tags map[string]TagDecl` — and `EmitDecl` carries
-`Kind string`, `Domain []string`, and
-`Dispositions map[string]string` (member → its disposition token).
+sibling of `Model.Tags map[string]TagDecl`. `EmitDecl` is an exported
+struct with exactly three exported fields: `Kind string` (one of
+`enum | bool | int | scalar`), `Domain []string` (enum only; the
+bytewise-sorted union; `nil` for every other kind), and
+`Dispositions map[string]string` (member → its disposition token;
+`nil` when the domain carries none).
+
+**`Model.EmitDecls` is always non-nil after a successful load** —
+empty for a zero-declaration model, never `nil` — matching the
+`Model.Tags` convention it is the sibling of, where `loadTags` assigns
+a `make`'d map unconditionally on the success path. `Domain` is `nil`
+(not an empty non-nil slice) for `bool`, `int`, and `scalar`, since
+none of them takes a domain; the distinction is observable because
+scenario 4 asserts value-equality on the carrier, where `nil` and
+`[]string{}` do not compare equal.
 
 **The carry is value-preserving, not order-preserving, and the
 member list is SORTED.** C1 takes the partitioned domain as a union,
@@ -799,18 +869,21 @@ order of a flat-array domain is NOT preserved either, and nothing
 downstream reads it (C4 joins by member, and the payload's own keys
 are byte-ordered).
 
-**Value conformance reuses `ConformValue` at the call site, without
-the carrier being a `TagDecl`.** `internal/table/load.go::
-ConformValue(decl TagDecl, member string) error` reads only `Kind`,
-`Domain`, `Min`, `Max`, and `Elements`, and its own doc fixes that
-"a zero `TagDecl` conforms everything" (A4). So the check constructs
-a throwaway `TagDecl{Kind: d.Kind, Domain: d.Domain}` per call and
-passes it; `Min`/`Max`/`Elements` stay nil, so the `int` arm's bounds
-and the `set` arm never fire. A4's reuse and this contract's
-non-`TagDecl` carrier are therefore not in tension: the prohibition
-is on the CARRIED model type, the signature is a call-site argument,
-and the adapter between them is this one struct literal — no
-extraction, no new exported helper.
+**Value conformance is performed by constructing a throwaway
+`TagDecl{Kind: d.Kind, Domain: d.Domain}` per call and passing it to
+`internal/table/load.go::ConformValue(decl TagDecl, member string)
+error`.** That struct literal IS the adapter — no extraction, no new
+exported helper. `ConformValue` reads only `Kind`, `Domain`, `Min`,
+`Max`, and `Elements`; `Min`/`Max`/`Elements` stay nil, so the `int`
+arm's bounds and the `set` arm never fire. **A `scalar`-kinded key is
+short-circuited BEFORE the call** rather than relying on
+`conformKind`'s fall-through: C1 fixes that `scalar` values are never
+refused, and an explicit skip states that in the code instead of
+inheriting it from the absence of a switch arm — the same reason the
+next paragraph refuses to treat fall-through as a defensive default.
+A4's reuse and this contract's non-`TagDecl` carrier are not in
+tension: the prohibition is on the CARRIED model type, the signature
+is a call-site argument.
 
 **The reuse is safe-by-omission, so C2's value refusal DEPENDS on
 C1's arms having already fired.** `ConformValue` refuses only what a
@@ -843,7 +916,14 @@ JSON object mapping emit key → the disposition token the declaration
 assigns the selected row's authored value, keys in byte order,
 present as `{}` — never `null`, never omitted — when no selected
 value carries one (undeclared model, non-enum kind, flat-array
-domain, or empty emit block alike).
+domain, or empty emit block alike). The field is
+`Dispositions map[string]string` with tag `json:"dispositions"` and no
+`omitempty`. **Byte order is the marshaller's, not the join's**:
+`encoding/json` sorts map keys on marshal, so the join performs no
+sort and the carried value is an ordinary unordered Go map — unlike
+C3's `Domain`, which is a real slice carrying a real sort. An
+implementer must not add a sort over this map; there is nothing there
+to order.
 
 **The map is keyed off the SELECTED ROW's authored emit, never off
 the declaration set.** An entry exists for key `k` exactly when the
@@ -861,7 +941,14 @@ position in `internal/cli/flow_resolve.go::resolvePayload`,
 immediately after `emit` — the same additive insertion `0010:C4`
 used (`emit` after `Gates`), for the same reason: struct declaration
 order is the emitted field order and the repo asserts payload JSON
-inline. **`omitempty` is available on this field and is deliberately
+inline. **The join itself is performed in `internal/cli`, reading
+`Model.EmitDecls`; `internal/table` gains no payload-shaped helper.**
+Whether `internal/cli` factors it into an unexported function or
+builds it inline is free, but the package boundary is not: a method on
+`*Model` returning the payload's map would shape the table package's
+API around the CLI's wire format, inverting the direction C3 fixes
+when it names C4's join the single reader OF the carry. `internal/table`
+owns the declaration; `internal/cli` owns the envelope. **`omitempty` is available on this field and is deliberately
 not taken**, though it would spare the golden diff on every
 undeclared model: `emit` itself is never-omitted for `0010:C4`'s
 reason, and a field that disappears when empty makes absence and
@@ -885,6 +972,14 @@ OWN authored values — the same single `Plan.RuleID` join path as
 payload unjoined: there is no default-row or merge path for emit in
 this model family. `flow next` carries no `dispositions`, for
 `0010:C4`'s reason: the answer is what `resolve` selects.
+
+The insertion takes `resolvePayload` from fourteen struct fields to
+**fifteen** and the wire from thirteen keys to **fourteen**, with
+`dispositions` at index 9 (`escape_class` is `omitempty` and absent on
+a non-escaped plan). Both values are normative fixtures; Testing
+Strategy scenario 5 carries the full key list and is where an
+implementer reads them off, and A2 enumerates the assertion sites that
+must be amended to match.
 ```
 
 #### Load-Bearing Decisions
@@ -940,12 +1035,13 @@ control.
 | Non-string TOML emit value (`verdict = 42`) | nonzero | `malformed_toml` from the decoder, unchanged by this RDR | none | loud |
 | Declaration-level key typo (`domaim = [...]`) | nonzero | `unknown_schema_field` from `decodeStrict`, NOT one of this RDR's three categories | none | loud |
 | Malformed shape INSIDE `domain` (non-array disposition, nesting below disposition level) | nonzero | `malformed_emit_declaration` from C1's hand-written arms — strictness stops descending at `domain`, so the decoder catches none of these | none | loud |
+| Both `domain = [...]` and `[emit.<key>.domain]` authored | nonzero | TOML duplicate-key error from the decoder — NOT a C1 arm (they are two spellings of one key) | none | loud |
 
 `fidelity` — C3's carry, operation × invariant:
 
 | Operation | Invariant | Lossy exemptions |
 | --- | --- | --- |
-| Source `[emit.<key>]` → normalized declaration carrier | value-equality on key, kind, domain membership, and each member's disposition (`0002:C22`'s clause, mirrored); determinism across loads proven by scenario 4 ALONE — `TestReq146` is scoped to `table.Row` and cannot reach this carrier (A8, Refuted) | authored ORDER is not carried — the domain is a bytewise-sorted union (C3); the partition grouping is recoverable from the member→disposition map, not stored separately |
+| Source `[emit.<key>]` → normalized declaration carrier | value-equality on key, kind, domain membership, and each member's disposition (`0002:C22`'s clause, mirrored); determinism across loads proven by scenario 4 ALONE — `TestReq146` is scoped to `table.Row` and cannot reach this carrier (A8, Refuted); `EmitDecls` non-nil after any successful load, `Domain` nil for non-enum kinds (C3) | authored ORDER is not carried — the domain is a bytewise-sorted union (C3); the partition grouping is recoverable from the member→disposition map, not stored separately |
 | Rule `[rule.emit]` → normalized `Emit` → payload `emit` | byte-equality on the authored string (`0010:C3`, "never mutated after normalization") | none |
 | Declaration + selected row → payload `dispositions` | each entry is the token the declaration lists that member under, verbatim | members with no disposition (flat domain, non-enum kind) contribute no entry — `{}`, never `null` |
 | Normalized model → kernel / dump | declarations are carried by neither | intentional: the kernel sees no emit (`0010:C3`) |
