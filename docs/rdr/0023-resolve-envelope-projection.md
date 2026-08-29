@@ -267,6 +267,24 @@ this RDR gives only the first.
     Caveat carried to implementation: `decision_table_0010_test.go`
     pins `resolvePayload` at exactly 14 struct fields — the A2
     mechanism keeps the count (pointer conversion adds no field).
+
+    Type-inspection sweep, run at reconcile (2026-08-29) because the
+    stamp above covers field COUNT and wire KEYS while A2's mechanism
+    changes field TYPES, and the two are not the same audit: the
+    repo's ONLY `reflect.TypeOf(resolvePayload{})` site is
+    `decision_table_0010_test.go::TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire`,
+    which asserts `NumField`, `FieldByName` existence, and
+    `Emit`/`Gates` adjacency — count, name and position, never
+    `.Type`, `.Kind()` or `.Tag`. The conversion preserves all three,
+    so it passes verbatim. No shipped test reads `resolvePayload`
+    struct tags, decodes into the struct, or constructs a payload
+    literal (`flow_resolve.go`'s keyed composite literal is the sole
+    construction site repo-wide), and the type-assertion sites in
+    `flow_resolve_0005_test.go` operate on decoded JSON `any` values,
+    not on the Go struct. The `.Kind()`/tag tests that do ship are
+    over `table.Row`/`table.TagValue` (`internal/table/`) and
+    `clierr.CLIError`/`Finding` — different types. A3 therefore holds
+    under the pointer conversion as written, unqualified.
   - **If wrong**: the change stops being additive — moved predecessor
     oracles are the "editing a predecessor's surface" cost this RDR
     claims to avoid.
@@ -316,8 +334,8 @@ this RDR gives only the first.
   general claim that no name is registered twice across the tree is
   FALSE (`help --all`), which is why C1 mandates a total walker rather
   than reuse of an existing partial one.**
-  - **Status**: Pending
-  - **Method**: Source Search
+  - **Status**: Verified
+  - **Method**: Source Search + Spike
   - **Evidence**: the collision half is VERIFIED — the `--all` probes
     are exact-name `Lookup("all")`
     (`internal/cli/flow_all_0011_test.go`, three probe sites), so a
@@ -341,20 +359,48 @@ this RDR gives only the first.
     which today's 0011 oracle misses precisely because it descends the
     `flow` group only. `plan-only` is unaffected (different name), but
     the whole-tree idiom C1 mandates has no shipped exemplar.
-  - **Verification plan**: write the total walker (no name-skip, no
-    `Hidden` gate) against the real root and confirm it enumerates
-    `help` and `completion`; assert the `plan-only` registrant set is
-    exactly `{flow resolve}` under it. Method: Spike, at implementation
-    Phase 2 — C1/S4 now fix the scope it must cover. Scope correction
-    (3amigo, 2026-08-29): a bare `NewRootCmd()` tree does NOT contain
-    `completion` — probed, its children are `docs`, `flow`, `help`,
-    `lint`, `version`, and `help` is present only because
-    `help_all.go` force-inits it; cobra creates `completion` in
-    `InitDefaultCompletionCmd` from `ExecuteC`. So the spike must
-    materialize both auto-generated commands via cobra's own
-    initializers before walking and assert they are IN the walked
-    set, else it verifies a walker over a tree lacking the command
-    class the clause exists to cover.
+
+    The IMPLEMENTABILITY half is now VERIFIED by spike, run at
+    reconcile (`evidence/spikes/a5-total-walker.md`) rather than
+    deferred, because C1 states the whole-tree scope as a MUST and
+    the clause's own escape hatch ("if that spike cannot reach this
+    scope, C1's structural negative needs its own form") is a
+    pre-lock branch, not a post-lock one. Result: the total walker —
+    no name-skip, no `Hidden` gate — is writable in a handful of
+    lines against the real `NewRootCmd()` and enumerates **15**
+    commands including `help`, `completion`, and all four
+    `completion` shell children, proving the recursion is total and
+    not one level deep. The `plan-only` registrant assertion is
+    expressible under it and evaluates to the empty set today, the
+    correct pre-implementation reading. The crux the cove sweep left
+    open — whether the tree UNDER TEST can carry the auto-generated
+    commands at all — resolves cleanly: both cobra initializers are
+    EXPORTED and callable directly from a test
+    (`github.com/spf13/cobra@v1.10.2::(*Command).InitDefaultCompletionCmd`,
+    which `ExecuteC` merely calls, and
+    `::(*Command).InitDefaultHelpCmd`), so no fork or unexported
+    access is needed, and `InitDefaultCompletionCmd`'s removal branch
+    cannot fire here because `NewRootCmd` adds four real
+    subcommands. The contrast run, over the SAME materialized root,
+    records why the reuse prohibition is load-bearing rather than
+    stylistic: `internal/cli/help_all.go::walkCommandTree` reaches
+    only **9** of the 15, dropping the entire `completion` subtree —
+    the six commands a total sweep exists to cover.
+
+    Anchor correction from the same run: the repo's help force-init
+    is `internal/cli/help_all.go::registerHelpAllOnTree` (which calls
+    cobra's `InitDefaultHelpCmd` to wire `--all` onto `help`); the
+    3amigo note naming `help_all.go::InitDefaultHelpCmd` cited the
+    cobra method as though it were a repo symbol. The bare-root probe
+    confirms the behavior that note described — `NewRootCmd()`'s
+    children are `docs`, `flow`, `help`, `lint`, `version`, with no
+    `completion` until the initializer runs.
+  - **Carried to implementation** (verification done, construction
+    remains): Phase 2 writes this walker as the shipped S4 oracle,
+    with both preconditions asserted — the auto-generated commands
+    materialized via cobra's own initializers, and `completion`
+    present in the walked set. The spike proves the oracle is
+    writable to C1's scope; it does not substitute for shipping it.
   - **If wrong**: C1's whole-tree structural negative cannot be pinned
     in the house idiom and needs its own form.
 - **A6 A refusal path carries nothing to project: `respond.Fail`
@@ -407,21 +453,34 @@ this RDR gives only the first.
   same unit as JSON: the projected `--as=text` rendering is strictly
   fewer total bytes than the default rendering of the same request,
   not merely a line subset.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: not yet measured. A2 established text-mode
-    DETERMINISM only (10 runs, one sha256,
-    `evidence/spikes/a2-encoder-mechanism.md` §Text-mode determinism);
-    the desk trace's "default 15 lines → projected 9" is a LINE count,
-    and no artifact records text byte widths. The claim is very likely
-    true — the six dropped lines (`model`, `observed.region`,
-    `observed.tier`, `outcome`, `owned`, `readers`) carry non-empty
-    content — but C1 now asserts it as a MUST in both modes, so it is
-    booked rather than assumed.
-  - **Verification plan**: measure total rendered bytes of
-    `--as=text` ± the flag on the pricing 2×2 call and on one
-    gate/write-heavy shape; record both in the A1 table's unit.
-    Method: Spike, at implementation Phase 2 alongside the S5 oracle.
+  - **Evidence**: text byte table measured at reconcile
+    (`evidence/spikes/a8-text-width.md`), on the same three shapes
+    A1 measured in JSON and in the same unit (total rendered bytes,
+    trailing newlines included): pricing 2×2 267→130 B (51.3%);
+    release ship-clean 338→154 B (54.4%); release begin 368→207 B
+    (43.7%). Strictly fewer total bytes on every shape, so C1's
+    both-modes width clause is satisfiable as written. The text
+    reduction slightly EXCEEDS the JSON reduction on each shape
+    (42.2–51.3%, A1) because `respond/text.go::flatten` prices each
+    echo leaf at its own full path plus a newline where JSON
+    amortizes the container over its members. `--plan-only` is not
+    implemented, so the projected rendering is derived by deleting
+    the echo-keyed lines from the shipped default; the filter rule
+    is recorded in the artifact. A2's text-mode DETERMINISM result
+    (10 runs, one sha256,
+    `evidence/spikes/a2-encoder-mechanism.md` §Text-mode determinism)
+    is unchanged and complementary — determinism is not width.
+
+    Subset corollary, measured in the same pass: on all three shapes
+    a line-diff of default against projected reports deletions only
+    and zero additions, and every projected line matches a default
+    line byte-for-byte. This is STRONGER than S5 asserts —
+    the projected rendering is in fact an order-preserving
+    subsequence — and S5's weaker set-membership form is deliberately
+    retained, since no clause requires the wire's declaration order
+    and text's sorted order to agree.
   - **If wrong**: C1's both-modes width clause is unsatisfiable as
     written and the clause narrows to JSON, leaving S5's subset
     assertion as text mode's only width guard.
@@ -433,28 +492,70 @@ this RDR gives only the first.
   writer renders `"readers":null` (or `"owned":null`) under
   `omitempty`, silently changing DEFAULT-mode bytes for callers who
   never opted in.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: the four container writers all allocate
-    unconditionally — `tagMap` and `observedTagMap`
-    (`internal/cli/flow_exec.go`), `emitMap`
-    (`internal/cli/flow_resolve.go`) and `readerIDs`
-    (`internal/cli/flow_next.go`) each open with `make(...)` — so no
-    shipped path produces a nil container today and the claim's
-    premise holds on `main`. What is NOT established is that the
-    property is contracted or guarded: only `emitMap`'s is deliberate
-    (`0010:C4`'s never-`null` clause), the rest are incidental, and
-    the critique lens verified by execution that a pointer to a nil
-    slice does render `null` under `omitempty`. The gap is that A2's
-    spike proved byte identity on POPULATED reference values, which
-    cannot exercise the nil arm.
-  - **Verification plan**: enumerate every assignment reaching the five
-    echo fields at the `resolvePayload{…}` site and confirm each source
-    is unconditionally allocated; then assert it — a default-mode
-    oracle over a request whose containers are empty (no `--tag`, no
-    owned keys, no readers), asserting the rendered bytes carry
-    `{}`/`[]` and no `null`. Method: Source Search + oracle, at
-    implementation Phase 1, before the conversion lands.
+  - **Evidence**: the enumeration half is DISCHARGED at reconcile
+    (2026-08-29), which is what the premise needed: `resolvePayload`
+    has exactly ONE construction site repo-wide
+    (`internal/cli/flow_resolve.go::runFlowResolve`'s composite
+    literal — no `&resolvePayload{}`, no zero-value `var`, no second
+    branch), and it sets all three container echo fields
+    unconditionally from `internal/cli/flow_exec.go::observedTagMap`
+    (`observed`), `internal/cli/flow_exec.go::tagMap` (`owned`) and
+    `internal/cli/flow_next.go::readerIDs` (`readers`). Each of the
+    three is branch-free — allocate via `make`, loop, return — with
+    no `return nil` on any path, and `make` with length/capacity 0
+    yields a non-nil empty container by language guarantee, so `{}`
+    and `[]` render, never `null`. The reader-pass-skipped case is
+    the closest approach to a nil arm and is safe: when
+    `internal/cli/flow_exec.go::(flowRequest).runReaders` invokes no
+    reader it returns a nil `owned` and a pre-allocated `outputs`,
+    and both are laundered through the allocating writers. Its two
+    refusal returns carry a non-nil `*clierr.CLIError` and are
+    guarded by `runFlowResolve` before the payload literal is
+    reachable, so no refusal path constructs a payload at all (A6).
+    `emitMap` (`internal/cli/flow_resolve.go`) feeds `emit`, a PLAN
+    field, not one of the three echo containers — it is also
+    unconditionally allocated, and is the one writer whose non-nil
+    intent is documented (`0010:C4`).
+  - **Residual, carried by design and not by omission**: the
+    invariant remains uncontracted for the three echo containers —
+    it is upheld by the writers' implementations, and nothing in the
+    type declaration, a test, or a stated contract pins it, so a
+    future edit to any writer could break it silently. That is A9's
+    own claim, now confirmed rather than refuted. The ORACLE half of
+    the original plan therefore stands as the guard and is scheduled,
+    not deferred-and-forgotten: a default-mode assertion over a
+    request whose containers are empty (no `--tag`, no owned keys, no
+    readers), asserting the rendered bytes carry `{}`/`[]` and no
+    `null`, at implementation Phase 1 BEFORE the conversion lands.
+    It rides S2's absence control (§oracle-discriminability), whose
+    negative control already renders one echo key as `null`.
+    Verification by execution is not owed here: the critique lens
+    already confirmed by running it that a pointer to a nil slice
+    renders `null` under `omitempty`, which is the hazard the oracle
+    guards, and A2's spike measured byte identity on populated
+    reference values, which cannot exercise the nil arm.
+
+    Existing coverage, found at reconcile and narrowing the residual:
+    the nil arm is not in fact unguarded on landing. THREE shipped
+    wire oracles already require the five echo keys PRESENT in
+    default mode, so a nil echo pointer under `omitempty` drops the
+    key and turns them red —
+    `decision_table_0010_test.go::wireKeyOrder`'s 13-key list,
+    `decision_table_0010_test.go::TestReq41_TheStateFieldsKeepTheirShapesAndAreEmpty`
+    (`owned` an object and `readers` an array, both empty), and
+    `flow_resolve_0005_test.go::TestReq76_ResolvePayloadCarriesItsFullDataMinimum`
+    (key-presence over all twelve keys). This does NOT discharge the
+    Phase 1 oracle — those three run populated or decision-table
+    shapes and none is written as an empty-container assertion, which
+    is the arm A9 names — but it does mean the conversion cannot land
+    silently broken: the five pointers must be non-nil whenever a
+    success payload is emitted, and that is now an implementation
+    invariant stated here rather than an implicit one. Neither this
+    nor the finding it came from narrows A3: all three are wire
+    oracles, blind to Go-level types, and the conversion keeps every
+    key present.
   - **If wrong**: A2's mechanism changes default-mode output for an
     untested request shape, breaking C1's byte-identity clause and
     §Consequences' "no consumer changes" promise — and S1 cannot see
@@ -548,12 +649,10 @@ thing.
 STRICTLY SHORTER is measured on the FULL EMITTED LINE — the complete
 {"type":"ok","data":{…}} NDJSON record as written, excluding the
 trailing newline — not on the .data payload alone, and it is asserted
-in BOTH output modes. The TEXT-mode half of that "both" rests on A8,
-presently Pending and unmeasured: JSON-mode width is measured (A1),
-text-mode width is not. The clause binds both modes as written; if
-A8's Phase 2 measurement refutes it, the remedy is A8's own — the
-clause narrows to JSON before lock, not after, since this RDR does
-not amend a locked contract. The envelope-inclusive unit is the one the
+in BOTH output modes. Both halves of that "both" are measured and the
+clause binds unconditionally: JSON width by A1, text width by A8
+(43.7-54.4% on the same three shapes, slightly exceeding the JSON
+reduction on each). The envelope-inclusive unit is the one the
 caller actually pays for, and it is the stricter reading (a constant
 wrapper makes any payload-level saving a smaller proportion of the
 line, never a larger one). In text mode the measurand is the total
@@ -648,16 +747,19 @@ group only. The behavioural command-error run is corroboration, never
 the assertion. This contract mints no new refusal code and no new
 exit group.
 
-This clause's IMPLEMENTABILITY is A5, presently Pending: the scope
-above is authored as a MUST, but no shipped test walks the tree
-totally and the walker is written for the first time at Phase 2. The
-clause is stated at full strength deliberately — narrowing it to what
-an existing partial walker can assert would discard the cove sweep's
-finding — and A5's verification plan is the spike that writes it. If
-that spike cannot reach this scope, C1's structural negative needs
-its own form and this paragraph moves; every downstream statement of
-it (§disposition, §oracle-discriminability, S4, MVV step 5, the desk
-trace) inherits that condition rather than restating it.
+This clause's IMPLEMENTABILITY is A5, VERIFIED by spike before lock:
+no shipped test walks the tree totally, so the walker is written for
+the first time here, but it is demonstrably writable to exactly this
+scope — a total walk of the real root enumerates 15 commands
+including `help`, `completion` and the four `completion` shell
+children, and the `plan-only` registrant assertion is expressible
+under it. The clause is therefore stated at full strength as a
+measured capability, not an aspiration; narrowing it to what an
+existing partial walker can assert would discard the cove sweep's
+finding AND assert a weaker negative than the tree supports.
+Construction remains Phase 2 work; every downstream statement of the
+scope (§disposition, §oracle-discriminability, S4, MVV step 5, the
+desk trace) inherits it rather than restating it.
 
 Totality is a property of the TREE UNDER TEST, not only of the
 walker, and the two auto-generated commands are not symmetric: cobra
@@ -1045,7 +1147,13 @@ never-projected plan-group field, and
 the two compose in either landing order with neither contract
 moving; the same fire and home are written symmetrically into
 0024's Joint-check line. Context beside the fire: 0012 touches the
-same file at a disjoint symbol (`flow_resolve.go::guardSeam`);
+same file at a disjoint symbol (`flow_resolve.go::guardSeam`); 0018
+likewise, at `flow_resolve.go::kernelResolveFailure` and
+`::escapeShapeBreaches` — both REFUSAL-path symbols, so the
+disjointness is structural rather than incidental: A6 establishes
+that a refusal carries no echo group to project and C1 forbids the
+flag from being readable on that path at all, so neither RDR can
+reach the other's site whichever lands first;
 0014/0017/0019/0020 cite `docs/cli-output-contract.md`, which this
 RDR's Phase 3 also edits, in disjoint sections (0017 writes its
 findings/code-registry sections; this RDR adds the projected worked
@@ -1411,11 +1519,21 @@ queries missed; the choice does not rest on it.
   is opt-in on the caller's own invocation — the caller that sets it
   is the caller that owns the parse — and the always-keep core means
   no decision field is ever among the zeros.
-- Version skew is loud, not silent: a binary predating this RDR
-  refuses `--plan-only` at the parse (`command-error`, exit 2), so a
-  caller can never hold a full-width payload believing it was
-  projected, and an absent `observed` always means projection, not
-  an old binary.
+- Version skew is loud, not silent, in BOTH directions. Forward — a
+  binary predating this RDR refuses `--plan-only` at the parse
+  (`command-error`, exit 2), so a caller can never hold a full-width
+  payload believing it was projected, and an absent `observed`
+  always means projection, not an old binary. Backward (rollback
+  after adoption) — the same refusal is what fires: an adopted
+  caller passing the flag to a downgraded binary fails at the parse
+  rather than silently receiving full-width output, so the skew
+  surfaces as an exit-2 failure at the call that skewed, never as
+  quietly wider bytes. The cost of that loudness is accepted and
+  named: the failure lands mid-chain, and because `0011:A14` caps
+  the shared `command-error` bucket's message, the diagnostic names
+  the flag only in pflag's free text. This is the generic-bucket
+  limit inherited as the predecessor's own, not a new one minted
+  here; recovery is to drop the flag, which the next line states.
 - Diagnosis: `--as=json` ± `--plan-only` over the same request
   diffs to exactly the echo keys; any other diff is a defect in the
   projection.
@@ -1426,16 +1544,21 @@ queries missed; the choice does not rest on it.
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified, with ONE carried exception:
-      A5's implementability half is discharged by writing the total
-      walker itself, which is Phase 2 work. It is a Pending
-      assumption whose verification IS a build step, not a blocker on
-      starting — Phase 1 does not depend on it. What it does gate is
-      lock: if the walker cannot be written to C1's scope (whole
-      tree, both auto-generated commands materialized and present in
-      the walked set), C1's structural negative needs its own form
-      and the contract moves. Every other assumption is Verified
-      before Phase 1.
+- [ ] All nine Critical Assumptions Verified before Phase 1, with no
+      carried exception. A5, A8 and A9 were closed at reconcile
+      rather than deferred, since each pinned something C1 asserts as
+      a MUST or the MVV consumes: A5's total walker demonstrated to
+      C1's full scope (`evidence/spikes/a5-total-walker.md`), A8's
+      text-mode width measured in A1's unit
+      (`evidence/spikes/a8-text-width.md`), A9's echo-container
+      allocation enumerated over the single construction site.
+- [ ] Two CONSTRUCTION obligations carry into the build — these are
+      oracles to write, not assumptions to settle, and neither gates
+      lock: the S4 total walker itself (Phase 2, with both
+      preconditions asserted — auto-generated commands materialized
+      and `completion` present in the walked set), and A9's
+      empty-container default-mode assertion (Phase 1, BEFORE the
+      pointer conversion lands, riding S2's absence control).
 - [ ] Ordering tolerance with cli/0024 confirmed (A4): either RDR may
       land first; the second lands with `dispositions` already/newly
       in the plan group and no contract in either moves.
@@ -1690,9 +1813,9 @@ real bytes, not restatements.
 | --- | --- | --- | --- |
 | 1 — no flag, json | C1 default byte-identity (against the pre-change golden, the battery's only pre-change side); `0005:A6` envelope list; `0010:C4` `emit` present; A9 nil-vs-empty | 14 keys, `"owned":{}` and `"readers":[]` present — non-nil containers, the A9 invariant — `"emit":{"dpa":"required","plan":"pro"}` | OK |
 | 2 — `--plan-only`, json | C1 key set + absent-not-null + declaration order + carried-value byte identity; C2 always-keep core; S2 literal | `{"revision":"","rule":"paid-eu","gates":[],"emit":{…},"next":{},"writes":{},"clear":[],"escaped":false}` — 8 keys, equal to S2's list | OK |
-| 3 — `--plan-only`, text | C1 text-subset; `0005:C1` both-modes agreement | default 15 lines → projected 9; the 6 dropped are exactly `model`, `observed.region`, `observed.tier`, `outcome`, `owned`, `readers` | OK |
+| 3 — `--plan-only`, text | C1 text-subset + C1 text WIDTH; `0005:C1` both-modes agreement; A8 | default 15 lines → projected 9; the 6 dropped are exactly `model`, `observed.region`, `observed.tier`, `outcome`, `owned`, `readers`; measured 267→130 B, 51.3% (A8), so the width clause is witnessed in bytes and not only in lines | OK |
 | 4 — unrecognized outcome ± flag | C1 report-only; A6 | refusal fields `code`/`message`/`param`/`detail`/`hint`/`findings` — no echo member to project | OK |
-| 5 — `flow next --plan-only`; tree walk | C1 non-registration + vacuity guard + walked-set precondition; A5 | `--all` probes are exact-name `Lookup("all")`; a resolve-local `plan-only` is invisible to them. Walked set on a bare root is `docs, flow, help, lint, version` — `completion` absent until `InitDefaultCompletionCmd`, so the oracle materializes it and asserts its presence first | OK (with the materialization precondition; without it the walk is vacuous on `completion`) |
+| 5 — `flow next --plan-only`; tree walk | C1 non-registration + vacuity guard + walked-set precondition; A5 | `--all` probes are exact-name `Lookup("all")`; a resolve-local `plan-only` is invisible to them. Walked set on a bare root is `docs, flow, help, lint, version` — `completion` absent until `InitDefaultCompletionCmd`, so the oracle materializes it and asserts its presence first. Executed at reconcile (A5 spike): 15 commands walked with both materialized, against 9 for `help_all.go::walkCommandTree` | OK (the materialization precondition is measured, not assumed; without it the walk is vacuous on `completion`) |
 | 6 — byte counts | A1; MVV step-6 pass bar | checked-in fixtures 290→152 (47.6%), 392→191 (51.3%), 412→238 (42.2%) — all clear the 40% bar; 708→146 B (79.4%) is the not-checked-in 48-fact demonstration, not a gate | OK |
 
 Two orderings coexist and are not the same ordering: the **wire** keeps
