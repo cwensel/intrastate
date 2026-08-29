@@ -372,7 +372,11 @@ names. The failure the approach could not answer would be a routing
 path that reads undeclared bytes; A2 pins that no such path exists,
 and if Resolve refutes A2 the choice reopens. Recommendation stands.
 Ground-sweep: clean (17 anchors).
-Joint-check: clear (12 peers) — grep hits triaged, reported as
+Joint-check: fired → 0025 (home: cli/0020 §Normative Contracts C1 /
+cli/0025 §Normative Contracts C1 — mutual tolerance: disjoint rule
+families at `accessorTable`; tag-admission identity homed here,
+accessor-entry shape homed in 0025; composes). Remaining peers clear
+(12) — grep hits triaged, reported as
 context: 0023 carries `flow_input.go` and `flow-tag-invalid` in its
 A7 assumption's Source-Read evidence (the echo group is an echo), not
 as a modify-anchor or a fenced pin — carrier admission strengthens
