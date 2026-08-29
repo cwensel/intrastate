@@ -367,50 +367,43 @@ This contract mints no new refusal code and no new exit group.
 **C2**
 
 ```normative
-The projection axis is a PARTITION this RDR owns, not a
-caller-supplied field list. Every current and future flow resolve
-success-payload field is assigned to exactly one side when it is
-added: the ECHO group — what the caller supplied verbatim or can
-reconstruct from its own prior calls: the model reference, the
-observed tags (--tag, echoed unchanged), the assembled owned view
-and the invoked reader identities, the requested outcome (--outcome,
-echoed unchanged) — or the PLAN group — what the run decided, its
-provenance, and what a caller acts on or must not misread: rule
-identity, gate results, authored answers and their interpretations,
-planned next/writes/clear, the escape disposition, and revision.
-revision rides the PLAN side deliberately: it is produced by the
-loader, not restated from the request, and it is the plan's only
-provenance — a chained caller cannot otherwise detect that the model
-changed under the same path between calls.
+The projection axis is the ECHO/PLAN partition doctrine of
+JDR 0002 §D1, applied to flow resolve — a fixed partition, not a
+caller-supplied field list. The doctrine (one-of-two assignment at
+field addition, reflective enforcement, the always-keep rule,
+unclear-joins-PLAN, the later-verb conformance rules) is normative
+THERE and is cited, not restated; this contract owns the verb's
+instance.
 
-The partition is ENFORCED, not prose: a reflective oracle MUST
-assert every field of the resolve success payload is assigned to
-exactly one group, so an unassigned new field is a test failure, not
-a silent default — the projection MUST NOT be implemented as a bare
-omit-list whose complement is "whatever else exists".
+The flow resolve assignments: the ECHO group is the model
+reference, the observed tags (--tag, echoed unchanged), the
+assembled owned view and the invoked reader identities, and the
+requested outcome (--outcome, echoed unchanged). The PLAN group is
+rule identity, gate results, authored answers and their
+interpretations, planned next/writes/clear, the escape disposition,
+and revision. revision rides the PLAN side deliberately: it is
+produced by the loader, not restated from the request, and it is
+the plan's only provenance — a chained caller cannot otherwise
+detect that the model changed under the same path between calls.
+--plan-only reports the PLAN group and omits the ECHO group (C1).
 
-An ALWAYS-KEEP core — rule, escaped, escape_class, revision — MUST
-survive every current and future projection mode of this verb: if
-the boolean axis ever generalizes to an enum or a field list, no
-mode may omit them, so a projected payload can never launder a
-rescued plan into an ordinary one or detach a plan from the model
-revision that produced it. When a new field fits neither group's
-description cleanly, it joins the PLAN group — over-reporting is
-recoverable, silent omission is not. Under this rule 0024's
-dispositions, if that RDR lands, is a PLAN-group field: each token
-is assigned by the [emit] declaration to the selected row's authored
-emit value (0024:C4's join) — derived from plan-group inputs only,
-never from observed or owned — and its never-omitted clause is
-untouched by this projection.
+Per JDR 0002 §D1's enforcement rule, this verb's reflective oracle
+MUST assert every field of the resolve success payload is assigned
+to exactly one group, so an unassigned new field is a test failure,
+not a silent default — the projection MUST NOT be implemented as a
+bare omit-list whose complement is "whatever else exists".
 
-A LATER verb that adopts a caller-controlled success-payload
-projection MUST follow the same two rules: the projection is applied
-to the verb-specific result before respond.OK — never in the respond
-gateway, never differing by output mode — and the projectable set is
-that verb's echo group, never its decision. This clause is the
-conformance surface for a future report/export verb; it obliges no
-verb to offer a projection, and it reserves nothing about the flag
-spelling a later verb picks.
+This verb's ALWAYS-KEEP core (JDR 0002 §D1) is rule, escaped,
+escape_class, revision: if the boolean axis ever generalizes to an
+enum or a field list, no mode may omit them, so a projected payload
+can never launder a rescued plan into an ordinary one or detach a
+plan from the model revision that produced it.
+
+Under JDR 0002 §D1, 0024's dispositions, if that RDR lands, is a
+PLAN-group field: each token is assigned by the [emit] declaration
+to the selected row's authored emit value (0024:C4's join) —
+derived from plan-group inputs only, never from observed or owned —
+and its never-omitted clause is untouched by this projection.
 ```
 
 #### Load-Bearing Decisions
@@ -449,13 +442,11 @@ spelling a later verb picks.
   inverted default (`--explain` to get the echo) — the defect-is-the-
   default inversion: it would put a flag on every one-call consumer
   to preserve behaviour that is already correct.
-- **Selection / predicate** — the partition rule (C2) decides which
-  side a field joins: supplied verbatim by the caller or
-  reconstructable from its own prior calls → echo; a decision, its
-  provenance, an authored answer, or a planned mutation → plan;
-  unclear → plan. The rule is applied once, at the moment a field is
-  added, by the RDR adding it — and the reflective
-  partition-completeness oracle makes skipping that assignment a
+- **Selection / predicate** — which side a field joins is decided by
+  the partition doctrine at JDR 0002 §D1 (cited, not restated:
+  echo/plan assignment at field addition, unclear → plan); C2
+  carries this verb's assignments. The reflective
+  partition-completeness oracle (C2) makes skipping that assignment a
   test failure rather than a silent omit-list default.
 
 #### Illustrative Code
@@ -540,8 +531,11 @@ Joint-decision check — open peers at depth 1 with Status Draft/Final:
 on 0024: shared modify-anchor
 `internal/cli/flow_resolve.go::resolvePayload` (0024:C4 appends
 `dispositions`; this RDR projects the echo group off the same
-payload). Homed, not paused: `cli/0023:C2` is the normative home —
-it assigns `dispositions` to the never-projected plan group, and
+payload). Homed, not paused: `JDR 0002 §D1` is the normative home
+(re-homed 2026-08-28 to the chartered envelope registry from this
+record's C2, where the proposer first recorded the doctrine; C2 now
+carries the verb's instance) — under it `dispositions` is a
+never-projected plan-group field, and
 0024:C4's quoted `Plan.RuleID` join reads plan-group inputs only, so
 the two compose in either landing order with neither contract
 moving; the same fire and home are written symmetrically into
@@ -552,8 +546,8 @@ RDR's Phase 3 also edits, in disjoint sections (0017 writes its
 findings/code-registry sections; this RDR adds the projected worked
 payload beside the resolve section) — co-citation context, no shared
 decision. Roster peer 0021 (unproposed, later in order) would be a
-consumer of C2's envelope-general clause if its export surface ever
-wants a projection; C2 obliges it to nothing. Absence arm: n/a —
+consumer of JDR 0002 §D1's later-verb clause if its export surface
+ever wants a projection; that clause obliges it to nothing. Absence arm: n/a —
 this proposal converts no refusal into an acceptance (`--plan-only`
 on the other verbs stays refused; success reporting only narrows).
 Bridge sub-check: n/a — no Cluster membership; no plan here
@@ -564,7 +558,7 @@ Premortem: hardened (hardened)
 
 Ground-sweep: clean (24 anchors)
 
-Joint-check: fired → 0024 (home: cli/0023:C2)
+Joint-check: fired → 0024 (home: JDR 0002 §D1)
 
 ## Alternatives Considered
 
@@ -800,9 +794,10 @@ queries missed; the choice does not rest on it.
 - Negative: `flow resolve` now has two success-payload widths; docs,
   help, and any payload-shape oracle must say which width they speak
   of.
-- Negative: the partition (C2) is a standing obligation — every
-  future payload field must be assigned a side by the RDR adding it,
-  and a mis-assignment is a spec defect, not a style choice.
+- Negative: the partition (JDR 0002 §D1; this verb's instance in C2)
+  is a standing obligation — every future payload field must be
+  assigned a side by the RDR adding it, and a mis-assignment is a
+  spec defect, not a style choice.
 - Accepted asymmetry: `--plan-only` on the other three verbs is the
   shared `command-error` usage bucket, not a typed refusal — the
   same accepted limit `0011:A14` recorded for `--all`.

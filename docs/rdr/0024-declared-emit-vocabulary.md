@@ -532,19 +532,22 @@ Premortem: hardened (hardened)
 
 Ground-sweep: clean (23 anchors)
 
-Joint-check: fired → 0023 (home: cli/0023:C2) — updated 2026-08-28 by
+Joint-check: fired → 0023 (home: JDR 0002 §D1) — updated 2026-08-28 by
 0023's Stage-2 pass (symmetric write; at this record's own pass 0023
-was a template and the check read clear (12 peers)). The fire: 0023's
-proposal shares the modify-anchor
+was a template and the check read clear (12 peers)); re-homed
+2026-08-28 to the chartered envelope registry, replacing the interim
+home `cli/0023:C2` (which now carries only the verb's instance
+assignments). The fire: 0023's proposal shares the modify-anchor
 `internal/cli/flow_resolve.go::resolvePayload` — this RDR appends
 `dispositions` (C4), 0023 projects the echo group off the same
 payload under an opt-in `--plan-only`. Homed and compositional, not a
-contradiction: `cli/0023:C2` assigns `dispositions` to its
-never-projected PLAN group because C4's join reads plan-group inputs
-only (the `[emit]` declaration and the selected row's authored value,
-by `Plan.RuleID`), so C4's append-last and never-omitted clauses hold
-under the projection in either landing order and neither contract
-moves. Original context beside the verdict: no other peer
+contradiction: under `JDR 0002 §D1`'s partition doctrine
+`dispositions` is a never-projected PLAN-group field (the instance
+assignment rides `cli/0023:C2`) because C4's join reads plan-group
+inputs only (the `[emit]` declaration and the selected row's authored
+value, by `Plan.RuleID`), so C4's append-last and never-omitted
+clauses hold under the projection in either landing order and neither
+contract moves. Original context beside the verdict: no other peer
 shares a modify-anchor at symbol level — 0012 touches
 `internal/cli/flow_resolve.go::guardSeam` and `internal/guard/lint.go`
 where this RDR touches `resolvePayload` and `internal/cli/lint.go`
