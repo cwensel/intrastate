@@ -133,244 +133,385 @@ dual-breach pinning test lands as part of this RDR.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 At HEAD, a dual-breach `Input` observably returns 0009's
+  escape-shape aggregate — pinning `CheckValid`-before-`CheckInput`
+  is a pin, not a behavior change.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: pending — an emission/order claim is never
+    quote-confirmed; the MVV's dual-breach scenario is the proof,
+    and it MUST first run against pre-change HEAD so the "pin, not a
+    change" half is itself observed, not inferred (0009 Phase 3c
+    probed a hand-built kernel table and observed 0009 reporting
+    first, but deliberately did not pin it).
+  - **If wrong**: the precedence contract C1 demands a reorder of
+    `Resolve`'s entry checks — a caller-visible category change, not
+    a pin — and A3's no-behavior-change framing falls with it.
+- **A2 Wrapping the three unexported reserved-key channel errors
+  with an exported sentinel breaks no existing test or caller: no
+  assertion depends on the current errors being unwrapped plain
+  values or on their exact message text.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: pending — sweep `internal/resolve/*_test.go` and
+    all `CheckInput` callers for message-text or error-equality
+    assertions on the reserved-key breach (the 0008 suites are
+    external-package tests, so they cannot reference the unexported
+    vars directly, but message substrings remain possible).
+  - **If wrong**: Phase 1 additionally rewrites the affected
+    assertions to `errors.Is` form — scope grows by those tests, and
+    the "additive only" consequence needs restating.
+- **A3 Pinning 0009-first contradicts no Final fence: `0008:C4`
+  licenses either error on a doubly-breaching input and explicitly
+  does not foreclose a fixed order, and 0009's precedence fences
+  order the shape breach only against modeled dispositions, which
+  0008's Go-error breach is not.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: pending — re-verify against `0008:C4` ("JD-5 may
+    narrow this to a fixed order; nothing here forecloses that"),
+    `0009:C3` ("precedes every modeled disposition"), and `0009:C4`
+    (carrier fences unchanged by this RDR).
+  - **If wrong**: the choice needs a 07.1 SPEC-DEFECT route against
+    the contradicted Final fence instead of landing here — the
+    Proposed Solution reopens.
+- **A4 No consumer outside `internal/cli` branches on the kernel's
+  error return today, and `internal/cli` branches only via
+  `errors.Is(err, resolve.ErrEscapeShapeBreach)` — so adding
+  classifiability to the reserved-key breach changes no shipped
+  branch.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: pending — sweep non-test callers of
+    `resolve.Resolve` / `resolve.CheckInput` for error inspection
+    beyond the `internal/cli/flow_resolve.go::kernelResolveFailure`
+    discrimination.
+  - **If wrong**: an existing negative-classification branch
+    ("unclassifiable ⇒ reserved key") silently inverts when the
+    sentinel lands; that caller must be rewritten in Phase 1.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Answer both halves of the fork with the smallest surface that makes
+each half structurally testable. **Precedence**: pin the order the
+code already has — on an `Input` breaching both preconditions,
+`Resolve` returns 0009's escape-shape aggregate; `Table.CheckValid()`
+reporting before `CheckInput` becomes an observable contract owned
+here (it was "a cheapness preference, not an observable contract"
+under 0009 REQ-22 — this RDR supersedes that framing by citation, not
+amendment). **Carrier**: the reserved-key breach becomes
+`errors.Is`-classifiable by one exported package-level sentinel,
+`ErrReservedTagKey`, which the three existing unexported channel
+errors wrap. No typed error and no structured payload: the reserved
+key is a compile-time constant and `0008:C4` fixes first-breach
+single-error reporting, so there is no payload a caller needs — the
+0009-style typed mirror is not reproduced. The dual-breach pinning
+test then asserts both halves structurally — `errors.Is(err,
+ErrEscapeShapeBreach)` true and `errors.Is(err, ErrReservedTagKey)`
+false — with no message-text assertion, and JDR 0001 §JD-5 closes at
+its home citing this RDR as the implementation carrier.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+Two surfaces move, both inside `internal/resolve`:
+
+- `internal/resolve/precondition.go` — gains the exported sentinel;
+  the three channel errors (`errReservedOwnedTag`,
+  `errReservedObservedTag`, `errReservedRequiresOwned`) become
+  wrappers that unwrap to it. Channel identity stays diagnostic
+  prose, exactly as today.
+- `internal/resolve/resolve.go::Resolve` — the call order
+  (`in.Table.CheckValid()` then `CheckInput(in)`) is unchanged; its
+  comment block stops disclaiming observability and cites this RDR's
+  precedence contract instead.
+
+The CLI mapping (`internal/cli/flow_resolve.go::kernelResolveFailure`)
+is deliberately untouched: a reserved-key breach keeps riding the
+generic internal-error branch. Whether it gains a dedicated CLI code
+is a code-table question owned by JDR 0001 §JD-8/§D10 and RDR 0005's
+re-entry, not by this RDR — the sentinel makes that later
+discrimination possible without deciding it here.
 
 #### Normative Contracts
-
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+Dual-breach precedence. When an Input breaches both entry
+preconditions — RDR 0009's escape-row shape rule
+(Table.CheckValid()) and RDR 0008's reserved-key rule
+(CheckInput) — Resolve MUST return the escape-shape breach
+error: errors.Is(err, ErrEscapeShapeBreach) reports true and
+errors.Is(err, ErrReservedTagKey) reports false, with the zero
+Result. This makes the CheckValid-before-CheckInput evaluation
+order at Resolve entry an observable contract (superseding, by
+citation, 0009 REQ-22's "cheapness preference, not an observable
+contract" framing); reordering the entry checks is a breaking
+change to this contract, not an implementation detail. The
+returned error is 0009's aggregate exactly as `0009:C4` fences
+it — verbatim, flat, every element a *EscapeShapeBreachError —
+and this RDR adds nothing to it. A dual-breach pinning test MUST
+assert both errors.Is verdicts above; it MUST NOT assert on
+message text.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+Reserved-key breach carrier. The kernel MUST export a
+package-level sentinel, ErrReservedTagKey, and every error
+CheckInput returns MUST report errors.Is(err, ErrReservedTagKey)
+== true — all three breach channels (owned tag, observed tag,
+Row.RequiresOwned) classify to the one sentinel. The breach
+stays a single non-aggregate error with first-breach-wins
+reporting and implementation-latitude scan order, exactly as
+`0008:C4` fences it; this RDR adds classifiability only. No
+typed error and no structured payload accompany the sentinel:
+channel identity and the offending row remain diagnostic prose,
+and a test or caller needing them MUST NOT parse message text —
+that need would be a design change routed through a successor
+RDR, not latitude here.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Identity** — classification is per-category, not per-channel:
+  one sentinel names "reserved-key breach"; the three channels stay
+  distinguishable only in prose. Callers branch on the category
+  (mirrors the authored path, where one `reserved_tag_key` load
+  category covers every channel).
+- **Naming** — `ErrReservedTagKey`, aligning the Go sentinel with
+  the existing category literal `reserved_tag_key`
+  (`internal/table/category.go::CatReservedTagKey`) and the
+  kernel-aligned code-name rule of JDR 0001 §D10. Rejected:
+  `ErrReservedKey` (drops the tag vocabulary), `ErrReservedInput`
+  (names the argument, not the rule).
+- **Selection / predicate** — when both preconditions qualify to
+  report, the escape-shape breach wins. Why this winner: a shape
+  breach is the table malformed *as a value*, independent of the
+  input tuple (`0009:C3`'s own rationale — the table does travel
+  inside `Input`, but `CheckValid` reads only `in.Table` while
+  `CheckInput` reads the call's tag sequences, so the asymmetry is
+  scope-of-read, not a phantom partition); it matches the order at
+  HEAD (a pin, not a change — A1); and it is the order under which a
+  dual-breach caller keeps the richer report (0009's per-row
+  structured aggregate vs 0008's single prose line).
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+```go
+// Illustrative — shape only.
+// precondition.go
+var ErrReservedTagKey = errors.New(
+    "resolve: input supplies the reserved tag key " + recognizedTagKey)
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+var errReservedOwnedTag = fmt.Errorf(
+    "%w as an owned tag; the recognized outcome enters only "+
+        "through Input.Recognized", ErrReservedTagKey)
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
-
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+// dual-breach pinning test (external package)
+_, err := resolve.Resolve(dualBreachInput)
+// errors.Is(err, resolve.ErrEscapeShapeBreach) == true
+// errors.Is(err, resolve.ErrReservedTagKey) == false
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Reserved-key breach detection | `internal/resolve/precondition.go::CheckInput` + three unexported channel errors | Unexported ⇒ unclassifiable outside the package | Extend (wrap with exported sentinel) | C2 |
+| Entry-order evaluation | `internal/resolve/resolve.go::Resolve` (CheckValid at 0, CheckInput at 0.5) | Order documented as non-observable | Reuse (pin as observable) | C1 |
+| Escape-shape classification | `resolve.ErrEscapeShapeBreach` / `*EscapeShapeBreachError` (`0009:C4`) | None | Reuse unchanged | C1 cites, adds nothing |
+| CLI kernel-error mapping | `internal/cli/flow_resolve.go::kernelResolveFailure` | Non-0009 errors collapse to generic `flow-accessor-failed` | Reuse unchanged (code-table change rides JDR 0001 §D10 / RDR 0005 re-entry) | none here |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+The QOC matrix (Alternatives Considered carries the losing analyses)
+decided on three rows: **fence compatibility** eliminated the join
+(`0009:C4`'s verbatim/flat-aggregate fence cannot host a
+cross-precondition join without reopening a Final record);
+**structural testability of the losing side** eliminated the
+no-sentinel option (a marker-by-absence degrades to "not 0009" the
+moment a third kernel error class exists, and its test is
+message-text-only — the untestability JD-5's sharpening names); and
+**behavior preservation + report richness** picked 0009-first over
+0008-first (a pin of HEAD rather than a silent category change, and
+the dual-breach caller keeps per-row structured diagnostics). The
+carrier stops at a sentinel because the guidance fork for Go error
+surfaces — caller needs matching + static message ⇒ top-level `var`
+(uber-go-guide §Error Types) — lands there, and 0009's heavier typed
+surface was justified by a structural payload (RowRef findings) that
+0008's first-breach-single-error fence deliberately does not owe.
+Sibling-path check: the "which precondition fired" discriminator
+already exists once at
+`internal/cli/flow_resolve.go::kernelResolveFailure`
+(`errors.Is(err, resolve.ErrEscapeShapeBreach)`) — this RDR extends
+that existing signal family rather than inventing a parallel one, and
+the sentinel's name reuses the authored path's existing category
+identity `internal/table/category.go::CatReservedTagKey`
+(`"reserved_tag_key"`) rather than minting new vocabulary.
+
+Premortem: hardened (hardened)
+Ground-sweep: clean (14 anchors)
+Joint-check: clear (12 peers)
+
+Premortem mitigations folded (critic ledger P-1..P-12,
+`evidence/propose-premortem/critic.md`): the pre-change-HEAD
+characterization run (P-1/P-12 → A1, MVV step 5), byte-preserved
+messages under a `%w` chain (P-3/P-5 → Phase 1, Risk 1, A2's
+message-assertion sweep), the non-aggregate carrier assertion (P-4 →
+MVV step 4), white-box per-channel wrap proofs (P-7 → MVV step 4),
+the JD-5-closure prerequisite so the pin is never solely
+self-declared (P-2 → Prerequisites, Phase 3), the negative-assertion
+blind-spot acknowledgment (P-6 → Failure Modes), the scope-of-read
+clarification (P-8 → D-Selection), and the honest locator-cost
+wording on the R4 rejection (P-10 → Briefly Rejected). P-9's owner
+is named in Technical Design (JDR 0001 §D10 / RDR 0005 re-entry);
+P-11's demanded quotation already sits verbatim in Alternative 1 and
+was CONFIRMED by the ground sweep. Ground-sweep anchor 14
+was refuted cosmetically (a dual-breach *construction* exists in
+test; the missing thing is the ordering assertion) and corrected
+inline — the choice was not reopened. Joint-check context: the open
+peers are the 12 Draft roster siblings; the two grep hits
+(`CheckInput` in 0012, inside its *rejected* Alternative 3;
+`reserved_tag_key` in 0024, as an append-precedent citation) are
+context, not decisions at this locus. RDRs 0008/0009 are
+`Implemented`, outside the open-peer set; their coupling on this
+question is already homed at JDR 0001 §JD-5, which this RDR closes —
+cite, don't restate.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+Scored QOC matrix. Question: *on a dual-breach `Input`, which
+precondition's error does `Resolve` return, and what carrier does the
+reserved-key breach travel?* Options: **O1** pin 0009-first + export
+`ErrReservedTagKey` (chosen); **O2** pin 0008-first + same sentinel;
+**O3** `errors.Join` both so order stops mattering; **O4** pin
+0009-first, no sentinel (classifiability-as-marker). One clause per
+cell; ✓ favorable, ✗ disqualifying, ~ neutral.
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
+| Criterion | O1 (chosen) | O2 0008-first | O3 join both | O4 no sentinel |
+| --- | --- | --- | --- | --- |
+| Correctness fit (both halves structurally testable) | ✓ two `errors.Is` assertions | ✓ same carrier | ✓ both classifiable | ✗ losing side testable only via message text |
+| Final-fence compatibility | ✓ `0008:C4` invites the narrowing | ✓ likewise | ✗ breaks `0009:C4` verbatim/flat-aggregate fence | ✓ no fence touched |
+| Prior-art alignment | ✓ sentinel per uber-go-guide §Error Types | ✓ same | ~ k8s `field.ErrorList` precedent is user-input validation, not programmer-mistake preconditions | ✗ negative classification has no precedent |
+| Behavior preservation | ✓ pins HEAD (A1) | ✗ silently swaps dual-breach category | ✗ changes return shape for dual breach | ✓ pins HEAD |
+| Dual-breach report richness | ✓ per-row structured aggregate wins | ✗ single prose line wins | ✓ both present | ✓ aggregate wins |
+| Reversibility / blast radius | ✓ additive sentinel + one test | ~ additive + reorder churn | ✗ requires reopening Final 0009 | ✓ smallest diff, but locks in fragility |
+| Future third error class | ✓ each class self-names | ✓ same | ~ aggregate grows | ✗ "unclassifiable ⇒ 0008" inverts |
 
-### Alternative 1: [Name]
+### Alternative 1: `errors.Join` both breaches (O3)
 
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: `Resolve` evaluates both preconditions
+unconditionally and returns `errors.Join(shapeErr, inputErr)` when
+both fire, so precedence stops existing as a question and both
+breaches classify via `errors.Is`. This is the Kubernetes-validation
+shape (`field.ErrorList` appended across checks, returned as one
+invalid error — `langref/kubebuilder` cronjob webhook).
 
 **Pros**:
 
-- [Advantage 1]
+- Dissolves the precedence half entirely; no order is load-bearing.
+- A dual-breach producer sees both mistakes in one round trip.
 
 **Cons**:
 
-- [Disadvantage 1]
+- `0009:C4` fences the escape-shape return: `Resolve` MUST return
+  `CheckValid`'s error VERBATIM, and the aggregate's
+  `Unwrap() []error` MUST be exactly one level deep with *every*
+  element a `*EscapeShapeBreachError`. Wrapping it in an outer join
+  (or admitting a foreign element) breaks both clauses — the CLI's
+  flat traversal (`internal/cli/flow_resolve.go::escapeShapeBreaches`)
+  depends on them — so O3 cannot land without reopening Final 0009.
+- The prior art misfits the channel: aggregation serves user-facing
+  declarative validation; this is the programmer-mistake path, where
+  `0008:C4` already rules a producer "is not owed an exhaustive
+  list".
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: disqualified on the fence-compatibility
+row — it is the only option whose cost is a Final-record reopen; its
+whole benefit (both mistakes in one trip) is worth less than that on
+a programmer-mistake channel.
+
+### Alternative 2: Reserved-key-first (O2)
+
+**Description**: same carrier work as O1, but pin `CheckInput` to
+report before `Table.CheckValid()` — the dual-breach test asserts the
+inverse pair of `errors.Is` verdicts, and the entry checks reorder.
+
+**Pros**:
+
+- Equally pinnable and structurally testable.
+- Arguably checks the cheaper predicate first (three sequence scans
+  vs a whole-row-set scan — both trivial).
+
+**Cons**:
+
+- Silently changes the de facto dual-breach category at HEAD (A1) —
+  the exact silent-reorder hazard the Problem Statement exists to
+  close would be exercised once, deliberately, to no benefit.
+- The dual-breach caller trades 0009's per-row structured aggregate
+  for a single prose line — strictly poorer diagnostics.
+- No semantic rationale beats `0009:C3`'s: a shape breach is the
+  table malformed as a value, independent of the tuple; occupancy of
+  one call's `Input` is the narrower fact.
+
+**Reason for rejection**: loses the behavior-preservation and
+report-richness rows and wins none.
+
+### Alternative 3: Classifiability as the marker (O4)
+
+**Description**: pin 0009-first but export nothing new — the fact
+that a dual-breach error satisfies `errors.Is(err,
+ErrEscapeShapeBreach)` while a pure reserved-key breach satisfies no
+sentinel *is* the observable marker of which precondition fired.
+
+**Pros**:
+
+- Zero new exported surface; nothing to name or lock.
+
+**Cons**:
+
+- The reserved-key side of the pinning test can only assert "not
+  classifiable as 0009" — which is also true of any future kernel
+  error — or fall back to message text, the exact untestability
+  JD-5's sharpening flags ("0008 has no sentinel").
+- Negative classification is already under pressure at HEAD:
+  `kernelResolveFailure`'s fall-through comment ("A blanket recode
+  would mislabel RDR 0008's reserved-key breach") shows a consumer
+  reasoning about 0008 by absence today.
+
+**Reason for rejection**: answers the precedence half while leaving
+the carrier half open — the JD-5 sharpening explicitly requires
+naming the error wrapping, and a marker-by-absence stops marking the
+moment a third error class arrives.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Full 0009-style mirror (exported typed error + structured
+  payload for the reserved-key breach)**: the key is a compile-time
+  constant and `0008:C4` fixes first-breach single-error reporting;
+  the breach *site* (which sequence, which row) stays diagnostic
+  prose — that locator cost is accepted deliberately (a producer
+  with a large generated input diagnoses from the message), and a
+  future structured-locator need is a successor-RDR design change
+  (C2 says so), not grounds to lock a typed surface with no present
+  consumer.
+- **Three exported per-channel sentinels**: no caller needs channel
+  granularity; it triples the locked surface and invites branching on
+  a distinction `0008:C4` keeps as prose.
 
 ## Context
 
 ### Background
 
-JDR 0001 §JD-5 sits in the JDR's `## Open` block (JD-6/JD-7 are
-closed); RDR 0009's Status line carries the joint-decision qualifier
-pointing at it. The gap is logged verbatim in the 0009
+JDR 0001 §JD-5 sits in the JDR's Interface record unclosed (JD-6/
+JD-7 around it are closed); RDR 0009 has since moved to
+`Implemented` with no Status qualifier, so the JDR entry is the only
+live pointer holding the question open. The gap is logged verbatim
+in the 0009
 implementation's `coverage.md` §Q-E ("JD-5's precedence ordering stays
 unconstrained — no test decides it") and Phase 3c probed a dual-breach
 input against a hand-built kernel table, observing 0009 reporting
@@ -400,100 +541,195 @@ REQ-22).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Read before enumerating (Stage 2 pass; queries, rejected branches,
+and accepted citations in
+`evidence/research/propose-prior-art.md`): the governing fences via
+the projector (`0008:C4`, `0009:C3`, `0009:C4`, JDR 0001 §JD-5 and
+§D10), the seam at HEAD (`internal/resolve/resolve.go::Resolve`,
+`internal/resolve/precondition.go::CheckInput`,
+`internal/cli/flow_resolve.go::kernelResolveFailure`), 0009's
+implementation artifacts (req-list REQ-19/21/22 and the REQ-22
+ASSUMPTION), and a bounded external pass. ⚠ no prior-art coverage for
+dual-precondition precedence ordering in the corpora (DevRef and
+StateMachineRes queries returned off-class hits only) — the
+precedence choice rests on repo-internal anchors; the carrier choice
+rests on uber-go-guide §Error Types and the k8s aggregate precedent
+recorded above.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — `0008:C4` closes with: "apply this predicate at
+  entry and report its breach; if the table also breaches RDR 0009's
+  shape rule, **either error is conforming** … JD-5 may narrow this
+  to a fixed order; nothing here forecloses that." ⇒ pinning an order
+  here contradicts no 0008 fence; the writer of the licensed
+  latitude is 0008 itself, and JD-5 is its named narrowing venue.
+- **Documented** — `0009:C3` fences precedence only against *modeled
+  dispositions* ("it precedes every modeled disposition (a malformed
+  table is malformed as a value, independent of the input tuple)";
+  REQ-21 carries the same bound via `0009:D-selection-predicate`);
+  0008's breach travels the Go-error path and is not one. ⇒ 0009's fences do not decide the dual-breach
+  order on their own; this RDR's C1 is a new contract, not a
+  restatement (this is triage's anti-collapse finding, kept because
+  JD-5's sharpening can be misread the other way).
+- **Documented** — `0009:C4` fences the escape-shape return as
+  verbatim and flat (one level, all elements
+  `*EscapeShapeBreachError`), and
+  `internal/cli/flow_resolve.go::escapeShapeBreaches` traverses
+  exactly that shape. ⇒ any cross-precondition join is fence-breaking
+  (kills O3), and C1 must add nothing to the aggregate.
+- **Documented** — `internal/resolve/resolve.go::Resolve` calls
+  `in.Table.CheckValid()` then `CheckInput(in)`, with the comment "a
+  cheapness preference, not an observable contract"; the three
+  reserved-key errors in `internal/resolve/precondition.go` are
+  unexported plain `errors.New` values. ⇒ the pin matches HEAD and
+  the carrier gap is real.
+- **Documented** — uber-go-guide §Error Types: caller needs matching
+  + static message ⇒ "top-level `var` with errors.New"; the typed-
+  error row is for dynamic/structured needs. ⇒ sentinel-only is the
+  convention-aligned carrier; 0009's typed surface was payload-
+  driven (`0009:C4` RowRef) and is not precedent for payload-free
+  0008.
+- **Verified** — a dual-breach test DOES exist at HEAD
+  (`internal/resolve/reserved_key_0008_test.go::TestReq44And45And90_ReservedKeyBreachIsNotSkippedByACoincidentShapeBreach`
+  builds the combined breach), but it deliberately asserts only that
+  *some* breach reports — never which — per `0008:C4`'s
+  not-skipped clause; no test asserts the ordering, matching
+  coverage.md §Q-E ("no test asserts the relative order", scoped to
+  the 0009 suite). ⇒ the MVV's pinning test extends this existing
+  fixture pattern rather than inventing one, and the gap is the
+  assertion, not the construction.
+- **Assumed** — dual-breach emission at HEAD is 0009-first (observed
+  by 0009 Phase 3c, but an order claim is never quote-confirmed) —
+  A1, Method: MVV Test.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: a programmatic producer can finally branch on the
+  reserved-key breach (`errors.Is`) instead of parsing prose, and the
+  dual-breach category becomes test-pinned — reordering the entry
+  checks now fails a test instead of silently swapping what callers
+  see.
+- Positive: JDR 0001 §JD-5 gets its closing answer with zero change
+  to either Final peer's fenced text — 0008's licensed latitude
+  narrows exactly the way its own fence anticipated.
+- Negative: the entry-check order is now load-bearing; a future
+  precondition added to `Resolve` must state its own order against
+  both existing checks at introduction (C1 covers only this pair).
+- Negative: `ErrReservedTagKey` is permanently locked exported
+  surface on the kernel package; a later structured-payload need is a
+  successor-RDR design change, not latitude (C2 says so explicitly).
+- Neutral: a dual-breach producer discovers its two mistakes
+  sequentially (fix shape breach, then see reserved-key breach) —
+  acceptable on the programmer-mistake channel where `0008:C4`
+  already owes no exhaustive list.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: wrapping the three channel errors changes their rendered
+  message text, breaking an unnoticed message-substring assertion or
+  log scraper.
+  **Mitigation**: A2 sweeps for message/equality assertions before
+  implementation; C2 keeps messages diagnostic-only, so any such
+  assertion found is rewritten to `errors.Is` form as part of
+  Phase 1.
+- **Risk**: a consumer already branches by negative classification
+  ("not `ErrEscapeShapeBreach` ⇒ reserved key"), which the new
+  sentinel silently strengthens or an added third error class later
+  weakens.
+  **Mitigation**: A4 sweeps all `resolve.Resolve`/`CheckInput`
+  callers; the only known discriminator
+  (`kernelResolveFailure`) treats non-0009 generically and stays
+  conforming.
+- **Risk**: JD-5's closure is recorded at the JDR home in a way that
+  restates rather than cites, drifting from this RDR's C1.
+  **Mitigation**: the closure entry cites `0018:C1`/`0018:C2` —
+  cite-don't-restate is the JDR's own interface-record convention.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- **Visible**: a dual-breach `Resolve` call returns an error that
+  classifies as `ErrReservedTagKey` — the pinning test fails; the
+  diagnosis is an entry-check reorder in `Resolve`, and the recovery
+  is restoring `CheckValid` before `CheckInput` (or a successor RDR
+  re-deciding C1).
+- **Visible**: a reserved-key breach error stops classifying
+  (`errors.Is` false) — a channel error lost its wrap; the
+  single-breach classification tests name the broken channel.
+- **Silent (guarded)**: before this RDR, a reorder swapped the
+  dual-breach category with no test noise — that is the defect being
+  closed; after it, the same edit is loud by construction.
+- **Silent (bounded, accepted)**: the dual-breach pin's
+  reserved-key half is a *negative* assertion
+  (`errors.Is == false`), which cannot by itself distinguish "shape
+  check won" from "reserved-key check deleted" — the suite as a
+  whole closes that hole (deleting `CheckInput` turns the
+  single-breach channel tests red even while the dual-breach test
+  stays green), and the MVV's flip demonstration shows the pin is
+  sensitive to the reorder it guards.
+- **Diagnosis path**: `errors.Is` against the two exported sentinels
+  partitions every kernel entry-precondition error; anything
+  classifying as neither is by construction some other kernel error,
+  and message text remains the human-facing diagnostic only.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A1 rides the MVV itself;
+      A2/A4 are pre-implementation source sweeps; A3 is a peer-fence
+      re-read)
+- [ ] The JD-5 closure entry (Phase 3) is drafted alongside the
+      code, so no implementation ships calling the order "pinned"
+      while the joint decision's home still reads open — `0008:C4`
+      routes the narrowing authority there, not here
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. In an external-package kernel test, build a dual-breach `Input`
+   programmatically: one escape row carrying a write (`0009` breach)
+   and an owned tag keyed `recognized` (`0008` breach).
+2. Call `resolve.Resolve`; assert the error is non-nil and the
+   `Result` is zero.
+3. Assert `errors.Is(err, resolve.ErrEscapeShapeBreach) == true` and
+   `errors.Is(err, resolve.ErrReservedTagKey) == false` — the
+   precedence pin (C1), with no message-text assertion.
+4. Rebuild the `Input` with only the reserved-key breach (each of
+   the three channels in turn); assert
+   `errors.Is(err, resolve.ErrReservedTagKey) == true` and that the
+   error is a single non-aggregate value (no `Unwrap() []error`) —
+   the carrier (C2). Add three white-box one-liners asserting
+   `errors.Is` directly on each unexported channel error, so "each
+   channel wraps" is a checked fact, not a routed guess (a
+   channel-routing mistake in the black-box input otherwise fakes
+   coverage).
+5. End-state: both tests green at HEAD order — with step 3 run once
+   against pre-change HEAD before the carrier lands (A1's
+   observation); flipping the two entry checks in `Resolve` makes
+   step 3 fail — demonstrated once during MVV, then reverted.
 
-### Phase 1: Code Implementation
+### Phase 1: Carrier
 
-#### Step 1: [Title]
+Export `ErrReservedTagKey` in `internal/resolve/precondition.go` and
+make the three channel errors wrap it via a `%w` chain (C2),
+preserving each rendered message byte-for-byte where the wrap
+allows — a message that must change is recorded, not slipped;
+rewrite any assertion A2 uncovered to `errors.Is` form.
 
-[Conditional scaffold]
+### Phase 2: Precedence pin
 
-[Instructions]
+Land the dual-breach pinning test (C1) and replace the
+`resolve.go::Resolve` comment's "not an observable contract"
+disclaimer with a citation of `0018:C1`.
 
-#### Step 2: [Title]
+### Phase 3: Close the joint decision at its home
 
-[Conditional scaffold]
-
-[Instructions]
-
-### Phase 2: Operational Activation
-
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Record JD-5's closure in JDR 0001 (Open → closed, citing
+`0018:C1`/`0018:C2` — cite, don't restate); RDR 0009's Status-line
+qualifier clearing then follows that record's own rule at its next
+gate, outside this RDR.
 
 ## Validation
 
