@@ -1,0 +1,1 @@
+{"type":"ok","data":{"model":"models/examples/pricing-decision-table.toml","revision":"","observed":{"region":"eu","tier":"paid"},"owned":{},"readers":[],"outcome":"decide","rule":"paid-eu","gates":[],"emit":{"dpa":"required","plan":"pro"},"next":{},"writes":{},"clear":[],"escaped":false}}
