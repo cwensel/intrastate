@@ -454,7 +454,10 @@ fixture migration in-plan if it is not.
 
 Premortem: hardened (hardened)
 Ground-sweep: clean (16 anchors)
-Joint-check: clear (12 peers)
+Joint-check: fired → 0025 (home: cli/0016 §Normative Contracts C4 —
+reader-selection seam homed here; 0025's command-backed read bindings
+are read bindings for C1–C4 purposes, carrier-agnostic; 0025 cites
+this home from its A4)
 
 Joint-check context (not a fire): of the fourteen anchor/literal
 tokens swept, the sole peer hit is 0024's Technical Environment
