@@ -132,205 +132,285 @@ author-values decision the evidence narrows but does not close.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 Widening the outgoing-row quantifier beyond
+  terminal-participating keys still mints at least one false
+  `graph-dead-end` finding on `models/rdr.toml` at HEAD** — D12's
+  nine-finding Phase 3c measurement holds in direction (the exact
+  count is not load-bearing; the sign is).
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: to produce at Resolve — re-run the D12 widening
+    experiment (range `hasOutgoingOrdinaryRow` over all multi-valued
+    keys in a throwaway branch) and record the finding count against
+    `models/rdr.toml`.
+  - **If wrong**: Alternative 1's measured cost evaporates and the
+    ranking must re-run — the relax arm re-enters at Resolve before
+    any carrier surface is edited.
+- **A2 The REQ-122 census is zero at HEAD**: `lint --model
+  models/rdr.toml --as=json` returns zero findings, so the residual
+  class has no member on the conforming model.
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: to produce at Resolve — the lint invocation and its
+    empty findings array.
+  - **If wrong**: the residual class (or another defect) is already
+    populated on a maintained model — C1's re-rank trigger fires
+    before the clause lands and the choice reopens.
+- **A3 Invariant 8 adopts the same split bound and accepts the
+  path-scoped D12-class residual, homed at JDR 0001 §JD-23**, so
+  confirming here binds both liveness invariants with no 0022 rework.
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: cli/0022:C2 (quantifier and abstraction clause,
+    "shared doctrine homed at JDR 0001 §JD-23").
+  - **If wrong**: the two records diverge on the one doctrine and the
+    joint decision reopens at §JD-23 — a Stage 7.1 contradiction, not
+    a silent drift.
+- **A4 REQ-111 is the only record support for the wider quantifier**
+  — no other RDR 0006 clause states invariant 2's exactness in
+  concrete-lattice terms, so C1's subordination of REQ-111 leaves no
+  live contradiction elsewhere in the governing record.
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: to produce at Resolve — sweep
+    `docs/rdr/0006-graph-lint-authority-and-guarantees/artifacts/req-list.md`
+    and the 0006 record for exactness claims naming invariant 2.
+  - **If wrong**: the successor clause contradicts an unsubordinated
+    clause — a 7.1 SPEC-DEFECT against this RDR's fence.
+- **A5 The pin test's positive arm still exercises invariant 2** —
+  `TestAdvDeadEndExistentialOnMergedNode` asserts the bounded split
+  catches a dead half on a terminal-participating key, so
+  re-documenting it as the declared-limit witness removes no coverage.
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**:
+    `internal/graphlint/adversarial_0006_test.go::TestAdvDeadEndExistentialOnMergedNode`
+    (D12 "Fixture corrected": "adds a positive arm asserting the
+    bounded split still catches a dead half living on a
+    terminal-participating key").
+  - **If wrong**: the tripwire pins only an absence and an invariant 2
+    regression could ship green — the positive arm must be added, not
+    merely re-documented.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Confirm the bound — arm (3) — and rank the residual, as the answer to
+JDR 0001 §JD-23's charter. Invariant 2's quantifier stays exactly what
+ships: the dead-end check runs over split nodes bounded by the
+terminal-participating keys (REQ-37's MUST), universal terminal
+satisfaction per split node, existential outgoing-row test over the
+keys that stay merged. No lint behavior changes. What changes is the
+record and its carrier surfaces: the guarantee gains an explicit
+successor clause naming the quantifier and its declared residual (C1);
+the residual class gets a canonical name, classification, and a
+normative re-rank trigger; the pin test is re-documented from open
+question to declared-limit witness, D12 closes, and the authoring docs
+state the limit with the REQ-117 cure at the point the guarantee is
+described (C2).
+
+The ranking — the charter's deliverable — is confirm > scoped
+correlation tracking > relax, on measured evidence. Relaxing REQ-37
+toward REQ-111 exactness converts a declared one-directional miss into
+measured false accusations: nine false `graph-dead-end` findings on the
+conforming `models/rdr.toml`, breaking REQ-122's zero census — the
+false-accuse direction the record's soundness doctrine forbids while it
+tolerates misses. Scoped correlation tracking closes the miss soundly
+but is priced (Alternative 2) against a residual population with zero
+observed members outside the adversarial pin fixture. Confirming costs
+nothing, changes no behavior, and binds both liveness-shaped invariants
+through the §JD-23 anchor with cli/0022:C2 standing unchanged.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+This is record-and-carrier surgery, not a code change. The shipped
+quantifier is already the confirmed reading:
+`internal/graphlint/analysis.go::checkDeadEnd` splits each reachable
+merged node via `analysis.go::splitNode` over `analysis.go::terminalKeys`
+⇒ the universal terminal test (`analysis.go::satisfiesSomeTerminal`)
+never reads a merged value on a deciding key; the outgoing-row test
+(`analysis.go::hasOutgoingOrdinaryRow`) is existential via
+`matchSatisfiable` over the keys left merged inside the split node ⇒
+an exit serving one held value of a non-terminal key rescues the split
+node — the residual this RDR declares rather than closes. The merged
+node set the check reads is written by the reachability fixpoint
+(`reach.go::reach`), whose join decorrelates keys by construction —
+that writer is why the residual exists at all.
+
+The residual class is classified once, for both liveness invariants:
+
+- **Population**: reachable split nodes whose deadness is separable
+  only on the values of a merged key participating in no terminal —
+  the population cli/0022:C1 carves against `graph-dead-end`'s.
+- **Direction**: one-directional — a miss (false negative), never a
+  false accusation; the same soundness direction 0006's doctrine
+  prescribes per invariant.
+- **Extent**: local for invariant 2 (one node's one-step outgoing-row
+  test) versus path-scoped for invariant 8 (cli/0022:C2's strictly
+  larger closure residual) — the rank is per-invariant extent under
+  one shared bound, cited from §JD-23, not restated.
+- **Cure** (REQ-117 direction): model clarity — declare the correlated
+  key in a terminal predicate, or write/clear it explicitly so the
+  correlation is authored rather than inferred.
+
+Three shipped surfaces carry the clause (C2): the call-site doc
+comments in `analysis.go`, the pin test
+`TestAdvDeadEndExistentialOnMergedNode` (the widening tripwire — any
+widening of the split fails it and forces SC-23's census re-run before
+acceptance), and `docs/model-authoring.md`'s dead-end passage. D12
+(`docs/rdr/0006-graph-lint-authority-and-guarantees/artifacts/deviations.md`,
+`Status: needs author decision`) closes by an appended resolution line;
+its entry — including the trigger language — is not rewritten.
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
+One independent load-bearing contract: the successor clause (C1). C2
+carries C1's declaration onto shipped surfaces and is not separately
+holdable.
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+Invariant 2's quantifier is CONFIRMED as REQ-37's bound, adopted as
+this record's answer to the shared merged-node liveness doctrine homed
+at JDR 0001 §JD-23: the dead-end check runs over split nodes — each
+reachable merged node split on the terminal-participating keys only,
+never the whole lattice; terminal satisfaction is UNIVERSAL per split
+node; the outgoing-row test is EXISTENTIAL over the keys that stay
+merged inside the split node. The guarantee this clause succeeds
+therefore reads: `graph-dead-end` is exact over the
+terminal-participating projection; outside it the guarantee carries a
+DECLARED RESIDUAL — the D12 residual: a reachable split node whose
+deadness is separable only on the values of a merged
+non-terminal-participating key is not accused. The residual is
+normative, one-directional (a miss, never a false accusation), and
+local to the one-step outgoing-row test. REQ-111's exactness statement
+is SUBORDINATED to this clause: "recovering exactness" reads as
+exactness of the universal terminal half over the split view, not
+concrete-lattice exactness of the whole invariant. Re-rank trigger:
+the first member of the D12 residual on a maintained (non-fixture)
+model — a shipped dead state separable only on non-terminal keys, or a
+nonzero SC-23-class census attributable to the residual — REOPENS this
+ranking through §JD-23, with scoped correlation tracking (Alternative
+2) as the named successor arm; until then neither liveness record
+widens or narrows the split.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+The declared residual is carried on three shipped surfaces, with no
+lint behavior change and no new I/O surface — `lint`'s findings on a
+conforming model are unchanged by this RDR (MVV step 2 asserts the
+zero census): (a)
+`analysis.go::hasOutgoingOrdinaryRow`'s and `::checkDeadEnd`'s doc
+comments cite cli/0015:C1 and JDR 0001 §JD-23 as the ranking's settled
+home, replacing the open-question "See D12" framing; (b)
+`TestAdvDeadEndExistentialOnMergedNode` remains the executable witness
+of the residual and the widening tripwire — its doc comment cites
+cli/0015:C1, and any widening of the split MUST fail this pin and
+re-run SC-23's census against `models/rdr.toml` before acceptance; (c)
+`docs/model-authoring.md`'s dead-end passage states the limit and its
+cure where the guarantee is described: a state kept live only by
+values of a key no terminal reads is outside the guarantee, and the
+cure is declaring that key in a terminal predicate or writing/clearing
+it explicitly (REQ-117 direction). D12 closes as resolved by cli/0015
+via an appended resolution line; the entry body is not rewritten.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Naming** — the residual class's canonical name is the **D12
+  residual** (the population cli/0022:C1 and :C2 call "D12-class"):
+  reachable split nodes whose deadness is separable only on merged
+  non-terminal-participating keys. Rejected: "existential-rescue
+  defect" (implies a bug where the clause declares a limit) and
+  "false-negative class" (names the direction without the
+  population).
+- **Selection / predicate** — of the two record-supported readings,
+  REQ-37's explicit MUST wins over the quantifier inferred from
+  REQ-111's principle. The deciding rule: an explicit MUST outranks an
+  inference, and adopting the inference measurably breaks a second
+  MUST (REQ-122's zero census — nine false findings, D12's Phase 3c
+  measurement). REQ-111 is not discarded; its exactness claim is
+  scoped to the universal half the split already makes exact (C1's
+  subordination).
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative — shape only, not load-bearing. The D12 residual in the
+smallest form (the ADV-3 fixture's shape):
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
-
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
-
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+```
+terminal:  status = "done"            # status is the only terminal key
+node:      {status: [open], phase: [p, q]}   # reachable, merged on phase
+rows:      advance: match phase = "p" → write status = "done"
+split on terminalKeys() = [status]:   # phase stays merged
+  {status=open, phase=[p,q]}          # one split node
+outgoing?  advance satisfiable (SOME held value: phase=p) → rescued
+concrete:  {status=open, phase=q} has no exit → the declared miss
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Dead-end quantifier | `analysis.go::checkDeadEnd` + `hasOutgoingOrdinaryRow` | D12 residual (the declared miss) | Reuse — confirm; doc-cite update only | C1, C2(a) |
+| Widening tripwire | `adversarial_0006_test.go::TestAdvDeadEndExistentialOnMergedNode` | pins the miss; positive arm on a terminal key (A5) | Reuse — re-document as declared-limit witness | C2(b) |
+| Guarantee prose | `docs/model-authoring.md` dead-end passage | states the guarantee without its limit | Extend — one limit-and-cure passage | C2(c) |
+| Deviation ledger | 0006 `artifacts/deviations.md` D12 | `Status: needs author decision` | Extend — append resolution line | C2 |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+Four factors decide, and the measured ones dominate. (1) **Soundness
+direction**: 0006's doctrine already ranks the two error directions —
+a universal check's miss is tolerable, a false accusation is not — and
+relaxing REQ-37 lands nine false accusations on the conforming model
+(D12's measured experiment), while confirming books only the declared
+miss. (2) **Explicit MUST over inference**: REQ-37 states the bound as
+a MUST with "never the whole lattice"; the wider quantifier is an
+inference from REQ-111's principle, and honouring the inference breaks
+REQ-122's MUST — the Selection decision above. (3) **Measured cost
+against measured benefit**: Alternative 2 closes the miss soundly but
+its priced costs (a second, tuple-aware semantics beside the split
+view; a fixpoint join and ceiling re-sized by pack products) buy
+precision on a population with zero observed members outside the
+adversarial fixture (A2). (4) **Doctrine unity**: §JD-23 requires one
+quantifier doctrine over both liveness invariants; confirming binds
+both through the anchor with cli/0022:C2 unchanged, while either other
+arm forces 0022's rework and SC-23's census re-run. The sibling-path
+check resolves to reuse: invariant 8 already makes this exact decision
+through §JD-23 (cli/0022:C2, `splitNode` over `terminalKeys` verbatim)
+— the discriminator exists, and this RDR confirms it rather than
+minting a parallel one. Rejections in one line each: relax converts a
+declared miss into measured false accusations; scoped correlation
+tracking is measurable cost against an empty measured population,
+retained as the named successor arm; external checking re-litigates
+0006:ALT4; advisory demotion is foreclosed by 0006:C17's closed tier.
+
+Premortem: hardened (paragraph). Shipped and failed: a production
+workflow model livelocks on a key no terminal reads — a retry-loop tag
+correlated with nothing terminal — lint said clean, the trap surfaced
+in production, and the incident review read "dead-end guarantee" as
+concrete exactness; the declared limit existed only inside the record,
+invisible at authoring time. The choice survives because the failure
+indicts the clause's *carriage*, not the ranking — closing the miss
+(arm 1) would have traded this incident for nine false accusations on
+day one, and arm 2's machinery was priced against a then-empty
+population. Two hardenings folded in response: C2(c) moves the limit
+and its cure into `docs/model-authoring.md` where the guarantee is
+read at authoring time, not only into the record; and C1's re-rank
+trigger makes exactly this incident the normative reopening condition
+— the first real-model member of the D12 residual reopens the ranking
+through §JD-23 with Alternative 2 pre-costed as the named successor,
+so the failure escalates by rule instead of by re-litigated debate.
+
+Ground-sweep: clean (16 anchors)
+(`docs/rdr/0015-dead-end-quantifier-over-merged-nodes/evidence/propose-premortem/ground-sweep.md`;
+all CONFIRMED by a fresh-context checker from an anchors-only brief,
+including the seven correlated `stage = "dropped"` rows each writing
+`status = "abandoned"`, and cli/0022:C1/C2 read via the projector).
 
 Joint-check: fired → 0022 (home: JDR 0001 §JD-23). Context (recorded at 0022's
 Stage-2 joint-decision check; symmetric fire): RDR 0022 codifies the
@@ -342,36 +422,124 @@ confirm. One doctrine must govern both liveness-shaped invariants;
 its normative home is the umbrella clause both records cite: JDR 0001
 §JD-23. This peer may not later record `clear` against 0022.
 
+Re-run at this RDR's own Stage-2 close (12 open peers, all Draft, no
+Final): the 0022 fire above stands ALREADY DISPOSED at §JD-23 — this
+proposal is the chartered answer, written through that home. Every
+distinctive modify-anchor and contract literal (`checkDeadEnd`,
+`hasOutgoingOrdinaryRow`, `splitNode`, `terminalKeys`,
+`satisfiesSomeTerminal`, `matchSatisfiable`,
+`TestAdvDeadEndExistentialOnMergedNode`, `graph-dead-end`, `D12`,
+`REQ-37`, `REQ-111`, `REQ-117`, `REQ-122`, `SC-23`, `JD-23`) hits only
+0022; the other 11 peers are grep-clean on all of them. Non-fires
+adjudicated as context: 0014 copies `models/rdr.toml` as its gate
+oracle's lint-subject fixture (a read, and the chosen arm re-runs no
+census, so the Background's arm-(1) coupling never activates);
+0016 lists the model among shipped artifacts read-only; 0019 cites it
+as a conforming model and edits `docs/model-authoring.md`'s
+start-state prose — a different passage of the shared doc than
+C2(c)'s dead-end passage, a merge concern, not a shared decision.
+Absence arm: no `Final` peers exist, and this proposal converts no
+refusal into an acceptance — it confirms an already-shipped
+acceptance.
+
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Relax REQ-37 toward REQ-111 exactness
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Widen the quantifier — range the outgoing-row test
+over all multi-valued keys (or all match-participating keys), so a
+split node dead on any key is accused. This is the reading REQ-111's
+principle supports when read alone, and it closes the D12 residual
+entirely. It was implemented and measured during the 0006 launch
+rather than argued away (D12's Evidence).
 
 **Pros**:
 
-- [Advantage 1]
+- Closes the miss: no reachable dead state escapes on any key.
+- Aligns with REQ-111's "universal checks must not [read merged
+  nodes]" read as a global principle, and with REQ-117's
+  clearer-model bias if the resulting findings were genuine.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Measured: nine false `graph-dead-end` findings on `models/rdr.toml`
+  — the merge decorrelates `stage`/`status` (seven rows write
+  `stage = "dropped"` together with `status = "abandoned"`), so the
+  cross product manufactures views no path produces and accuses them.
+- Inverts the soundness direction: the doctrine tolerates misses and
+  forbids false accusations; this arm trades a declared miss for
+  measured accusations on a conforming model.
+- Breaks REQ-122's zero census; SC-23 must re-run and the checked-in
+  model be reworked to merge genuinely distinct keys — REQ-117's
+  "clearer model" cure fails here because the accused states are
+  abstraction artifacts, not model defects.
+- Unilaterally widens the §JD-23 bound both records share, forcing
+  cli/0022:C2's rework in the same stroke.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: converts a declared, one-directional miss
+into measured false accusations on the conforming model, breaking one
+explicit MUST (REQ-122) to honour an inference from a principle
+(REQ-111).
+
+### Alternative 2: Scoped correlation tracking
+
+**Description**: Keep REQ-37's split bound, but close the miss by
+tracking correlation at a bounded scope — per merged fixpoint node, a
+record of the value tuples that actually co-occur over a *pack* of
+keys (the terminal-participating keys plus keys written in the same
+rows, the "terminal-adjacent" scope D12 leaves uncosted). The
+outgoing-row test then ranges over recorded tuples only, so widening
+never manufactures decorrelated views: `{stage=dropped, status=draft}`
+is absent from every tuple set and cannot be accused. This is the
+relational-domain "packing" shape from the abstract-interpretation
+tradition (uncorroborated in the local corpora — Research Findings —
+so that framing is context, not load-bearing support).
+
+**Pros**:
+
+- Closes the miss soundly: exactness extends to the pack with no
+  false accusations, satisfying REQ-111 and REQ-122 simultaneously.
+- Bounded by construction: tuple sets are capped by distinct write
+  footprints per node, worst case the product of the pack's declared
+  domains — not the whole lattice.
+
+**Cons** (the costing D12 left undone):
+
+- **State cost**: the fixpoint join must union tuple sets, so node
+  identity and the published node ceiling re-size by pack products —
+  a second ceiling population, the blast radius that re-opens
+  `reach.go::reach`'s core rather than adding a pass beside it.
+- **Semantics cost**: a second, tuple-aware satisfaction/edge
+  semantics beside the split view; every consumer of the fixpoint
+  (invariants 2, 6, 8, and the 0021 export) must then decide
+  tuple-aware or not — the dual-semantics drift the record already
+  rejects for path sensitivity ("a path-sensitive reading would be
+  exponential and is rejected", D12 quoting 0006's join rule).
+- **Pack definition is itself a new contract**: model-dependent,
+  unbounded in general, and silently wrong when a correlation spans
+  rows outside the pack — the miss returns one scope further out.
+- **Benefit is measured at zero**: the residual population has no
+  member on the conforming model (REQ-122 census zero, A2) — all cost
+  is spent on the adversarial fixture's class.
+
+**Reason for rejection**: measurable cost against an empty measured
+population — retained as the named successor arm C1's re-rank trigger
+points at, so the pricing above is the head start if the class ever
+populates.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **External model checker over the concrete space**: exact but
+  re-litigates 0006:ALT4 — the authoritative gate stays native lint
+  over the model intrastate actually consumes, not a drifting
+  duplicate toolchain.
+- **Demote the miss to an advisory finding**: the advisory tier is
+  closed at four (0006:C17), and an advisory over states the
+  abstraction cannot separate would accuse falsely at lower severity
+  — the same soundness inversion at a discount.
+- **Delete the pin and stay silent**: hides a shipped limit and
+  removes the widening tripwire REQ-122's census discipline depends
+  on.
 
 ## Context
 
@@ -389,14 +557,16 @@ the accepted miss is pinned by `TestAdvDeadEndExistentialOnMergedNode`
 — the pin stays and is the trigger until the successor clause lands.
 SC-23 already names a guard-aware-pruning successor RDR as the
 expected route. Sequencing: this RDR decides the *predicate*; RDR 0014
-(kata `9en6`) decides the gate's *testable surface* — deciding either
+(kata `9en6`, Proposed 2026-08-28) decides the gate's *testable
+surface* — deciding either
 leaves the other open, though arm (1) would re-run the SC-23 census
 RDR 0014 also touches.
 
 ### Technical Environment
 
 Go module `github.com/cwensel/intrastate`. Surfaces: the graph-lint
-dead-end check (invariant 2) in `internal/guard`, the checked-in
+dead-end check (invariant 2) in `internal/graphlint`
+(`analysis.go::checkDeadEnd`), the checked-in
 `models/rdr.toml` (seven rows correlate `stage = "dropped"` with
 `status = "abandoned"`), pin test
 `TestAdvDeadEndExistentialOnMergedNode`. Governing record: RDR 0006
@@ -406,100 +576,133 @@ dead-end check (invariant 2) in `internal/guard`, the checked-in
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Prior art was read before enumeration
+(`docs/rdr/0015-dead-end-quantifier-over-merged-nodes/evidence/research/prior-art.md`).
+⚠ no prior-art coverage in the local corpora for either external
+claim: the relational-packing framing behind Alternative 2 (two
+queries, citation-fragment noise) and the peer-tool instance question
+(one query here plus sibling 0022's four recorded negatives for the
+shared problem class) — both stay Resolve-side context, and the choice
+rests entirely on in-repo quotable evidence: D12's measured widening
+experiment and REQ texts
+(`docs/rdr/0006-graph-lint-authority-and-guarantees/artifacts/req-list.md`,
+`artifacts/deviations.md`), the shipped quantifier
+(`analysis.go::checkDeadEnd`, `::hasOutgoingOrdinaryRow`), the pin
+test, and the §JD-23 doctrine with cli/0022:C2. Constraints that
+shaped the choice: the no-amend rule on locked 0006 (hence a successor
+clause here, not an edit there), §JD-23's one-doctrine requirement
+across invariants 2 and 8, and the advisory tier closed at four
+(0006:C17).
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Verified** (source read at HEAD): `checkDeadEnd` splits every
+  reachable node via `splitNode` over `terminalKeys()` and tests
+  `hasOutgoingOrdinaryRow` existentially per split node; the call-site
+  doc already books the residual as "the accepted false-NEGATIVE the
+  record books against invariant 2 … See D12".
+- **Verified** (rg count at HEAD): `models/rdr.toml` carries seven
+  `stage = "dropped"` rows, matching D12's correlation claim.
+- **Documented** (D12, artifacts/deviations.md): the widening was
+  implemented and measured — nine false `graph-dead-end` findings on
+  the conforming model; "Both readings have record support and the
+  record does not rank them"; "This entry is the trigger."
+- **Documented** (req-list.md): REQ-37's MUST ("never the whole
+  lattice"), REQ-111's split remedy, REQ-117's cure direction,
+  REQ-122's zero-census pass condition.
+- **Assumed** (A1/A2 spikes at Resolve): the nine-finding direction
+  and the zero census still hold at HEAD — the two measurements the
+  ranking's arithmetic rests on.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: the guarantee becomes honest — the quantifier is named,
+  the residual has a canonical class and a published cure, and the
+  D12 open author decision closes with zero behavior change and the
+  REQ-122 census untouched.
+- Positive: both liveness invariants are bound through one anchor
+  (§JD-23); cli/0022 proceeds with its C2 unchanged.
+- Negative: the miss stays — a real model can livelock on a
+  non-terminal key with lint silent. Accepted deliberately, with C1's
+  re-rank trigger as the escalation path.
+- Negative: REQ-111's broad reading is narrowed by subordination — a
+  recorded reduction in what "exactness" promises.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: the D12 residual populates on a real model after lock.
+  **Mitigation**: C1's normative re-rank trigger reopens the ranking
+  through §JD-23 with Alternative 2 pre-costed as the named successor.
+- **Risk**: the clause drifts across its three carrier surfaces.
+  **Mitigation**: all three carry the same `cli/0015:C1` citation
+  (greppable), and the pin test fails on any widening regardless of
+  what the prose says.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+Visible: any widening of the split fails
+`TestAdvDeadEndExistentialOnMergedNode` — the tripwire — and C2(b)
+forces SC-23's census re-run before acceptance. Silent: the declared
+miss itself — a dead state separable only on a non-terminal key ships
+unaccused; diagnosis path is `docs/model-authoring.md`'s limit-and-cure
+passage (C2(c)), which names the class and the authored cure; recovery
+is C1's re-rank trigger. A developer who suspects the miss reproduces
+it by checking whether the stuck state's distinguishing key appears in
+any terminal predicate (`analysis.go::terminalKeys` is the deciding
+set).
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. `go test ./internal/graphlint -run
+   TestAdvDeadEndExistentialOnMergedNode` — green, with the pin's doc
+   comment now citing `cli/0015:C1` as the settled home.
+2. `intrastate lint --model models/rdr.toml --as=json` — zero
+   findings: the REQ-122 census is byte-unchanged by this RDR.
+3. `rg "cli/0015:C1"` — hits on all three carrier surfaces:
+   `internal/graphlint/analysis.go`,
+   `internal/graphlint/adversarial_0006_test.go`, and
+   `docs/model-authoring.md`.
+4. The D12 entry in 0006's `artifacts/deviations.md` carries the
+   appended resolution line naming cli/0015.
 
-### Phase 1: Code Implementation
+End state: the record ranks the two readings, the ranking is readable
+at every surface an author or implementer meets it, and lint behavior
+is unchanged.
 
-#### Step 1: [Title]
+### Phase 1: Record and Carrier Surgery
 
-[Conditional scaffold]
+#### Step 1: Cite the clause at the call site
 
-[Instructions]
+Update `analysis.go::checkDeadEnd`'s and `::hasOutgoingOrdinaryRow`'s
+doc comments to cite `cli/0015:C1` and JDR 0001 §JD-23 as the
+ranking's settled home, replacing the open-question "See D12" framing
+(C2(a)).
 
-#### Step 2: [Title]
+#### Step 2: Re-document the pin
 
-[Conditional scaffold]
+Rewrite `TestAdvDeadEndExistentialOnMergedNode`'s doc comment from
+needs-author-decision framing to declared-limit witness plus widening
+tripwire, citing `cli/0015:C1`; confirm the positive arm's coverage
+(A5) rather than assuming it (C2(b)).
 
-[Instructions]
+#### Step 3: State the limit where the guarantee is read
 
-### Phase 2: Operational Activation
+Extend `docs/model-authoring.md`'s dead-end passage with the
+limit-and-cure text of C2(c).
 
-[Conditional scaffold]
+#### Step 4: Close D12
 
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Append the resolution line to the D12 entry in 0006's
+`artifacts/deviations.md` — resolved by cli/0015, entry body
+untouched.
 
 ## Validation
 
@@ -647,7 +850,16 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0006 artifacts: `artifacts/req-list.md` (REQ-37, REQ-111,
+  REQ-117, REQ-122), `artifacts/deviations.md` (D12),
+  `artifacts/verification.md` (SC-23).
+- JDR 0001 `docs/jdr/0001-resolve-kernel-seam.md` §JD-23 — the
+  merged-node liveness-quantifier doctrine's home.
+- cli/0022:C1, cli/0022:C2 — invariant 8's population carve and shared
+  split bound (via projector).
+- Source reviewed: `internal/graphlint/analysis.go`,
+  `internal/graphlint/adversarial_0006_test.go`, `models/rdr.toml`,
+  `docs/model-authoring.md`.
+- Prior-art search record:
+  `docs/rdr/0015-dead-end-quantifier-over-merged-nodes/evidence/research/prior-art.md`.
+- Related: kata `intrastate#pz9z` (1538), roborev job 6155.
