@@ -303,7 +303,12 @@ are model-authored.
     and 6 `stopped:`-like (`stopped:no-profile`,
     `stopped:determinacy-trigger-unjudged`, …). The partition is
     clean, so a disposition-partitioned enum domain is authorable as
-    the model stands today.
+    the model stands today. The partition is **three-valued in
+    practice, not binary**: `none` (terminal) and `resolve:lens`
+    (resolve-through) are neither `/rdr-*` routes nor `stopped:`
+    tokens — which is the empirical case against `ALT1`'s prefix
+    convention and the reason dispositions attach per MEMBER rather
+    than as a stop/route flag.
     **Generalized from the Draft's "its `next` key"**: the consumer
     has TWO routing keys under two names — `rdr-write.toml` (30
     `[rule.emit]` blocks) routes on **`op`**, not `next`, with 10
@@ -445,6 +450,19 @@ disposition token that is the empty string. Emit declarations are NOT
 tag declarations: no provenance, no accessor reference, no
 `min/max/elements/single_valued/required`, and an emit key remains
 barred from match, guard, write, and accessor use (`0010:C3`).
+
+A declaration is **author-owned and unversioned**: a domain may be
+widened or narrowed by editing the model, and intrastate holds no
+history to check the edit against — every check in this contract reads
+the model file against itself at one point in time. Widening is cheap
+here in a way the general closed-domain critique does not anticipate,
+because the domain and the rules it constrains are co-located in one
+authored file, so a new member is a one-line edit rather than a
+migration against populated data. NARROWING is the direction that
+carries risk — a removed member orphans any answer a consumer still
+expects — and this contract neither prevents nor detects it: that is
+the same external-truth question the domain-drift risk names, owned by
+the consumer's seam test, not by load.
 ```
 
 **C2**
@@ -689,6 +707,30 @@ independently foreclosed by `0006:C1`: coupling the resolver to a
 design-time proof "would put a design-time proof on the runtime path,
 which this RDR's authority split rejects".
 
+**External support, and one condition deliberately NOT taken**
+(`evidence/research/resolve-literature.md`). Two citations landed
+where the DMN claim (A6) did not. Meyer, *Object-Oriented Software
+Construction* 2e §17.2 p. 646 treats a partial typing regime as
+legitimate, and distinguishes a *cast* (forces a type blindly) from an
+*assignment attempt* (proposes a type and checks membership) — a
+declared `domain` is the latter, which is the shape C2 implements.
+Daigneau, *Service Design Patterns* pp. 272–274 supplies the asymmetry
+this RDR turns on: tolerance is a READER virtue ("ignore unknown
+content"), strictness a SENDER virtue — "message senders can
+facilitate effective communications by using schema validation before
+sending a message". Validating a table's inputs (guards, matches) but
+not its answers inverts that.
+Meyer attaches a condition — a partial regime should "identify [its
+loopholes] clearly, if possible providing tools to flag any software
+using them", i.e. report `scalar`-declared coverage. **That condition
+is deliberately not taken**, and the reason is structural, not an
+oversight: the only finding class it could occupy is advisory, and
+`0006:C17` closes the advisory tier at four named codes. Taking it
+would reopen a locked Final contract for a report neither kata asked
+for. The escape hatch stays visible where the Risks section already
+puts it — in the one reviewable declaration table — and its check is
+review- and consumer-seam-side.
+
 The hardened premortem (`evidence/propose-premortem/critic.md`,
 17-finding ledger) returned PASS with mitigations; the recommendation
 survives hardened. Its accepted findings are live in C1–C4, the
@@ -755,6 +797,15 @@ it as a stop; everything else routes. No key admission, no domains.
 - A binary stop/route split is baked in; the peer instance read shows
   peers carrying richer declared end-state semantics (ms-conductor's
   `status: success|failed` on `type: terminate`).
+- **The motivating model already needs three, not two** (verified at
+  Resolve against `rdr-status.toml`): beside the `/rdr-*` routes and
+  the `stopped:*` tokens the folded kata names, the live navigator
+  answers `none` and `resolve:lens` — a terminal and a
+  resolve-through, neither a stop nor a command to run. A prefix
+  convention that partitions the world in two silently classes both
+  with the routes, which is the same "reads as a command" failure the
+  kata filed. Per-member dispositions carry a third value the day the
+  author writes one, with no grammar change.
 
 **Reason for rejection**: solves only the folded facet, at the cost
 of shipping the convention as contract; the QOC correctness row is a
