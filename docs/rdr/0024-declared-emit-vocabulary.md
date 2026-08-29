@@ -134,21 +134,18 @@ distinction lives in a string-prefix naming discipline every consumer
 re-implements and no lint checks.
 
 The decision, made once: does a model declare its emit vocabulary, and
-what does a declaration prove? The seeded candidate: an optional
+what does a declaration prove? The candidate weighed: an optional
 per-key `[emit.<key>]` declaration table mirroring the tag grammar's
-declare-then-prove move — kind + domain (enum/bool/int; scalar as the
-declared-but-unvalidated escape hatch), domain members carrying a
-disposition (route/stop/terminal) that surfaces as its own field on
-the resolve payload (additive on `0005:C1`'s append-only envelope,
-the same override path RDR 0010 took for emit itself), with values
-staying uninterpreted at resolve — the declaration constrains
-authoring, not evaluation. Predicate: with any declaration present, an
-undeclared emit key refuses at load and an out-of-domain value is a
-blocking lint finding; a model with zero declarations lints exactly as
-today (opt-in, no corpus breakage). The RDR must weigh the folded
-facet's cheaper competing shape — a documented reserved prefix
-enforced by lint — and decide the contract once across grammar
-(`internal/table`), proof (`internal/graphlint`), and surfacing
+declare-then-prove move, with domain members carrying a disposition
+that surfaces on the resolve payload (the Proposed Solution is its
+adopted form; C1–C4 are authoritative). Predicate: with any
+declaration present, an undeclared emit key and an out-of-domain
+value each refuse at load and surface as blocking `intrastate lint`
+findings; a model with zero declarations lints exactly as today
+(opt-in, no corpus breakage). The RDR must weigh the folded facet's
+cheaper competing shape — a documented reserved prefix enforced by
+lint — and decide the contract once across grammar
+(`internal/table`), proof (the load pipeline), and surfacing
 (`internal/cli`), keeping intrastate generic: domains and dispositions
 are model-authored.
 
@@ -230,10 +227,10 @@ are model-authored.
   external alignment claim for declare-then-prove over answers.**
   - **Status**: Pending
   - **Method**: Prior Art
-  - **Evidence**: no corpus coverage at Propose
-    (`evidence/research/propose-prior-art.md`); demoted here for a
-    Resolve spec read (DMN §decision table, output values) rather than
-    leaned on — the choice rests on the in-repo mirror (`0002:C22`).
+  - **Evidence**: to verify by a DMN spec read (§decision table,
+    output values); no corpus coverage
+    (`evidence/research/propose-prior-art.md`). The choice does not
+    lean on this claim — it rests on the in-repo mirror (`0002:C22`).
   - **If wrong**: an alignment citation drops; the approach stands on
     the tag-grammar mirror and the opened peer citations.
 
@@ -241,16 +238,15 @@ are model-authored.
 
 ### Approach
 
-Adopt the seeded candidate, sharpened on one point: an **optional
-per-key `[emit.<key>]` declaration table** that mirrors the tag
-grammar's declare-then-prove move, whose checks land in the **load
-pipeline** (not graphlint), and whose domain members may carry a
-**model-authored disposition** that `flow resolve` surfaces as one
+An **optional per-key `[emit.<key>]` declaration table** that mirrors
+the tag grammar's declare-then-prove move, whose checks land in the
+**load pipeline** (not graphlint), and whose domain members may carry
+a **model-authored disposition** that `flow resolve` surfaces as one
 appended payload field.
 
-A declaration answers the contract question the seed poses — *what
-does a declaration prove?* — as: **a declaration constrains
-authoring, never evaluation.** With any declaration present, the
+A declaration answers the contract question the Problem Statement
+poses — *what does a declaration prove?* — as: **a declaration
+constrains authoring, never evaluation.** With any declaration present, the
 loader proves every authored `[rule.emit]` key is declared and every
 authored value conforms to its key's declared kind/domain, before
 candidate rows are yielded. Evaluation is untouched: emit values stay
@@ -263,19 +259,18 @@ appended `dispositions: {}` (C4) — the same class of additive,
 fixture-updated change `0010:C4` shipped for `emit` itself, never a
 behavioral one.
 
-The enforcement-point sharpening is deliberate: the seed predicate
-said "blocking lint finding," but both new checks are single-rule —
-decidable from one rule plus the model's declarations — and
-`0002:C24`'s load/lint arity split assigns single-rule checks to the
-load pipeline ("Cross-row findings … carry RDR 0006's lint
-categories, not these"). ⇒ The checks are new load categories, and
-the seed's acceptance still holds verbatim: `intrastate lint` loads
-first and maps a load refusal to blocking findings
-(`internal/cli/lint.go` builds them via its `loadFindings` arm), and
-`flow resolve` maps every load category to `flow-model-invalid`
-(`0005:C1`). No graphlint code changes; the advisory tier stays
-closed (`0006:C17`) and the blocking tier's "at least" floor
-(`0006:C3`) is not touched.
+The enforcement point is the load pipeline, not lint: both new checks
+are single-rule — decidable from one rule plus the model's
+declarations — and `0002:C24`'s load/lint arity split assigns
+single-rule checks to load ("Cross-row findings … carry RDR 0006's
+lint categories, not these"); a parallel lint-side single-rule tier
+would contradict the split the repo is built on. The Problem
+Statement's predicate holds verbatim: `intrastate lint` loads first
+and maps a load refusal to blocking findings (`internal/cli/lint.go`
+builds them via its `loadFindings` arm), and `flow resolve` maps
+every load category to `flow-model-invalid` (`0005:C1`). No graphlint
+code changes; the advisory tier stays closed (`0006:C17`) and the
+blocking tier's "at least" floor (`0006:C3`) is not touched.
 
 ### Technical Design
 
@@ -354,13 +349,14 @@ pipeline (`0002:C24`'s "load") MUST refuse, before yielding rows:
   of its key's declared enum domain, not a `bool` token, or not an
   `int` literal, per C1's kinds (`scalar` values are never refused).
 
-Both categories join `0002:C24`'s data-level set (that list is "at
-minimum", and `reserved_tag_key` is the append precedent) and
-therefore map to `flow-model-invalid` with one findings[] entry per
-hit under `0005:C1`, and to blocking findings under `intrastate lint`
-via its load-refusal arm (`internal/cli/lint.go`). All three
-categories are refusals — nonzero exit, never advisory, under every
-surface that loads the model. Masking is bounded by the existing
+These two categories and C1's `malformed_emit_declaration` join
+`0002:C24`'s data-level set (that list is "at minimum", and
+`reserved_tag_key` is the append precedent) and therefore map to
+`flow-model-invalid` with one findings[] entry per hit under
+`0005:C1`, and to blocking findings under `intrastate lint` via its
+load-refusal arm (`internal/cli/lint.go`). All three categories are
+refusals — nonzero exit, never advisory, under every surface that
+loads the model. Masking is bounded by the existing
 pipeline discipline: `0002:C24` requires every category refused
 before rows are yielded and `0005:C1` requires one findings[] entry
 PER HIT, so an emit refusal reports beside, not instead of, a
@@ -402,11 +398,12 @@ JSON object mapping emit key → the disposition token the declaration
 assigns the selected row's authored value, keys in byte order,
 present as `{}` — never `null`, never omitted — when no selected
 value carries one (undeclared model, non-enum kind, flat-array
-domain, or empty emit block alike). It is appended LAST in
-`internal/cli/flow_resolve.go::resolvePayload`, immediately after
-`emit` — the same additive append `0010:C4` used, for the same
-reason: declaration order is the emitted key order and the repo
-asserts payload JSON inline. The token is surfaced verbatim;
+domain, or empty emit block alike). It is inserted at one fixed
+position in `internal/cli/flow_resolve.go::resolvePayload`,
+immediately after `emit` — the same additive insertion `0010:C4`
+used (`emit` after `Gates`), for the same reason: struct declaration
+order is the emitted field order and the repo asserts payload JSON
+inline. The token is surfaced verbatim;
 intrastate never interprets it. Text mode renders through the generic
 payload renderer as `dispositions.<key>: <token>` / `dispositions:
 (none)` with no per-verb special case (the `0010:C4` clause). A plan
@@ -474,7 +471,7 @@ domain = ["required", "waived"]   # flat form: no dispositions
 | Kind vocabulary and value-conformance rules | Predecessor (RDR 0003 via `0002:C22`) | Available | C1 reuses the token spellings; A4 decides reuse vs local check |
 | Load-category refusal + findings mapping | Predecessor (`0002:C24`, `0005:C1`) | Available | C2 appends three categories to an "at minimum" set |
 | Lint surfacing of load refusals as blocking findings | Predecessor (RDR 0006 CLI arm) | Available | C2; no graphlint change |
-| Append-only resolve payload | Predecessor (`0005:C1`, precedent `0010:C4`) | Available | C4 appends `dispositions` after `emit` |
+| Append-only resolve payload | Predecessor (`0005:C1`, precedent `0010:C4`) | Available | C4 inserts `dispositions` after `emit` |
 
 ### Existing Infrastructure Audit
 
@@ -506,38 +503,20 @@ while amending a Final contract; D re-creates the exact failure the
 seed documents (a defect that fires when the rare row is finally
 exercised). A is the only approach that closes both defects, keeps
 every locked contract intact, and costs nothing to models that do not
-opt in. The enforcement point moved from the seed's "lint finding" to
-load categories because `0002:C24`'s arity split already assigns
-single-rule checks to load — inventing a parallel lint-side
-single-rule tier would contradict the split the repo is built on,
-while the seed's acceptance (each defect a blocking finding under
-`intrastate lint`) holds either way.
+opt in. The load-not-lint enforcement point is the Approach's
+`0002:C24` arity argument; the acceptance predicate holds either way.
 
 The hardened premortem (`evidence/propose-premortem/critic.md`,
 17-finding ledger) returned PASS with mitigations; the recommendation
-survives hardened. Folded: the zero-declaration claim restated as
-load/lint-identical plus one appended `{}` field (P-5, Approach); the
-authored-form-equals-executed-form proof pinned to `0010:C3`'s
-no-mutation clause (P-4, C2); refusal-tier and no-masking clauses
-(P-16/P-17, C2); the escape-rescue disposition join and the
-no-default-path statement (P-7, C4); lexical-only kind checks (P-13/
-P-14, C1); scalar hollowing and disposition-token drift as named
-risks with the advisory-tier route explicitly barred by `0006:C17`
-(P-2/P-11/P-12); the whole-table-refusal blast radius priced as
-authoring-time, model-internal, CI-caught (P-9/P-15, Failure Modes).
-Duplicate disposition membership was already refused (P-10, C1);
-non-enumerable answers were already surfaced as A5 (P-8).
+survives hardened. Its accepted findings are live in C1–C4, the
+Risks and Mitigations, and the Failure Modes.
 
 Premortem: hardened (hardened)
 
 Ground-sweep: clean (23 anchors)
 
-Joint-check: fired → 0023 (home: JDR 0002 §D1) — updated 2026-08-28 by
-0023's Stage-2 pass (symmetric write; at this record's own pass 0023
-was a template and the check read clear (12 peers)); re-homed
-2026-08-28 to the chartered envelope registry, replacing the interim
-home `cli/0023:C2` (which now carries only the verb's instance
-assignments). The fire: 0023's proposal shares the modify-anchor
+Joint-check: fired → 0023 (home: JDR 0002 §D1; the verb's instance
+assignments ride `cli/0023:C2`). The fire: 0023's proposal shares the modify-anchor
 `internal/cli/flow_resolve.go::resolvePayload` — this RDR appends
 `dispositions` (C4), 0023 projects the echo group off the same
 payload under an opt-in `--plan-only`. Homed and compositional, not a
@@ -547,7 +526,7 @@ assignment rides `cli/0023:C2`) because C4's join reads plan-group
 inputs only (the `[emit]` declaration and the selected row's authored
 value, by `Plan.RuleID`), so C4's append-last and never-omitted
 clauses hold under the projection in either landing order and neither
-contract moves. Original context beside the verdict: no other peer
+contract moves. Peer sweep: no other peer
 shares a modify-anchor at symbol level — 0012 touches
 `internal/cli/flow_resolve.go::guardSeam` and `internal/guard/lint.go`
 where this RDR touches `resolvePayload` and `internal/cli/lint.go`
@@ -661,28 +640,24 @@ runtime surprise; the QOC correctness row is a 2.
 
 ### Background
 
-Tracked as kata `intrastate#vt9n`; kata `intrastate#rg0e` was
-collapsed into it by seed-triage (both triage leaves agreed
-independently: rg0e's declared-kind shape is one field of this
-declaration grammar, and its lint-enforced reserved-prefix shape is
-the degenerate form of the same move — deciding them separately would
-either reopen this contract or ship the convention the declaration
-exists to replace). Scope review of rg0e verified there is no
-STOP/ROUTE discriminator anywhere — `EmitValue` is
+Tracked as kata `intrastate#vt9n`; kata `intrastate#rg0e` is folded
+in: its declared-kind shape is one field of this declaration grammar,
+and its lint-enforced reserved-prefix shape is the degenerate form of
+the same move — deciding them separately would either reopen this
+contract or ship the convention the declaration exists to replace.
+No STOP/ROUTE discriminator exists anywhere today — `EmitValue` is
 `{Key, Value string}` ("undeclared, uninterpreted, compared by exact
 byte equality"), the resolve payload copies it verbatim, and
-`internal/graphlint` never reads `Row.Emit` — and found RDR 0010
-adjudicated the principle while naming this exact widening as
-deferred: `0010:A6` verified string-valued emit "as sufficient for the
-motivating consumer" and its Consequences state "structured answers
-wait for a widening"; a widening on a locked contract is a new RDR,
-never an amendment. Consumer stakes: every prose decision table
-migrated to a model multiplies the unlinted emit surface, and a
-cross-file seam test wants the leg "every declared emit domain member
-is a real command or stop token." Acceptance carried from the seed:
-with declarations present, the misspelled value and the typo'd key are
-each a blocking finding; a declaration-free model lints exactly as
-today.
+`internal/graphlint` never reads `Row.Emit`. RDR 0010 adjudicated the
+principle while naming this exact widening as deferred: `0010:A6`
+verified string-valued emit "as sufficient for the motivating
+consumer" and its Consequences state "structured answers wait for a
+widening"; a widening on a locked contract is a new RDR, never an
+amendment. Consumer stakes: every prose decision table migrated to a
+model multiplies the unlinted emit surface, and a cross-file seam
+test wants the leg "every declared emit domain member is a real
+command or stop token." The acceptance predicate lives in the Problem
+Statement.
 
 ### Technical Environment
 
@@ -690,8 +665,9 @@ Go module `github.com/cwensel/intrastate`. Surfaces:
 `internal/table/load.go` (the tag declaration grammar to mirror),
 `internal/table/normalize.go::emitSequence` (pass-through, no
 validation), `internal/table/model.go::EmitValue`,
-`internal/graphlint/` (where the domain check would land),
-`internal/cli/flow_resolve.go` (resolve payload `Emit` map).
+`internal/graphlint/` (unchanged — the emit checks land in the load
+pipeline), `internal/cli/flow_resolve.go` (resolve payload `Emit`
+map).
 Governing records: RDR 0002 (tag grammar), RDR 0005 (C1 append-only
 envelope), RDR 0006 (lint authority), RDR 0010 (C3, C4, A6 — emit
 block ownership and the deferred widening).
@@ -710,9 +686,9 @@ opened two citations: ms-conductor `examples/README.md` §Explicit
 Termination (declared `type: terminate` steps with a `status` field)
 and scxmlcc `doc/user-manual.md` §Final State (`<final>` as a
 declared element) ⇒ peers declare the stop structurally, which
-disqualifies the prefix convention as the contract. ⚠ no prior-art
-coverage in the available corpora for the DMN output-values class
-claim; it is demoted to A6 rather than leaned on. Code paths read:
+disqualifies the prefix convention as the contract. ⚠ the DMN
+output-values class claim has no corpus coverage; it is carried as
+A6, not leaned on. Code paths read:
 `internal/table/load.go::loadTags` (the declare-then-prove shape to
 mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 `internal/table/normalize.go::emitSequence`,
@@ -790,8 +766,8 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
   corpus make the appended `dispositions` field a wide mechanical
   diff.
   **Mitigation**: A2 sizes it at Resolve; `0010:C4` walked the same
-  path with `emit` and the append-last rule confines each edit to one
-  trailing field.
+  path with `emit`, and the fixed insertion point (immediately after
+  `emit`) confines each inline edit to one field at a known position.
 - **Risk**: scalar hollowing — whole-model strictness pushes a bulk
   adopter to declare everything `scalar`, and "declared" reads as
   "checked" (premortem P-2/P-11).
@@ -878,7 +854,7 @@ non-TagDecl carrier type (C3); dump and kernel untouched.
 
 ### Phase 3: Envelope surfacing
 
-Append `dispositions` to `resolvePayload` after `emit`, joined from
+Insert `dispositions` into `resolvePayload` after `emit`, joined from
 the selected row's authored values against the carried declarations
 (C4); update inline payload assertions in the same change (A2).
 
@@ -894,23 +870,46 @@ home.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The MVV is the acceptance spine — the seed's adversarial table driven
+from reproduced defect to green declaration to opt-out identity. Done
+= every scenario below is green and the MVV run recorded; every C1
+refusal arm and every C2 category maps to at least one scenario.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Scenario**: table-driven load of malformed declarations — an
+   unknown `kind` token; an `enum` with no domain, an empty domain,
+   an empty-string member, or a duplicate member (across disposition
+   lists included); a `domain` on a non-enum kind; an empty-string
+   disposition token (C1).
+   **Expected**: each refuses `malformed_emit_declaration` at load,
+   one blocking finding per hit, before any row is yielded.
+2. **Scenario**: a declared model with an undeclared `[rule.emit]`
+   key on an ordinary rule and on an escape rule, and with
+   out-of-domain values per kind — a non-member enum value, a
+   non-`true|false` bool, a non-integer-literal int, an arbitrary
+   `scalar` value (C2).
+   **Expected**: `unknown_emit_key` on both rule classes;
+   `emit_value_out_of_domain` for the enum/bool/int cases; `scalar`
+   never refused. A model with a coexisting structural defect reports
+   both — one findings[] entry per hit, no masking.
+3. **Scenario**: zero-declaration opt-out (C2's opt-in leg; A3's
+   corpus sweep as the fixture check).
+   **Expected**: full suite green with the loader change and no model
+   changed; no new refusal reachable; the only observable delta is
+   C4's appended `dispositions: {}`.
+4. **Scenario**: declaration carry through normalization (C3).
+   **Expected**: key, kind, domain members, and member dispositions
+   read identically off the normalized model; kernel and dump
+   surfaces carry none of it.
+5. **Scenario**: `flow resolve` payloads across the join matrix — an
+   enum member carrying a disposition, a flat-array domain, non-enum
+   kinds, an empty emit block, an undeclared model, and an escape-row
+   rescue (C4).
+   **Expected**: `dispositions` maps only member-disposition hits and
+   is `{}` in every other case — never `null`, never omitted — sits
+   immediately after `emit`, joins from the escape row's own authored
+   values by `Plan.RuleID`, and renders in text mode through the
+   generic payload renderer; `flow next` payloads carry no
+   `dispositions`.
 
 ## Finalization Gate
 
