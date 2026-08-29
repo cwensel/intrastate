@@ -37,13 +37,13 @@ Query run:
 Accepted citations:
 
 - ms-conductor `examples/README.md` §Explicit Termination
-  (`/Users/cwensel/sandbox/newcoinc/state-machines/repos/ms-conductor/examples/README.md`):
+  (`../state-machines/repos/ms-conductor/examples/README.md`):
   a workflow with "multiple legitimate end states" uses `type: terminate`
   steps with a declared `status: success|failed` field — the stop is a
   structural declaration carried on the step, surfaced distinctly
   (exit code, `is_explicit: true`), never a prefix on the output string.
 - scxmlcc `doc/user-manual.md` §Final State (`<final>`)
-  (`/Users/cwensel/sandbox/newcoinc/state-machines/repos/scxmlcc/doc/user-manual.md`):
+  (`../state-machines/repos/scxmlcc/doc/user-manual.md`):
   SCXML marks termination with the `<final>` element — a declared node
   kind that machinery reacts to (`done.state.ID` events, machine
   termination) — not a naming discipline over state ids.
