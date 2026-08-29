@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -1853,125 +1853,75 @@ keys; no clause requires the two orders to match, and none should.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: `0023-resolve-envelope-projection/artifacts/gate.md`
+(Gate PASS 2026-08-29)
 
 ### Cross-Cutting Concerns
 
-[Gate key: cross-cutting]
+**Versioning.** The flag is additive and opt-in, so no existing caller
+observes a change; default-mode output is byte-identical to the
+pre-change binary (C1, guarded by the MVV's pre-change golden). Version
+skew is loud in both directions rather than silent (F5): a pre-RDR
+binary given `--plan-only` fails with `command-error` and exit 2, and a
+post-RDR binary without the flag emits the full width. The accepted
+limit is that the skew surfaces as the shared usage bucket rather than a
+typed refusal — the same limit `0011:A14` recorded for `--all`, adopted
+here rather than re-litigated.
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Incremental adoption.** Opt-in by construction: the projection is
+reachable only through the flag, and the RDR ships the capability, not
+its adoption (§Consequences). A green build therefore delivers zero
+measured saving on day one and does not close the motivating tracker
+`intrastate#srz2` — it unblocks it. The realized reduction is measured
+by the follow-on migration change that adds the flag at a real call
+site, charted in `evidence/critique/Charted.md`.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Canonical-form / determinism.** This RDR claims byte-identical
+default-mode output, so the checklist applies in its byte-layout half
+(no hashing or content-addressed identity is claimed, so hash function,
+library and pre-image layout do not apply):
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+- *Encoder and byte layout* — one encoder for both paths, HTML escaping
+  disabled, the measurand fixed as the full emitted NDJSON line
+  excluding the trailing newline (C1). Carried fields keep their
+  default-mode relative order.
+- *Map iteration order* — no map-order path exists in text mode: the
+  gateway flattener sorts keys from the decoded map
+  (`internal/cli/respond/text.go::flatten`, A2). JSON key order is
+  struct declaration order, preserved under the pointer conversion.
+- *Empty / null / absent distinguishability* — this is the sharpest edge
+  and is contracted, not assumed. An omitted key is **absent**, never
+  `null` and never an empty placeholder (C1); `emit` stays present as
+  `{}` per `0010:C4`; `observed`/`owned` render as `{}` when empty in
+  default mode, which bare-map `omitempty` would wrongly drop (A2). A9
+  covers the residual: every container writer must return a non-nil
+  value or a pointer to it would render `null` under `omitempty` and
+  silently change default-mode bytes — carried as a Phase-1 oracle
+  obligation ahead of the conversion.
+- *Whitespace and case folding* — unchanged; the projection deletes whole
+  keys and never rewrites a carried value.
+- *Version marker* — none is minted, deliberately. The wire shape is
+  identified by the flag the caller passed, not by an in-payload marker;
+  `revision` is the plan-side identity slot and is contracted-but-vacant
+  until RDR 0002's `[model]` block admits the key (C2).
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+**Character encoding.** No new encoding surface. Tag literals are
+refused rather than coerced by the shipped parser
+(`internal/cli/flow_input.go::parseTags`, A7); the sole rewrite is
+`canonicalSet`'s re-encode of an already-valid set literal, which is
+value-preserving.
 
-### Proportionality
+**Build tool compatibility.** The docs and help surfaces are generated
+and CI-checked, so a commit registering the flag without regenerating
+them turns `make check` red. Phase 3 owns the regeneration; the
+ordering is named in the plan so the phases are sequenced rather than
+discovered at build time.
 
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Concurrency model, memory management, licensing, deployment model, IDE
+compatibility and secret/credential lifecycle do not apply: the change
+adds one boolean flag and one projection function on an existing
+single-process CLI path, persists nothing, and touches no credential or
+distribution surface.
 
 ## References
 
@@ -1995,5 +1945,7 @@ matrix/provenance prose left from the template or Seed
   trajectory context). Propose research:
   `evidence/research/propose-prior-art.md`.
 - Spike evidence: `evidence/spikes/a1-byte-width.md`,
-  `evidence/spikes/a2-encoder-mechanism.md`. Related: kata
+  `evidence/spikes/a2-encoder-mechanism.md`,
+  `evidence/spikes/a5-total-walker.md`,
+  `evidence/spikes/a8-text-width.md`. Related: kata
   `intrastate#srz2`.
