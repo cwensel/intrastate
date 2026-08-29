@@ -205,11 +205,21 @@ are model-authored.
     C4 takes the struct from fourteen fields to fifteen and the wire
     from thirteen keys to fourteen. Beside it sit the inline
     whole-payload assertions and byte-identity goldens in
-    `internal/cli/flow_demand_0011_test.go` — 0011's own adversarial
-    oracle for its demand-set change (its comment: "the goldens are
-    deliberately brittle: any change to the resolve envelope re-breaks
-    every entry at once"), not a payload-shape contract 0011 owns, so
-    their update is a fixture edit rather than a peer-spec amendment.
+    `internal/cli/flow_demand_0011_test.go`. **These are NOT ordinary
+    fixtures, and calling them that understates the edit**: they are
+    0011's REQ-118 / `0011:S8` oracle, and the file states four times
+    over that they are "captured from the PRE-change build of this
+    tree, per A-11" to prove `flow resolve` is byte-identical across
+    0011's demand-set change — "so a field this contract was never
+    meant to touch cannot change unnoticed". Regenerating them is
+    therefore a **peer-spec amendment, not a fixture edit**: it
+    permanently destroys the pre-change property that gives them their
+    evidentiary value, and no regenerated capture can recover it. The
+    regeneration is nonetheless licensed here, because 0011's
+    guarantee is scoped to 0011's own change class (A15 iii) and
+    `dispositions` is an append 0011 never contemplated — but it is
+    licensed EXPLICITLY, by name, as an amendment to a peer record's
+    verification, exactly as `TestReq39` is below.
     **Counted, not estimated**: the payload literals are Go raw strings
     concatenated across source lines, so a line-oriented grep
     undercounts the adjacency — normalizing the `` ` + `` joins first
@@ -408,24 +418,55 @@ are model-authored.
   package-wide determinism sweep that a new `[]string` carried on the
   normalized model falls under, so C3's bytewise-sorted union is the
   shape that satisfies it rather than merely a house-style choice.**
+  - **Status**: Refuted — the sweep does NOT reach a model-level
+    carrier. C3's sort stands on scenario 4, which asserts it
+    directly.
+  - **Method**: Source Search
+  - **Evidence**: Read at HEAD,
+    `internal/table/roundtrip_test.go::TestReq146_EveryEmittedSequenceIsASortedSlice`.
+    All three sub-tests are scoped to `table.Row`, never to `Model`:
+    "every emitted sequence is a slice" reflects over
+    `reflect.TypeOf(table.Row{})` against a **hand-written** field
+    list (`Atoms, NextTags, Writes, RequiresOwned, Gate, Escape,
+    Suffix`); "repeated loads produce one value" compares
+    `got.Rows`; "the row sequence itself is sorted" sorts row
+    identities. A new `Model.EmitDecls` field is structurally
+    unreachable from all three — adding it cannot make the sweep
+    fire, and an unsorted union built from map iteration would pass
+    it untouched. The assumption's second horn is the true one, and
+    more strongly than it was posed: the carrier cannot be "added to
+    the list" either, because the list is typed to `table.Row`.
+    The determinism REQUIREMENT is unaffected — it is C3's sort that
+    fixes it, and Testing Strategy scenario 4 asserts the
+    repeated-load leg directly rather than resting on this sweep,
+    which is why the refutation costs the contract nothing.
+  - **If wrong**: n/a — the claim is refuted, not carried. The
+    consequence it predicted is the one that landed: the sort is
+    correct but unproven by the sweep C3 cited, so scenario 4 is the
+    sole oracle and Phase 2 owes no edit to `TestReq146`.
+
+- **A9 A source line is recoverable for an emit refusal the way
+  `tagHeaderLine` recovers one for a tag refusal — i.e. the raw source
+  the loader holds (`l.src`) permits locating an `[emit.<key>]`
+  declaration header and a rule's `[rule.emit]` block, so Phase 1's
+  `emitHeaderLine` is writable without new plumbing.**
   - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: Named by the 3amigo QA pass at
-    `internal/table/roundtrip_test.go` as pinning "every emitted
-    sequence is a sorted slice" and as producing one value across
-    repeated loads despite randomized map iteration. What is NOT yet
-    established is its SCOPE — whether the sweep enumerates model
-    surfaces reflectively (so `Model.EmitDecls[k].Domain` is picked
-    up automatically) or asserts a fixed hand-maintained list (so the
-    new carrier must be added to it, and omitting it degrades
-    silently the way scenario 6's category-witness map does). The
-    determinism requirement holds either way — it is the sort that
-    C3 fixes — but which test proves it, and whether an edit to that
-    test is owed in Phase 2, is unverified.
-  - **If wrong**: the sort is still correct but unproven by the sweep
-    C3 cites, and Phase 2 owes an explicit determinism assertion of
-    its own (scenario 4's repeated-load leg); surfaces as a carrier
-    the sweep never looks at.
+  - **Evidence**: Raised by the critique lens, which established the
+    gap but not the remedy: `atLine` is wired at exactly ONE loader
+    site at HEAD (`internal/table/load.go:214`, in `loadTags`, fed by
+    `tagHeaderLine(l.src, key)`), so without an analogue every emit
+    refusal renders line 0/1 and the Failure Modes' "offending file in
+    `locator`" is false. What is NOT established is that the same
+    technique reaches an emit declaration: `tagHeaderLine`'s method of
+    locating a `[tags.<key>]` header in `l.src` has not been read, and
+    a rule's `[rule.emit]` block is nested one level deeper than a
+    top-level declaration table, so the rule-scoped locator may need a
+    different anchor than the declaration-scoped one.
+  - **If wrong**: the locator promise narrows to whatever is
+    recoverable (declaration-level only, or file-level), and the
+    Failure Modes and MVV step 2 say so instead of promising a line;
+    surfaces as a refusal pointing at `:1` in the MVV.
 
 ## Proposed Solution
 
@@ -529,18 +570,36 @@ free-form map so strict decoding descends no further"). Strictness
 still catches a typo at the DECLARATION level (`domaim = [...]`
 refuses), but inside the domain sub-table the decoder catches
 nothing, so this contract must refuse by hand what strictness gives
-free elsewhere.
+free elsewhere. **That declaration-level refusal is the decoder's, not
+this grammar's**: it arrives as `unknown_schema_field` (A1's
+`decodeStrict` arm), an existing `0002:C24` category and NOT one of
+the three this RDR registers. A test covering a `domaim` typo asserts
+the decoder's slug, and an implementer must not add a hand-written arm
+to re-report it as `malformed_emit_declaration`.
 
 Refused as `malformed_emit_declaration`: an unknown `kind` token; an
-`enum` with no domain, an empty domain, an empty-string member, or a
+`enum` carrying no usable domain, an empty-string member, or a
 duplicate member (duplicates across disposition lists included — one
 member, one disposition); a `domain` on a non-enum kind; a
 disposition token that is the empty string; and — the arms that exist
 only because strictness cannot reach them — a `domain` that is
 neither a flat array of strings nor a table of disposition keys, a
 disposition whose value is not an array of strings, any nesting below
-the disposition level, a non-string member, and a disposition
-sub-table carrying no keys. Emit declarations are NOT tag
+the disposition level, and a non-string member.
+
+**"No usable domain" is ONE arm, not two, because the decoder cannot
+tell the two authorings apart.** Measured against
+`pelletier/go-toml/v2 v2.2.4` with an `any`-typed `domain`: an `enum`
+declaring no `domain` key at all and an `[emit.<key>.domain]`
+sub-table carrying zero keys BOTH decode to `Domain == nil`, with no
+error and nothing to discriminate on. Refusing them separately is
+therefore unimplementable, and a fixture per arm is unwritable — so
+this contract states the single reachable arm the implementation can
+actually satisfy. An empty flat `domain = []` IS distinguishable (it
+decodes to a non-nil empty slice) and is covered by the same arm,
+which is a decision about the message, not a limit: all three
+authorings are one defect — an enum whose domain admits nothing — and
+one category. Emit declarations are NOT tag
 declarations: no provenance, no accessor reference, no
 `min/max/elements/single_valued/required`, and an emit key remains
 barred from match, guard, write, and accessor use (`0010:C3`).
@@ -593,7 +652,7 @@ carrier) then `checkRuleEmit` (this contract's two cross-checks over
 every `sourceRule.Emit`). `loadEmitDecls` MUST precede
 `checkRuleEmit` — the cross-check reads the carrier the first step
 builds — and both are inserted immediately after `loadTags` in
-`load.go::run`'s step slice. The six steps between `loadTags` and
+`load.go::run`'s step slice. The five steps between `loadTags` and
 `normalizeRules` (`loadAccessors`, `loadDump`, `loadContexts`,
 `loadInitial`, `loadTerminal`) are independent of both: emit
 declarations bind no accessor, no dump column, and no state, so no
@@ -729,12 +788,12 @@ authored `domain` array, whose order is inherited for free. So
 not itself carried: it is fully recoverable from `Dispositions`,
 which is what the grouping encodes. Sorting is what makes the carry
 deterministic across loads despite randomized map iteration over the
-domain sub-table, the property
+domain sub-table — the same property
 `internal/table/roundtrip_test.go::TestReq146_EveryEmittedSequenceIsASortedSlice`
-already pins for every emitted sequence (A8 — whether that sweep
-reaches a NEW carrier automatically or names its surfaces by hand is
-unverified, so scenario 4 asserts the repeated-load leg directly
-rather than resting on it). What is preserved is value-equality on key, kind,
+pins for `table.Row`, but that sweep does NOT reach this carrier: all
+three of its sub-tests are scoped to `table.Row` (A8, Refuted), so
+**Testing Strategy scenario 4 is the sole oracle for this clause** and
+Phase 2 owes no edit to `TestReq146`. What is preserved is value-equality on key, kind,
 domain membership, and each member's disposition — the authored
 order of a flat-array domain is NOT preserved either, and nothing
 downstream reads it (C4 joins by member, and the payload's own keys
@@ -752,6 +811,21 @@ non-`TagDecl` carrier are therefore not in tension: the prohibition
 is on the CARRIED model type, the signature is a call-site argument,
 and the adapter between them is this one struct literal — no
 extraction, no new exported helper.
+
+**The reuse is safe-by-omission, so C2's value refusal DEPENDS on
+C1's arms having already fired.** `ConformValue` refuses only what a
+well-formed declaration tells it to: at HEAD `conformDomain`'s enum
+arm is guarded by `len(decl.Domain) > 0`, so an `enum` with an empty
+domain conforms every value, and `conformKind` carries only `int` and
+`bool` arms — an unknown kind, and `enum`/`scalar`, fall through to
+`nil`. Both shapes are refused upstream by C1 (an unknown `kind`
+token; an `enum` carrying no usable domain), which is what makes the
+reuse sound — but the dependency is load-bearing and is stated here
+rather than left implicit: **if C1's arms are ever relaxed,
+`emit_value_out_of_domain` silently stops firing** instead of failing
+loudly. An implementer must not read `ConformValue`'s "a zero
+`TagDecl` conforms everything" doc as a defensive default; for emit it
+is a permissive one, and C1 is the guard.
 
 The kernel (`internal/resolve`) continues to carry no declarations
 and no emit. This RDR adds exactly one reader of the carried
@@ -794,9 +868,14 @@ reason, and a field that disappears when empty makes absence and
 emptiness indistinguishable to a consumer — the exact distinction
 `internal/cli/respond/text.go::flatten` documents as the one REQ-66
 turns on, and the reason `EscapeClass` (genuinely conditional on an
-escape rescue) is the payload's only `omitempty` member. A consumer
-must be able to read `dispositions == {}` as "this model declared
-nothing" rather than "this binary predates the field". The token is surfaced verbatim;
+escape rescue) is the payload's only `omitempty` member. The
+distinction the field buys is between **"this model declared nothing"
+(`{}`) and "this row's answers carry dispositions" (populated)** — a
+distinction `omitempty` would erase, since the undeclared-model case
+is precisely the empty one. It is NOT a binary-version signal: a
+binary predating this field emits no `dispositions` key at all, so
+absence already means "older binary" whether or not `omitempty` is
+taken, and version detection is not what this clause is for. The token is surfaced verbatim;
 intrastate never interprets it. Text mode renders through the generic
 payload renderer as `dispositions.<key>: <token>` / `dispositions:
 (none)` with no per-verb special case (the `0010:C4` clause). A plan
@@ -859,12 +938,14 @@ control.
 | Declared key no rule emits; declared member no rule authors | 0 | none — deliberately unreported (`0006:C17` closes the advisory tier) | none | silent (accepted) |
 | Emit defect coexisting with a structural one | nonzero | whichever the fail-fast pipeline reaches first, one finding | none | loud, one at a time |
 | Non-string TOML emit value (`verdict = 42`) | nonzero | `malformed_toml` from the decoder, unchanged by this RDR | none | loud |
+| Declaration-level key typo (`domaim = [...]`) | nonzero | `unknown_schema_field` from `decodeStrict`, NOT one of this RDR's three categories | none | loud |
+| Malformed shape INSIDE `domain` (non-array disposition, nesting below disposition level) | nonzero | `malformed_emit_declaration` from C1's hand-written arms — strictness stops descending at `domain`, so the decoder catches none of these | none | loud |
 
 `fidelity` — C3's carry, operation × invariant:
 
 | Operation | Invariant | Lossy exemptions |
 | --- | --- | --- |
-| Source `[emit.<key>]` → normalized declaration carrier | value-equality on key, kind, domain membership, and each member's disposition (`0002:C22`'s clause, mirrored) | authored ORDER is not carried — the domain is a bytewise-sorted union (C3); the partition grouping is recoverable from the member→disposition map, not stored separately |
+| Source `[emit.<key>]` → normalized declaration carrier | value-equality on key, kind, domain membership, and each member's disposition (`0002:C22`'s clause, mirrored); determinism across loads proven by scenario 4 ALONE — `TestReq146` is scoped to `table.Row` and cannot reach this carrier (A8, Refuted) | authored ORDER is not carried — the domain is a bytewise-sorted union (C3); the partition grouping is recoverable from the member→disposition map, not stored separately |
 | Rule `[rule.emit]` → normalized `Emit` → payload `emit` | byte-equality on the authored string (`0010:C3`, "never mutated after normalization") | none |
 | Declaration + selected row → payload `dispositions` | each entry is the token the declaration lists that member under, verbatim | members with no disposition (flat domain, non-enum kind) contribute no entry — `{}`, never `null` |
 | Normalized model → kernel / dump | declarations are carried by neither | intentional: the kernel sees no emit (`0010:C3`) |
@@ -875,7 +956,7 @@ witness at each step:
 | MVV step | Assertions in force | Witness | Verdict |
 | --- | --- | --- | --- |
 | 1 — adversarial table, no declaration | C2 opt-in leg; A3 (zero `[emit.` repo-wide) | `lint` exit 0, zero findings | consistent — the defect reproduces |
-| 2 — add `[emit.next]`, lint | C1 grammar; C2 both categories; fail-fast cardinality | one blocking finding per run; `emit_value_out_of_domain` then, after the fix, `unknown_emit_key` | consistent — C2's fail-fast and MVV's "one run, one finding" agree |
+| 2 — add `[emit.next]`, lint | C1 grammar; C2 both categories; fail-fast cardinality; Failure Modes' locator promise | one blocking finding per run; `emit_value_out_of_domain` then, after the fix, `unknown_emit_key` — each carrying the offending block's SOURCE LINE, not `:1` | consistent once Phase 1 adds the `emitHeaderLine`/`atLine` wiring; without it the locator leg fails (`atLine` is wired only in `loadTags` at HEAD) |
 | 3 — fix both, resolve a `stop` row | C4 position, join, and verbatim token; C1 member-disposition uniqueness | `dispositions:{"next":"stop"}` at wire index 9; 14 keys | consistent — C4's insertion point and Testing Strategy scenario 5's key list agree |
 | 4 — delete `[emit]`, re-run | C2 opt-in leg; C4 never-omitted | exit 0, no findings, `dispositions: {}` | consistent — the only observable delta is the empty field, as the Approach claims |
 
@@ -1275,7 +1356,15 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
   tier this RDR lands in rather than of the declaration itself:
   C2 declines to invent the total order `load.go` withholds. An
   author facing it declares `scalar` first and tightens per key,
-  which is the escape hatch's second purpose.
+  which is the escape hatch's second purpose. **What is genuinely new
+  here is the shape, not the cost**: every existing load category
+  fires on a model the author just edited, against the edit. This is
+  the first that fires N times over a corpus of values the author did
+  NOT touch — adding one declaration retroactively puts every
+  pre-existing `[rule.emit]` value in the model under judgment at
+  once. That is the intended proof, and it is also why the adoption
+  round-trip is unlike any refusal an author has met before, which is
+  what the `scalar`-first path exists to blunt.
 - Negative: a declared-key-never-emitted or member-never-authored
   situation is deliberately unreported (closed advisory tier); stale
   vocabulary can accrete in a declaration.
@@ -1306,10 +1395,17 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
   corpus make the appended `dispositions` field a wide mechanical
   diff.
   **Mitigation**: A2 sizes it at Resolve — 28 sites, all of them,
-  since the goldens are brittle by design; `0010:C4` walked the same
-  path with `emit`. The fixed insertion point (immediately after
-  `emit`) confines each edit to one field at a known position, so the
-  diff is wide but mechanical and uniform.
+  since every one pins the `emit`/`next` adjacency; `0010:C4` walked
+  the same path with `emit`. The fixed insertion point (immediately
+  after `emit`) confines each edit to one field at a known position,
+  so the diff is wide but mechanical and uniform. **The residual risk
+  is not diff width but evidentiary loss**: those 28 are 0011's
+  pre-change byte-identity capture (REQ-118), so regenerating them
+  spends an oracle that cannot be recaptured. Phase 3 prices that
+  explicitly — capture from a build carrying only this append, and
+  inspect the diff for the single inserted key — because after
+  regeneration nothing remains that would catch a second change
+  riding along.
 - **Risk**: scalar hollowing — whole-model strictness pushes a bulk
   adopter to declare everything `scalar`, and "declared" reads as
   "checked" (premortem P-2/P-11).
@@ -1318,6 +1414,23 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
   declaration, not 500 rows); an advisory finding for scalar-declared
   keys is deliberately NOT taken — the advisory tier is closed
   (`0006:C17`) — so the check is review- and consumer-seam-side.
+- **Risk**: a future emit value stops being a fixed literal — an
+  author wants one interpolated or caller-supplied answer on an
+  otherwise-closed key, and the key's only escape is whole-key
+  `kind = "scalar"`, which drops the proof for every OTHER value on
+  that key.
+  **Mitigation**: not a live condition — A5 verifies all 54
+  `[rule.emit]` blocks across the consumer's two models carry fixed
+  literals (22 and 10 distinct values), and `0010:A6` (Verified)
+  already adjudicated the general case: per-invocation data "is the
+  argument the caller already holds", never a table value, which is
+  the property that makes emit answers enumerable at all. So the
+  condition would require reversing a locked peer decision, not
+  merely authoring a new value. Recorded because the escape's
+  granularity IS whole-key: if that day comes, the answer is a new
+  kind or a per-member escape in a successor RDR, not `scalar` on the
+  key — and noticing that early is cheaper than discovering it as a
+  hollowed declaration.
 - **Risk**: disposition-token drift — a model renames `stop` to
   `halt` and every consumer's `dispositions[k] == "stop"` test goes
   quietly false (premortem P-12).
@@ -1365,6 +1478,21 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
       (DMN prior art) is carried Pending and NOT load-bearing — no
       corpus reaches DMN material; the alignment argument runs on
       `0002:C22` and the two opened peer citations instead.
+- [x] A8 is **Refuted** at pre-lock (critique lens, both models):
+      `TestReq146` is scoped to `table.Row` and cannot reach
+      `Model.EmitDecls`. This costs the contract nothing — C3's sort
+      is unchanged and Testing Strategy scenario 4 was already written
+      as the direct oracle — but it removes a corroborating test this
+      record cited, so **scenario 4 is now the sole determinism proof**
+      and Phase 2 owes no `TestReq146` edit.
+- [ ] A9 (emit refusal source line) is Pending: the critique
+      established that `atLine` is wired only in `loadTags`, so
+      Phase 1 owes an `emitHeaderLine` analogue. What remains
+      unverified is that the technique reaches an `[emit.<key>]`
+      header and a nested `[rule.emit]` block. Verify by reading
+      `tagHeaderLine` before Phase 1 writes the sibling; if the
+      rule-scoped case is not reachable, narrow the locator promise
+      rather than dropping the refusal.
 - [ ] A7 is carried Pending on its CLOSURE leg only: the spike
       established that both `domain` forms decode and that a
       declaration-level typo still refuses, but not that C1's
@@ -1409,6 +1537,20 @@ beside tags, and refuse `malformed_emit_declaration` /
 `internal/table/load.go::conformKind`/`conformDomain` through a narrow
 helper (A4); no `internal/guard` import.
 
+**Line attribution needs a sibling of `tagHeaderLine`, or every emit
+refusal points at the wrong line.** `atLine` is wired at exactly one
+loader site at HEAD — `load.go:214`, inside `loadTags`, fed by
+`tagHeaderLine(l.src, key)` — so a refusal raised by the new steps
+carries no source line unless this phase adds the analogue. Write
+`emitHeaderLine` beside it and stamp all three categories through
+`atLine`, keyed on the `[emit.<key>]` header for a declaration defect
+and on the offending rule's `[rule.emit]` block for `unknown_emit_key`
+/ `emit_value_out_of_domain`. Without it the Failure Modes' "offending
+file in `locator`" and the MVV's expected locator are both false, and
+the adoption loop the Consequences price in gets materially worse:
+a fail-fast pipeline that reports one defect per run WITHOUT a line
+number makes the author search the model by hand each round.
+
 **Amend three stale comments in the same change.** Each states emit's
 openness as a positive commitment and reads false once a declaration
 can exist — leaving them is the real inconsistency risk, not the
@@ -1427,6 +1569,11 @@ key still never enters `Model.Tags` and
 keeps passing unchanged; only the "no kind to consult" and
 "uninterpreted" wordings narrow to "no TAG kind" and "never parsed,
 canonicalized, or converted" (C1's lexical-check clause).
+`TestReq27`'s ASSERTIONS need no edit, but its failure-message prose
+restates "undeclared" in the same absolute sense the three comments
+do — narrow those strings to "not a tag key" in this same change, for
+the same reason: a message that will now be read by someone holding a
+declared model should not tell them emit keys cannot be declared.
 
 **A second 0010 spec test reads as a tripwire on this change and is
 pre-cleared here.**
@@ -1448,8 +1595,11 @@ Carry declarations onto the normalized model as
 type (C3), with the domain stored as a bytewise-sorted union and the
 member→disposition map beside it; dump and kernel untouched. The sort
 is load-bearing, not cosmetic — an unsorted union built from the
-domain sub-table's map iteration is non-deterministic across loads and
-fails `TestReq146`'s sorted-sequence sweep.
+domain sub-table's map iteration is non-deterministic across loads.
+**Nothing existing catches that**: `TestReq146`'s sweep is scoped to
+`table.Row` and cannot see a model-level carrier (A8, Refuted), so the
+failure signal is scenario 4's repeated-load assertion, which this
+phase must therefore write rather than inherit.
 
 ### Phase 3: Envelope surfacing
 
@@ -1465,9 +1615,17 @@ grep reports 7; the literals are raw strings concatenated across
 lines, and normalizing the joins gives 28);
 (ii) those 28 ARE the 3 `resolveGolden` byte-identity goldens plus the
 25-entry `shippedResolveGoldens` sweep in the same file, not a further
-set — 0011's own adversarial oracle, deliberately brittle by its
-authors' comment, so their mechanical regeneration is authorized HERE
-by name;
+set. They are 0011's REQ-118 / `0011:S8` oracle, **captured from a
+pre-change build** to prove byte-identity across 0011's change (A-11),
+so regenerating them is an amendment to a peer record's spec
+verification and is authorized HERE by name — not absorbed as a
+fixture edit. Two obligations ride with that authorization: the
+regenerated goldens must be captured from a build carrying ONLY the
+`dispositions` append (never from a tree with other pending work, or
+the capture silently launders it), and the diff must be inspected to
+confirm every one of the 28 changed in exactly one way — the inserted
+`dispositions` key at index 9 — since after regeneration no oracle
+remains that could detect a second change riding along;
 (iii) `internal/cli/decision_table_0010_test.go::TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire`,
 whose 13-key `slices.Equal` list becomes 14 keys and whose
 `NumField() != 14` guard becomes `!= 15` — it encodes `0010:C4`'s
@@ -1568,14 +1726,19 @@ cardinality every load scenario asserts is the fail-fast behavior
 captured in `evidence/spikes/c2-finding-multiplicity.md`.
 
 1. **Scenario**: table-driven load of malformed declarations — an
-   unknown `kind` token; an `enum` with no domain, an empty domain,
-   an empty-string member, or a duplicate member (across disposition
+   unknown `kind` token; an `enum` carrying no usable domain, an
+   empty-string member, or a duplicate member (across disposition
    lists included); a `domain` on a non-enum kind; an empty-string
    disposition token; and the arms strict decoding cannot reach
    because `domain` is `any`-typed — a `domain` that is neither array
    nor table, a non-array disposition value, nesting below the
-   disposition level, a non-string member, and an empty disposition
-   sub-table (C1).
+   disposition level, and a non-string member (C1).
+   The no-usable-domain arm takes **three fixtures against one
+   expectation** — no `domain` key, an empty `[emit.<key>.domain]`
+   sub-table, and `domain = []` — because C1 refuses all three as one
+   arm and the first two are indistinguishable after decode. Assert
+   the shared category; do NOT assert distinct messages for the first
+   two, which would pin a discrimination the decoder cannot make.
    **Expected**: each case, loaded on its own, refuses
    `malformed_emit_declaration` at load with exactly one blocking
    finding, before any row is yielded. One defect per fixture — the
@@ -1620,11 +1783,13 @@ captured in `evidence/spikes/c2-finding-multiplicity.md`.
    the authored token, `Domain` equals the bytewise-sorted union of
    the authored members, and `Dispositions[<member>]` equals the
    token that member was listed under. Kernel and dump surfaces carry
-   none of it. **Determinism is asserted, not assumed**: loading the
-   same partitioned-domain model repeatedly yields one `Domain`
+   none of it. **Determinism is asserted here or nowhere**: loading
+   the same partitioned-domain model repeatedly yields one `Domain`
    value, which is the leg that fails if the union is built from map
-   iteration without the sort — the same property
-   `TestReq146_EveryEmittedSequenceIsASortedSlice` pins package-wide.
+   iteration without the sort. `TestReq146_EveryEmittedSequenceIsASortedSlice`
+   does NOT cover it — that sweep is scoped to `table.Row` (A8,
+   Refuted) — so this assertion is the only thing standing between an
+   unsorted union and a green suite.
 5. **Scenario**: `flow resolve` payloads across the join matrix — an
    enum member carrying a disposition, a flat-array domain, non-enum
    kinds, an empty emit block, an undeclared model, and an escape-row
@@ -1663,6 +1828,14 @@ captured in `evidence/spikes/c2-finding-multiplicity.md`.
    because that map is hand-maintained and iterates over itself: an
    omitted category fails nothing, so the convention degrades
    silently without an explicit assertion here.
+   **The convention has an exclusivity leg (REQ-131) this scenario
+   must also carry**: each witness trips its own category *and no
+   other*. Assert it per witness. Note the interaction with C2's
+   fail-fast, unspecified order — a witness carrying two defects
+   could satisfy "trips its category" while the finding actually
+   raised is the other one, so each witness must be single-defect by
+   construction, which is the same discipline scenarios 1 and 2
+   already require.
 7. **Scenario**: the `dispositions` field is registered under JDR
    0002 §D1's ECHO/PLAN assignment (C4).
    **Expected**: the reflective oracle §D1 mandates — for which "an
@@ -1670,10 +1843,18 @@ captured in `evidence/spikes/c2-finding-multiplicity.md`.
    sees `dispositions` assigned PLAN. Landing order decides where the
    assertion runs, not whether it does: if 0023 landed first, this
    change registers against the shipped oracle; if this RDR lands
-   first, the obligation transfers to 0023's implementation and is
-   recorded here so it is not discovered as a red reflective test.
-   Phase 3 names this obligation; this scenario is what makes the
-   Done criterion unsatisfiable while it is unmet.
+   first, the obligation transfers to 0023's implementation.
+   **In the 0024-first order this scenario is not dischargeable by
+   this record's own tests**, since the oracle does not exist at HEAD
+   — so it discharges instead as a written, checked-in note at the
+   `dispositions` field declaration in
+   `internal/cli/flow_resolve.go::resolvePayload` naming the PLAN
+   assignment and `JDR 0002 §D1`, which is what 0023's implementer
+   reads when wiring the oracle. That note is the Done criterion in
+   that order; the reflective assertion is 0023's. Stating it this way
+   avoids the circularity of a scenario that claims to make Done
+   unsatisfiable while its own transfer clause discharges it
+   elsewhere.
 8. **Scenario**: Phase 4's shipped artifacts (C1, C4).
    **Expected**: `models/examples/pricing-decision-table.toml` lints
    exit 0 with its emit keys declared — the declared domains must
