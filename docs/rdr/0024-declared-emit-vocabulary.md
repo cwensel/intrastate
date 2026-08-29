@@ -68,10 +68,11 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: foundational — provisional: one contract (the
-  emit-vocabulary declaration grammar and what it proves)
-  spanning table grammar, graphlint proof, and the resolve
-  envelope.
+- **Profile**: foundational — one contract (the emit-vocabulary
+  declaration and what it proves, stated as C1–C4 by surface:
+  grammar, load proof, normalized carry, resolve envelope) that
+  locks a grammar, spans `internal/table` and `internal/cli`, and
+  produces a declaration carry peer RDRs 0021/0023 consume.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -154,41 +155,99 @@ are model-authored.
 - **A1 The top-level `[emit]` TOML key is free: the source schema
   declares no `emit` field, so today's `decodeStrict` refuses it as an
   unknown schema field and adding it collides with nothing.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify against
-    `internal/table/source.go::sourceDoc` (field list carries
-    `outcomes, terminal, model, initial, tags, read, write, gate,
-    context, rule, dump` — no `emit`) and
-    `internal/table/source.go::decodeStrict`'s unknown-key arm.
+  - **Evidence**: `internal/table/source.go::sourceDoc` declares
+    exactly `Outcomes, Terminal, Model, Initial, Tags, Read, Write,
+    Gate, Context, Rule, Dump` (toml tags `outcomes, terminal, model,
+    initial, tags, read, write, gate, context, rule, dump`) — **no
+    `emit` field**, so the top-level key is free. The refusal leg is
+    real and carries the claimed slug:
+    `internal/table/source.go::decodeStrict` sets
+    `dec.DisallowUnknownFields()` and maps a `*toml.StrictMissingError`
+    to `fail(CatUnknownSchemaField, …)`, where
+    `internal/table/category.go` spells `CatUnknownSchemaField` as
+    `"unknown_schema_field"`. It is called unconditionally from
+    `internal/table/load.go`'s pass-2 strict decode, so an older binary
+    handed a declared model refuses loudly rather than ignoring the
+    declaration.
   - **If wrong**: the declaration table needs another authoring locus
     and C1's grammar moves; surfaces as a decode error on the first
     declared model.
-- **A2 Appending one field after `emit` in
-  `internal/cli/flow_resolve.go::resolvePayload` is additive under
-  `0005:C1`'s append-only findings/envelope discipline, with the same
-  fixture-update-in-change precedent `0010:A4` set for the dump
-  column.**
-  - **Status**: Pending
-  - **Method**: Peer RDR
-  - **Evidence**: to verify against `0005:C1` and `0010:C4` (which
-    fixed `emit`'s own position by appending after `Gates`), plus a
-    sweep of inline payload JSON assertions in
-    `internal/cli/flow_resolve_0005_test.go` and the 0010/0011 flow
-    tests.
+- **A2 Appending `dispositions` after `emit` in
+  `internal/cli/flow_resolve.go::resolvePayload` breaks no payload
+  CONSUMER (every reader parses by key, none positionally), and its
+  cost is a bounded, enumerable test-corpus diff — 31 inline
+  whole-payload assertion sites, 3 `resolveGolden` byte-identity
+  goldens, the `shippedFixtureGolden` sweep, and one peer REQ test
+  that pins the struct's field count and wire key order.**
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: **Consumer leg — clean.** Every Go-side reader
+    parses by key (`data["emit"]`, `map[string]any`); `wireKeyOrder`
+    and `keysOf` in `internal/cli/decision_table_0010_test.go` are
+    test helpers asserting order, not production parsers, and the
+    consumer skills under the RDR engine's `skills/` do not parse the
+    payload positionally. `encoding/json` emits struct fields in
+    declaration order — the property `resolvePayload`'s own comment
+    already relies on ("the declaration order IS the JSON key order
+    Go's encoder emits") — so inserting after `Emit` does place
+    `dispositions` there.
+    **Cost leg — enumerated, and larger than a fixture sweep.** The
+    binding item is
+    `internal/cli/decision_table_0010_test.go::TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire`,
+    which asserts BOTH the exact 13-key wire order (`slices.Equal`)
+    and `reflect.TypeOf(resolvePayload{}).NumField() != 14` — it
+    encodes `0010:C4`'s normative position clause as a REQ test, so
+    editing it amends a peer RDR's spec verification, not a fixture.
+    C4 takes the struct from fourteen fields to fifteen and the wire
+    from thirteen keys to fourteen. Beside it sit the inline
+    whole-payload assertions and byte-identity goldens in
+    `internal/cli/flow_demand_0011_test.go` (RDR 0011's guard against
+    exactly this class of change). **The full enumerated edit set —
+    counts, files, and what each asserts — is the licensed diff in
+    Implementation Plan Phase 3**, named there so it is authorized
+    rather than discovered mid-change.
+    **Citation correction.** `0005:C1` does not state a general
+    append-only discipline for the SUCCESS payload — it extends the
+    CLIError *failure* envelope by "exactly one omitempty structured
+    field, `findings`". `0010:C4` is the operative payload precedent
+    (it appended `emit` after `Gates` for this same reason: "the repo
+    asserts payload JSON inline in Go tests, so an unfixed position is
+    an unlicensed diff"). `0010:A4` is a real precedent for the
+    *shape* of this obligation — its census "counted TOML only, and
+    that was the gap", missing a Go slice literal — which is why this
+    Evidence enumerates the Go-side assertions rather than only the
+    inline JSON.
   - **If wrong**: the `dispositions` field breaks a consumer parsing
     positionally or an inline test corpus larger than one change can
     carry; surfaces as red payload-equality tests.
-- **A3 No checked-in model or fixture authors an `[emit.<key>]`
-  declaration, and only `models/examples/pricing-decision-table.toml`
-  authors `[rule.emit]`, so the zero-declaration opt-out keeps the
-  whole corpus linting exactly as today.**
-  - **Status**: Pending
+- **A3 No checked-in model, fixture, or test source anywhere in the
+  repo authors an `[emit.<key>]` declaration, so every existing emit
+  author takes C2's zero-declaration leg and the whole corpus lints
+  exactly as today.**
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: corpus sweep over `models/` and
-    `internal/**/testdata` for `[emit.` and `[rule.emit]`, plus a
-    full-suite run with the loader change in place and no model
-    changed.
+  - **Evidence**: `evidence/spikes/a3-corpus-sweep.md`.
+    `rg --glob '*.toml' '^\s*\[emit'` over the repo returns **zero
+    hits** — no model, no fixture, no evidence artifact declares an
+    emit vocabulary, so the opt-out leg covers the entire corpus.
+    Baseline confirmed green at HEAD: `go build ./...` clean,
+    `go test ./...` all packages `ok`, and all four `models/*.toml`
+    lint exit 0 (two carry pre-existing non-blocking
+    `graph-coverage-closed-by-escape` advisories, unrelated to emit).
+    **Enumeration corrected**: `[rule.emit]` is authored in more
+    places than `models/` — `models/examples/pricing-decision-table.toml`
+    is the only *model* (4 blocks), but ten `_test.go` files under
+    `internal/{table,cli,graphlint}` author `[rule.emit]` as inline
+    TOML string literals, and one 0010 evidence artifact authors one
+    block. The Go test sources are load-bearing for this assumption
+    because they feed the loader directly; all of them likewise
+    declare zero `[emit.<key>]`, so the opt-out predicate holds over
+    every one. The post-change leg (full suite green WITH the loader
+    change and no model edited) is unrunnable at Draft — that code
+    does not exist at HEAD — and is carried to implementation as
+    Testing Strategy scenario 3, not claimed here.
   - **If wrong**: strictness fires on an existing model and the
     opt-in predicate is broken; surfaces as a load refusal in an
     untouched fixture.
@@ -196,13 +255,29 @@ are model-authored.
   check (enum membership, bool/int literal form) implementable in the
   load pipeline without importing `internal/guard`'s predicate-atom
   machinery.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify against `internal/guard`'s exported
-    surface and the existing write-block conformance site
-    (`internal/table/normalize.go`, the domain/kind conformance the
-    file header names) — reuse if a value-level checker is exported,
-    else a local check.
+  - **Evidence**: `internal/guard` exports **no value-level
+    conformance checker**. Its closest export,
+    `guard.Conforms(m *table.Model, v View) error`, checks only
+    required-key presence and single-valued cardinality, skips
+    `ProvenanceRecognized`, and performs no kind or domain-membership
+    check; every other export is keyed to predicate atoms, assignment
+    sets, or product cardinality. So the assumption's operative claim
+    — implementable **without importing `internal/guard`** — holds.
+    The reusable checker is in this package, not guard:
+    `internal/table/load.go::conform` / `::conformKind` /
+    `::conformDomain` are unexported, receiver-free functions taking
+    `(TagDecl, string)`, and `conformDomain`'s enum arm is exactly the
+    membership test C2 needs (`slices.Contains(decl.Domain, member)`).
+    They are keyed to `TagDecl`, so an emit declaration reuses them
+    through a small adapter or a narrower helper extracted from the
+    two; the `set` arm simply never fires for emit (`0010:C3`: an emit
+    value is one authored string).
+    **Evidence-pointer correction**: the write-block conformance
+    CHECKER is at `internal/table/load.go::conform`, not in
+    `normalize.go` — `internal/table/normalize.go` holds only the call
+    site (`conform(decl, "eq", members)`).
   - **If wrong**: the check either drags guard's atom semantics into
     emit (the wall `0010:C3` builds) or duplicates kind rules that can
     drift from RDR 0003's; surfaces as divergent refusals for the same
@@ -210,27 +285,67 @@ are model-authored.
 - **A5 The motivating consumer's emit answers are enumerable at
   authoring time — routing commands are fixed strings and judgment
   cells answer with fixed `stopped:<code>` tokens — so an enum domain
-  with a disposition partition can actually be authored for its `next`
-  key.**
-  - **Status**: Pending
+  with a disposition partition can actually be authored for each of
+  its routing keys.**
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: `0010:A6` (verified at 0010's Stage 6: stage verb
-    and lens are closed sets known when the table is authored;
-    "Judgment cells route to a stop-packet row, again a fixed
-    `stopped:<code>` string"; per-invocation data is supplied by the
-    caller, never the table).
+  - **Evidence**: `0010:A6` (Status `Verified`) states it verbatim:
+    the stage verb and the lens "are fixed strings known when the
+    table is authored", the record number "is the argument the caller
+    already holds", and "Judgment cells route to a stop-packet row,
+    again a fixed `stopped:<code>` string" — per-invocation data is
+    supplied by the caller, never the table.
+    **Empirical confirmation over the live consumer models.**
+    `rdr-status.toml` carries 54 `[rule.emit]` blocks whose `next` key
+    holds **22 distinct values, every one a fixed literal**, with no
+    interpolation and no per-invocation data: 16 route-like
+    (`none`, `/rdr-refine`, `/rdr-resolve`, `/rdr-prelock <lens>`, …)
+    and 6 `stopped:`-like (`stopped:no-profile`,
+    `stopped:determinacy-trigger-unjudged`, …). The partition is
+    clean, so a disposition-partitioned enum domain is authorable as
+    the model stands today.
+    **Generalized from the Draft's "its `next` key"**: the consumer
+    has TWO routing keys under two names — `rdr-write.toml` (30
+    `[rule.emit]` blocks) routes on **`op`**, not `next`, with 10
+    distinct values partitioning the same way (`claim`, `lock`,
+    `demote`, `readme-add`, … / `stopped:not-lockable`,
+    `stopped:no-gate-written`, …). C1's per-key `[emit.<key>]` grammar
+    accommodates this by construction; a key-level or single-key
+    design would not have. `rdr-write.toml`'s `edit` key holds a
+    multi-line shell script — an unambiguously open-valued key that
+    takes `kind = "scalar"`, which is the per-key escape C1 provides
+    and a live instance of why it is needed.
   - **If wrong**: the consumer cannot close its domain and declares
     `scalar`, which admits the misspelled value again; surfaces as the
     seed defect persisting under a declaration.
 - **A6 DMN decision tables carry an allowed-values list on output
   clauses that conformant tooling checks output entries against — the
   external alignment claim for declare-then-prove over answers.**
-  - **Status**: Pending
+  - **Status**: Pending — **not load-bearing**; carried unverified by
+    decision, not by omission (see plan below).
   - **Method**: Prior Art
-  - **Evidence**: to verify by a DMN spec read (§decision table,
-    output values); no corpus coverage
-    (`evidence/research/propose-prior-art.md`). The choice does not
-    lean on this claim — it rests on the in-repo mirror (`0002:C22`).
+  - **Evidence**: **Searched and not found**
+    (`evidence/research/resolve-prior-art.md`). No DMN or BPM-suite
+    material exists in any corpus available to this project — DevRef,
+    StateMachineLit, StateMachineRes, and PapersFast were each
+    queried, and the sibling `../state-machines` repo returns zero
+    word-boundary hits for `DMN` / `Decision Model and Notation` /
+    `outputValues`. The two legs separate: leg 1 (the standard
+    declares an allowed output-values list on the output clause) has
+    no section-anchored source; leg 2 — that conformant tooling
+    *checks* authored output entries against it, which is the half
+    that would actually corroborate declare-then-prove over answers —
+    has **zero** support. Camunda's output-clause docs describe
+    `typeRef`, a type constraint on evaluated output, not an
+    allowed-values enumeration; rejected as non-analogous.
+    **Verification plan if ever needed**: read OMG DMN 1.3 §8 directly
+    from the spec PDF (publisher sites block automated fetch, so this
+    is a manual acquisition into a corpus first). Not scheduled — the
+    claim is carried as an unverified aside, and this Draft does not
+    rest on it: the alignment argument runs on the in-repo mirror
+    (`0002:C22`) and the two opened peer citations (ms-conductor
+    `type: terminate`, scxmlcc `<final>`), which are Verified prior
+    art for the structural-declaration move.
   - **If wrong**: an alignment citation drops; the approach stands on
     the tag-grammar mirror and the opened peer citations.
 
@@ -352,15 +467,57 @@ pipeline (`0002:C24`'s "load") MUST refuse, before yielding rows:
 These two categories and C1's `malformed_emit_declaration` join
 `0002:C24`'s data-level set (that list is "at minimum", and
 `reserved_tag_key` is the append precedent) and therefore map to
-`flow-model-invalid` with one findings[] entry per hit under
-`0005:C1`, and to blocking findings under `intrastate lint` via its
-load-refusal arm (`internal/cli/lint.go`). All three categories are
+`flow-model-invalid` under `0005:C1`, and to a blocking finding under
+`intrastate lint` via its load-refusal arm
+(`internal/cli/lint.go`). All three categories are
 refusals — nonzero exit, never advisory, under every surface that
-loads the model. Masking is bounded by the existing
-pipeline discipline: `0002:C24` requires every category refused
-before rows are yielded and `0005:C1` requires one findings[] entry
-PER HIT, so an emit refusal reports beside, not instead of, a
-coexisting structural one. Proving the AUTHORED form is proving the
+loads the model.
+
+**Reporting is FAIL-FAST, one refusal per run — inherited from the
+load tier, not decided here.** `0002:C24` routes these checks to load
+by arity, and the load tier's cardinality is already contracted:
+`0008:C4` fixes it — "the predicate reports **the first breach it
+finds and returns a single non-nil error**; it does not aggregate …
+a producer holding a programmer mistake is not owed an exhaustive
+list" — and `internal/table/load.go`'s package contract states the
+same for the pipeline as a whole ("the refusal is singular: load is
+fail-fast and returns one categorized error, never a list"). So a
+model carrying an emit defect AND a coexisting structural one
+surfaces whichever the pipeline reaches first; the author fixes and
+re-runs, exactly as for every other load category today.
+
+**Why fail-fast is the correct tier behavior, not a limitation.** The
+project accumulates findings precisely where a TOTAL ORDER over them
+exists, and only there — the term is used in its exact sense, and each
+instance names the comparator that provides it: graph lint reports
+every defect in one pass (`0003:C19`, restated `0006:C16`) because
+`internal/graphlint/engine.go::sortFindings` orders findings by their
+identity tuple, making the emitted set independent of iteration order;
+`0009`'s escape-shape report aggregates because
+`internal/resolve/resolve.go::compareRefs` orders `RowRef`
+lexicographically on `(RuleID, SourceLocator)`. Load
+has no such comparator — `internal/table/load.go` states that "the order in
+which independent defects are checked is **deliberately
+unspecified**" — so accumulating there would publish a
+non-deterministic set, which is the property that unspecified order
+exists to keep unobservable. Where two refusals coexist the house
+answer is PRECEDENCE, not aggregation (`0018:C1` makes the entry-check
+order an observable contract; `0018:ALT1` rejected `errors.Join` on
+the ground that "aggregation serves user-facing declarative
+validation; this is the programmer-mistake path"). This RDR fixes no
+precedence among the three emit categories and the existing ones, and
+takes none: order stays unspecified.
+
+`0005:C1`'s "one findings[] entry per category hit" is satisfied
+vacuously, because no load path yields more than one hit to map — this
+RDR introduces no accumulation and takes no `Overrides` entry against
+it. **What this RDR does NOT claim** is the lint tier's
+report-everything guarantee: an emit refusal MAY mask a coexisting
+structural one, and vice versa. Multi-defect load reporting would
+require inventing the total order `load.go` declines to fix; it is a
+pipeline-wide change out of scope here, left to a later RDR that owns
+it.
+Proving the AUTHORED form is proving the
 executed form: `0010:C3` fixes that normalization carries the emit
 block through `expand` unmutated ("Emit is never mutated after
 normalization") — no emit value exists post-normalization that load
@@ -478,7 +635,7 @@ domain = ["required", "waived"]   # flat form: no dispositions
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Declaration parse/load | `internal/table/load.go::loadTags` + `sourceTagDecl` | Tag-specific: provenance, accessor ties, reserved-key rules | Extend the pattern, not the type — a parallel `loadEmit` with its own decl type | C1's "NOT tag declarations" clause |
-| Value conformance | `internal/table/normalize.go` write-block domain/kind conformance | Keyed to `TagDecl` and tag kinds incl. `set` | Reuse if separable (A4), else local value-level check | C2 |
+| Value conformance | `internal/table/load.go::conform`/`conformKind`/`conformDomain` (`normalize.go` is the call site) | Keyed to `TagDecl` and tag kinds incl. `set` | REUSE — verified separable (A4): unexported, receiver-free, `(TagDecl, string)`; adapt via a narrow helper, no `internal/guard` import | C2 |
 | Emit carry-through | `internal/table/model.go::EmitValue`, `normalize.go::emitSequence` | Carries authored pairs only, no declarations | Extend model with a declaration carrier | C3 |
 | Payload join | `internal/cli/flow_resolve.go::resolvePayload` + `emitMap` | Fixed field order asserted inline in tests | Extend by append (A2) | C4 |
 
@@ -505,6 +662,32 @@ exercised). A is the only approach that closes both defects, keeps
 every locked contract intact, and costs nothing to models that do not
 opt in. The load-not-lint enforcement point is the Approach's
 `0002:C24` arity argument; the acceptance predicate holds either way.
+
+**House precedent (verified at Resolve,
+`evidence/research/resolve-precedent.md`).** The chosen shape is the
+established pattern, named as such by a peer: `0020` decided the
+sibling question for `--tag` keys and its rationale states "the house
+already adjudicated this shape once … **carrier-by-default,
+declare-to-tighten is the established pattern**", with `0020:C1`
+closing "declaring a key later is the **opt-in tightening**" and
+`0020:BR1` naming "**the 0024 shape**" as compatible layered work.
+The two records govern opposite sides of one seam and do not collide:
+0020 admits an undeclared CALLER key at runtime *because* the
+model-side closed world stays shut ("a rule atom, accessor key, write
+target, clear target, or `[initial]` assignment naming an undeclared
+tag still refuses at load"), and emit values are model-authored, so
+they sit on the closed side. The loader census bears this out — tag
+keys, tag kinds, operators, the outcome alphabet, dump columns,
+reserved keys, and schema fields all refuse unknown members at load;
+`[rule.emit]` is the **sole** admitted-unconditionally vocabulary.
+Closing it restores the rule the author-facing doc already states:
+"a misspelled facet is a stable refusal rather than a silent no-op"
+(`docs/model-authoring.md`), whose sibling clause — "declaring the
+class rather than deriving it is what makes the refusal possible" —
+is this RDR's argument in the project's own words. `ALT3` is
+independently foreclosed by `0006:C1`: coupling the resolver to a
+design-time proof "would put a design-time proof on the runtime path,
+which this RDR's authority split rejects".
 
 The hardened premortem (`evidence/propose-premortem/critic.md`,
 17-finding ledger) returned PASS with mitigations; the recommendation
@@ -687,8 +870,13 @@ Termination (declared `type: terminate` steps with a `status` field)
 and scxmlcc `doc/user-manual.md` §Final State (`<final>` as a
 declared element) ⇒ peers declare the stop structurally, which
 disqualifies the prefix convention as the contract. ⚠ the DMN
-output-values class claim has no corpus coverage; it is carried as
-A6, not leaned on. Code paths read:
+output-values class claim was SEARCHED AT RESOLVE AND NOT FOUND —
+four corpora plus the sibling analysis repo return nothing
+(`evidence/research/resolve-prior-art.md`), and the half that would
+corroborate declare-then-prove over answers (that conformant tooling
+CHECKS authored output entries) has zero support. It stays A6,
+unverified and not leaned on; the alignment argument rests on
+`0002:C22` and the two peer citations above. Code paths read:
 `internal/table/load.go::loadTags` (the declare-then-prove shape to
 mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 `internal/table/normalize.go::emitSequence`,
@@ -788,10 +976,12 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 
 - **Breaks visibly**: a declared model with an undeclared key,
   out-of-domain value, or malformed declaration refuses at load —
-  `intrastate lint` exits nonzero with one blocking finding per hit
-  (category slug in the finding's `code`, offending file in
-  `locator`), and `flow resolve`/`flow next` refuse
-  `flow-model-invalid` with the same findings. Diagnose from the
+  `intrastate lint` exits nonzero with one blocking finding — the
+  first refusal the fail-fast pipeline reaches (category slug in the
+  finding's `code`, offending file in `locator`) — and
+  `flow resolve`/`flow next` refuse `flow-model-invalid` with the same
+  finding. A model carrying several defects is fixed and re-run one
+  refusal at a time, as it is today for every other load category. Diagnose from the
   finding's category + locator; recover by fixing the declaration or
   the rule. Blast radius is authoring-time, not run-time: every check
   reads only the model file against itself (never the consumer's
@@ -817,8 +1007,10 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1–A6; A2 and A3 gate the
-      envelope and opt-out legs respectively)
+- [x] Critical Assumptions verified: A1–A5 Verified at Stage 4. A6
+      (DMN prior art) is carried Pending and NOT load-bearing — no
+      corpus reaches DMN material; the alignment argument runs on
+      `0002:C22` and the two opened peer citations instead.
 
 ### Minimum Viable Validation
 
@@ -828,9 +1020,15 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
    reproduced).
 2. Add an `[emit.next]` enum declaration with a
    route/stop-partitioned domain; run `intrastate lint`.
-   **Expected**: exit nonzero, exactly two blocking findings —
-   `emit_value_out_of_domain` on rule 1 and `unknown_emit_key` on
-   rule 2, each with a locator.
+   **Expected**: exit nonzero with ONE blocking finding — the load
+   pipeline is fail-fast (C2), so the run reports whichever defect it
+   reaches first, with its category slug in `code` and a locator.
+   Fix that rule and re-run: the second defect now surfaces, likewise
+   as one finding. Across the two runs both categories are observed —
+   `emit_value_out_of_domain` for the misspelled value and
+   `unknown_emit_key` for the typo'd `nxet` key. Do NOT expect both in
+   one run; one run, one finding is the locked cardinality
+   (`0008`, asserted).
 3. Fix both rules; lint exits 0. Run `flow resolve` selecting a rule
    whose value is listed under `stop`. **Expected**: payload carries
    the authored `emit` unchanged and `dispositions` mapping the key
@@ -845,7 +1043,28 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 Extend the source schema with the `[emit]` table, load declarations
 beside tags, and refuse `malformed_emit_declaration` /
 `unknown_emit_key` / `emit_value_out_of_domain` in the load pipeline
-(C1, C2) — the whole opt-in predicate lives here.
+(C1, C2) — the whole opt-in predicate lives here. Reuse
+`internal/table/load.go::conformKind`/`conformDomain` through a narrow
+helper (A4); no `internal/guard` import.
+
+**Amend three stale comments in the same change.** Each states emit's
+openness as a positive commitment and reads false once a declaration
+can exist — leaving them is the real inconsistency risk, not the
+grammar:
+`internal/table/model.go::EmitValue` ("undeclared, uninterpreted, and
+compared by exact byte equality"),
+`internal/table/normalize.go::emitSequence` ("they are undeclared and
+uninterpreted"), and `internal/table/dump.go::renderEmit` ("an emit
+key has neither: it is undeclared, so there is no kind to consult").
+The amendment is narrow and must preserve what `0010:C3` actually
+fixed: "undeclared" there means **not a tag** — no provenance, no
+accessor, no match/guard/write participation — every clause of which
+C1 keeps. `[emit]` is a SEPARATE NAMESPACE from `[tags]`, so an emit
+key still never enters `Model.Tags` and
+`internal/table/emit_0010_test.go::TestReq27_AnEmitKeyIsNotATagKey`
+keeps passing unchanged; only the "no kind to consult" and
+"uninterpreted" wordings narrow to "no TAG kind" and "never parsed,
+canonicalized, or converted" (C1's lexical-check clause).
 
 ### Phase 2: Normalized carry
 
@@ -856,7 +1075,37 @@ non-TagDecl carrier type (C3); dump and kernel untouched.
 
 Insert `dispositions` into `resolvePayload` after `emit`, joined from
 the selected row's authored values against the carried declarations
-(C4); update inline payload assertions in the same change (A2).
+(C4). **The licensed diff, enumerated by A2** — all of it lands in
+this one change, and nothing outside it:
+(i) the 28 inline whole-payload assertions in
+`internal/cli/flow_demand_0011_test.go`, 7 of which pin the
+`"emit":{…},"next"` adjacency;
+(ii) the 3 `resolveGolden` byte-identity goldens and the
+`shippedResolveGoldens` sweep in the same file — RDR 0011's guard
+against exactly this class of change, so their update is authorized
+HERE by name;
+(iii) `internal/cli/decision_table_0010_test.go::TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire`,
+whose 13-key `slices.Equal` list becomes 14 keys and whose
+`NumField() != 14` becomes 15 — it encodes `0010:C4`'s position clause,
+so this is an amendment to a peer RDR's spec test and is called out
+rather than absorbed as a fixture edit.
+`TestReq43` (escaped between clear and escape_class) asserts relative
+indices and needs no edit. Any assertion outside this list going red
+is a signal the append did more than C4 licenses — investigate, do not
+update it.
+
+**The §D1 registration obligation, whichever record lands second.**
+`JDR 0002 §D1` requires every success-payload field of a projecting
+verb to be assigned to ECHO or PLAN **when it is added**, enforced by
+a reflective oracle for which "an unassigned new field is a test
+failure, never a silent default". `dispositions` is assigned PLAN
+there by name. That oracle does not exist at HEAD — 0023 is Final and
+unimplemented — so: if 0023 lands first, this change registers
+`dispositions` with the oracle it shipped; if 0024 lands first, 0023's
+implementation registers it when the oracle arrives. Either order
+works and neither contract moves (`0023:A4`), but the registration is
+not optional and is named here so it is not discovered as a red
+reflective test.
 
 ### Phase 4: Example and docs
 
@@ -875,13 +1124,31 @@ from reproduced defect to green declaration to opt-out identity. Done
 = every scenario below is green and the MVV run recorded; every C1
 refusal arm and every C2 category maps to at least one scenario.
 
+**Code paths under test, and the verification each rests on.** The
+load-side scenarios (1–3) exercise `internal/table/load.go`'s refusal
+arms beside the existing `loadTags` step, reusing
+`load.go::conform`/`conformKind`/`conformDomain` for value conformance
+(A4 — verified reusable in-package, no `internal/guard` import). The
+grammar sits on the free `[emit]` key in
+`internal/table/source.go::sourceDoc`, refused today by
+`decodeStrict`'s `CatUnknownSchemaField` arm (A1). Scenario 3's
+opt-out baseline is the corpus sweep and green suite in
+`evidence/spikes/a3-corpus-sweep.md` (A3). Scenario 5 exercises
+`internal/cli/flow_resolve.go::resolvePayload`'s join, whose licensed
+test-corpus diff is enumerated in A2 and Phase 3. The single-finding
+cardinality every load scenario asserts is the fail-fast behavior
+captured in `evidence/spikes/c2-finding-multiplicity.md`.
+
 1. **Scenario**: table-driven load of malformed declarations — an
    unknown `kind` token; an `enum` with no domain, an empty domain,
    an empty-string member, or a duplicate member (across disposition
    lists included); a `domain` on a non-enum kind; an empty-string
    disposition token (C1).
-   **Expected**: each refuses `malformed_emit_declaration` at load,
-   one blocking finding per hit, before any row is yielded.
+   **Expected**: each case, loaded on its own, refuses
+   `malformed_emit_declaration` at load with exactly one blocking
+   finding, before any row is yielded. One defect per fixture — the
+   pipeline is fail-fast, so a fixture carrying two defects proves
+   nothing about the second.
 2. **Scenario**: a declared model with an undeclared `[rule.emit]`
    key on an ordinary rule and on an escape rule, and with
    out-of-domain values per kind — a non-member enum value, a
@@ -889,13 +1156,22 @@ refusal arm and every C2 category maps to at least one scenario.
    `scalar` value (C2).
    **Expected**: `unknown_emit_key` on both rule classes;
    `emit_value_out_of_domain` for the enum/bool/int cases; `scalar`
-   never refused. A model with a coexisting structural defect reports
-   both — one findings[] entry per hit, no masking.
+   never refused — each from its own single-defect fixture, one
+   blocking finding per run. A model carrying an emit defect AND a
+   coexisting structural one asserts the fail-fast contract instead:
+   exactly one finding, and the test does NOT assert WHICH — the
+   pipeline order is unspecified and pinning it would fabricate a
+   guarantee (the same "deliberately unasserted" move
+   `internal/table/reserved_key_0008_test.go` makes).
 3. **Scenario**: zero-declaration opt-out (C2's opt-in leg; A3's
    corpus sweep as the fixture check).
    **Expected**: full suite green with the loader change and no model
    changed; no new refusal reachable; the only observable delta is
-   C4's appended `dispositions: {}`.
+   C4's appended `dispositions: {}`. This is A3's post-change leg,
+   which could not run at Draft — the A3 spike establishes the
+   pre-change baseline (build clean, suite `ok`, all four
+   `models/*.toml` lint exit 0) that this scenario re-runs after the
+   change to prove byte-for-byte equivalence.
 4. **Scenario**: declaration carry through normalization (C3).
    **Expected**: key, kind, domain members, and member dispositions
    read identically off the normalized model; kernel and dump
@@ -909,7 +1185,21 @@ refusal arm and every C2 category maps to at least one scenario.
    immediately after `emit`, joins from the escape row's own authored
    values by `Plan.RuleID`, and renders in text mode through the
    generic payload renderer; `flow next` payloads carry no
-   `dispositions`.
+   `dispositions`. The post-change wire key order is exactly these
+   fourteen keys, in this order (the pre-change thirteen from
+   `decision_table_0010_test.go::TestReq39`, with `dispositions`
+   inserted at index 9):
+
+   ```
+   model, revision, observed, owned, readers, outcome, rule, gates,
+   emit, dispositions, next, writes, clear, escaped
+   ```
+
+   and `reflect.TypeOf(resolvePayload{}).NumField() == 15`
+   (`escape_class` is `omitempty` and absent from the wire on a
+   non-escaped plan). These two values are the normative fixture this
+   scenario asserts; both are read from the current test's asserted
+   values, not invented.
 
 ## Finalization Gate
 
@@ -1048,5 +1338,10 @@ matrix/provenance prose left from the template or Seed
 - Prior art opened: ms-conductor `examples/README.md` §Explicit
   Termination; scxmlcc `doc/user-manual.md` §Final State (`<final>`)
   — search record at `evidence/research/propose-prior-art.md`.
+- Stage 4 evidence: `evidence/research/resolve-prior-art.md` (A6
+  negative — DMN searched across four corpora, not found);
+  `evidence/spikes/a3-corpus-sweep.md` (A3 — zero `[emit.` repo-wide,
+  green baseline); `evidence/spikes/c2-finding-multiplicity.md` (C2 —
+  the load pipeline is fail-fast, one refusal per run).
 - Related issues: kata `intrastate#vt9n`, kata `intrastate#rg0e`
   (folded), kata `srz2` (RDR 0023 projection consumer).
