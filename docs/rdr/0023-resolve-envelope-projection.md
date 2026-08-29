@@ -109,7 +109,7 @@ N/A-bulleted). -->
   narrowed to the DEFAULT mode: under the opt-in `--plan-only`
   projection (C1 below) the echo-group fields `model`, `observed`,
   `owned`, `readers`, `outcome` are absent from the success payload
-  (`revision` stays — plan-side provenance, C2). Default-mode output is byte-identical to today's; every
+  (`revision` stays — plan-side identity slot, C2). Default-mode output is byte-identical to today's; every
   other 0005 obligation on `flow resolve` — one terminal envelope,
   refusal codes, exit groups, gate ordering, both-modes agreement — is
   unchanged. No clause of 0011 is overridden: `0011:C2`'s fence is
@@ -215,8 +215,10 @@ Each answer also decides whether future verbs inherit the projection.
   tests.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: swept all 16 test files invoking `flow resolve`
-    (~120 sites): none passes a projection flag; every success-payload
+  - **Evidence**: swept all 21 test files invoking `flow resolve`
+    (count re-taken at the cove sweep, 2026-08-29; the earlier "16"
+    was a miscount, the substantive claim unchanged): none passes a
+    projection flag (`rg plan-only internal/` → no matches); every success-payload
     assertion runs default mode — key-set
     (`internal/cli/flow_resolve_0005_test.go`), byte-identity and
     wire key-order (`internal/cli/decision_table_0010_test.go`).
@@ -252,19 +254,41 @@ Each answer also decides whether future verbs inherit the projection.
   visible to a per-command `Lookup`), the four-verb vacuity guard
   transfers, and nothing in
   `internal/cli/flow_all_0011_test.go::TestReq46And47And65And98_AllIsAbsentFromTheOtherThreeVerbsAndTheFlowGroup`
-  or `registerSelectionFlags` is name-generic in a way the new sweep
-  would disturb.**
-  - **Status**: Verified
+  or `registerSelectionFlags` registers `plan-only` under any other
+  name. Scoped at the cove sweep to the flag name this RDR adds: the
+  general claim that no name is registered twice across the tree is
+  FALSE (`help --all`), which is why C1 mandates a total walker rather
+  than reuse of an existing partial one.**
+  - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: the `--all` probes are exact-name `Lookup("all")`
-    (`internal/cli/flow_all_0011_test.go`, three probe sites) — a
+  - **Evidence**: the collision half is VERIFIED — the `--all` probes
+    are exact-name `Lookup("all")`
+    (`internal/cli/flow_all_0011_test.go`, three probe sites), so a
     resolve-local `plan-only` is invisible to them; the root builds
-    via plain `AddCommand` (`internal/cli/root.go`) and the shipped
-    tests already walk `Commands()` recursively (the hidden `docs`
-    command still enumerates, so the whole-tree walk misses nothing);
-    the four-verb vacuity guard transfers as a pattern;
-    `registerSelectionFlags` registers only `model`/`flow`/`artifact`
-    — nothing name-generic for the new sweep to disturb.
+    via plain `AddCommand` (`internal/cli/root.go`); the four-verb
+    vacuity guard transfers as a pattern; `registerSelectionFlags`
+    registers only `model`/`flow`/`artifact`. The IMPLEMENTABILITY
+    half was re-opened by the cove sweep (2026-08-29) and its original
+    evidence retracted: no shipped test walks `Commands()` recursively
+    — every sweep is a fixed two-level loop over the `flow` group
+    (`flow_all_0011_test.go`, `flow_surface_0005_test.go`,
+    `flow_input_0005_test.go`) — and the repo's only recursive walker,
+    `internal/cli/help_all.go::walkCommandTree`, SKIPS children named
+    `help` or `completion` before recursing, with its `docs.go` callers
+    further gating on `c.Hidden`. So `docs` enumerates because that
+    caller admits hidden commands, not because the walker is total:
+    reusing it would assert a strictly weaker negative than C1's
+    "whole command tree". The sweep also found a live counterexample
+    to the generalization — `internal/cli/help_all.go::wireHelpSubcommandAll`
+    registers a second `--all` on the auto-generated `help` command,
+    which today's 0011 oracle misses precisely because it descends the
+    `flow` group only. `plan-only` is unaffected (different name), but
+    the whole-tree idiom C1 mandates has no shipped exemplar.
+  - **Verification plan**: write the total walker (no name-skip, no
+    `Hidden` gate) against the real root and confirm it enumerates
+    `help` and `completion`; assert the `plan-only` registrant set is
+    exactly `{flow resolve}` under it. Method: Spike, at implementation
+    Phase 2 — C1/S4 now fix the scope it must cover.
   - **If wrong**: C1's whole-tree structural negative cannot be pinned
     in the house idiom and needs its own form.
 - **A6 A refusal path carries nothing to project: `respond.Fail`
@@ -325,8 +349,9 @@ settled and stays. Under the flag the success payload carries exactly
 the **plan group** the verb's own extended help already names under
 "Reading a successful plan" (`internal/cli/flow_resolve.go::flowResolveExtendedDesc`:
 `rule`, `next{}`, `writes{}`, `clear[]`, `emit{}`, `escaped`,
-`escape_class`, `gates[]`), plus `revision` as the plan's provenance
-(loader-produced, not request echo — C2 carries the rationale),
+`escape_class`, `gates[]`), plus `revision` as the plan-side identity
+slot (loader-produced, not request echo, and presently constant-empty
+— C2 carries the rationale),
 and omits the **echo group** (`model`,
 `observed`, `owned`, `readers`, `outcome`) as absent keys.
 The projection is applied to the verb-specific result *before*
@@ -386,12 +411,22 @@ over the same request with and without the flag: identical exit
 codes; byte-identical refusal envelopes (CLIError, findings — never
 projected, and carrying no echo group to project); the projected
 success payload a strict key-subset of the default payload with
-byte-identical values on every carried key; and an identical
-invoked-reader set. A later change that skips work whose only
+byte-identical values on every carried key; an identical
+invoked-reader set; and the projected encoding STRICTLY SHORTER than
+the default. The width assertion is not implied by the subset one — a
+later plan-group field can grow the projected payload past today's
+full width with the key-set and partition oracles still green — so
+the flag's whole reason for existing is itself oracle-enforced. A later change that skips work whose only
 consumer is a projected-away field breaches this clause.
-Presence-rule fields keep their own contracts inside the plan group:
-emit stays present as {} (0010:C4), escape_class stays
-omitempty-on-unescaped.
+Presence-rule fields keep their own contracts inside the plan group,
+unchanged and not restated here: emit stays present as {} (0010:C4),
+and escape_class keeps whatever presence rule its producer already has
+(0005:A-3 — omitted when unescaped, and also when an escaped row's
+class is unprobeable, `flow_resolve.go::escapeClassOf`). This
+projection neither widens nor narrows those rules: a field the default
+mode omits is omitted under the flag for the same reason, so an oracle
+MUST assert presence-rule fields by comparison against the SAME run's
+default output, never against an unconditional literal.
 
 Text mode renders the projected result through the same generic
 payload renderer as every other success; the projection is applied
@@ -409,9 +444,22 @@ registering plan-only is exactly {flow resolve} — closed over verbs
 added later, deliberately stronger than the enumerated-sibling sweep
 the --all oracle shipped
 (internal/cli/flow_all_0011_test.go::TestReq46And47And65And98_AllIsAbsentFromTheOtherThreeVerbsAndTheFlowGroup)
-— vacuity-guarded by requiring the four flow verbs to exist. The
-behavioural command-error run is corroboration, never the assertion.
-This contract mints no new refusal code and no new exit group.
+— vacuity-guarded by requiring the four flow verbs to exist.
+
+WHOLE means total: the walk descends every child of the root with no
+name-based skip and no Hidden gate, INCLUDING the auto-generated help
+and completion commands. It therefore MUST NOT reuse
+internal/cli/help_all.go::walkCommandTree, which skips children named
+help or completion before recursing and whose docs.go callers further
+gate on Hidden — that walker asserts a strictly weaker negative than
+this clause requires. The scope is load-bearing, not pedantic: a
+registration reachable only on an auto-generated command is exactly
+what an enumerated sweep misses, and the repo already contains one
+(help --all, internal/cli/help_all.go::wireHelpSubcommandAll) that
+the shipped 0011 oracle does not see because it descends the flow
+group only. The behavioural command-error run is corroboration, never
+the assertion. This contract mints no new refusal code and no new
+exit group.
 ```
 
 **C2**
@@ -432,9 +480,22 @@ requested outcome (--outcome, echoed unchanged). The PLAN group is
 rule identity, gate results, authored answers and their
 interpretations, planned next/writes/clear, the escape disposition,
 and revision. revision rides the PLAN side deliberately: it is
-produced by the loader, not restated from the request, and it is
-the plan's only provenance — a chained caller cannot otherwise
-detect that the model changed under the same path between calls.
+produced by the loader, never restated from the request, so it is
+structurally a plan-side attestation rather than an echo, and it is
+the slot a model-identity signal occupies when one exists.
+
+revision is CONTRACTED BUT PRESENTLY VACANT, and this RDR records
+that rather than assuming a live value: 0002's [model] block admits
+no revision key, so no model can declare one and the accessor returns
+"" on every payload this CLI can emit
+(internal/cli/flow_exec.go::revision, REQ-25's consequent, DEV-7).
+The assignment is therefore made on the field's DEFINITION — a
+loader-produced identity token — not on any provenance it delivers
+today; a chained caller cannot currently detect a model change from
+it. Projecting it costs 14 bytes and keeps the wire shape stable for
+the day 0002 admits the key. If a successor instead retires the
+field, that RDR removes it from this group and from the always-keep
+core together.
 --plan-only reports the PLAN group and omits the ECHO group (C1).
 
 The assignment ground (recorded at Resolve, 2026-08-29): ECHO is
@@ -443,8 +504,9 @@ its behalf (internal/resolve/resolve.go::Resolve takes Owned and
 Observed as Input; internal/cli/flow_exec.go::invokedReaders
 derives readers from model + outcome alone) — and PLAN is the
 kernel's output side plus bounded identity attestations, of which
-revision is the shipped instance: provenance rides as an identity
-token, never re-echoed content. A future drift-detection ask joins
+revision is the declared instance: provenance rides as an identity
+token, never re-echoed content — the slot is contracted and stable
+even while its value is empty. A future drift-detection ask joins
 PLAN as a bounded state-identity field under the §D1 field-addition
 rule, not by moving raw owned content into the projected width.
 
@@ -456,9 +518,24 @@ bare omit-list whose complement is "whatever else exists".
 
 This verb's ALWAYS-KEEP core (JDR 0002 §D1) is rule, escaped,
 escape_class, revision: if the boolean axis ever generalizes to an
-enum or a field list, no mode may omit them, so a projected payload
-can never launder a rescued plan into an ordinary one or detach a
-plan from the model revision that produced it.
+enum or a field list, no mode may PROJECT them away, so a projected
+payload can never launder a rescued plan into an ordinary one or
+detach a plan from the model revision that produced it. Always-keep
+is projection-invariance, not unconditional presence: a core field
+whose producer already has a presence rule (escape_class) appears
+under the flag exactly when it appears by default — the rule the
+laundering guard actually rests on is escaped, which is
+unconditionally present.
+
+The core's two halves carry different weight today, and the clause
+says so rather than implying both are live. rule, escaped and
+escape_class are load-bearing now — they are what a caller reads to
+tell a rescued plan from an ordinary one. revision's clause is
+FORWARD-BINDING: the field is presently constant-empty (above), so
+what always-keep buys is that a future projection mode cannot drop
+the model-identity slot at the moment 0002 gives it a value. Binding
+it now is the cheap half of the trade — 14 bytes against a silent
+provenance loss in a mode nobody has designed yet.
 
 Under JDR 0002 §D1, 0024's dispositions, if that RDR lands, is a
 PLAN-group field: each token is assigned by the [emit] declaration
@@ -510,6 +587,60 @@ and its never-omitted clause is untouched by this projection.
   partition-completeness oracle (C2) makes skipping that assignment a
   test failure rather than a silent omit-list default.
 
+#### Source-authority census
+
+Every success-payload field, its writer, and its C2 side. All fifteen
+are written at one assembly site (`internal/cli/flow_resolve.go`
+`resolvePayload{…}` literal) — there is no fallback arm and no second
+writer, which is what makes the partition a single-site edit.
+
+| Field | Writer | Derived from | C2 side |
+| --- | --- | --- | --- |
+| `model` | `req.modelRef` | `--model`, verbatim | ECHO |
+| `observed` | `observedTagMap(req.observed)` | `--tag`, refused-not-coerced (`parseTags`) | ECHO |
+| `owned` | `tagMap(owned)` | reader pass over the caller's own request | ECHO |
+| `readers` | `readerIDs(readers)` | pure function of model + outcome (`flow_exec.go::invokedReaders`) | ECHO |
+| `outcome` | `outcome` | `--outcome`, verbatim | ECHO |
+| `revision` | `req.revision()` — constant `""` today (`flow_exec.go`, no `[model]` revision key exists) | loader, not the request | PLAN (identity slot) |
+| `rule` | `plan.RuleID` | kernel | PLAN |
+| `gates` | `req.runGates` | gate run on the selected row | PLAN |
+| `emit` | `emitMap(row.Emit)` | selected row's authored block (`0010:C4`) | PLAN |
+| `next` | `tagMap(plan.NextTags)` | kernel | PLAN |
+| `writes`, `clear` | `plan.Writes` split on `ClearSentinel` | kernel | PLAN |
+| `escaped` | `plan.Escaped` | kernel | PLAN |
+| `escape_class` | `escapeClassOf(...)` | re-probe of the ordinary rows | PLAN |
+
+Sibling arms: none. The reflective oracle (C2) is what keeps this table
+from going stale — a field added without a side is a test failure.
+
+#### Disposition
+
+| Input class | Exit | Envelope | Artifact | Loud / silent |
+| --- | --- | --- | --- | --- |
+| `--plan-only` on `flow resolve`, success | 0 | projected success payload | — | loud (narrower output is the request) |
+| `--plan-only` on `flow resolve`, refusal | unchanged | refusal, byte-identical (A6) | — | loud, flag-blind |
+| `--plan-only` on `next`/`read-state`/`set-state` | 2 | `command-error` shared bucket | — | loud (parse failure, `0011:A14` limit) |
+| `--plan-only` on a binary predating this RDR | 2 | `command-error` | — | loud — an absent `observed` always means projection, never an old binary |
+| echo group under the flag | — | keys ABSENT | — | silent by design; the caller supplied every one |
+
+The flag mints no refusal code and no exit group (C1).
+
+#### Oracle discriminability
+
+Each Testing Strategy scenario, what makes it fail, and its negative
+control — the guard against an oracle that passes by absence-of-error.
+
+| Oracle | Fails if X is wrong, because Y | Negative control |
+| --- | --- | --- |
+| S1 ± flag differential | a projected value drifts from its default rendering — the comparison is against the same run's default bytes, not a literal; the width clause additionally fails if the projection stops saving bytes | mutate one carried value under the flag; separately, add a large plan-group field and confirm the width clause goes red where the key-set oracle stays green |
+| S2 explicit key set | the key list is an authored literal, so a field falling through into the projected width fails it | add a field to the payload without a C2 side; S2 and S3 must both go red |
+| S3 partition completeness | reflective over the struct, so an unassigned field is a failure rather than a default | same control as S2 |
+| S4 registration walk | vacuity-guarded on the four flow verbs, so an empty walk cannot pass | register `plan-only` on a second command; S4 must go red |
+| S5 text subset | asserts per-line byte identity against the default run's lines, not merely "fewer lines" | drop a plan-group line under the flag; S5 must go red |
+
+S4 is the one structural-absence oracle here, and the vacuity guard is
+what stops it passing on an empty command tree.
+
 #### Illustrative Code
 
 Illustrative only — tests must not assert these bytes; normative
@@ -539,7 +670,8 @@ The same run without `--plan-only` additionally carries `model`,
 | Success payload assembly | `internal/cli/flow_resolve.go::resolvePayload` | Fields are concrete (non-pointer), so conditional absence needs a mechanism (A2) | Extend | Echo fields become projectable; plan fields untouched |
 | Both-modes rendering | `internal/cli/respond` (`OK`, `text.go::flatten`) | None — renders whatever the verb hands it | Reuse unchanged | Projection lands before `respond.OK`, so no gateway change |
 | Flag registration | `newFlowResolveCmd` (verb-local), `registerSelectionFlags` (shared) | Shared registrar reaches all verbs | Extend verb-local only | The flag never enters the shared registrar (C1) |
-| Absence-oracle idiom | `internal/cli/flow_all_0011_test.go::TestReq46And47And65And98_AllIsAbsentFromTheOtherThreeVerbsAndTheFlowGroup` | Enumerated-sibling sweep, one flag name per sweep | Reuse as pattern, strengthened | New whole-tree oracle: commands registering `plan-only` == exactly `{flow resolve}` (C1, A5) |
+| Absence-oracle idiom | `internal/cli/flow_all_0011_test.go::TestReq46And47And65And98_AllIsAbsentFromTheOtherThreeVerbsAndTheFlowGroup` | Enumerated two-level sweep over the `flow` group, one flag name per sweep; no shipped test recurses | Reuse as pattern, strengthened | New whole-tree oracle: commands registering `plan-only` == exactly `{flow resolve}` (C1, A5) |
+| Recursive tree walk | `internal/cli/help_all.go::walkCommandTree` | Skips `help`/`completion` by name; callers gate on `Hidden` — not total | Do NOT reuse; write a total walker | C1 fixes the scope: no name-skip, no `Hidden` gate (A5 spike) |
 | Verb help | `flow_resolve.go::flowResolveExtendedDesc` ("Reading a successful plan") | None | Extend | The help's plan list is the partition's user-facing statement; gains the flag line |
 
 ### Decision Rationale
@@ -552,7 +684,7 @@ as a matrix (profile: foundational), approaches × deciding criteria:
 | --- | --- | --- | --- | --- |
 | Correctness fit (drop the chained-call echo; refusals untouched) | full — the echo group is exactly the measured duplication | full, plus generality nothing asked for | partial — omission differs by mode | partial — needs a per-skill recipe carried in every prompt |
 | Prior-art alignment | `gh pr diff --name-only` (fixed projection) | `gh --json <fields>` (field selection + universe policing) | none surveyed — gh renders text from the same selected fields, not a tier | jq is gh's *escape hatch* (`--jq`), offered beside, not instead of, projection |
-| Safety of the projected payload | `escaped`/`escape_class` never omissible, by construction | caller can drop `escaped` unless an always-keep set is added — which IS this partition | n/a | a recipe can drop anything, including refusal fields on the shared stdout |
+| Safety of the projected payload | `escaped`/`escape_class` never PROJECTABLE, by construction | caller can drop `escaped` unless an always-keep set is added — which IS this partition | n/a | a recipe can drop anything, including refusal fields on the shared stdout |
 | Blast radius vs locked fences | one verb, one flag; `0005:C1` held by construction; no shipped oracle moves | same, plus a declared field universe and adjacency to the rejected `--select` spelling | breaks `0005:C1`'s one-`flatten` gateway or mints per-verb text templates | zero repo change; the burden exports to every consumer |
 | Consumer parse stability | one struct parses both widths (absent echo keys decode to zero values) | N shapes, one per field list | two shapes per mode | consumer-defined, drifts as the payload grows (0024 adds a field) |
 | Extensibility (a later verb, e.g. an export surface) | one rule: project the verb result pre-`respond.OK`, echo group only | generalizes, dragging the field universe along | — | — |
@@ -814,7 +946,8 @@ queries missed; the choice does not rest on it.
   `writes{}`, `clear[]`, `emit{}`, `escaped`, `escape_class`,
   `gates[]` and none of the echo fields. ⇒ C2's partition is the
   house vocabulary made normative, not a new taxonomy — plus
-  `revision` on the plan side as the plan's provenance (C2). The
+  `revision` on the plan side as the identity slot (C2 — contracted,
+  presently empty). The
   writer of that state is `runFlowResolve` itself: every plan-group
   field is computed by the selection/gate path, every echo-group
   field is copied from the request or the reader pass.
@@ -868,7 +1001,11 @@ queries missed; the choice does not rest on it.
   reflective partition-completeness oracle plus the explicit
   projected-key-set literal — an unassigned field is a test failure,
   and a field reaching the projected width is a conscious edit to a
-  normative list.
+  normative list. Those two catch an unassigned field but not a
+  legitimately-assigned large one, so C1's differential also asserts
+  the projected encoding is strictly shorter than the default — the
+  clause that actually fails on P-12's "bigger output, every test
+  green" scenario.
 - **Risk**: the boolean later generalizes (a second projection
   profile is asked for) and drifts toward the rejected field-list
   design without its safety.
@@ -882,10 +1019,13 @@ queries missed; the choice does not rest on it.
   between widths on every run, so a field added to one struct only is
   caught by the suite, not by a consumer.
 - **Risk**: a consumer treats plan-only output as the full record and
-  loses provenance (which model/revision produced this plan).
+  loses the model reference — `model` is the projected-away field that
+  actually names which model produced the plan, since `revision` is
+  constant-empty today (C2).
   **Mitigation**: opt-in with an unchanged default; the help line
   states the omitted group by name; the caller that opts in is the
-  caller that already holds the request.
+  caller that already holds the request, `model` included — which is
+  precisely why `model` is ECHO and not PLAN.
 
 ### Failure Modes
 
@@ -936,8 +1076,8 @@ family):
    byte-identical to the pre-change fixture.
 2. Re-run the same invocation with `--plan-only` → exactly the
    normative projected key set (`revision`, `rule`, `gates`, `emit`,
-   `next`, `writes`, `clear`, `escaped` — `escape_class` when
-   escaped); every carried field byte-identical to step 1's;
+   `next`, `writes`, `clear`, `escaped` — plus `escape_class` iff
+   step 1 carried it); every carried field byte-identical to step 1's;
    `model`/`observed`/`owned`/`readers`/`outcome` absent (not null,
    not empty).
 3. Re-run step 2 with `--as=text` → the projected lines are a
@@ -994,14 +1134,21 @@ not a test assertion.
    **Expected**: identical exit codes and invoked-reader set;
    refusal envelopes byte-identical; the projected success payload a
    strict key-subset of the default with byte-identical values on
-   every carried key. Normative fixture: the projected wire record
-   of the pricing 2×2 call (`evidence/spikes/a2-encoder-mechanism.md`).
+   every carried key; and the projected encoding strictly shorter
+   than the default (C1's width clause — the guard P-12 otherwise
+   escapes; unconditional because the five echo keys always render,
+   `model`/`outcome` being non-`omitempty` and the three containers
+   rendering `{}`/`[]`). Normative fixture: the projected wire record
+   of the pricing 2×2 call (`evidence/spikes/a2-encoder-mechanism.md`),
+   where the full NDJSON line measures 290 B and its projection 152 B.
 2. **Scenario**: projected top-level key set (explicit-literal
    oracle).
    **Expected**: exactly `revision`, `rule`, `gates`, `emit`,
-   `next`, `writes`, `clear`, `escaped` (`escape_class` when
-   escaped); omitted keys absent — never null or empty placeholders.
-   The same normative fixture pins the exact bytes
+   `next`, `writes`, `clear`, `escaped`, plus `escape_class` exactly
+   when the same request's DEFAULT output carries it (the producer's
+   own presence rule, C1 — not an unconditional "when escaped");
+   omitted keys absent — never null or empty placeholders. The same
+   normative fixture pins the exact bytes
    (`evidence/spikes/a2-encoder-mechanism.md`).
 3. **Scenario**: reflective partition-completeness over the resolve
    success payload.
@@ -1010,9 +1157,35 @@ not a test assertion.
 4. **Scenario**: whole-tree flag-registration walk from the root.
    **Expected**: the set of commands registering `plan-only` is
    exactly `{flow resolve}`; vacuity-guarded on the four flow verbs.
+   The walk is TOTAL — no name-skip, no `Hidden` gate, `help` and
+   `completion` included (C1); a control asserting the walk actually
+   reaches `help` guards against a walker that silently narrows.
+   `help_all.go::walkCommandTree` is not reusable here (it skips both).
 5. **Scenario**: `--as=text` ± the flag, repeated runs.
    **Expected**: projected text lines a byte-identical, stable
    subset of the default-mode lines.
+
+### Desk trace
+
+The MVV walked stepwise with every assertion in force at that step, on
+the normative fixture (the pricing 2×2 call,
+`evidence/spikes/a2-encoder-mechanism.md`). Witnesses are that call's
+real bytes, not restatements.
+
+| MVV step | Assertions in force | Witness | Verdict |
+| --- | --- | --- | --- |
+| 1 — no flag, json | C1 default byte-identity; `0005:A6` envelope list; `0010:C4` `emit` present | 14 keys, `"owned":{}` and `"readers":[]` present, `"emit":{"dpa":"required","plan":"pro"}` | OK |
+| 2 — `--plan-only`, json | C1 key set + absent-not-null + declaration order + carried-value byte identity; C2 always-keep core; S2 literal | `{"revision":"","rule":"paid-eu","gates":[],"emit":{…},"next":{},"writes":{},"clear":[],"escaped":false}` — 8 keys, equal to S2's list | OK |
+| 3 — `--plan-only`, text | C1 text-subset; `0005:C1` both-modes agreement | default 15 lines → projected 9; the 6 dropped are exactly `model`, `observed.region`, `observed.tier`, `outcome`, `owned`, `readers` | OK |
+| 4 — unrecognized outcome ± flag | C1 report-only; A6 | refusal fields `code`/`message`/`param`/`detail`/`hint`/`findings` — no echo member to project | OK |
+| 5 — `flow next --plan-only`; tree walk | C1 non-registration + vacuity guard; A5 | `--all` probes are exact-name `Lookup("all")`; a resolve-local `plan-only` is invisible to them | OK |
+| 6 — byte counts | A1 | 708→146 B (79.4%); 290→152; 392→191; 412→238 | OK |
+
+Two orderings coexist and are not the same ordering: the **wire** keeps
+struct declaration order (C1), while **text** is alphabetically sorted
+by the shipped `flatten` (`respond/text.go`, `sort.Strings`). Step 3's
+subset property holds under either, because projection only deletes
+keys; no clause requires the two orders to match, and none should.
 
 ### Performance Expectations
 
