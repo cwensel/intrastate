@@ -235,6 +235,16 @@ this RDR gives only the first.
     fixture (author-approved 2026-08-29): the projected wire record
     of the pricing 2×2 call, recorded in the spike artifact and
     cited by Testing Strategy S1/S2 Expected.
+
+    Conversion SCOPE, pinned at the repeatability lens (2026-08-29):
+    the mechanism applies to the five ECHO fields only, each `T` → `*T`
+    with `T` unchanged from the census's Go-type column
+    (`string`, `map[string]string`, `[]string`) — no other field on
+    `resolvePayload` becomes pointer-valued. Recorded because a run
+    reconstructed `escape_class` as `*string`, which would put an
+    always-keep core field (C2) in the same shape as a projectable
+    one; on `main` it is a plain `string` whose `,omitempty` realises
+    `0005:A-3`'s presence rule, a mechanism distinct from projection.
   - **If wrong**: C1's absence-not-null and byte-identity clauses are
     unimplementable as specced and the mechanism (or the clause) must
     change before lock.
@@ -570,7 +580,13 @@ The oracle MUST instead observe which readers ACTUALLY RAN in each
 run — recording execution at the reader invocation site (a counting or
 recording seam around the reader pass, the run's own side effects,
 never a re-call of the planning function) — and assert the two
-observed sets are equal. The DEFAULT-mode run of the same request
+observed sets are equal. The invocation site the seam wraps is the
+per-reader `exec.Read` call inside
+`internal/cli/flow_exec.go::(flowRequest).runReaders`, the one pass
+that yields `readers` and `owned` together; the seam's FORM is left to
+the implementer, but its position is not — a seam placed at the
+name-computation (`invokedReaders`) rather than the execution records
+intent, not execution, and is the vacuous form this clause rejects. The DEFAULT-mode run of the same request
 supplies the expected set. The discriminating property is that a
 projected run which skips the reader pass MUST turn this assertion
 red; an assertion that cannot distinguish that case does not satisfy
@@ -587,12 +603,24 @@ mode omits is omitted under the flag for the same reason, so an oracle
 MUST assert presence-rule fields by comparison against the SAME run's
 default output, never against an unconditional literal.
 
+The projection SITE is normative, not an implementation-plan detail.
+It is applied to the verb-specific result BEFORE respond.OK, never in
+the respond gateway and never per output mode; it sits on the SUCCESS
+path only, AFTER the last respond.Fail return; and the flag is read at
+exactly ONE lexical site, that projection branch — never passed as a
+parameter into payload assembly, and never consulted in gate
+evaluation, rule selection, or refusal construction. A defensive "if
+refusing, skip projection" guard is FORBIDDEN: refusal flag-blindness
+(A6) must hold structurally, because a refusal returns before the
+projection is reachable, and a guard would both signal a misplaced
+site and make the flag readable on a path this contract requires it
+cannot influence. Assembly is flag-blind (C2).
+
 Text mode renders the projected result through the same generic
-payload renderer as every other success; the projection is applied
-to the verb-specific result BEFORE respond.OK, never in the respond
-gateway and never per output mode, so the two modes cannot disagree
-(0005:C1 held by construction). The projected text lines MUST be a
-subset of the default-mode text lines, byte-identical per line.
+payload renderer as every other success, so the two modes cannot
+disagree (0005:C1 held by construction). The projected text lines
+MUST be a subset of the default-mode text lines, byte-identical per
+line.
 
 --plan-only MUST NOT be accepted by any other command — satisfied by
 NON-REGISTRATION (registered on resolve only, never the shared
@@ -718,9 +746,11 @@ that is INDEPENDENT of the projection code, and the independence is
 the whole content of the check: an oracle that derives the ECHO set
 by observing what the projection drops is tautological — it restates
 the implementation and cannot fail. So the assignment is DECLARED (a
-per-field marker on `resolvePayload` or a table keyed by field name,
-one entry per field, carrying `echo` or `plan`), the projection is
-implemented FROM that declaration, and the oracle asserts three
+standalone table keyed by field name, one entry per field, carrying
+`echo` or `plan` — the carrier constrained below), the projection is
+implemented FROM that declaration as a DISTINCT function taking the
+assembled payload and returning the projected one, and the oracle
+asserts three
 things against it: every struct field has exactly one entry; the
 entry set and the field set are equal (neither a field without an
 entry nor an entry without a field); and the keys a projected run
@@ -740,6 +770,16 @@ forbid, reached by the carrier the clause would otherwise permit.
 Independence has to be structural — a separate site a projection edit
 does not open — or S3 asserts only that the implementation agrees
 with itself.
+
+The projection function is likewise SEPARATE from payload assembly:
+it takes the fully assembled payload and returns the projected one,
+and the flag is never a parameter to the assembly function. Fusing
+the two — assembling conditionally under the flag — destroys both
+checkable properties this contract rests on: there is no standalone
+projection to implement FROM the declaration, and the site rule
+below (projection after the last `respond.Fail`) stops being
+structurally locatable. Assembly is flag-blind; projection is the
+only flag-aware step.
 
 This verb's ALWAYS-KEEP core (JDR 0002 §D1) is rule, escaped,
 escape_class, revision: if the boolean axis ever generalizes to an
@@ -839,21 +879,53 @@ a single-site edit. The three numbers must agree: this census is the
 input to C2's declaration and to S3's bidirectional equality assertion,
 so a miscount here becomes a red S3 on the implementer's first run.
 
-| Field | Writer | Derived from | C2 side |
-| --- | --- | --- | --- |
-| `model` | `req.modelRef` | `--model`, verbatim | ECHO |
-| `observed` | `observedTagMap(req.observed)` | `--tag`, refused-not-coerced (`parseTags`) | ECHO |
-| `owned` | `tagMap(owned)` | reader pass over the caller's own request | ECHO |
-| `readers` | `readerIDs(readers)` | pure function of model + outcome (`flow_exec.go::invokedReaders`) | ECHO |
-| `outcome` | `outcome` | `--outcome`, verbatim | ECHO |
-| `revision` | `req.revision()` — constant `""` today (`flow_exec.go`, no `[model]` revision key exists) | loader, not the request | PLAN (identity slot) |
-| `rule` | `plan.RuleID` | kernel | PLAN |
-| `gates` | `req.runGates` | gate run on the selected row | PLAN |
-| `emit` | `emitMap(row.Emit)` | selected row's authored block (`0010:C4`) | PLAN |
-| `next` | `tagMap(plan.NextTags)` | kernel | PLAN |
-| `writes`, `clear` | `plan.Writes` split on `ClearSentinel` | kernel | PLAN |
-| `escaped` | `plan.Escaped` | kernel | PLAN |
-| `escape_class` | `escapeClassOf(...)` | re-probe of the ordinary rows | PLAN |
+| Field | Go type on `main` | Writer | Derived from | C2 side |
+| --- | --- | --- | --- | --- |
+| `model` | `string` | `req.modelRef` | `--model`, verbatim | ECHO |
+| `observed` | `map[string]string` | `observedTagMap(req.observed)` | `--tag`, refused-not-coerced (`parseTags`) | ECHO |
+| `owned` | `map[string]string` | `tagMap(owned)` | reader pass over the caller's own request | ECHO |
+| `readers` | `[]string` | `readerIDs(readers)` | pure function of model + outcome (`flow_exec.go::invokedReaders`) | ECHO |
+| `outcome` | `string` | `outcome` | `--outcome`, verbatim | ECHO |
+| `revision` | `string` | `req.revision()` — constant `""` today (`flow_exec.go`, no `[model]` revision key exists) | loader, not the request | PLAN (identity slot) |
+| `rule` | `string` | `plan.RuleID` | kernel | PLAN |
+| `gates` | `[]gateResult` | `req.runGates` | gate run on the selected row | PLAN |
+| `emit` | `map[string]string` | `emitMap(row.Emit)` | selected row's authored block (`0010:C4`) | PLAN |
+| `next` | `map[string]string` | `tagMap(plan.NextTags)` | kernel | PLAN |
+| `writes`, `clear` | `map[string]string`, `[]string` | `plan.Writes` split on `ClearSentinel` | kernel | PLAN |
+| `escaped` | `bool` | `plan.Escaped` | kernel | PLAN |
+| `escape_class` | `string` (`,omitempty`) | `escapeClassOf(...)` | re-probe of the ordinary rows | PLAN |
+
+The reader pass runs EARLY and produces both echo fields at once:
+`runFlowResolve` calls `flow_exec.go::(flowRequest).runReaders` once,
+which returns `readers` and `owned` together from a single loop, and
+the kernel call consumes that `owned` — so readers precede
+`resolve.Resolve`, not follow it. Six of the nine `respond.Fail` sites
+in `runFlowResolve` (kernel error, kernel refusal, row-not-found, gate
+error, gate deny) are therefore reached AFTER the readers have already
+executed. Two consequences the projection must respect: the reader
+pass is upstream of the projection site by a wide margin, so C1's
+"skips work whose only consumer is a projected-away field" has a large
+reachable surface rather than a success-path-only one — which is what
+gives S1's skip-the-reader-pass control its force; and because one
+call yields both fields, no implementation may satisfy the projection
+by suppressing `owned` and `readers` independently. Assembly order is
+otherwise not contracted: the `resolvePayload{…}` literal is built
+last, after readers, kernel, row lookup and gates, and this RDR fixes
+only that the projection follows it.
+
+Types read from `internal/cli/flow_resolve.go::resolvePayload` on
+`main` (2026-08-29). The column is normative INPUT to A2's mechanism,
+not decoration: A2 converts `T` → `*T` with `T` UNCHANGED from this
+column, and the conversion applies to the FIVE ECHO FIELDS ONLY.
+Nothing else on the struct becomes pointer-valued — in particular
+`escape_class` stays a plain `string` whose `,omitempty` drops the key
+on `""`. Its presence rule (`0005:A-3`) is therefore realised by a
+mechanism DISTINCT from the projection mechanism, and the two must not
+be conflated: `escape_class` is always-keep core (C2), so an
+implementation or oracle that treated "pointer + omitempty" as the
+mark of a projectable field would sweep away a field the partition
+requires carried. Group membership is the declaration table's (C2),
+never a Go type's.
 
 Sibling arms: none. The reflective oracle (C2) is what keeps this table
 from going stale — a field added without a side is a test failure.
@@ -1440,16 +1512,12 @@ Register `--plan-only` on `resolve` only and hand `respond.OK` the
 projected verb result when set — the mechanism A2 verified, applied
 after payload assembly, before the gateway.
 
-The projection site sits on the SUCCESS path only, after the last
-`respond.Fail` return: refusal flag-blindness (A6, C1's report-only
-clause) is then structural — a refusal returns before the projection
-is reachable — and NOT a defensive branch. Do not add a "if refusing,
-skip projection" guard; a guard would mean the projection site is
-wrongly placed, and it would make the flag readable on a path C1
-requires it cannot influence. The flag is read once, at the
-projection site, and nowhere in gate evaluation, rule selection, or
-refusal construction — which is what makes S1's identical-decision
-assertions hold by construction rather than by test.
+The projection site, the single-read rule, and the prohibition on a
+defensive refusal guard are C1's (projection-site clause) — normative
+there, applied here, not restated. What Phase 1 adds is why the shape
+pays off in this phase: because the flag is unreadable outside the
+projection branch, S1's identical-decision assertions hold by
+construction rather than by test.
 
 The `resolvePayload` struct keeps exactly its current field count:
 `decision_table_0010_test.go` pins `NumField() == 14` (:435) and the
@@ -1562,7 +1630,18 @@ not a test assertion.
    **Expected**: the set of commands registering `plan-only` is
    exactly `{flow resolve}`; vacuity-guarded on the four flow verbs.
    The walk is TOTAL — no name-skip, no `Hidden` gate, `help` and
-   `completion` included (C1). Two preconditions, both asserted: the
+   `completion` included (C1). The walker yields the WALKED COMMAND
+   SET — every command reached, unfiltered — and the registrant filter
+   is applied by the caller, not inside the walk. This is what makes
+   the preconditions assertable: they are asserted against the walker's
+   own output, and a walker that returned only `plan-only` registrants
+   could never contain `completion` in a passing build, so the
+   discriminating precondition would be unwritable. It is also a
+   distinct symbol from `internal/cli/help_all.go::walkCommandTree`,
+   which C1 forbids reusing — that one is a visitor
+   (`func(root *cobra.Command, fn func(*cobra.Command))`, no return)
+   and skips `help`/`completion`, so neither its name nor its shape
+   carries over. Two preconditions, both asserted: the
    oracle materializes the auto-generated commands via cobra's own
    initializers before walking, and the walked set CONTAINS
    `completion` (and `help`). `completion` is the discriminating
