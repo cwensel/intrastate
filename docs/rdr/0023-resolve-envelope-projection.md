@@ -245,9 +245,11 @@ this RDR gives only the first.
   tests.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: swept all 21 test files invoking `flow resolve`
-    (count re-taken at the cove sweep, 2026-08-29; the earlier "16"
-    was a miscount, the substantive claim unchanged): none passes a
+  - **Evidence**: swept all 22 test files invoking `flow resolve`
+    (count re-executed at the critique lens, 2026-08-29:
+    `rg -l 'flow.*resolve|"resolve"' internal/cli --glob '*_test.go'`
+    → 22; the earlier "16" and "21" were both miscounts, the
+    substantive claim unchanged across all three): none passes a
     projection flag (`rg plan-only internal/` → no matches); every success-payload
     assertion runs default mode — key-set
     (`internal/cli/flow_resolve_0005_test.go`), byte-identity and
@@ -275,6 +277,21 @@ this RDR gives only the first.
     JDR 0002 §D1's Resolved clause records the same assignment
     ("`dispositions` is a PLAN-group field… consistent by
     citation"). Neither contract moves in either landing order.
+
+    Scope of this stamp, narrowed at the critique lens (2026-08-29):
+    it covers the CONTRACTS only. It does NOT claim 0024 is
+    oracle-free against this RDR's baseline — `0024:C4` appends
+    `dispositions` LAST in `internal/cli/flow_resolve.go::resolvePayload`,
+    and two shipped 0010 oracles are extensional over that struct:
+    `decision_table_0010_test.go:435` asserts `NumField() != 14` and
+    `:427` a `slices.Equal` exact wire-key-set comparison. Both go red
+    when 0024 lands, in either order. That cost is 0024's own additive
+    append (the same one `0010:C4` took) and is not created by this
+    projection — A2's conversion changes field TYPES, not the count,
+    so this RDR alone moves neither assertion, which is what keeps A3
+    true as written. Recorded here because A3's "no predecessor
+    oracle moves" holds for THIS RDR and would be misread as covering
+    the pair.
   - **If wrong**: the joint decision homed at `cli/0023:C2` reopens
     and one of the two envelopes must move.
 - **A5 The whole-tree registration oracle C1 mandates is
@@ -398,6 +415,40 @@ this RDR gives only the first.
   - **If wrong**: C1's both-modes width clause is unsatisfiable as
     written and the clause narrows to JSON, leaving S5's subset
     assertion as text mode's only width guard.
+- **A9 Default-mode byte identity under A2's pointer conversion rests
+  on an invariant no contract states: every container writer feeding
+  the echo group returns a non-nil value, so a pointer to it renders
+  `{}`/`[]` and never `null`. Under the conversion this incidental
+  property becomes load-bearing — a nil container reached by any
+  writer renders `"readers":null` (or `"owned":null`) under
+  `omitempty`, silently changing DEFAULT-mode bytes for callers who
+  never opted in.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: the four container writers all allocate
+    unconditionally — `tagMap` and `observedTagMap`
+    (`internal/cli/flow_exec.go`), `emitMap`
+    (`internal/cli/flow_resolve.go`) and `readerIDs`
+    (`internal/cli/flow_next.go`) each open with `make(...)` — so no
+    shipped path produces a nil container today and the claim's
+    premise holds on `main`. What is NOT established is that the
+    property is contracted or guarded: only `emitMap`'s is deliberate
+    (`0010:C4`'s never-`null` clause), the rest are incidental, and
+    the critique lens verified by execution that a pointer to a nil
+    slice does render `null` under `omitempty`. The gap is that A2's
+    spike proved byte identity on POPULATED reference values, which
+    cannot exercise the nil arm.
+  - **Verification plan**: enumerate every assignment reaching the five
+    echo fields at the `resolvePayload{…}` site and confirm each source
+    is unconditionally allocated; then assert it — a default-mode
+    oracle over a request whose containers are empty (no `--tag`, no
+    owned keys, no readers), asserting the rendered bytes carry
+    `{}`/`[]` and no `null`. Method: Source Search + oracle, at
+    implementation Phase 1, before the conversion lands.
+  - **If wrong**: A2's mechanism changes default-mode output for an
+    untested request shape, breaking C1's byte-identity clause and
+    §Consequences' "no consumer changes" promise — and S1 cannot see
+    it, since it compares projected against default within one build.
 
 ## Proposed Solution
 
@@ -487,7 +538,12 @@ thing.
 STRICTLY SHORTER is measured on the FULL EMITTED LINE — the complete
 {"type":"ok","data":{…}} NDJSON record as written, excluding the
 trailing newline — not on the .data payload alone, and it is asserted
-in BOTH output modes. The envelope-inclusive unit is the one the
+in BOTH output modes. The TEXT-mode half of that "both" rests on A8,
+presently Pending and unmeasured: JSON-mode width is measured (A1),
+text-mode width is not. The clause binds both modes as written; if
+A8's Phase 2 measurement refutes it, the remedy is A8's own — the
+clause narrows to JSON before lock, not after, since this RDR does
+not amend a locked contract. The envelope-inclusive unit is the one the
 caller actually pays for, and it is the stricter reading (a constant
 wrapper makes any payload-level saving a smaller proportion of the
 line, never a larger one). In text mode the measurand is the total
@@ -498,15 +554,29 @@ would still pass, a subset being satisfied by the equal set.
 The IDENTICAL INVOKED-READER SET cannot be read off the projected
 run's payload, because readers is an ECHO field this flag projects
 away, and the shipped helper reading it fails hard on absence
-(internal/cli/flow_fixtures_0011_test.go::readersOf). The oracle
-MUST therefore compare the reader set through a channel the
-projection does not touch: the DEFAULT-mode run of the same request
-supplies the expected set, and the projected run's set is taken from
-the same in-process derivation the payload field is rendered from
-(internal/cli/flow_exec.go::invokedReaders), never from its own
-output. Asserting it from the projected payload is not a weaker
-form of this check — it is unwritable, and the assertion it would
-replace is the one that catches this clause's own named breach.
+(internal/cli/flow_fixtures_0011_test.go::readersOf).
+
+The measurand is therefore OBSERVED READER EXECUTION, not a recomputed
+derivation. Comparing invokedReaders(model, outcome) across the two
+runs is NOT an admissible form of this assertion: it is a pure function
+of two arguments the flag does not touch
+(internal/cli/flow_exec.go::invokedReaders takes *table.Model and
+outcome), so it returns equal sets on every implementation — including
+one that never runs a reader at all. Such an oracle is green by
+construction and cannot fail, which makes it worse than absent: it
+reads as coverage of exactly the breach this clause names.
+
+The oracle MUST instead observe which readers ACTUALLY RAN in each
+run — recording execution at the reader invocation site (a counting or
+recording seam around the reader pass, the run's own side effects,
+never a re-call of the planning function) — and assert the two
+observed sets are equal. The DEFAULT-mode run of the same request
+supplies the expected set. The discriminating property is that a
+projected run which skips the reader pass MUST turn this assertion
+red; an assertion that cannot distinguish that case does not satisfy
+this clause. Asserting it from the projected payload is not a weaker
+form of this check — it is unwritable; asserting it by recomputation
+is not weaker either — it is vacuous.
 Presence-rule fields keep their own contracts inside the plan group,
 unchanged and not restated here: emit stays present as {} (0010:C4),
 and escape_class keeps whatever presence rule its producer already has
@@ -550,6 +620,17 @@ group only. The behavioural command-error run is corroboration, never
 the assertion. This contract mints no new refusal code and no new
 exit group.
 
+This clause's IMPLEMENTABILITY is A5, presently Pending: the scope
+above is authored as a MUST, but no shipped test walks the tree
+totally and the walker is written for the first time at Phase 2. The
+clause is stated at full strength deliberately — narrowing it to what
+an existing partial walker can assert would discard the cove sweep's
+finding — and A5's verification plan is the spike that writes it. If
+that spike cannot reach this scope, C1's structural negative needs
+its own form and this paragraph moves; every downstream statement of
+it (§disposition, §oracle-discriminability, S4, MVV step 5, the desk
+trace) inherits that condition rather than restating it.
+
 Totality is a property of the TREE UNDER TEST, not only of the
 walker, and the two auto-generated commands are not symmetric: cobra
 materializes them lazily, so a walker that never had them to skip
@@ -565,6 +646,17 @@ control asserting the walk reaches help is NOT sufficient on its own:
 help is present by default, so it cannot distinguish a total walker
 from an untested tree — completion is the discriminating case and
 the control MUST name it.
+
+That precondition is a DEPENDENCY ON COBRA'S OWN INITIALIZERS
+(InitDefaultCompletionCmd, reachable from ExecuteC), and the
+assertion is what makes the dependency safe rather than silent: if a
+cobra upgrade renames, relocates or stops materializing the command,
+the precondition fails LOUDLY and the oracle goes red, instead of the
+walk quietly covering a smaller tree and passing vacuously. This is
+why presence is asserted as a precondition rather than assumed — the
+one failure mode a registration-absence oracle cannot survive is
+passing over a tree that never contained the command class the clause
+exists to reach.
 ```
 
 **C2**
@@ -634,9 +726,20 @@ entry set and the field set are equal (neither a field without an
 entry nor an entry without a field); and the keys a projected run
 actually emits equal the declaration's `plan` side. A new field with
 no entry then fails at the first assertion rather than defaulting
-into either width. Which of the two declaration carriers is used is
-an implementation choice left to Phase 1 alongside A2's mechanism;
-that it is separate from the projection code is not.
+into either width.
+
+The carrier is CONSTRAINED, not free: it MUST be a standalone table
+keyed by field name, in its own declaration site, NOT a per-field
+marker on `resolvePayload`. The two carriers are not equivalent under
+A2's mechanism — A2 rewrites the echo fields' types and tags on that
+struct, so a marker carried there is edited in the very commit that
+changes the projection, and an implementer who nils a field and
+retypes its tag in one edit has moved the assertion and its subject
+together. That is the tautological oracle this clause exists to
+forbid, reached by the carrier the clause would otherwise permit.
+Independence has to be structural — a separate site a projection edit
+does not open — or S3 asserts only that the implementation agrees
+with itself.
 
 This verb's ALWAYS-KEEP core (JDR 0002 §D1) is rule, escaped,
 escape_class, revision: if the boolean axis ever generalizes to an
@@ -725,10 +828,16 @@ and its never-omitted clause is untouched by this projection.
 
 #### Source-authority census
 
-Every success-payload field, its writer, and its C2 side. All fifteen
-are written at one assembly site (`internal/cli/flow_resolve.go`
-`resolvePayload{…}` literal) — there is no fallback arm and no second
-writer, which is what makes the partition a single-site edit.
+Every success-payload field, its writer, and its C2 side. The set is
+FOURTEEN fields — `reflect.TypeOf(resolvePayload{}).NumField()` is 14,
+the count `internal/cli/decision_table_0010_test.go` already pins — laid
+out in thirteen rows below because `writes` and `clear` share one
+`plan.Writes` writer. All fourteen are written at one assembly site
+(`internal/cli/flow_resolve.go` `resolvePayload{…}` literal) — there is
+no fallback arm and no second writer, which is what makes the partition
+a single-site edit. The three numbers must agree: this census is the
+input to C2's declaration and to S3's bidirectional equality assertion,
+so a miscount here becomes a red S3 on the implementer's first run.
 
 | Field | Writer | Derived from | C2 side |
 | --- | --- | --- | --- |
@@ -768,7 +877,7 @@ control — the guard against an oracle that passes by absence-of-error.
 
 | Oracle | Fails if X is wrong, because Y | Negative control |
 | --- | --- | --- |
-| S1 ± flag differential | a projected value drifts from its default rendering — the comparison is against the same run's default bytes, not a literal; the width clause additionally fails if the projection stops saving bytes on the full emitted line; the reader-set check reads a channel the projection cannot touch, so it fails on a real reader-set change rather than on the field's absence | mutate one carried value under the flag; separately, add a large plan-group field and confirm the width clause goes red where the key-set oracle stays green; separately, change the invoked-reader derivation under the flag and confirm the reader assertion goes red (it cannot, if read from the projected payload — that form aborts instead) |
+| S1 ± flag differential | a projected value drifts from its default rendering — the comparison is against the same run's default bytes, not a literal; the width clause additionally fails if the projection stops saving bytes on the full emitted line; the reader-set check observes which readers actually RAN, so it fails on a real execution change rather than on the field's absence | mutate one carried value under the flag; separately, add a large plan-group field and confirm the width clause goes red where the key-set oracle stays green; separately — the control that discriminates this clause — SKIP the reader pass under the flag and confirm the reader assertion goes red. That control is the reason the measurand is observed execution: a recomputed `invokedReaders(model, outcome)` comparison stays green through it (neither argument is flag-dependent), and reading the set from the projected payload aborts instead |
 | S2 explicit key set + absent-not-null | the key list is an authored literal, so a field falling through into the projected width fails it; and a projected key rendered as `null`/`{}`/`""` fails the absence assertion rather than passing as "not carried" | add a field to the payload without a C2 side; S2 and S3 must both go red. Absence control: render one echo key as `null` (the bare non-pointer `omitempty` hazard A2 reproduced) — S2 must go red where a key-presence-only check would stay green |
 | S3 partition completeness | reflective over the struct against an INDEPENDENT declared assignment source, so an unassigned field is a failure rather than a default, and the check cannot restate the projection code | add a field to the payload without a C2 side; S2 and S3 must both go red. Discriminating control (not shared with S2): add a field, declare it `plan`, but omit it from the projection — S3 must go red on the emitted-keys-equal-`plan` assertion while S2 stays green |
 | S4 registration walk | vacuity-guarded on the four flow verbs AND on the walked set containing `help` and `completion`, so neither an empty walk nor an unmaterialized tree can pass | register `plan-only` on a second command; S4 must go red. Second control: register it on the auto-generated `completion` command — S4 must go red there too, which is the control a bare `NewRootCmd()` tree cannot run |
@@ -1103,12 +1212,16 @@ queries missed; the choice does not rest on it.
 ### Consequences
 
 - Positive: a chained or secondary `resolve` call stops re-paying the
-  echo as transcript tokens. The seed's ~72% is the echo *share* of
-  the motivating call measured against `emit`+`rule` alone; the
-  shipped reduction is smaller (the plan group also carries `gates`,
-  `next`, `writes`, `clear`, `escaped`, `revision`) and A1 measures
-  it honestly across fixture shapes before lock. The saving
-  multiplies with every model a consumer migrates.
+  echo as transcript tokens. The seed's ~72% is RETIRED as a headline
+  (Problem Statement): it was the echo *share* of the seed's own
+  motivating call measured against `emit`+`rule` alone, and that call
+  was never re-run under the shipped partition. The shipped figures
+  are A1's: 42.2–51.3% on the three checked-in fixtures and 79.4% on
+  a synthetic 48-fact shape authored for the spike and not checked in.
+  Quote the range with its shape, never a single number — the saving
+  scales with fact count, the floor being the retained PLAN group
+  (`gates`, `next`, `writes`, `clear`, `escaped`, `revision`). The
+  saving multiplies with every model a consumer migrates.
 - Scope of the guarantee: the token reduction covers successes only.
   Refusal envelopes are untouched — they carry diagnosis
   (`findings`), not echo (A6) — so a probing caller that mostly
@@ -1131,6 +1244,15 @@ queries missed; the choice does not rest on it.
   dropped its status call are the natural first adopters, and
   whoever migrates them owns measuring the realized reduction against
   A1's table.
+  Consequence for the motivating tracker, stated so it is not
+  discovered at close: `intrastate#srz2` (P1) is the ADOPTION ask, so
+  this RDR landing green does not close it — it unblocks it. Closing
+  it needs a follow-on migration change that adds `--plan-only` at a
+  real call site and records the realized reduction. That successor
+  is not seeded here (it is a consumer-side change, not this RDR's
+  surface), and the RDR's own completion bar stays Phase 2 green plus
+  the MVV step-6 table; what changes is only that nobody should read
+  a green build as having delivered the P1 saving.
 - Positive: the default is untouched — no consumer changes, no 0005/
   0010/0011 test moves (A3), no respond-gateway change.
 - Negative: `flow resolve` now has two success-payload widths; docs,
@@ -1180,6 +1302,24 @@ queries missed; the choice does not rest on it.
   states the omitted group by name; the caller that opts in is the
   caller that already holds the request, `model` included — which is
   precisely why `model` is ECHO and not PLAN.
+  **Residual, accepted and named rather than mitigated away**: "holds
+  the request" is an assumption about the caller, and the motivating
+  caller is the case that strains it — an agent projects precisely
+  because it is dropping transcript, so a chain that keeps only
+  projected bodies has no `model` and an empty `revision`, and cannot
+  answer "which model decided this" from the record alone. The
+  partition is not reopened for it: `model` is a verbatim `--model`
+  copy (A7), so promoting it to PLAN would put echoed input in the
+  decision group and contradict JDR 0002 §D1's ground, and `revision`
+  is named in that JDR's always-keep core at decision level, so this
+  RDR cannot drop it. What the residual actually costs is bounded by
+  the always-keep core: a projected plan can never be MISREAD (`rule`,
+  `escaped`, `escape_class` are all carried) — it can only be
+  unattributed. A consumer needing attribution in the projected width
+  either records the model on its own side at call time, or waits for
+  `revision` to carry a value (C2's forward-binding clause), and an
+  RDR that gives `revision` a live value closes this without moving a
+  field.
 
 ### Failure Modes
 
@@ -1236,7 +1376,15 @@ family):
 
 1. Run `flow resolve` with a recognized outcome and discriminating
    `--tag`s, `--as=json`, without the flag → today's full payload,
-   byte-identical to the pre-change fixture.
+   byte-identical to the pre-change fixture. The fixture is a GOLDEN
+   CAPTURED FROM THE PRE-CHANGE BINARY and checked in BEFORE Phase 1
+   edits the struct (Phase 1's first step, `git stash`-clean tree) —
+   this is the only comparison in the whole battery that has a
+   pre-change side. S1–S5 all compare the new build against itself,
+   so none of them can see a default-mode regression that moves both
+   sides together; without a captured golden, C1's headline
+   "byte-identical to today's" is asserted nowhere and every existing
+   consumer rides on a manual step.
 2. Re-run the same invocation with `--plan-only` → exactly the
    normative projected key set (`revision`, `rule`, `gates`, `emit`,
    `next`, `writes`, `clear`, `escaped` — plus `escape_class` iff
@@ -1261,16 +1409,27 @@ family):
    shape and one gate/write-heavy fixture, measured on the full
    emitted line (C1's unit), and compare against A1's baseline in
    `evidence/spikes/a1-byte-width.md` — 79.4% saved on the 48-fact
-   class, 42–51% on the state-machine shapes. PASS BAR: every shape
-   measured saves bytes (the S1 width oracle already enforces this
-   per-run), and the 48-fact class saves at least 70% — the shipped
-   figure is 79.4%, and a projection landing below 70% there means
-   the plan group is carrying materially more than A1 measured, which
-   is A1's "saves too little to justify a new surface" condition and
-   routes back rather than recording a number. The state-machine
-   shapes carry no percentage bar: their 42–51% is recorded for
-   comparison, since the saving scales with fact count by
-   construction and the floor is the retained PLAN group.
+   class, 42–51% on the state-machine shapes.
+
+   PASS BAR, stated on shapes the implementer can actually run: every
+   shape measured saves bytes (the S1 width oracle already enforces
+   this per-run), and the CHECKED-IN fixtures
+   (`models/examples/pricing-decision-table.toml`,
+   `release-grammar.toml`, `review-state-machine.toml`) each save at
+   least 40% — A1 measured 42.2–51.3% on them, so a landing below 40%
+   there means the plan group is carrying materially more than A1
+   measured, which is A1's "saves too little to justify a new
+   surface" condition and routes back rather than recording a number.
+
+   The 79.4% figure is NOT a pass bar, because its shape is not
+   checked in: `pricing-48.toml` was authored inside the A1 spike as
+   scratch (`a1-byte-width.md` §S1b) and no fixture of that width
+   exists in `models/examples/`. It is recorded as the high-fact-count
+   DEMONSTRATION — the saving scales with fact count by construction,
+   the floor being the retained PLAN group — and any headline quoting
+   79.4% must say which shape produced it. To gate on it, the step
+   re-materializes the 48-fact model from the spike's recorded
+   generator first; otherwise the checked-in bar above is the gate.
 
 End-state: one flag, two widths, one decision; refusals and default
 mode untouched.
@@ -1329,11 +1488,20 @@ flag's own usage string are inputs to the GENERATED artifacts
 `docs/cli-reference.md` and `llms.txt`, which `make docs-check`
 verifies as up to date and which `make check` runs (`Makefile`,
 `DOCS_FILES` / `docs-check` / `check`). So this phase regenerates
-those files and commits them in the same change; a Phase 1 commit
-that registers the flag without regenerating them turns CI red on
-its own. The flag's usage string is authored here, once, since it
-ships into a committed artifact rather than staying an
-implementation detail.
+those files and commits them in the same change. The flag's usage
+string is authored here, once, since it ships into a committed
+artifact rather than staying an implementation detail.
+
+Phase ordering, stated as a constraint rather than a hazard: because
+the generated artifacts derive from the flag's registration, the
+commit that registers the flag MUST also carry the regenerated
+`docs/cli-reference.md` and `llms.txt`, or `make check` fails on
+`docs-check` at that commit. "Phase 3" names the authoring work, not
+a later commit boundary — regeneration rides with Phase 1's
+registration commit, and the prose/worked-payload edits may follow
+separately. A phase split that leaves the flag registered and the
+artifacts stale is a red build by construction, so the plan does not
+schedule one.
 
 ## Validation
 
@@ -1347,11 +1515,14 @@ not a test assertion.
 1. **Scenario**: same request ± `--plan-only`, `--as=json`
    (differential report-only oracle).
    **Expected**: identical exit codes; identical invoked-reader set,
-   compared through the projection-independent channel C1 names (the
-   default run supplies the expected set; the projected run's set
-   comes from `flow_exec.go::invokedReaders`, never from its own
-   payload — `readers` is projected away and
-   `flow_fixtures_0011_test.go::readersOf` fails hard on absence);
+   measured as OBSERVED READER EXECUTION per C1 (the default run
+   supplies the expected set; the projected run's set is recorded at
+   the reader invocation site, never from its own payload —
+   `readers` is projected away and
+   `flow_fixtures_0011_test.go::readersOf` fails hard on absence —
+   and never by re-calling `flow_exec.go::invokedReaders`, whose
+   arguments the flag does not touch, which would make the assertion
+   unfailable);
    refusal envelopes byte-identical; the projected success payload a
    strict key-subset of the default with byte-identical values on
    every carried key; and the projected encoding strictly shorter
@@ -1418,6 +1589,15 @@ not a test assertion.
    is STRICTLY SHORTER in total rendered bytes (C1's width clause
    binds both modes); a subset assertion alone is satisfied by the
    equal set, so a zero-saving text projection would otherwise pass.
+   The two measurands are JOINTLY SUFFICIENT only because the subset
+   is asserted per-line and byte-identically: every projected line
+   must appear in the default set unchanged, so the width reduction
+   can only come from DROPPED lines, never from a shortened carried
+   value. Stated because the pair is otherwise separable — a
+   projection that kept every default line and shortened one carried
+   value would satisfy a set-subset read loosely and still shrink
+   the total, and it is the per-line byte identity, not the width
+   clause, that refuses it.
    Witness: 15 default lines → 9 projected on the normative fixture.
 
 ### Desk trace
@@ -1429,12 +1609,12 @@ real bytes, not restatements.
 
 | MVV step | Assertions in force | Witness | Verdict |
 | --- | --- | --- | --- |
-| 1 — no flag, json | C1 default byte-identity; `0005:A6` envelope list; `0010:C4` `emit` present | 14 keys, `"owned":{}` and `"readers":[]` present, `"emit":{"dpa":"required","plan":"pro"}` | OK |
+| 1 — no flag, json | C1 default byte-identity (against the pre-change golden, the battery's only pre-change side); `0005:A6` envelope list; `0010:C4` `emit` present; A9 nil-vs-empty | 14 keys, `"owned":{}` and `"readers":[]` present — non-nil containers, the A9 invariant — `"emit":{"dpa":"required","plan":"pro"}` | OK |
 | 2 — `--plan-only`, json | C1 key set + absent-not-null + declaration order + carried-value byte identity; C2 always-keep core; S2 literal | `{"revision":"","rule":"paid-eu","gates":[],"emit":{…},"next":{},"writes":{},"clear":[],"escaped":false}` — 8 keys, equal to S2's list | OK |
 | 3 — `--plan-only`, text | C1 text-subset; `0005:C1` both-modes agreement | default 15 lines → projected 9; the 6 dropped are exactly `model`, `observed.region`, `observed.tier`, `outcome`, `owned`, `readers` | OK |
 | 4 — unrecognized outcome ± flag | C1 report-only; A6 | refusal fields `code`/`message`/`param`/`detail`/`hint`/`findings` — no echo member to project | OK |
 | 5 — `flow next --plan-only`; tree walk | C1 non-registration + vacuity guard + walked-set precondition; A5 | `--all` probes are exact-name `Lookup("all")`; a resolve-local `plan-only` is invisible to them. Walked set on a bare root is `docs, flow, help, lint, version` — `completion` absent until `InitDefaultCompletionCmd`, so the oracle materializes it and asserts its presence first | OK (with the materialization precondition; without it the walk is vacuous on `completion`) |
-| 6 — byte counts | A1 | 708→146 B (79.4%); 290→152; 392→191; 412→238 | OK |
+| 6 — byte counts | A1; MVV step-6 pass bar | checked-in fixtures 290→152 (47.6%), 392→191 (51.3%), 412→238 (42.2%) — all clear the 40% bar; 708→146 B (79.4%) is the not-checked-in 48-fact demonstration, not a gate | OK |
 
 Two orderings coexist and are not the same ordering: the **wire** keeps
 struct declaration order (C1), while **text** is alphabetically sorted
