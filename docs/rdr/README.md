@@ -32,7 +32,7 @@ engine README — this file is only the per-project index.
 | [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Draft | Low |
 | [0022](0022-terminal-reachability-liveness-invariant.md) | Terminal-reachability liveness invariant | Draft | Low |
 | [0023](0023-resolve-envelope-projection.md) | Resolve-envelope projection opt-out | Final | High |
-| [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Draft | High |
+| [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Final | High |
 | [0025](0025-command-invoking-accessor-bindings.md) | Command-invoking accessor bindings | Draft | High |
 
 ## Implementing

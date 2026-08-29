@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -2029,125 +2029,65 @@ captured in `evidence/spikes/c2-finding-multiplicity.md`.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: `0024-declared-emit-vocabulary/artifacts/gate.md`
+(Gate PASS 2026-08-29)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
-
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+- **Versioning** — a declaration is **author-owned and unversioned**
+  (C1): intrastate holds no history, so every check reads the model
+  file against itself at one point in time. Widening a domain is a
+  one-line edit because the domain and the rules it constrains are
+  co-located in one authored file; NARROWING is the risky direction
+  and this RDR neither prevents nor detects it — that is the
+  consumer's seam test, not load's. On the binary axis, a model
+  carrying `[emit]` refuses on an older binary as
+  `unknown_schema_field` (A1's `decodeStrict` arm) — loud, never a
+  silent ignore. `dispositions` takes no `omitempty` and is therefore
+  **not** a version signal either: a binary predating the field emits
+  no key at all, so absence already means "older binary" (C4).
+- **Incremental adoption** — opt-in is whole-model, not per-key: with
+  zero `[emit.*]` declarations the pipeline is byte-for-byte today's,
+  and A3 establishes that is every model in the repo. First adoption
+  on a large model is an N-round fix-and-rerun loop, because load is
+  fail-fast and this RDR declines to invent the total order `load.go`
+  withholds (C2). `kind = "scalar"` is the deliberate per-key escape
+  for an author taking that path — declare `scalar` first, tighten per
+  key. At merge this RDR ships capability, not coverage.
+- **Character encoding** — every kind check is LEXICAL on the authored
+  string (C1): no emit value is parsed into a typed representation,
+  canonicalized, case-folded, or converted anywhere downstream, and
+  evaluation stays byte-comparison (`0010:C3`). The authored value is
+  always a TOML string, so `kind = "int"` takes `count = "42"` and a
+  bare `count = 42` refuses as `malformed_toml` from the decoder. The
+  permissive `int` literals (`03`, `+5`, `-0`) are inherited from
+  RDR 0003's `strconv.Atoi` rules by construction, not re-decided here.
+- **Canonical-form / determinism** — this RDR claims determinism at
+  two places and both name their oracle. (i) C3's `Domain` is the
+  bytewise-sorted union of the authored members, sorted because the
+  partitioned domain is read from a Go map and map iteration is
+  randomized; `Domain` is `nil` (never empty-non-nil) for non-enum
+  kinds, and `Model.EmitDecls` is always non-nil after a successful
+  load. `TestReq146_EveryEmittedSequenceIsASortedSlice` does **not**
+  cover this carrier (A8, Refuted — it is scoped to `table.Row`), so
+  Testing Strategy scenario 4 is the sole oracle and asserts the
+  repeated-load leg directly. (ii) C4's `dispositions` key order is
+  the **marshaller's**, not the join's: `encoding/json` sorts map keys
+  on marshal, so no sort is performed or owed there. No hash, no
+  content-addressed identity, and no replay-stable digest is claimed
+  anywhere in this RDR, so the hash-function / pre-image-layout limb
+  of this concern does not apply. Empty/null/absent distinguishability
+  IS claimed and is contracted explicitly: `dispositions` is `{}` —
+  never `null`, never omitted — and `omitempty` is deliberately not
+  taken so "this model declared nothing" stays distinguishable from
+  "this row's answers carry dispositions".
+- **Concurrency model** — none introduced. Both new steps are
+  `*loader` methods on the single-threaded load path, and the
+  declaration carrier is written once during load and read-only
+  thereafter; the kernel (`internal/resolve`) carries no declarations
+  at all (C3).
 
 ## References
 
