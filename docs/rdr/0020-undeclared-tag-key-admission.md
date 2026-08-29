@@ -138,236 +138,335 @@ output contract speaks to the undeclared-key/array case.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 No caller, test, or fixture load-bears on the undeclared-array
+  refusal** — nothing branches on `flow-tag-invalid` fired for a key
+  the model does not declare (the "is not set-valued" arm over the
+  zero decl).
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: (Resolve) sweep the repo's tests/fixtures and the
+    motivating consumer for assertions on `flow-tag-invalid` over an
+    undeclared key; the anchor is the message literal
+    `is not set-valued` beside a key absent from the fixture's
+    `[tags]`.
+  - **If wrong**: the acceptance-conversion silently changes a
+    consumer's error-handling path; surfaces as a caller branch on
+    `flow-tag-invalid` that never fires again.
+- **A2 An undeclared `--tag` value cannot influence resolution** —
+  dimensions come only from rule atoms, and every model-side reference
+  to an undeclared tag refuses at load, so the carried value is
+  structurally unreadable.
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: (Resolve) the `unknown_tag` refusal sites —
+    `internal/table/normalize.go` ("references/writes/clears the
+    undeclared tag"), `internal/table/load.go::accessorTable` ("names
+    the undeclared tag"), the `[initial]` arm — plus an MVV run showing
+    identical selection with and without the carried key.
+  - **If wrong**: pass-through becomes semantically live and the
+    carrier arm's safety argument collapses — routing could depend on
+    unvalidated bytes; surfaces as a selection diff in the MVV pair.
+- **A3 No byte-equality obligation reads an undeclared observed
+  value** — no read-back, plan copy-through, or comparison path
+  consumes it, so verbatim (non-canonicalised) carry is safe.
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: (Resolve) trace consumers of the kernel Observed view
+    and the payload `observed` field; read-back equality is confined to
+    `--write` (`internal/cli/flow_state.go::parseWrites`, which proves
+    a declaration first).
+  - **If wrong**: a verbatim (unsorted/duplicated) array breaks an
+    equality check somewhere downstream; surfaces as a spurious
+    mismatch refusal.
+- **A4 External prior art aligns with the carrier arm** — SCXML's
+  declared-datamodel/open-event-data split, protobuf unknown-field
+  retention, Kubernetes-style open label vocabularies (demoted: not
+  quotable from the corpora at Propose; see
+  `evidence/research/propose-research.md`).
+  - **Status**: Pending
+  - **Method**: Prior art
+  - **Evidence**: (Resolve) one opened citation per named system, or a
+    recorded negative; the choice does not rest on this — in-repo
+    anchors carry it.
+  - **If wrong**: the alignment claim weakens; the decision still
+    stands on the in-repo anchors (non-fatal — record and move on).
+- **A5 RDR 0005's stable code table tolerates an arm of
+  `flow-tag-invalid` becoming unreachable for undeclared keys** — the
+  table fixes spellings and exit groups, not per-arm reachability, so
+  no amendment of 0005 is required.
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: (Resolve) cite the 0005 element that fixes the code
+    table (`0005:FM`, mirrored at `internal/cli/flow_input.go`'s
+    constant block) and confirm no clause pins the undeclared-array
+    refusal itself.
+  - **If wrong**: the change needs a successor-RDR amendment path for
+    0005's table before it can land; surfaces at Stage 7's
+    contradiction check.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Adopt arm (1): an undeclared `--tag` key is a **pure carrier**. The
+zero `TagDecl` means what two of the three in-code authorities already
+say it means — `internal/cli/flow_input.go::parseTags`'s guarded-lookup
+comment ("conforms everything … shape-only behaviour a caller already
+relies on") and `internal/table/load.go::ConformValue`'s doc ("A zero
+TagDecl conforms everything … keeps an undeclared `--tag` key
+shape-only") — and the one dissenting arm,
+`internal/cli/flow_input.go::canonicalValue`'s `!isSet && looksArray`
+refusal, is the bug. Admission distinguishes *undeclared* (key absent
+from the model's tag table) from *declared scalar* (zero-valued `Kind`
+never occurs for a declared key — the loader requires a kind), and for
+an undeclared key admits the value verbatim, array literals included:
+no canonicalisation, no kind or domain check, no comparison. The value
+is provably uninterpreted — every model-side reference to an undeclared
+tag (rule atom, accessor key, write, clear, `[initial]`) already
+refuses at load under `unknown_tag` ⇒ nothing that routes can read the
+carried bytes — so passing it through cannot corrupt selection. This is
+the same disposition the emit namespace shipped under `0010:C3`
+(`internal/table/model.go::EmitValue`: "undeclared, uninterpreted, and
+compared by exact byte equality" — its writer is the rule author, its
+carrier the payload). The provenance guards are untouched and still
+precede admission: reserved key, owned key, duplicate (REQ-26/27/28).
+No new refusal code is minted; the "is not set-valued" message becomes
+truthful because it can only fire for a key whose declaration actually
+says so.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+One seam moves: the admission path in `internal/cli/flow_input.go`.
+`parseTags` switches its guarded lookup to the two-value form and
+routes an undeclared key around `canonicalValue` (or passes the
+declaredness bit into it — implementation latitude), so the
+kind/shape/domain arms run only under a real declaration. The carried
+value flows exactly where an undeclared scalar already flows today:
+into the kernel's Observed view (`resolve.Input.Observed`, where only
+atoms — all declaration-checked at load — can read keys) and out
+through the resolve payload's `observed` echo, byte-for-byte as given.
+`--write`/`--clear` are out of scope: `internal/cli/flow_state.go::
+parseWrites` proves a writer binding (and therefore a declaration)
+before its `canonicalValue` call, so the zero-decl arm is reachable
+from `parseTags` alone.
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
+One contract — the meaning of the zero `TagDecl` at `--tag` admission.
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
-```
+PURE CARRIER. At `--tag` admission, a key ABSENT from the loaded
+model's normalized tag table (the two-value `m.Tags[key]` lookup) is
+a pure carrier: the CLI admits its value VERBATIM — byte-preserved,
+JSON array literals included — and never canonicalises, conforms,
+kind-checks, or compares it. The only refusals reachable for an
+undeclared key are, unchanged and still preceding any accessor
+(REQ-27):
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+- the flag grammar (`--tag` takes `name=value`) and the empty-value
+  arm, both `flow-tag-invalid` — an empty observed value is
+  indistinguishable from unset;
+- `flow-tag-reserved` (REQ-26), `flow-tag-owned` (REQ-27),
+  `flow-tag-duplicate` (REQ-28).
+
+`flow-tag-invalid`'s kind, shape, and domain arms — including "is not
+set-valued" — are reachable only for a DECLARED key, whose loaded
+declaration (kind required at load, one of RDR 0003's five tokens)
+is what the message then truthfully reports. No new refusal code is
+minted; `flow-tag-undeclared` does not exist. The carried value rides
+the kernel's Observed view and echoes in the resolve payload's
+`observed` field byte-for-byte as given; declared set values keep the
+canonical-array form of `docs/cli-output-contract.md` §Set values on
+the wire. The model-side closed world is untouched: a rule atom,
+accessor key, write target, clear target, or `[initial]` assignment
+naming an undeclared tag still refuses at load (`unknown_tag`).
+Declaring a key later is the opt-in tightening: admission then
+enforces that declaration's kind and domain.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Identity** — "declared" means the key is present, byte-exact, in
+  the normalized model's tag table (`m.Tags`, two-value lookup); the
+  same presence signal `internal/table/load.go::accessorTable` already
+  branches on (`_, ok := l.model.Tags[key]`). No parallel registry, no
+  case folding, no zero-decl sentinel.
+- **Wire / byte format** — an undeclared value crosses verbatim, never
+  re-canonicalised: canonicalising would interpret as a set a value
+  whose declaration never asserted set-ness. Declared set values keep
+  the §Set-values-on-the-wire canonical array unchanged.
+- **Naming** — no new code; the rejected alternative's
+  `flow-tag-undeclared` is deliberately not minted (Alternatives,
+  arm 2).
+- **Selection / predicate** — refusal precedence at admission is
+  unchanged: grammar → reserved → owned → duplicate → (declared keys
+  only) kind/shape/domain conformance; the carrier branch sits where
+  the conformance arms would have run.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative — shape only, not load-bearing:
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
-
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
-
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
-
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+```go
+decl, declared := m.Tags[key]
+if !declared {
+    // Pure carrier (0020:C1): admit verbatim; nothing can read it.
+    out = append(out, resolveTag{Key: key, Value: value})
+    continue
+}
+canonical, ce := canonicalValue(key, value, decl, "tag")
+```
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Undeclared-key discrimination at admission | `internal/cli/flow_input.go::parseTags` + `canonicalValue` | zero-decl lookup conflates "undeclared" with "declared non-set" | Extend | two-value lookup; carrier branch precedes the conformance arms |
+| Declaration-presence signal | `internal/table/load.go::accessorTable` (`_, ok := l.model.Tags[key]`) | none | Reuse | same discriminator; no new signal invented |
+| Uninterpreted-vocabulary precedent | `internal/table/model.go::EmitValue` (`0010:C3`) | different namespace (emit, not tags) | Reuse (as precedent) | carrier semantics mirror an adjudicated in-repo disposition |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+Key factors. (a) Two of the three in-code authorities already promise
+carrier semantics — the `parseTags` guarded-lookup comment and
+`ConformValue`'s zero-decl doc — and only `canonicalValue`'s
+first-byte sniff dissents; the fix restores the documented contract
+rather than inventing one. (b) Safety is structural, not disciplinary:
+the loader's `unknown_tag` refusals make an undeclared key unreadable
+by any rule, accessor, write, clear, or initial assignment ⇒ the
+carried bytes cannot influence selection. (c) The house already
+adjudicated this shape once: emit keys are "undeclared, uninterpreted,
+byte-compared" (`0010:C3`), with opt-in declarations arriving later
+(0024) — carrier-by-default, declare-to-tighten is the established
+pattern. (d) The user outcome: a producer's whole fact vector composes
+into `--tag` flags without the model enumerating alien keys — the
+exact failure that motivated this RDR. (e) `looksArray` on an
+undeclared value is an interpretation of bytes the system pledges not
+to interpret, and it misclassifies a legitimate scalar that merely
+begins with `[`.
+
+Rejections: arm (2) (`flow-tag-undeclared`) breaks the shipped
+undeclared-scalar pass-through, forces models to enumerate keys they
+have no interest in (the motivating pain, made mandatory), and buys a
+typo guard the payload's `observed` echo already surfaces; arm (3)
+ratifies a first-byte heuristic with no principled defense, leaves the
+motivating composition broken, and still refuses legitimate
+`[`-prefixed scalars; per-model opt-in strictness (the 0024 shape) is
+compatible later work, not the default's meaning — see Briefly
+Rejected.
+
+Premortem: survived (paragraph) — the shipped-and-failed narrative is
+the silent-typo swallow: a caller misspells a declared set-valued key,
+the misspelling passes as a carrier, the intended rule silently fails
+to match, and resolution refuses no-match or routes to an escape row —
+a debugging session with no error naming the key. The approach
+answers it: this is today's shipped behavior for scalars (the comment
+calls it "behaviour a caller already relies on"), so arm (1) extends
+an accepted open-world cost rather than creating one; the resolve
+payload's `observed` echo lists the stray key beside the declared
+ones, which is where the pinned MVV test points a diagnostician; and
+the remedy — declare the key — is exactly the opt-in tightening C1
+names. The failure the approach could not answer would be a routing
+path that reads undeclared bytes; A2 pins that no such path exists,
+and if Resolve refutes A2 the choice reopens. Recommendation stands.
+Ground-sweep: clean (17 anchors).
+Joint-check: clear (12 peers) — grep hits triaged, reported as
+context: 0023 carries `flow_input.go` and `flow-tag-invalid` in its
+A7 assumption's Source-Read evidence (the echo group is an echo), not
+as a modify-anchor or a fenced pin — carrier admission strengthens
+the verbatim-echo reading it rests on, and the echo-group content
+question is already homed at JDR 0002 §D1's partition doctrine (the
+disposed 0023↔0024 coupling), not a new fire; 0017 cites
+`flow_input.go::loadFindings` — a different symbol, precedent
+citation only; 0012 answers declared-key VALUES at the guard seam one
+seam downstream and its C2 states "Undeclared-key ADMISSION policy …
+is upstream and deliberately not decided here" (its own Joint-check
+names 0020 as its nearest coupling, clear — compositional); 0018
+exports `ErrReservedTagKey` around the kernel's reserved-key channel,
+which precedes admission and does not move. No peer carries
+`parseTags`, `canonicalValue`, `not set-valued`, or
+`flow-tag-undeclared`. Absence arm (this proposal converts a refusal
+into an acceptance): no `Final`-status peer exists — 0001–0011 are
+`Implemented` (closed; any coupling rides to 7.1) — and a
+due-diligence sweep of them found the kind-mismatch language scoped
+to DECLARED keys only ("a bare scalar for a set key, or an array for
+a scalar key", 0005), no reliance on the undeclared-array refusal;
+A5 pins that reading of 0005's code table at Resolve. Bridge
+sub-check: n/a — no surface here is scheduled for deletion by a
+sibling plan and this plan retires none.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Declaration as identity precondition (`flow-tag-undeclared`)
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Arm (2) — an undeclared `--tag` key is refused as
+such, under a new code naming the absence (`flow-tag-undeclared`),
+with a migration window for callers relying on undeclared scalars
+passing today. Symmetric with the model-side closed world: the
+caller's vocabulary becomes as declared as the author's.
 
 **Pros**:
 
-- [Advantage 1]
+- Catches a misspelled key loudly instead of silently carrying it.
+- One uniform rule — no declared/undeclared branch at admission.
+- Symmetric with the loader's `unknown_tag` closed world.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Breaking: undeclared scalars pass today and the guarded-lookup
+  comment calls that "behaviour a caller already relies on" — a
+  migration story and a new code (0005's table grows) for no consumer
+  demand.
+- Mandates the exact DX failure that motivated this RDR: every model
+  must enumerate a producer's whole fact vocabulary, including keys it
+  has no interest in.
+- Diverges from the in-repo precedent for uninterpreted vocabulary
+  (`0010:C3`: emit keys undeclared and uninterpreted; 0024 makes
+  declaration opt-in, not mandatory).
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: converts the motivating bug into a mandate
+for the workaround's worst property (enumerate-everything), at the
+cost of a breaking change plus a new refusal code, to buy a typo
+guard the payload's `observed` echo already provides.
+
+### Alternative 2: Ratify today's split, rewrite the message
+
+**Description**: Arm (3) — keep scalars-pass/arrays-refuse, and
+rewrite the refusal to name the real cause and remedy ("`extra` is
+not declared; declare it — even with no guard atom — to pass a set
+value").
+
+**Pros**:
+
+- Zero behavior change; cheapest; the message defect (blaming a
+  nonexistent declaration) is fixed.
+
+**Cons**:
+
+- Enshrines a first-byte heuristic (`looksArray`) as contract:
+  admission of an undeclared key depends on whether its value begins
+  with `[` — an interpretation of bytes the system pledges not to
+  interpret, with no principled line to defend at Finalization.
+- Refuses a legitimate undeclared scalar that merely begins with `[`.
+- Leaves the motivating composition broken: set-valued facts still
+  force declarations, now merely with a better error.
+
+**Reason for rejection**: ratifies an accident as a contract; the
+better message treats the symptom while the asymmetry it apologizes
+for remains indefensible.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **BR1 Per-model opt-in strictness (the 0024 shape — a model switch
+  making undeclared `--tag` keys refuse)**: compatible later work
+  layered on top of the carrier default, but it answers "may a model
+  opt out of the default?" while this RDR must first fix what the
+  default *means* — and nothing motivates it yet.
+- **BR2 Canonicalise undeclared array-looking values as sets**:
+  interprets undeclared bytes (the same sin as `looksArray`) and
+  invents a byte-equality obligation no consumer holds (A3).
 
 ## Context
 
@@ -401,100 +500,139 @@ key `recognized`).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Read at Propose (trail: `evidence/research/propose-research.md`): the
+admission seam (`internal/cli/flow_input.go::parseTags` /
+`canonicalValue`), the runtime conformance surface
+(`internal/table/load.go::ConformValue` and its zero-decl doc), the
+loader's undeclared-tag refusal sites (`internal/table/normalize.go`,
+`load.go::accessorTable`, the `[initial]` arm — all `unknown_tag`),
+the `--write` path (`internal/cli/flow_state.go::parseWrites`), the
+emit-namespace precedent (`internal/table/model.go::EmitValue`,
+`0010:C3`), `docs/cli-output-contract.md` §Set values on the wire, and
+the sibling proposals 0012 / 0018 / 0024 via the projector. External
+corpus reads (4 arc queries over `StateMachineRes`) surfaced no
+quotable passage for the class "undeclared caller-context key
+admission in peer engines"; ⚠ no prior-art coverage (quotable) for
+that external class — the external analogies were demoted to A4
+rather than leaned on, and the choice rests on the in-repo anchors.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — the contradiction is internal to the code: the
+  `parseTags` guarded-lookup comment and `ConformValue`'s doc both
+  promise "the zero `TagDecl` conforms everything / shape-only", while
+  `canonicalValue`'s `isSet := decl.Kind == "set"` plus `looksArray`
+  refuses an undeclared array ⇒ the dissenting arm, not the comments,
+  is the odd one out.
+- **Documented** — an undeclared key is structurally unreadable: every
+  model-side reference (rule atom, accessor `keys` member, write,
+  clear, `[initial]` target) refuses at load under `unknown_tag`
+  (`internal/table/normalize.go`, `internal/table/load.go`) ⇒ a
+  carried value can never reach selection; its writer is the caller
+  and its only reader the payload's `observed` echo.
+- **Documented** — a declared key never carries an empty `Kind`: the
+  loader refuses any kind outside RDR 0003's five tokens ⇒ zero-`Kind`
+  at the admission seam identifies "undeclared" exactly, and the
+  two-value lookup makes that explicit.
+- **Documented** — the zero-decl arm of `canonicalValue` is reachable
+  only from `parseTags`: `parseWrites` proves a writer binding (and
+  thus a declaration) before its call ⇒ the decision is `--tag`-scoped
+  and REQ-61's `--write`/`--clear` surface does not move.
+- **Documented** — the in-repo precedent for undeclared vocabulary is
+  pure carrier: `EmitValue` is "undeclared, uninterpreted, and
+  compared by exact byte equality" (`0010:C3`), with declarations
+  arriving later as opt-in (0024) ⇒ carrier-by-default,
+  declare-to-tighten is the established house pattern.
+- **Assumed** — no caller load-bears on the undeclared-array refusal
+  (A1) and no byte-equality path reads an undeclared observed value
+  (A3); Resolve verifies both.
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: a producer's whole fact vector composes into `--tag` flags
+  with no alien-key declarations; the 157-record motivating corpus
+  resolves.
+- Positive: the comment/code contradiction closes on the side both
+  comments already document; the false "is not set-valued" message can
+  no longer fire without a declaration to blame.
+- Positive: the open-caller/closed-model split becomes a recorded
+  contract (C1) instead of an accident.
+- Negative: the silent-typo swallow extends from scalars to arrays — a
+  misspelled declared set key now passes as a carrier instead of
+  refusing with a wrong message; accepted as the open-world cost
+  already shipped for scalars, mitigated by the `observed` echo and by
+  declaring the key.
+- Negative: declaring a previously-carried key later tightens
+  admission (kind/domain refusals appear) — intended, and the same
+  opt-in semantics 0024 ships for emit.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: a consumer branches on the undeclared-array refusal today
+  and the acceptance-conversion breaks its error path.
+  **Mitigation**: A1's Resolve sweep before implementation; the pinned
+  asymmetry test documents the new disposition.
+- **Risk**: some downstream path compares observed values byte-wise
+  and a verbatim (unsorted) array breaks it.
+  **Mitigation**: A3's Resolve trace; if refuted, the carrier arm
+  revisits verbatim-vs-canonical carry before lock.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+Visible: declared-key refusals are unchanged — wrong kind, wrong
+shape, out-of-domain, reserved, owned, duplicate all still refuse at
+exit 2 before any accessor. Silent: a misspelled key (declared or not)
+passes as a carrier and the intended rule fails to match; resolution
+then refuses no-match or routes to an escape row. Diagnosis: the
+resolve payload's `observed` field echoes every carried key
+byte-for-byte — the stray spelling sits beside the declared keys in
+the same envelope the refusal rides. Recovery: fix the spelling, or
+declare the key (no guard atom needed) to put it under conformance.
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A1–A3, A5; A4 is non-fatal)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. Author a fixture model declaring one scalar tag and one set tag,
+   with no declaration for `extra` or `extras`.
+2. Run `flow resolve` with `--tag extra=plain` and
+   `--tag extras=["a","b"]` beside the declared tags: the invocation
+   exits 0 and the payload's `observed` field carries both values
+   byte-for-byte as given.
+3. Run the same invocation without the two carrier flags: the selected
+   rule and outcome are identical — the carried keys influenced
+   nothing (A2's runtime leg).
+4. Hand the DECLARED scalar tag an array literal: still refused
+   `flow-tag-invalid` "is not set-valued" — now truthfully, and the
+   red test pins this beside step 2 so the asymmetry is authored, not
+   incidental.
 
 ### Phase 1: Code Implementation
 
-#### Step 1: [Title]
+#### Step 1: Carrier branch at admission
 
-[Conditional scaffold]
+Switch `parseTags`'s guarded lookup to the two-value form and route an
+undeclared key past the conformance arms per C1 (grammar, empty-value,
+reserved, owned, duplicate refusals unchanged and in order).
 
-[Instructions]
+#### Step 2: Truthful comments
 
-#### Step 2: [Title]
+Rewrite the guarded-lookup comment to cite this RDR's carrier contract
+instead of promising a different decision elsewhere;
+`ConformValue`'s zero-decl doc stays true as written.
 
-[Conditional scaffold]
+#### Step 3: Pinned tests and docs
 
-[Instructions]
-
-### Phase 2: Operational Activation
-
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Land the red test of MVV steps 2–4 (undeclared scalar AND array pass,
+declared-scalar-given-array still refuses), and the
+`docs/model-schema.md` line for authors composing a producer's whole
+tag output (Background's obligation).
 
 ## Validation
 
