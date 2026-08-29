@@ -96,8 +96,8 @@ N/A-bulleted). -->
   Draft Profile until Resolve has run. -->
 - **Priority**: Low
 - **Related Issues**: kata `intrastate#jjkh` (1602); kata `4hps`
-  (terminal-reachability invariant — a potential consumer of
-  this export, neither blocking the other)
+  (terminal-reachability invariant — now RDR 0022, a potential
+  consumer of this export, neither blocking the other)
 - **Predecessors**: 0002-transition-table-as-reviewable-data,
   0005-skill-integration-cli-contract,
   0006-graph-lint-authority-and-guarantees
@@ -133,236 +133,450 @@ RDR 0002 owns only row-dump ordering.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 The respond gateway's `TextLiner` seam prints a multi-line
+  `Data` string verbatim on stdout in text mode, with no decoration,
+  reordering, or trailing content beyond one final newline — including
+  under provoked notes/warnings, which stay on stderr.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: `internal/cli/respond/respond.go::TextLiner` exists
+    and `OK` prints it via `Fprintln`; a spike must byte-compare
+    `stdout == document + "\n"` for a multi-kilobyte multi-line
+    payload with advisories provoked (premortem P-5/P-15).
+  - **If wrong**: the bare-document text mode gains stray bytes, CI
+    diffs of the export break, and C5 needs a gateway extension
+    instead of a ride on the existing seam.
+- **A2 The reachable node set and its successor edges are a
+  deterministic function of the model value, and the edge list is
+  recoverable after the fixpoint by re-running `successorsOf` over the
+  final nodes with subsumption mapping (`indexOf`), yielding EXACTLY
+  the edges the traversal itself took — over-approximation by merged
+  re-run is the premortem's central defect (P-1), so equality, not
+  plausibility, is the bar.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: `internal/graphlint/reach.go::reach` iterates slices,
+    not maps, and `successorsOf` appends in first-seen row order; the
+    spike must (a) show repeated runs byte-identical (including under
+    map-seed variation) and (b) run a DIFFERENTIAL test — an observer
+    recording edges during the traversal vs the post-hoc recovery —
+    over fixtures that force subsumption merges and a merged node that
+    enables a row no pre-merge node enabled.
+  - **If wrong**: the named fallback is the in-traversal edge observer
+    (record edges as `reach` takes them); that arm is admissible
+    because C4's neutrality oracle — lint byte-identical with and
+    without the export code — is stated mechanism-independently and
+    the MVV asserts it either way (P-14).
+- **A3 The normalized model value carries everything the document
+  needs — declarations with finite domains (via
+  `guard.AssignmentCount`), `[initial]`, `terminal`, normalized rows
+  with blocked atoms, and `guard.Groups` — with no re-parse of the
+  authored TOML.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/model.go` field walk against the C2
+    field list; `internal/guard/product.go::Groups` for the partition.
+  - **If wrong**: the schema shrinks, or a loader extension becomes a
+    prerequisite and the blast radius grows past this RDR.
+- **A4 A new root export verb requires no amendment to RDR 0005's
+  envelope contract.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: `0005:C1` — "Other command groups (lint, dump,
+    parse) are outside this contract and are owned by the RDR that
+    names them"; confirm the carve-out covers a root `graph` verb.
+  - **If wrong**: the surface must be renegotiated at the envelope
+    home before Phase 2 can land.
+- **A5 Marshaling the document through the shared non-HTML-escaping
+  encoder is byte-stable: struct field order is fixed, every sequence
+  is pre-sorted, and no Go map reaches the wire.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: `internal/cli/clierr::WriteJSONLine` is the one
+    encoder (`0005:C1`); a spike must double-emit a fixture and
+    byte-compare.
+  - **If wrong**: C3's replay invariant fails and the document needs a
+    custom marshaler with its own ordering proof.
+- **A6 The DOT rendering is derivable from the exported document value
+  alone — nodes, edges, initial, and terminal-satisfaction are enough —
+  with no reach or analysis internals consulted.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: a spike DOT of a fixture document must render via
+    `dot -Tsvg` with every exported node and edge present.
+  - **If wrong**: the renderer couples to graphlint internals and the
+    two `--emit` arms stop being projections of one value.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+A new root verb, `intrastate graph`, exports the normalized graph lint
+certifies as one deterministic document. `--emit json|dot` (default
+`json`) selects the document format — the peer pattern is one exporter
+surface with a format-selector flag, JSON and DOT as sibling output
+types (`../state-machines/repos/state-machine-cat/README.md`,
+`--output-type … dot|…|json|…`). `--as` keeps its existing envelope
+meaning untouched: under `--as=text` stdout carries the selected
+document verbatim (riding the gateway's existing
+`respond.go::TextLiner` seam — the seam for a payload that is one
+canonical string a caller pipes; its writer is the verb's payload
+constructor, set per invocation); under `--as=json` stdout carries
+exactly one `ok` envelope embedding the same document. The verb runs
+load + normalize + reachability only: it never runs the lint
+invariants, emits no findings, and exports any model that loads —
+including one lint would refuse — so emission can never alter lint's
+verdict and a failing model can still be inspected as a graph. The
+JSON document is the machine-readable follow-up RDR 0002 explicitly
+seeded — its dump "does not define a dump grammar" and names "a
+re-readable dump grammar" as follow-up work (`0002:§round-trip-inverse-invariants`)
+⇒ this RDR may own the JSON schema without touching 0002's dump text.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+One new document-assembly component (package boundary settled at
+Resolve; it sits beside the relation it exports) builds an export
+value from the loaded `*table.Model` plus the reachability fixpoint
+(`internal/graphlint/reach.go::Reach`, extended with edge recovery per
+A2). The CLI verb is a thin arm over it: selection flags → load
+(`table.LoadWithAdvisories`'s underlying load path — advisories are
+ignored here; they are lint's advisory channel, not graph data) →
+assemble → render (`--emit`) → respond gateway. The DOT renderer is a
+pure function of the export value (A6). Extension point: the document
+is schema-versioned, so later producers (a declared-emit vocabulary,
+new invariant metadata) join additively without a second export
+surface.
 
 #### Normative Contracts
 
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap).
+These five blocks are facets of the one contract this RDR owns — the
+export surface and its document — stated separately by concern
+(surface, document, determinism, neutrality, mode coexistence).
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+SURFACE. A new root verb `graph` is registered beside `lint` — outside
+the `flow` group, under `0005:C1`'s carve-out for command groups "owned
+by the RDR that names them". Model selection mirrors `lint`'s arm set
+and codes verbatim (`internal/cli/lint.go::runLint`): exactly one of
+`--model <path>` / `--flow <id>`; both → `flag-mutually-exclusive`;
+`--flow` alone → `flag-invalid-value` (this build resolves no ids);
+neither → `flag-required`; unreadable file → `model-unreadable`; load
+failure → `model-invalid` with one findings[] entry per load category.
+`--emit <format>` selects the document: `json` (default) or `dot`; any
+other value → `flag-invalid-value` naming `emit`. RunE starts with
+`respond.ValidateMode`, success routes through `respond.OK`, failure
+through `respond.Fail`; exit codes are the existing 0/2 mapping — no
+new exit group.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+DOCUMENT. The JSON document is this RDR's wire format, versioned by a
+required leading `schema` field, initial value `intrastate.graph/1`;
+evolution within `/1` is strictly additive (a consumer ignoring
+unknown fields keeps working). It carries, at minimum: model identity
+and class; the tag declarations (name, provenance, kind, required,
+single-valued, and the declared domain exactly when
+`guard.AssignmentCount` reports it finite); the declared `[initial]`
+assignments; the declared `terminal` predicate sets; the normalized
+rows carrying RDR 0002's dump field list as structured values —
+identity, source, kind, outcome, atoms (each `{key, operator,
+literal[], block}`), next, writes, requires_owned, gate, escape, emit
+— in 0002's canonical row order with atoms in 0002's canonical atom
+order; the selection-context groups (context plus member row
+identities); and the reachability relation — merged fixpoint nodes
+(`{id, values}`, id = the canonical node key) and edges (`{from, to,
+rule}`) — with nodes sorted by node key and edges by (from, to, rule),
+so construction order is unobservable. The `reach` block carries a
+REQUIRED abstraction marker (spelling at Resolve) stating the relation
+is the DECLARED over-approximation, not the runtime — merged nodes,
+guard/observed atoms unpruned (`reach.go::Reach` doc) — so a formal
+consumer can tell which property classes are sound over it. The
+document carries NO verdict or finding field: an export is never a
+lint pass, and the schema docs say so. Set-valued members are JSON
+arrays, closing `0002:§round-trip-inverse-invariants`'s lossy
+set-literal rendering for this document; the document is NOT a model
+source and no export→load inverse is claimed. Exact field spellings
+are fixed at Resolve; the field LIST above is normative now. The DOT
+document renders the same value: one node per reachability node, one
+edge per reachability edge labeled with its rule id, the initial node
+and terminal-satisfying nodes marked, and the abstraction marker
+rendered in the graph header comment/label so the diagram carries it
+too (premortem P-7); its node/edge SET and the marker are normative,
+its styling/attributes are not.
+```
+
+**C3**
+
+```normative
+DETERMINISM. For one model input and one build, emission is
+byte-for-byte identical across invocations, in every `--emit` and
+`--as` combination. Every sequence on the wire is pre-sorted by C2's
+orders before marshaling; no Go map iteration reaches the wire; JSON
+is emitted through the one shared non-HTML-escaping encoder
+(`clierr.WriteJSONLine`, per `0005:C1`'s one-encoder rule). This is a
+DELIBERATE NARROWING of the seed's "deterministic for the same model"
+to (model, build) — stated, not silent (premortem P-3): across builds
+the JSON document changes only by C2's additive schema rule (a
+cross-build golden pins it), and DOT styling carries no cross-build
+stability promise, so a build bump may re-baseline DOT diffs and may
+only ADD to JSON ones.
+```
+
+**C4**
+
+```normative
+NEUTRALITY. The export runs load, normalization, grouping, and the
+reachability traversal only, reaching the traversal through the same
+`graphlint` entry surface lint uses (`0006:AP`'s one-request-builder
+precedent), so verb/lint drift is structural, not disciplinary. It
+MUST NOT run the lint invariants, MUST NOT emit findings, and MUST
+NOT alter any input it shares with lint: `intrastate lint`'s verdict,
+finding set, and bytes are identical with and without the export code
+present (the MVV asserts this), and the oracle is
+MECHANISM-INDEPENDENT — it binds equally if Resolve picks A2's
+in-traversal edge observer (premortem P-14). The verb succeeds for
+ANY model that loads, including a model lint refuses; the
+model-loads-but-lint-refuses case is a dedicated fixture with an
+asserted, defined document — never whatever the traversal happens to
+do (premortem P-6).
+When the traversal is incomplete under the published node ceiling
+(`reach.go::reach` returns `complete == false`), the verb refuses with
+the scalar code `graph-export-too-large` (GroupUserEnv, exit 2) naming
+the ceiling and the narrow-a-domain remedy — never a partial document,
+because a partial graph diffs as a graph change.
+```
+
+**C5**
+
+```normative
+MODE COEXISTENCE. Under `--as=text` (the default) stdout carries the
+selected document verbatim and nothing else — the payload satisfies
+the gateway's `TextLiner` seam, so the DOT stream pipes to `dot` and
+the JSON document diffs raw in CI; advisories stay on stderr. Under
+`--as=json` stdout carries exactly one terminal `ok` envelope whose
+`data` embeds the same document: the document object for `--emit
+json`, a single string field carrying the DOT text for `--emit dot`
+(the documented unwrap is one `jq -r` step). Both modes derive from
+one export value (0005's two-modes agreement). All four `--as`×
+`--emit` cells are defined — none refused, none dead — and a consumer
+that parses stdout as an envelope MUST use `--as=json`: the text-mode
+stream is the bare document by contract, exactly as `version`'s
+`TextLine` is its identity string (premortem P-10).
+The verb offers NO caller-controlled projection of its success
+payload; if a later revision adds one it MUST conform to JDR 0002 §D1
+(projection before respond.OK, echo-group-only, enforced partition,
+always-keep core).
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
+- **Identity** — a node is its canonical node key
+  (`reach.go::(Node).key` — injective by escaping, ⇒ two exported
+  nodes never collide); a row is RDR 0002's row identity; an edge is
+  the `(from, to, rule)` triple.
+- **Wire / byte format** — C2's schema-versioned JSON document; exact
+  field spellings fixed at Resolve; DOT styling explicitly
+  non-normative.
+- **Naming** — verb `graph`, flag `--emit`. Rejected: `dump` (0002's
+  dump is a distinct, rows-only review rendering — reusing the name
+  would merge two contracts), `export` (names the act, not the
+  artifact), overloading `--as` for format selection (conflates
+  envelope mode with document format and leaves no room for a third
+  format).
+- **Selection / predicate** — `--emit` selects the DOCUMENT, `--as`
+  selects the ENVELOPE; the 2×2 composes with no refused or dead cell,
+  which is what kept a second stream/exception out of the gateway.
 
 #### Round-Trip / Inverse Invariants
 
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- `json-decode ∘ export = value identity on the exported projection`:
+  decoding the JSON document reconstructs, value-for-value, every
+  field C2 lists — including exact set members, the recoverability
+  0002's text dump deliberately declined
+  (`0002:§round-trip-inverse-invariants`).
+- `export ∘ export = byte identity on any loadable model` (C3's replay
+  form; the MVV asserts it as byte equality, not exit-code green).
+- No `load ∘ export` inverse is claimed: the document is derived
+  output, never a model source.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative only — tests must not assert these literally.
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```sh
+# CI: diff the certified graph across two commits.
+intrastate graph --model flow.toml > graph.json
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+# Review: render the diagram.
+intrastate graph --model flow.toml --emit dot | dot -Tsvg -o flow.svg
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+# Machine caller: same document, enveloped.
+intrastate graph --model flow.toml --as=json | jq .data.schema
+```
+
+```json
+{"schema":"intrastate.graph/1","model":"flow","class":"state-machine",
+ "tags":[{"name":"stage","provenance":"owned","kind":"enum",
+          "domain":["draft","final"],"required":true}],
+ "initial":[{"key":"stage","value":["draft"]}],
+ "terminal":[[{"key":"stage","operator":"eq","literal":["final"],
+               "block":"match"}]],
+ "rows":[{"identity":"flow/lock","kind":"ordinary","outcome":"lock",
+          "atoms":[{"key":"stage","operator":"eq","literal":["draft"],
+                    "block":"match"}],
+          "writes":[{"key":"stage","value":["final"]}]}],
+ "groups":[{"context":"…","rules":["flow/lock"]}],
+ "reach":{"nodes":[{"id":"stage=draft,;","values":{"stage":["draft"]}},
+                   {"id":"stage=final,;","values":{"stage":["final"]}}],
+          "edges":[{"from":"stage=draft,;","to":"stage=final,;",
+                    "rule":"flow/lock"}]}}
+```
 
 ### Capability Dependencies
 
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Reachability edge list (nodes exist; edges are not returned today) | This RDR (extends `reach.go`) | Introduced | A2's recovery must equal the traversal's own edges |
+| Bare-document text mode | Existing (`respond.go::TextLiner`) | Available | A1 verifies verbatim multi-line pass-through |
+| Canonical row/atom orders | Predecessor (RDR 0002 normalize/dump) | Available | C2 cites, never re-sorts differently |
+| DOT rendering | This RDR | Introduced | Pure function of the export value (A6) |
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Row rendering | `internal/table/dump.go::Dump` | Text-only, set literals lossy by decision (`0002:§round-trip-inverse-invariants`) | Reuse the field list and order, not the renderer | C2 carries the dump vocabulary as structured JSON |
+| Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Extend | A2; no behavior change to lint's relation |
+| Output gateway | `internal/cli/respond` | One terminal envelope under `--as=json` | Reuse (`TextLiner` + `OK`) | C5; no gateway exception, no second stream |
+| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (0006 REQ-10) | Reuse the arm set and code spellings | C1 mirrors, verified at Resolve |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+Scored matrix (large profile), approaches × deciding criteria — one
+clause per cell; ✓ favorable, ✗ disqualifying, ~ workable with cost:
+
+| Criterion | O1 sibling verb `graph --emit` | O2 `--emit` on `lint` | O3 file target `--out` | O4 external generator over dump text |
+| --- | --- | --- | --- | --- |
+| Verdict neutrality provable | ✓ structural — lint untouched | ✗ shares one RunE with the verdict | ~ side-effect write inside a verify verb | ✓ out of process |
+| Export of a failing model | ✓ load-success only | ✗ blocking model exits 2 with a CLIError that has no graph carrier | ✗ same entanglement | ✓ but only rows, no reachability |
+| Envelope-contract fit | ✓ TextLiner + one envelope, no exception | ✗ second document on one stream breaks one-envelope | ~ receipt envelope, but two output places | ✓ n/a |
+| CI diffability | ✓ raw stdout document | ~ must survive beside findings | ~ temp-file management in CI | ✗ dump text lossy (`0002:§round-trip-inverse-invariants`) |
+| Prior-art alignment | ✓ smcat/`--output-type` stdout stream | ✗ no opened peer folds export into its verifier verdict | ~ smcat supports `-o`, but stdout is its documented pipe form | ✗ peers export structured, not scraped |
+| Blast radius / reversibility | ✓ one new verb, deletable | ~ flags on the authoritative acceptance surface | ~ new I/O side-effect class | ✓ none, but outcome unmet |
+
+O1 wins on the two disqualifying rows: only a surface that does not
+share `lint`'s RunE can export a model lint refuses (the debugging
+half of the user outcome), and only a document that IS the stdout
+stream in text mode is diffable and pipeable without envelope
+surgery. O2 fails both; O3 fails the failing-model row and adds an
+I/O class for no gain over a shell redirect; O4 cannot carry the
+reachability relation at all. Sibling-path check: the repo's only
+existing format discriminator is the `--as` envelope mode
+(`respond.go::FlagName`); searched `internal/cli` for an existing
+document-format flag — none exists, so `--emit` is a new
+discriminator, deliberately scoped to this one verb.
+
+Premortem: hardened (hardened) — one fresh-context critic, queried
+once (`evidence/propose-premortem/critic.md`, 16 findings): the
+approach survived; the central mechanism finding (P-1, post-fixpoint
+edge recovery) hardened A2 into an equality bar with a named
+in-traversal-observer fallback, and P-3/P-6/P-7/P-10/P-14/P-16 folded
+into C2–C5, Risks, and Failure Modes; the three citation findings
+(P-2/P-11/P-12) resolved against the already-opened sources.
+
+Ground-sweep: clean (20 anchors) — one fresh-context checker over the
+cited anchors only; every Go symbol, refusal code, dump column, peer
+passage (0005:C1, `0002:§round-trip-inverse-invariants`, `0006:C19`
+via `lint.go`'s comment), JDR 0002 §D1, and both `../state-machines`
+passages CONFIRMED on `main`.
+
+Joint-check: clear (12 peers) — open peers 0012–0020, 0022–0024
+grepped for this RDR's modify-anchors (`reach.go::Reach` extension,
+new `graph` verb/root registration) and contract literals (`--emit`,
+`intrastate.graph/1`, `graph-export-too-large`, the mirrored C1
+codes): no whole-token hit shares an undecided contract. Context
+beside the clear: 0015 names "the 0021 export" only inside its
+REJECTED alternative's cons, under the merged-node doctrine settled
+at JDR 0001 §JD-23 (0022/0015's home) — this export emits the merged
+fixpoint relation as-is and takes no side of that doctrine; 0023/0024
+couple with this RDR only through JDR 0002 §D1, cited by C5; 0024's
+load-refusal appends reach this verb by construction (C1 consumes the
+one load pipeline, `0002:C24`'s owners). Bridge sub-check: n/a — no
+sibling plan schedules deletion/replacement of any surface this plan
+introduces, and this plan retires nothing.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: `--emit` on the `lint` verb (O2)
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: The seed's first-named shape — `intrastate lint
+--emit=json|dot` exports from the same invocation that verdicts, since
+`newAnalysis` already computes everything the document carries.
 
 **Pros**:
 
-- [Advantage 1]
+- One invocation lints and exports; CI runs one command.
+- No new verb to document.
 
 **Cons**:
 
-- [Disadvantage 1]
+- A blocking model exits 2 through `respond.Fail` with a `CLIError`
+  envelope that has no graph carrier — `0005:C1` fixes the failure
+  envelope as "extended by exactly one omitempty structured field,
+  findings, per JDR 0001 §D10" (opened and quoted, not assumed —
+  premortem P-11), so carrying a graph on failure means amending a
+  locked envelope contract or breaking one-envelope with a second
+  document on the stream.
+- Verdict-neutrality becomes a property to argue about a shared RunE
+  instead of a property the structure gives for free.
+- Flag surface lands on the authoritative acceptance verb
+  (`0006:C19`), so every future export change re-opens lint's
+  contract.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: fails both disqualifying matrix rows
+(failing-model export, envelope fit); "lint also exports" couples two
+contracts one of which must never influence the other. Its one real
+advantage — same-run export structurally IS the certified traversal —
+is preserved in the chosen shape by C4's same-entry-surface rule plus
+A2's traversal-equality bar, not lost (premortem P-11's drift
+concern).
+
+### Alternative 2: file-target export (O3)
+
+**Description**: `--out <path>` (on `lint` or a sibling) writes the
+document to a file; stdout keeps its envelope; the seed's third DOT
+option.
+
+**Pros**: stdout contract untouched; multi-format runs write several
+files.
+
+**Cons**: introduces a side-effecting write to a read-only surface;
+CI must manage paths the shell redirect already manages; peers
+document the pipe form (`smcat -T dot … -o - | dot …`) as the primary
+composition.
+
+**Reason for rejection**: adds an I/O class for nothing a `>` redirect
+does not already provide, and still needs a stdout answer for pipes.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **JSON-only, DOT via an external converter**: the diagram is half
+  the stated user outcome, DOT derives from the same value at the cost
+  of one pure renderer, and every opened peer exporter ships dot and
+  json as sibling output types of one surface.
+- **External generator over `table.Dump` text (O4)**: the dump's
+  rendered set literals are non-recoverable by 0002's own decision,
+  and the dump carries no reachability relation.
+- **Overloading `--as` (text→DOT, json→document)**: conflates envelope
+  mode with document format; no cell left for a third format or for a
+  raw-JSON pipe.
+- **Emitting the graph inside lint's success payload always**: bloats
+  every lint call's envelope with data findings-consumers never asked
+  for, and still fails the failing-model case.
 
 ## Context
 
@@ -373,7 +587,7 @@ the state-machines research audit (CW8) and research notes (§7d)
 assigned intrastate the spec/validator role, and review rejected a
 hand-maintained formal model as a drifting second artifact. Out of
 scope by the seed's own framing: any new lint invariant —
-liveness/terminal-reachability is kata `4hps` (a separate seed), which
+liveness/terminal-reachability is kata `4hps` (now RDR 0022), which
 may consume this export's reachability relation but is not blocked by
 it, and each ships with the other unlanded; likewise shipping or
 maintaining a TLA+/SMV model in-repo — a generator script over the
@@ -393,100 +607,156 @@ initial/terminal give reachability a root and stop set).
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Read before enumerating: the in-repo priors
+(`docs/cli-output-contract.md`, `internal/cli/respond/respond.go`,
+`internal/cli/lint.go`, `internal/table/dump.go`,
+`internal/graphlint/{engine,analysis,reach,groups}.go`), the governing
+records (`0005:C1`, `0002:§round-trip-inverse-invariants`), and the
+external prior art: the seed's role citations re-validated in the
+`../state-machines` audit (CW8: "spec/validator, not a runtime") and a
+bounded StateMachineRes corpus pass whose one strong instance is
+state-machine-cat's `--output-type … dot|…|json|…` exporter (queries,
+opened hits, and rejected branches recorded in
+`evidence/research/prior-art.md`). Constraint that shaped the choice:
+the respond gateway already has a seam (`TextLiner`) for a payload
+that IS one canonical string, so a bare-document text mode needs no
+gateway exception.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — `0005:C1` carves `lint`/`dump`/`parse`-class
+  command groups out of the flow contract, "owned by the RDR that
+  names them" ⇒ a root `graph` verb is claimable here without
+  amending 0005.
+- **Documented** — 0002 fixes the dump's field list and row order but
+  "does not define a dump grammar" and names a re-readable form as
+  follow-up work ⇒ the JSON schema is this RDR's to own, and reusing
+  the dump's field vocabulary keeps one row contract, not two.
+- **Documented** — peer exporters (state-machine-cat) treat json and
+  dot as sibling output types of one surface streamed to stdout ⇒ the
+  format flag + raw stream shape; no opened peer wraps DOT in a JSON
+  envelope (⚠ negative corpus result, recorded).
+- **Documented** — `reach()` returns nodes and a completeness bit but
+  no edge list ⇒ edges are this RDR's one extension to the traversal
+  surface (A2).
+- **Assumed** — TextLiner passes a multi-line document byte-exact
+  (A1); post-fixpoint edge recovery equals the traversal's edges (A2);
+  shared-encoder marshaling is byte-stable (A5).
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Positive: the certified graph becomes a first-class, diffable CI
+  artifact; formal models (TLA+/Alloy/SMV) become derivable downstream
+  consumers instead of drifting second artifacts; a refused model can
+  still be inspected as a graph.
+- Positive: one row contract — the document reuses 0002's dump
+  vocabulary, so a column added there (the `emit` precedent) has one
+  obvious landing in the schema.
+- Negative: `intrastate.graph/1` is a locked wire format; every later
+  producer (declared-emit metadata, new invariant surfaces) must land
+  additively or version the schema.
+- Negative: the exported reachability relation exposes the
+  OVER-APPROXIMATION lint reasons over (merged nodes, unpruned
+  guard/observed edges — `reach.go::Reach` doc); a consumer reading it
+  as the runtime relation will over-count edges.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: consumers mistake the merged, over-approximate relation
+  for runtime behavior and "verify" properties the runtime lacks.
+  **Mitigation**: the document self-describes — the `reach` block
+  carries an explicit abstraction marker (wording at Resolve), and the
+  docs state the over-approximation contract where the schema is
+  described.
+- **Risk**: schema drift — a later field added ad hoc breaks C3's
+  additive rule.
+  **Mitigation**: golden-fixture byte tests pin `/1`; a failing pin is
+  the tripwire that forces the additive-or-version decision.
+- **Risk**: the DOT arm quietly diverges from the JSON arm's graph,
+  or breaks on hostile content (quotes/newlines/non-ASCII in tag
+  values — DOT quoting is its own escaping surface, premortem P-16).
+  **Mitigation**: A6's design — DOT renders the export value, not the
+  analysis — plus a test asserting DOT node/edge ids equal the JSON
+  document's, plus escaping fixtures that must survive `dot -Tsvg`.
+- **Risk**: a clean, schema-stamped export reads as certification and
+  a PR merges on the diagram while lint failed in another job
+  (premortem P-6).
+  **Mitigation**: C2 — the document carries no verdict field and the
+  docs state an export is never a lint pass; the lint gate, not the
+  export, stays the acceptance surface (`0006:C19`).
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- Visible: refusals reuse lint's arm codes (C1) and the new
+  `graph-export-too-large` refusal names the ceiling and remedy
+  (accepted cost, premortem P-13: the over-ceiling debugger gets the
+  same narrow-a-domain remedy lint gives, not a partial graph that
+  diffs as a graph change); a killed process leaves no terminal
+  envelope (existing contract).
+- Visible: an envelope-sniffing wrapper pointed at text-mode output
+  mis-parses the bare document — by contract it must use `--as=json`
+  (C5); the four-cell behavior is documented and tested.
+- Silent (accepted, marked): a build bump re-baselines DOT diffs and
+  may add JSON fields (C3's stated narrowing); the cross-build golden
+  makes the moment visible.
+- Silent (guarded): nondeterministic bytes across runs — caught by the
+  MVV's double-emit byte compare, never shipped silently; a partial
+  graph after an incomplete traversal — structurally impossible, C4
+  refuses instead.
+- Diagnosis: byte-diff two runs (determinism), `jq .data` vs text
+  output (mode agreement), `intrastate lint` before/after (neutrality
+  oracle).
 
 ## Implementation Plan
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] All Critical Assumptions verified (A1/A2/A5/A6 are spikes; A2 —
+  edge recovery equals the traversal's edges — gates Phase 1)
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. Author a small state-machine fixture (two owned states, one
+   terminal, one escape row) and a decision-table fixture.
+2. `intrastate graph --model <fixture>` twice → the two stdouts are
+   BYTE-identical, parse as JSON, and carry every C2 field (schema,
+   tags, initial, terminal, rows, groups, reach.nodes, reach.edges).
+3. `intrastate graph --model <fixture> --emit dot | dot -Tsvg` renders;
+   the DOT node/edge id set equals step 2's `reach` block.
+4. `intrastate graph --model <fixture> --as=json | jq .data` equals
+   step 2's document, value-for-value.
+5. `intrastate lint` over a fixture WITH blocking findings still
+   refuses identically (byte-compared against a pre-change capture),
+   while `intrastate graph` over the same model succeeds with an
+   ASSERTED document (defined content, not incidental) — the
+   neutrality oracle, mechanism-independent per C4.
 
-### Phase 1: Code Implementation
+End-state: one loadable model, four invocations, byte-level oracles
+for determinism, mode agreement, and lint neutrality.
 
-#### Step 1: [Title]
+### Phase 1: Export value and edge recovery
 
-[Conditional scaffold]
+Build the document-assembly component over `*table.Model` +
+`Reach`-with-edges; goldens pin `intrastate.graph/1`; the A2
+differential test (observer vs recovery, subsumption-merge fixtures)
+decides the recovery mechanism before the schema freezes.
 
-[Instructions]
+### Phase 2: CLI verb and gateway wiring
 
-#### Step 2: [Title]
+Register root `graph` with C1's arm set, `--emit`, the `TextLiner`
+ride, and the `graph-export-too-large` refusal.
 
-[Conditional scaffold]
+### Phase 3: DOT renderer
 
-[Instructions]
+A pure renderer over the export value; equality test against the JSON
+arm's node/edge set.
 
-### Phase 2: Operational Activation
+### Phase 4: Contract surfaces
 
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+`docs/cli-output-contract.md` gains the document section; `--help-all`
+gains the verb; abstraction-marker wording lands with the schema docs.
 
 ## Validation
 
@@ -634,7 +904,16 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- `0005:C1` (envelope contract; command-group carve-out); `0002:§round-trip-inverse-invariants`
+  (dump grammar declined, follow-up seeded); `0006:C19` (lint as the
+  acceptance surface); JDR 0002 §D1 (projection doctrine, cited by C5).
+- Source reviewed: `internal/cli/{lint.go,root.go}`,
+  `internal/cli/respond/respond.go`, `internal/table/dump.go`,
+  `internal/graphlint/{engine,analysis,reach,groups,taxonomy}.go`.
+- Prior art: `../state-machines/AUDIT-rdr-flow.md` (CW8),
+  `../state-machines/research/state-machines-research.md` (§7d),
+  `../state-machines/repos/state-machine-cat/README.md`
+  (`--output-type`); search record in
+  `0021-lint-normalized-graph-export/evidence/research/prior-art.md`.
+- Related: kata `intrastate#jjkh`; RDR 0022 (prospective consumer of
+  the reachability relation).
