@@ -68,9 +68,11 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: foundational — provisional: one contract (a
-  caller-controlled projection axis on the resolve envelope)
-  spanning fences locked by RDR 0005 and RDR 0011.
+- **Profile**: foundational — one independent contract, the
+  caller-controlled projection axis on the resolve envelope (C1
+  surface/wire + C2 partition instance), a cross-RDR producer: it
+  narrows `0005:A6`, instances JDR 0002 §D1, and composes with
+  `0024:C4`.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -164,12 +166,17 @@ Each answer also decides whether future verbs inherit the projection.
   projected width is materially smaller on the chained-call class
   the RDR targets — the seed's 1529→~430 figure is the echo SHARE of
   the motivating call, not the shipped reduction.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: re-run the kata `intrastate#srz2` measurement over
-    the shipped `--plan-only` (or a prototype projection) on the
-    motivating decision-table shape AND a gate/write-heavy fixture;
-    record the default vs projected byte table.
+  - **Evidence**: live-run byte table (author-approved 2026-08-29;
+    `evidence/spikes/a1-byte-width.md`): pricing 2×2 290→152 B
+    (47.6% saved); synthetic 48-fact motivating class 708→146 B
+    (79.4%); release ship-clean (writes+clear) 392→191 B (51.3%);
+    release begin (gate+writes) 412→238 B (42.2%) — materially
+    smaller on every shape with the full shipped PLAN group
+    retained. The seed's 72% was the echo share against
+    `emit`+`rule` alone; 79.4% is the honest shipped reduction on
+    that class. MVV step 6 re-records this table at implementation.
   - **If wrong**: the flag saves too little to justify a new surface
     on a locked verb, and the RDR routes back to "nowhere" (no
     projection axis).
@@ -183,12 +190,21 @@ Each answer also decides whether future verbs inherit the projection.
   order, and text mode stays deterministic (the flattener already
   sorts keys from the decoded map, `respond/text.go::flatten`, so no
   map-iteration-order path exists).**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: a minimal encoder spike over
-    `internal/cli/flow_resolve.go::resolvePayload` showing default
-    bytes unchanged (fixture-diff) and projected bytes = default
-    minus echo keys, plus a repeated text-mode run.
+  - **Evidence**: encoder spike
+    (`evidence/spikes/a2-encoder-mechanism.md`): pointer-valued echo
+    fields with `omitempty`, populated by decoding a live CLI
+    reference line, marshal byte-identical to shipped default output
+    — including `"owned":{}` (a non-nil pointer to an empty map
+    survives `omitempty`) — and, nilled, drop all five echo keys:
+    absent, declaration order kept, surviving bytes equal to jq
+    key-deletion of the reference. The bare non-pointer `omitempty`
+    hazard reproduced (drops empty `{}`/`[]`). Text mode: 10 runs,
+    one hash (`respond/text.go::flatten` sorts keys). Normative
+    fixture (author-approved 2026-08-29): the projected wire record
+    of the pricing 2×2 call, recorded in the spike artifact and
+    cited by Testing Strategy S1/S2 Expected.
   - **If wrong**: C1's absence-not-null and byte-identity clauses are
     unimplementable as specced and the mechanism (or the clause) must
     change before lock.
@@ -197,11 +213,16 @@ Each answer also decides whether future verbs inherit the projection.
   assertion runs default-mode, so the 0005/0010/0011 suites do not
   move and "default unchanged" holds without editing a predecessor's
   tests.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: sweep `internal/cli/*_test.go` for resolve success
-    payload assertions; confirm none invokes the new flag's path and
-    none needs edits.
+  - **Evidence**: swept all 16 test files invoking `flow resolve`
+    (~120 sites): none passes a projection flag; every success-payload
+    assertion runs default mode — key-set
+    (`internal/cli/flow_resolve_0005_test.go`), byte-identity and
+    wire key-order (`internal/cli/decision_table_0010_test.go`).
+    Caveat carried to implementation: `decision_table_0010_test.go`
+    pins `resolvePayload` at exactly 14 struct fields — the A2
+    mechanism keeps the count (pointer conversion adds no field).
   - **If wrong**: the change stops being additive — moved predecessor
     oracles are the "editing a predecessor's surface" cost this RDR
     claims to avoid.
@@ -213,12 +234,15 @@ Each answer also decides whether future verbs inherit the projection.
   derivation input, and whichever RDR lands second changes nothing in
   the other's contract (the premortem's seed-3 check: this cites the
   quoted join rule, not a summary of the sibling).**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: `0024:C4` (envelope clause: `dispositions` appended
-    after `emit`, "never omitted", joined by the "same single
-    `Plan.RuleID` join path as `emit`") read against C2's partition
-    assignment below; re-check at Resolve if 0024's draft moves.
+  - **Evidence**: `0024:C4` re-read whole at Resolve (2026-08-29):
+    `dispositions` joins from the selected row's OWN authored values
+    by "the same single `Plan.RuleID` join path as `emit`" —
+    plan-group inputs only, `observed`/`owned` never read — and
+    JDR 0002 §D1's Resolved clause records the same assignment
+    ("`dispositions` is a PLAN-group field… consistent by
+    citation"). Neither contract moves in either landing order.
   - **If wrong**: the joint decision homed at `cli/0023:C2` reopens
     and one of the two envelopes must move.
 - **A5 The whole-tree registration oracle C1 mandates is
@@ -230,27 +254,38 @@ Each answer also decides whether future verbs inherit the projection.
   `internal/cli/flow_all_0011_test.go::TestReq46And47And65And98_AllIsAbsentFromTheOtherThreeVerbsAndTheFlowGroup`
   or `registerSelectionFlags` is name-generic in a way the new sweep
   would disturb.**
-  - **Status**: Pending
-  - **Method**: Source Read
-  - **Evidence**: the cited test's structure (per-name `Lookup`,
-    four-verb vacuity guard) and the command-tree traversal surface
-    available to a test (root command's child enumeration, recursive).
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: the `--all` probes are exact-name `Lookup("all")`
+    (`internal/cli/flow_all_0011_test.go`, three probe sites) — a
+    resolve-local `plan-only` is invisible to them; the root builds
+    via plain `AddCommand` (`internal/cli/root.go`) and the shipped
+    tests already walk `Commands()` recursively (the hidden `docs`
+    command still enumerates, so the whole-tree walk misses nothing);
+    the four-verb vacuity guard transfers as a pattern;
+    `registerSelectionFlags` registers only `model`/`flow`/`artifact`
+    — nothing name-generic for the new sweep to disturb.
   - **If wrong**: C1's whole-tree structural negative cannot be pinned
     in the house idiom and needs its own form.
 - **A6 A refusal path carries nothing to project: `respond.Fail`
   renders `clierr.CLIError` (+ `findings`) with no request-echo
   member, so `--plan-only` cannot change a single refusal byte and
   "report-only" holds on failures by construction.**
-  - **Status**: Pending
-  - **Method**: Source Read
-  - **Evidence**: `internal/cli/respond` failure emission path and
-    `internal/cli/clierr` envelope fields.
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: the refusal envelope's fields are `code`,
+    `message`, `param`, `detail`, `hint`, `findings`
+    (`internal/cli/clierr/clierr.go`) — no echo-group member;
+    `respond.Fail` marshals the `*CLIError` directly and never the
+    verb payload struct. (`Finding`'s `model,omitempty` is RDR 0006
+    lint-finding metadata, not a resolve request echo.)
   - **If wrong**: the flag changes refusal output, breaking C1's
     report-only clause and the caller's error handling.
 - **A7 The echo group really is an echo: `observed` renders the
   caller's `--tag` set verbatim (`0005:C1` refuses rather than
-  coerces — a non-canonical set literal is `flow-tag-invalid`, an
-  owned/reserved key is refused before any accessor), and `model`
+  coerces — a malformed or nonconforming tag literal is
+  `flow-tag-invalid`, an owned/reserved key is refused before any
+  accessor), and `model`
   and `outcome` are the caller's own flag values copied through
   (`runFlowResolve`: `payload.Outcome` is `--outcome`'s string) — no
   CLI-side defaulting, coercion, or expansion produces an observed
@@ -258,13 +293,23 @@ Each answer also decides whether future verbs inherit the projection.
   in scope, not a refutation: a set-kind literal is re-encoded to
   the canonical bytes of the same members (the form a conforming
   caller already speaks).**
-  - **Status**: Pending
-  - **Method**: Source Read
-  - **Evidence**: `internal/cli/flow_input.go` tag parsing (refusal
-    codes, no rewrite path) and
-    `internal/cli/flow_resolve.go::runFlowResolve` payload
-    population; a fixture asserting `observed` byte-equals the
-    supplied tag set.
+  - **Status**: Verified
+  - **Method**: Source Search
+  - **Evidence**: `internal/cli/flow_input.go::parseTags` refuses
+    owned/reserved/duplicate/malformed/nonconforming tags; the sole
+    rewrite is `canonicalSet`'s sort/dedup/compact re-encode of a
+    VALID set literal — exactly the named value-preserving exception
+    (the claim's wording was narrowed to match at Resolve);
+    `runFlowResolve` copies `--model`/`--outcome` through verbatim.
+    Round disposition (author-approved 2026-08-29): `owned` and
+    `readers` stay ECHO — `readers` is a pure function of
+    model + outcome (`internal/cli/flow_exec.go::invokedReaders`,
+    derivable from the caller's own request), and `owned` rolls
+    forward as prior-owned overlaid with `next` (a clear is a
+    `<clear>` sentinel write; untouched keys never change), with
+    `flow set-state`'s read-back refusing unplanned foreign changes;
+    corpus + precedent grounding in
+    `evidence/research/resolve-partition-prior-art.md`.
   - **If wrong**: `observed` is derived output, its projection hides
     what the kernel actually matched against, and the field moves to
     the plan group before lock.
@@ -391,6 +436,17 @@ produced by the loader, not restated from the request, and it is
 the plan's only provenance — a chained caller cannot otherwise
 detect that the model changed under the same path between calls.
 --plan-only reports the PLAN group and omits the ECHO group (C1).
+
+The assignment ground (recorded at Resolve, 2026-08-29): ECHO is
+the kernel's input side — supplied by the caller or assembled on
+its behalf (internal/resolve/resolve.go::Resolve takes Owned and
+Observed as Input; internal/cli/flow_exec.go::invokedReaders
+derives readers from model + outcome alone) — and PLAN is the
+kernel's output side plus bounded identity attestations, of which
+revision is the shipped instance: provenance rides as an identity
+token, never re-echoed content. A future drift-detection ask joins
+PLAN as a bounded state-identity field under the §D1 field-addition
+rule, not by moving raw owned content into the projected width.
 
 Per JDR 0002 §D1's enforcement rule, this verb's reflective oracle
 MUST assert every field of the resolve success payload is assigned
@@ -893,7 +949,9 @@ family):
    whole-tree structural oracle (the set of commands registering the
    flag is exactly `{flow resolve}`) passes.
 6. Record default vs projected byte counts on the motivating-model
-   shape and one gate/write-heavy fixture (A1's table).
+   shape and one gate/write-heavy fixture (A1's table; Resolve's
+   baseline in `evidence/spikes/a1-byte-width.md` — 79.4% saved on
+   the 48-fact class, 42–51% on the state-machine shapes).
 
 End-state: one flag, two widths, one decision; refusals and default
 mode untouched.
@@ -936,12 +994,15 @@ not a test assertion.
    **Expected**: identical exit codes and invoked-reader set;
    refusal envelopes byte-identical; the projected success payload a
    strict key-subset of the default with byte-identical values on
-   every carried key.
+   every carried key. Normative fixture: the projected wire record
+   of the pricing 2×2 call (`evidence/spikes/a2-encoder-mechanism.md`).
 2. **Scenario**: projected top-level key set (explicit-literal
    oracle).
    **Expected**: exactly `revision`, `rule`, `gates`, `emit`,
    `next`, `writes`, `clear`, `escaped` (`escape_class` when
    escaped); omitted keys absent — never null or empty placeholders.
+   The same normative fixture pins the exact bytes
+   (`evidence/spikes/a2-encoder-mechanism.md`).
 3. **Scenario**: reflective partition-completeness over the resolve
    success payload.
    **Expected**: every field assigned to exactly one C2 group; an
@@ -952,6 +1013,26 @@ not a test assertion.
 5. **Scenario**: `--as=text` ± the flag, repeated runs.
    **Expected**: projected text lines a byte-identical, stable
    subset of the default-mode lines.
+
+### Performance Expectations
+
+- Wall time unchanged: projection is key deletion on the assembled
+  payload before `respond.OK` — no extra I/O, no second marshal
+  path; the 5ms call the Problem Statement measures is unaffected.
+- Output width (A1's live table,
+  `evidence/spikes/a1-byte-width.md`): 79.4% saved on the 48-fact
+  motivating class (708→146 B), 47.6% on the 2×2 table, 42–51% on
+  the gate/write state-machine shapes. The floor is the retained
+  PLAN group; the saving grows with fact count.
+- Determinism checklist (C1 claims byte-stability; A2 spike
+  results): no hashing; one wire encoder
+  (`internal/cli/clierr/clierr.go::WriteJSONLine` — `json.Encoder`,
+  `SetEscapeHTML(false)`, compact one-line NDJSON); wire key order
+  is struct declaration order, text mode sorts decoded keys
+  (`respond/text.go::flatten`; 10 repeated runs, one hash); empty
+  vs absent distinguishable (non-nil pointer to empty map renders
+  `{}`, nil renders absent — never `null`); the version marker is
+  `revision` (plan-side provenance, C2).
 
 ## Finalization Gate
 
@@ -1077,7 +1158,25 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- JDR 0002 §D1 (`docs/jdr/0002-success-envelope-projection.md`) —
+  the partition doctrine C2 instances; JDR 0001 §D8
+  (`docs/jdr/0001-resolve-kernel-seam.md`) — why `owned`/`readers`
+  entered the envelope.
+- `docs/cli-output-contract.md` — the worked payload default mode
+  keeps byte-identical.
+- Peer-CLI prior art (langref checkouts):
+  `gh-cli/pkg/cmd/pr/diff/diff.go` (`--name-only` fixed
+  projection); `gh-cli/pkg/cmdutil/json_flags.go` (`--json
+  <fields>` general form — Alternative 1).
+- Literature (Resolve research,
+  `evidence/research/resolve-partition-prior-art.md`): Kleppmann,
+  *Designing Data-Intensive Applications*, Ch 11 pp480–481 (command
+  results are emitted events; state is derived); Masse, *REST API
+  Design Rulebook*, p92 (caller-side field trimming), p53 (ETag as
+  opaque version identity); Richardson/Amundsen/Ruby, *RESTful Web
+  APIs*, p358; Yao et al., *ReAct*, p2 (observations re-paid as
+  trajectory context). Propose research:
+  `evidence/research/propose-prior-art.md`.
+- Spike evidence: `evidence/spikes/a1-byte-width.md`,
+  `evidence/spikes/a2-encoder-mechanism.md`. Related: kata
+  `intrastate#srz2`.
