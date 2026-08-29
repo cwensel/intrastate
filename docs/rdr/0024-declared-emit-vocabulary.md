@@ -363,8 +363,13 @@ are model-authored.
 - **A6 DMN decision tables carry an allowed-values list on output
   clauses that conformant tooling checks output entries against — the
   external alignment claim for declare-then-prove over answers.**
-  - **Status**: Pending — **not load-bearing**; carried unverified by
-    decision, not by omission (see plan below).
+  - **Status**: Pending — **DOWNGRADED at reconcile**, and carried
+    unverified by decision, not by omission. Not load-bearing: it is
+    a corroborating external citation, and the alignment argument
+    stands without it on the in-repo mirror (`0002:C22`) plus the two
+    opened peer citations. Searched exhaustively and not found; the
+    named plan below is deliberately UNSCHEDULED, since nothing in
+    the design waits on it.
   - **Method**: Prior Art
   - **Evidence**: **Searched and not found**
     (`evidence/research/resolve-prior-art.md`). No DMN or BPM-suite
@@ -395,21 +400,27 @@ are model-authored.
   forfeits is bounded to the domain sub-tree — so C1's hand-written
   arms cover exactly what the decoder stops catching, and nothing
   above the declaration level regresses.**
-  - **Status**: Pending
+  - **Status**: Pending — **DOWNGRADED at reconcile**: the decode
+    legs are Verified; only the CLOSURE leg is carried, under the
+    named plan below, and it is not MVV-critical (the MVV drives the
+    declared-then-green path, not the exhaustive malformed-arm sweep).
   - **Method**: Spike
   - **Evidence**: `evidence/spikes/c1-dual-form-domain.md` establishes
     both legs against `pelletier/go-toml/v2 v2.2.4` with an
     `any`-typed `domain`: both forms decode (`err=<nil>`), a
     declaration-level typo (`domaim`) still refuses under strict mode,
     and a non-array disposition value and nesting below the
-    disposition level both decode silently. What remains Pending is
+    disposition level both decode silently. What remains open is
     the CLOSURE claim — that the five hand-written arms C1 adds are
     the complete set of shapes the decoder stops refusing. The spike
     probed three; the arms were derived from the type structure rather
-    than enumerated exhaustively. Verify at implementation with a
-    table-driven fixture per arm (Testing Strategy scenario 1) plus a
-    negative sweep confirming no other malformed domain shape reaches
-    the pipeline unrefused.
+    than enumerated exhaustively. **Named plan that WILL run during
+    implementation**: Testing Strategy scenario 1 — a table-driven
+    fixture per arm (including the three-fixtures-one-expectation
+    no-usable-domain arm) plus a negative sweep confirming no other
+    malformed domain shape reaches the pipeline unrefused. It runs in
+    Phase 1, which does not close until it is green, so the closure is
+    proven as the arms are written rather than assumed before them.
   - **If wrong**: a malformed domain shape loads silently and the
     declaration proves less than C1 claims; surfaces as a fixture that
     should refuse and does not.
@@ -450,28 +461,47 @@ are model-authored.
   the loader holds (`l.src`) permits locating an `[emit.<key>]`
   declaration header and a rule's `[rule.emit]` block, so Phase 1's
   `emitHeaderLine` is writable without new plumbing.**
-  - **Status**: Pending
-  - **Method**: Source Search
-  - **Evidence**: Raised by the critique lens, which established the
-    gap but not the remedy: `atLine` is wired at exactly ONE loader
-    site at HEAD (`internal/table/load.go:214`, in `loadTags`, fed by
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `evidence/spikes/a9-rule-side-locator.md`. Raised by
+    the critique lens, which established the gap but not the remedy:
+    `atLine` is wired at exactly ONE loader site at HEAD
+    (`internal/table/load.go:214`, in `loadTags`, fed by
     `tagHeaderLine(l.src, key)`), so without an analogue every emit
     refusal renders line 0/1 and the Failure Modes' "offending file in
-    `locator`" is false. **The two legs now separate, and only the
-    first is closed.** `tagHeaderLine(src []byte, key string) int`
+    `locator`" is false. **The DECLARATION leg closed at pre-lock**:
+    `tagHeaderLine(src []byte, key string) int`
     (`internal/table/load.go:181`) splits the source into lines, strips
     trailing `#` comments and whitespace, and exact-matches the literal
     bracketed header (bare or TOML-quoted), returning 0 unless exactly
-    one line matches. Nothing in it special-cases `[tags.*]`, so the
-    DECLARATION leg reaches `[emit.<key>]` unchanged — the technique is
-    generic over the header text. The RULE-SIDE leg does NOT: the
-    function matches top-level headers per line and carries no nesting
-    or indentation logic, so a rule's `[rule.emit]` block needs a
-    different anchor, which has not been written or read. That leg is
-    what keeps this Pending, and C2 now makes both lines normative
-    rather than a Phase 1 aspiration. Verify at implementation by
-    writing the rule-side locator and asserting a nonzero line in the
-    MVV's step 2.
+    one line matches. Nothing in it special-cases `[tags.*]`, so it
+    reaches `[emit.<key>]` unchanged — generic over the header text.
+    **The RULE-SIDE leg is now closed too, and the claim's stated
+    technique is corrected in closing it.** The operative claim
+    (writable without new plumbing) HOLDS:
+    `internal/table/normalize.go::normalizeRule` is a `*loader` method,
+    so `l.src` and the rule `id` are both already in scope at the sole
+    `sourceRule.Emit` read (the `Emit: emitSequence(rule.Emit)` site) —
+    no data has to be threaded, only a helper written. But the claim's
+    premise that the locator finds "a rule's `[rule.emit]` block" by
+    that header is **wrong, and would have failed silently**:
+    `[rule.emit]` is the authored shape, yet its header text is
+    byte-identical for every rule (63 occurrences in the motivating
+    consumer's `rdr-status.toml`, 4 in the in-repo example), so
+    `tagHeaderLine`'s exactly-one-match-or-zero contract returns 0 on
+    every real multi-rule model. The locator therefore anchors on the
+    rule id (`id = "<ruleID>"`, matching the VALUE — `[model]` also
+    carries an `id` key) and scans forward to the emit block; the id is
+    unique before any emit work runs, enforced by `CatDuplicateRuleID`
+    in `normalize.go`, and the ordering precondition was checked
+    mechanically — every rule's `id` line precedes its `[rule.emit]`
+    header in both real models (63/63 and 4/4). The decoder was ruled
+    out as an alternative route rather than assumed away:
+    `pelletier/go-toml/v2 v2.2.4` exposes position only on
+    `DecodeError` with unexported line/column fields, and a rule-side
+    emit refusal is decided AFTER a successful strict decode — but it
+    is not needed, since `loader.src` is retained for exactly this
+    purpose. C2 and Phase 1 now carry the id-anchored technique.
   - **If wrong**: the locator promise narrows to whatever is
     recoverable (declaration-level only, or file-level), and C2's
     all-three-categories clause, the Failure Modes, and MVV step 2 say
@@ -724,11 +754,26 @@ a declaration defect keys on the top-level `[emit.<key>]` header,
 which `tagHeaderLine`'s technique reaches unchanged (it scans lines
 for a literal bracketed header, comment-stripped, and is generic over
 the header text); a rule-side defect (`unknown_emit_key`,
-`emit_value_out_of_domain`) keys on the offending rule's `[rule.emit]`
-block, which that technique does NOT reach — it matches top-level
-headers only and carries no nesting logic. Whether that is one helper
-taking the header text or two is an implementation choice; recovering
-BOTH lines is not. A9 carries the rule-side leg as Pending.
+`emit_value_out_of_domain`) keys on the offending RULE ID, **not on
+its `[rule.emit]` header**. The header text is byte-identical for
+every rule in a model (63 occurrences in the motivating consumer's
+`rdr-status.toml`), so `tagHeaderLine`'s exactly-one-match-or-zero
+contract returns 0 on every real multi-rule model — header matching is
+not merely unreachable here, it is the wrong key. The rule-side
+locator anchors on the rule's `id = "<ruleID>"` line and scans forward
+to the emit block: the id is unique by the time any emit work runs
+(`CatDuplicateRuleID` is enforced in `normalize.go`), and it is
+already in hand — `normalizeRule` is a `*loader` method, so `l.src`
+and `id` are both in scope at the sole `sourceRule.Emit` read
+(`internal/table/normalize.go::normalizeRule`, the `Emit:
+emitSequence(rule.Emit)` site). The anchor must match the id's VALUE,
+since `[model]` also carries an `id` key. The decoder is not an
+alternative route — `pelletier/go-toml/v2` exposes position only on
+`DecodeError` with unexported fields, and a rule-side emit refusal is
+decided after a successful strict decode — but it is not needed, since
+`loader.src` is retained for exactly this purpose. Two helpers or one
+is an implementation choice; recovering BOTH lines is not (A9,
+Verified — `evidence/spikes/a9-rule-side-locator.md`).
 
 These two categories and C1's `malformed_emit_declaration` join
 `0002:C24`'s data-level set (that list is "at minimum", and
@@ -1570,10 +1615,11 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 
 ### Prerequisites
 
-- [x] Critical Assumptions verified: A1–A5 Verified at Stage 4. A6
-      (DMN prior art) is carried Pending and NOT load-bearing — no
-      corpus reaches DMN material; the alignment argument runs on
-      `0002:C22` and the two opened peer citations instead.
+- [x] Critical Assumptions verified: A1–A5 Verified at Stage 4, A9
+      Verified at reconcile. A6 (DMN prior art) is downgraded and
+      carried Pending, NOT load-bearing — no corpus reaches DMN
+      material; the alignment argument runs on `0002:C22` and the two
+      opened peer citations instead.
 - [x] A8 is **Refuted** at pre-lock (critique lens, both models):
       `TestReq146` is scoped to `table.Row` and cannot reach
       `Model.EmitDecls`. This costs the contract nothing — C3's sort
@@ -1581,14 +1627,13 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
       as the direct oracle — but it removes a corroborating test this
       record cited, so **scenario 4 is now the sole determinism proof**
       and Phase 2 owes no `TestReq146` edit.
-- [ ] A9 (emit refusal source line) is Pending: the critique
-      established that `atLine` is wired only in `loadTags`, so
-      Phase 1 owes an `emitHeaderLine` analogue. What remains
-      unverified is that the technique reaches an `[emit.<key>]`
-      header and a nested `[rule.emit]` block. Verify by reading
-      `tagHeaderLine` before Phase 1 writes the sibling; if the
-      rule-scoped case is not reachable, narrow the locator promise
-      rather than dropping the refusal.
+- [x] A9 (emit refusal source line) is **Verified** at reconcile
+      (`evidence/spikes/a9-rule-side-locator.md`). Both legs are
+      recoverable from what the loader already holds, so the locator
+      promise stands and needed no narrowing. The rule-side leg does
+      not key on the `[rule.emit]` header — that text repeats per rule
+      — but on the unique rule id, which `normalizeRule` holds beside
+      `l.src`. Phase 1 owes the helper; it owes no new plumbing.
 - [ ] A7 is carried Pending on its CLOSURE leg only: the spike
       established that both `domain` forms decode and that a
       declaration-level typo still refuses, but not that C1's
@@ -1629,19 +1674,28 @@ mirror), `internal/table/model.go::EmitValue` and `declaredKinds`,
 Extend the source schema with the `[emit]` table, load declarations
 beside tags, and refuse `malformed_emit_declaration` /
 `unknown_emit_key` / `emit_value_out_of_domain` in the load pipeline
-(C1, C2) — the whole opt-in predicate lives here. Reuse
-`internal/table/load.go::conformKind`/`conformDomain` through a narrow
-helper (A4); no `internal/guard` import.
+(C1, C2) — the whole opt-in predicate lives here. Reuse the exported
+`internal/table/load.go::ConformValue(decl TagDecl, member string)`
+as-is (A4), passing a throwaway `TagDecl{Kind, Domain}` per call —
+that struct literal is the whole adapter, so there is no narrow
+helper to write and no extraction (C3); no `internal/guard` import.
 
 **Line attribution needs a sibling of `tagHeaderLine`, or every emit
 refusal points at the wrong line.** `atLine` is wired at exactly one
 loader site at HEAD — `load.go:214`, inside `loadTags`, fed by
 `tagHeaderLine(l.src, key)` — so a refusal raised by the new steps
-carries no source line unless this phase adds the analogue. Write
-`emitHeaderLine` beside it and stamp all three categories through
-`atLine`, keyed on the `[emit.<key>]` header for a declaration defect
-and on the offending rule's `[rule.emit]` block for `unknown_emit_key`
-/ `emit_value_out_of_domain`. Without it the Failure Modes' "offending
+carries no source line unless this phase adds the analogue. Stamp all
+three categories through `atLine`, with the two keying strategies C2
+fixes. A declaration defect keys on the `[emit.<key>]` header, which
+`tagHeaderLine` reaches unchanged. A rule-side defect
+(`unknown_emit_key` / `emit_value_out_of_domain`) does NOT key on the
+`[rule.emit]` header — that text repeats verbatim per rule, so an
+exactly-one-match scan returns 0 on any multi-rule model. Write
+`emitHeaderLine(src []byte, ruleID string) int` as a rule-id-anchored,
+block-bounded forward scan: find the `id = "<ruleID>"` line (the id's
+VALUE — `[model]` also carries an `id` key), then scan to the emit
+block. Both inputs are already in scope — `normalizeRule` is a
+`*loader` method holding `l.src` and `id` (A9). Without it the Failure Modes' "offending
 file in `locator`" and the MVV's expected locator are both false, and
 the adoption loop the Consequences price in gets materially worse:
 a fail-fast pipeline that reports one defect per run WITHOUT a line
@@ -1808,9 +1862,12 @@ refusal arm and every C2 category maps to at least one scenario.
 
 **Code paths under test, and the verification each rests on.** The
 load-side scenarios (1–3) exercise `internal/table/load.go`'s refusal
-arms beside the existing `loadTags` step, reusing
-`load.go::conform`/`conformKind`/`conformDomain` for value conformance
-(A4 — verified reusable in-package, no `internal/guard` import). The
+arms beside the existing `loadTags` step, reusing the exported
+`load.go::ConformValue` for value conformance (A4 — verified reusable
+as-is, already called cross-package by
+`internal/cli/flow_input.go::flowInput`, no `internal/guard` import;
+the unexported three-arg `conform` is the write-block atom checker and
+is NOT what an emit declaration reuses). The
 grammar sits on the free `[emit]` key in
 `internal/table/source.go::sourceDoc`, refused today by
 `decodeStrict`'s `CatUnknownSchemaField` arm (A1). Scenario 3's
