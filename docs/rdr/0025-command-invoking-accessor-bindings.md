@@ -102,9 +102,9 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
   - **Evidence**: `internal/accessor/model.go::readerFor` selects the
     read-back reader by artifact role (the model author writes that state by
     declaring `role` on a read entry), and the re-read can fail independently
-    of the write (`0004:C13`); RDR 0016 is re-shaping
-    reader-per-role cardinality (intrastate#p63c) — pin the 0016 element id
-    at Resolve, when its proposal is citable.
+    of the write (`0004:C13`); `0016:C4` is the normative home for reader
+    selection (fail-closed unique `readerFor`) — 0025 conforms as consumer;
+    pin the `0016:C4` element id at Resolve.
   - **If wrong**: command writes are unverifiable by construction and every
     such write refuses `read_back_incomplete`.
 - **A5 [Kubernetes `ExecAction` documents its probe command as an argv array
@@ -419,13 +419,18 @@ Ground-sweep: clean (18 anchors) — 11 code anchors and 7 peer elements
 (0004:C3/C8/C12–C16) all CONFIRMED by a factored checker; one cosmetic note
 (role-routing of read-back reads from C12/code, independent-failure from
 C13), no load-bearing miss.
-Joint-check: fired → 0016, 0020 (OPEN) — all three arms ran on the written
-proposal. Arm 1 (modify-anchors, `--repo`-resolved): pair with 0020 on
-`internal/table/load.go::accessorTable` (uncited — 0025's C1 relaxes the
-path-required rule there; whether 0020's touch composes is the open joint
-question) and pair with 0016 on `internal/accessor/model.go::readerFor`
-(cited — A4 already declares the coupling: 0025's command-write read-back
-rides the reader-per-role selection 0016 is re-shaping). Arm 2 (contract
+Joint-check: fired → 0016 (home: cli/0016 §Normative Contracts C4);
+fired → 0020 (home: cli/0025 §Normative Contracts C1 / cli/0020 §Normative
+Contracts C1 — mutual tolerance: disjoint rule families at `accessorTable`,
+entry shape here, tag admission there; composes) — all three arms ran on the
+written proposal. Arm 1 (modify-anchors, `--repo`-resolved): pair with 0020
+on `internal/table/load.go::accessorTable` (uncited — 0025's C1 relaxes the
+path-required rule there; 0020's tag-admission touch is a disjoint rule
+family in the same loader and composes, each record homing its own C1) and
+pair with 0016 on `internal/accessor/model.go::readerFor`
+(cited — A4 declares the coupling: 0016:C4 is the normative home for
+reader selection; 0025's command-write read-back rides it as consumer,
+pinning the element id via A4). Arm 2 (contract
 literals): no pair involving 0025. Arm 3 (absence, manual): C1 converts the
 load-time path-required refusal into acceptance for command entries; grepped
 the locked peers (0001–0011) for reliance on that refusal — the line-level
