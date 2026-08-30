@@ -8,8 +8,11 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // REQ-85 / `PH4`: "Declare the pricing example's emit keys
@@ -28,34 +31,70 @@ func TestReq86_0024_ThePricingExampleDeclaresTheValuesItActuallyAuthors(t *testi
 	path := pricingModelPath(t)
 	src := readRepoFile(t, "models/examples/pricing-decision-table.toml")
 
-	for _, key := range []string{"[emit.plan]", "[emit.dpa]"} {
-		if !strings.Contains(src, key) {
-			t.Errorf("the pricing example declares no `%s`; Phase 4 declares "+
-				"the example's emit keys", key)
+	// The oracle is the LOADED model's declared vocabulary, not the source
+	// text. `[emit.plan]` and every member string also appear verbatim in
+	// the rules' own `[rule.emit]` assignments, so a `strings.Contains`
+	// sweep goes green on a model whose domains declare none of them —
+	// right bytes, wrong place.
+	m := loadExampleModel0024(t, path)
+
+	for key, want := range map[string][]string{
+		"plan": {"basic", "pro"},
+		"dpa":  {"required", "none"},
+	} {
+		decl, declared := m.EmitDecls[key]
+		if !declared {
+			t.Errorf("the pricing example declares no emit key %q; Phase 4 "+
+				"declares the example's emit keys. declared = %v",
+				key, declaredEmitKeys0024(m))
+			continue
+		}
+		for _, member := range want {
+			if !slices.Contains(decl.Domain, member) {
+				t.Errorf("the pricing example's %q domain is %v; it must "+
+					"cover %q, which its four rows actually author",
+					key, decl.Domain, member)
+			}
+		}
+		// `PH4` fixes this example on the FLAT spelling, so no key carries
+		// dispositions. The partitioned form's home is the routing example.
+		if decl.Dispositions != nil {
+			t.Errorf("the pricing example's %q declaration carries "+
+				"dispositions %v; `PH4` fixes this example on the flat "+
+				"`domain = [ ... ]` spelling", key, decl.Dispositions)
 		}
 	}
 
 	// The Illustrative Code block shows `[emit.dpa]` with `domain =
 	// ["required", "waived"]` — a SHAPE illustration whose members are not
-	// this model's, and copying it refuses two of the four rows.
+	// this model's, and copying it refuses two of the four rows. This one
+	// stays a source scan on purpose: it is an anti-COPY assertion, and a
+	// stray `waived` anywhere in the file is what it is about.
 	if strings.Contains(src, "waived") {
 		t.Error("the pricing example's `dpa` domain names `waived`; that " +
 			"member is the ILLUSTRATIVE CODE's shape, not this model's, " +
 			"and copying it refuses two of the four rows")
 	}
 
-	// The declared domains cover the values the four rows actually author.
-	for _, member := range []string{
-		`"basic"`, `"pro"`, `"required"`, `"none"`,
-	} {
-		if !strings.Contains(src, member) {
-			t.Errorf("the pricing example does not carry the member %s it "+
-				"authors", member)
-		}
-	}
-
 	// The proof, not the reading: it lints exit 0 with the declarations in.
 	requireSuccess(t, "lint", "--model", path, "--as=json")
+}
+
+// loadExampleModel0024 loads a checked-in example through the loader the
+// CLI itself uses, so an assertion lands on the DECLARED vocabulary rather
+// than on bytes that happen to be present somewhere in the document.
+func loadExampleModel0024(t *testing.T, path string) *table.Model {
+	t.Helper()
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	m, err := table.Load(body, path)
+	if err != nil {
+		t.Fatalf("load %s: %v", path, err)
+	}
+	return m
 }
 
 // REQ-86 second leg: `PH4` fixes the pricing example on the FLAT
@@ -127,6 +166,10 @@ func TestReq87_0024_ASecondRoutingExampleShipsAndLintsClean(t *testing.T) {
 		t.Fatalf("read models/examples: %v", err)
 	}
 
+	// The discriminator is the LOADED declaration, not three independent
+	// substring hits: `[emit.`, `route = [` and `stop = [` can all be
+	// present in a comment, or under three different keys, in a model that
+	// partitions nothing.
 	var routing []string
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
@@ -135,24 +178,44 @@ func TestReq87_0024_ASecondRoutingExampleShipsAndLintsClean(t *testing.T) {
 		if e.Name() == "pricing-decision-table.toml" {
 			continue
 		}
-		body, rerr := os.ReadFile(filepath.Join(dir, e.Name()))
-		if rerr != nil {
-			t.Fatalf("read %s: %v", e.Name(), rerr)
-		}
-		src := string(body)
-		// The second example's discriminator: ONE emit key partitioned
-		// into `route` and `stop` members.
-		if strings.Contains(src, "[emit.") &&
-			strings.Contains(src, "route = [") &&
-			strings.Contains(src, "stop = [") {
+		if partitionedEmitKey0024(t, filepath.Join(dir, e.Name())) != "" {
 			routing = append(routing, e.Name())
 		}
 	}
 
-	if len(routing) == 0 {
-		t.Fatalf("no example under models/examples/ declares one emit key "+
-			"partitioned into `route` and `stop` members; Phase 4 adds a "+
-			"second example. present = %v", entries)
+	if len(routing) != 1 {
+		t.Fatalf("%d examples under models/examples/ declare ONE emit key "+
+			"partitioned into `route` and `stop`; Phase 4 adds exactly one. "+
+			"matched = %v", len(routing), routing)
+	}
+
+	// "a small routing table whose ONE emit key partitions" — the key that
+	// partitions is the model's only one. A model declaring a second, flat
+	// key alongside it is a different example, and the count is the only
+	// thing that says so.
+	m := loadExampleModel0024(t, filepath.Join(dir, routing[0]))
+	key := partitionedEmitKey0024(t, filepath.Join(dir, routing[0]))
+	if len(m.EmitDecls) != 1 {
+		t.Fatalf("the routing example declares %d emit keys (%v); `PH4` "+
+			"adds a table whose ONE emit key partitions into `route` and "+
+			"`stop`", len(m.EmitDecls), declaredEmitKeys0024(m))
+	}
+
+	// Its members are exactly the union of the two dispositions, and every
+	// one of them carries a disposition — the property that makes the
+	// example the partitioned form's worked home.
+	decl := m.EmitDecls[key]
+	if got := dispositionTokens0024(decl); !slices.Equal(
+		got, []string{"route", "stop"}) {
+		t.Errorf("the routing example partitions into %v; `PH4` names the "+
+			"two disposition tokens `route` and `stop`", got)
+	}
+	for _, member := range decl.Domain {
+		if _, ok := decl.Dispositions[member]; !ok {
+			t.Errorf("the routing example's domain member %q sits under no "+
+				"disposition; the key's domain is the UNION of the "+
+				"partition's member arrays", member)
+		}
 	}
 
 	// Both examples lint clean.
@@ -163,6 +226,57 @@ func TestReq87_0024_ASecondRoutingExampleShipsAndLintsClean(t *testing.T) {
 				"--model", filepath.Join(dir, name), "--as=json")
 		})
 	}
+}
+
+// partitionedEmitKey0024 returns the single emit key the model at path
+// declares with a PARTITIONED domain, or the empty string where the model
+// declares none. More than one is reported as a failure: `PH4` adds one
+// worked example of the partitioned form, not a family.
+func partitionedEmitKey0024(t *testing.T, path string) string {
+	t.Helper()
+
+	var found []string
+	for key, decl := range loadExampleModel0024(t, path).EmitDecls {
+		if decl.Dispositions != nil {
+			found = append(found, key)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return ""
+	case 1:
+		return found[0]
+	default:
+		t.Fatalf("%s declares %v with partitioned domains; the routing "+
+			"example partitions ONE emit key", path, found)
+		return ""
+	}
+}
+
+// dispositionTokens0024 returns the distinct disposition tokens a declared
+// domain's members are listed under.
+func dispositionTokens0024(decl table.EmitDecl) []string {
+	seen := map[string]bool{}
+	tokens := make([]string, 0, 2)
+	for _, token := range decl.Dispositions {
+		if !seen[token] {
+			seen[token] = true
+			tokens = append(tokens, token)
+		}
+	}
+	slices.Sort(tokens)
+	return tokens
+}
+
+// declaredEmitKeys0024 names the emit keys a model declares, sorted, for a
+// failure message that says what WAS found rather than only what was not.
+func declaredEmitKeys0024(m *table.Model) []string {
+	keys := make([]string, 0, len(m.EmitDecls))
+	for key := range m.EmitDecls {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // REQ-85 tail / REQ-107 tail: "`docs/cli-output-contract.md` documents

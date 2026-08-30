@@ -15,15 +15,13 @@ import (
 	"github.com/cwensel/intrastate/internal/table"
 )
 
-// emitWitnesses is `0024:S6`'s checked-in witness map, following the
-// convention `internal/table/dump_test.go`'s REQ-119 map holds for every
-// existing load category (ASSUMPTION-10): one single-defect fixture per
-// category, tripping it and no other.
-var emitWitnesses = map[table.Category]string{
-	table.CatMalformedEmitDeclaration: "neg/neg-emit-unknown-kind.toml",
-	table.CatUnknownEmitKey:           "neg/neg-emit-unknown-key.toml",
-	table.CatEmitValueOutOfDomain:     "neg/neg-emit-value-out-of-domain.toml",
-}
+// `0024:S6`'s three checked-in witnesses are registered in
+// `internal/table/dump_test.go::TestReq106_EveryNamedCategoryExistsAndIs
+// Witnessed`'s map, which ASSUMPTION-10 reads as THE convention for a new
+// load category. A second, parallel map here would have kept them outside
+// the authoritative floor — including outside its exclusivity leg and its
+// completeness leg — so the registration lives there and the assertions
+// below name the three category constants directly.
 
 // REQ-70 / `0024:D-naming`: "The new load categories are
 // `malformed_emit_declaration`, `unknown_emit_key`, and
@@ -53,12 +51,20 @@ func TestReq70_0024_TheThreeCategorySlugsAreFixedLiterals(t *testing.T) {
 // HAPPY PATH
 func TestReq104_0024_EachEmitCategoryIsRegisteredInCategories(t *testing.T) {
 	declared := table.Categories()
-	for cat := range emitWitnesses {
+	for _, cat := range emitCategories0024 {
 		if !slices.Contains(declared, cat) {
 			t.Errorf("category %q is not in table.Categories(); the wire "+
 				"slug and the registered category are ONE decision", cat)
 		}
 	}
+}
+
+// emitCategories0024 names the three constants `0024:D-naming` fixes, the
+// same three `TestReq70_0024` pins to their literal slugs.
+var emitCategories0024 = []table.Category{
+	table.CatMalformedEmitDeclaration,
+	table.CatUnknownEmitKey,
+	table.CatEmitValueOutOfDomain,
 }
 
 // REQ-104 tail: "each carries a checked-in `testdata/neg/*.toml` witness
@@ -68,31 +74,15 @@ func TestReq104_0024_EachEmitCategoryIsRegisteredInCategories(t *testing.T) {
 // this scenario must also carry**: each witness trips its own category *and
 // no other*. Assert it per witness. … each witness must be single-defect by
 // construction"
-// ADVERSARIAL
-func TestReq105_0024_EachWitnessTripsItsOwnCategoryAndNoOther(t *testing.T) {
-	for cat, rel := range emitWitnesses {
-		t.Run(string(cat), func(t *testing.T) {
-			got := loadCategory(t, rel)
-			if got != cat {
-				t.Errorf("%s refused %q; want %q — one single-defect fixture "+
-					"per category, tripping it and NO other", rel, got, cat)
-			}
-		})
-	}
-
-	t.Run("no two witnesses trip the same category", func(t *testing.T) {
-		seen := map[table.Category]string{}
-		for cat, rel := range emitWitnesses {
-			got := loadCategory(t, rel)
-			if prior, dup := seen[got]; dup {
-				t.Errorf("%s and %s both refuse %q; each witness trips its "+
-					"OWN category and no other", prior, rel, got)
-			}
-			seen[got] = rel
-			_ = cat
-		}
-	})
-}
+//
+// Both legs are carried by
+// `TestReq106_EveryNamedCategoryExistsAndIsWitnessed`, which the three
+// categories are now registered in: its per-category subtest IS the
+// exclusivity assertion (`loadCategory(t, rel) != cat` fails on a witness
+// tripping a second category first), and its completeness leg is what
+// would notice a fourth emit category shipping without one. Restating
+// either here against a private map would only reintroduce the parallel
+// registration this kata removed.
 
 // REQ-108 / `0024:S9`: "**Expected**: an enum-declared emit value renders
 // byte-identically to its undeclared rendering —

@@ -10,6 +10,8 @@ package table
 import (
 	"os"
 	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -69,39 +71,149 @@ func TestReq25_0024_BothStepsSitImmediatelyAfterLoadTagsInTheStepSlice(t *testin
 	}
 	slice := src[start : start+end]
 
-	order := []string{"l.loadTags", "l.loadEmitDecls", "l.checkRuleEmit"}
-	at := make([]int, len(order))
-	for i, step := range order {
-		at[i] = strings.Index(slice, step)
-		if at[i] < 0 {
-			t.Fatalf("`run`'s step slice does not hold `%s`", step)
+	// The slice is parsed into its ELEMENTS once, and every clause below is
+	// stated against that ordered list. An index-of-substring reading
+	// cannot say "immediately after": it is satisfied by any unlisted bare
+	// step sitting between `loadTags` and the emit steps, since such a step
+	// appears in no exclusion list.
+	//
+	// REQ-27: the slice is uniform — every element is a bare bound method
+	// value, so there is no room for a conditional call. A
+	// `strings.Contains(slice, "if ")` guard is not that claim either: a
+	// wrapper such as `conditionally(l.checkRuleEmit)` carries no `if `.
+	// The shape of each element is what the clause is about, so each
+	// element is matched, and a non-conforming one is what makes the
+	// adjacency reading below trustworthy.
+	//
+	// The span opens on the composite-literal token itself; every LATER
+	// line is an element or a comment.
+	var steps []string
+	for _, raw := range strings.Split(slice, "\n")[1:] {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
 		}
-	}
-	if !(at[0] < at[1] && at[1] < at[2]) {
-		t.Errorf("the step slice orders loadTags/loadEmitDecls/checkRuleEmit "+
-			"at %v; both are inserted IMMEDIATELY AFTER `loadTags`, and "+
-			"`loadEmitDecls` MUST precede `checkRuleEmit`", at)
+		m := stepElement.FindStringSubmatch(raw)
+		if m == nil {
+			t.Fatalf("`run`'s step slice carries the element %q; the slice "+
+				"is UNIFORM — every element is a bare `l.<method>,` bound "+
+				"method value, with the zero-declaration opt-in gate "+
+				"evaluated INSIDE each step", line)
+		}
+		steps = append(steps, m[1])
 	}
 
-	// "Immediately after": nothing else sits between them.
-	between := slice[at[0]:at[2]]
-	for _, other := range []string{
-		"l.loadAccessors", "l.loadDump", "l.loadContexts", "l.loadInitial",
-		"l.loadTerminal", "l.normalizeRules",
-	} {
-		if strings.Contains(between, other) {
-			t.Errorf("`%s` sits between `loadTags` and `checkRuleEmit`; the "+
-				"two new steps are inserted IMMEDIATELY after `loadTags`",
-				other)
-		}
+	// REQ-25: `loadTags`, `loadEmitDecls` and `checkRuleEmit` occupy three
+	// CONSECUTIVE positions, in that order.
+	want := []string{"loadTags", "loadEmitDecls", "checkRuleEmit"}
+	tags := slices.Index(steps, "loadTags")
+	if tags < 0 {
+		t.Fatalf("`run`'s step slice does not hold `loadTags`; it holds %v",
+			steps)
+	}
+	if tags+len(want) > len(steps) ||
+		!slices.Equal(steps[tags:tags+len(want)], want) {
+		t.Fatalf("`run`'s step slice reads %v; both emit steps are inserted "+
+			"IMMEDIATELY AFTER `loadTags` — the three occupy consecutive "+
+			"positions %v — and `loadEmitDecls` MUST precede `checkRuleEmit`",
+			steps, want)
 	}
 
-	// REQ-27: the slice is uniform — no conditional call wraps either step.
-	if strings.Contains(slice, "if ") {
-		t.Error("`run`'s step slice carries a conditional; the zero-" +
-			"declaration opt-in gate is evaluated INSIDE each step")
+	// And `normalizeRules` FOLLOWS all three, positively: C2 places the
+	// emit steps ahead of it so both read the SOURCE rules. Adjacency alone
+	// cannot say this — it is satisfied by the whole trio sitting AFTER
+	// `normalizeRules`.
+	norm := slices.Index(steps, "normalizeRules")
+	if norm < 0 {
+		t.Fatalf("`run`'s step slice does not hold `normalizeRules`; it "+
+			"holds %v", steps)
+	}
+	if norm < tags+len(want) {
+		t.Errorf("`run`'s step slice reads %v; both emit steps sit AHEAD of "+
+			"`normalizeRules` so they read the SOURCE rules rather than "+
+			"normalized rows", steps)
 	}
 }
+
+// stepElement matches one element of `run`'s step slice — a bare bound
+// method value at the slice's own indentation, and nothing else — and
+// captures the method name.
+var stepElement = regexp.MustCompile(`^\t\tl\.([A-Za-z]+),$`)
+
+// REQ-25 behaviourally: `checkRuleEmit` runs BEFORE `normalizeRules`.
+//
+// The positional oracle above reads `load.go` as text, so it proves where
+// the tokens sit, not what the loader does. This one drives a fixture
+// carrying BOTH an undeclared emit key AND a defect only `normalizeRules`
+// sees (a duplicate rule id), through the public `Load`. Only one refusal
+// comes back — the tier is fail-fast — and it is `CatUnknownEmitKey`
+// exactly when the emit step ran first. Reorder the slice and this goes to
+// `CatDuplicateRuleID`; no amount of text in `load.go` can hold it green.
+// ADVERSARIAL
+func TestReq25_0024_TheEmitStepRefusesAheadOfNormalization(t *testing.T) {
+	_, err := Load([]byte(emitAheadOfNormalizeSrc0024), "emit-ahead-of-normalize")
+	if err == nil {
+		t.Fatal("the doubly-defective fixture loaded clean; it carries both " +
+			"an undeclared emit key and a duplicate rule id")
+	}
+	cat, ok := CategoryOf(err)
+	if !ok {
+		t.Fatalf("the refusal carries no category: %v", err)
+	}
+	if cat != CatUnknownEmitKey {
+		t.Errorf("the fixture refuses with %s; `checkRuleEmit` is inserted "+
+			"AHEAD of `normalizeRules` (`0024:C2`), so the emit defect is "+
+			"the one the fail-fast tier reports, not %s", cat, CatDuplicateRuleID)
+	}
+}
+
+// emitAheadOfNormalizeSrc0024 is doubly defective ON PURPOSE, which is why
+// it is not a promoted `testdata/neg` witness: those are single-defect by
+// construction (REQ-105 exclusivity). `nxet` is declared nowhere, and
+// `cell-x` is declared twice.
+const emitAheadOfNormalizeSrc0024 = `outcomes = ["decide"]
+
+[model]
+id = "emit-ahead-of-normalize"
+version = 1
+class = "decision-table"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.a]
+provenance = "observed"
+kind = "enum"
+domain = ["x", "y"]
+single_valued = true
+required = true
+
+[emit.verdict]
+kind = "enum"
+domain = ["alpha", "beta"]
+
+[[rule]]
+id = "cell-x"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "x"
+[rule.emit]
+verdict = "alpha"
+nxet = "typo"
+
+[[rule]]
+id = "cell-x"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "y"
+[rule.emit]
+verdict = "beta"
+`
 
 // REQ-33: "The decoder is not an alternative route — `pelletier/go-toml/v2`
 // exposes position only on `DecodeError` with unexported fields"
@@ -135,12 +247,11 @@ func TestReq33_0024_NoDecoderPositionPlumbingIsIntroduced(t *testing.T) {
 			"declaration-side locator reaches its position by that " +
 			"technique, unchanged")
 	}
-	if strings.Count(src, "atLine(") < 3 {
-		t.Errorf("`load.go` calls `atLine` %d times; all three emit "+
-			"categories MUST carry a source line stamped through it, "+
-			"beside the tag refusal that already does",
-			strings.Count(src, "atLine("))
-	}
+	// The count of textual `atLine(` occurrences is NOT asserted here.
+	// Comments and a fourth call site perturb it in both directions, and
+	// `TestReq30_0024` already asserts every one of the three categories
+	// carries a non-zero `Line` — the behavioural form of the same claim,
+	// which strictly dominates a token census.
 }
 
 // readLoadGoSource returns `internal/table/load.go`'s text. The two clauses

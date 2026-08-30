@@ -27,8 +27,11 @@ package cli
 import (
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
 // mvvSeedTable0024 is "the seed's two-rule adversarial table": the first
@@ -197,15 +200,93 @@ func mvv0024Step2(t *testing.T) {
 	}
 
 	// Every finding carries the offending block's SOURCE LINE, not `:1`.
-	for name, f := range map[string]string{
-		"run A": ceA.Findings[0].Locator,
-		"run B": ceB.Findings[0].Locator,
+	//
+	// A suffix test against `:1` accepts a locator stamped at ANY wrong
+	// non-1 line, so it proves textual presence rather than structural
+	// identity. REQ-30 requires the OFFENDING block's line, and REQ-32
+	// fixes the rule-side anchor on the rule's `id = "<ruleID>"` line —
+	// explicitly NOT on its `[rule.emit]` header. Both runs are therefore
+	// compared line-for-line against the anchor resolved from the source
+	// that run actually loaded.
+	for _, run := range []struct {
+		name    string
+		src     string
+		finding clierr.Finding
+	}{
+		{"run A", declared, ceA.Findings[0]},
+		{"run B", fixed, ceB.Findings[0]},
 	} {
-		if strings.HasSuffix(f, ":1") || !strings.Contains(f, ":") {
-			t.Errorf("%s's finding locator is %q; each finding carries the "+
-				"offending block's SOURCE LINE, not `:1`", name, f)
+		anchor := mvvOffendingRuleAnchor0024(t, run.name, run.finding.Code)
+		want := lineOfFixture(t, run.src, anchor)
+		if got := locatorLine(t, run.name, run.finding.Locator); got != want {
+			t.Errorf("%s's finding locator is %q, i.e. line %d; the "+
+				"offending rule's anchor %q is at line %d — each finding "+
+				"carries the OFFENDING block's SOURCE LINE (REQ-30), keyed "+
+				"on the rule id line (REQ-32)",
+				run.name, run.finding.Locator, got, anchor, want)
 		}
 	}
+}
+
+// mvvOffendingRuleAnchor0024 names the `id = "<ruleID>"` line REQ-32 fixes
+// the rule-side locator on, for the rule that carries the reported defect.
+// The MVV table is built so each category is reachable from exactly one
+// rule: `first-rule` misspells the emit VALUE, `second-rule` types the KEY.
+func mvvOffendingRuleAnchor0024(t *testing.T, run, code string) string {
+	t.Helper()
+
+	switch code {
+	case "emit_value_out_of_domain":
+		return `id = "first-rule"`
+	case "unknown_emit_key":
+		return `id = "second-rule"`
+	default:
+		t.Fatalf("%s refused %q; the two reachable categories are "+
+			"`emit_value_out_of_domain` and `unknown_emit_key`", run, code)
+		return ""
+	}
+}
+
+// locatorLine returns the line number a `file:line` locator carries. The
+// path is split on its FINAL colon so a temp-dir path carrying one cannot
+// mis-parse.
+func locatorLine(t *testing.T, run, locator string) int {
+	t.Helper()
+
+	i := strings.LastIndex(locator, ":")
+	if i < 0 {
+		t.Fatalf("%s's finding locator is %q; REQ-30 requires a "+
+			"`file:line` locator", run, locator)
+	}
+	line, err := strconv.Atoi(locator[i+1:])
+	if err != nil {
+		t.Fatalf("%s's finding locator is %q; its line part %q does not "+
+			"parse: %v", run, locator, locator[i+1:], err)
+	}
+	return line
+}
+
+// lineOfFixture returns the 1-based line number of the single fixture line
+// whose trimmed text equals anchor. It mirrors
+// `internal/table/emit_proof_0024_test.go::lineOf`, which `internal/cli`
+// cannot import; the fatal-on-ambiguous behaviour is load-bearing — an
+// anchor matching more than one line is exactly the mis-attribution the
+// 0024 deviation record D11/D12 already paid for.
+func lineOfFixture(t *testing.T, src, anchor string) int {
+	t.Helper()
+
+	line, matches := 0, 0
+	for i, raw := range strings.Split(src, "\n") {
+		if strings.TrimSpace(raw) == anchor {
+			matches++
+			line = i + 1
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("the fixture carries %d lines equal to %q; the anchor must "+
+			"be unique for the assertion to mean anything", matches, anchor)
+	}
+	return line
 }
 
 // REQ-91 / `MVV` step 3: "Fix both rules; lint exits 0. Run `flow resolve`

@@ -849,6 +849,14 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		table.CatMalformedRuleID:                    "neg/neg-ruleid-hash.toml",
 		table.CatDuplicateRuleID:                    "neg/neg-duplicate-rule-id.toml",
 		table.CatReservedTagKey:                     "neg/neg-recognized-misnamed.toml",
+
+		// RDR 0024's three emit categories. ASSUMPTION-10 reads THIS map as
+		// the convention a new load category registers in, so they live here
+		// rather than in a second, parallel map beside their own scenario —
+		// a map the completeness leg below could never range.
+		table.CatMalformedEmitDeclaration: "neg/neg-emit-unknown-kind.toml",
+		table.CatUnknownEmitKey:           "neg/neg-emit-unknown-key.toml",
+		table.CatEmitValueOutOfDomain:     "neg/neg-emit-value-out-of-domain.toml",
 	}
 
 	t.Run("every category the floor names is exported", func(t *testing.T) {
@@ -862,6 +870,27 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		// witness, but it is still part of the floor.
 		if !slices.Contains(declared, table.CatDuplicateModelID) {
 			t.Errorf("category %q is not in table.Categories()", table.CatDuplicateModelID)
+		}
+	})
+
+	t.Run("every exported category is witnessed here", func(t *testing.T) {
+		// The converse direction, and the one that makes this map a FLOOR
+		// rather than a list. Without it a newly registered category is
+		// witnessed only where its own scenario remembers to say so, and
+		// the floor silently stops covering the surface it names.
+		//
+		// `duplicate_model_id` is cross-document and has no single-document
+		// witness; it is exempt by construction, not by omission.
+		for _, cat := range table.Categories() {
+			if cat == table.CatDuplicateModelID {
+				continue
+			}
+			if _, ok := witnesses[cat]; !ok {
+				t.Errorf("category %q is exported by table.Categories() but "+
+					"carries no witness in this map; every load category is "+
+					"witnessed by a single-defect `testdata/neg` fixture "+
+					"asserted BY CATEGORY (REQ-119, REQ-131)", cat)
+			}
 		}
 	})
 
