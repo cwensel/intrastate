@@ -364,6 +364,33 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
   - **If wrong**: nothing in C6 changes; a later config file composes
     disjunctively with the flag (either grants, neither revokes), which is why
     the successor inherits an already-gated seam.
+- **A15 [C3's read envelope maps onto `ReadBinding.Read`'s existing split
+  return without an interface change: a parsed key becomes a `KeyValue` in
+  `values`, an omitted declared key a name in `unreadable`, and `exit_absent`
+  absence is a key in neither — and `WriteBinding.Invocations()` has a
+  defensible answer for a command binding]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: to verify — opened by the repeatability lens, where all
+    three runs invented a `Read` signature (two rendered it
+    `(map[string]string, error)`) because the RDR named the seam without
+    quoting it. Established on `main`:
+    `internal/accessor/binding.go::ReadBinding` is
+    `Read(ctx context.Context, art Artifact, requested []string) (values []KeyValue, unreadable []string, err error)`,
+    `::GateBinding` is `Gate(ctx, art) (Verdict, string, error)`, and
+    `::WriteBinding` is `Apply(ctx, art, planned []resolve.Tag) error` plus
+    `Invocations() int`. C7 now quotes them. The claim is that UNREADABLE
+    rides the `unreadable` slice (not an error, not a sentinel value), that
+    established-absent is expressible as omission from both slices, and that
+    `Invocations()` — written for the file binding's retry accounting — has a
+    meaning for a spawn-per-invocation binding. Verify by reading
+    `executor.go::invokeRead`'s handling of both slices and every
+    `Invocations()` call site, confirming what the count is consumed for.
+  - **If wrong**: if the two slices cannot express the three read outcomes, C3
+    needs a third outcome channel and C7's "no interface change" claim fails —
+    widening the blast radius to the path-backed bindings C4 promises to leave
+    untouched. If `Invocations()` has no sound answer, the write binding needs
+    a documented constant and a Failure Mode.
 
 ## Proposed Solution
 
@@ -450,7 +477,15 @@ exit_absent   = [<code>, ...]               # []int,            read entries onl
 exit_verdicts = { "<code>" = "<verdict>" }  # map[string]string, gate entries only
 env           = { "<KEY>" = "<value>" }     # map[string]string
 env_pass      = ["<VAR>", ...]              # []string
+
+exactly one of `path` / `command` per entry. Load-time this is C5 `command_and_path_conflict`; at RUNTIME the constructor refuses a carrier-less entry with a refusing binding (`execution_failure`, Detail naming the malformed entry) and MUST NOT fall through to a `Path: ""` file binding, which would read every declared key as absent and confirm an unapplied write. In-memory models never pass the loader, so the runtime arm is the one that closes this — not a duplicate of C5
 ```
+
+The TOML spellings above are the contract; the Go field names and struct tags
+on `internal/table/source.go::sourceAcc` are unconstrained implementation
+choice, as is the decomposition of the binding into helpers and the package or
+file that holds it. This RDR fixes the wire, the carrier grammar, the load-time
+vocabulary and the seam it implements — not the module layout.
 
 An accessor entry carries **exactly one** of `path` or `command`; both or
 neither is a load-time defect. `command` must be non-empty and contain no
@@ -564,6 +599,7 @@ stdout (read, output = "json", default): flat JSON object of strings; a declared
 stdout (read, output = "raw"):            the single declared key's value = stdout minus one trailing "\n"; valid only when `keys` has exactly one entry
 stdout (gate): {"verdict": "allow" | "deny" | "indeterminate", "reason": "<text>"}
 exit_absent   = [<code>, ...]                # read entries: a listed exit with empty stdout establishes every declared key absent
+empty stdout, no exit-map match: execution_failure, on BOTH read modes and on gate — never UNREADABLE and never established-absent. A silent tool is a broken tool, not an answer: `exit_absent`/`exit_verdicts` are the ONLY way an empty stdout carries meaning, so a read whose exit is unlisted (exit 0 included) refuses, exactly as `output = "raw"` already does
 exit_verdicts = { "<code>" = "allow" | "deny" | "indeterminate", ... }   # gate entries: a listed exit with empty stdout is that verdict
 ```
 
@@ -614,9 +650,9 @@ order:    parse the stdout envelope, THEN classify the exit code
 deadline: Setpgid; at ctx deadline Cancel = SIGKILL to -pgid; WaitDelay = 500ms bounds the stdin write and the pipe drain; timeout is classified from ctx.Err()
 bounds:   stdout capped at 1 MiB (overflow = execution_failure); a NEW `Detail string` field on `accessor.Refusal` carries the last 4 KiB of stderr
 env:      child env = allowlisted parent vars {PATH, HOME, TMPDIR, LANG, LC_*} + named `env_pass = ["VAR", ...]` vars + the entry's literal `env = { KEY = "value" }` + the overlay {INTRASTATE_ROLE, INTRASTATE_CAPABILITY, INTRASTATE_ACCESSOR, INTRASTATE_PROTOCOL=1}; nothing else is inherited. On a key collision the LATER layer wins, in exactly that order: overlay > entry `env` > `env_pass` > parent allowlist. `LC_*` is a literal prefix match on `LC_` (the one prefix rule; `env_pass` names whole variables and admits no pattern). An `env` key or `env_pass` name matching the `INTRASTATE_` prefix is a C5 `command_env_conflict` defect at load, so the overlay is never shadowed silently
-detail:   the stderr tail reaches the refusal as a typed `*accessor.ExecError` (Detail string) returned by the command binding through the existing `error` return; `executor.go::refusalOf` gains an error parameter and `errors.As`-es it. It is the base constructor, NOT the only post-selection one: `executor.go::refusalWithKeys` wraps it and is what `Executor.Read` routes every read refusal through, so the error parameter threads through BOTH or the read path — the capability that binds directly — silently drops its tail. `Detail` is empty on every refusal carrying no error (timeout, read-back, gate-off) and set only where a binding returned one
+detail:   the stderr tail reaches the refusal as a typed `*accessor.ExecError` (Detail string) returned by the command binding through the existing `error` return; `executor.go::refusalOf` gains an error parameter and `errors.As`-es it. It is the base constructor, NOT the only post-selection one: `executor.go::refusalWithKeys` wraps it and is what `Executor.Read` routes every read refusal through, so the error parameter threads through BOTH or the read path — the capability that binds directly — silently drops its tail. `Detail` is empty on every refusal carrying no error (timeout, read-back, gate-off) and set only where a binding returned one. `ExecError` is `struct { Detail string; Err error }` with `Error() string` and `Unwrap() error`: it WRAPS the offending `os/exec` error rather than flattening it, so `errors.Is(err, exec.ErrNotFound)` survives the trip to the refusal site and the argv0-not-found case stays distinguishable from a non-zero exit. `Detail` is the 4 KiB stderr tail, not `Err.Error()`
 write:    read_back required; verified only through the role's reader, never by exit status
-platform: a runtime `runtime.GOOS` check in the command binding refuses `execution_failure` before spawn on non-Unix; a build constraint would make the refusal unbuildable-on-Windows rather than observable, and lint must stay platform-neutral in the same binary. The check reads an injectable package-level `goos` var (defaulting to `runtime.GOOS`) so the refusal is testable on Unix CI — unlike C4's deadline triple, overriding this one weakens nothing at runtime
+platform: a runtime `runtime.GOOS` check in the command binding refuses `execution_failure` before spawn on non-Unix — the predicate is `goos == "windows" || goos == "js" || goos == "plan9"` (refuse-listed, not allow-listed), so every Unix that supports C4's process-group mechanism, including the BSDs, is admitted without enumerating it; a build constraint would make the refusal unbuildable-on-Windows rather than observable, and lint must stay platform-neutral in the same binary. The check reads an injectable package-level `goos` var (defaulting to `runtime.GOOS`) so the refusal is testable on Unix CI — unlike C4's deadline triple, overriding this one weakens nothing at runtime
 ```
 
 Execution-safety inheritance. Command bindings run under RDR 0004's executor
@@ -631,11 +667,12 @@ is on the refusal path. The addition is additive-only — 0004 pins the refusal
 closure, REQ-84) — and `Reason` is not reused because `0004:C7` reserves it for a
 gate deny.
 
-The field alone is inert: the binding **interfaces** return a bare `error`
-(`internal/accessor/binding.go` — `Read`, `Gate`, `Apply`), and the executor
-discards that error, keeping only `ClassExecutionFailure`. So the carrier is a
-**typed error**, not an interface change: the command binding returns
-`*accessor.ExecError` (one exported `Detail string`).
+The field alone is inert: the binding **interfaces** carry their failure in a
+bare `error` slot (`internal/accessor/binding.go` — `Read`, `Gate`, `Apply`;
+C7 quotes the full returns), and the executor discards that error, keeping
+only `ClassExecutionFailure`. So the carrier is a **typed error**, not an
+interface change: the command binding returns `*accessor.ExecError` in that
+existing slot (C4 fixes its shape).
 
 The hook is the **refusal constructors**, not the invocation helpers. There is
 no symmetric `invokeRead`/`invokeGate`/`invokeWrite` triple to edit — only
@@ -720,7 +757,7 @@ command_shell_interpreter     # argv0 + inline-code flag (sh -c, bash -c, python
 command_output_shape          # output = "raw" with keys ≠ 1; exit_absent on a non-read; exit_verdicts on a non-gate or naming a non-verdict
 command_env_conflict          # an `env` key or `env_pass` name matching the reserved `INTRASTATE_` prefix (C4 overlay)
 
-registration: all six are appended to `table.Categories()`, whose hand-maintained list IS the closed set; appended in the order declared above, after the existing members, so a consumer enumerating the list sees additions only at the tail
+registration: all six are appended to `table.Categories()`, whose hand-maintained list IS the closed set; appended in the order declared above, after the existing members, so a consumer enumerating the list sees additions only at the tail. Each gets a typed `Category` constant of the existing `Cat…` form beside the others; the wire STRINGS above are the contract and the constant identifiers are not. The list's total size is not a contract at any point — it is append-only, and no clause or test may assert a count
 precedence: WITHIN one entry — load is fail-fast (`0002:C24` — one categorized error for the whole document, never a list), so an entry carrying several of these defects reports the first in the order declared above. ACROSS entries in the SAME table there is no order: `accessorTable` ranges a Go map, so which of two defective entries is reported is unspecified, and no test may assert it. ACROSS tables the order IS fixed — `load.go::loadAccessors` runs read, then write, then gate, returning on the first error — so a defective read entry always masks a defective gate entry; that ordering is `0002`'s, inherited not established here, and a test may rely on it only as 0002's contract
 interpreter set: OPEN (deny-listed, not closed) — an unlisted interpreter is admitted, so the list grows by amendment
 ```
@@ -783,6 +820,7 @@ be validated structurally"); no argv carrier reversed (reversal ledger,
 registration: the flag is registered on every verb whose command path reaches `flow_exec.go::buildRequest` — today FOUR call sites across three verbs (`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2). An unregistered verb's lookup returns false, which REFUSES (fail-closed), so drift costs execution, never a bypass
 absent ⇒ every command invocation refuses execution_failure before spawn, Detail naming the gate; lint (C1/C5) validates regardless
 gate site: ONE — `buildRequest` reads the flag and passes it to `flowbind.Registry`, the single production construction site (`flow_exec.go:830`), which builds refusing command bindings when it is unset. `Registry` is a free function, not a method, so this is a signature change on it plus the `flowRequest` field; every executor built from that shared registry inherits the gate, so no execution path can bypass it by reaching the executor another way
+signature: `Registry` today is `func Registry(m *table.Model) accessor.Registry`. It gains BOTH new inputs and no others, in this order: `func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Registry`. `baseDir` is A12's model-file directory (C2's argv0 resolution root), `allowCommands` this gate; the return type is unchanged and `Registry` does not gain an error return — a carrier-less or gate-refused entry yields a refusing binding (C1), not a construction failure
 ```
 
 Execution gate. A model-declared command is code that runs when the model is
@@ -827,6 +865,19 @@ peer converged on after gating too late: Consul script checks flipped
 off-by-default and re-gated twice more, Hugo's deny-by-default
 `security.exec.allow`, Go's `GOVCS` allowlist, beads refusing repo-persisted
 commands pending a trust gate (reversal ledger).
+
+**C7** — the implemented seam, quoted as it exists.
+
+```normative
+the three command bindings implement `internal/accessor/binding.go`'s interfaces UNCHANGED — this RDR adds no method, changes no signature, and every clause above is expressed within them:
+
+  Read(ctx context.Context, art Artifact, requested []string) (values []KeyValue, unreadable []string, err error)
+  Gate(ctx context.Context, art Artifact) (Verdict, string, error)
+  Apply(ctx context.Context, art Artifact, planned []resolve.Tag) error
+  Invocations() int          # on WriteBinding, beside Apply
+
+the write method is `Apply`, NOT `Write`. `Gate` returns verdict + reason + error, so C3's `reason` field crosses back through the Go return and is not dropped. C3's read envelope maps onto `Read`'s SPLIT return: a parsed key becomes a `KeyValue` in `values`, an omitted declared key a name in `unreadable` — UNREADABLE is that second slice, never an error and never an absent value. `exit_absent` establishes absence by returning the key in NEITHER slice
+```
 
 #### Load-Bearing Decisions
 
@@ -1535,7 +1586,7 @@ the absence-of-error oracle).
 | non-empty stdout, malformed | `execution_failure` | loud |
 | empty stdout, exit in `exit_verdicts` | that verdict | loud |
 | empty stdout, exit in `exit_absent` | keys established absent | loud |
-| empty stdout, unlisted non-zero exit | `execution_failure` | loud |
+| empty stdout, unlisted exit (zero or not) | `execution_failure` — read and gate alike (C3) | loud |
 | stdout > 1 MiB | `execution_failure` | loud |
 | deadline exceeded | `timeout` (from `ctx.Err()`), group killed | loud |
 | spawn failure / gate off / Windows | `execution_failure`, `Detail` names the cause | loud |
