@@ -28,15 +28,34 @@ import (
 )
 
 // resolvePayload is `flow resolve`'s verb-specific `data` (REQ-76).
+//
+// RDR 0023 `0023:A2` retypes the five ECHO-group fields — `Model`,
+// `Observed`, `Owned`, `Readers`, `Outcome` — from `T` to `*T` with
+// `,omitempty`, leaving `T` itself and every JSON key string unchanged.
+// That is the mechanism `--plan-only`'s projection deletes a key with: a
+// nilled pointer under `omitempty` drops the key entirely, which is what
+// "an omitted key is ABSENT, never null and never an empty placeholder"
+// requires. A bare non-pointer `omitempty` cannot serve, because it would
+// also drop an EMPTY `{}`/`[]` in DEFAULT mode and silently move bytes for
+// callers who never opted in (`0023:A9`).
+//
+// The conversion changes TYPES only: the field COUNT stays 14 and the
+// declaration ORDER — which is the JSON key order Go's encoder emits — is
+// untouched, so `decision_table_0010_test.go`'s pinned count, key list and
+// `Emit`-after-`Gates` adjacency all pass verbatim (`0023:A3`).
+//
+// The five pointers are non-nil on every emitted SUCCESS payload; that is
+// now an implementation invariant rather than an incidental property
+// (`0023:A9`). `runFlowResolve` below allocates each one unconditionally.
 type resolvePayload struct {
-	Model    string            `json:"model"`
-	Revision string            `json:"revision"`
-	Observed map[string]string `json:"observed"`
-	Owned    map[string]string `json:"owned"`
-	Readers  []string          `json:"readers"`
-	Outcome  string            `json:"outcome"`
-	Rule     string            `json:"rule"`
-	Gates    []gateResult      `json:"gates"`
+	Model    *string            `json:"model,omitempty"`
+	Revision string             `json:"revision"`
+	Observed *map[string]string `json:"observed,omitempty"`
+	Owned    *map[string]string `json:"owned,omitempty"`
+	Readers  *[]string          `json:"readers,omitempty"`
+	Outcome  *string            `json:"outcome,omitempty"`
+	Rule     string             `json:"rule"`
+	Gates    []gateResult       `json:"gates"`
 	// Emit is the selected row's `[rule.emit]` block (`0010:C4`): a JSON
 	// object of string values, keys in byte order, present as `{}` — never
 	// `null`, never omitted — when the selected row authored none.
@@ -79,6 +98,13 @@ plan back is flow set-state's job, and nothing links the two calls.`,
 	registerSelectionFlags(cmd)
 	registerTagFlag(cmd)
 	cmd.Flags().String("outcome", "", "the recognized outcome tag to resolve")
+	// RDR 0023 `0023:C1` — VERB-LOCAL, deliberately. The projection axis
+	// rides `resolve` alone: it never enters `registerSelectionFlags` (the
+	// shared registrar), the `flow` group's own or persistent set, or the
+	// root's persistent set. That non-registration IS the fence — the
+	// sibling verbs refuse `--plan-only` at the parse, through the shared
+	// `command-error` bucket, and this contract mints no code of its own.
+	cmd.Flags().Bool(planOnlyFlagName, false, planOnlyFlagUsage)
 	withExtendedHelp(cmd, flowResolveExtendedDesc)
 	return cmd
 }
@@ -220,13 +246,26 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		return respond.Fail(cmd, ce)
 	}
 
+	// Payload assembly is FLAG-BLIND (`0023:C2`): it never reads
+	// `--plan-only` and never takes it as a parameter. Every echo field is
+	// assembled and every pointer allocated here, whatever the caller asked
+	// for — projection is the only flag-aware step, and it runs on the
+	// FULLY ASSEMBLED value below.
+	//
+	// The five echo pointers are allocated unconditionally, which is what
+	// keeps default-mode bytes identical to the pre-change binary: an empty
+	// container still renders `{}`/`[]` rather than `null` or nothing
+	// (`0023:A9`).
+	observedView := observedTagMap(req.observed)
+	ownedView := tagMap(owned)
+	readerView := readerIDs(readers)
 	payload := resolvePayload{
-		Model:    req.modelRef,
+		Model:    &req.modelRef,
 		Revision: req.revision(),
-		Observed: observedTagMap(req.observed),
-		Owned:    tagMap(owned),
-		Readers:  readerIDs(readers),
-		Outcome:  outcome,
+		Observed: &observedView,
+		Owned:    &ownedView,
+		Readers:  &readerView,
+		Outcome:  &outcome,
 		Rule:     plan.RuleID,
 		Gates:    gates,
 		// The join is by rule id, AFTER selection and after the gates: `row`
@@ -270,7 +309,14 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		payload.EscapeClass = escapeClassOf(row, req, owned, outcome)
 	}
 
-	return respond.OK(cmd, respond.Success{Data: payload})
+	// RDR 0023 `0023:C1` — the projection site, and the only place this verb
+	// reads `--plan-only`. It is AFTER the last `respond.Fail` return above,
+	// so every refusal path is flag-blind structurally rather than by a
+	// guard, and it is BEFORE the gateway, so both output modes render one
+	// projected result through the one renderer.
+	return respond.OK(cmd, respond.Success{
+		Data: projectResolvePayload(cmd, payload),
+	})
 }
 
 // emitMap renders the selected row's emit sequence as the payload's

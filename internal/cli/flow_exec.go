@@ -262,6 +262,23 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 		if !ok {
 			continue
 		}
+		// RDR 0023 `0023:C1` — the reader-execution recording seam, wrapped
+		// around the per-reader EXECUTION rather than around the name
+		// computation.
+		//
+		// The position is normative even though the form is not: C1 fixes
+		// the measurand as "OBSERVED READER EXECUTION, not a recomputed
+		// derivation" and rejects `invokedReaders(model, outcome)` by name,
+		// because neither of that function's arguments depends on anything
+		// a report-width flag could touch — comparing it across two runs
+		// returns equal sets on every implementation, including one that
+		// never runs a reader at all. Recording HERE records what ran.
+		//
+		// The seam is FLAG-BLIND, necessarily: `--plan-only` is readable at
+		// exactly one lexical site and this is not it. Both widths drive
+		// this hook identically, which is what makes the two recordings
+		// comparable in the first place.
+		recordReaderExecution(name)
 		result := exec.Read(ctx, name)
 		if result.Refused() {
 			return nil, nil, accessorFailure(*result.Refusal, phaseRead)
@@ -290,6 +307,32 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 		return strings.Compare(a.Key, b.Key)
 	})
 	return outputs, owned, nil
+}
+
+// readerExecutionHook, when non-nil, is called with each reader's id at the
+// moment that reader ACTUALLY RUNS — immediately before its `exec.Read`
+// invocation inside `runReaders`, the one pass that yields `readers` and
+// `owned` together.
+//
+// It is the seam RDR 0023 `0023:C1` requires the reader differential to be
+// written against: "the oracle MUST instead observe which readers ACTUALLY
+// RAN in each run — recording execution at the reader invocation site (a
+// counting or recording seam around the reader pass, the run's own side
+// effects, never a re-call of the planning function)".
+//
+// Nil in production, so the shipped path pays one nil check and records
+// nothing; an observer installs it to collect a run's executed set. It
+// takes the reader id and nothing else — in particular it takes no flag and
+// no request, because a seam that could observe `--plan-only` would make
+// the very execution it records flag-dependent, and the flag is readable at
+// exactly one site that is not this one.
+var readerExecutionHook func(readerID string)
+
+// recordReaderExecution reports that the named reader is about to run.
+func recordReaderExecution(readerID string) {
+	if readerExecutionHook != nil {
+		readerExecutionHook(readerID)
+	}
 }
 
 func (r flowRequest) artifactMap() accessor.Artifacts {
