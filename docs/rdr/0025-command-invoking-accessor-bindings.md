@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: foundational — Seam Lineage ≥2 floors it; Resolve recount:
   one seam, the declared-command carrier + authority bound (C1/C2/C5/C6)
@@ -1788,103 +1788,83 @@ bytes (Risks), so the determinism checklist does not apply.
 > citable as `cli/NNNN:G-cross-cutting`. Cite it that
 > way, not by section name.
 
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0025-command-invoking-accessor-bindings/artifacts/gate.md (Gate PASS 2026-08-30)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Secret / credential lifecycle.** Declared `command` argv is reviewable data
+by design, so anything placed in it is visible in the model file, in `git`
+history, and in host process listings. This RDR's policy: **credentials never
+appear in `command`, in `env` literals, or in stdin values** — a bound tool
+reads its own credential from its own configuration, and where a variable must
+reach the child it is named in `env_pass` (C4), which forwards a value without
+recording it. The C4 allowlist is what makes this enforceable rather than
+advisory: the child environment is composed, not inherited (A7 establishes that
+inherited env silently steers the same binary and argv), so a credential cannot
+arrive by accident. A lint advisory on credential-shaped argv elements is
+**not** in v1 and is charted to the successor that adds the config surface
+(A10), alongside the persistent `allow_commands` opt-in.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Deployment model.** Command-backed accessors require a POSIX process model:
+`Setpgid` plus group `SIGKILL` plus `WaitDelay` is the necessary-and-sufficient
+termination triple (A1), and it has no Windows equivalent in this design. A
+command entry invoked on Windows refuses `execution_failure` with `Detail`
+naming the cause (F9) — a loud, declared refusal, never a silent unbounded
+child. Path-backed accessors are unaffected, so Windows keeps the whole
+path-backed surface. Widening this is a successor's scope.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+**Incremental adoption.** The carrier is additive and the selection is total:
+`path` → today's file binding, `command` → the new binding, exactly one
+declared (C1). Every existing model keeps working untouched, and no path-backed
+entry changes meaning. The one migration cost is real and named rather than
+hidden: converting an entry from `path` to `command` requires an **absolute**
+`--artifact` path (C2), while path-backed entries accept the relative paths this
+repo's fixtures and docs use today, so a converted entry can break a caller that
+lints green (Consequences, F7). Adoption is also gated at the invocation
+(`--allow-commands`, C6), so the feature is opt-in twice over — per model entry
+and per invocation.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+**Concurrency model.** This RDR adds a child-process boundary, not concurrency:
+each invocation spawns one child in its own process group and waits under the
+declared timeout. The concurrency-adjacent obligation it does own is **draining
+without deadlock** — stdout is bounded at 1 MiB and the drain is bounded by
+`WaitDelay`, so a child that holds a pipe open cannot hang the parent past the
+deadline (C4, A1). Ordering across accessors is unchanged and stays RDR 0004's.
 
-### Proportionality
+**Character encoding.** Two encodings meet at the child boundary and the RDR
+fixes both. The `json` mode is a flat JSON object of strings (UTF-8 by the JSON
+spec), where an omitted key means not-carried and never empty-string. The `raw`
+mode is defined bytewise: the value is the child's stdout minus **exactly one**
+trailing `\n` — no trimming, no case folding, no whitespace normalization, so a
+value with meaningful leading or internal whitespace survives. intrastate never
+re-emits the child's bytes (the artifact's byte form belongs to the bound tool,
+not to intrastate — Performance Expectations), which is why no canonical-form
+obligation attaches.
 
-[Gate key: proportionality]
+**Canonical-form / determinism.** This RDR claims **no** byte-identical output,
+content-addressed identity, or replay-stable hash, so the hash/pre-image
+checklist does not apply. What it does claim is a fidelity invariant of a
+different kind, and that one is pinned: declared argv → executed argv is
+byte-for-byte equality except the single whole-element `{artifact}`
+substitution, and planned tags → stdin → tool → read-back is **typed tag-value**
+equality, explicitly not byte equality, with `<clear>` round-tripping as absence
+(Pre-Lock Mini-Checks, `fidelity`). Read-back comparison-set semantics are not
+this RDR's to fix — **RDR 0016 owns them** (`cli/0016:C4`, reader-per-role
+resolution and comparison sets; kata intrastate#p63c), and A4 declares this RDR
+a consumer of that policy rather than a second author of it.
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
+**Versioning.** The placeholder vocabulary is versioned as a closed set: v1 is
+`{artifact}` and is complete (C2). Because it is closed and validated at load,
+an unknown placeholder is a C5 defect rather than a silently-passed literal —
+which is what lets the vocabulary grow later without ambiguity about what an
+older model meant. C6's per-invocation gate is expected to be **amended, not
+rewritten**, when a config surface lands: the successor adds a second grant path
+disjunctively to an already-refusing default (Risks).
 
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Not applicable, and omitted rather than N/A-bulleted: build tool compatibility,
+licensing, IDE compatibility, memory management.
 
 ## References
 
