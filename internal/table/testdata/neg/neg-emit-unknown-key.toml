@@ -1,0 +1,48 @@
+# RDR 0024 `0024:S6` witness — `unknown_emit_key`.
+#
+# SINGLE DEFECT by construction: `verdict` is declared, and `cell-x` emits
+# a second key `nxet` that `[emit]` declares nowhere. Every declared value
+# is in domain, so the fixture trips this category and no other (REQ-105
+# exclusivity leg).
+outcomes = ["decide"]
+
+[model]
+id = "emit-witness"
+version = 1
+class = "decision-table"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.a]
+provenance = "observed"
+kind = "enum"
+domain = ["x", "y"]
+single_valued = true
+required = true
+
+[emit.verdict]
+kind = "enum"
+domain = ["alpha", "beta"]
+
+[[rule]]
+id = "cell-x"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "x"
+[rule.emit]
+verdict = "alpha"
+nxet = "typo"
+
+[[rule]]
+id = "cell-y"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.a]
+eq = "y"
+[rule.emit]
+verdict = "beta"
