@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -766,18 +767,111 @@ func foldCheckoutRoot(t *testing.T, line string) string {
 
 	raw := repoRootFor(t) + "/"
 
-	// The prefix as it appears once encoded into the record. json.Marshal
-	// of a string returns it quoted; the quotes are trimmed to leave the
-	// escaped body.
-	encoded, err := json.Marshal(raw)
+	esc, err := encodedCheckoutPrefix(raw)
 	if err != nil {
 		t.Fatalf("encode the checkout prefix: %v", err)
 	}
-	esc := strings.Trim(string(encoded), `"`)
 
 	line = strings.ReplaceAll(line, esc, "")
 	if esc != raw {
 		line = strings.ReplaceAll(line, raw, "")
 	}
 	return line
+}
+
+// encodedCheckoutPrefix returns the prefix as it appears once encoded into
+// the record.
+//
+// Encoded with the SAME encoder settings the record itself is written with:
+// `respond.marshalCanonical` sets `SetEscapeHTML(false)`, so a `<`, `>` or
+// `&` in the path renders as itself on the wire. `json.Marshal` escapes all
+// three (`&` as `\u0026`), which would make the needle a string that does
+// not occur in the record at all — and on a platform whose separator also
+// needs escaping the raw fallback would miss too, folding nothing while
+// still reporting success.
+//
+// `Encode` returns the value quoted and newline-terminated; both are
+// trimmed to leave the escaped body.
+func encodedCheckoutPrefix(raw string) (string, error) {
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(raw); err != nil {
+		return "", err
+	}
+	return strings.Trim(strings.TrimRight(buf.String(), "\n"), `"`), nil
+}
+
+// The fold's needle must be byte-identical to how a REAL emitted record
+// spells the same prefix.
+//
+// Driven end to end rather than against a locally re-encoded expectation:
+// the record below is produced by the shipped emit path, so the arms fail
+// if the fold's encoder settings and the wire's diverge — which is exactly
+// the divergence `json.Marshal` introduced. The arms are the paths on which
+// the two encoders disagree: an HTML metacharacter, which `json.Marshal`
+// escapes (`&` as `\u0026`) and the wire encoder does not.
+//
+// `<` and `>` are RESERVED characters in a Windows filename, so the arms
+// carrying them cannot create their fixture there and are skipped rather
+// than failed. Skipping is safe because the discrimination does not depend
+// on them: `&` is legal in a Windows path and `json.Marshal` escapes it too
+// (as `\u0026`), so the `ampersand` arm keeps this oracle red under the
+// reverted encoder on EVERY platform. Failing instead would take the whole
+// suite red on the one shipped target (`.goreleaser.yaml`) whose separator
+// escaping is the reason `foldCheckoutRoot` folds two spellings at all.
+func TestFoldCheckoutRootEncodesThePrefixTheWayTheRecordDoes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  string
+	}{
+		{name: "plain", dir: "checkout"},
+		{name: "ampersand", dir: "a&b"},
+		{name: "angles", dir: "less<greater>"},
+		{name: "all-three", dir: "a&b<c>d"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" &&
+				strings.ContainsAny(tc.dir, "<>") {
+				t.Skipf("`<` and `>` are reserved in a Windows filename, so "+
+					"%q is not creatable here; the `ampersand` arm carries "+
+					"the same HTML-escaping discrimination on this platform",
+					tc.dir)
+			}
+
+			// The normative pricing table, relocated under a directory
+			// spelled the way a hostile checkout root would be.
+			src, err := os.ReadFile(pricingModelPath(t))
+			if err != nil {
+				t.Fatalf("read the pricing fixture: %v", err)
+			}
+			root := filepath.Join(t.TempDir(), tc.dir)
+			if err := os.MkdirAll(root, 0o750); err != nil {
+				t.Fatalf("make the checkout-shaped dir: %v", err)
+			}
+			model := filepath.Join(root, "pricing-decision-table.toml")
+			if err := os.WriteFile(model, src, 0o600); err != nil {
+				t.Fatalf("write the relocated fixture: %v", err)
+			}
+
+			// A real record, from the shipped emit path. `model` echoes the
+			// `--model` argument verbatim, so the record carries this
+			// directory in the wire's own spelling.
+			line := requireSuccess(t, resolveArgs(model, "", "decide",
+				"--tag", "tier=paid", "--tag", "region=eu", "--as=json")...)
+
+			esc, err := encodedCheckoutPrefix(root + string(os.PathSeparator))
+			if err != nil {
+				t.Fatalf("encode the checkout prefix: %v", err)
+			}
+			if !strings.Contains(line, esc) {
+				t.Errorf("the folded needle does not occur in the emitted "+
+					"record:\n  needle = %s\n  record = %s\n"+
+					"the fold must encode the prefix with the RECORD's "+
+					"encoder settings (SetEscapeHTML(false)); a needle that "+
+					"HTML-escapes `&`/`<`/`>` matches nothing and "+
+					"foldCheckoutRoot silently folds nothing", esc, line)
+			}
+		})
+	}
 }

@@ -28,7 +28,11 @@ package cli
 // output, or the run's own observed side effects.
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -356,11 +360,14 @@ func TestAdversarialF2_ObservedReaderExecutionIsEqualPlusOrMinusTheFlag(t *testi
 //
 //  2. The exit-3 GROUP. REQ-32 asserts "identical exit codes" and the
 //     shipped arms exercise exit 2 only, so the assertion is pinned on one
-//     group. An environment failure (`flow-accessor-timeout`,
-//     `flow-read-incomplete`) refuses from inside the reader pass — the one
-//     pass a report-width flag has any reason to want to skip (REQ-37) —
-//     and it is the class where a flag-conditional shortcut would surface
-//     as a CHANGED EXIT rather than as changed bytes.
+//     group. The representative below is an environment fault raised while
+//     CONSULTING the gate (`flow-accessor-failed`) — the class where a
+//     flag-conditional shortcut anywhere in the pre-site work surfaces as a
+//     CHANGED EXIT rather than as changed bytes. REQ-37's reader pass is
+//     the surface a report-width flag has reason to want to skip, but it is
+//     covered by ADV-2's execution-seam differential, which observes the
+//     reader set directly; no shipped fixture refuses from inside the
+//     reader pass, so this group's representative is the gate fault.
 //
 // STATUS: PASSES against the current implementation. The site is correct:
 // every refusal returns before the projection is reachable and no defensive
@@ -411,20 +418,27 @@ func TestAdversarialF3_RefusalsAtTheSiteBoundaryAndInTheExit3GroupAreFlagBlind(t
 				"must be flag-blind together",
 		},
 		{
-			// The exit-3 group, refusing from INSIDE the reader pass — the
-			// one pass REQ-37 names as the reachable surface for a
-			// report-width shortcut.
-			name: "accessor-unavailable/the-exit-3-group",
+			// The exit-3 group's representative. The fixture's gate cannot
+			// be CONSULTED, so this refuses from `req.runGates` — NOT from
+			// the reader pass, whose readers succeed here. The code is
+			// pinned so the arm's control fixes the refusal CLASS rather
+			// than accepting any exit-3 that happens to occur.
+			name: "gate-unconsultable/the-exit-3-group",
 			args: resolveArgs(failModel,
 				artifactBinding(flowStateRole, failArt), "advance"),
-			code: "",
+			code: "flow-accessor-failed",
 			exit: 3,
 			why: "the shipped refusal differential runs exit-2 refusals only, " +
 				"so REQ-32's \"identical exit codes\" is pinned on one group. " +
-				"This refusal comes from inside the reader pass, which is the " +
-				"work REQ-37 names as the reachable surface for a " +
-				"report-width shortcut — a flag-conditional skip there " +
-				"surfaces as a CHANGED EXIT, not as changed bytes",
+				"This is the exit-3 representative: an environment fault " +
+				"raised while CONSULTING the gate, well below every exit-2 " +
+				"arm above and the only refusal class in which a " +
+				"flag-conditional shortcut anywhere in the pre-site work " +
+				"would surface as a CHANGED EXIT rather than as changed " +
+				"bytes. It is NOT a reader-pass refusal — the readers " +
+				"succeed on this fixture — so REQ-37's reader-pass surface " +
+				"is covered by the execution-seam differential in ADV-2, not " +
+				"here",
 		},
 	} {
 		t.Run(refusal.name, func(t *testing.T) {
@@ -549,15 +563,145 @@ func TestAdversarialF3_NoRefusalReturnFollowsTheProjectionSite(t *testing.T) {
 		}
 	}
 
-	// REQ-49: the flag is read at exactly ONE lexical site, and it is not
-	// this function. `runFlowResolve` hands the assembled payload to the
+	// REQ-49: the flag is read at exactly ONE lexical site, and that site is
+	// the projection branch — not this function, and not anywhere else in
+	// the package. `runFlowResolve` hands the assembled payload to the
 	// projection; it never reads the flag itself.
-	if strings.Contains(body, planOnlyFlag) &&
-		!strings.Contains(body, "projectResolvePayload(") {
-		t.Errorf("`runFlowResolve` names %q outside the projection call; the "+
-			"flag is read at exactly ONE lexical site — the projection branch "+
-			"— and is never a parameter to payload assembly", planOnlyFlag)
+	//
+	// Asserted over the PARSED package, not over one file's source text. A
+	// substring test cannot express "zero reads INSIDE this function": the
+	// body text also contains the projection call, and any predicate written
+	// to excuse that call excuses every other read alongside it. The parse
+	// also sees through spelling — an added read is caught whether it names
+	// the `planOnlyFlagName` identifier or the `"plan-only"` literal.
+	//
+	// Scoped to EVERY non-test file of `internal/cli` rather than to the two
+	// files the site rule mentions by name. "Exactly one lexical site" is a
+	// claim about the package, so a read added in a third file — the exec
+	// pass, the gate walk, a refusal builder — is exactly the mutation this
+	// oracle exists to catch, and a two-file oracle stays green through it.
+	sites := planOnlyReadSites0023(t)
+
+	if len(sites) != 1 {
+		t.Errorf("the projection flag is read at %d site(s) in internal/cli, "+
+			"not 1: %s\n`0023:C1`/REQ-49 fix the flag at exactly ONE lexical "+
+			"site — the projection branch — and it is \"never passed as a "+
+			"parameter into payload assembly, and never consulted in gate "+
+			"evaluation, rule selection, or refusal construction\". More than "+
+			"one read makes \"the site\" a set of sites, and `0023:C1`'s "+
+			"structural reading of refusal flag-blindness is stated about a "+
+			"single site", len(sites), strings.Join(sites, ", "))
+		return
 	}
+
+	// And that one site is the projection branch itself. A read that moved
+	// into a helper — even one called only from `projectResolvePayload` —
+	// keeps the count at one while relocating the site the contract names,
+	// so the count alone does not pin REQ-49.
+	if want := "flow_projection.go::projectResolvePayload"; sites[0] != want {
+		t.Errorf("the projection flag's one read is at %s, not %s; REQ-49 "+
+			"names the projection branch as THE site. A read that lives "+
+			"anywhere else — payload assembly, a gate, a refusal builder, or "+
+			"a helper beside the projection — makes assembly flag-aware, "+
+			"which is the property `0023:A6` and the ±-flag width oracles "+
+			"both rest on", sites[0], want)
+	}
+}
+
+// planOnlyReadSites0023 returns every `Flags().GetBool(<plan-only>)` call in
+// the non-test sources of `internal/cli`, each as `<file>::<function>` and
+// sorted, so REQ-49's "exactly ONE lexical site" is asserted over the whole
+// package rather than over the files the rule happens to name.
+//
+// A read is reported whichever way it spells the flag: the production
+// `planOnlyFlagName` identifier or the `"plan-only"` literal it is bound to.
+// Both are the same read to cobra, so an oracle that saw only one spelling
+// would be evaded by writing the other.
+//
+// Reached by directory walk rather than by a hard-coded file list for the
+// same reason the scope is package-wide: a list would have to be extended by
+// whoever adds the file that breaks the rule.
+func planOnlyReadSites0023(t *testing.T) []string {
+	t.Helper()
+
+	dir := filepath.Join(repoRootFor(t), "internal", "cli")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read internal/cli: %v", err)
+	}
+
+	var sites []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") ||
+			strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		sites = append(sites, planOnlyReadsInFile0023(t, dir, name)...)
+	}
+
+	if len(sites) == 0 {
+		t.Fatal("no read of the projection flag anywhere in internal/cli; " +
+			"REQ-49 fixes the count at ONE, so zero means the oracle has " +
+			"stopped seeing the site rather than that the rule holds")
+	}
+
+	slices.Sort(sites)
+	return sites
+}
+
+// planOnlyReadsInFile0023 returns the flag reads in one non-test file, each
+// labelled with its enclosing top-level function (or `<file-scope>` for a
+// read outside any function body).
+func planOnlyReadsInFile0023(t *testing.T, dir, name string) []string {
+	t.Helper()
+
+	parsed, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join(dir, name), nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", name, err)
+	}
+
+	var sites []string
+	for _, decl := range parsed.Decls {
+		fn := "<file-scope>"
+		if fd, ok := decl.(*ast.FuncDecl); ok {
+			fn = fd.Name.Name
+		}
+		for range countPlanOnlyReads0023(decl) {
+			sites = append(sites, name+"::"+fn)
+		}
+	}
+	return sites
+}
+
+// countPlanOnlyReads0023 counts `Flags().GetBool(<plan-only>)` calls under
+// one AST node.
+func countPlanOnlyReads0023(scope ast.Node) int {
+	count := 0
+	ast.Inspect(scope, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "GetBool" || len(call.Args) != 1 {
+			return true
+		}
+		switch arg := call.Args[0].(type) {
+		case *ast.Ident:
+			if arg.Name == "planOnlyFlagName" {
+				count++
+			}
+		case *ast.BasicLit:
+			if arg.Kind == token.STRING &&
+				strings.Trim(arg.Value, "`\"") == planOnlyFlag {
+				count++
+			}
+		}
+		return true
+	})
+	return count
 }
 
 // readCLISource reads one non-test file from `internal/cli`.
