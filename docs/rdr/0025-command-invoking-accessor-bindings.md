@@ -13,8 +13,9 @@ N/A-bulleted). -->
 - **Date**: 2026-08-28
 - **Status**: Draft
 - **Type**: Feature
-- **Profile**: foundational — Seam Lineage ≥2 floors it; locks the
-  declared-command carrier and authority bound (C1–C5).
+- **Profile**: foundational — Seam Lineage ≥2 floors it; Resolve recount:
+  one seam, the declared-command carrier + authority bound (C1/C2/C5/C6)
+  with its invocation envelope (C3/C4), inseparable — no split.
 - **Priority**: High
 - **Related Issues**: intrastate#v0hb (tracker);
   intrastate#p63c (reader cardinality per role, owned by
@@ -53,107 +54,181 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
   including the child's process *tree*, a non-reading child's stdin pipe, and
   post-kill pipe drain — building on the executor's context deadline plus
   process-group termination and a drain bound in the binding]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: `internal/accessor/executor.go::invokeRead` wraps every
-    invocation in `context.WithTimeout` over the declared bound (the executor,
-    not the binding, writes the deadline — `0004:C16`); the spike binds (i) a
-    command that sleeps past deadline, (ii) a wrapper whose *grandchild*
-    inherits the stdout pipe and sleeps, and (iii) a child that never reads
-    stdin, asserting `timeout` refusals, no hang, and no surviving process
-    group (premortem P-4).
+    invocation in `context.WithTimeout` over the declared bound (`0004:C16`).
+    Spike `evidence/spikes/a1-deadline/` (`run.sh` → `output.txt`, Go 1.26,
+    darwin/arm64, timeout 1s, `WaitDelay` 500ms): with `Setpgid` +
+    `Cancel = kill(-pgid, SIGKILL)` + `WaitDelay`, the grandchild-holds-pipe
+    (S2, 1004ms), non-reading-stdin with a 1 MiB stdin (S4, 1002ms) and
+    direct-sleeper (S5, 1002ms) cases all return within the bound with
+    **zero** surviving processes in the group; the fast child (S6) is
+    unaffected. Controls: naive `CommandContext` (S1) blocks `Wait` past the
+    5s watchdog because the orphan holds stdout; `WaitDelay` alone (S3)
+    returns at 1501ms but leaves `sleep 30` orphaned. Normative fixture
+    **FX-deadline** (author-approved): S2/S3/S1 lines of `output.txt`.
+    Mechanism fixed in C4. Two mechanism facts for the build: `Wait` returns
+    `*ExitError` ("signal: killed"), never `context.DeadlineExceeded` — the
+    timeout is classified from `ctx.Err()`; `$GOROOT/src/os/exec/exec.go`
+    `WaitDelay` doc ("bounds the time spent waiting on … a child process that
+    exits but leaves its I/O pipes unclosed") and `Cancel` doc anchor the
+    semantics.
   - **If wrong**: the CLI hangs or a runaway child outlives the `timeout`
     refusal while still mutating the artifact.
 - **A2 [`os/exec` passes the argv vector verbatim to the child: no shell, no
   word-splitting, no glob expansion, on the supported platforms]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: Go `os/exec` package docs and `Cmd.Args` semantics; anchor
-    the exact doc sentence at Resolve.
+  - **Evidence**: `$GOROOT/src/os/exec/exec.go` package doc (Go 1.26.6):
+    "the os/exec package intentionally does not invoke the system shell and
+    does not expand any glob patterns or handle other expansions, pipelines,
+    or redirections"; `Cmd.Args` doc: "Args holds command line arguments,
+    including the command as Args[0]"; `exec.Command` resolves a
+    separator-free name through `LookPath` in the **parent's** `PATH` before
+    spawn. Caveat recorded: on Windows the vector is re-quoted into a single
+    command line (`SysProcAttr.CmdLine` overrides) — v1's supported platforms
+    are the Unix ones the process-group mechanism (A1, C4) needs.
+    (`evidence/research/source-search.md` §A2.)
   - **If wrong**: the authority bound of C2 is fiction — a declared argument
     containing shell metacharacters executes something the model never
     declared.
-- **A3 [A useful class of established tools binds directly — path-positional
-  argv plus either envelope-conformant output, a Resolve-adopted single-value
-  raw read mode, or A8's declared exit mapping; everything else is served by
-  a thin wrapper conforming to the same C3 envelope, and that wrapper class
-  is small and mechanical, not bespoke per integration]**
-  - **Status**: Pending
+- **A3 [Established tools bind directly for *reads and gates* —
+  path-positional argv plus the raw single-value read mode or A8's declared
+  exit mapping; established-tool *writes*, and any read whose output is
+  multi-valued, are served by a thin declared wrapper conforming to the C3
+  envelope, and that wrapper class is small and mechanical, not bespoke per
+  integration]**
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: bind a real VCS query (e.g. `git config --file {artifact}
-    --get <key>`) as a declared read and drive it through `flow` end to end;
-    record per tool class (VCS query, file probe, status verb) whether the
-    binding was direct, raw-mode, exit-mapped, or wrapped, and what the
-    wrapper had to do (premortem P-1/P-2: stdin-as-data corruption and
-    envelope-size limits are spike scenarios).
+  - **Evidence**: narrowed from "a useful class binds directly" by spike
+    `evidence/spikes/a3-a7-a8-real-tools/` (`run.sh` → `output.txt`,
+    `notes.md`, git 2.55): R1 `git config --file {artifact} --get state.phase`
+    emits `draft\n` — not a JSON object — so it binds only via the raw mode C3
+    now fixes (normative fixture **FX-raw-read**, author-approved); R2 the
+    multi-valued `--list` needs a 5-line `k=v → JSON` wrapper
+    (`wrapper-list.sh`); R3 **every** established-tool write needs a wrapper:
+    the fixed argv cannot carry the planned value and `git config` ignores
+    stdin (R3b leaves the artifact unchanged), so `wrapper-write.sh` (stdin
+    JSON → `git config` per key, 8 lines) is the write form, and read-back
+    through R1 then observes `review`. Hazard P-1 confirmed: a stdin-sinking
+    argv0 (`tee {artifact}`, R4b) overwrites the artifact with the envelope and
+    the next read-back fails `exit=128 bad config line 1` — named in Failure
+    Modes. P-2: a 2 MiB envelope captures in 88ms (R5) — C4 caps stdout at
+    1 MiB. Per tool class (notes.md table): VCS query → raw; file probe /
+    status verb → exit-mapped (A8); VCS write → wrapped.
   - **If wrong**: every integration needs a bespoke wrapper script — the
     delegate-to-established-tools thesis fails and the choice tips toward the
     adapter-registry alternative.
 - **A4 [Read-back for a command-backed write completes through the role's
   declared reader, which may itself be command-backed, preserving the
   applied-but-unverified sense when it cannot]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: `internal/accessor/model.go::readerFor` selects the
-    read-back reader by artifact role (the model author writes that state by
-    declaring `role` on a read entry), and the re-read can fail independently
-    of the write (`0004:C13`); `0016:C4` is the normative home for reader
-    selection (fail-closed unique `readerFor`) — 0025 conforms as consumer;
-    pin the `0016:C4` element id at Resolve.
+  - **Evidence**: `internal/accessor/model.go::readerFor` — `func (reg
+    Registry) readerFor(role string) (Definition, bool)`, predicate
+    `Capability == CapRead && Accessor.Role == role` — selects by role only and
+    returns a `Definition` whose binding is reached through the `ReadBinding`
+    interface, so a command-backed reader is admissible without change;
+    called from `internal/accessor/executor.go::invokeWrite` for read-back,
+    whose failure is independent of the write (`0004:C13`, `0004:C14`).
+    `0016:C4` pinned: "`internal/accessor/model.go::readerFor` resolves 'the
+    role's read definition' uniquely — and the resolution site MUST fail
+    closed". Landing order: `rdr status --tags 0016` reports `status=Draft`
+    (`gate_stale=false`, `gate_written=false`) — today's `readerFor` is still
+    first-match; 0025 lands after 0016 or inherits first-match until it does
+    (Prerequisites).
   - **If wrong**: command writes are unverifiable by construction and every
     such write refuses `read_back_incomplete`.
 - **A5 [Kubernetes `ExecAction` documents its probe command as an argv array
   executed without a shell — the demoted prior-art instance of the class
   claim]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: quote the `ExecAction.Command` doc comment from
-    `k8s.io/api/core/v1` (not surfaced at Propose; attempts logged in
-    evidence/research/prior-art.md).
+  - **Evidence**: `k8s.io/api@v0.36.2/core/v1/types.go` `type ExecAction
+    struct`, `Command []string` doc comment: "The command is simply exec'd, it
+    is not run inside a shell, so traditional shell instructions ('|', etc)
+    won't work." (`evidence/research/source-search.md` §A5; promoted from the
+    prior-art record's demoted list.)
   - **If wrong**: nothing structural — the class claim already rests on the
     quoted Docker exec-form and Terraform external-program citations.
 - **A6 [RDR 0004's closed validation-code set closes 0004's own defect
   vocabulary, not the seam: a successor RDR may add codes for surfaces 0004
   did not define]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: cite at Resolve the 0004 element that fixes the
-    validation-code set's closure scope; `internal/accessor/model.go`
-    (`ValidationCodes`, "closed eight-member set") is the code-side reading.
+  - **Evidence**: no 0004 contract clause closes the set; the only closure
+    statement is `0004:§testing-strategy` S1 ("eight validation arms, each
+    asserting its own named code"), realized in own code as the
+    `internal/accessor/model.go::ValidationCode` comment ("closed eight-member
+    validation-code set") and
+    `internal/accessor/validation_0004_test.go::TestReq84_TheValidationCodeSetIsClosedAtEight`
+    (exact-list assertion). So the closure is 0004's own test contract, not
+    the seam's — and extending `ValidationCode` would break REQ-84. Decision
+    (C5): the four defects are **`internal/table/category.go::Category`**
+    constants, the family that already owns accessor-entry load defects
+    (`CatMalformedAccessorDeclaration` — `load.go::accessorTable` emits it for
+    "path is absent or empty" today).
   - **If wrong**: C5's defects must ship as a separate lint family instead of
     extending `accessor.ValidationCode` — carrier shape unchanged, surfacing
     relocated.
 - **A7 [A child process's inherited environment does not silently widen the
   authority bound: an explicit env policy (inherit-as-is vs scrubbed) can be
   fixed at Resolve without reshaping the carrier]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: enumerate what the bound tools actually need from the
-    environment (`PATH`, `HOME`, VCS config vars) and fix the policy plus its
-    failure surface.
+  - **Evidence**: spike `evidence/spikes/a3-a7-a8-real-tools/` V1–V4: `git
+    config --file` answers correctly with an **empty** child env (V1 — argv0
+    resolves through the parent's `PATH` before spawn, A2) and with `PATH`
+    only (V2); `--file` isolates from `~/.gitconfig`, `GIT_CONFIG_GLOBAL`,
+    `GIT_DIR`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_PARAMETERS` and
+    `GIT_CONFIG_COUNT` injection (V3a–V4e all read `draft`), but the controls
+    without `--file` (V3c, V4a', V4c'') return `FROM_HOME_GITCONFIG` /
+    `FROM_GIT_CONFIG_GLOBAL` / `FROM_ENV_INJECTION` — the same binary and argv
+    answer differently under inherited env, which is exactly the ambient
+    widening the claim excludes. Policy fixed in C4: allowlist inheritance
+    (`PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_*`) plus named `env_pass` vars, a
+    literal per-entry `env` table, and the `INTRASTATE_*` overlay; no ambient
+    pass-through (the sudo `env_reset` / Bazel strict-action-env / Hugo
+    `security.exec.osEnv` end-state — reversal ledger).
   - **If wrong**: ambient process state reaches the command invisibly — the
     same ambient-authority class `0004:C3` exists to exclude, one seam over.
 - **A8 [Established gate/read tools that answer in exit codes (`test -f`,
   `git diff --quiet` conventions) can be admitted via a *declared* per-entry
   exit-code mapping — deny / established-absent as model-visible
   declarations — without laundering execution failure into a verdict]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: premortem P-5/P-12 show the default non-zero →
-    `execution_failure` mapping makes command-gate deny unreachable for
-    exit-speaking tools; the spike designs and exercises the mapping shape
-    (or concludes such tools always go through wrappers) at Resolve.
+  - **Evidence**: spike `evidence/spikes/a3-a7-a8-real-tools/` E1a–E1h and
+    R6, normative fixture **FX-exit-codes** (author-approved): verdict codes
+    and error codes are disjoint for the bound tools — `test -f` 0/1 (verdict)
+    vs 2 (bad operator); `git diff --quiet` 0/1 vs 128 (bad path); `git config
+    --get` missing key → 1 with empty stdout (established absent) vs a missing
+    executable → `exec.ErrNotFound`, no exit code at all. A declared map that
+    lists only verdict codes and sends every unlisted code, every spawn error
+    and every malformed envelope to `execution_failure` therefore admits these
+    tools without laundering failure into a verdict (C3 `exit_verdicts` /
+    `exit_absent`).
   - **If wrong**: exit-speaking gates always need wrappers — narrows A3's
     direct-binding class but changes no contract.
-- **A9 [No consumer besides `internal/table/load.go::accessorTable` and the
-  registry's constructors requires `path` presence on an accessor entry — a
+- **A9 [No consumer besides `internal/table/load.go::accessorTable`, the
+  registry's constructors, and the file binding's own runtime use of its
+  copied locator requires `path` presence on an accessor entry — a
   locator-less command entry breaks no other partition]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: sweep every reader of `table.Accessor.Path` and every
-    validation arm partitioning on locator presence (premortem P-7/P-11: a
-    pre-dispatch site that resolves or validates `path` for all accessors
-    would reject or bypass command entries).
+  - **Evidence**: sweep of every non-test reader of the accessor `Path` field
+    (`evidence/research/source-search.md` §A9): declaration
+    `internal/table/source.go::sourceAcc`; validation + copy in
+    `internal/table/load.go::accessorTable` (the "path is absent or empty"
+    arm C1 relaxes); constructors `internal/cli/flowbind/registry.go::Registry`;
+    and — the one site the claim now names — the file binding's runtime reads
+    of its own copied `Path` (`internal/cli/flowbind/flowbind.go::Reader.run`,
+    `::Writer.Apply`, `::Gate.Gate` via `unreachable`/`verdictFor`), which
+    only a path-constructed binding ever executes. Every other consumer of
+    `Readers`/`Writers`/`Gates` (`load.go`, `normalize.go`, `flow_exec.go`,
+    `flow_state.go`) reads `Role`/`Keys` only, and `dump.go` does not emit
+    `Path`. Premortem P-7/P-11's pre-dispatch site does not exist.
   - **If wrong**: each such site gains the same carrier discrimination the
     registry gets — mechanical, but it must be enumerated before build.
 
@@ -190,12 +265,14 @@ command runs — only which artifact path fills the one declared hole and what
 typed data arrives on stdin.
 
 Integration honesty (premortem P-1/P-8/P-9): a tool binds *directly* when it
-is path-positional and its semantics fit the envelope or the Resolve-decided
-raw/exit-mapping modes (A3, A8); otherwise the integration form is a **thin
-declared wrapper that conforms to the same C3 envelope** — its invocation
-argv is still in the model and linted, and the envelope bounds what it must
-do, but its body is script the model does not carry (accepted, recorded as a
-Consequence).
+is path-positional and its semantics fit the envelope, the raw single-value
+read mode, or the declared exit maps (A3, A8) — in practice reads and gates;
+established-tool **writes** always take the other form, because a fixed argv
+cannot carry the planned value and the tools do not read stdin (A3 spike).
+That form is a **thin declared wrapper that conforms to the same C3
+envelope** — its invocation argv is still in the model and linted, and the
+envelope bounds what it must do, but its body is script the model does not
+carry (accepted, recorded as a Consequence).
 
 ### Technical Design
 
@@ -218,14 +295,15 @@ Components:
   Sibling-path check: searched for an existing path-vs-command discriminator —
   none exists (`os/exec` appears nowhere outside tests; `flowbind` is the sole
   non-test binding implementation).
-- **Data flow** — per capability, under C3/C4: a read command receives the
-  requested key set on stdin and answers with the flat string map (an omitted
-  key is not-carried, mirroring `0004:C8`); a gate command answers a verdict
-  envelope (three-valued, refusal never laundered into a verdict — the rule
+- **Data flow** — per capability, under C3/C4: a read command receives an
+  empty object on stdin (its key set is the entry's declared `keys`, already
+  in the model) and answers with the flat string map (an omitted key is
+  not-carried, mirroring `0004:C8`) or, in raw mode, the one value; a gate
+  command answers a verdict envelope or a declared exit code (three-valued,
+  refusal never laundered into a verdict — the rule
   `internal/cli/flowbind/flowbind.go::Gate` already keeps); a write command
-  receives the planned tags on stdin and is verified only by read-back. Field
-  grammars, clear-sentinel carriage, and any raw read mode are fixed at
-  Resolve (C3; LBD Wire / byte format).
+  receives the planned tags on stdin, `<clear>` literal, and is verified only
+  by read-back. Field grammars are C3's, fixed by the A3/A8 spikes.
 
 #### Normative Contracts
 
@@ -260,26 +338,51 @@ absolute path — the executor refuses the invocation (`execution_failure`)
 when the caller-bound artifact path is relative or begins with `-`, so a
 path can never be parsed as a flag by the invoked tool.
 
+argv0 resolution is fixed at load, never cwd-relative: a bare name resolves
+through the parent's `PATH` at spawn (A2); a name containing a path
+separator resolves against the **model file's directory** (the git-hook /
+pre-commit convention); an empty argv0 is a C5 defect, and the binding never
+restores implicit current-directory lookup — Go itself shipped cwd-relative
+`PATH` resolution for a decade and reversed it (`exec.ErrDot`, Go 1.19;
+reversal ledger, `evidence/research/prior-art-resolve-devref-go.md`).
+
 **C3**
 
 ```normative
-stdin:         one JSON object, all values strings   # per-invocation data beyond the artifact path
-stdout (read): flat JSON object of strings; an omitted key is not-carried
-stdout (gate): a verdict envelope — one of RDR 0004's three verdicts, plus a reason
+stdin (write): {"<key>": "<value>", ...}   # the planned tags; a planned `<clear>` crosses as the literal reserved value
+stdin (read/gate): {}                       # nothing per-invocation beyond {artifact}; the object is always sent
+stdout (read, output = "json", default): flat JSON object of strings; an omitted key is not-carried
+stdout (read, output = "raw"):            the single declared key's value = stdout minus one trailing "\n"; valid only when `keys` has exactly one entry
+stdout (gate): {"verdict": "allow" | "deny" | "indeterminate", "reason": "<text>"}
+exit_absent   = [<code>, ...]                # read entries: a listed exit with empty stdout establishes every declared key absent
+exit_verdicts = { "<code>" = "allow" | "deny" | "indeterminate", ... }   # gate entries: a listed exit with empty stdout is that verdict
 ```
 
 Invocation envelope. Per-invocation data beyond the artifact path crosses
 only on stdin; read and gate results return only on stdout, in the shapes
 above. A write command's success is never taken from its exit status alone —
-verification is read-back (`0004:C12`). Field-level grammars (envelope field
-names, clear-sentinel carriage, a possible single-value raw-stdout read mode)
-are fixed at Resolve by this RDR.
+verification is read-back (`0004:C12`). Grammar fixed at Resolve: the gate
+`verdict` strings are `internal/accessor/model.go::Verdict`'s
+(`0004:C9`); `<clear>` is carried unchanged as the planned value — the tool
+or wrapper performs the removal, and read-back verifies absence
+(`0004:C11`). `output = "raw"` and the two exit maps exist because established
+tools speak single values and exit codes, not envelopes (A3, A8 spikes); the
+maps list **verdict** codes only — any unlisted exit, spawn failure, or
+malformed stdout is `execution_failure` (C4), so execution failure is never
+laundered into a verdict. A non-empty stdout is always parsed first (C4
+ordering); the exit maps apply only to an empty stdout. The protocol's
+version rides out-of-band as `INTRASTATE_PROTOCOL` in the child env (C4
+overlay), keeping the stdout map flat — the envelope-versioning lesson of
+kubebuilder's external-plugin `apiVersion` and client-go's exec-credential
+`v1alpha1`→`v1` migration (reversal ledger).
 
 **C4**
 
 ```normative
 order:    parse the stdout envelope, THEN classify the exit code
-deadline: terminate the child's process group; bound the stdin write and the pipe drain
+deadline: Setpgid; at ctx deadline Cancel = SIGKILL to -pgid; WaitDelay = 500ms bounds the stdin write and the pipe drain; timeout is classified from ctx.Err()
+bounds:   stdout capped at 1 MiB (overflow = execution_failure); Detail carries the last 4 KiB of stderr
+env:      child env = allowlisted parent vars {PATH, HOME, TMPDIR, LANG, LC_*} + named `env_pass = ["VAR", ...]` vars + the entry's literal `env = { KEY = "value" }` + the overlay {INTRASTATE_ROLE, INTRASTATE_CAPABILITY, INTRASTATE_ACCESSOR, INTRASTATE_PROTOCOL=1}; nothing else is inherited
 write:    read_back required; verified only through the role's reader, never by exit status
 ```
 
@@ -288,16 +391,27 @@ unchanged: the declared timeout
 bounds the invocation, and at the deadline the binding terminates the child's
 **process group**, not only the direct child, with a bounded stdin write and a
 bounded post-kill pipe-drain wait so a non-reading or slow-draining child can
-never hang the CLI (mechanism — process-group signal, `WaitDelay`-style drain
-bound — fixed at Resolve by A1's spike; premortem P-4). The deadline mints
-`ClassTimeout`; spawn failure, a malformed stdout envelope, and — by default —
-a non-zero exit are `ClassExecutionFailure`, whose `Detail` carries a bounded
-stderr tail (size fixed at Resolve). Ordering is normative (premortem P-12):
+never hang the CLI (premortem P-4). The mechanism is the A1 spike's
+necessary-and-sufficient triple: `Setpgid`, a `Cancel` that signals the
+group, and `WaitDelay` — the spike shows dropping the group signal orphans
+the grandchild and dropping `WaitDelay` hangs `Wait`; and because `Wait`
+reports the kill as an `ExitError`, the deadline is classified from
+`ctx.Err()`, never from the wait error. The deadline mints
+`ClassTimeout`; spawn failure, a malformed or oversized stdout envelope, and —
+by default — a non-zero exit are `ClassExecutionFailure`, whose `Detail`
+carries the bounded stderr tail. Ordering is normative (premortem P-12):
 the stdout envelope is parsed **before** exit-code classification, so a
-well-formed deny envelope with a non-zero exit is a deny, not a failure. By
-default a non-zero exit is never a gate deny and never establishes a key
-absent; whether an entry may *declare* an exit-code mapping for those two
-semantic answers is A8's Resolve question. A write entry carries
+well-formed deny envelope with a non-zero exit is a deny, not a failure. A
+non-zero exit is a gate verdict or an established absence **only** when the
+entry's C3 exit map lists that code and stdout is empty. The env policy is an
+allowlist because the A7 spike showed the same binary and argv answering from
+`~/.gitconfig`, `GIT_CONFIG_GLOBAL` or `GIT_CONFIG_COUNT` injection when those
+were inherited; `argv0` still resolves through the parent's `PATH` before
+spawn (A2), which the allowlist passes on unchanged. `env_pass` is the named,
+no-glob escape hatch (an `SSH_AUTH_SOCK`-class need must be declared, per
+entry, in the model where review sees it); the `INTRASTATE_*` overlay gives
+wrappers their context without new placeholders — the `CONSUL_INDEX` /
+`ETCD_WATCH_*` / `HELM_PLUGIN_*` convention. A write entry carries
 `read_back = true` (mandatory for every write since RDR 0004), its success is
 never taken from exit status, and it is
 verified through the role's declared reader — the re-read runs under its own
@@ -311,18 +425,48 @@ complete.
 command_and_path_conflict     # both or neither of path/command declared
 command_empty                 # empty vector or empty argv element
 command_unknown_placeholder   # unknown or non-whole-element {…} token
-command_shell_interpreter     # argv0 + inline-code flag (sh -c, bash -c, python -c, env chains) without explicit opt-in
+command_shell_interpreter     # argv0 + inline-code flag (sh -c, bash -c, python -c, env chains); no opt-in in v1
+command_output_shape          # output = "raw" with keys ≠ 1; exit_absent on a non-read; exit_verdicts on a non-gate or naming a non-verdict
 ```
 
 Static validation. New load-time defect classes, surfaced by the same
 validation that rejects malformed accessor entries today and reported by
-`intrastate lint`. `command_shell_interpreter` is what keeps "not a shell runner" enforced
-rather than aspirational (premortem P-3/P-10): a fixed `["bash", "-c", …]`
-vector is still a shell runner, so the known interpreter-with-inline-code
-forms are load-time defects; the opt-in shape (if any) is fixed at Resolve.
-Final literal spellings and their home (table loader vs
-`accessor.ValidationCode`) are confirmed at Resolve (A6); the defect classes
-are normative.
+`intrastate lint`. Home fixed at Resolve (A6): these are
+`internal/table/category.go::Category` constants with the spellings above —
+the family `load.go::accessorTable` already uses for accessor-entry defects —
+not `accessor.ValidationCode`, whose eight-member closure is RDR 0004's own
+test contract. `command_shell_interpreter` is what keeps "not a shell
+runner" enforced rather than aspirational (premortem P-3/P-10): a fixed
+`["bash", "-c", …]` vector is still a shell runner, so the known
+interpreter-with-inline-code forms are load-time defects. There is no opt-in
+in v1: inline code belongs in a wrapper *file* named as `argv0`, which is the
+form A3's spike wrappers take — and the defect's report says so ("inline
+shell is not a declared command; put it in a script and declare the script
+as argv0"), the remediation-in-the-refusal pattern ralph-tui's metacharacter
+ban uses. Every peer that shipped a shell-string carrier later deprecated it
+(Helm subprocess v1, Consul `script`/`handler`→`args`) or bolted heuristic
+lint over it (awf-cli's security-validator: "an opaque shell string cannot
+be validated structurally"); no argv carrier reversed (reversal ledger,
+`evidence/research/prior-art-resolve-{cli-a,cli-b,sm}.md`).
+
+**C6**
+
+```normative
+allow_commands = true   # user-scope intrastate.toml, never the model file; absent or false ⇒ every command invocation refuses execution_failure naming the gate; lint (C1/C5) validates regardless
+```
+
+Execution gate. A model-declared command is code that runs when the model is
+used, and the model travels with the repo — so execution requires a one-time
+opt-in **outside the model**, in the invoking user's configuration
+(`internal/cli/config/` discovery; a `--allow-commands` invocation flag
+forces on for one run). With the gate off, a command invocation refuses
+before spawn (`execution_failure`, Detail naming
+`allow_commands`), while `intrastate lint` still validates the entries — the
+model is reviewable before it is trusted. This is the shape every shipped
+peer converged on after gating too late: Consul script checks flipped
+off-by-default and re-gated twice more, Hugo's deny-by-default
+`security.exec.allow`, Go's `GOVCS` allowlist, beads refusing repo-persisted
+commands pending a trust gate (reversal ledger).
 
 #### Load-Bearing Decisions
 
@@ -330,8 +474,10 @@ are normative.
   `(flow, name, capability)` triple; whether an entry is path- or
   command-backed does not enter identity.
 - **Wire / byte format** — stdin/stdout JSON-object-of-strings envelopes
-  (C3); exact field grammar deferred, owner: **this RDR at Resolve**, decided
-  by the A3 spike against a real tool.
+  plus the raw single-value read mode and the two exit maps (C3), field
+  grammar fixed by the A3/A8 spikes against `git config`, `git diff --quiet`
+  and `test -f`. Rejected: carrying the requested key set on stdin (a list is
+  not a string value, and the keys are already declared in the model).
 - **Naming** — the field is `command`; the family is "command-backed
   accessors". Rejected: `exec` (implies a shell surface), `run` (verb
   collision with CLI verbs), `argv` (implementation jargon in an
@@ -347,15 +493,24 @@ Illustrative — intent only; tests must not assert it literally.
 
 ```toml
 [read.branch_state]
-role    = "repo"
-command = ["git", "-C", "{artifact}", "config", "--file", ".flowstate", "--get-regexp", "^flow[.]"]
-# stdout is not the C3 envelope: binds directly only via the Resolve-decided raw/exit modes (A3/A8), else a thin wrapper
-keys    = ["flow.stage"]
-timeout = "5s"
+role        = "repo"
+command     = ["git", "config", "--file", "{artifact}", "--get", "flow.stage"]
+output      = "raw"          # stdout is the one value, not an envelope
+exit_absent = [1]            # `--get` of a missing key: exit 1, empty stdout
+keys        = ["flow.stage"]
+timeout     = "5s"
+
+[gate.clean_tree]
+role          = "repo"
+command       = ["git", "-C", "{artifact}", "diff", "--quiet"]
+exit_verdicts = { "0" = "allow", "1" = "deny" }   # 128 (bad path) stays execution_failure
+timeout       = "5s"
 
 [write.stage]
 role      = "repo"
-command   = ["flowstate-write", "{artifact}"]   # planned tags arrive on stdin
+command   = ["tools/flowstate-write", "{artifact}"]   # separator ⇒ resolved against the model file's dir; wrapper: stdin JSON → git config per key
+env       = { GIT_CONFIG_NOSYSTEM = "1" }
+env_pass  = ["SSH_AUTH_SOCK"]                          # named pass-through; nothing else inherited beyond the C4 allowlist
 keys      = ["flow.stage"]
 timeout   = "10s"
 read_back = true
@@ -367,14 +522,15 @@ read_back = true
 | --- | --- | --- | --- |
 | Bounded child execution under a context deadline | Go stdlib `os/exec` (`CommandContext`) | Available | A1/A2 verify the bound is real |
 | Timeout enforcement and refusal classes at the seam | RDR 0004 executor (`internal/accessor`) | Available | C4 inherits, adds no class |
-| Reader-per-role read-back resolution | RDR 0016 (in flight, intrastate#p63c) | Deferred | A4 — pin compatibility at Resolve |
+| Reader-per-role read-back resolution | RDR 0016 (`0016:C4`; Draft at Resolve, intrastate#p63c) | Deferred | A4 — `readerFor` is binding-agnostic today (first-match); fail-closed uniqueness arrives with 0016 |
+| Process-group termination + drain bound | Go stdlib `os/exec` (`Setpgid`, `Cancel`, `WaitDelay`) | Available | C4 mechanism, A1 spike |
 
 ### Existing Infrastructure Audit
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Declared-accessor carrier | `internal/table` (`sourceAcc`, `Accessor`, `load.go::accessorTable`) | `path` is required today | Extend | C1 exactly-one rule |
-| Execution safety + validation | `internal/accessor` (executor, `Validate`, `ValidationCode`) | validation-code set closed by 0004 | Extend | C5 (home decided via A6) |
+| Execution safety + validation | `internal/accessor` (executor, `Validate`, `ValidationCode`) | validation-code set closed at eight by 0004's REQ-84 test | Reuse unchanged | C5 homes in `table.Category` (A6) |
 | Binding construction | `internal/cli/flowbind/registry.go::Registry` | constructs path-backed bindings only | Extend | Selection LBD |
 | Simulated command behaviour | `flowbind::verdictFor` / `::unreachable` path suffixes | magic-string simulation — the accreted seam | Reuse unchanged | command family removes the pressure to grow it |
 
@@ -567,10 +723,31 @@ relaxes).
 - **Verified** — the executor already owns timeout enforcement via
   `context.WithTimeout` (`internal/accessor/executor.go::invokeRead`), and no
   path-vs-command discriminator exists anywhere in the tree (`os/exec` absent
-  outside tests).
-- **Assumed** — established tools can meet the stdout envelope with at most a
-  thin wrapper (A3); child env inheritance can be policy-fixed without
-  reshaping the carrier (A7).
+  outside tests; reuse audit re-run at Resolve).
+- **Verified (spike)** — a context deadline alone does not bound a command:
+  `Setpgid` + group `SIGKILL` + `WaitDelay` is the necessary-and-sufficient
+  triple (A1; `evidence/spikes/a1-deadline/`).
+- **Verified (spike)** — established tools speak single values and exit
+  codes, never the envelope: reads and gates bind directly through the raw
+  mode and exit maps, every established-tool write needs a wrapper because a
+  fixed argv cannot carry the value and the tool ignores stdin (A3, A8;
+  `evidence/spikes/a3-a7-a8-real-tools/`).
+- **Verified (spike)** — inherited env silently steers the same binary and
+  argv (`~/.gitconfig`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_COUNT`), so the child
+  env is an allowlist, not inheritance (A7).
+- **Documented** — Kubernetes `ExecAction.Command` is "simply exec'd, it is
+  not run inside a shell" (A5, promoted from the prior-art demoted list).
+- **Documented** — the reversal ledger
+  (`evidence/research/prior-art-resolve-{cli-a,cli-b,sm,devref-go}.md`):
+  Helm removed shell-string plugin commands for argv (subprocess v1); Consul
+  deprecated `script`/`handler` for `args` and re-gated script checks
+  off-by-default; Hugo added deny-by-default exec + env allowlists post hoc;
+  Go reversed cwd-relative `PATH` lookup (`exec.ErrDot`, 1.19) and narrowed
+  VCS binaries (`GOVCS`); of 32 peer state-machine tools only four let a
+  model name a command, and both shell-string carriers accrued corrective
+  ADRs/lints while neither argv carrier did. String→argv, inherit→allowlist,
+  open→gated — no project moved the other way; C1/C2, C4's allowlist and
+  C6's gate each sit on the settled side.
 
 ## Trade-offs
 
@@ -584,8 +761,16 @@ relaxes).
 - Negative: a new process boundary enters the trust surface — child env, PATH
   resolution of `argv0`, and process-listing visibility of argv become
   reviewable concerns (A7, Failure Modes).
-- Negative: tools that are not path-positional and not envelope-speaking need
-  thin declared wrappers (bounded by A3's spike verdict).
+- Negative: every established-tool *write*, and any multi-valued read, needs
+  a thin declared wrapper — the A3 spike's wrappers are 5–8 lines of shell,
+  but their bodies are script the model does not carry.
+- Negative: the child env is an allowlist (C4), so a tool that needs another
+  variable declares it literally in `env` or names it in `env_pass` — an
+  explicit, reviewable cost.
+- Negative: nothing executes until the invoking user sets
+  `allow_commands = true` once in their own config (C6) — one boolean of
+  adoption friction, accepted as the price every gated-too-late peer ended
+  up paying anyway.
 
 ### Risks and Mitigations
 
@@ -607,14 +792,19 @@ relaxes).
   the cross-cutting gate (secret/credential lifecycle).
 - **Risk**: `argv0` resolves via `PATH`, so the same model executes different
   binaries on different hosts.
-  **Mitigation**: fold into A7's env policy at Resolve (options: record
-  as-declared semantics, or a lint advisory on bare `argv0`).
+  **Mitigation**: accepted as-declared semantics — `PATH` is in C4's
+  allowlist and `LookPath` runs in the parent before spawn (A2); an author who
+  wants host-independence writes an absolute `argv0`. A lint advisory on bare
+  `argv0` is deferred to the cross-cutting gate.
 
 ### Failure Modes
 
 - Visible: load-time C5 defects name the entry and the offending element;
   runtime refusals carry the 0004 diagnosis tuple (accessor, capability,
   role, timeout) with class `timeout` or `execution_failure`.
+- Visible: with the C6 gate off, every command invocation refuses
+  `execution_failure` naming `allow_commands` before any child spawns; lint
+  still validates, so the model is reviewable before it is trusted.
 - Visible: a gate command with a malformed envelope refuses
   `execution_failure` — never a deny the model didn't decide.
 - Silent risk: a child that ignores termination at deadline can outlive its
@@ -625,10 +815,13 @@ relaxes).
   surprising; diagnosis starts at the role's reader declaration. Load-time
   detection of a reader-less write role is reader-cardinality territory —
   RDR 0016's contract, not this one (A4).
-- Silent risk: a write tool that treats its stdin as *content* would ingest
-  the C3 envelope into the artifact; A3's spike exercises this class, and the
-  wrapper contract (envelope in, tool-native invocation out) is the answer
-  for tools that read stdin as data (premortem P-2).
+- Silent risk: a write tool that sinks its stdin into the artifact ingests
+  the C3 envelope as content — the A3 spike's `tee {artifact}` overwrote the
+  artifact with `{"state.phase":"review"}` and exit 0; it surfaces only at
+  read-back (`git config` then fails `bad config line 1` → 
+  `read_back_incomplete`), never at the write. The wrapper contract (envelope
+  in, tool-native invocation out) is the answer for every stdin-reading tool
+  (premortem P-1/P-2).
 - Recovery: fix the model entry, re-run `intrastate lint`, re-invoke;
   bindings hold no state between invocations (`0004:C14` — no retry, no
   undo).
@@ -637,18 +830,25 @@ relaxes).
 
 ### Prerequisites
 
-- [ ] All Critical Assumptions verified (A1–A9)
-- [ ] A3 spike verdict on the envelope vs raw single-value read mode
+- [x] All Critical Assumptions verified (A1–A9)
+- [x] A3 spike verdict on the envelope vs raw single-value read mode — raw
+      mode adopted (C3 `output = "raw"`)
+- [ ] RDR 0016 lands first (fail-closed `readerFor`), or 0025 records that
+      command-write read-back inherits first-match until it does (A4)
 
 ### Minimum Viable Validation
 
 1. Author a model declaring one command-backed read and one command-backed
    write (`read_back = true`) over a single artifact role, delegating to an
-   established tool present in CI (e.g. `git config --file {artifact}`).
-2. `intrastate lint` accepts it; four mutated copies (path+command conflict,
-   empty element, unknown placeholder, `["sh", "-c", …]` interpreter form)
-   are each rejected with their C5 defect.
-3. Drive a state change end to end: the resolved decision invokes the
+   established tool present in CI: the read binds `git config --file
+   {artifact} --get <key>` directly in raw mode; the write is a declared
+   wrapper over `git config` (the A3 spike's `wrapper-write.sh` shape).
+2. `intrastate lint` accepts it; five mutated copies (path+command conflict,
+   empty element, unknown placeholder, `["sh", "-c", …]` interpreter form,
+   `output = "raw"` with two keys) are each rejected with their C5 defect.
+3. With `allow_commands = true` in the invoking configuration (C6; without
+   it, the same invocation refuses `execution_failure` naming the gate),
+   drive a state change end to end: the resolved decision invokes the
    declared write command; the tool — not intrastate — applies the edit to
    the artifact.
 4. Read-back runs through the declared command reader and verifies the
@@ -683,14 +883,15 @@ timeout and read-back failure scenarios as tests.
 
 ### Testing Strategy
 
-Coverage goal: every C1–C5 clause has a test that fails when its rule is
+Coverage goal: every C1–C6 clause has a test that fails when its rule is
 dropped; the MVV scenario is the integration proof.
 
 1. **Scenario**: load-time validation (C1/C5) — a valid command entry plus
-   the four MVV mutants (path+command conflict, empty element, unknown or
-   partial `{…}` token, `["sh", "-c", …]`).
+   the five MVV mutants (path+command conflict, empty element, unknown or
+   partial `{…}` token, `["sh", "-c", …]`, raw output with two keys).
    **Expected**: the valid entry loads; each mutant is rejected with its own
-   named C5 code — asserted by code, never by "validation returned non-empty".
+   named C5 `table.Category` — asserted by category, never by "validation
+   returned non-empty"; `accessor.ValidationCodes` stays at eight (REQ-84).
 2. **Scenario**: substitution guard (C2) — `{artifact}` bound to an absolute
    path, a relative path, and a `-`-prefixed path; an element embedding the
    token mid-string.
@@ -698,27 +899,64 @@ dropped; the MVV scenario is the integration proof.
    the child observes equals the declared vector otherwise byte-for-byte; the
    relative and `-` cases refuse `execution_failure` before spawn; the
    mid-string case is a C5 defect at load.
-3. **Scenario**: envelope-before-exit ordering (C4) — a gate command that
+3. **Scenario**: envelope-before-exit ordering (C3/C4) — a gate command that
    writes a well-formed deny envelope and exits non-zero; one that writes a
    malformed envelope and exits zero; one that exits non-zero with no
-   envelope.
-   **Expected**: deny, `execution_failure`, `execution_failure` respectively,
-   each carrying the 0004 diagnosis tuple and a bounded stderr tail.
+   envelope and no exit map; the same with `exit_verdicts = { "1" = "deny" }`;
+   a gate exiting 2 under that map; a read exiting 1 with `exit_absent = [1]`
+   and one exiting 128; a 1 MiB + 1 byte stdout.
+   **Expected**: deny, `execution_failure`, `execution_failure`, deny,
+   `execution_failure`, established-absent, `execution_failure`,
+   `execution_failure` respectively — the verdict/error code split follows
+   normative fixture **FX-exit-codes** (`evidence/spikes/a3-a7-a8-real-tools/
+   output.txt` E1a–E1h, R6) — each refusal carrying the 0004 diagnosis tuple
+   and the 4 KiB stderr tail.
 4. **Scenario**: deadline (C4, A1) — a child sleeping past `timeout`, a
    wrapper whose grandchild holds the stdout pipe, and a child that never
-   reads stdin.
-   **Expected**: `timeout` refusal within the bound in all three, no hang,
-   and no process from the child's group surviving the refusal.
-5. **Scenario**: write read-back (C4) — a command write whose tool applies
-   the planned tags; one whose tool exits zero without applying them; one
-   whose role reader cannot read a compared key.
+   reads stdin (1 MiB stdin); plus the ablations: no process group, no
+   `WaitDelay`.
+   **Expected**: `timeout` refusal within `timeout + WaitDelay` in all three,
+   no hang, and no process from the child's group surviving the refusal —
+   normative fixture **FX-deadline** (`evidence/spikes/a1-deadline/output.txt`
+   S1–S5: S2/S4/S5 ≈1.0s with 0 survivors; the ablations reproduce S3's
+   orphan and S1's blocked `Wait`, which the test asserts as failures of the
+   ablated build, not of the binding).
+4b. **Scenario**: raw read and env policy (C3/C4, A3/A7) — `git config --file
+   {artifact} --get <key>` in raw mode; the same entry with an inherited
+   `GIT_CONFIG_COUNT` injection in the parent env and no `env` declaration.
+   **Expected**: the value is stdout minus one trailing newline — normative
+   fixture **FX-raw-read** (`output.txt` R1: stdout `"draft\n"` → `draft`);
+   the injection never reaches the child (its env holds only the allowlist),
+   so the read is unchanged.
+5. **Scenario**: write read-back (C3/C4) — a command write whose wrapper
+   applies the planned tags; one whose tool exits zero without applying them
+   (`git config` with the value on stdin, spike R3b); one whose argv0 sinks
+   stdin into the artifact (`tee {artifact}`, spike R4b); one planning
+   `<clear>`.
    **Expected**: success reporting the written tags; `read_back_mismatch`;
-   `read_back_incomplete` (applied-but-unverified) — the write's exit status
-   decides none of them.
+   `read_back_incomplete` (the corrupted artifact no longer parses for the
+   reader); the key reads back absent — the write's exit status decides none
+   of them.
 6. **Scenario**: the MVV end to end against an established tool present in
    CI.
    **Expected**: the declared write command, not intrastate, edits the
    artifact, and the declared command reader verifies it.
+7. **Scenario**: execution gate (C6) — a valid command model invoked with no
+   `allow_commands` in config; with `allow_commands = true`; with the
+   `--allow-commands` flag alone; `intrastate lint` under all three.
+   **Expected**: refusal `execution_failure` naming `allow_commands` with no
+   child process spawned; normal execution; normal execution; lint passes in
+   all three (validation is ungated).
+
+### Performance Expectations
+
+Spike-measured, darwin/arm64, Go 1.26.6, git 2.55 (`evidence/spikes/`):
+a `git config --file` read or write invocation costs 7–15ms wall including
+spawn; a 2 MiB stdout envelope captures in 88ms (C4 caps at 1 MiB); the
+deadline overshoot is ≤4ms past `timeout` when the group dies on signal and
+at most `timeout + WaitDelay` (500ms) when a descendant holds a pipe. No
+byte-stable output is claimed: read-back compares typed tag values, not
+bytes (Risks), so the determinism checklist does not apply.
 
 ## Finalization Gate
 
@@ -845,7 +1083,20 @@ matrix/provenance prose left from the template or Seed
 ## References
 
 - Prior-art record with quotes and search budget:
-  `docs/rdr/0025-command-invoking-accessor-bindings/evidence/research/prior-art.md`
+  `docs/rdr/0025-command-invoking-accessor-bindings/evidence/research/prior-art.md`;
+  Resolve source-search record: `…/evidence/research/source-search.md`;
+  Resolve prior-art reversal ledger:
+  `…/evidence/research/prior-art-resolve-{cli-a,cli-b,sm,devref-go}.md`
+  (helm, gh-cli, goreleaser, kubebuilder, hugo, golangci-lint, consul,
+  opentofu, etcd, roborev, beads, semgrep rules; 32 peer state-machine
+  tools; Go toolchain `generate`/`ErrDot`/`GOVCS`/cgo-flag allowlist;
+  corpus-cited Unix/security references).
+- Spikes: `…/evidence/spikes/a1-deadline/` (A1; `run.sh`, `main.go`,
+  `output.txt`, `notes.md`) and `…/evidence/spikes/a3-a7-a8-real-tools/`
+  (A3/A7/A8; `run.sh`, `main.go`, `wrapper-*.sh`, `output.txt`, `notes.md`).
+- Go 1.26.6 `os/exec` package doc, `Cmd.Args`, `Cmd.Cancel`, `Cmd.WaitDelay`
+  (`$GOROOT/src/os/exec/exec.go`); `k8s.io/api@v0.36.2/core/v1/types.go`
+  `ExecAction.Command`.
 - Docker Dockerfile reference (exec form vs shell form); git-difftool
   documentation (`difftool.<tool>.cmd`); Terraform `external` data source
   documentation (hashicorp/terraform-provider-external).
