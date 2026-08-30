@@ -221,3 +221,10 @@ does not perform.
 `models/` or `internal/table/testdata/` uses a single-quoted id, a padded
 assignment, or a model/rule id collision. But the locator is a
 consumer-authored-model surface, and the clause is unconditional.
+
+---
+
+*Phase 3a CoVe verification, run independently of the Phase 1 suite. This
+file was staged concurrently with the Phase 3b adversarial test commit and
+was swept into `18d5db5`; the verification work and FAIL-1 above are Phase
+3a's, derived from the spec and confirmed against the built binary.*
