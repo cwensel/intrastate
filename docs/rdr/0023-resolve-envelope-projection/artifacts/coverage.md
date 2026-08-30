@@ -326,13 +326,66 @@ contains no test function, so it is exempt by construction.
    ships under a name the probe does not recognise, extend the recognised
    markers rather than weakening the assertion.
 
-4. **REQ-MVV output slot: PENDING.** Phase 2 records the actual MVV step-6
-   byte table here — default vs projected on the full emitted line for
-   `pricing-decision-table.toml`, `release-grammar.toml` and
-   `review-state-machine.toml`, each against the 40% bar, compared with
-   `evidence/spikes/a1-byte-width.md`. `TestMVV0023_.../step6_...` logs the
-   measured ratios via `t.Logf` on every run.
+4. **REQ-MVV output slot: RECORDED (Phase 2).** All six MVV steps pass.
+
+   Step 6's measured byte table, as `TestMVV0023_.../step6_...` logs it —
+   the full emitted line, trailing newline excluded, which is C1's unit:
 
    ```
-   (pending — Phase 2)
+   pricing-decision-table:      360 B → 152 B (57.8% saved)
+   release-grammar/begin:       482 B → 238 B (50.6% saved)
+   review-state-machine/approve: 368 B → 158 B (57.1% saved)
    ```
+
+   All three clear the 40% bar, so REQ-105's route-back is not triggered.
+
+   **Against `evidence/spikes/a1-byte-width.md`.** The in-test defaults
+   above are inflated on the DEFAULT side only, because the harness must
+   pass an absolute `--model` path (the package's tests run with
+   `cwd = internal/cli`) and `model` echoes that argument verbatim. Re-run
+   from the repo root with the spikes' own relative-path invocations, the
+   shipped projection reproduces A1's recorded rows EXACTLY:
+
+   | row | invocation | default | projected | saved | A1 records |
+   | --- | --- | ---: | ---: | ---: | --- |
+   | S1 | pricing 2×2, `--tag tier=paid --tag region=eu` | 290 B | 152 B | 47.6% | 290 → 152, 47.6% |
+   | S2b | release `begin`, seeded `phase=idle,build-id=none`, `--tag risk=0 --tag 'checks=[]'` | 412 B | 238 B | 42.2% | 412 → 238, 42.2% |
+
+   Both projected widths match the spike to the byte, which is the stronger
+   result: the plan group the flag retains is exactly the one A1 measured,
+   so REQ-105's "the plan group is carrying materially more than A1
+   measured" condition is not merely un-triggered but positively excluded.
+
+   The review fixture's `approve` resolves through a bare escape row, so it
+   is also the MVV's witness for the CONDITIONAL ninth key — `escape_class`
+   is present by default and present under the flag, per REQ-25/REQ-74:
+
+   ```
+   default:   {"type":"ok","data":{"model":…,"revision":"","observed":{},"owned":{"status":"draft"},
+                "readers":["review-state"],"outcome":"approve","rule":"approve-otherwise","gates":[],
+                "emit":{},"next":{},"writes":{},"clear":[],"escaped":true,"escape_class":"no_match"}}
+   projected: {"type":"ok","data":{"revision":"","rule":"approve-otherwise","gates":[],"emit":{},
+                "next":{},"writes":{},"clear":[],"escaped":true,"escape_class":"no_match"}}
+   ```
+
+   The A1 row-S1 baseline is LOGGED, never asserted, per REQ-114 ("A1's byte
+   table is recorded evidence, not a test assertion"), and the
+   not-checked-in 79.4% figure is not gated, per REQ-106.
+
+## Phase 2 result
+
+`go test ./...` — all packages pass. `golangci-lint run` — 0 issues.
+`make check` (fmt-check, vet, lint, build, graph-lint, docs-check, and
+`go test -race`) — green.
+
+All 35 new 0023 test functions pass, together with the 267 pre-existing
+`internal/cli` tests, none of which moved — `0023:A3`'s "no predecessor
+oracle moves" claim discharged by execution (REQ-135). The one conditional
+skip (`dispositions`, pending 0024) remains a skip, which is the ordering
+tolerance REQ-87 records.
+
+Seven deviations are recorded in `deviations.md`; none is
+`needs author decision`. Five are TEST-FIXTURE, one is a SPEC-DEFECT in
+REQ-116's premise about `llms.txt` resolved from REQ-117's own statement of
+the obligation, and one is an IMPL-DECISION recording the reader seam's
+form, which C1 explicitly delegates.
