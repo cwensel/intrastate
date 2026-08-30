@@ -13,6 +13,7 @@ package table_test
 // them" (REQ-18) are the ones A7's closure leg covers.
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/table"
@@ -26,6 +27,21 @@ type emitArm struct {
 	req string
 	// body is the `[emit]` declaration text, authored verbatim.
 	body string
+}
+
+// armSource renders one arm as a single-defect `[emit]` body.
+//
+// An arm declaring a key other than `verdict` leaves `verdict` undeclared,
+// and `dtWithEmitDecl` appends RDR 0010 rules that emit it — a second,
+// unrelated defect. Prefixing `declVerdictCovering` removes it. Arms that
+// declare `verdict` themselves are left alone: prefixing there would
+// author `[emit.verdict]` twice and refuse as `CatMalformedTOML`, which
+// would mis-categorize the arm rather than sharpen it.
+func armSource(arm emitArm) string {
+	if strings.Contains(arm.body, "[emit.verdict]") {
+		return arm.body
+	}
+	return declVerdictCovering + "\n\n" + arm.body
 }
 
 // malformedEmitArms enumerates C1's refusal arms, one single-defect
@@ -111,7 +127,10 @@ stop = ["alpha", "gamma"]`,
 	},
 
 	// REQ-16 / ASSUMPTION-8: "a `domain` on a non-enum kind" — the PRESENCE
-	// of the key under bool/int/scalar, in EITHER spelling.
+	// of the key under bool/int/scalar, in EITHER spelling. That reading is
+	// a 3x2 closure, so all six cells are authored: covering only the flat
+	// spelling for int and scalar would leave an implementation that
+	// refused `[emit.<key>.domain]` on bool alone passing this gate.
 	{
 		name: "a flat `domain` on kind = bool",
 		req:  "REQ-16",
@@ -140,6 +159,22 @@ domain = ["anything"]`,
 kind = "bool"
 [emit.flag.domain]
 route = ["true"]`,
+	},
+	{
+		name: "a disposition-table `domain` on kind = int",
+		req:  "REQ-16",
+		body: `[emit.count]
+kind = "int"
+[emit.count.domain]
+route = ["1"]`,
+	},
+	{
+		name: "a disposition-table `domain` on kind = scalar",
+		req:  "REQ-16",
+		body: `[emit.free]
+kind = "scalar"
+[emit.free.domain]
+route = ["anything"]`,
 	},
 
 	// REQ-17: "a disposition token that is the empty string"
@@ -211,12 +246,22 @@ stop = ["gamma"]`,
 // fail-fast, so a fixture carrying two defects proves nothing about the
 // second."
 // REQ-13, REQ-14, REQ-15, REQ-16, REQ-17, REQ-18: C1's refusal arms.
+//
+// Single-defectness is enforced by `armSource`: the arms keyed on
+// something other than `verdict` are folded together with
+// `declVerdictCovering`, because `dtWithEmitDecl` appends the RDR 0010
+// rules and three of those emit `verdict`. Undeclared, that key is a
+// SECOND defect (`unknown_emit_key` under `0024:C2`'s whole-model
+// strictness) and the arm would pass only because `loadEmitDecls` is
+// ordered ahead of `checkRuleEmit` in `load.go::run` — coupling this
+// closure gate to a separate contract. Precedent: D9, which found and
+// fixed the identical fixture defect in `internal/cli`.
 // ADVERSARIAL
 func TestReq94_0024_EveryMalformedDeclarationArmRefuses(t *testing.T) {
 	for _, arm := range malformedEmitArms {
 		t.Run(arm.req+"/"+arm.name, func(t *testing.T) {
 			model, err := table.Load(
-				[]byte(dtWithEmitDecl(arm.body)), "emit-arm.toml")
+				[]byte(dtWithEmitDecl(armSource(arm))), "emit-arm.toml")
 
 			if err == nil {
 				t.Fatalf("%s (%s) loaded CLEAN; C1 refuses it as %q\n"+
