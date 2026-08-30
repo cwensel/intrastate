@@ -283,3 +283,138 @@ position after `emit` — which is precisely what `0024:C4` fixes about it.
 **Evidence:** `0023:A-8` and `0023:REQ-96`/`REQ-97` as quoted in
 `internal/cli/flow_mvv_0023_test.go`'s own doc comments; the existing
 `foldCheckoutRoot` precedent in the same function.
+
+---
+
+## D10 — the declaration locator declines on an inline-table declaration
+
+**Type:** IMPL-DECISION
+**Status:** licensed by REQ-31
+**Site:** `internal/table/load.go::emitHeaderLine`,
+`internal/table/emit_locator_adv_0024_test.go::TestAdv3_0024_TheDeclarationLocatorDeclinesOnAnInlineTableDeclaration`
+
+Phase 3b scored an inline-table declaration under a bare `[emit]` as a
+locator defect: it decodes to the same `map[string]sourceEmitDecl` as the
+bracketed spelling, takes the same C1 arm, refuses with the same category
+— and renders line 0, which reads against REQ-30's "All three categories
+MUST carry a source line". Phase 3a probed the same input and declined to
+score it. This entry resolves the disagreement in 3a's favour.
+
+REQ-31 does not merely permit reusing the tag technique; it fixes the KEY
+and the TECHNIQUE together: "a declaration defect keys on the top-level
+`[emit.<key>]` header, which `tagHeaderLine`'s technique reaches
+**unchanged**". Under the inline spelling C2's own chosen key does not
+exist in the document, and `tagHeaderLine`'s contract answers that case
+deliberately rather than by omission — its doc comment states "zero on
+anything ambiguous is the point, not a gap … pointing at the wrong text
+costs more than pointing at no text".
+
+The behaviour is inherited, not introduced. Verified directly against the
+`rdr-fixture.toml` tag block with one kind defect, both spellings:
+
+    inline   `[tags]` / `status = { kind = "gauge", … }`  -> line 0
+    bracketed `[tags.status]` / `kind = "gauge"`          -> line 19
+
+Both return `malformed_tag_declaration`. So the emit surface reproduces
+its predecessor exactly. Widening `emitHeaderLine` past `tagHeaderLine`
+would make emit diverge from tags on identical authoring, which is what
+"unchanged" forbids — and it would do so on a hazard REQ-31 already
+priced in.
+
+**Contrast with the rule side (D11), which WAS fixed.** `emitRuleLine`
+has no such license: REQ-32/REQ-76 describe "a rule-id-anchored,
+block-bounded forward scan", a technique with no predecessor to inherit
+from, and the shipped code performed no scan at all. A clause naming a
+technique the code does not implement is a defect; a clause naming a
+technique the code implements faithfully, weaknesses included, is not.
+
+**Test adjustment.** The ADV-3 leg asserted the unlicensed reading and is
+retargeted to the licensed contract: the category is still asserted, the
+locator is asserted to decline (`Line == 0`) rather than point at text it
+cannot confirm, and a NEW bracketed control leg was added alongside it
+asserting the same defect DOES recover its header line — without which
+the decline assertion would also pass against a locator that always
+returned 0. The test's justification against REQ-31 is carried in its own
+doc comment.
+
+**Evidence:** REQ-31 as quoted above; `tagHeaderLine`'s doc comment in
+`internal/table/load.go`; the two-spelling tag probe reproduced above.
+
+---
+
+## D11 — the rule-side locator's uniqueness premise is false as built
+
+**Type:** SPEC-DEFECT
+**Status:** resolved in implementation; no RDR amendment
+**Site:** `internal/table/load.go::emitRuleLine`, `::checkRuleEmit`
+
+`0024:C2` justifies the rule-id anchor with "the id is unique by the time
+any emit work runs (`CatDuplicateRuleID` is enforced in `normalize.go`)".
+That premise contradicts C2's own step placement. The same clause fixes
+both emit steps "before yielding rows … as a step ahead of
+[`normalizeRules`], beside `loadTags`" — and `normalize.go` is where
+`CatMalformedRuleShape` ("a `[[rule]]` carries no id"),
+`CatMalformedRuleID` and `CatDuplicateRuleID` are all minted. So
+`checkRuleEmit` reads `l.doc.Rule` before any rule id is proven present,
+well-formed, or unique. Two normative clauses of C2 cannot both be true.
+
+RDR 0024 is Final and is not amended, so this is recorded rather than
+corrected in the record.
+
+**Resolution: the premise was made UNNECESSARY, not true.** The step
+ordering is normative and REQ-tested (REQ-24, REQ-25, REQ-55 all depend
+on emit preceding `normalizeRules`), so reordering the pipeline to make
+the premise true was rejected — it would trade a locator weakness for a
+contract breach. Instead `emitRuleLine` selects the rule by ORDINAL (its
+index in `l.doc.Rule`, which the decoder fills in document order) and
+bounds the scan to that rule's own `[[rule]]` block. Uniqueness is then
+irrelevant: a duplicated id and a rule id equal to the model id both
+recover their own line, because no line outside the block is ever a
+candidate. The rule id is retained as a CONFIRMING match, which is what
+keeps the anchor "rule-id-anchored" per REQ-32.
+
+Where the block carries no `id` assignment at all, the locator returns
+the `[[rule]]` header line rather than zero, and `checkRuleEmit` names the
+rule positionally (`rule #3`) instead of rendering `rule  emits …`.
+REQ-30 requires a source line unconditionally; this holds it
+unconditionally, at the cost of a coarser pointer in the one case where a
+finer one does not exist in the source.
+
+**Evidence:** C2's two conflicting sentences as quoted; the category sites
+in `internal/table/normalize.go`; Phase 3b's ADV-1, now passing.
+
+---
+
+## D12 — the rule-side anchor tokenizes the `id` assignment
+
+**Type:** SPEC-UNDER
+**Status:** resolved in implementation
+**Site:** `internal/table/load.go::scalarAssignment`, `::stripComment`,
+`::tableHeader`
+
+REQ-32 fixes the anchor as the rule's "`id = \"<ruleID>\"` line" and
+REQ-76 as "a rule-id-anchored, block-bounded forward scan". Read as a
+literal spelling the two are in tension: TOML fixes no spelling for an
+assignment, so `id="r"`, `id  =  "r"` and the literal-string `id = 'r'`
+are the same document and name the same rule, and an id containing `#`
+cannot survive a comment strip that cuts inside a quoted string. The
+record does not say which reading governs.
+
+Read as the SCAN REQ-76 names — the reading taken here — the quoted
+spelling is illustrative of what is being looked for, not a match
+template, and the scan tokenizes: it splits the key from the value on
+`=`, tolerates arbitrary horizontal whitespace, and accepts all three
+TOML string syntaxes. This is grounded in ASSUMPTION-4's own reading of
+the sibling clause, which reads REQ-30 as "the property, not the
+integer"; the same move reads REQ-32 as the anchor, not the byte string.
+
+Three unexported helpers are introduced — `tableHeader`, `scalarAssignment`
+and `stripComment`. None is public surface and none is named in the
+Normative Contracts, so they are recorded here as SPEC-UNDER per Phase 2's
+additive-is-not-exempt rule. `headerLine`'s cruder comment strip is left
+untouched: it is right for a bracketed header, whose text cannot carry a
+quoted `#` in the authorings that scan admits, and changing it would move
+the tag surface REQ-31 pins.
+
+**Evidence:** REQ-32, REQ-76 and ASSUMPTION-4 as quoted; Phase 3b's ADV-2,
+now passing.

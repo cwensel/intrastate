@@ -215,25 +215,40 @@ func TestAdv2_0024_TheRuleAnchorSurvivesLegalTOMLSpellingsOfTheSameID(t *testing
 	})
 }
 
-// ADV-3. The DECLARATION-side locator has the mirror defect.
-// `emitHeaderLine` scans for a standalone `[emit.<key>]` header line, but
-// `0024:C1` fixes the declaration by its DECODED SHAPE, not by its
-// authoring: "an empty table and an absent one both decode to an empty
-// map", and the `any`-typed `domain` exists precisely because the decoder,
-// not the text, is what defines the declaration.
+// ADV-3. The DECLARATION-side locator declines on an inline-table
+// declaration -- and that is LICENSED, not a defect. See deviation D10.
 //
-// TOML gives an author a second, equally legal spelling of the identical
+// The probe: `0024:C1` fixes the declaration by its DECODED SHAPE ("an
+// empty table and an absent one both decode to an empty map"), and TOML
+// gives an author a second, equally legal spelling of the identical
 // document -- an inline table under a bare `[emit]`. It decodes to the same
-// `map[string]sourceEmitDecl`, takes the same C1 arms, and refuses with the
-// same category. It simply has no `[emit.<key>]` header line to find, so
-// the refusal carries no position and `0024:C2`'s "All three categories
-// MUST carry a source line" is false for it.
+// `map[string]sourceEmitDecl` and takes the same C1 arm, but has no
+// `[emit.<key>]` header line to find.
 //
-// The rule-side leg is included as the control: it keys on the rule id and
-// is unaffected by how the DECLARATION was spelled, which isolates the
-// defect to `emitHeaderLine`.
-func TestAdv3_0024_TheDeclarationLocatorSurvivesAnInlineTableDeclaration(t *testing.T) {
-	t.Run("a malformed inline declaration", func(t *testing.T) {
+// Why it is licensed rather than fixed. REQ-31 does not merely permit
+// reusing the tag technique, it fixes the KEY and the TECHNIQUE together:
+// "a declaration defect keys on the top-level `[emit.<key>]` header, which
+// `tagHeaderLine`'s technique reaches UNCHANGED". Under the inline
+// spelling C2's own chosen key does not exist in the document, and
+// `tagHeaderLine`'s contract answers that case deliberately -- its doc
+// comment states "zero on anything ambiguous is the point, not a gap …
+// pointing at the wrong text costs more than pointing at no text".
+//
+// The behaviour is also inherited, not introduced: at HEAD an inline
+// `[tags]` declaration carrying the same defect renders line 0 where the
+// bracketed spelling renders its header line. Widening `emitHeaderLine`
+// past `tagHeaderLine` would make the emit surface diverge from the tag
+// surface on identical authoring, which is what "unchanged" forbids.
+//
+// So this leg asserts the LICENSED contract -- the category is still
+// correct and the locator declines honestly rather than pointing at the
+// wrong text -- and the bracketed control alongside it proves the decline
+// is specific to the spelling REQ-31's key does not reach. The rule-side
+// leg is the second control: it keys on the rule id and is unaffected by
+// how the declaration was spelled, which is what isolated the behaviour to
+// `emitHeaderLine` in the first place.
+func TestAdv3_0024_TheDeclarationLocatorDeclinesOnAnInlineTableDeclaration(t *testing.T) {
+	t.Run("a malformed inline declaration declines its line", func(t *testing.T) {
 		decl := "\n[emit]\nnext_command = { kind = \"nope\" }\n"
 		src := advFixture(t, decl, "continue-prelock", "next_command = \"alpha\"\n")
 
@@ -241,11 +256,31 @@ func TestAdv3_0024_TheDeclarationLocatorSurvivesAnInlineTableDeclaration(t *test
 		if f.Category != table.CatMalformedEmitDeclaration {
 			t.Fatalf("category = %q, want %q", f.Category, table.CatMalformedEmitDeclaration)
 		}
-		if want := advLineOf(src, "next_command = { kind"); f.Line != want {
-			t.Errorf("Line = %d, want %d; an inline-table declaration decodes to the "+
-				"same shape as the bracketed spelling and takes the same C1 arm, but "+
-				"`emitHeaderLine` finds no `[emit.next_command]` header and the "+
-				"refusal loses the source line `0024:C2` requires", f.Line, want)
+		// REQ-31 keys this refusal on the `[emit.<key>]` header, which this
+		// authoring does not carry, so `tagHeaderLine`'s technique declines
+		// -- unchanged, as REQ-31 requires.
+		if f.Line != 0 {
+			t.Errorf("Line = %d, want 0; REQ-31 keys a declaration defect on the "+
+				"`[emit.<key>]` header and reaches it with `tagHeaderLine`'s "+
+				"technique UNCHANGED, which declines where that header is absent "+
+				"rather than pointing at text it cannot confirm", f.Line)
+		}
+	})
+
+	t.Run("the bracketed spelling of the same defect carries its header line", func(t *testing.T) {
+		// The control for the decline above: REQ-31's key EXISTS here, so
+		// the same defect recovers its line. Without this leg the assertion
+		// above would also pass against a locator that always returned 0.
+		decl := "\n[emit.next_command]\nkind = \"nope\"\n"
+		src := advFixture(t, decl, "continue-prelock", "next_command = \"alpha\"\n")
+
+		f := advRefusal(t, src)
+		if f.Category != table.CatMalformedEmitDeclaration {
+			t.Fatalf("category = %q, want %q", f.Category, table.CatMalformedEmitDeclaration)
+		}
+		if want := advLineOf(src, "[emit.next_command]"); f.Line != want {
+			t.Errorf("Line = %d, want %d; the bracketed declaration carries REQ-31's "+
+				"key and must stamp its header line", f.Line, want)
 		}
 	})
 

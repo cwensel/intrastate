@@ -224,6 +224,103 @@ consumer-authored-model surface, and the clause is unconditional.
 
 ---
 
+---
+
+## Phase 3b — adversarial findings (ADV-1, ADV-2, ADV-3)
+
+*Restored. Phase 3b appended these three entries to this file, but a
+concurrent Phase 3a write overwrote them before commit; `18d5db5` carries
+them in its commit message and its test file
+(`internal/table/emit_locator_adv_0024_test.go`) but not here. They are
+reinstated below from that commit, with each one's disposition appended.*
+
+All three are anchored in the record's Failure Modes section — a declared
+model carrying a defect "refuses at load … (category slug in the finding's
+`code`, offending file in `locator`)", and an author can "diagnose from the
+finding's category + locator" — and in `0024:C2`'s "All three categories
+MUST carry a source line". All three attack the LOCATOR, the single point
+that promise rests on. All three FAILED when written.
+
+### ADV-1 — the rule-side locator's uniqueness premise is false as built
+
+`0024:C2` justifies the rule-id anchor with "the id is unique by the time
+any emit work runs (`CatDuplicateRuleID` is enforced in `normalize.go`)".
+False as built: C2 also places both emit steps AHEAD of `normalizeRules`,
+where `CatMalformedRuleShape` ("a `[[rule]]` carries no id"),
+`CatMalformedRuleID` and `CatDuplicateRuleID` are all enforced. So
+`checkRuleEmit` reads `l.doc.Rule` before any rule id is proven present,
+well-formed or unique. Three legs, each authoring exactly one emit defect:
+
+| leg | observed at `18d5db5` |
+| --- | --- |
+| a rule carrying no id at all | detail renders `rule  emits …`, `Line = 0` |
+| two rules sharing one id | `Line = 0` — `headerLine` bails on two matches |
+| a rule id equal to the model id | `Line = 0` — same ambiguity bail |
+
+**Disposition: FIXED** (deviation D11, Type SPEC-DEFECT). The premise was
+made unnecessary rather than true: the pipeline ordering C2 fixes is
+normative and REQ-tested, so it was left exactly as specified, and
+`emitRuleLine` now selects the rule by ORDINAL and bounds its scan to that
+rule's own `[[rule]]` block. Uniqueness is then irrelevant. A block with no
+`id` assignment yields the `[[rule]]` header line, and the detail names the
+rule positionally (`rule #3`).
+
+### ADV-2 — the anchor was an exact text match on one spelling
+
+The anchor was `headerLine(src, "id = " + strconv.Quote(ruleID))` — exact
+line equality after a comment strip and a trim. TOML fixes no such
+spelling. Observed at `18d5db5`: `id="r"`, `id  =  "r"` and `id = 'r'` all
+returned `Line = 0` for the SAME rule the refusal named, as did any id
+containing `#` (the comment strip cuts inside the quoted string). The id
+here is present, unique and unambiguous — a distinct root cause from
+ADV-1. It made "MUST carry a source line" contingent on how the author
+happened to type a space.
+
+**Disposition: FIXED** (deviation D12, Type SPEC-UNDER). The anchor now
+tokenizes the assignment: key/value split on `=`, arbitrary horizontal
+whitespace, all three TOML string syntaxes, and a quote-aware comment
+strip.
+
+### ADV-3 — the declaration locator declines on an inline-table declaration
+
+The mirror case on the declaration side. `0024:C1` fixes the declaration by
+its DECODED SHAPE, and TOML gives a second legal spelling of the identical
+document — an inline table under a bare `[emit]`. It decodes to the same
+`map[string]sourceEmitDecl`, takes the same C1 arm, refuses with the same
+category, and carries `Line = 0` because there is no `[emit.<key>]` header
+to find. A rule-side control leg passed, isolating the behaviour to
+`emitHeaderLine`.
+
+**The two verifiers disagreed here**: Phase 3b scored it a defect; Phase 3a
+probed the same input and deliberately declined to score it, on the ground
+that REQ-31 licenses reusing `tagHeaderLine`'s technique and the identical
+weakness reproduces at HEAD for `malformed_tag_declaration`.
+
+**Disposition: NOT A DEFECT — licensed by REQ-31** (deviation D10, Type
+IMPL-DECISION). 3a's ground was checked rather than accepted: the same
+one-kind-defect tag declaration in both spellings gives
+
+    inline    `[tags]` / `status = { kind = "gauge", … }`  ->  line 0
+    bracketed `[tags.status]` / `kind = "gauge"`           ->  line 19
+
+both `malformed_tag_declaration`. The weakness is inherited exactly, and
+REQ-31 fixes the key and the technique together — "keys on the top-level
+`[emit.<key>]` header, which `tagHeaderLine`'s technique reaches
+**unchanged**". The ADV-3 leg was retargeted to the licensed contract
+(category asserted, locator asserted to decline rather than point at
+unconfirmable text) and a bracketed control leg was added so the decline
+assertion cannot pass against a locator that always returns 0. This is the
+only test leg changed; the justification is carried in the test's own doc
+comment and in D10.
+
+### Probed and found HANDLED (no test added)
+
+Sorted-union and fail-fast determinism across 50 loads; all eight malformed
+`any`-domain shapes; carry nil-ness; disposition cross-contamination;
+escape-rule coverage; and value conformance per kind.
+
+---
+
 *Phase 3a CoVe verification, run independently of the Phase 1 suite. This
 file was staged concurrently with the Phase 3b adversarial test commit and
 was swept into `18d5db5`; the verification work and FAIL-1 above are Phase
