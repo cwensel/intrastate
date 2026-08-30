@@ -827,6 +827,6 @@ func buildRequest(cmd *cobra.Command, withTags bool) (flowRequest, *clierr.CLIEr
 		modelRef:  ref,
 		artifacts: artifacts,
 		observed:  observed,
-		registry:  flowbind.Registry(model),
+		registry:  flowbind.Registry(model, "", false),
 	}, nil
 }
