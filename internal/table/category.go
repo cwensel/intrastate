@@ -46,6 +46,25 @@ const (
 	CatMalformedEmitDeclaration Category = "malformed_emit_declaration"
 	CatUnknownEmitKey           Category = "unknown_emit_key"
 	CatEmitValueOutOfDomain     Category = "emit_value_out_of_domain"
+
+	// The six RDR 0025 command-carrier categories (`0025:C5`), in clause
+	// order. The wire STRINGS here are the contract; these identifiers are
+	// not. A constant is not in the closed set until it is appended to
+	// Categories() below — an unregistered constant refuses correctly at
+	// the call site while staying invisible to every consumer that
+	// enumerates the set, which is why the registration is asserted
+	// separately from the refusal (`0025:C5`, S1).
+	//
+	// PHASE 1 DECLARATION ONLY. Nothing raises these yet and they are NOT
+	// yet appended to Categories(); the RDR 0025 conformance suite is red
+	// against both by design, and Phase 2 lands the six load arms in
+	// `load.go::accessorTable` and the six tail entries below.
+	CatCommandAndPathConflict    Category = "command_and_path_conflict"
+	CatCommandEmpty              Category = "command_empty"
+	CatCommandUnknownPlaceholder Category = "command_unknown_placeholder"
+	CatCommandShellInterpreter   Category = "command_shell_interpreter"
+	CatCommandOutputShape        Category = "command_output_shape"
+	CatCommandEnvConflict        Category = "command_env_conflict"
 )
 
 // Categories returns the closed load-category set in declaration order.

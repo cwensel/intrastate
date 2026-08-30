@@ -140,13 +140,42 @@ type TagDecl struct {
 }
 
 // Accessor is one `[read.<id>]`, `[write.<id>]`, or `[gate.<id>]` entry.
-// All four of role, path, keys, and timeout are required (`0002:C2`).
+// Role, keys, and timeout are required (`0002:C2`); the CARRIER is exactly
+// one of `path` or `command` (`0025:C1`).
 type Accessor struct {
 	Role     string
 	Path     string
 	Keys     []string
 	Timeout  string
 	ReadBack bool
+
+	// RDR 0025 `0025:C1` — the command carrier. An entry declares exactly
+	// one of Path or Command; both or neither is
+	// `command_and_path_conflict`.
+	//
+	// PHASE 1 DECLARATION ONLY. Nothing populates these yet; the RDR 0025
+	// conformance suite is red against them by design and Phase 2 fills
+	// them in at `load.go::accessorTable` alongside the six C5 arms.
+
+	// Command is the declared argv vector, executed with no shell and no
+	// rewriting beyond whole-element `{artifact}` substitution (`0025:C2`).
+	Command []string
+	// Output selects the read envelope shape, `"json"` or `"raw"`. It is a
+	// POINTER so an omitted declaration stays distinguishable from an
+	// explicit `"json"` at load, where the `command_output_shape` arms are
+	// judged (`0025:C1`).
+	Output *string
+	// ExitAbsent lists the exit codes that, with an empty stdout,
+	// establish every declared key absent. Read entries only (`0025:C3`).
+	ExitAbsent []int
+	// ExitVerdicts maps an exit code to a gate verdict, consulted only for
+	// an empty stdout. Gate entries only (`0025:C3`).
+	ExitVerdicts map[string]string
+	// Env is the entry's literal child-environment layer (`0025:C4`).
+	Env map[string]string
+	// EnvPass names whole parent variables to forward. It admits no
+	// pattern (`0025:C4`).
+	EnvPass []string
 }
 
 // EmitDecl is one emit key's declaration (`0024:C3`).
