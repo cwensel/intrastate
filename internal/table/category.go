@@ -54,11 +54,6 @@ const (
 	// the call site while staying invisible to every consumer that
 	// enumerates the set, which is why the registration is asserted
 	// separately from the refusal (`0025:C5`, S1).
-	//
-	// PHASE 1 DECLARATION ONLY. Nothing raises these yet and they are NOT
-	// yet appended to Categories(); the RDR 0025 conformance suite is red
-	// against both by design, and Phase 2 lands the six load arms in
-	// `load.go::accessorTable` and the six tail entries below.
 	CatCommandAndPathConflict    Category = "command_and_path_conflict"
 	CatCommandEmpty              Category = "command_empty"
 	CatCommandUnknownPlaceholder Category = "command_unknown_placeholder"
@@ -98,6 +93,16 @@ func Categories() []Category {
 		CatMalformedEmitDeclaration,
 		CatUnknownEmitKey,
 		CatEmitValueOutOfDomain,
+
+		// The six RDR 0025 command-carrier categories, appended at the
+		// TAIL in C5 clause order so a consumer enumerating the list sees
+		// additions only there (`0025:C5`).
+		CatCommandAndPathConflict,
+		CatCommandEmpty,
+		CatCommandUnknownPlaceholder,
+		CatCommandShellInterpreter,
+		CatCommandOutputShape,
+		CatCommandEnvConflict,
 	}
 }
 

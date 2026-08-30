@@ -46,15 +46,18 @@ role = ""
 path = "rdr.lock"
 keys = ["status"]
 timeout = "2s"`, table.CatMalformedAccessorDeclaration},
+		// RDR 0025 `0025:C1`/REQ-14: a command entry is now legal here, so
+		// the path-absent case moves to `command_and_path_conflict` —
+		// changing CATEGORY, not verdict. The entry still refuses.
 		{"absent path", `[gate.rdr-lock]
 role = "rdr"
 keys = ["status"]
-timeout = "2s"`, table.CatMalformedAccessorDeclaration},
+timeout = "2s"`, table.CatCommandAndPathConflict},
 		{"empty path", `[gate.rdr-lock]
 role = "rdr"
 path = ""
 keys = ["status"]
-timeout = "2s"`, table.CatMalformedAccessorDeclaration},
+timeout = "2s"`, table.CatCommandAndPathConflict},
 		{"absent keys", `[gate.rdr-lock]
 role = "rdr"
 path = "rdr.lock"

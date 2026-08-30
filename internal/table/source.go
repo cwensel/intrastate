@@ -87,6 +87,22 @@ type sourceAcc struct {
 	Keys     *[]string `toml:"keys"`
 	Timeout  *string   `toml:"timeout"`
 	ReadBack *bool     `toml:"read_back"`
+
+	// The six RDR 0025 command-carrier fields (`0025:C1`). They are the
+	// complete set this RDR adds: strict decoding makes a field absent
+	// from this struct a document-level `unknown_schema_field`, so
+	// declaring them here is the precondition of C5 reporting anything.
+	//
+	// Command is a POINTER to a slice so an explicit `command = []` stays
+	// distinguishable from an absent key: the empty vector is
+	// `command_empty` while absence beside an absent `path` is
+	// `command_and_path_conflict`.
+	Command      *[]string          `toml:"command"`
+	Output       *string            `toml:"output"`
+	ExitAbsent   *[]int             `toml:"exit_absent"`
+	ExitVerdicts *map[string]string `toml:"exit_verdicts"`
+	Env          *map[string]string `toml:"env"`
+	EnvPass      *[]string          `toml:"env_pass"`
 }
 
 type sourceContext struct {

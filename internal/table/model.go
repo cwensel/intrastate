@@ -152,10 +152,6 @@ type Accessor struct {
 	// RDR 0025 `0025:C1` — the command carrier. An entry declares exactly
 	// one of Path or Command; both or neither is
 	// `command_and_path_conflict`.
-	//
-	// PHASE 1 DECLARATION ONLY. Nothing populates these yet; the RDR 0025
-	// conformance suite is red against them by design and Phase 2 fills
-	// them in at `load.go::accessorTable` alongside the six C5 arms.
 
 	// Command is the declared argv vector, executed with no shell and no
 	// rewriting beyond whole-element `{artifact}` substitution (`0025:C2`).

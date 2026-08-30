@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	toml "github.com/pelletier/go-toml/v2"
 
@@ -935,10 +936,15 @@ func (l *loader) loadAccessors() error {
 	return nil
 }
 
-// accessorTable validates one capability table. Each of role, path, keys,
-// and timeout is required, and any of them absent, empty, or ill-formed is
-// a `malformed accessor declaration` — except a keys member naming an
+// accessorTable validates one capability table. Role, keys, and timeout
+// are required, and any of them absent, empty, or ill-formed is a
+// `malformed accessor declaration` — except a keys member naming an
 // undeclared tag, which carries `unknown tag` (`0002:C2`).
+//
+// The CARRIER is exactly one of `path` or `command`, and its defects carry
+// RDR 0025's own six categories rather than the inherited one (`0025:C1`,
+// `0025:C5`). The other four rules are unchanged: C1 relaxes only the path
+// rule.
 func (l *loader) accessorTable(src map[string]sourceAcc, capability string, wantReadBack bool) (map[string]Accessor, error) {
 	out := make(map[string]Accessor, len(src))
 	for id, a := range src {
@@ -948,8 +954,6 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		switch {
 		case a.Role == nil || *a.Role == "":
 			return nil, bad("role is absent or empty")
-		case a.Path == nil || *a.Path == "":
-			return nil, bad("path is absent or empty")
 		case a.Keys == nil || len(*a.Keys) == 0:
 			return nil, bad("keys is absent or empty")
 		case a.Timeout == nil:
@@ -961,6 +965,13 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		}
 		if d <= 0 {
 			return nil, bad("timeout " + *a.Timeout + " is not positive")
+		}
+
+		// The CARRIER, before the per-key checks: C5's arms judge the
+		// entry's own declaration, and a raw-mode arity defect must not be
+		// masked by a key that happens to name the reserved kernel key.
+		if err := carrierDefect(a, capability, id, *a.Keys); err != nil {
+			return nil, err
 		}
 
 		for _, key := range *a.Keys {
@@ -983,16 +994,252 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 			return nil, bad("read_back is a write-entry key")
 		}
 
-		out[id] = Accessor{
+		acc := Accessor{
 			Role:     *a.Role,
-			Path:     *a.Path,
 			Keys:     *a.Keys,
 			Timeout:  *a.Timeout,
 			ReadBack: a.ReadBack != nil && *a.ReadBack,
+			Output:   a.Output,
 		}
+		if a.Path != nil {
+			acc.Path = *a.Path
+		}
+		if a.Command != nil {
+			acc.Command = slices.Clone(*a.Command)
+		}
+		if a.ExitAbsent != nil {
+			acc.ExitAbsent = slices.Clone(*a.ExitAbsent)
+		}
+		if a.ExitVerdicts != nil {
+			acc.ExitVerdicts = maps.Clone(*a.ExitVerdicts)
+		}
+		if a.Env != nil {
+			acc.Env = maps.Clone(*a.Env)
+		}
+		if a.EnvPass != nil {
+			acc.EnvPass = slices.Clone(*a.EnvPass)
+		}
+		out[id] = acc
 	}
 	return out, nil
 }
+
+// commandPlaceholders is the CLOSED v1 placeholder vocabulary (`0025:C2`).
+// A placeholder is recognized only as a WHOLE argv element.
+var commandPlaceholders = []string{"{artifact}"}
+
+// shellInterpreters is C5's OPEN deny-list: argv0 forms that take inline
+// code on a flag. It is deliberately not closed — an unlisted interpreter
+// is admitted, so the check raises the cost of an inline-shell carrier
+// without claiming to make one impossible (`0025:C5`).
+var shellInterpreters = map[string][]string{
+	"sh":     {"-c"},
+	"bash":   {"-c"},
+	"dash":   {"-c"},
+	"ksh":    {"-c"},
+	"zsh":    {"-c"},
+	"csh":    {"-c"},
+	"tcsh":   {"-c"},
+	"python": {"-c"},
+	"ruby":   {"-e"},
+	"node":   {"-e", "--eval"},
+	"php":    {"-r"},
+}
+
+// envReservedPrefix is the literal, case-sensitive prefix the C4 overlay
+// reserves. An `env` key or `env_pass` name matching it is a defect, so
+// the overlay is never shadowed silently (`0025:C5`).
+const envReservedPrefix = "INTRASTATE_"
+
+// carrierDefect reports the FIRST C5 defect an entry carries, in the
+// clause order C5 declares: conflict, empty, unknown placeholder, shell
+// interpreter, output shape, env conflict. Load is fail-fast, so an entry
+// carrying several reports the earliest (`0025:C5` precedence).
+func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
+	where := capability + " " + id
+	hasPath := a.Path != nil && *a.Path != ""
+	hasCommand := a.Command != nil
+
+	// 1 — command_and_path_conflict: both or neither carrier.
+	//
+	// "Both" is keyed on the KEYS being declared, so an empty `path`
+	// beside a `command` is still a conflict rather than a silently
+	// ignored second carrier; "neither" is keyed on neither being a
+	// USABLE carrier, which is where the old "path is absent or empty"
+	// arm lands now that a command entry is legal (REQ-7, REQ-14).
+	switch {
+	case a.Path != nil && a.Command != nil:
+		return fail(CatCommandAndPathConflict,
+			where+" declares both `path` and `command`; an entry carries "+
+				"exactly one carrier")
+	case !hasPath && !hasCommand:
+		return fail(CatCommandAndPathConflict,
+			where+" declares neither `path` nor `command`; an entry carries "+
+				"exactly one carrier")
+	}
+
+	if hasCommand {
+		argv := *a.Command
+
+		// 2 — command_empty: an empty vector or an empty element.
+		if len(argv) == 0 {
+			return fail(CatCommandEmpty, where+" declares an empty `command` vector")
+		}
+		for i, el := range argv {
+			if el == "" {
+				return fail(CatCommandEmpty,
+					where+" declares an empty `command` element at index "+strconv.Itoa(i))
+			}
+		}
+
+		// 3 — command_unknown_placeholder: an unknown or non-whole-element
+		// `{…}` token. Never silently-literal text.
+		for _, el := range argv {
+			if slices.Contains(commandPlaceholders, el) {
+				continue
+			}
+			// A brace-bearing element is a PLACEHOLDER ATTEMPT only when it
+			// is a single word. An element carrying whitespace is a command
+			// STRING — the `sh -c "cat {artifact}"` shape — which clause 4
+			// owns; reading it as a malformed placeholder would report the
+			// wrong defect and mask the interpreter form (deviations D6).
+			if strings.ContainsAny(el, "{}") && strings.IndexFunc(el, unicode.IsSpace) < 0 {
+				return fail(CatCommandUnknownPlaceholder,
+					where+" declares the element "+el+
+						", which carries a `{…}` token that is not exactly a known "+
+						"placeholder; the v1 vocabulary is "+
+						strings.Join(commandPlaceholders, ", "))
+			}
+		}
+
+		// 4 — command_shell_interpreter: argv0 plus an inline-code flag.
+		if el, ok := interpreterForm(argv); ok {
+			return fail(CatCommandShellInterpreter,
+				where+" declares the interpreter form "+el+
+					"; inline shell is not a declared command; put it in a script "+
+					"and declare the script as argv0")
+		}
+	}
+
+	// 5 — command_output_shape.
+	if err := outputShapeDefect(a, capability, where, keys); err != nil {
+		return err
+	}
+
+	// 6 — command_env_conflict.
+	if a.Env != nil {
+		for _, k := range slices.Sorted(maps.Keys(*a.Env)) {
+			if strings.HasPrefix(k, envReservedPrefix) {
+				return fail(CatCommandEnvConflict,
+					where+" declares the `env` key "+k+", which matches the "+
+						"reserved "+envReservedPrefix+" prefix the overlay owns")
+			}
+		}
+	}
+	if a.EnvPass != nil {
+		for _, v := range *a.EnvPass {
+			if strings.HasPrefix(v, envReservedPrefix) {
+				return fail(CatCommandEnvConflict,
+					where+" names the `env_pass` variable "+v+", which matches "+
+						"the reserved "+envReservedPrefix+" prefix the overlay owns")
+			}
+		}
+	}
+	return nil
+}
+
+// interpreterForm reports the offending element when argv names a known
+// interpreter followed by that interpreter's inline-code flag, walking
+// through an `env` chain so `["env", "sh", "-c", …]` is caught too.
+func interpreterForm(argv []string) (string, bool) {
+	i := 0
+	for i < len(argv) && filepathBase(argv[i]) == "env" {
+		i++
+		// Skip `env`'s own NAME=VALUE assignments.
+		for i < len(argv) && strings.Contains(argv[i], "=") {
+			i++
+		}
+	}
+	if i >= len(argv) {
+		return "", false
+	}
+	flags, known := shellInterpreters[filepathBase(argv[i])]
+	if !known {
+		return "", false
+	}
+	for _, arg := range argv[i+1:] {
+		if slices.Contains(flags, arg) {
+			return argv[i] + " " + arg, true
+		}
+	}
+	return "", false
+}
+
+// filepathBase is `path.Base` over the declared argv0 spelling, so
+// `/bin/sh -c` is recognized as the same form as `sh -c`. It stays a
+// string operation: this package performs no path RESOLUTION (`0002:EIA`).
+func filepathBase(s string) string {
+	if i := strings.LastIndexByte(s, '/'); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// outputShapeDefect covers C5's three output-shape arms: `output = "raw"`
+// with a declared key set whose ARITY is not one, `exit_absent` on a
+// non-read entry, and `exit_verdicts` on a non-gate entry or naming a
+// value outside the closed verdict set. `output` itself is a read-entry
+// key admitting exactly `"json"` or `"raw"` (`0025:C1`, `0025:C3`).
+func outputShapeDefect(a sourceAcc, capability, where string, keys []string) error {
+	if a.Output != nil {
+		if capability != "read" {
+			return fail(CatCommandOutputShape,
+				where+" declares `output`, which is a read-entry key")
+		}
+		switch *a.Output {
+		case "json":
+		case "raw":
+			// Valid only when the declared key list has arity one. The
+			// ARITY is the declared list's length, not its distinct set: a
+			// repeated key still declares two, which raw mode cannot carry.
+			if len(keys) != 1 {
+				return fail(CatCommandOutputShape,
+					where+` declares output = "raw" with `+
+						strconv.Itoa(len(keys))+" declared keys; raw mode carries "+
+						"the single declared key's value and is valid only at arity one")
+			}
+		default:
+			return fail(CatCommandOutputShape,
+				where+" declares output "+strconv.Quote(*a.Output)+
+					`; the admitted literals are "json" and "raw"`)
+		}
+	}
+	if a.ExitAbsent != nil && capability != "read" {
+		return fail(CatCommandOutputShape,
+			where+" declares `exit_absent`, which is a read-entry key")
+	}
+	if a.ExitVerdicts != nil {
+		if capability != "gate" {
+			return fail(CatCommandOutputShape,
+				where+" declares `exit_verdicts`, which is a gate-entry key")
+		}
+		for _, code := range slices.Sorted(maps.Keys(*a.ExitVerdicts)) {
+			v := (*a.ExitVerdicts)[code]
+			if !slices.Contains(commandVerdicts, v) {
+				return fail(CatCommandOutputShape,
+					where+" maps exit "+code+" to "+strconv.Quote(v)+
+						", which is not a gate verdict")
+			}
+		}
+	}
+	return nil
+}
+
+// commandVerdicts mirrors `accessor.Verdicts()`, which this package cannot
+// import: `internal/accessor` imports `internal/table`, so naming the
+// three here is what keeps the dependency one-way. RDR 0004 owns the
+// vocabulary; C3 fixes that the exit map's values ARE those strings.
+var commandVerdicts = []string{"allow", "deny", "indeterminate"}
 
 // checkAccessorBindings enforces the provenance-scoped arity rules, which
 // need the normalized rows: the written-key set is what the rules' write

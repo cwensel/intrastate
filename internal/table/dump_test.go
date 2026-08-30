@@ -857,6 +857,17 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		table.CatMalformedEmitDeclaration: "neg/neg-emit-unknown-kind.toml",
 		table.CatUnknownEmitKey:           "neg/neg-emit-unknown-key.toml",
 		table.CatEmitValueOutOfDomain:     "neg/neg-emit-value-out-of-domain.toml",
+
+		// RDR 0025's six command-carrier categories, registered in the
+		// same map for the same reason: it is the FLOOR, and a category
+		// witnessed only by its own scenario silently stops covering the
+		// surface this map names (`0025:C5`).
+		table.CatCommandAndPathConflict:    "neg/neg-command-and-path-conflict.toml",
+		table.CatCommandEmpty:              "neg/neg-command-empty.toml",
+		table.CatCommandUnknownPlaceholder: "neg/neg-command-unknown-placeholder.toml",
+		table.CatCommandShellInterpreter:   "neg/neg-command-shell-interpreter.toml",
+		table.CatCommandOutputShape:        "neg/neg-command-output-shape.toml",
+		table.CatCommandEnvConflict:        "neg/neg-command-env-conflict.toml",
 	}
 
 	t.Run("every category the floor names is exported", func(t *testing.T) {
