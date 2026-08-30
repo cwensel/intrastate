@@ -125,11 +125,27 @@ type invocation struct {
 	stdout   []byte
 	stderr   string
 	exitCode int
-	// exited reports that the process RAN and exited. The two exit maps are
-	// consulted only for a process that ran, so a spawn failure — which has
-	// no exit code at all — can never be claimed by them however broadly
-	// they are written (`0025:C3`).
+	// exited reports that the process RAN and exited OF ITS OWN ACCORD with
+	// a real exit code. The two exit maps are consulted only for such a
+	// process, so a spawn failure — which has no exit code at all — can
+	// never be claimed by them however broadly they are written
+	// (`0025:C3`).
+	//
+	// A process the parent SIGNALLED is the same case: `Wait` reports a
+	// SIGKILL as an `*exec.ExitError` whose `ExitCode()` is the synthetic
+	// -1, but a killed process no more exited than a spawn failure did, and
+	// a lint-green `exit_absent = [-1]` / `exit_verdicts = { "-1" = ... }`
+	// would otherwise convert a child killed BEFORE IT ANSWERED into
+	// established absence or a verdict the model never decided
+	// (`0025:F1`/`0025:F2`/`0025:F3`). The distinction is made HERE, at the
+	// binding, and not by the executor's independent `ctx.Err()` check —
+	// `0025:C6` forbids a safety property that rests on "a coincidence
+	// between two independent decisions", and the executor's check does not
+	// cover `context.Canceled` at all.
 	exited bool
+	// signaled reports that the child was terminated by a signal, which is
+	// what the refusal text says instead of the meaningless "exited -1".
+	signaled bool
 }
 
 // spawn performs the whole pre-spawn refusal ladder and, past it, one
@@ -237,9 +253,16 @@ func spawn(
 	case werr == nil:
 		inv.exited = true
 	case errors.As(werr, &ee):
-		// `Wait` reports a deadline kill as an ExitError too, so the
-		// deadline is classified from ctx.Err() by the caller and never
-		// from this error (`0025:C4`).
+		// `Wait` reports a SIGNALLED child as an ExitError too, with the
+		// synthetic exit code -1. A killed process did not exit, so the exit
+		// maps must not be able to claim it (`0025:C3`); the deadline itself
+		// is classified from ctx.Err() by the caller and never from this
+		// error (`0025:C4`).
+		if status, held := ee.Sys().(syscall.WaitStatus); held && status.Signaled() {
+			inv.signaled = true
+			inv.exitCode = ee.ExitCode()
+			break
+		}
 		inv.exited = true
 		inv.exitCode = ee.ExitCode()
 	default:
@@ -491,6 +514,11 @@ func (r Reader) Read(ctx context.Context, art accessor.Artifact, requested []str
 		}
 		return values, nil, nil
 	}
+	if inv.signaled {
+		return nil, nil, wrap(inv.stderr, errors.New(
+			"the read command produced no stdout and was killed by a signal "+
+				"before it exited, so its `exit_absent` map does not apply"))
+	}
 	return nil, nil, wrap(inv.stderr, errors.New(
 		"the read command produced no stdout and exited "+
 			strconv.Itoa(inv.exitCode)+
@@ -589,6 +617,11 @@ func (g Gate) Gate(ctx context.Context, art accessor.Artifact) (
 			return accessor.Verdict(v), "", nil
 		}
 	}
+	if inv.signaled {
+		return "", "", wrap(inv.stderr, errors.New(
+			"the gate command produced no stdout and was killed by a signal "+
+				"before it exited, so its `exit_verdicts` map does not apply"))
+	}
 	return "", "", wrap(inv.stderr, errors.New(
 		"the gate command produced no stdout and exited "+
 			strconv.Itoa(inv.exitCode)+
@@ -620,6 +653,10 @@ func (w *Writer) Apply(ctx context.Context, art accessor.Artifact, planned []res
 		stdinObject(planned))
 	if err != nil {
 		return err
+	}
+	if inv.signaled {
+		return wrap(inv.stderr, errors.New(
+			"the write command was killed by a signal before it exited"))
 	}
 	if inv.exitCode != 0 {
 		return wrap(inv.stderr, errors.New(
