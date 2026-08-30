@@ -298,3 +298,55 @@ func TestAdv3_0024_TheDeclarationLocatorDeclinesOnAnInlineTableDeclaration(t *te
 		}
 	})
 }
+
+// ADV-4. The `[[rule]]` CENSUS, not the id anchor, is the locator's other
+// load-bearing half. `emitRuleLine` counts the `[[rule]]` headers it can
+// recognize and indexes that census with the decoder's ordinal, so any
+// legal spelling the census misses drops a block and slides every LATER
+// ordinal onto the wrong rule.
+//
+// This is strictly worse than the degenerate `:1` that `0024:MVV` step 2
+// forbids ("each carrying the offending block's SOURCE LINE, not `:1`").
+// A missing line is honest; a line inside a DIFFERENT, innocent rule is the
+// "pointing at the wrong text costs more than pointing at no text" failure
+// `emitRuleLine`'s own doc comment disclaims, and it sends the author to
+// edit a rule that carries no defect.
+//
+// The probe respells ONE header — the first — using TOML's quoted-key
+// grammar. `[["rule"]]` and `[['rule']]` name the same array table as
+// `[[rule]]`; the decoder places all of them in `l.doc.Rule`, so the
+// ordinal is unchanged and only the census can disagree. The defect is
+// then authored on a LATER rule, which is where a census that is short by
+// one shows up.
+//
+// REQ-30: "All three categories MUST carry a source line".
+// REQ-32: the rule-side defect "keys on the offending RULE ID".
+// ADVERSARIAL
+func TestAdv4_0024_TheRuleCensusSurvivesQuotedRuleHeaders(t *testing.T) {
+	for _, tc := range []struct{ name, spelling string }{
+		{"a basic-string key", `[["rule"]]`},
+		{"a literal-string key", `[['rule']]`},
+		{"a spaced basic-string key", `[[ "rule" ]]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The defect sits on `reconcile-rewind`, the THIRD rule, so a
+			// census that misses the first header reports the fourth rule's
+			// block instead of the third's.
+			src := advFixture(t, advEnumDecl, "reconcile-rewind",
+				"next_command = \"bad\"\n")
+			src = strings.Replace(src, "[[rule]]", tc.spelling, 1)
+
+			f := advRefusal(t, src)
+			if f.Category != table.CatEmitValueOutOfDomain {
+				t.Fatalf("category = %q, want %q", f.Category, table.CatEmitValueOutOfDomain)
+			}
+			want := advLineOf(src, `id = "reconcile-rewind"`)
+			if f.Line != want {
+				t.Errorf("Line = %d, want %d with the first rule header spelled %s; "+
+					"the census dropped it and slid the ordinal onto another rule's "+
+					"block, which points the author at innocent text — worse than "+
+					"the `:1` `0024:MVV` step 2 forbids", f.Line, want, tc.spelling)
+			}
+		})
+	}
+}

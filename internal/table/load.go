@@ -608,18 +608,34 @@ func emitRuleLine(src []byte, ruleID string, ordinal int) int {
 // count: a dotted header such as `[rule.emit]` belongs to the block it sits
 // in and does not close it, so it reports empty.
 //
-// The reported header is CANONICAL: TOML admits whitespace inside the
-// brackets, so `[[ rule ]]` and `[[rule]]` name the same array table and
-// must compare equal. Reporting the authored spelling instead would drop
-// the spaced form from a caller's `[[rule]]` census and shift every later
-// ordinal onto the wrong block — the "pointing at the wrong text costs
-// more than pointing at no text" failure `emitRuleLine` disclaims.
+// The reported header is CANONICAL: TOML fixes no single spelling for a
+// key. Whitespace inside the brackets is free, and a bare key, a basic
+// string key and a literal string key are interchangeable — `[[rule]]`,
+// `[[ rule ]]`, `[["rule"]]` and `[['rule']]` all name the same array
+// table and must compare equal. Reporting the authored spelling instead
+// would drop the other forms from a caller's `[[rule]]` census and shift
+// every later ordinal onto the wrong block — the "pointing at the wrong
+// text costs more than pointing at no text" failure `emitRuleLine`
+// disclaims, and worse than the bare `:1` `0024:MVV` step 2 forbids,
+// because it sends an author to edit an innocent rule.
+//
+// Only a MATCHED outer quote pair is stripped, and only from an otherwise
+// bare key. Folding anything looser would fuse a genuinely distinct table
+// name into `rule` and add a PHANTOM census entry, shifting ordinals the
+// other way.
 func tableHeader(raw string) string {
 	text := strings.TrimSpace(stripComment(raw))
 	if !strings.HasPrefix(text, "[") || !strings.HasSuffix(text, "]") {
 		return ""
 	}
-	name := strings.TrimSpace(strings.Trim(text, "[]"))
+	name := unquoteKey(strings.TrimSpace(strings.Trim(text, "[]")))
+	// The dot test runs AFTER unquoting, so it is applied to the key's
+	// CONTENT rather than to its punctuation. `[["rule.other"]]` is
+	// therefore excluded exactly as `[rule.other]` is. That is the
+	// conservative direction: TOML reads the quoted dot as one ordinary
+	// key, but this scan only needs to know which lines end a `[[rule]]`
+	// block, and declining a name it cannot confidently reduce to `rule`
+	// keeps it out of the census rather than adding a phantom entry.
 	if strings.Contains(name, ".") {
 		return ""
 	}
@@ -627,6 +643,27 @@ func tableHeader(raw string) string {
 		return "[[" + name + "]]"
 	}
 	return "[" + name + "]"
+}
+
+// unquoteKey strips a MATCHED outer quote pair off a single TOML key,
+// reporting the key's content. TOML admits three interchangeable spellings
+// of the same key — bare (`rule`), basic string (`"rule"`) and literal
+// string (`'rule'`) — so canonicalizing them to the bare form is what lets
+// one string comparison recognize a table however it was authored.
+//
+// It is deliberately narrow. A lone or mismatched quote is NOT a quoted
+// key and is reported unchanged, so a table genuinely named `"rule` can
+// never be folded into the `rule` census. It performs no escape
+// processing: an escape inside a table-name key is outside what this
+// line-oriented scan claims to recognize, and reporting the raw content
+// keeps such a key distinct rather than guessing it equal to another.
+func unquoteKey(name string) string {
+	for _, q := range []byte{'"', '\''} {
+		if len(name) >= 2 && name[0] == q && name[len(name)-1] == q {
+			return name[1 : len(name)-1]
+		}
+	}
+	return name
 }
 
 // scalarAssignment reads a bare `key = <string>` assignment off one line and
