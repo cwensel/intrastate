@@ -372,7 +372,7 @@ func TestReq106_0024_TheDispositionsFieldCarriesTheD1RegistrationNote(t *testing
 	}
 	note := head[start:]
 
-	for _, want := range []string{"PLAN", "JDR 0002"} {
+	for _, want := range []string{"PLAN", "JDR 0002 §D1"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("the `Dispositions` field declaration carries no note "+
 				"naming %q; in the 0024-first order that written, "+

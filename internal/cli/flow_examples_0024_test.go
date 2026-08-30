@@ -58,24 +58,53 @@ func TestReq86_0024_ThePricingExampleDeclaresTheValuesItActuallyAuthors(t *testi
 	requireSuccess(t, "lint", "--model", path, "--as=json")
 }
 
-// REQ-86 second leg: the declarations are load-bearing, so `resolve` over
-// the example surfaces a joined `dispositions` entry rather than `{}`.
-// HAPPY PATH
-func TestReq86_0024_ThePricingExampleResolvesWithJoinedDispositions(t *testing.T) {
+// REQ-86 second leg: `PH4` fixes the pricing example on the FLAT
+// spelling - "Neither `plan` nor `dpa` splits into routes and stops, so
+// declaring this model demonstrates `domain = [ ... ]` and nothing else"
+// - so its declarations carry no dispositions and `resolve` over it
+// answers with an EMPTY `dispositions` object. The non-empty join is
+// proved against the routing example, which REQ-87 adds as the
+// partitioned form's home.
+// BOUNDARY
+func TestReq86_0024_ThePricingExampleResolvesWithEmptyDispositions(t *testing.T) {
 	stdout := requireSuccess(t, "flow", "resolve",
 		"--model", pricingModelPath(t), "--outcome", "decide",
 		"--tag", "tier=paid", "--tag", "region=eu", "--as=json")
 
 	data := flowData(t, stdout)
 	got := dispositionsOf(t, data)
-	if len(got) == 0 {
-		t.Errorf("`flow resolve` over the pricing example joined NO "+
-			"dispositions; Phase 4 declares its emit keys against the "+
-			"values it authors. payload = %v", data)
+	if len(got) != 0 {
+		t.Errorf("`flow resolve` over the pricing example joined %d "+
+			"disposition(s); `PH4` declares both its emit keys with the flat "+
+			"`domain = [ ... ]` spelling, which carries none. The partitioned "+
+			"form's home is the routing example. payload = %v",
+			len(got), data)
 	}
-	// The selected row `paid-eu` authors `plan = "pro"` and `dpa =
-	// "required"`; whichever key the example partitions, the surfaced
-	// token must be one the declaration lists.
+}
+
+// REQ-86 / REQ-87: the declarations are load-bearing, so `resolve` over
+// the PARTITIONED example surfaces a joined `dispositions` entry rather
+// than `{}`. This is the non-empty leg the flat pricing example cannot
+// carry.
+// HAPPY PATH
+func TestReq86_0024_TheRoutingExampleResolvesWithJoinedDispositions(t *testing.T) {
+	path := filepath.Join(repoRootFor(t), "models", "examples",
+		"routing-decision-table.toml")
+
+	stdout := requireSuccess(t, "flow", "resolve",
+		"--model", path, "--outcome", "triage",
+		"--tag", "severity=high", "--tag", "owner=assigned", "--as=json")
+
+	data := flowData(t, stdout)
+	got := dispositionsOf(t, data)
+	if len(got) == 0 {
+		t.Errorf("`flow resolve` over the routing example joined NO "+
+			"dispositions; REQ-87 adds it precisely as the partitioned "+
+			"declaration's worked example. payload = %v", data)
+	}
+
+	// An entry exists only when the authored value sits under a
+	// disposition, so no surfaced token may be empty.
 	for key, token := range got {
 		if token == "" {
 			t.Errorf("dispositions[%q] is the empty string; an entry exists "+

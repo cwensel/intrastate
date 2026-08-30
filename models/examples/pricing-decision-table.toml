@@ -61,13 +61,12 @@ required = true
 # member no row authors is legal authoring headroom; declaring one SHORT of
 # what a row authors refuses that row.
 #
-# `dpa` takes the partitioned spelling, so each member carries a
-# model-authored disposition token. intrastate fixes no disposition
-# vocabulary and never interprets a token: `gate` and `clear` mean whatever
-# the consumer decides they mean, and they arrive verbatim in `flow
-# resolve`'s `dispositions` object. `plan` takes the flat spelling — a
-# domain with no dispositions — which is what a key you want CHECKED but
-# not ROUTED looks like.
+# Both keys take the FLAT spelling — a domain with no dispositions — which
+# is what a key you want CHECKED but not ROUTED looks like. Neither `plan`
+# nor `dpa` splits into routes and stops, so this model demonstrates
+# `domain = [ ... ]` and nothing else; `flow resolve` answers with an empty
+# `dispositions` object over it. The partitioned `[emit.<key>.domain]`
+# spelling has its own home in `routing-decision-table.toml`.
 
 [emit.plan]
 kind = "enum"
@@ -75,9 +74,7 @@ domain = ["basic", "pro"]
 
 [emit.dpa]
 kind = "enum"
-[emit.dpa.domain]
-gate = ["required"]
-clear = ["none"]
+domain = ["required", "none"]
 
 [[rule]]
 id = "free-eu"

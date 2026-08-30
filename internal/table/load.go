@@ -567,6 +567,11 @@ func emitRuleLine(src []byte, ruleID string, ordinal int) int {
 			starts = append(starts, i)
 		}
 	}
+	// `ordinal` indexes `l.doc.Rule`, so it is only meaningful while the
+	// scanned census aligns with what the decoder found. A spelling this
+	// scan fails to recognize would shift later ordinals onto the wrong
+	// block, so an out-of-range ordinal reports NO line rather than a
+	// confidently wrong one.
 	if ordinal < 0 || ordinal >= len(starts) {
 		return 0
 	}
@@ -602,15 +607,26 @@ func emitRuleLine(src []byte, ruleID string, ordinal int) int {
 // the empty string where the line declares none. Only TOP-LEVEL headers
 // count: a dotted header such as `[rule.emit]` belongs to the block it sits
 // in and does not close it, so it reports empty.
+//
+// The reported header is CANONICAL: TOML admits whitespace inside the
+// brackets, so `[[ rule ]]` and `[[rule]]` name the same array table and
+// must compare equal. Reporting the authored spelling instead would drop
+// the spaced form from a caller's `[[rule]]` census and shift every later
+// ordinal onto the wrong block — the "pointing at the wrong text costs
+// more than pointing at no text" failure `emitRuleLine` disclaims.
 func tableHeader(raw string) string {
 	text := strings.TrimSpace(stripComment(raw))
 	if !strings.HasPrefix(text, "[") || !strings.HasSuffix(text, "]") {
 		return ""
 	}
-	if strings.Contains(strings.Trim(text, "[]"), ".") {
+	name := strings.TrimSpace(strings.Trim(text, "[]"))
+	if strings.Contains(name, ".") {
 		return ""
 	}
-	return text
+	if strings.HasPrefix(text, "[[") && strings.HasSuffix(text, "]]") {
+		return "[[" + name + "]]"
+	}
+	return "[" + name + "]"
 }
 
 // scalarAssignment reads a bare `key = <string>` assignment off one line and
