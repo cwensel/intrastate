@@ -465,10 +465,21 @@ func (l *loader) checkRuleEmit() error {
 		return nil
 	}
 
-	for _, rule := range l.doc.Rule {
+	for ordinal, rule := range l.doc.Rule {
 		ruleID := ""
 		if rule.ID != nil {
 			ruleID = *rule.ID
+		}
+		// This step runs AHEAD of `normalizeRules` because `0024:C2` fixes
+		// it there ("before yielding rows"), and `normalizeRules` is where
+		// the missing-id, malformed-id and duplicate-id categories are
+		// minted. So a rule id read here is not yet proven present, and the
+		// refusal names the rule POSITIONALLY when it is absent rather than
+		// rendering "rule  emits …", which attributes the defect to nothing.
+		// The ordering C2 fixes is untouched; only the naming degrades.
+		named := "rule " + ruleID
+		if ruleID == "" {
+			named = "rule #" + strconv.Itoa(ordinal+1)
 		}
 		// Sorted, so which of several defects in one block is reported does
 		// not ride the map seed.
@@ -476,8 +487,8 @@ func (l *loader) checkRuleEmit() error {
 			decl, declared := l.model.EmitDecls[key]
 			if !declared {
 				return atLine(fail(CatUnknownEmitKey,
-					"rule "+ruleID+" emits the undeclared key "+key),
-					emitRuleLine(l.src, ruleID))
+					named+" emits the undeclared key "+key),
+					emitRuleLine(l.src, ruleID, ordinal))
 			}
 			// A scalar key is short-circuited BEFORE the call rather than
 			// relying on conformKind's fall-through: the escape hatch is
@@ -493,9 +504,9 @@ func (l *loader) checkRuleEmit() error {
 			if err := ConformValue(
 				TagDecl{Kind: decl.Kind, Domain: decl.Domain}, rule.Emit[key]); err != nil {
 				return atLine(fail(CatEmitValueOutOfDomain,
-					"rule "+ruleID+" emits "+key+" = "+
+					named+" emits "+key+" = "+
 						strconv.Quote(rule.Emit[key])+": "+err.Error()),
-					emitRuleLine(l.src, ruleID))
+					emitRuleLine(l.src, ruleID, ordinal))
 			}
 		}
 	}
@@ -512,23 +523,153 @@ func emitHeaderLine(src []byte, key string) int {
 	return headerLine(src, "[emit."+key+"]", "[emit."+strconv.Quote(key)+"]")
 }
 
-// emitRuleLine reports the 1-based line of the `id = "<ruleID>"` line
-// belonging to the rule that authored the offending emit block, or ZERO.
+// emitRuleLine reports the 1-based line locating the rule that authored the
+// offending emit block: its `id` assignment where one is authored, and
+// otherwise its `[[rule]]` header.
 //
-// A rule-side defect keys on the offending RULE ID rather than on its
+// A rule-side defect keys on the offending RULE rather than on its
 // `[rule.emit]` header, because a rule's emit block is not identifiable on
 // its own: `[rule.emit]` is spelled identically under every `[[rule]]`, so
-// a scan for it cannot tell which rule it belongs to. The rule id can: it
-// is authored once per rule and is the identity the refusal already names.
+// a scan for it cannot tell which rule it belongs to (`0024:C2`).
 //
-// The anchor matches the id's VALUE, not the bare `id` key, since `[model]`
-// carries an `id` key too — matching the key would stamp the model header's
-// line on every rule-side refusal.
-func emitRuleLine(src []byte, ruleID string) int {
-	if ruleID == "" {
+// REQ-32/REQ-76 fix the technique as a rule-id-anchored, BLOCK-BOUNDED
+// FORWARD SCAN, and both halves carry weight:
+//
+//   - Block-bounded. The scan starts at the ordinal's `[[rule]]` header and
+//     stops at the next top-level table header, so it can only ever read
+//     the offending rule's own text. That is what closes the `[model]`
+//     id-collision hazard C2 raises: `[model]`'s `id` is outside every rule
+//     block, so it is never a candidate, and a rule id that happens to
+//     equal the model id still recovers its own line. It also closes the
+//     duplicate-id collision, which C2 assumed away on the premise that
+//     `CatDuplicateRuleID` runs first — false as built, since C2 itself
+//     places both emit steps AHEAD of `normalizeRules`, where the
+//     missing-id, malformed-id and duplicate-id categories are enforced.
+//     Ordinal selection makes the premise unnecessary rather than true: the
+//     step ordering C2 fixes is normative and is left exactly as specified.
+//   - Forward scan, not text equality. The anchor TOKENIZES the assignment
+//     rather than matching one canonical spelling. TOML fixes no spelling
+//     for `id = "r"`: `id="r"`, `id  =  "r"` and the literal-string form
+//     `id = 'r'` are the same document, and an id carrying `#` must not be
+//     truncated by a comment strip that cuts inside a quoted string.
+//
+// `ordinal` is the rule's index in `l.doc.Rule`, which the decoder fills in
+// document order, so it maps to the ordinal `[[rule]]` header. `ruleID` is
+// used only to CONFIRM the match; a rule that authors no id, or whose id
+// does not round-trip through the scan, still yields its header line rather
+// than zero, because `0024:C2` requires a source line unconditionally.
+func emitRuleLine(src []byte, ruleID string, ordinal int) int {
+	lines := strings.Split(string(src), "\n")
+
+	starts := make([]int, 0, 8)
+	for i, raw := range lines {
+		if tableHeader(raw) == "[[rule]]" {
+			starts = append(starts, i)
+		}
+	}
+	if ordinal < 0 || ordinal >= len(starts) {
 		return 0
 	}
-	return headerLine(src, "id = "+strconv.Quote(ruleID))
+
+	start := starts[ordinal]
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if tableHeader(lines[i]) != "" {
+			end = i
+			break
+		}
+	}
+
+	// Forward scan from the block's header to its close. A rule's own
+	// sub-tables (`[rule.match…]`, `[rule.emit]`) are not top-level headers,
+	// so they do not end the block; the next `[[rule]]` or `[…]` does.
+	for i := start + 1; i < end; i++ {
+		value, ok := scalarAssignment(lines[i], "id")
+		if !ok {
+			continue
+		}
+		if ruleID == "" || value == ruleID {
+			return i + 1
+		}
+	}
+	// No usable `id` assignment inside the block. The `[[rule]]` header is
+	// still an honest, unambiguous pointer at the offending rule, and a
+	// header line beats no line at all.
+	return start + 1
+}
+
+// tableHeader reports the bracketed TOML table header a line declares, or
+// the empty string where the line declares none. Only TOP-LEVEL headers
+// count: a dotted header such as `[rule.emit]` belongs to the block it sits
+// in and does not close it, so it reports empty.
+func tableHeader(raw string) string {
+	text := strings.TrimSpace(stripComment(raw))
+	if !strings.HasPrefix(text, "[") || !strings.HasSuffix(text, "]") {
+		return ""
+	}
+	if strings.Contains(strings.Trim(text, "[]"), ".") {
+		return ""
+	}
+	return text
+}
+
+// scalarAssignment reads a bare `key = <string>` assignment off one line and
+// reports the value with its quoting removed.
+//
+// It tolerates every spelling TOML admits for the same document: arbitrary
+// horizontal whitespace around the key and the `=`, and all three string
+// syntaxes — basic (`"v"`), literal ('v'), and their multi-line forms'
+// single-line use. It reports false for a dotted key, an inline table, or
+// any non-string value, none of which name a rule the way an `id` does.
+func scalarAssignment(raw, key string) (string, bool) {
+	text := strings.TrimSpace(stripComment(raw))
+	rest, ok := strings.CutPrefix(text, key)
+	if !ok {
+		return "", false
+	}
+	rest = strings.TrimLeft(rest, " \t")
+	rest, ok = strings.CutPrefix(rest, "=")
+	if !ok {
+		return "", false
+	}
+	rest = strings.TrimSpace(rest)
+	for _, q := range []string{`"""`, "'''", `"`, "'"} {
+		body, ok := strings.CutPrefix(rest, q)
+		if !ok {
+			continue
+		}
+		body, ok = strings.CutSuffix(body, q)
+		if !ok {
+			return "", false
+		}
+		return body, true
+	}
+	return "", false
+}
+
+// stripComment removes a trailing TOML comment from one line, leaving a `#`
+// that sits INSIDE a quoted string alone.
+//
+// `headerLine`'s cruder strip — cut at the first `#` — is right for a
+// bracketed header, whose text cannot carry a quoted `#` in the authorings
+// that scan admits. It is wrong for a value assignment: a rule id may
+// legally contain `#`, and cutting inside its quotes truncates the id so it
+// can never match its own anchor.
+func stripComment(raw string) string {
+	var quote rune
+	for i, r := range raw {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == '#':
+			return raw[:i]
+		}
+	}
+	return raw
 }
 
 // headerLine reports the 1-based line whose decoration-stripped text equals
