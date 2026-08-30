@@ -13,21 +13,16 @@ N/A-bulleted). -->
 - **Date**: 2026-08-28
 - **Status**: Draft
 - **Type**: Feature
-- **Profile**: foundational — floored by Seam Lineage (2 prior
-  closed point-fixes at the accessor-execution seam); the
-  contract axis alone reads `large` (locks the
-  declared-command authority bound and its carrier shape).
+- **Profile**: foundational — Seam Lineage ≥2 floors it; locks the
+  declared-command carrier and authority bound (C1–C5).
 - **Priority**: High
 - **Related Issues**: intrastate#v0hb (tracker);
   intrastate#p63c (reader cardinality per role, owned by
   RDR 0016)
 - **Seam Lineage**: `internal/accessor/binding.go::WriteBinding`
   — 3rd point-fix; trail: dkcf (read-back seal) + 742a
-  (0004 suite oracles) — per the kata-scope-review
-  §seam-accretion emission on intrastate#v0hb: "two closed
-  point-fixes on the same accessor-execution facet-family —
-  the missing-design-decision signature". Count ≥2 → Profile
-  floored at `foundational`; no accretion disposition.
+  (0004 suite oracles). Count ≥2 → Profile floored at
+  `foundational`; no accretion disposition.
 
 ## Problem Statement
 
@@ -113,8 +108,8 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
   - **Status**: Pending
   - **Method**: Source Search
   - **Evidence**: quote the `ExecAction.Command` doc comment from
-    `k8s.io/api/core/v1` (three fetches failed to surface quotable text at
-    Propose; see evidence/research/prior-art.md).
+    `k8s.io/api/core/v1` (not surfaced at Propose; attempts logged in
+    evidence/research/prior-art.md).
   - **If wrong**: nothing structural — the class claim already rests on the
     quoted Docker exec-form and Terraform external-program citations.
 - **A6 [RDR 0004's closed validation-code set closes 0004's own defect
@@ -166,12 +161,11 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
 
 ### Approach
 
-The undecided contract the two accreted point-fixes danced around: **what
-carries a declared accessor's real external behaviour** — both dkcf (read-back
-seal) and 742a (0004 suite oracles) patched consequences of `flowbind`
-*simulating* command behaviour through magic `path` suffixes
-(`internal/cli/flowbind/flowbind.go::verdictFor`, `::unreachable`), because no
-declared-command carrier or authority bound exists.
+The undecided contract at this seam: **what carries a declared accessor's
+real external behaviour**. Today `flowbind` *simulates* command behaviour
+through magic `path` suffixes (`internal/cli/flowbind/flowbind.go::verdictFor`,
+`::unreachable`) because no declared-command carrier or authority bound
+exists — the gap both accreted point-fixes (Seam Lineage) patched around.
 
 Answer: an accessor entry may declare `command`, a **fixed argv vector**
 carried on the same TOML entry as its role, keys, and timeout. The vector is
@@ -179,9 +173,10 @@ validated at load, executed with **no shell**, and admits exactly one form of
 variation: a **closed, tool-defined placeholder vocabulary** (v1: `{artifact}`)
 substituted **whole-element only** with the caller-bound artifact path for the
 entry's declared role. All other per-invocation data crosses on **stdin as a
-JSON object of strings**, and read/gate results return on **stdout as a flat
-JSON object of strings** — the same shape intrastate's own artifact and
-Terraform's external-program protocol already use. Command-backed bindings
+JSON object of strings**; read results return on **stdout as a flat JSON
+object of strings** — the same shape intrastate's own artifact and
+Terraform's external-program protocol already use — and gate results as a
+verdict envelope (C3). Command-backed bindings
 implement the existing `ReadBinding`/`GateBinding`/`WriteBinding` seam and run
 under RDR 0004's executor unchanged: declared timeout, refusal classes,
 post-write read-back through the role's reader.
@@ -223,15 +218,14 @@ Components:
   Sibling-path check: searched for an existing path-vs-command discriminator —
   none exists (`os/exec` appears nowhere outside tests; `flowbind` is the sole
   non-test binding implementation).
-- **Data flow** — per capability: a read command receives the requested key
-  set on stdin and answers with the flat string map on stdout (a key omitted
-  from the map is not-carried, mirroring `0004:C8` omission semantics); a gate
-  command answers a verdict envelope on stdout (three-valued — a non-zero exit
-  is `execution_failure`, never a deny, mirroring
-  `internal/cli/flowbind/flowbind.go::Gate`'s refusal-not-launder rule); a
-  write command receives the planned tags (including clear-sentinel removals)
-  on stdin and is verified only by read-back, never by its own exit status.
-  Exact envelope grammars are fixed at Resolve (LBD, Wire / byte format).
+- **Data flow** — per capability, under C3/C4: a read command receives the
+  requested key set on stdin and answers with the flat string map (an omitted
+  key is not-carried, mirroring `0004:C8`); a gate command answers a verdict
+  envelope (three-valued, refusal never laundered into a verdict — the rule
+  `internal/cli/flowbind/flowbind.go::Gate` already keeps); a write command
+  receives the planned tags on stdin and is verified only by read-back. Field
+  grammars, clear-sentinel carriage, and any raw read mode are fixed at
+  Resolve (C3; LBD Wire / byte format).
 
 #### Normative Contracts
 
@@ -303,8 +297,9 @@ the stdout envelope is parsed **before** exit-code classification, so a
 well-formed deny envelope with a non-zero exit is a deny, not a failure. By
 default a non-zero exit is never a gate deny and never establishes a key
 absent; whether an entry may *declare* an exit-code mapping for those two
-semantic answers is A8's Resolve question. A write entry requires
-`read_back = true`, its success is never taken from exit status, and it is
+semantic answers is A8's Resolve question. A write entry carries
+`read_back = true` (mandatory for every write since RDR 0004), its success is
+never taken from exit status, and it is
 verified through the role's declared reader — the re-read runs under its own
 bounded timeout (`0004:C15`), never the write's residue — with the
 applied-but-unverified sense (`0004:C14`) preserved when read-back cannot
@@ -354,6 +349,7 @@ Illustrative — intent only; tests must not assert it literally.
 [read.branch_state]
 role    = "repo"
 command = ["git", "-C", "{artifact}", "config", "--file", ".flowstate", "--get-regexp", "^flow[.]"]
+# stdout is not the C3 envelope: binds directly only via the Resolve-decided raw/exit modes (A3/A8), else a thin wrapper
 keys    = ["flow.stage"]
 timeout = "5s"
 
@@ -406,7 +402,7 @@ wrapper) to gain no review advantage over O2; O3 concedes review to gain
 expressiveness O2 mostly retains; O4 relocates authorship, not authority, and
 prices every integration at a release.
 
-Premortem: hardened (hardened) — the critic's 14-row P-ledger
+Premortem: hardened — the critic's 14-row P-ledger
 (evidence/propose-premortem/critic.md) forced into the draft: the
 interpreter-argv0 lint defect and dash-guarded absolute-path substitution
 (P-3/P-10 → C2/C5), process-group + stdin/drain bounding (P-4 → C4/A1),
@@ -462,8 +458,8 @@ stdin as JSON.
 
 **Reason for rejection**: it forces the wrapper for *every* tool, including
 the path-positional class O2 binds directly (and the exit-speaking class A8
-may admit); the premortem's honest finding stands — some tools need wrappers
-under O2 too (P-8) — but O1 pays that cost universally while O2's one
+may admit); some tools need wrappers under O2 too (P-8), but O1 pays that cost
+universally while O2's one
 path-valued, whole-element, dash-guarded hole keeps the review property O1
 was buying (P-3 mitigations in C2/C5).
 
@@ -507,24 +503,19 @@ product thesis that the *model author* declares the delegation.
 Filed as kata intrastate#v0hb after RDR 0004 (Accessor Execution Safety Model)
 shipped the capability-bounded execution seam — read, gate, write, each
 declared, artifact-role-scoped, timeout-bounded, and (for write) verified by
-read-back. Scope review verified the gap against source: the only non-test
-implementations of the binding interfaces are `internal/cli/flowbind`'s
-Reader/Writer/Gate, all bound to one artifact format (a flat JSON object of
-string tag key to tag value); `Writer.Apply` mutates a map and saves JSON;
-there is zero `os/exec` outside tests; and no RDR 0001–0024 adjudicates a
-command-invoking binding (RDR 0014 uses `exec.Command` only in illustrative
-snippets). RDR 0004's deviations D1–D18 fence nothing out here; D17's "write
-command" language anticipates process semantics.
+read-back. No RDR 0001–0024 adjudicates a command-invoking binding (RDR 0014
+uses `exec.Command` only in illustrative snippets); RDR 0004's deviations
+D1–D18 fence nothing out here, and D17's "write command" language anticipates
+process semantics.
 
-The undecided design fork (rdr-seed-triage verdict ONE-RDR): whether a declared
-external command is carried as a fixed argv vector on the accessor's
-capability-table entry — no shell interpretation, no interpolation of
-caller/artifact data — versus a parameterized/templated command shape that
-admits bounded substitution. The lint-validatable-from-the-model-alone
-authority bound is the load-bearing fork; carrier placement (generalizing the
-per-accessor `path` locator vs a sibling field vs a new accessor shape) is its
-dependent clause, decided by the same answer. Two closed point-fixes (dkcf,
-742a) have already accreted at this seam.
+The design fork: whether a declared external command is carried as a fixed
+argv vector on the accessor's capability-table entry — no shell
+interpretation, no interpolation of caller/artifact data — versus a
+parameterized/templated command shape that admits bounded substitution. The
+lint-validatable-from-the-model-alone authority bound is the load-bearing
+fork; carrier placement (generalizing the per-accessor `path` locator vs a
+sibling field vs a new accessor shape) is its dependent clause, decided by the
+same answer.
 
 ### Technical Environment
 
@@ -692,13 +683,42 @@ timeout and read-back failure scenarios as tests.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Coverage goal: every C1–C5 clause has a test that fails when its rule is
+dropped; the MVV scenario is the integration proof.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: load-time validation (C1/C5) — a valid command entry plus
+   the four MVV mutants (path+command conflict, empty element, unknown or
+   partial `{…}` token, `["sh", "-c", …]`).
+   **Expected**: the valid entry loads; each mutant is rejected with its own
+   named C5 code — asserted by code, never by "validation returned non-empty".
+2. **Scenario**: substitution guard (C2) — `{artifact}` bound to an absolute
+   path, a relative path, and a `-`-prefixed path; an element embedding the
+   token mid-string.
+   **Expected**: the absolute path is substituted whole-element and the argv
+   the child observes equals the declared vector otherwise byte-for-byte; the
+   relative and `-` cases refuse `execution_failure` before spawn; the
+   mid-string case is a C5 defect at load.
+3. **Scenario**: envelope-before-exit ordering (C4) — a gate command that
+   writes a well-formed deny envelope and exits non-zero; one that writes a
+   malformed envelope and exits zero; one that exits non-zero with no
+   envelope.
+   **Expected**: deny, `execution_failure`, `execution_failure` respectively,
+   each carrying the 0004 diagnosis tuple and a bounded stderr tail.
+4. **Scenario**: deadline (C4, A1) — a child sleeping past `timeout`, a
+   wrapper whose grandchild holds the stdout pipe, and a child that never
+   reads stdin.
+   **Expected**: `timeout` refusal within the bound in all three, no hang,
+   and no process from the child's group surviving the refusal.
+5. **Scenario**: write read-back (C4) — a command write whose tool applies
+   the planned tags; one whose tool exits zero without applying them; one
+   whose role reader cannot read a compared key.
+   **Expected**: success reporting the written tags; `read_back_mismatch`;
+   `read_back_incomplete` (applied-but-unverified) — the write's exit status
+   decides none of them.
+6. **Scenario**: the MVV end to end against an established tool present in
+   CI.
+   **Expected**: the declared write command, not intrastate, edits the
+   artifact, and the declared command reader verifies it.
 
 ## Finalization Gate
 
