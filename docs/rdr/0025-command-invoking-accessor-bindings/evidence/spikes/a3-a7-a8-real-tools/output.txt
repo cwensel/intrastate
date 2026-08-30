@@ -1,0 +1,299 @@
+spike: rdr-0025 a3-a7-a8-real-tools
+date: 2026-08-30T18:38:10Z
+go: go version go1.26.6 darwin/arm64
+git: git version 2.55.0
+os: Darwin 25.6.0
+---
+artifact=$TMPDIR/a3spike1497112283/state.cfg
+git=/opt/local/bin/git
+
+################ A3 direct-binding class
+---
+R1 read: git config --get (single value)
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=14.408ms
+  RAW-mode bind: key=state.phase value="draft" (TrimRight \n)
+---
+R2a read: git config --list (raw k=v lines)
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--list"]
+  exit=0
+  stdout="state.phase=draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 's' looking for beginning of value)
+  dur=11.182ms
+---
+R2b read: wrapper-list.sh (k=v -> JSON)
+  argv=["$SPIKE/wrapper-list.sh" "$TMPDIR/a3spike1497112283/state.cfg"]
+  exit=0
+  stdout="{\"state.phase\":\"draft\"}\n"
+  c3_read_envelope: OK keys=1
+  dur=15.354ms
+---
+R3a write: git config set (value in argv -- NOT expressible in fixed argv)
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "state.phase" "review"]
+  exit=0
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=8.741ms
+  artifact_after="[state]\n\tphase = review\n"
+---
+R3b write: git config with data on stdin only (does git read stdin?)
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "state.phase"]
+  stdin="{\"state.phase\":\"review\"}"
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.307ms
+  artifact_after="[state]\n\tphase = draft\n"
+---
+R3c write: wrapper-write.sh (stdin JSON -> git config per key)
+  argv=["$SPIKE/wrapper-write.sh" "$TMPDIR/a3spike1497112283/state.cfg"]
+  stdin="{\"state.phase\":\"review\"}"
+  exit=0
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=16.778ms
+  artifact_after="[state]\n\tphase = review\n"
+---
+R3d read-back via R1
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  exit=0
+  stdout="review\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'r' looking for beginning of value)
+  dur=6.56ms
+---
+R4a P-1: cat {artifact} as WRITE with JSON stdin
+  argv=["cat" "$TMPDIR/a3spike1497112283/state.cfg"]
+  stdin="{\"state.phase\":\"review\"}"
+  exit=0
+  stdout="[state]\n\tphase = draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 's' looking for beginning of value)
+  dur=2.002ms
+  artifact_after="[state]\n\tphase = draft\n"
+---
+R4b P-1: tee {artifact} as WRITE with JSON stdin
+  argv=["tee" "$TMPDIR/a3spike1497112283/state.cfg"]
+  stdin="{\"state.phase\":\"review\"}"
+  exit=0
+  stdout="{\"state.phase\":\"review\"}"
+  c3_read_envelope: OK keys=1
+  dur=1.964ms
+  artifact_after="{\"state.phase\":\"review\"}"
+---
+R4c read-back after tee
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  exit=128
+  stdout=""
+  stderr="fatal: bad config line 1 in file $TMPDIR/a3spike1497112283/state.cfg\n"
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=6.449ms
+---
+R5 P-2: 2 MiB JSON envelope
+  argv=["$SPIKE/wrapper-big.sh" "$TMPDIR/a3spike1497112283/state.cfg"]
+  exit=0
+  stdout_len=2097164 stdout_head="{\"blob\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  c3_read_envelope: OK keys=1
+  dur=87.695ms
+---
+R6 read-absent: git config --get missing.key
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "missing.key"]
+  exit=1
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=6.939ms
+
+################ A8 exit-code mapping
+---
+E1a test -f (exists)
+  argv=["test" "-f" "$TMPDIR/a3spike1497112283/state.cfg"]
+  exit=0
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=1.985ms
+---
+E1b test -f (missing)
+  argv=["test" "-f" "$TMPDIR/a3spike1497112283/nope"]
+  exit=1
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=1.767ms
+---
+E1c test with bogus option (execution failure)
+  argv=["test" "--bogus" "$TMPDIR/a3spike1497112283/state.cfg"]
+  exit=2
+  stdout=""
+  stderr="test: --bogus: unexpected operator\n"
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=1.787ms
+---
+E1d git diff --quiet (clean)
+  argv=["git" "-C" "$TMPDIR/a3spike1497112283/repo" "diff" "--quiet"]
+  exit=0
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=6.924ms
+---
+E1e git diff --quiet (dirty)
+  argv=["git" "-C" "$TMPDIR/a3spike1497112283/repo" "diff" "--quiet"]
+  exit=1
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=6.005ms
+---
+E1f git with bad path (execution failure)
+  argv=["git" "-C" "$TMPDIR/a3spike1497112283/norepo" "diff" "--quiet"]
+  exit=128
+  stdout=""
+  stderr="fatal: cannot change to '$TMPDIR/a3spike1497112283/norepo': No such file or directory\n"
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=5.327ms
+---
+E1g git config --file <missing file> --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/nofile.cfg" "--get" "state.phase"]
+  exit=1
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=6.34ms
+---
+E1h missing executable (spawn error)
+  argv=["definitely-not-a-binary-xyz" "$TMPDIR/a3spike1497112283/state.cfg"]
+  spawn_error=exec: "definitely-not-a-binary-xyz": executable file not found in $PATH  is_ErrNotFound=true  exit=(none)
+  stdout=""
+  c3_read_envelope: NOT PARSEABLE (unexpected end of JSON input)
+  dur=0s
+
+################ A7 env policy
+---
+V1 Env=[] (scrubbed; bare argv0 'git')
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=[]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=8.342ms
+---
+V1b Env=[] --list --show-origin (which files does git open?)
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--list" "--show-origin"]
+  env=[]
+  exit=0
+  stdout="file:$TMPDIR/a3spike1497112283/state.cfg\tstate.phase=draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'i' in literal false (expecting 'a'))
+  dur=7.955ms
+---
+V2 Env=[PATH]
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.762ms
+---
+V3a Env=[PATH,HOME=tmp w/ conflicting ~/.gitconfig] --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=8.524ms
+---
+V3b same + GIT_TRACE=1
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_TRACE=1"]
+  exit=0
+  stdout="draft\n"
+  stderr="11:38:11.690948 git.c:502               trace: built-in: git config --file $TMPDIR/a3spike1497112283/state.cfg --get state.phase\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.769ms
+---
+V3c control: NO --file, HOME=tmp -> reads ~/.gitconfig
+  argv=["git" "config" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home"]
+  exit=0
+  stdout="FROM_HOME_GITCONFIG\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'F' looking for beginning of value)
+  dur=7.682ms
+---
+V3d --file --list --show-origin under HOME=tmp
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--list" "--show-origin"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home"]
+  exit=0
+  stdout="file:$TMPDIR/a3spike1497112283/state.cfg\tstate.phase=draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'i' in literal false (expecting 'a'))
+  dur=7.724ms
+---
+V4a GIT_CONFIG_GLOBAL set, --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_GLOBAL=$TMPDIR/a3spike1497112283/global.cfg"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=8.333ms
+---
+V4a' GIT_CONFIG_GLOBAL set, NO --file --get (control)
+  argv=["git" "config" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_GLOBAL=$TMPDIR/a3spike1497112283/global.cfg"]
+  exit=0
+  stdout="FROM_GIT_CONFIG_GLOBAL\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'F' looking for beginning of value)
+  dur=8.504ms
+---
+V4b GIT_DIR set, --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_DIR=$TMPDIR/a3spike1497112283/repo/.git"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.942ms
+---
+V4c GIT_CONFIG_COUNT injection, --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=state.phase" "GIT_CONFIG_VALUE_0=FROM_ENV_INJECTION"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=8.092ms
+---
+V4c' GIT_CONFIG_COUNT injection, --file --get-all
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get-all" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=state.phase" "GIT_CONFIG_VALUE_0=FROM_ENV_INJECTION"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.94ms
+---
+V4c'' GIT_CONFIG_COUNT injection, NO --file (control)
+  argv=["git" "config" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=state.phase" "GIT_CONFIG_VALUE_0=FROM_ENV_INJECTION"]
+  exit=0
+  stdout="FROM_ENV_INJECTION\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'F' looking for beginning of value)
+  dur=7.983ms
+---
+V4d GIT_CONFIG_PARAMETERS, --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_PARAMETERS='state.phase=FROM_GIT_CONFIG_PARAMETERS'"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.614ms
+---
+V4e GIT_CONFIG_SYSTEM, --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_CONFIG_SYSTEM=$TMPDIR/a3spike1497112283/global.cfg" "GIT_CONFIG_NOSYSTEM=0"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.871ms
+---
+V4f GIT_EXEC_PATH=tmp (hijack helper dir), --file --get
+  argv=["git" "config" "--file" "$TMPDIR/a3spike1497112283/state.cfg" "--get" "state.phase"]
+  env=["PATH=<parent PATH>" "HOME=$TMPDIR/a3spike1497112283/home" "GIT_EXEC_PATH=$TMPDIR/a3spike1497112283"]
+  exit=0
+  stdout="draft\n"
+  c3_read_envelope: NOT PARSEABLE (invalid character 'd' looking for beginning of value)
+  dur=7.497ms
+---
+done
+harness_exit=0

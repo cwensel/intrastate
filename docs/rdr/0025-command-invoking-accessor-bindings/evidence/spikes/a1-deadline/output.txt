@@ -1,0 +1,27 @@
+--- go vet
+vet: ok
+--- build
+build: ok
+--- run
+go=go1.26.6 os=darwin arch=arm64 timeout=1s waitDelay=500ms watchdog=5s
+---
+S1 elapsed=5000ms err="WATCHDOG: Wait did not return within 5s" waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=1 [79332]
+    ctxErr=context deadline exceeded blockedPastWatchdog=true tree@200ms=[79331(ppid=79330,pgid=79310,"sh -c sleep 30; : A1SPIKE_S1_79330") 79332(ppid=79331,pgid=79310,"sleep 30")]
+    survivors=[79332(ppid=1,pgid=79310,"sleep 30")]
+S2 elapsed=1004ms err="signal: killed" waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=0 []
+    ctxErr=context deadline exceeded blockedPastWatchdog=false tree@200ms=[79345(ppid=79330,pgid=79345,"sh -c sleep 30; : A1SPIKE_S2_79330") 79346(ppid=79345,pgid=79345,"sleep 30")]
+S3 elapsed=1501ms err="signal: killed" waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=1 [79351]
+    ctxErr=context deadline exceeded blockedPastWatchdog=false tree@200ms=[79350(ppid=79330,pgid=79310,"sh -c sleep 30; : A1SPIKE_S3_79330") 79351(ppid=79350,pgid=79310,"sleep 30")]
+    survivors=[79351(ppid=1,pgid=79310,"sleep 30")]
+S4 elapsed=1002ms err="signal: killed" waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=0 []
+    ctxErr=context deadline exceeded blockedPastWatchdog=false tree@200ms=[79354(ppid=79330,pgid=79354,"sleep 30")]
+S5 elapsed=1002ms err="signal: killed" waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=0 []
+    ctxErr=context deadline exceeded blockedPastWatchdog=false tree@200ms=[79357(ppid=79330,pgid=79357,"sleep 30")]
+S6 elapsed=254ms err=<nil> waitErr_is_DeadlineExceeded=false waitDelayHit=false survivors=0 []
+    ctxErr=<nil> blockedPastWatchdog=false tree@200ms=[]
+    output="{\"k\":\"v\"}"
+---
+cleanup: killing 2 leftover tree pids [79332(ppid=1,pgid=79310,"sleep 30") 79351(ppid=1,pgid=79310,"sleep 30")]
+post-cleanup survivors=0
+--- host check (pkill -f A1SPIKE_ as belt-and-braces)
+pkill: nothing to kill
