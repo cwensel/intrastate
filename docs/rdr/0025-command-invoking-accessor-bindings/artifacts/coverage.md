@@ -252,3 +252,65 @@ The non-empty-stdout arms of S3 (cases 1, 2, 8) are asserted as
 CONTRACT-DERIVED with no fixture oracle, exactly as S3 directs — their
 expected values follow from C3/C4's ordering rule and FX-exit-codes says
 nothing about them.
+
+## REQ-MVV — recorded end-to-end output (Phase 2)
+
+`TestReqMVV_ALintedModelAppliesAndVerifiesARealChangeThroughACommand`
+passes with all five steps plus the end state. The same MVV driven through
+the shipped binary against real `git config --file`, with the actual
+output:
+
+**Step 2 — `intrastate lint` accepts the authored model** (the six mutants
+are each rejected with their own C5 category; see the subtests):
+
+```
+$ intrastate lint --model mvv.toml --as=json
+{"type":"ok","data":{"findings":[]}}
+exit=0
+```
+
+**Step 3a — without `--allow-commands`, the same invocation refuses before
+spawn**, `execution_failure` naming the gate:
+
+```
+$ intrastate flow set-state --model mvv.toml --artifact state=<dir>/state.cfg \
+    --write status=final --as=json
+{"code":"flow-accessor-failed","message":"the accessor `state` could not be executed","param":"state","detail":"command execution requires the `allow_commands` opt-in (--allow-commands); the accessor `state` declares a command and none was given"}
+exit=3
+```
+
+**Step 3 — with the flag, the declared write COMMAND applies the edit**:
+
+```
+$ intrastate flow set-state --model mvv.toml --artifact state=<dir>/state.cfg \
+    --write status=final --allow-commands --as=json
+{"type":"ok","data":{"model":"mvv.toml","revision":"","artifacts":{"state":"<dir>/state.cfg"},"writers":["state"],"writes":{"status":"final"},"clear":[],"owned":{"status":"final"}}}
+exit=0
+```
+
+The artifact is `git config`'s own format, not intrastate's flat JSON —
+which is the whole point, since intrastate never wrote it:
+
+```
+$ cat state.cfg
+[flow]
+	status = final
+```
+
+**Step 4 — the round trip reconstructs the planned value exactly**, read
+back out of the tool's own artifact through the declared command reader
+(`git config --get` in raw mode, FX-raw-read):
+
+```
+$ intrastate flow read-state --model mvv.toml --artifact state=<dir>/state.cfg \
+    --allow-commands --as=json
+{"type":"ok","data":{"model":"mvv.toml","revision":"","artifacts":{"state":"<dir>/state.cfg"},"readers":[{"id":"state","keys":["status"],"tags":{"status":"final"}}]}}
+exit=0
+```
+
+`owned` on step 3 is the READ-BACK-CONFIRMED value, so `status = "final"`
+there is the verification, not the request echoed. Step 5 (a command past
+its declared 300 ms timeout) refuses a timeout code and leaves no orphan.
+
+**End state**: a linted model applied and verified a real state change
+through a declared command, with the executed argv readable in the model.

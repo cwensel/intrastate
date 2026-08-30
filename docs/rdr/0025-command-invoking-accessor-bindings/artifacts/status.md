@@ -1,8 +1,8 @@
-RDR: 0025-command-invoking-accessor-bindings | phase: 1 — Tests first | state: IN-PROGRESS
-last: wrote 79 REQ-cited tests across 7 files; red gate confirmed (79 FAIL, 0 regressions)
+RDR: 0025-command-invoking-accessor-bindings | phase: 2 — Implementation | state: IN-PROGRESS
+last: full suite green tree-wide; golangci-lint clean; REQ-MVV output recorded
 blocker: none
-changed: internal/table/{model.go,category.go,command_carrier_0025_test.go}, internal/accessor/{model.go,exec_detail_0025_test.go}, internal/cli/cmdbind/*, internal/cli/flowbind/{registry.go,registry_command_0025_test.go}, internal/cli/{flow_exec.go,command_gate_0025_test.go,command_fixtures_0025_test.go,command_mvv_0025_test.go}, artifacts/{coverage.md,deviations.md,status.md}
+changed: internal/table/{source.go,model.go,category.go,load.go,accessors_test.go,dump_test.go,testdata/neg/neg-command-*.toml}, internal/accessor/{executor.go,model.go}, internal/cli/cmdbind/{cmdbind.go,seam_0025_test.go}, internal/cli/flowbind/registry.go, internal/cli/{flow.go,flow_exec.go,command_fixtures_0025_test.go,command_gate_0025_test.go,command_mvv_0025_test.go}, docs/cli-reference.md, llms.txt, artifacts/{coverage.md,deviations.md,status.md}
 validate: go test ./...
-next: Phase 2 — Implementation
-session: 2026-08-30T00:00:00Z
+next: Phase 3 — Self-verification
+session: 2026-08-30T23:11:16Z
 artifacts: req-list.md coverage.md verification.md deviations.md
