@@ -111,3 +111,84 @@ Phase 1 would turn the containment walk green while `buildRequest` still
 ignored it — a false green on the load-bearing gate. Phase 3 of the RDR's
 own plan lands registration and threading in the SAME step, and the tests
 are written to that.
+
+---
+
+# Phase 2 — Implementation
+
+## D5 — REQ-14's fixture change lands on RDR 0002's own suite
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+`0025:C1` relaxes `accessorTable`'s path rule, so the "path is absent or
+empty" case moves out of `malformed_accessor_declaration`. REQ-14 states
+the consequence directly: "Existing fixtures asserting the old category on
+a path-less entry change category, not verdict." Two cases in
+`internal/table/accessors_test.go::TestReq19` (absent path, empty path) now
+assert `command_and_path_conflict`. Both still refuse; only the category
+moved, which is exactly what the clause licenses.
+
+The conflict rule's two halves are keyed differently, and both are forced
+by the Phase 1 suite: "both" is keyed on the KEYS being declared (so
+`path = ""` beside a `command` is a conflict — REQ-7's third case), while
+"neither" is keyed on neither being a USABLE carrier (so `path = ""` alone
+is a conflict, which is where the old arm lands).
+
+## D6 — a brace-bearing argv element is a placeholder attempt only when it is a single word
+
+**Type: SPEC-UNDER. Status: derived from the suite's own discriminating pair.**
+
+C5's placeholder clause and its interpreter clause both claim
+`["sh", "-c", "cat {artifact}"]`, and the Phase 1 suite requires opposite
+answers on the two shapes:
+
+- REQ-74 (`["sh", "-c", "cat {artifact}"]`) ⇒ `command_shell_interpreter`
+- REQ-80 (`["sh", "-c", "{role}"]`) ⇒ `command_unknown_placeholder`,
+  because "unknown placeholder outranks shell interpreter"
+
+Under a uniform "any element containing a non-whole `{…}` token is a
+placeholder defect" reading, REQ-74's first case reports the placeholder
+category and the interpreter clause becomes unreachable behind it. The
+discriminator the pair forces is WHITESPACE: `{role}`,
+`--file={artifact}`, `{artifact}.bak`, and `{artifact` are all single
+words and are placeholder attempts; `cat {artifact}` is a command STRING,
+which is the shape clause 4 owns.
+
+Grounded in the RDR's own S1 mutant list, which names the placeholder
+mutant as an "unknown or partial `{…}` token" — a token, not a command
+line — and in C2's "a placeholder is recognized only as a whole argv
+element", whose subject is an element that is trying to BE one.
+
+## D7 — the S5 `<clear>` arm's fixture could not produce its own expected outcome
+
+**Type: TEST-FIXTURE. Status: repaired against the spec's own MVV shape.**
+
+`seam_0025_test.go::TestReq127`'s clear arm drove `<clear>` through
+`writeThrough`, whose write tool is `stdin-to-file` and whose reader is
+`cat {artifact}` in json mode. That tool STORES the literal rather than
+removing it, so the read-back observes the key present holding `<clear>`
+— which is `read_back_mismatch`, and is asserted as exactly that by
+`TestReq46`'s read-back sibling over the byte-identical fixture. The two
+arms cannot both hold on one fixture.
+
+The spec resolves it: S5's clear arm expects "the key reads back absent",
+and under C3 a command reader establishes absence ONLY through
+`exit_absent` — a json-mode omission is UNREADABLE by contract. So the
+arm needs the MVV's own shape: a wrapper that performs the removal, and a
+reader that exits a listed code with an empty stdout when the key is
+gone (`git config --get`'s shape, spike R6/E1g).
+
+Repaired by giving that ONE arm a `clearThrough` helper carrying both.
+The other three arms of `TestReq127` keep `writeThrough` unchanged, and
+`TestReq46`'s literal-stored mismatch arm is untouched — the two senses
+stay separately asserted, which is what the clause requires.
+
+## D8 — `Registry`'s `baseDir` is the model file's directory, absolutized at the CLI
+
+**Type: IMPL-DECISION. Status: recorded; affects future interpretation.**
+
+A12 is `Pending` in the record and C2 states the shape rather than a
+verified reachability. It reaches: `buildRequest` already holds the
+selected model PATH (`selectModel` returns it as `ref`), so `baseDir` is
+`filepath.Dir` of `filepath.Abs(ref)` with no new `table.Model` field and
+no loader change. A12's "If wrong" does not apply.

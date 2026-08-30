@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -501,9 +502,16 @@ func TestReq127_WriteVerificationIsReadBackAndNeverExitStatus(t *testing.T) {
 	})
 
 	t.Run("a planned <clear> reads back ABSENT", func(t *testing.T) {
+		// This arm needs a wrapper that HONOURS the clear and a reader that
+		// can establish absence, and `stdin-to-file` + `cat` is neither:
+		// it stores the literal, which is `read_back_mismatch` and is
+		// asserted as such by TestReq46's read-back sibling. Under C3 a
+		// command reader establishes absence ONLY through `exit_absent`, so
+		// the fixture takes the MVV's own shape — a wrapper that removes,
+		// and a reader that exits a listed code with empty stdout when the
+		// key is gone (deviations D7).
 		art := artifactAt(t, "state.json")
-		got, _ := writeThrough(t, art,
-			[]resolve.Tag{{Key: fxKey, Value: table.ClearSentinel}})
+		got, _ := clearThrough(t, art)
 
 		if got.Refusal != nil {
 			t.Fatalf("a cleared key refused %q; the tool performs the removal "+
@@ -519,6 +527,64 @@ func TestReq127_WriteVerificationIsReadBackAndNeverExitStatus(t *testing.T) {
 			}
 		}
 	})
+}
+
+// clearThrough drives one planned `<clear>` through a wrapper that
+// REMOVES the key and a reader that establishes absence the only way C3
+// gives a command reader: an `exit_absent` code with an empty stdout.
+//
+// The two argv vectors below are the FIXTURE's own, not model-declared —
+// the same carve-out `traceArgv` takes in the CLI suite. A declared
+// `sh -c` vector is a C5 defect (REQ-74) and no model here carries one.
+func clearThrough(t *testing.T, art accessor.Artifact) (
+	accessor.WriteResult, *storeReader,
+) {
+	t.Helper()
+
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("no POSIX sh for the clear-honouring wrapper: %v", err)
+	}
+
+	// The wrapper: drain the envelope, then TRUNCATE the artifact, which is
+	// this fixture's removal.
+	wacc := entry(fxRole, []string{sh, "-c", `cat >/dev/null; : > "$1"`, "sh", art.Path}, fxKey)
+	wacc.ReadBack = true
+
+	// The reader: emit the artifact when it holds anything, and exit 1 with
+	// an empty stdout when it does not — `git config --get`'s own shape.
+	racc := entry(fxRole, []string{sh, "-c", `test -s "$1" && cat "$1"`, "sh", "{artifact}"}, fxKey)
+	racc.ExitAbsent = []int{1}
+
+	reader := &storeReader{
+		inner: cmdbind.Reader{Accessor: racc, Name: "cmd.read", Config: allowed(t)},
+	}
+	reg := accessor.Registry{
+		Flow: "cmdflow",
+		Definitions: []accessor.Definition{
+			{
+				Identity: accessor.Identity{
+					Flow: "cmdflow", Name: "cmd.read", Capability: accessor.CapRead,
+				},
+				Accessor: racc,
+				Binding:  reader,
+			},
+			{
+				Identity: accessor.Identity{
+					Flow: "cmdflow", Name: fxName, Capability: accessor.CapWrite,
+				},
+				Accessor: wacc,
+				Binding: &cmdbind.Writer{
+					Accessor: wacc, Name: fxName, Config: allowed(t),
+				},
+			},
+		},
+		OwnedTags: []string{fxKey},
+	}
+	e := accessor.NewExecutor(reg, accessor.Artifacts{fxRole: art})
+	return e.Write(ctxOf(t), fxName, resolve.Plan{
+		Writes: []resolve.Tag{{Key: fxKey, Value: table.ClearSentinel}},
+	}), reader
 }
 
 // storeReader counts reads so a test can assert the declared reader
