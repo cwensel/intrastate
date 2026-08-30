@@ -68,20 +68,29 @@ var echoGroup0023 = []string{
 // core; whether it is EMITTED on a given run is its producer's presence
 // rule (`0005:A-3`), which REQ-24/REQ-25 require asserting against the same
 // run's default output rather than unconditionally.
+//
+// RDR 0024 `0024:C4` appends `dispositions` immediately after `emit`, and
+// JDR 0002 §D1 assigns it PLAN — a disposition token is the interpretation
+// of an authored answer, which is what this group names. Registering it
+// here is `0024:PH3`'s "whichever record lands second" obligation, taken on
+// the leg where 0023 landed first.
 var planGroup0023 = []string{
-	"revision", "rule", "gates", "emit", "next", "writes", "clear",
-	"escaped", "escape_class",
+	"revision", "rule", "gates", "emit", "dispositions", "next", "writes",
+	"clear", "escaped", "escape_class",
 }
 
 // projectedKeyLiteral0023 is `0023:S2`'s explicit literal list, in
 // `0023:A-1`'s order — "the projected order is the default order minus the
 // deleted keys, never a re-sort", which puts `revision` FIRST.
 //
-// It carries EIGHT names; `escape_class` is the conditional ninth
-// (`0023:A-2`) and is appended by the oracle only when the same request's
-// DEFAULT output carried it.
+// It carries NINE names — `0023:S2`'s eight plus `dispositions`, which
+// `0024:C4` appends immediately after `emit` and JDR 0002 §D1 assigns
+// PLAN. `escape_class` is the conditional tenth (`0023:A-2`) and is
+// appended by the oracle only when the same request's DEFAULT output
+// carried it.
 var projectedKeyLiteral0023 = []string{
-	"revision", "rule", "gates", "emit", "next", "writes", "clear", "escaped",
+	"revision", "rule", "gates", "emit", "dispositions", "next", "writes",
+	"clear", "escaped",
 }
 
 // alwaysKeepCore0023 is this verb's always-keep core (`0023:C2`,

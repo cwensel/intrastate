@@ -157,6 +157,10 @@ kind = "enum"
 route = ["alpha", "beta"]
 stop = ["gamma", "never-authored"]
 
+[emit.code]
+kind = "enum"
+domain = ["1"]
+
 [emit.never-emitted]
 kind = "scalar"
 `, 1)

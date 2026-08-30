@@ -19,6 +19,14 @@ import (
 // table: `verdict` declared enum, its three authored values partitioned
 // into two model-authored dispositions.
 //
+// `code` is declared too, and must be: `0024:C2` fixes that strictness is
+// WHOLE-MODEL, not per-key, and `cell-xp` authors `code = "1"` alongside
+// its `verdict`. Leaving it out would refuse every fixture below as
+// `unknown_emit_key` before any disposition was ever joined. It takes the
+// FLAT spelling deliberately — a declared key carrying no disposition is
+// the control REQ-60's second leg turns on, and it keeps `cell-xp`'s
+// expected join at exactly one entry.
+//
 // The declaration is authored between the header and the rules so the
 // top-level table is not parsed into the last `[[rule]]`.
 const dtDecl0024 = `
@@ -27,6 +35,10 @@ kind = "enum"
 [emit.verdict.domain]
 route = ["alpha", "beta"]
 stop = ["gamma"]
+
+[emit.code]
+kind = "enum"
+domain = ["1"]
 `
 
 // declaredDT0024 is `dtModel0010` with the `[emit]` declaration inserted.
@@ -131,6 +143,10 @@ func TestReq57_0024_DispositionsIsEmptyObjectInEveryOtherCase(t *testing.T) {
 [emit.verdict]
 kind = "enum"
 domain = ["alpha", "beta", "gamma"]
+
+[emit.code]
+kind = "enum"
+domain = ["1"]
 `, 1)
 			},
 			tags: []string{"a=x", "b=p"},
@@ -140,6 +156,9 @@ domain = ["alpha", "beta", "gamma"]
 			src: func(t *testing.T) string {
 				return strings.Replace(declaredDT0024(t), dtDecl0024, `
 [emit.verdict]
+kind = "scalar"
+
+[emit.code]
 kind = "scalar"
 `, 1)
 			},
@@ -401,6 +420,10 @@ kind = "enum"
 [emit.verdict.domain]
 "`+token+`" = ["alpha", "beta"]
 stop = ["gamma"]
+
+[emit.code]
+kind = "enum"
+domain = ["1"]
 `, 1)
 			data := resolveDispositions0024(t, src, "a=x", "b=p")
 			if got := dispositionsOf(t, data)["verdict"]; got != token {

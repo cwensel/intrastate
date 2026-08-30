@@ -66,8 +66,14 @@ func TestReq60And61And62And63And68And69_EveryPayloadFieldIsAssignedToExactlyOneC
 		"model": "echo", "observed": "echo", "owned": "echo",
 		"readers": "echo", "outcome": "echo",
 		"revision": "plan", "rule": "plan", "gates": "plan", "emit": "plan",
-		"next": "plan", "writes": "plan", "clear": "plan", "escaped": "plan",
-		"escape_class": "plan",
+		// RDR 0024 `0024:C4` appends `dispositions`; JDR 0002 §D1 assigns
+		// it PLAN — a disposition token is the INTERPRETATION of an
+		// authored answer, which this group names, never an echo of the
+		// request. Registering it here is `0024:PH3`'s "whichever record
+		// lands second" obligation on the 0023-first leg.
+		"dispositions": "plan",
+		"next":         "plan", "writes": "plan", "clear": "plan",
+		"escaped": "plan", "escape_class": "plan",
 	}
 
 	// (1) every struct field has exactly one entry, and (2) the entry set
@@ -392,17 +398,23 @@ func TestReq72And88And89_ThePointerConversionCoversTheFiveEchoFieldsAndNothingEl
 func TestReq64And90And91And135_TheConversionChangesFieldTypesNeverTheFieldCount(t *testing.T) {
 	rt := resolvePayloadType()
 
-	// 14 on THIS tree. `0023:JC1`/REQ-87 record the ordering tolerance with
-	// cli/0024: if that RDR lands first its own additive append moves this
-	// count, and that cost is 0024's, not this projection's. This RDR alone
-	// moves neither assertion.
-	if rt.NumField() != 14 {
-		t.Errorf("`resolvePayload` declares %d fields; this RDR keeps the "+
-			"count EXACTLY as it found it (14) — the pointer conversion "+
-			"changes field TYPES only. A field addition is out of scope "+
-			"BY CONSTRUCTION: adding one would falsify `0023:A3`'s \"no "+
-			"predecessor oracle moves\" claim and move "+
-			"`decision_table_0010_test.go`'s pinned count",
+	// 15 on THIS tree. `0023:JC1`/REQ-87 record the ordering tolerance with
+	// cli/0024 and fix whose cost the move is: "if that RDR lands first its
+	// own additive append moves this count, and that cost is 0024's, not
+	// this projection's". 0023 landed FIRST here, so it is `0024:C4`'s
+	// append of `dispositions` — one field, immediately after `Emit` — that
+	// took the count from 14 to 15.
+	//
+	// The subject of THIS assertion is unchanged and still fails on its own
+	// terms: the pointer conversion changes field TYPES only, so the count
+	// moves exactly once per additive RDR and never as a side effect of the
+	// conversion.
+	if rt.NumField() != 15 {
+		t.Errorf("`resolvePayload` declares %d fields; the pointer "+
+			"conversion changes field TYPES only, and the one field "+
+			"addition on this tree is `0024:C4`'s `dispositions` append "+
+			"(14 -> 15). A further addition is out of scope for BOTH "+
+			"records",
 			rt.NumField())
 	}
 

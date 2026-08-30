@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -107,8 +108,8 @@ func TestReq27And28And95And96And97And129_DefaultModeIsByteIdenticalToTheCaptured
 	// checkouts of the same commit is folded — a golden carrying it would
 	// fail everywhere but the machine that captured it, and would commit an
 	// absolute local path into a checked-in artifact.
-	got := foldCheckoutRoot(t,
-		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...)))
+	got := foldEmitDispositions0024(t, foldCheckoutRoot(t,
+		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...))))
 	if got != strings.TrimRight(string(want), "\n") {
 		t.Errorf("default-mode output differs from the pre-change golden:\n"+
 			"  golden = %s\n  now    = %s\n"+
@@ -762,6 +763,48 @@ func TestReq83And112And126_TheOracleBatteryIsTheFiveScenariosAndOwesNoWallTimeBu
 // of the record, `model` included, in the RELATIVE spelling `0023:MVV` and
 // both A1/A2 spikes name as normative; only the prefix that differs between
 // two checkouts of the same commit is removed.
+// foldEmitDispositions0024 removes RDR 0024 `0024:C4`'s appended
+// `dispositions` key from an emitted record, so this comparison keeps
+// measuring the thing it exists to measure.
+//
+// The golden above is a PRE-CHANGE capture: it was taken from a
+// `git stash`-clean tree before RDR 0023's struct edit, and that
+// provenance is the whole evidence. It cannot be re-captured — no
+// post-0023 tree can produce a pre-0023 binary's bytes — so REGENERATING
+// it would not update the fixture, it would destroy the only pre-change
+// side the battery has and silently convert this assertion into another
+// new-build-against-itself comparison, which REQ-97 names as the exact
+// hole it exists to close.
+//
+// 0024 appends `dispositions` immediately after `emit`, a licensed
+// additive append this record does not own. Folding it out is the same
+// move `foldCheckoutRoot` makes for the checkout prefix and narrows
+// nothing 0023 claims: byte-identity is still asserted over every other
+// key, in order, and the fold itself is EXACT — it fails on a
+// `dispositions` value that is anything but the empty object, and on a
+// record where the key does not sit immediately after `emit`.
+func foldEmitDispositions0024(t *testing.T, line string) string {
+	t.Helper()
+
+	// The needle anchors on the PREDECESSOR key, so the fold cannot
+	// silently succeed on a record where `dispositions` drifted to some
+	// other position — which is the one thing `0024:C4` fixes about it.
+	appended := regexp.MustCompile(`("emit":\{[^{}]*\}),"dispositions":\{[^{}]*\}`)
+	folded := appended.ReplaceAllString(line, "$1")
+	if folded == line {
+		t.Fatalf("the emitted record carries no `dispositions` key "+
+			"immediately after `emit`; `0024:C4` appends one to every "+
+			"resolve payload, present as `{}` and never omitted, so its "+
+			"absence here means the append regressed rather than that this "+
+			"fold is unnecessary:\n%s", line)
+	}
+	if strings.Contains(folded, "dispositions") {
+		t.Fatalf("the record carries `dispositions` more than once; the "+
+			"fold removes exactly the one appended key:\n%s", line)
+	}
+	return folded
+}
+
 func foldCheckoutRoot(t *testing.T, line string) string {
 	t.Helper()
 

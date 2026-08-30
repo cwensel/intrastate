@@ -56,8 +56,8 @@ const (
 //
 //	model, observed, owned, readers, outcome  ECHO
 //	revision                                  PLAN  (identity slot)
-//	rule, gates, emit, next, writes, clear,
-//	escaped, escape_class                     PLAN
+//	rule, gates, emit, dispositions, next,
+//	writes, clear, escaped, escape_class      PLAN
 //
 // Two entries carry more weight than the rest and are called out because a
 // later reader will be tempted to move them:
@@ -87,15 +87,21 @@ var resolvePayloadGroups = map[string]payloadGroup{
 	"Readers":  groupEcho,
 	"Outcome":  groupEcho,
 
-	"Revision":    groupPlan,
-	"Rule":        groupPlan,
-	"Gates":       groupPlan,
-	"Emit":        groupPlan,
-	"Next":        groupPlan,
-	"Writes":      groupPlan,
-	"Clear":       groupPlan,
-	"Escaped":     groupPlan,
-	"EscapeClass": groupPlan,
+	"Revision": groupPlan,
+	"Rule":     groupPlan,
+	"Gates":    groupPlan,
+	"Emit":     groupPlan,
+	// RDR 0024 `0024:C4` / JDR 0002 §D1 — `dispositions` is PLAN. A
+	// disposition token is the INTERPRETATION of an authored answer, which
+	// this table's own PLAN prose names: it is nothing the caller sent, and
+	// it is produced by joining the selected row against the model's
+	// declared vocabulary. It rides beside `emit` for the same reason.
+	"Dispositions": groupPlan,
+	"Next":         groupPlan,
+	"Writes":       groupPlan,
+	"Clear":        groupPlan,
+	"Escaped":      groupPlan,
+	"EscapeClass":  groupPlan,
 }
 
 // echoFieldNames returns the `resolvePayload` field names this table

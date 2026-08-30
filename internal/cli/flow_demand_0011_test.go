@@ -636,17 +636,17 @@ var resolveGolden = map[string]string{
 	"advance": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"advance",` +
-		`"rule":"prelock","gates":[],"emit":{},"next":{"stage":"prelocked"},` +
+		`"rule":"prelock","gates":[],"emit":{},"dispositions":{},"next":{"stage":"prelocked"},` +
 		`"writes":{"stage":"prelocked"},"clear":[],"escaped":false}}`,
 	"revise": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"revise",` +
-		`"rule":"resolve-route-back","gates":[],"emit":{},"next":{"stage":"refined"},` +
+		`"rule":"resolve-route-back","gates":[],"emit":{},"dispositions":{},"next":{"stage":"refined"},` +
 		`"writes":{"stage":"refined"},"clear":[],"escaped":false}}`,
 	"abandon": `{"type":"ok","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"abandon",` +
-		`"rule":"resolve-abandon","gates":[],"emit":{},` +
+		`"rule":"resolve-abandon","gates":[],"emit":{},"dispositions":{},` +
 		`"next":{"stage":"dropped","status":"abandoned"},` +
 		`"writes":{"stage":"dropped","status":"abandoned"},"clear":[],` +
 		`"escaped":false}}`,
@@ -704,7 +704,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		bindOnly: []string{flowOrphanRole},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -714,7 +714,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		bindOnly: []string{flowOrphanRole},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -727,7 +727,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		bindOnly: []string{flowOrphanRole},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{},"readers":[],"outcome":"bail",` +
-			`"rule":"bail-escape","gates":[],"emit":{},"next":{},` +
+			`"rule":"bail-escape","gates":[],"emit":{},"dispositions":{},"next":{},` +
 			`"writes":{},"clear":[],"escaped":true,` +
 			`"escape_class":"no_match"}}`,
 	},
@@ -738,7 +738,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		bindOnly: []string{flowOrphanRole, "sidecar"},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -747,7 +747,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"advance","rule":"advance","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -760,7 +760,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance",` +
 			`"rule":"gated-reported","gates":[{"id":"reported",` +
-			`"result":"allow"}],"emit":{},"next":{"status":"final"},` +
+			`"result":"allow"}],"emit":{},"dispositions":{},"next":{"status":"final"},` +
 			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
 	},
 	{
@@ -768,7 +768,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"advance","rule":"advance","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -786,7 +786,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{"phase":"alpha"},"owned":{"status":"draft"},` +
 			`"readers":["state"],"outcome":"alpha","rule":"match-alpha",` +
-			`"gates":[{"id":"approval","result":"allow"}],"emit":{},` +
+			`"gates":[{"id":"approval","result":"allow"}],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -802,7 +802,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		bindOnly: []string{flowOrphanRole},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -811,7 +811,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"gamma","rule":"no-match-atoms","gates":[],"emit":{},` +
+			`"outcome":"gamma","rule":"no-match-atoms","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -820,7 +820,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"scalar-control","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"scalar-control","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -829,7 +829,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"hold","rule":"recognized-only","gates":[],"emit":{},` +
+			`"outcome":"hold","rule":"recognized-only","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -839,7 +839,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"resolved-row",` +
-			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
 			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
 	},
 	{
@@ -855,7 +855,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"labels":"[\"plain\"]","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"advance",` +
-			`"gates":[],"emit":{},` +
+			`"gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"labels":"[\"a<b\",\"x&y\"]","status":"final"},` +
 			`"writes":{"labels":"[\"a<b\",\"x&y\"]","status":"final"},` +
 			`"clear":[],"escaped":false}}`,
@@ -872,7 +872,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowSideRole, []string{"mode=fast"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"mode":"fast"},"readers":["side"],` +
-			`"outcome":"advance","rule":"side-advance","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"side-advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"mode":"slow"},"writes":{"mode":"slow"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -889,7 +889,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"opt":"p","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"guarded-advance",` +
-			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
 			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
 	},
 	{
@@ -905,7 +905,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{"hint":"x"},"owned":{"status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"hint-row",` +
-			`"gates":[],"emit":{},"next":{"status":"final"},` +
+			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
 			`"writes":{"status":"final"},"clear":[],"escaped":false}}`,
 	},
 	{
@@ -918,7 +918,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{"fails":"yes","holds":"yes","missing":"yes"},` +
 			`"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"advance","rule":"mixed-row","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"mixed-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -936,7 +936,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"observed":{"alpha":"a","zebra":"z"},` +
 			`"owned":{"mid":"m","status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"sort-row",` +
-			`"gates":[{"id":"beta","result":"allow"}],"emit":{},` +
+			`"gates":[{"id":"beta","result":"allow"}],"emit":{},"dispositions":{},` +
 			`"next":{"mid":"m","status":"final"},` +
 			`"writes":{"mid":"m","status":"final"},"clear":[],` +
 			`"escaped":false}}`,
@@ -958,7 +958,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 			`"owned":{"size":"9","status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"pair-row",` +
 			`"gates":[{"id":"beta","result":"allow"},` +
-			`{"id":"size","result":"allow"}],"emit":{},` +
+			`{"id":"size","result":"allow"}],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -975,7 +975,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"gone":"ready","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
-			`"rule":"uncomparable-row","gates":[],"emit":{},` +
+			`"rule":"uncomparable-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -989,7 +989,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"gone":"ready","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"hold",` +
-			`"rule":"absent-guard-row","gates":[],"emit":{},` +
+			`"rule":"absent-guard-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -1005,7 +1005,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"missingowned":"q","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
-			`"rule":"unavail-row","gates":[],"emit":{},` +
+			`"rule":"unavail-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"missingowned":"x","status":"final"},` +
 			`"writes":{"missingowned":"x","status":"final"},` +
 			`"clear":[],"escaped":false}}`,
@@ -1015,7 +1015,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},
@@ -1030,7 +1030,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
-			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},` +
+			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
 			`"clear":[],"escaped":false}}`,
 	},

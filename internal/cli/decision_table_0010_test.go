@@ -420,9 +420,15 @@ func TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire(t *testing.T) {
 		"--tag", "a=x", "--tag", "b=p", "--as=json")
 
 	got := wireKeyOrder(t, stdout)
+	// RDR 0024 `0024:C4` inserts `dispositions` at index 9, immediately
+	// after `emit`. That append is the licensed Phase 3 edit (`0024:PH3`):
+	// the 13-key list becomes 14 keys and the field guard below becomes 15,
+	// and this REQ's own subject — `emit` sitting immediately after
+	// `gates` — is untouched by it.
 	want := []string{
 		"model", "revision", "observed", "owned", "readers", "outcome",
-		"rule", "gates", "emit", "next", "writes", "clear", "escaped",
+		"rule", "gates", "emit", "dispositions", "next", "writes", "clear",
+		"escaped",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("payload key order = %v;\nwant                 %v\n"+
@@ -430,11 +436,12 @@ func TestReq39_EmitSitsImmediatelyAfterGatesOnTheWire(t *testing.T) {
 			"pre-edit order is not otherwise disturbed", got, want)
 	}
 
-	t.Run("the struct declares fourteen fields", func(t *testing.T) {
+	t.Run("the struct declares fifteen fields", func(t *testing.T) {
 		rt := reflect.TypeOf(resolvePayload{})
-		if rt.NumField() != 14 {
-			t.Errorf("resolvePayload declares %d fields; C4 takes it from "+
-				"thirteen to fourteen", rt.NumField())
+		if rt.NumField() != 15 {
+			t.Errorf("resolvePayload declares %d fields; `0010:C4` took it "+
+				"to fourteen and `0024:C4` takes it to fifteen",
+				rt.NumField())
 		}
 		gates, ok := rt.FieldByName("Gates")
 		if !ok {

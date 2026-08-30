@@ -64,7 +64,28 @@ type resolvePayload struct {
 	// declaration order IS the JSON key order Go's encoder emits and
 	// displacing Next..EscapeClass would rewrite a key order this RDR does
 	// not own. Gates, not Rule, is the predecessor.
-	Emit    map[string]string `json:"emit"`
+	Emit map[string]string `json:"emit"`
+
+	// Dispositions maps each emit key the SELECTED ROW authored to the
+	// disposition token the model's declaration assigns that authored value
+	// (`0024:C4`). It is present as `{}` — never `null`, never omitted —
+	// when no selected value carries one: an undeclared model, a non-enum
+	// kind, a flat-array domain and an empty emit block all render `{}`.
+	// `omitempty` is available here and is deliberately not taken.
+	//
+	// The map is keyed off the selected row's authored emit, never off the
+	// declaration set: a declared key the row does not emit contributes no
+	// entry, and the map is never padded to the declared key set.
+	//
+	// Byte order is the MARSHALLER's, not the join's — `encoding/json`
+	// sorts map keys on marshal — so nothing here sorts.
+	//
+	// JDR 0002 §D1 registration: this field is assigned the PLAN group by
+	// name in `flow_partition.go::resolvePayloadGroups`, the declared
+	// ECHO/PLAN partition RDR 0023 ships. A disposition token is the
+	// interpretation of an authored answer, never an echo of the request.
+	Dispositions map[string]string `json:"dispositions"`
+
 	Next    map[string]string `json:"next"`
 	Writes  map[string]string `json:"writes"`
 	Clear   []string          `json:"clear"`
@@ -291,11 +312,16 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		// `emit` never crosses the kernel seam, and a gate deny is a
 		// refusal rather than a payload, so this is never computed on a
 		// denied selection.
-		Emit:    emitMap(row.Emit),
-		Next:    tagMap(plan.NextTags),
-		Writes:  map[string]string{},
-		Clear:   []string{},
-		Escaped: plan.Escaped,
+		Emit: emitMap(row.Emit),
+		// The disposition join rides the SAME single `Plan.RuleID` join
+		// path as `emit` — `row` is what `rowByID` returned — so an escaped
+		// plan carries the escape row's OWN authored values and no
+		// defaulted or merged value can reach the payload unjoined.
+		Dispositions: dispositionMap(req.model, row.Emit),
+		Next:         tagMap(plan.NextTags),
+		Writes:       map[string]string{},
+		Clear:        []string{},
+		Escaped:      plan.Escaped,
 	}
 	if payload.Gates == nil {
 		payload.Gates = []gateResult{}
@@ -348,6 +374,32 @@ func emitMap(emit []table.EmitValue) map[string]string {
 	out := make(map[string]string, len(emit))
 	for _, e := range emit {
 		out[e.Key] = e.Value
+	}
+	return out
+}
+
+// dispositionMap joins the selected row's authored emit against the
+// model's declared emit vocabulary (`0024:C4`).
+//
+// The join is performed HERE, in the CLI, reading `Model.EmitDecls`.
+// `internal/table` gains no payload-shaped helper: a method on `*Model`
+// returning this map would shape the table package's API around one verb's
+// wire format.
+//
+// An entry exists for key `k` exactly when the selected row authors `k`
+// AND `k`'s declaration lists that authored value under a disposition. A
+// declared key the row does not emit, a non-enum kind, and a flat-array
+// domain all contribute nothing — the result is `{}`, never padded with
+// nulls, empty strings, or absent-markers.
+//
+// The token is carried VERBATIM: intrastate never interprets it. Domains
+// and dispositions are model-authored vocabulary.
+func dispositionMap(m *table.Model, emit []table.EmitValue) map[string]string {
+	out := make(map[string]string, len(emit))
+	for _, e := range emit {
+		if token, listed := m.EmitDecls[e.Key].Dispositions[e.Value]; listed {
+			out[e.Key] = token
+		}
 	}
 	return out
 }
