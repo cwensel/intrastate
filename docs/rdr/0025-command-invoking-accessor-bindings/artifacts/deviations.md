@@ -300,3 +300,65 @@ hold under any implementation. S3's own wording puts the tail assertion
 on FX-exit-codes E1c — `test --bogus`, exit 2 WITH stderr — so the
 fixture takes that shape: a script that writes one stderr line and exits
 2.
+
+## D15 — `0025:C4`'s deadline triple is necessary but NOT sufficient
+
+**Type: SPEC-DEFECT. Status: implementation closes the gap; the clause's
+sufficiency claim is overstated and a successor should say so.**
+
+C4 states the A1 spike's triple — `Setpgid`, a `Cancel` that signals the
+group, and `WaitDelay` — as "necessary AND sufficient", and `0025:F4`
+bounds the accepted residue to "a child that IGNORES termination at
+deadline". Phase 3a and Phase 3b each reproduced, independently, two
+liveness failures that the triple as written does not reach and that
+`F4`'s residue does not cover, both in children that ignore nothing:
+
+- A child writing more than one pipe buffer (64 KiB) to stderr before
+  closing stdout deadlocks against a parent that drains stdout to
+  completion first. `WaitDelay` bounds the stdin write and the POST-kill
+  drain, not the pre-kill one, so no member of the triple addresses it.
+  Measured pre-fix: 5 000 stderr lines burned the full 8s deadline.
+- `cmd.Cancel` fires only when the context ends, so the group is signalled
+  only on the FAILURE path. A grandchild backgrounded by a tool that
+  exited 0 survives holding the inherited pipes. Measured pre-fix: a
+  correct tool's read refused after its full 3s deadline.
+
+**Taken.** Both are closed in the implementation without changing the
+declared contract: the triple is kept intact and two properties C4 clearly
+intends but does not spell out are added — the two output channels drain
+CONCURRENTLY, and the group is reaped after the direct child is waited on,
+on the success path as much as the failure path. Neither weakens a
+declared bound; the stdout cap, the stderr tail, `WaitDelay`, and the
+deadline classification from `ctx.Err()` are unchanged.
+
+The reading is grounded in C4's own stated purpose for the group signal —
+"dropping the group signal ORPHANS A GRANDCHILD holding the pipe" — which
+is the failure observed on the success path, so honouring it there is
+what the clause asks for rather than an extension of it.
+
+**Owed to a successor.** C4's "necessary and sufficient" should either
+name the concurrent drain and the post-wait group reap as members of the
+mechanism, or drop the sufficiency claim. `F4`'s residue statement should
+likewise be narrowed to what it now is: a child that survives a SIGKILL to
+its process group.
+
+**No new public surface.** The fix adds `reapGroup` and an `invocation`
+field, both unexported; no identifier in the RDR's Normative Contracts
+changed shape, so this carries no additive SPEC-UNDER.
+
+## D16 — a signalled child's refusal text is new, unspecified prose
+
+**Type: IMPL-DECISION. Status: settled.**
+
+Distinguishing a signalled child from an exited one (D15's sibling, the
+`0025:C3` soundness fix) makes the previous refusal text — "produced no
+stdout and exited -1" — a statement about an exit code that does not
+exist. C3 fixes the CLASSES and the wire, not refusal prose, and the RDR
+names no wording for this case because the case was not contemplated.
+
+**Taken.** Read, gate, and write each say the command "was killed by a
+signal before it exited", and the read and gate arms add that the entry's
+`exit_absent` / `exit_verdicts` map therefore does not apply. The class is
+unchanged — `execution_failure` at the binding, which the executor still
+reclassifies to `timeout` when `ctx.Err()` is `DeadlineExceeded` — so no
+declared class or category moved; only the free-text diagnosis is new.

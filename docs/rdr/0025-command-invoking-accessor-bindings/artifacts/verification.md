@@ -308,3 +308,128 @@ NOT recorded as a violation: `0025:C5` fixes the interpreter set as OPEN —
 "deny-listed, not closed … an unlisted interpreter is admitted, so the list
 grows by amendment" — and an unlisted spelling is exactly that case. Noted
 because the spelling gap is one an amendment would likely want to close.
+
+## Phase 3c — Fixup
+
+Phase 3a (28 spec-derived probes) and Phase 3b (adversarial review) ran in
+isolation from each other and converged on an identical three defects. All
+three are closed. The five reported adversarial tests are green, unweakened
+and unedited, plus one added for an uncovered edge.
+
+Validation, on the fixed tree: `go test ./...` green, `go test -race ./...`
+green, `make check` exit 0 (gofmt, vet, golangci-lint 0 issues, graph-lint,
+docs-check). The tree is gofmt-clean and both commits went through the
+`pre-commit` hook without `--no-verify`.
+
+### DEFECT 1 — the exit maps claimed a KILLED child (FAIL-1 / ADV-1)
+
+**Changed.** `internal/cli/cmdbind/cmdbind.go`. `spawn` set
+`inv.exited = true` for any `*exec.ExitError`, and `Wait` reports a SIGKILL
+as one with the synthetic `ExitCode() == -1`. The wait arm now reads
+`WaitStatus.Signaled()`: a signalled child sets a new unexported `signaled`
+field and NOT `exited`, so neither `exit_absent` nor `exit_verdicts` can be
+consulted for it. `Reader.Read`, `Gate.Gate`, and `Writer.Apply` each refuse
+naming the signal (D16).
+
+The decision is made at the BINDING, which is the point of the fix: the
+executor's `bounded.Err() == context.DeadlineExceeded` check masked only the
+deadline arm, and `0025:C6` forbids resting a safety property on "a
+coincidence between two independent decisions". The cancel path is now
+closed at its source rather than upstream.
+
+**Evidence it is closed** (same inputs as the findings):
+
+| input | before | after |
+| --- | --- | --- |
+| read, `exit_absent = [-1]`, 500ms deadline | `values=[{state.phase "" Absent:true}] err=nil` | refusal |
+| gate, `exit_verdicts = { "-1" = "allow" }`, 400ms | `verdict="allow" err=nil` | `verdict="" err=`refusal |
+| read, `exit_absent = [-1]`, parent CANCELLED at 300ms | `values=[{k "" Absent:true}] err=nil` | `values=[] err=the read command produced no stdout and was killed by a signal before it exited, so its `exit_absent` map does not apply` |
+| write, signalled | (exit -1 refusal, misleading text) | `the write command was killed by a signal before it exited` |
+
+The cancel row is the load-bearing one: nothing upstream reclassifies
+`context.Canceled`, so before the fix that absence was BELIEVED, and
+`0004:C12` read-back verifies a `<clear>` on absence — the `0025:F5`
+"confirm an unapplied write" shape. It now refuses.
+
+Green: `TestAdvReadExitAbsentMustNotClaimAKilledChild`,
+`TestAdvGateExitVerdictsMustNotClaimAKilledChild`,
+`TestAdvKilledChildOnParentCancelIsNotAnAnswer`.
+
+### DEFECT 2 — stderr drained only AFTER stdout (FAIL-2 / ADV-2)
+
+**Changed.** `internal/cli/cmdbind/cmdbind.go`. Both output channels now
+drain CONCURRENTLY in two goroutines joined after the wait. Previously
+`readBounded(outPipe, …)` ran to completion before `readBounded(errPipe, …)`
+was called at all, so a child filling the 64 KiB stderr pipe buffer before
+closing stdout blocked in `write(2)` while the parent blocked in `read(2)`.
+Bounds are unchanged: stdout at cap+1 (so overflow is still DETECTED, not
+truncated), stderr under the same cap with the last 4 KiB kept.
+
+**Evidence it is closed** — the finding's own table, re-measured:
+
+| stderr lines (~24 B each) | before | after |
+| --- | --- | --- |
+| 1 000 (~24 KiB) | 229ms, correct | correct |
+| 5 000 (~120 KiB) | 8.002s, refused "produced no stdout" | **242ms**, `values=[{k v}] err=<nil>` |
+| 20 000 (~480 KiB) | 8.005s, same refusal | **351ms**, `values=[{k v}] err=<nil>` |
+
+Green: `TestAdvVerboseStderrMustNotDeadlockTheDrain` (3.00s FAIL → 0.13s
+PASS).
+
+### DEFECT 3 — the process group signalled only on the failure path (FAIL-3 / ADV-3)
+
+**Changed.** `internal/cli/cmdbind/cmdbind.go`. A new unexported `reapGroup`
+SIGKILLs `-pgid` after `cmd.Wait` returns, on the success path as much as
+the failure path. `cmd.Cancel` is unchanged and still carries the deadline
+arm; the two do not overlap, since `Cancel` fires only when the context
+ends.
+
+Placing the reap AFTER the wait is what makes it safe: the direct child is
+already gone, so nothing legitimate is signalled — whatever remains in the
+group is exactly the orphan `0025:C4` names ("dropping the group signal
+ORPHANS A GRANDCHILD holding the pipe"). `p.Pid <= 1` is guarded, since a
+negative pid of 0 or 1 would address the caller's own group or init.
+
+Both liveness fixes rest on one structural change: `spawn` now owns the
+output pipes (`os.Pipe`, with `cmd.Stdout`/`cmd.Stderr` set to the write
+ends) rather than using `cmd.StdoutPipe`/`cmd.StderrPipe`. `Cmd.Wait` closes
+the pipes IT owns as soon as the direct child is reaped, which would
+truncate a read still in flight; owning them lets the group be released
+first and the drains then run to a true EOF. An `*os.File` on those fields
+is handed to the child directly, with no copying goroutine, so this removes
+rather than adds concurrency inside `os/exec`.
+
+**Evidence it is closed.** `( sleep 30 ) & printf '{"k":"v"}'; exit 0`
+under a 3s deadline: before `elapsed=3.001s values=[] err=context deadline
+exceeded`; after **`elapsed=221ms values=[{k v}] err=<nil>`**. The
+grandchild is also REAPED, not merely detached from the drain.
+
+Green: `TestAdvBackgroundGrandchildMustNotStallASuccessfulRead` (3.00s FAIL
+→ 0.22s PASS).
+
+### Regression test added
+
+`TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead` — the second half
+of ADV-3, which no reported test asserted. Not stalling the drain and not
+LEAKING the process are different properties: a fix that closed the first
+with a pipe close alone would leave the second open, and `0025:F4` admits
+process leakage only for a child that outlives its `timeout` refusal, never
+one that outlives a SUCCESSFUL invocation. The tool records its background
+helper's pid; the test asserts the read succeeds AND the pid is dead after.
+Verified red against the pre-fix source (`refused: context deadline
+exceeded`), green after.
+
+No reported test was weakened, edited, or deleted.
+
+### Deviations recorded
+
+- **D15** (SPEC-DEFECT) — `0025:C4`'s deadline triple is necessary but not
+  sufficient, and `0025:F4`'s residue statement is too narrow. Closed in the
+  implementation without changing the declared contract; a successor owes
+  the clause wording.
+- **D16** (IMPL-DECISION) — the signalled-child refusal prose is new and
+  unspecified; the refusal CLASS is unchanged.
+
+No new public surface: `reapGroup` and the `invocation.signaled` field are
+unexported, and no identifier in the Normative Contracts changed shape, so
+this pass carries no additive SPEC-UNDER.
