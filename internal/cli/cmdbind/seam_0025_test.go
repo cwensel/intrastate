@@ -45,6 +45,9 @@ import (
 // error"
 // REQ-102: "Invocations() int          # on WriteBinding, beside Apply"
 // REQ-104: "the write method is `Apply`, NOT `Write`."
+// REQ-116: "Phase 2: Binding family — Implement command-backed
+// `ReadBinding`/`GateBinding`/`WriteBinding` over `exec.CommandContext`
+// honoring C2–C4 (a sibling package to `flowbind`)."
 // BOUNDARY — NEGATIVE REQ.
 //
 // The compile-time half is the only way a Go test can catch "no signature

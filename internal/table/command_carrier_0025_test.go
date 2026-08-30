@@ -1183,3 +1183,127 @@ func TestReq139_APathBackedModelIsUnchangedByTheCommandCarrier(t *testing.T) {
 			"to say anything; a command-backed model refused: %v", err)
 	}
 }
+
+// REQ-112: "the field is `command`; the family is \"command-backed
+// accessors\". Rejected: `exec` ..., `run` ..., `argv` ..."
+// REQ-15: "the Go field names and struct tags on
+// `internal/table/source.go::sourceAcc` are unconstrained implementation
+// choice, as is the decomposition of the binding into helpers and the
+// package or file that holds it"
+// BOUNDARY — REQ-15 is a NEGATIVE REQ.
+//
+// The two halves are one test because they cut in opposite directions and
+// only the pair is meaningful: the WIRE spelling is fixed and the Go name
+// is not. So the oracle reads the TOML — the author-facing carrier — and
+// deliberately never names a Go field or a struct tag.
+func TestReq112_TheWireFieldIsCommandAndTheRejectedSpellingsAreNot(t *testing.T) {
+	if _, err := table.Load([]byte(cmdCarrierModel), "cmd-carrier.toml"); err != nil {
+		t.Fatalf("the `command` spelling must decode: %v", err)
+	}
+
+	for _, rejected := range []string{"exec", "run", "argv"} {
+		t.Run(rejected, func(t *testing.T) {
+			src := swapEntry(t, cmdCarrierModel, cmdReadBlock, `[read.state]
+role = "state"
+`+rejected+` = ["reader", "{artifact}"]
+keys = ["status"]
+timeout = "2s"`)
+			cat := loadCategoryOf(t, src, "cmd-rejected-name.toml")
+			if cat != table.CatUnknownSchemaField {
+				t.Errorf("`%s` decoded as category %q; the carrier field is "+
+					"`command` and the rejected spellings are not schema",
+					rejected, cat)
+			}
+		})
+	}
+}
+
+// REQ-26: "This keeps `table` free of path resolution and leaves in-memory
+// model construction untouched — no `table.Model` field, so no constructor
+// or fixture changes."
+// REQ-116/REQ-117 (the phase boundary they encode): the carrier lives in
+// `internal/table`; argv0 resolution and the gate live above it.
+// ADVERSARIAL — NEGATIVE REQ.
+//
+// The mutant this kills is the FIRST form of A12, which the critique lens
+// refuted: a loader that recorded the model's directory would have to
+// perform path resolution, which `0002:EIA` forbids and which every
+// in-memory construction and fixture would then have to supply.
+func TestReq26_TheLoaderPerformsNoPathResolutionAndModelCarriesNoBaseDir(t *testing.T) {
+	// A model built from BYTES with a sourceID that is not a real path
+	// loads clean and carries no directory anywhere. If the loader resolved
+	// paths, this would fail or record something.
+	m, err := table.Load([]byte(cmdCarrierModel), "not/a/real/path/on/disk.toml")
+	if err != nil {
+		t.Fatalf("Load must take bytes plus a display sourceID and perform no "+
+			"file I/O: %v", err)
+	}
+
+	// The oracle is structural and stays off Go field NAMES (REQ-15): the
+	// only path-shaped value a loaded model carries is the per-entry
+	// declared locator, and a command entry has none.
+	if got := m.Readers["state"].Path; got != "" {
+		t.Errorf("read.state Path = %q on a command entry; the model carries no "+
+			"resolved path and a command entry declares no locator", got)
+	}
+
+	// And the discriminating half: the carrier must be LIVE, or "the loader
+	// resolves nothing" is asserted over a field that does not exist.
+	if len(m.Readers["state"].Command) == 0 {
+		t.Fatal("the command carrier did not decode; the no-resolution claim " +
+			"above is vacuous without it")
+	}
+}
+
+// REQ-138: "credentials never appear in `command`, in `env` literals, or in
+// stdin values ... A lint advisory on credential-shaped argv elements is
+// **not** in v1"
+// DOMAIN EDGE — NEGATIVE REQ.
+//
+// The clause states a POLICY and explicitly declines to enforce it in v1.
+// The test that catches a violation is therefore that no v1 lint arm
+// refuses a credential-shaped element: shipping one would be scope this
+// record charts to a successor, and it would also mean a model that lints
+// green today starts refusing.
+func TestReq138_NoV1LintAdvisoryRefusesACredentialShapedArgvElement(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry string
+	}{
+		{"a token-shaped literal in argv", `[read.state]
+role = "state"
+command = ["reader", "--token", "ghp_0123456789abcdefghijklmnopqrstuvwxyz"]
+keys = ["status"]
+timeout = "2s"`},
+		{"a password-named env literal", `[read.state]
+role = "state"
+command = ["reader"]
+env = { TOOL_PASSWORD = "hunter2" }
+keys = ["status"]
+timeout = "2s"`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := swapEntry(t, cmdCarrierModel, cmdReadBlock, tc.entry)
+			if _, err := table.Load([]byte(src), "cmd-credential.toml"); err != nil {
+				if cat, ok := table.CategoryOf(err); ok &&
+					strings.HasPrefix(string(cat), "command_") {
+					t.Errorf("a credential-shaped declaration refused %q; the "+
+						"advisory is NOT in v1 and is charted to the successor "+
+						"that adds the config surface", cat)
+				}
+			}
+		})
+	}
+
+	// The discriminating half: the ENFORCEABLE part of the policy IS built
+	// — the child environment is composed, not inherited (C4), so a
+	// credential cannot arrive by accident. That is asserted where it lives,
+	// in the binding suite; here the pin is that the carrier is live so the
+	// absence above is about a missing advisory rather than a missing
+	// carrier.
+	if _, err := table.Load([]byte(cmdCarrierModel), "cmd-carrier.toml"); err != nil {
+		t.Fatalf("the carrier must be live: %v", err)
+	}
+}

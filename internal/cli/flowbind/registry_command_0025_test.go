@@ -246,6 +246,9 @@ func TestReq113_TheRegistrySelectsTheBindingByCarrierField(t *testing.T) {
 // refusing binding (`execution_failure`, Detail naming the malformed entry)
 // and MUST NOT fall through to a `Path: \"\"` file binding, which would
 // read every declared key as absent and confirm an unapplied write"
+// REQ-11: "The selection in `flowbind.Registry` must be **exhaustive, and
+// fail closed on the residue**." ... "the constructor selects `command`
+// first, `path` second, and **panics-free refuses** the third case"
 // REQ-131 (S7's C1 residue arm): "an entry with neither carrier builds a
 // **refusing** binding, never a `Path: \"\"` file binding."
 // ADVERSARIAL
@@ -338,6 +341,11 @@ func requireNames(t *testing.T, err error, want string) {
 // unset."
 // REQ-96: "The gate sites **in the command binding's constructor**, not in
 // the executor"
+// REQ-117: "Phase 3: Selection — Discriminate the constructor by carrier
+// field at `internal/cli/flowbind/registry.go::Registry` ... Register
+// `--allow-commands` ... and thread it (C6) from `buildRequest` ... in the
+// SAME phase: selection is the step that first makes a command reachable,
+// so the gate must not lag it by even one commit."
 // ADVERSARIAL
 //
 // The discriminating pair: the SAME model, the same entries, the flag off

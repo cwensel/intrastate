@@ -82,6 +82,9 @@ func rawValue(t *testing.T, acc table.Accessor, art accessor.Artifact) accessor.
 // whole-element placeholder substitution."
 // REQ-19: "Execution invokes no shell and performs no other rewriting of
 // the vector."
+// REQ-123 (S2): "the absolute path is substituted whole-element and the
+// argv the child observes equals the declared vector otherwise
+// byte-for-byte"
 // HAPPY PATH
 //
 // The Pre-Lock `fidelity` invariant: declared argv → executed argv is
@@ -921,6 +924,11 @@ func TestReq50_AStdoutOverTheOneMiBCapIsAnExecutionFailureNotATruncation(t *test
 // nothing else is inherited."
 // REQ-47: "The protocol's version rides out-of-band as `INTRASTATE_PROTOCOL`
 // in the child env"
+// REQ-53: "`LC_*` is a literal prefix match on `LC_` (the one prefix rule;
+// `env_pass` names whole variables and admits no pattern)."
+// REQ-126 (S4b): "the injection never reaches the child (its env holds only
+// the allowlist) ... Asserted on the child's observed environment, not on
+// the read result, since an env defect can leave the value correct."
 // ADVERSARIAL
 //
 // Asserted on the CHILD's observed environment, not on the read result,
@@ -1232,6 +1240,10 @@ func TestReq49_TheDeadlineBoundsTheWholeProcessGroupAndLeavesNoSurvivor(t *testi
 // REQ-61: "The check reads an injectable package-level `goos` var
 // (defaulting to `runtime.GOOS`) so the refusal is testable on Unix CI"
 // REQ-134: the same, as a Failure Mode.
+// REQ-130 (S6b): "`execution_failure` naming the unsupported platform, with
+// no child spawned (asserted by absence of a spawn, as in scenario 7); the
+// same model passes `intrastate lint` under that setting, since lint is
+// platform-neutral."
 // DOMAIN EDGE
 //
 // PHASE-0 READING (ASSUMPTION REQ-60/REQ-61): the `goos` var is unexported
@@ -1267,6 +1279,22 @@ func TestReq60_ACommandEntryRefusesOnARefuseListedPlatformBeforeSpawn(t *testing
 			}
 		})
 	}
+
+	t.Run("lint stays platform-neutral in the same binary", func(t *testing.T) {
+		// REQ-130 / REQ-134: "the same model passes `intrastate lint` under
+		// that setting, since lint is platform-neutral" — a model authored
+		// on Windows still validates. A BUILD CONSTRAINT would have made
+		// the refusal unbuildable-on-Windows rather than observable, and it
+		// would have taken lint with it; the runtime check is what keeps
+		// the two separable, so the separation is what this asserts.
+		cmdbind.SetGOOSForTest(t, "windows")
+
+		if _, err := table.Load([]byte(platformNeutralModel(bin)), "win.toml"); err != nil {
+			t.Errorf("a command model failed to LOAD under GOOS=windows: %v — "+
+				"validation is platform-neutral and the refusal is a runtime "+
+				"check in the binding, not a build constraint", err)
+		}
+	})
 
 	t.Run("an unlisted Unix is admitted without enumeration", func(t *testing.T) {
 		// The predicate is refuse-listed, so a BSD — which nothing
@@ -1372,4 +1400,59 @@ func requireGateRefusal(t *testing.T, err error, trace string) {
 		t.Error("a child ran; the gate refuses BEFORE spawn — asserted by the " +
 			"absence of a spawn, not by a non-zero exit")
 	}
+}
+
+// platformNeutralModel is a valid command-backed model, used to assert that
+// LOADING is unaffected by the platform the binding refuses on.
+func platformNeutralModel(bin string) string {
+	return `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "winflow"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[read.state]
+role = "state"
+command = ["` + bin + `", "emit", "draft", "0"]
+output = "raw"
+keys = ["status"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+command = ["` + bin + `", "stdin-to-file", "{artifact}"]
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "advance-draft"
+[rule.match.status]
+eq = "draft"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"
+`
 }
