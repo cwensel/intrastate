@@ -205,7 +205,8 @@ Available Commands:
   set-state   Apply planned owned-tag writes, verified by read-back
 
 Flags:
-      --help-all   show extended help (vocabulary, wire shapes, exit codes)
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --help-all         show extended help (vocabulary, wire shapes, exit codes)
 
 Global Flags:
       --as string   output mode: text | json (default "text")
@@ -322,7 +323,8 @@ Flags:
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
 
 Global Flags:
-      --as string   output mode: text | json (default "text")
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --as string        output mode: text | json (default "text")
 ```
 
 ```
@@ -416,7 +418,8 @@ Flags:
       --model string           path to the transition model
 
 Global Flags:
-      --as string   output mode: text | json (default "text")
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --as string        output mode: text | json (default "text")
 ```
 
 ```
@@ -510,7 +513,8 @@ Flags:
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
 
 Global Flags:
-      --as string   output mode: text | json (default "text")
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --as string        output mode: text | json (default "text")
 ```
 
 ```
@@ -638,7 +642,8 @@ Flags:
       --write stringArray      planned owned-tag write, as name=value (repeatable)
 
 Global Flags:
-      --as string   output mode: text | json (default "text")
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --as string        output mode: text | json (default "text")
 ```
 
 ```

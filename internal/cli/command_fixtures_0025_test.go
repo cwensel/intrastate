@@ -37,21 +37,32 @@ func writeWrapper(t *testing.T, dir string) string {
 	t.Helper()
 
 	p := filepath.Join(dir, "flowstate-write")
+	// The `flow.` section prefix is the WRAPPER's job, and its presence
+	// here is the point: `git config` refuses a key carrying no section
+	// ("key does not contain a section"), while the model's tag key is
+	// `status`. Mapping intrastate's tag name onto the tool's native key
+	// space is exactly the translation the Approach charts to the wrapper
+	// body — script the model does not carry (deviations D11).
 	const body = `#!/bin/sh
 # stdin: {"<key>":"<value>", ...}   argv: <artifact>
+#
+# The envelope is split into one "key":"value" pair per LINE, with a
+# trailing newline so the last pair is not dropped by read, and via tr
+# rather than a sed newline replacement so the split behaves identically
+# under BSD and GNU sed.
 set -e
 artifact="$1"
-payload=$(cat)
-printf '%s' "$payload" |
-  sed -e 's/^{//' -e 's/}$//' -e 's/","/"\n"/g' |
-  while IFS= read -r pair; do
+cat |
+  sed -e 's/^{//' -e 's/}$//' -e 's/","/"|"/g' |
+  tr '|' '\n' |
+  while IFS= read -r pair || [ -n "$pair" ]; do
     [ -n "$pair" ] || continue
     key=$(printf '%s' "$pair" | sed -e 's/^"//' -e 's/":.*$//')
     val=$(printf '%s' "$pair" | sed -e 's/^.*":"//' -e 's/"$//')
     if [ "$val" = "<clear>" ]; then
-      git config --file "$artifact" --unset "$key" 2>/dev/null || true
+      git config --file "$artifact" --unset "flow.$key" 2>/dev/null || true
     else
-      git config --file "$artifact" "$key" "$val"
+      git config --file "$artifact" "flow.$key" "$val" || exit 1
     fi
   done
 `
@@ -68,14 +79,21 @@ printf '%s' "$payload" |
 func traceArgv(t *testing.T, trace string) []string {
 	t.Helper()
 
-	sh, err := exec.LookPath("sh")
-	if err != nil {
+	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skipf("no POSIX sh on PATH for the spawn sentinel: %v", err)
 	}
-	// NOTE: this is a fixture's OWN argv, not a model-declared command —
-	// a declared `sh -c` vector is a C5 defect (REQ-74) and the models
-	// below never carry one.
-	return []string{sh, "-c", "printf ran >> " + strconv.Quote(trace)}
+	// The sentinel is a SCRIPT FILE declared as argv0, which is the only
+	// shape a model may carry: a declared `["sh", "-c", …]` vector is the
+	// C5 `command_shell_interpreter` defect REQ-74 asserts, so a model
+	// built around one would refuse at LOAD and never reach the gate this
+	// sentinel exists to observe (deviations D10). It is the same shape
+	// the MVV's own `traceScript` takes.
+	p := filepath.Join(t.TempDir(), "sentinel")
+	body := "#!/bin/sh\nprintf ran >> " + strconv.Quote(trace) + "\n"
+	if err := os.WriteFile(p, []byte(body), 0o700); err != nil {
+		t.Fatalf("writing the spawn sentinel: %v", err)
+	}
+	return []string{p}
 }
 
 // --- model writers --------------------------------------------------------
@@ -228,4 +246,22 @@ func requireGit(t *testing.T) {
 		t.Skipf("the MVV binds `git config --file`, an established tool the "+
 			"RDR's own A3 spike bound; git is not on PATH: %v", err)
 	}
+}
+
+// stderrScript writes a child that fails LOUDLY: a non-zero exit carrying
+// a stderr line, which is FX-exit-codes E1c's shape (`test --bogus` →
+// exit 2, empty stdout, stderr set). It is what a tail assertion needs —
+// a tool that exits non-zero in silence has no tail to carry.
+func stderrScript(t *testing.T, dir string) string {
+	t.Helper()
+
+	p := filepath.Join(dir, "loud-reader")
+	const body = `#!/bin/sh
+printf 'reader: --bogus: unexpected operator\n' >&2
+exit 2
+`
+	if err := os.WriteFile(p, []byte(body), 0o700); err != nil {
+		t.Fatalf("writing the loud reader: %v", err)
+	}
+	return p
 }

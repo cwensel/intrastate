@@ -6,6 +6,7 @@ package cli
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -367,6 +368,31 @@ const (
 // the same request unchanged", so a refusal about the REQUEST must never
 // take it, or the caller spins forever on an input they must instead fix.
 func accessorFailure(refusal accessor.Refusal, at phase) *clierr.CLIError {
+	return withStderrTail(accessorFailureOf(refusal, at), refusal.Detail)
+}
+
+// withStderrTail lands a command-backed invocation's bounded stderr tail
+// in the CLI's ONE `Detail` slot (`0025:C4`, REQ-65).
+//
+// There is exactly one slot — `clierr.CLIError` has a single `Detail` and
+// `EmitText` renders a single `detail:` line — so "renders beneath" is not
+// available and no second carrier is added. Where both senses are present
+// they occupy that slot IN ORDER: the applied-sense text FIRST, because
+// losing "the write may have applied" to a diagnostic tail would drop the
+// more consequential fact, and the tail appended after it.
+func withStderrTail(ce *clierr.CLIError, tail string) *clierr.CLIError {
+	if ce == nil || tail == "" {
+		return ce
+	}
+	if ce.Detail == "" {
+		ce.Detail = tail
+		return ce
+	}
+	ce.Detail = ce.Detail + "\n" + tail
+	return ce
+}
+
+func accessorFailureOf(refusal accessor.Refusal, at phase) *clierr.CLIError {
 	id := refusal.Accessor
 
 	switch refusal.Class {
@@ -822,11 +848,37 @@ func buildRequest(cmd *cobra.Command, withTags bool) (flowRequest, *clierr.CLIEr
 		}
 	}
 
+	// `0025:C6` — the flag is read with the error CHECKED, not discarded.
+	// Persistent registration on the `flow` group guarantees presence, so
+	// a lookup miss can only be a WIRING BUG and must surface as one:
+	// pflag's own text is "flag accessed but not defined", a programmer
+	// error, never a statement about user intent. A default-deny resting
+	// on the zero value would make fail-closed a coincidence between two
+	// independent decisions, and the dangerous edit — a parent registering
+	// the flag, or a verb registering a different default — silently
+	// converts the miss into a hit and fails OPEN.
+	allowCommands, ferr := cmd.Flags().GetBool("allow-commands")
+	if ferr != nil {
+		return flowRequest{}, internalErr(codeAccessorFailed,
+			"the --allow-commands gate is not registered on this command: "+
+				ferr.Error())
+	}
+
+	// `0025:C2` — the root a separator-bearing argv0 resolves against is
+	// the MODEL FILE's directory, absolutized here because `--model` is
+	// stored verbatim and a relative one must not make argv0 resolution
+	// cwd-dependent. The loader performs no path resolution (`0002:EIA`),
+	// so the base dir is carried at this layer and never on `table.Model`.
+	baseDir := ""
+	if abs, aerr := filepath.Abs(ref); aerr == nil {
+		baseDir = filepath.Dir(abs)
+	}
+
 	return flowRequest{
 		model:     model,
 		modelRef:  ref,
 		artifacts: artifacts,
 		observed:  observed,
-		registry:  flowbind.Registry(model, "", false),
+		registry:  flowbind.Registry(model, baseDir, allowCommands),
 	}, nil
 }

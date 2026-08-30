@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/cli/cmdbind"
 	"github.com/cwensel/intrastate/internal/table"
 )
 
@@ -30,12 +31,8 @@ import (
 // `--allow-commands` gate, checked here because this is the single
 // production construction site every executor's registry comes from
 // (`0025:C6`).
-//
-// PHASE 1 DECLARATION ONLY for the two new parameters: the signature is
-// the one `0025:C6` fixes so the conformance suite compiles, and Phase 2
-// lands the carrier discrimination and the gate.
 func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Registry {
-	_, _ = baseDir, allowCommands
+	cfg := cmdbind.Config{BaseDir: baseDir, AllowCommands: allowCommands}
 
 	reg := accessor.Registry{
 		Flow:      m.ID,
@@ -44,35 +41,64 @@ func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Regis
 
 	for _, name := range slices.Sorted(keys(m.Readers)) {
 		acc := m.Readers[name]
+		var binding accessor.Binding = Reader{Path: acc.Path}
+		if commandBacked(acc) {
+			binding = cmdbind.Reader{Accessor: acc, Name: name, Config: cfg}
+		}
 		reg.Definitions = append(reg.Definitions, accessor.Definition{
 			Identity: accessor.Identity{
 				Flow: m.ID, Name: name, Capability: accessor.CapRead,
 			},
 			Accessor: acc,
-			Binding:  Reader{Path: acc.Path},
+			Binding:  binding,
 		})
 	}
 	for _, name := range slices.Sorted(keys(m.Writers)) {
 		acc := m.Writers[name]
+		var binding accessor.Binding = &Writer{Path: acc.Path}
+		if commandBacked(acc) {
+			binding = &cmdbind.Writer{Accessor: acc, Name: name, Config: cfg}
+		}
 		reg.Definitions = append(reg.Definitions, accessor.Definition{
 			Identity: accessor.Identity{
 				Flow: m.ID, Name: name, Capability: accessor.CapWrite,
 			},
 			Accessor: acc,
-			Binding:  &Writer{Path: acc.Path},
+			Binding:  binding,
 		})
 	}
 	for _, name := range slices.Sorted(keys(m.Gates)) {
 		acc := m.Gates[name]
+		var binding accessor.Binding = Gate{Path: acc.Path}
+		if commandBacked(acc) {
+			binding = cmdbind.Gate{Accessor: acc, Name: name, Config: cfg}
+		}
 		reg.Definitions = append(reg.Definitions, accessor.Definition{
 			Identity: accessor.Identity{
 				Flow: m.ID, Name: name, Capability: accessor.CapGate,
 			},
 			Accessor: acc,
-			Binding:  Gate{Path: acc.Path},
+			Binding:  binding,
 		})
 	}
 	return reg
+}
+
+// commandBacked is the carrier discriminator, and it is what makes the
+// selection TOTAL: `command` first, `path` second, and the residue — an
+// entry carrying NEITHER — takes the command arm too, where it builds a
+// REFUSING binding rather than a `Path: ""` file binding (`0025:C1`).
+//
+// That third case is the one C1 spends a paragraph on: the file binding
+// FAILS OPEN on an empty path, mapping a non-existent file to an empty
+// store by design, so a carrier-less entry reaching it would read every
+// declared key as ABSENT and confirm an unapplied write as verified —
+// silent state loss, never a crash. C1's load-time exactly-one rule makes
+// the residue unreachable through the loader; a binding built from an
+// in-memory model never passed it, which is why the constructor refuses
+// it anyway.
+func commandBacked(acc table.Accessor) bool {
+	return len(acc.Command) != 0 || acc.Path == ""
 }
 
 // OwnedTags returns the model's owned tag keys, sorted.

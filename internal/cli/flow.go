@@ -81,6 +81,16 @@ Run any verb with --help-all for its refusal codes and worked calls.`,
 		},
 	}
 
+	// `0025:C6` — ONE registration, on the GROUP's persistent set, whose
+	// subtree is exactly the `buildRequest` callers and nothing else. That
+	// makes the caller set STRUCTURAL rather than a hand-kept verb list: a
+	// fifth verb added inside the group inherits the gate, and one added
+	// outside it loses command execution loudly. `lint` sits at ROOT,
+	// outside the group, so it does not carry the flag — validation is
+	// ungated, and a flag that changes nothing is a false affordance.
+	cmd.PersistentFlags().Bool("allow-commands", false,
+		"permit model-declared command accessors to execute (off by default)")
+
 	cmd.AddCommand(
 		newFlowNextCmd(),
 		newFlowResolveCmd(),

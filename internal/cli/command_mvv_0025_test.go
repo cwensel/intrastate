@@ -127,8 +127,10 @@ env = { INTRASTATE_ROLE = "spoof" }`,
 				if err == nil {
 					t.Fatalf("lint ACCEPTED the %s mutant", m.name)
 				}
-				if code := clierr.ErrorCode(err); code != codeModelInvalid {
-					t.Fatalf("code = %q; want %q", code, codeModelInvalid)
+				// `lint` is at ROOT and carries its own code, not the
+				// `flow`-group-scoped one (deviations D10).
+				if code := clierr.ErrorCode(err); code != lintModelInvalid {
+					t.Fatalf("code = %q; want %q", code, lintModelInvalid)
 				}
 				// The oracle is the CATEGORY the finding carries, never
 				// "lint returned non-empty" (S1).
@@ -374,13 +376,16 @@ func traceScript(t *testing.T, dir, trace string) string {
 func writtenTags(t *testing.T, stdout string) map[string]string {
 	t.Helper()
 
+	// `set-state`'s READ-BACK-CONFIRMED owned tags ride the payload's
+	// `owned` map, not an invented `written` array: RDR 0005 fixes the
+	// envelope and this RDR changes no CLI payload shape. `owned` is
+	// exactly what the read-back verified — a cleared key is absent from
+	// it, since a verified removal is not a written value (deviations
+	// D12, `0004:C11`).
 	var env struct {
 		Type string `json:"type"`
 		Data struct {
-			Written []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"written"`
+			Owned map[string]string `json:"owned"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
@@ -389,44 +394,30 @@ func writtenTags(t *testing.T, stdout string) map[string]string {
 	if env.Type != "ok" {
 		t.Fatalf("set-state envelope type = %q; want %q\n%s", env.Type, "ok", stdout)
 	}
-	out := map[string]string{}
-	for _, w := range env.Data.Written {
-		out[w.Name] = w.Value
-	}
-	return out
+	return env.Data.Owned
 }
 
 // reportedTag decodes one tag from `flow read-state`'s report.
 func reportedTag(t *testing.T, stdout, key string) string {
 	t.Helper()
 
+	// `read-state` reports per-reader: each reader carries its DECLARED
+	// key set beside the tags it returned (deviations D12).
 	var env struct {
 		Data struct {
-			Tags []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"tags"`
 			Readers []struct {
-				Tags []struct {
-					Name  string `json:"name"`
-					Value string `json:"value"`
-				} `json:"tags"`
+				ID   string            `json:"id"`
+				Keys []string          `json:"keys"`
+				Tags map[string]string `json:"tags"`
 			} `json:"readers"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
 		t.Fatalf("read-state stdout is not one JSON object: %v\n%s", err, stdout)
 	}
-	for _, tag := range env.Data.Tags {
-		if tag.Name == key {
-			return tag.Value
-		}
-	}
 	for _, r := range env.Data.Readers {
-		for _, tag := range r.Tags {
-			if tag.Name == key {
-				return tag.Value
-			}
+		if v, held := r.Tags[key]; held {
+			return v
 		}
 	}
 	t.Fatalf("read-state reported no %q tag:\n%s", key, stdout)

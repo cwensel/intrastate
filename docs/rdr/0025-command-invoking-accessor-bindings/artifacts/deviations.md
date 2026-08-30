@@ -192,3 +192,111 @@ verified reachability. It reaches: `buildRequest` already holds the
 selected model PATH (`selectModel` returns it as `ref`), so `baseDir` is
 `filepath.Dir` of `filepath.Abs(ref)` with no new `table.Model` field and
 no loader change. A12's "If wrong" does not apply.
+
+## D9 — cobra resolves a parent's persistent flag into `Flags()` only after a merge
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+REQ-131 words S7's containment arm as a structural
+`Flags().Lookup("allow-commands") != nil` walk. `cobra.Command.Flags()` is
+documented as "the complete FlagSet that applies to this command (local
+and persistent declared here and by all parents)", but the parent-pflag
+merge is LAZY: it runs on parse, or on the first call to
+`InheritedFlags()`/`LocalFlags()`. On a freshly built, unexecuted tree
+`Flags().Lookup` therefore misses a group-registered persistent flag —
+including on the "fifth verb added inside the group" positive control,
+which is added after the tree is built and so can never have been primed.
+
+The only implementation that would satisfy the walk cold is a PER-VERB
+registration, which C6 forbids in the same clause ("ONE registration, on
+the `flow` GROUP") and which the fifth-verb control exists to catch.
+
+Repaired by calling cobra's own `InheritedFlags()` — the accessor that
+performs the merge — immediately before each assertion. The assertion
+itself stays on `Flags()`, exactly as REQ-131 words it, and still
+discriminates: verified that a verb registered OUTSIDE the group resolves
+nothing after the identical call.
+
+## D10 — three Phase 1 fixtures misread the shipped CLI surface
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+Three fixtures asserted against surfaces that do not exist as written; in
+each case the RDR fixes nothing about the detail and the repair is to the
+shipped shape.
+
+1. **`lint`'s model-invalid code.** `command_gate_0025_test.go` and
+   `command_mvv_0025_test.go` asserted `codeModelInvalid`
+   (`"flow-model-invalid"`) on `intrastate lint` invocations. Root `lint`
+   has always answered `"model-invalid"`
+   (`internal/cli/lint.go:183`); the `flow`-prefixed constant is the
+   GROUP's. Named `lintModelInvalid` at the suite's own head.
+2. **The lint-mutant substitution.** `writeCommandModel` APPENDS
+   `"{artifact}"` to the supplied argv, so the entry reads
+   `command = ["true", "{artifact}"]` and a substitution keyed on
+   `command = ["true"]` never applied.
+3. **The spawn sentinel's argv.** `traceArgv` returned
+   `["sh", "-c", …]` and was placed INTO a model by
+   `writeCommandModel` — which is the C5 `command_shell_interpreter`
+   defect REQ-74 asserts, so the model refused at LOAD and never reached
+   the gate the sentinel exists to observe. Its own comment already said
+   a model must not carry that form. Repaired to a script FILE declared
+   as argv0, the shape the MVV's `traceScript` already takes and the one
+   C5 names as the remediation.
+
+## D11 — the MVV wrapper could not write through `git config`
+
+**Type: TEST-FIXTURE. Status: repaired against the A3 spike's own shape.**
+
+`writeWrapper`'s body had two defects that made the MVV's step 3
+unreachable:
+
+- it passed the tag key VERBATIM to `git config`, which refuses a key
+  carrying no section ("key does not contain a section: status"). The
+  model's tag key is `status` and the declared reader reads
+  `flow.status`, so mapping intrastate's tag name onto the tool's native
+  key space is the WRAPPER's job — exactly the translation the Approach
+  charts to the wrapper body as "script the model does not carry";
+- its envelope split relied on a sed `\n` replacement (GNU-only; a no-op
+  under BSD sed) and left no trailing newline, so `while read` dropped
+  the final — and, at one key, only — pair. Both halves silently
+  produced a zero-pair loop that exited 0 without writing, which the
+  read-back then correctly reported as `read_back_mismatch`.
+
+Repaired with `tr` for the split and `read -r pair || [ -n "$pair" ]` for
+the last line, plus the `flow.` section prefix.
+
+## D12 — the MVV payload decoders were written against an invented envelope
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+`writtenTags` decoded `data.written[].name/value` and `reportedTag`
+decoded `data.tags[]`; neither field exists. RDR 0005 fixes the CLI
+envelope and this RDR changes no payload shape:
+`set-state` reports the read-back-CONFIRMED owned tags on
+`data.owned` (`flow_state.go::setStatePayload`), and `read-state` reports
+per reader on `data.readers[].tags` (`flow_exec.go::readerOutput`).
+`data.owned` is the right oracle for the round-trip arm on its own terms:
+it is what read-back verified, and a cleared key is absent from it.
+
+## D13 — REQ-91's success control used a write tool that never applies
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+The discriminating arm ("with the registration intact the identical
+invocation succeeds") declared `command = ["true", "{artifact}"]`, which
+exits zero and writes nothing, so read-back correctly refused
+`read_back_mismatch` — for a reason with nothing to do with the lookup
+the arm is about. Repaired to the suite's own applying wrapper.
+
+## D14 — REQ-65's tail arm used a tool that emits no stderr
+
+**Type: TEST-FIXTURE. Status: mechanical translation.**
+
+The "tail only, no applied sense" arm declared `false` as its reader and
+then asserted `CLIError.Detail` is non-empty. `false` exits non-zero in
+SILENCE, so there is no stderr tail to carry and the assertion could not
+hold under any implementation. S3's own wording puts the tail assertion
+on FX-exit-codes E1c — `test --bogus`, exit 2 WITH stderr — so the
+fixture takes that shape: a script that writes one stderr line and exits
+2.

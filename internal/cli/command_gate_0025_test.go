@@ -30,6 +30,11 @@ import (
 // the walk below from restating a literal per assertion.
 const allowCommandsFlag = "allow-commands"
 
+// lintModelInvalid is the code root `lint` carries for a load refusal. It
+// is NOT the `flow`-group-scoped `codeModelInvalid`: the two surfaces
+// answer under different codes and always have (deviations D10).
+const lintModelInvalid = "model-invalid"
+
 // --- C6: registration and containment (S7) --------------------------------
 
 // REQ-89: "registration: ONE registration, on the `flow` GROUP —
@@ -71,6 +76,13 @@ func TestReq89_EveryVerbInTheFlowGroupResolvesTheAllowCommandsFlag(t *testing.T)
 	for _, v := range verbs {
 		// The structural resolution check, exactly as S7 words it. Never a
 		// text match on pflag's "flag accessed but not defined".
+		//
+		// `InheritedFlags()` is cobra's own accessor for the parent-pflag
+		// MERGE that `Flags()` reports lazily — it performs the merge and
+		// returns; the assertion below stays on `Flags()`, as REQ-131
+		// words it, and still discriminates: a verb OUTSIDE the group
+		// resolves nothing after the same call (deviations D9).
+		_ = v.InheritedFlags()
 		if v.Flags().Lookup(allowCommandsFlag) == nil {
 			t.Errorf("`flow %s` does not RESOLVE --%s; a verb inside the group "+
 				"inherits the persistent flag, and one that does not would "+
@@ -86,6 +98,7 @@ func TestReq89_EveryVerbInTheFlowGroupResolvesTheAllowCommandsFlag(t *testing.T)
 		fifth := &cobra.Command{Use: "fifth", RunE: func(*cobra.Command, []string) error { return nil }}
 		g.AddCommand(fifth)
 
+		_ = fifth.InheritedFlags()
 		if fifth.Flags().Lookup(allowCommandsFlag) == nil {
 			t.Errorf("a fifth verb added inside the group does not resolve --%s; "+
 				"the coupling must be to the GROUP, not to a hand-kept verb list",
@@ -101,6 +114,7 @@ func TestReq89_EveryVerbInTheFlowGroupResolvesTheAllowCommandsFlag(t *testing.T)
 		outside := &cobra.Command{Use: "outside", RunE: func(*cobra.Command, []string) error { return nil }}
 		fresh.AddCommand(outside)
 
+		_ = outside.InheritedFlags()
 		if outside.Flags().Lookup(allowCommandsFlag) != nil {
 			t.Errorf("a verb at ROOT resolves --%s; the flag's subtree is the "+
 				"`flow` group and nothing else", allowCommandsFlag)
@@ -118,6 +132,7 @@ func TestReq90_LintSitsAtRootAndDoesNotResolveTheFlag(t *testing.T) {
 
 	lint := subcommand(t, root, "lint")
 
+	_ = lint.InheritedFlags()
 	if lint.Flags().Lookup(allowCommandsFlag) != nil {
 		t.Errorf("`lint` resolves --%s; validation is UNGATED and a flag that "+
 			"changes nothing is a false affordance — the exclusion is "+
@@ -251,8 +266,12 @@ func TestReq92_LintValidatesACommandModelRegardlessOfTheGate(t *testing.T) {
 		if rerr != nil {
 			t.Fatalf("reading the model: %v", rerr)
 		}
+		// `writeCommandModel` appends `{artifact}` to the supplied argv, so
+		// the write entry reads `command = ["true", "{artifact}"]`
+		// (deviations D10).
 		bad := strings.Replace(string(src),
-			`command = ["true"]`, `command = ["sh", "-c", "true"]`, 1)
+			`command = ["true", "{artifact}"]`,
+			`command = ["sh", "-c", "true", "{artifact}"]`, 1)
 		if bad == string(src) {
 			t.Fatal("the mutant substitution did not apply")
 		}
@@ -265,8 +284,10 @@ func TestReq92_LintValidatesACommandModelRegardlessOfTheGate(t *testing.T) {
 			t.Fatal("lint accepted an `sh -c` interpreter form; C5's defects are " +
 				"what make the model reviewable before it is trusted")
 		}
-		if code := clierr.ErrorCode(err); code != codeModelInvalid {
-			t.Errorf("code = %q; want %q", code, codeModelInvalid)
+		// `lint` is at ROOT and carries its OWN model-invalid code; the
+		// `flow`-scoped constant belongs to the group (deviations D10).
+		if code := clierr.ErrorCode(err); code != lintModelInvalid {
+			t.Errorf("code = %q; want %q", code, lintModelInvalid)
 		}
 	})
 }
@@ -287,9 +308,15 @@ func TestReq92_LintValidatesACommandModelRegardlessOfTheGate(t *testing.T) {
 // would make the safety property a coincidence between two independent
 // decisions.
 func TestReq91_ALookupMissIsAWiringBugAndSurfacesAsOne(t *testing.T) {
+	requireGit(t)
+
+	// The write tool must genuinely APPLY: the discriminating arm below
+	// asserts the intact tree SUCCEEDS on the identical invocation, and a
+	// no-op `true` would refuse `read_back_mismatch` for a reason that has
+	// nothing to do with the lookup (deviations D13).
 	dir := t.TempDir()
-	model := writeCommandModel(t, dir, []string{"true"})
-	art := filepath.Join(dir, "state.json")
+	model := writeCommandModel(t, dir, []string{writeWrapper(t, dir)})
+	art := filepath.Join(dir, "state.cfg")
 
 	// The wiring bug, staged: the SAME verb is re-parented under a group
 	// that never registered the flag, so pflag's GetBool at `buildRequest`
@@ -376,9 +403,12 @@ func TestReq65_TheAppliedSenseLeadsAndTheStderrTailFollowsInOneSlot(t *testing.T
 	dir := t.TempDir()
 
 	t.Run("tail only, no applied sense", func(t *testing.T) {
-		// A READ whose tool exits non-zero with stderr: an execution
-		// failure with no applied sense competing for the slot.
-		model := writeCommandReadModel(t, dir, []string{"false"})
+		// A READ whose tool exits non-zero WITH STDERR: an execution
+		// failure with no applied sense competing for the slot. `false`
+		// writes no stderr and so has no tail to carry, which is the
+		// arm's own subject — the fixture takes FX-exit-codes E1c's shape
+		// instead: a non-zero exit that says something (deviations D14).
+		model := writeCommandReadModel(t, dir, []string{stderrScript(t, dir)})
 		art := filepath.Join(dir, "state.json")
 
 		_, _, err := runCmd(t, "flow", "read-state",
