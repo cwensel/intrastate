@@ -413,8 +413,28 @@ func TestMVV0023_ResolveEnvelopeProjectionEndToEnd(t *testing.T) {
 					t.Fatalf("the projected run failed: %v\n%s", err, projOut)
 				}
 
-				def := len(emittedLine(t, defOut))
-				proj := len(emittedLine(t, projOut))
+				// The checkout root is folded out of BOTH widths before
+				// measuring, for the same reason D-1 folds it out of the
+				// golden: `model` carries the `--model` argument verbatim,
+				// and the harness must pass an ABSOLUTE path because the
+				// package's tests run with `cwd = internal/cli`. That
+				// prefix lands only in the DEFAULT payload — `model` is an
+				// echo field the projection drops — so leaving it in
+				// inflates `def` alone and reports a saving that rises with
+				// the length of the capturing machine's checkout path.
+				//
+				// That is not a cosmetic bias: it measures the wrong thing
+				// in the favourable direction. `0023:A1` measured
+				// release-grammar at 412 B → 238 B (42.2%), clearing the
+				// 40% bar by 2.2 points; an absolute prefix reports the
+				// same run at ~50%, so a genuine regression below the bar
+				// could still pass here while failing on a short checkout
+				// path. Folding restores the RELATIVE spelling the RDR and
+				// both spikes name as normative, making the ratio a
+				// property of the payload rather than of the filesystem.
+				root := repoRootFor(t) + "/"
+				def := len(strings.ReplaceAll(emittedLine(t, defOut), root, ""))
+				proj := len(strings.ReplaceAll(emittedLine(t, projOut), root, ""))
 				saved := float64(def-proj) / float64(def) * 100
 
 				// The pass bar. Not "did not error" — a MEASURED RATIO on
