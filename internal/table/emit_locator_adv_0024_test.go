@@ -111,6 +111,10 @@ func TestAdv1_0024_TheRuleSideLocatorSurvivesAnUnprovenRuleID(t *testing.T) {
 		// with no way to locate it, which is the failure the locator exists
 		// to prevent.
 		src := advFixture(t, advEnumDecl, "continue-prelock", "next_command = \"bad\"\n")
+		// The offending rule's `[[rule]]` header is the line directly above
+		// the id, so it is captured BEFORE the id line is removed and keeps
+		// its number afterwards — everything above it is untouched.
+		want := advLineOf(src, "id = \"continue-prelock\"") - 1
 		src = strings.Replace(src, "id = \"continue-prelock\"\n", "", 1)
 
 		f := advRefusal(t, src)
@@ -121,10 +125,22 @@ func TestAdv1_0024_TheRuleSideLocatorSurvivesAnUnprovenRuleID(t *testing.T) {
 			t.Errorf("the detail names no rule and reads %q; a refusal an author "+
 				"cannot attribute to a rule is not diagnosable", f.Detail)
 		}
-		if f.Line <= 0 {
-			t.Errorf("Line = %d; `0024:C2` requires every emit refusal to carry a "+
-				"source line, and the Failure Modes promise the offending block is "+
-				"locatable from the finding", f.Line)
+		if got := strings.TrimSpace(strings.Split(src, "\n")[want-1]); got != "[[rule]]" {
+			t.Fatalf("line %d reads %q, want the offending rule's `[[rule]]` "+
+				"header; the assertion below would pin the wrong line", want, got)
+		}
+		// Pinned to the EXACT line, not merely a positive one. With no `id`
+		// left in the block there is nothing to confirm, so D11's contract is
+		// the ordinal's own `[[rule]]` header — the honest coarser pointer. A
+		// bare `> 0` passes against any wrong line, including a foreign
+		// rule's, which is the "pointing at the wrong text costs more than
+		// pointing at no text" failure the locator disclaims. Sibling ADV-2
+		// already pins its legs this way.
+		if f.Line != want {
+			t.Errorf("Line = %d, want %d — the offending rule's own `[[rule]]` "+
+				"header; `0024:C2` requires every emit refusal to carry a source "+
+				"line, and a line that is merely positive can still send the "+
+				"author to an innocent rule", f.Line, want)
 		}
 	})
 
@@ -349,4 +365,90 @@ func TestAdv4_0024_TheRuleCensusSurvivesQuotedRuleHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ADV-5. The anchor compares in the DECODED domain, not the authored one.
+//
+// TOML's basic string carries escapes, and the decoder applies them: the
+// rule authored `id = "\u0072econcile-rewind"` lands in `l.doc.Rule` as
+// `reconcile-rewind`, indistinguishable from the plain spelling. A scan
+// that compares the RAW body compares `\u0072econcile-rewind` against
+// `reconcile-rewind`, never confirms the id, and falls to the block's
+// `[[rule]]` header — REQ-32's chosen anchor lost to an authoring choice
+// the decoder already erased.
+//
+// The same gap has a header-side twin. `emitRuleLine` builds its census by
+// comparing `tableHeader(line)` to the single canonical `"[[rule]]"`, so a
+// header spelled `[["\u0072ule"]]` that is not decoded drops out of the
+// census and slides every later ordinal onto the wrong block — the
+// "pointing at the wrong text costs more than pointing at no text" failure
+// `emitRuleLine`'s doc comment disclaims, which ADV-4 pins for the
+// unescaped quoted spellings.
+//
+// Both are one decision, so both are served by one helper
+// (`decodeScalarString`) that round-trips a candidate through the SAME
+// decoder rather than reimplementing TOML's escape table — D12 declined a
+// hand-rolled unescaper, and reusing the decoder stays inside that fence
+// while making the comparison exact.
+// ADVERSARIAL
+func TestAdv5_0024_TheRuleAnchorSurvivesTOMLEscapesInTheIDAndTheHeader(t *testing.T) {
+	const canonical = `id = "reconcile-rewind"`
+
+	t.Run("an id authored with a unicode escape", func(t *testing.T) {
+		escaped := `id = "\u0072econcile-rewind"`
+		src := advFixture(t, advEnumDecl, "reconcile-rewind", "next_command = \"bad\"\n")
+		src = strings.Replace(src, canonical, escaped, 1)
+
+		f := advRefusal(t, src)
+		if f.Category != table.CatEmitValueOutOfDomain {
+			t.Fatalf("category = %q, want %q", f.Category, table.CatEmitValueOutOfDomain)
+		}
+		if want := advLineOf(src, escaped); f.Line != want {
+			t.Errorf("Line = %d, want %d for an id spelled %s; the escape denotes "+
+				"the SAME id the decoder put in `l.doc.Rule`, so the anchor must "+
+				"confirm it rather than degrading to the block header REQ-32 "+
+				"chose against", f.Line, want, escaped)
+		}
+	})
+
+	t.Run("an id carrying an escaped quote beside a trailing comment", func(t *testing.T) {
+		// Two failures stacked: `stripComment` must not read the ESCAPED
+		// quote as closing the string (or the comment stays attached and the
+		// line never tokenizes), and the value must then decode to the `a"b`
+		// the decoder holds. A literal string defines no escapes, so only
+		// the basic form gets this treatment.
+		escaped := `id = "reconcile\"rewind" # the offending rule`
+		src := advFixture(t, advEnumDecl, "reconcile-rewind", "next_command = \"bad\"\n")
+		src = strings.Replace(src, canonical, escaped, 1)
+
+		f := advRefusal(t, src)
+		if f.Category != table.CatEmitValueOutOfDomain {
+			t.Fatalf("category = %q, want %q", f.Category, table.CatEmitValueOutOfDomain)
+		}
+		if want := advLineOf(src, escaped); f.Line != want {
+			t.Errorf("Line = %d, want %d for an id spelled %s; the comment strip "+
+				"must honour the backslash-escaped quote and the value must be "+
+				"compared decoded, or a legal id can never match its own anchor",
+				f.Line, want, escaped)
+		}
+	})
+
+	t.Run("a rule header key authored with a unicode escape", func(t *testing.T) {
+		// The header twin of the leg above, and ADV-4's escaped case. The
+		// defect sits on `reconcile-rewind`, the THIRD rule, so a census
+		// that misses the FIRST header reports a foreign block's line.
+		src := advFixture(t, advEnumDecl, "reconcile-rewind", "next_command = \"bad\"\n")
+		src = strings.Replace(src, "[[rule]]", `[["\u0072ule"]]`, 1)
+
+		f := advRefusal(t, src)
+		if f.Category != table.CatEmitValueOutOfDomain {
+			t.Fatalf("category = %q, want %q", f.Category, table.CatEmitValueOutOfDomain)
+		}
+		if want := advLineOf(src, canonical); f.Line != want {
+			t.Errorf("Line = %d, want %d with the first rule header spelled "+
+				"`[[\"\\u0072ule\"]]`; the escape names the SAME array table the "+
+				"decoder filled `l.doc.Rule` from, so a census that drops it "+
+				"slides the ordinal onto an innocent rule", f.Line, want)
+		}
+	})
 }

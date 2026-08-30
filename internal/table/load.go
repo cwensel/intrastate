@@ -653,15 +653,19 @@ func tableHeader(raw string) string {
 //
 // It is deliberately narrow. A lone or mismatched quote is NOT a quoted
 // key and is reported unchanged, so a table genuinely named `"rule` can
-// never be folded into the `rule` census. It performs no escape
-// processing: an escape inside a table-name key is outside what this
-// line-oriented scan claims to recognize, and reporting the raw content
-// keeps such a key distinct rather than guessing it equal to another.
+// never be folded into the `rule` census.
+//
+// A basic-string key is DECODED, not merely unwrapped: `"rule"` names
+// the array table `rule` exactly as `"rule"` does, so reporting the raw
+// body would drop the block from the caller's census and shift every later
+// ordinal — the same failure the plain quoted spelling caused before it was
+// canonicalized. Decoding runs through `decodeScalarString`, the shared
+// helper `scalarAssignment` uses for the value side, so the key half and
+// the id half of the anchor agree by construction rather than by two
+// parallel implementations.
 func unquoteKey(name string) string {
-	for _, q := range []byte{'"', '\''} {
-		if len(name) >= 2 && name[0] == q && name[len(name)-1] == q {
-			return name[1 : len(name)-1]
-		}
+	if decoded, ok := decodeScalarString(name); ok {
+		return decoded
 	}
 	return name
 }
@@ -674,6 +678,11 @@ func unquoteKey(name string) string {
 // syntaxes — basic (`"v"`), literal ('v'), and their multi-line forms'
 // single-line use. It reports false for a dotted key, an inline table, or
 // any non-string value, none of which name a rule the way an `id` does.
+//
+// The KEY and `=` are tokenized here; the VALUE is handed to
+// `decodeScalarString`, so the comparison happens in the DECODED domain and
+// an id authored with an escape matches the string the decoder actually put
+// in `l.doc.Rule`.
 func scalarAssignment(raw, key string) (string, bool) {
 	text := strings.TrimSpace(stripComment(raw))
 	rest, ok := strings.CutPrefix(text, key)
@@ -685,19 +694,40 @@ func scalarAssignment(raw, key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	rest = strings.TrimSpace(rest)
-	for _, q := range []string{`"""`, "'''", `"`, "'"} {
-		body, ok := strings.CutPrefix(rest, q)
-		if !ok {
-			continue
-		}
-		body, ok = strings.CutSuffix(body, q)
-		if !ok {
-			return "", false
-		}
-		return body, true
+	return decodeScalarString(strings.TrimSpace(rest))
+}
+
+// decodeScalarString reports the value a TOML string literal denotes, or
+// false where text is not a single, self-contained string literal.
+//
+// It does NOT hand-roll an unescaper. It hands one candidate to the SAME
+// decoder that filled `l.doc`, as the one-line document `id = <text>`, and
+// reports what came back. `"reconcile-rewind"`, `"reconcile-rewind"` and
+// `'reconcile-rewind'` all denote one string and must all confirm the rule
+// they name; reimplementing TOML's escape table to learn that would be a
+// second, divergable parser for a grammar the module already carries.
+//
+// Only a quoted literal is offered to the decoder. Bare text is rejected
+// before the round trip, so a bare key or a non-string value (a number, a
+// boolean, an inline table) reports false rather than decoding to something
+// that never appeared in the document. Anything the decoder refuses — an
+// unterminated quote, a trailing second value, an invalid escape — is also
+// false, which leaves the caller on its existing degrade rather than on a
+// guess.
+func decodeScalarString(text string) (string, bool) {
+	if len(text) < 2 {
+		return "", false
 	}
-	return "", false
+	if q := text[0]; q != '"' && q != '\'' {
+		return "", false
+	}
+	var probe struct {
+		ID string `toml:"id"`
+	}
+	if err := toml.Unmarshal([]byte("id = "+text), &probe); err != nil {
+		return "", false
+	}
+	return probe.ID, true
 }
 
 // stripComment removes a trailing TOML comment from one line, leaving a `#`
@@ -708,12 +738,25 @@ func scalarAssignment(raw, key string) (string, bool) {
 // that scan admits. It is wrong for a value assignment: a rule id may
 // legally contain `#`, and cutting inside its quotes truncates the id so it
 // can never match its own anchor.
+//
+// Inside a BASIC string a backslash escapes the next character, so `\"`
+// does not close the string and must not flip the scan back out of it —
+// otherwise `id = "a\"b" # c` is read as having closed at the escaped quote
+// and its comment is left attached. A LITERAL string defines no escapes at
+// all: a backslash in `'a\'` is an ordinary character and the first `'`
+// closes it, so the escape rule is applied only to the basic form.
 func stripComment(raw string) string {
 	var quote rune
+	escaped := false
 	for i, r := range raw {
 		switch {
+		case escaped:
+			escaped = false
 		case quote != 0:
-			if r == quote {
+			switch {
+			case quote == '"' && r == '\\':
+				escaped = true
+			case r == quote:
 				quote = 0
 			}
 		case r == '"' || r == '\'':

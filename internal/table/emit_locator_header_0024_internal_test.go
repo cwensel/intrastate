@@ -37,6 +37,15 @@ func TestTableHeaderCanonicalizesQuotedAndSpacedRuleHeaders(t *testing.T) {
 		{`[[ "rule" ]]`, "[[rule]]"},
 		{`[[ 'rule' ]]`, "[[rule]]"},
 		{`[["rule"]]  # trailing comment`, "[[rule]]"},
+		// A basic-string key carries ESCAPES, and the decoder applies
+		// them: `"\u0072ule"` denotes `rule`. Canonicalizing must decode
+		// rather than merely unwrap, or the escaped spelling drops out of
+		// the census exactly as the plain quoted spelling once did.
+		{`[["\u0072ule"]]`, "[[rule]]"},
+		{`[[ "ru\u006ce" ]]`, "[[rule]]"},
+		// A literal string defines NO escapes, so its backslash is an
+		// ordinary character and the key is a different table.
+		{`[['\u0072ule']]`, `[[\u0072ule]]`},
 		{`["rule"]`, "[rule]"},
 		{`[ 'model' ]`, "[model]"},
 	} {
