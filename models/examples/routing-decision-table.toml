@@ -1,0 +1,108 @@
+# A routing decision table: one emit key, partitioned into dispositions.
+#
+# Referenced by docs/cli-output-contract.md, which documents the `flow
+# resolve` payload's `dispositions` object against this model. Linted by
+# `make graph-lint`, so a change to the loader or the analysis that
+# invalidates this document fails CI rather than leaving the documentation
+# describing a model the tool no longer accepts.
+#
+# The table is `severity x owner`, a 2x2 product with all four cells
+# claimed exactly once, so it lints with an EMPTY findings list — no gap,
+# no overlap, and no escape row needed.
+#
+# What it exists to teach, which the pricing example does not: the
+# PARTITIONED spelling of a declared emit domain (RDR 0024 `0024:C1`).
+#
+# `[emit.next.domain]` is a sub-table whose keys are MODEL-AUTHORED
+# disposition tokens and whose values are member arrays. The key's domain
+# is the union of those arrays — here `escalate`, `notify`, `park`,
+# `close` — and each member carries the one disposition it is listed
+# under. `flow resolve` surfaces that token in `dispositions`, so a
+# consumer can branch on "does this answer keep the request moving, or
+# does it end it?" without hard-coding the four command names.
+#
+# intrastate fixes NO disposition vocabulary and never interprets a token.
+# `route` and `stop` below mean exactly what a reader of this model
+# decides they mean; the tool only guarantees they arrive verbatim.
+#
+# One member, one disposition: listing `park` under both `route` and
+# `stop` refuses `malformed_emit_declaration` at load.
+
+outcomes = ["triage"]
+
+[model]
+id = "routing"
+version = 1
+class = "decision-table"
+description = "the partitioned emit-domain example docs/cli-output-contract.md quotes"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.severity]
+provenance = "observed"
+kind = "enum"
+domain = ["high", "low"]
+single_valued = true
+required = true
+
+[tags.owner]
+provenance = "observed"
+kind = "enum"
+domain = ["assigned", "unassigned"]
+single_valued = true
+required = true
+
+# The declared emit vocabulary. One key, four members, two dispositions.
+[emit.next]
+kind = "enum"
+[emit.next.domain]
+route = ["escalate", "notify"]
+stop = ["park", "close"]
+
+[[rule]]
+id = "high-assigned"
+[rule.match.recognized]
+eq = "triage"
+[rule.guard.all.severity]
+eq = "high"
+[rule.guard.all.owner]
+eq = "assigned"
+[rule.emit]
+next = "escalate"
+
+[[rule]]
+id = "high-unassigned"
+[rule.match.recognized]
+eq = "triage"
+[rule.guard.all.severity]
+eq = "high"
+[rule.guard.all.owner]
+eq = "unassigned"
+[rule.emit]
+next = "notify"
+
+[[rule]]
+id = "low-assigned"
+[rule.match.recognized]
+eq = "triage"
+[rule.guard.all.severity]
+eq = "low"
+[rule.guard.all.owner]
+eq = "assigned"
+[rule.emit]
+next = "park"
+
+[[rule]]
+id = "low-unassigned"
+[rule.match.recognized]
+eq = "triage"
+[rule.guard.all.severity]
+eq = "low"
+[rule.guard.all.owner]
+eq = "unassigned"
+[rule.emit]
+next = "close"

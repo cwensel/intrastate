@@ -140,7 +140,7 @@ intrastate flow set-state --model flow.toml \
   --clear stale --as=json
 ```
 
-## `flow resolve` and the `emit` answer
+## `flow resolve`, the `emit` answer, and its `dispositions`
 
 The `flow resolve` success payload carries `emit`, a JSON object of string
 values with keys in byte order. It is the row's authored answer, joined to
@@ -152,7 +152,7 @@ selected and what it says are one answer.
 ```json
 {"model":"pricing.toml","revision":"","observed":{"region":"eu","tier":"free"},
  "owned":{},"readers":[],"outcome":"decide","rule":"free-eu","gates":[],
- "emit":{"dpa":"required","plan":"basic"},
+ "emit":{"dpa":"required","plan":"basic"},"dispositions":{"dpa":"gate"},
  "next":{},"writes":{},"clear":[],"escaped":false}
 ```
 
@@ -172,6 +172,108 @@ unauthored block as `emit: (none)`.
 require and write without evaluating anything; the answer is what `flow
 resolve` selects.
 
+### Declaring the emit vocabulary
+
+A model MAY declare its emit vocabulary in a top-level `[emit]` table, one
+sub-table per emit key. Declaring is opt-in and the trigger is the COUNT of
+declared keys, never the presence of the table: a model with zero
+declarations behaves exactly as it does today, and a bare `[emit]` table
+with no sub-tables is a zero-declaration model.
+
+```toml
+[emit.plan]
+kind = "enum"
+domain = ["basic", "pro"]
+
+[emit.dpa]
+kind = "enum"
+[emit.dpa.domain]
+gate = ["required"]
+clear = ["none"]
+```
+
+`kind` is required and is one of `enum`, `bool`, `int`, `scalar`. `set` is
+not admitted, because an emit value is one authored string. Only an `enum`
+takes a `domain`; `bool` fixes the implicit domain `true | false`, `int`
+constrains the value to a base-10 integer literal, and `scalar` is the
+declared-but-unvalidated escape hatch — the key is admitted, the value
+unconstrained.
+
+The `domain` key has two spellings, and they are two spellings of ONE key,
+not two fields. `domain = [...]` is a flat member array with no
+dispositions. `[emit.<key>.domain]` is a sub-table whose keys are
+MODEL-AUTHORED disposition tokens and whose values are member arrays; the
+key's domain is the union, and each member carries the one disposition it
+is listed under.
+
+Every check is LEXICAL, on the authored string. No value is parsed into a
+typed representation, canonicalized, or converted anywhere: the payload and
+the dump carry the authored bytes. The authored value is always a TOML
+string, so under `kind = "int"` an author writes `count = "42"` and a bare
+`count = 42` is a decoder refusal, `malformed_toml`, exactly as it is today.
+
+Once one key is declared, the whole model is strict, and three load
+categories become reachable — refusals, never advisories, so `intrastate
+lint` exits nonzero and the `flow` verbs answer `flow-model-invalid`:
+
+| category | when |
+| --- | --- |
+| `malformed_emit_declaration` | the declaration itself is ill-formed — an unknown `kind`, an `enum` with no usable domain, an empty or duplicated member, a `domain` on a non-enum kind, an empty disposition token |
+| `unknown_emit_key` | a rule, ordinary or escape, emits a key `[emit]` does not declare |
+| `emit_value_out_of_domain` | an authored value is outside its key's declared domain, is not a `bool` token, or is not an `int` literal |
+
+Each carries the offending block's source line in its `locator`. Load is
+fail-fast, so exactly one refusal comes back per run.
+
+A declaration is author-owned and unversioned: widen or narrow a domain by
+editing the model. A declared key no rule emits, and a declared member no
+rule authors, are findings of no tier — that is authoring headroom.
+
+### `dispositions`
+
+The success payload carries `dispositions` immediately after `emit`: a JSON
+object mapping emit key → the disposition token the declaration assigns the
+SELECTED ROW's authored value.
+
+An entry exists for key `k` exactly when the selected row authors `k` AND
+`k`'s declaration lists that authored value under a disposition. A declared
+key the row does not emit contributes no entry, and the object is never
+padded to the declared key set. It is present as `{}` — never `null`, never
+omitted — when no selected value carries one: an undeclared model, a
+non-enum kind, a flat-array domain and an empty emit block all render `{}`.
+Keys arrive in byte order.
+
+`models/examples/routing-decision-table.toml` is the worked example. It
+declares one key, `next`, partitioned into `route` and `stop`:
+
+```toml
+[emit.next]
+kind = "enum"
+[emit.next.domain]
+route = ["escalate", "notify"]
+stop = ["park", "close"]
+```
+
+Its `low-assigned` row answers `next = "park"`, which the declaration lists
+under `stop`:
+
+```json
+{"rule":"low-assigned","gates":[],
+ "emit":{"next":"park"},"dispositions":{"next":"stop"},
+ "next":{},"writes":{},"clear":[],"escaped":false}
+```
+
+The token is surfaced verbatim. intrastate fixes no disposition vocabulary
+and never interprets a token — `route` and `stop` above are the model
+author's words, and the tool only guarantees they arrive unchanged.
+
+A plan rescued by an escape row joins `dispositions` from that escape row's
+own authored values, the same single join path `emit` takes. In `--as=text`
+the field renders through the generic payload renderer as
+`dispositions.<key>: <token>`, and as `dispositions: (none)` when empty.
+`flow next` carries no `dispositions`, for the same reason it carries no
+`emit`.
+
 ## `flow resolve --plan-only` and the two halves of the payload
 
 Every field of the `flow resolve` success payload belongs to exactly one of
@@ -180,7 +282,7 @@ two groups, and the assignment is fixed:
 | group | fields | what it is |
 | --- | --- | --- |
 | **echo** | `model`, `observed`, `owned`, `readers`, `outcome` | the request, read back — the caller already holds all of it |
-| **plan** | `revision`, `rule`, `gates`, `emit`, `next`, `writes`, `clear`, `escaped`, `escape_class` | what the call DECIDED |
+| **plan** | `revision`, `rule`, `gates`, `emit`, `dispositions`, `next`, `writes`, `clear`, `escaped`, `escape_class` | what the call DECIDED |
 
 `--plan-only` omits the echo group. It is report-only: the same rule is
 selected, the same gates run, the same readers are invoked, and refusals are
@@ -197,7 +299,7 @@ The full payload:
 ```json
 {"model":"pricing.toml","revision":"","observed":{"region":"eu","tier":"free"},
  "owned":{},"readers":[],"outcome":"decide","rule":"free-eu","gates":[],
- "emit":{"dpa":"required","plan":"basic"},
+ "emit":{"dpa":"required","plan":"basic"},"dispositions":{"dpa":"gate"},
  "next":{},"writes":{},"clear":[],"escaped":false}
 ```
 
@@ -205,12 +307,12 @@ The same call with `--plan-only`:
 
 ```json
 {"revision":"","rule":"free-eu","gates":[],
- "emit":{"dpa":"required","plan":"basic"},
+ "emit":{"dpa":"required","plan":"basic"},"dispositions":{"dpa":"gate"},
  "next":{},"writes":{},"clear":[],"escaped":false}
 ```
 
 Fields with a presence rule keep it, unchanged, inside the plan group:
-`emit` is still present as `{}` when the row authored none, and
+`emit` and `dispositions` are still present as `{}` when nothing joins, and
 `escape_class` still appears exactly when it would appear by default —
 omitted on an unescaped plan in both widths. The flag neither widens nor
 narrows a producer's own rule.

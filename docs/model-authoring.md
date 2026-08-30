@@ -638,10 +638,18 @@ literal. The `clear` list is the only way to produce it as a tag value,
 and it surfaces the same way at the CLI: `flow set-state --clear <key>`,
 never `--write key=<clear>`.
 
-The reservation does not reach `[rule.emit]`. Emit keys are not tags —
-nothing declares them and nothing writes them — and their values are
-uninterpreted strings, so `plan = "<clear>"` in an emit block loads and
-answers with that literal text. It carries no clearing meaning there.
+The reservation does not reach `[rule.emit]`. Emit keys are not TAG keys:
+`[tags.<key>]` never declares one, nothing writes one, and their values
+are never parsed or canonicalized. So `plan = "<clear>"` in an emit block
+carries no clearing meaning there — it is the literal text, and it is
+answered as that text.
+
+Whether it LOADS is a separate question, and the model's own to answer. An
+emit key MAY be declared in the top-level `[emit]` table
+([below](#declaring-the-emit-vocabulary)); if `plan` is declared `enum`
+over a domain that does not list `<clear>`, that row refuses at load as
+`emit_value_out_of_domain`. Declare nothing and it loads, as it always
+has.
 
 Note the placement — `clear` is a rule-level key, so it precedes the first
 `[rule.*]` sub-table. See
@@ -755,8 +763,69 @@ atoms pin fewer dimensions and so span several, and closes any remainder
 with the escape row below.
 
 `[rule.emit]` is the row's answer: a flat block of string values, returned
-by `flow resolve` under the `emit` key. Its keys are not tags — nothing
-declares them, nothing writes them, and they take no part in selection.
+by `flow resolve` under the `emit` key. Its keys are not TAG keys —
+`[tags.<key>]` never declares one, nothing writes them, and they take no
+part in selection. They MAY carry their own declaration, in the top-level
+`[emit]` table.
+
+#### Declaring the emit vocabulary
+
+Left undeclared, an emit block is free text: a misspelled key or a typo'd
+value loads clean and is answered verbatim, because nothing knows what the
+key was supposed to be. Declaring the vocabulary makes it a checked fact.
+
+```toml
+[emit.plan]
+kind = "enum"
+domain = ["basic", "pro"]
+
+[emit.dpa]
+kind = "enum"
+[emit.dpa.domain]
+gate = ["required"]
+clear = ["none"]
+```
+
+`kind` is required and is one of `enum`, `bool`, `int`, `scalar`. `set` is
+not admitted, because an emit value is one authored string rather than a
+member sequence. Only an `enum` takes a `domain`; `scalar` admits any
+value and is the documented escape hatch for a key you want ADMITTED but
+not checked.
+
+The `domain` key has two spellings. `domain = [...]` is a flat member
+array. `[emit.<key>.domain]` is a sub-table whose keys are your own
+disposition tokens and whose values are member arrays — the domain is the
+union, each member carries the one disposition it is listed under, and
+`flow resolve` surfaces that token in its `dispositions` object. intrastate
+fixes no disposition vocabulary and never interprets a token.
+
+Declaring is **opt-in and whole-model**. The trigger is the COUNT of
+declared keys, so a model with no `[emit]` table — or a bare `[emit]` with
+no sub-tables — behaves exactly as it does today and no new refusal is
+reachable. Declare ONE key and the whole model is strict: every rule's
+emit keys must be declared, on ordinary and escape rows alike.
+
+Three refusals become reachable, all at load, so `intrastate lint` exits
+nonzero and `flow resolve` answers `flow-model-invalid`:
+
+- `malformed_emit_declaration` — the declaration itself is ill-formed: an
+  unknown `kind`, an `enum` with no usable domain, an empty or duplicated
+  member, a `domain` on a non-enum kind, an empty disposition token.
+- `unknown_emit_key` — a rule emits a key `[emit]` does not declare.
+- `emit_value_out_of_domain` — an authored value is outside its key's
+  declared domain, is not a `bool` token, or is not an `int` literal.
+
+An emit declaration is not a tag declaration: it takes no `provenance`, no
+`min`/`max`/`elements`/`single_valued`/`required`, and a declared emit key
+is still barred from match, guard, write, and accessor use. It is also
+author-owned and unversioned — widen or narrow a domain by editing the
+model, and nothing checks the edit against a history. A declared key no
+rule emits, and a declared member no rule authors, are findings of no
+tier.
+
+`models/examples/pricing-decision-table.toml` and
+`models/examples/routing-decision-table.toml` both ship declared; the
+second is the partitioned-domain worked example.
 
 ### Discriminate with guard atoms, not `[rule.match.<key>]`
 

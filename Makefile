@@ -68,14 +68,16 @@ MODEL ?= models/rdr.toml
 
 # The worked examples docs/model-authoring.md walks through: one per
 # model class, plus the grammar-surface model every snippet in that
-# document's "The grammar" section is copied from. They are linted here
-# for the same reason the subject above is: a documented model that the
-# loader or the analysis has since stopped accepting is worse than no
-# example, and prose cannot catch that. All three are expected to lint at
-# exit 0 — the two state machines carry `graph-coverage-closed-by-escape`
-# advisories, which do not fail.
+# document's "The grammar" section is copied from, plus the routing table
+# docs/cli-output-contract.md documents `dispositions` against (RDR 0024
+# `0024:PH4`). They are linted here for the same reason the subject above
+# is: a documented model that the loader or the analysis has since stopped
+# accepting is worse than no example, and prose cannot catch that. All four
+# are expected to lint at exit 0 — the state machine carries
+# `graph-coverage-closed-by-escape` advisories, which do not fail.
 EXAMPLE_MODELS = \
 	models/examples/pricing-decision-table.toml \
+	models/examples/routing-decision-table.toml \
 	models/examples/review-state-machine.toml \
 	models/examples/release-grammar.toml
 

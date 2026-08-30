@@ -48,6 +48,37 @@ domain = ["eu", "us"]
 single_valued = true
 required = true
 
+# RDR 0024 `0024:C1` — the emit vocabulary, DECLARED.
+#
+# Declaring it turns the answer block from free text into a checked fact:
+# a key no `[emit]` sub-table names refuses `unknown_emit_key`, and a value
+# outside its declared domain refuses `emit_value_out_of_domain`. Both are
+# load refusals, so `intrastate lint` exits nonzero and `flow resolve`
+# answers `flow-model-invalid` rather than handing back a typo.
+#
+# The domains are the values THIS model actually authors across its four
+# rows — `plan` is basic or pro, `dpa` is required or none. Declaring a
+# member no row authors is legal authoring headroom; declaring one SHORT of
+# what a row authors refuses that row.
+#
+# `dpa` takes the partitioned spelling, so each member carries a
+# model-authored disposition token. intrastate fixes no disposition
+# vocabulary and never interprets a token: `gate` and `clear` mean whatever
+# the consumer decides they mean, and they arrive verbatim in `flow
+# resolve`'s `dispositions` object. `plan` takes the flat spelling — a
+# domain with no dispositions — which is what a key you want CHECKED but
+# not ROUTED looks like.
+
+[emit.plan]
+kind = "enum"
+domain = ["basic", "pro"]
+
+[emit.dpa]
+kind = "enum"
+[emit.dpa.domain]
+gate = ["required"]
+clear = ["none"]
+
 [[rule]]
 id = "free-eu"
 [rule.match.recognized]
