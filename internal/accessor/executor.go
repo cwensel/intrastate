@@ -51,26 +51,39 @@ func (e *Executor) selects(name string, capability Capability) (
 		// Validation rejects this before execution; at runtime a
 		// definition that slipped through cannot be bounded, and an
 		// unbounded invocation is not something this boundary performs.
-		return def, Artifact{}, 0, refusalOf(def, 0, ClassExecutionFailure)
+		return def, Artifact{}, 0, refusalOf(def, 0, ClassExecutionFailure, nil)
 	}
 
 	art, ok := e.Artifacts[def.Accessor.Role]
 	if !ok {
-		return def, Artifact{}, timeout, refusalOf(def, timeout, ClassExecutionFailure)
+		return def, Artifact{}, timeout, refusalOf(def, timeout, ClassExecutionFailure, nil)
 	}
 	return def, art, timeout, nil
 }
 
 // refusalOf builds the diagnosis tuple every refusal carries: accessor
-// identity, capability, artifact role, and declared timeout (`0004:FM`).
-func refusalOf(def Definition, timeout time.Duration, class RefusalClass) *Refusal {
-	return &Refusal{
+// identity, capability, artifact role, and declared timeout (`0004:FM`),
+// plus the bounded stderr tail an invocation error carries (`0025:C4`).
+//
+// `err` is the offending binding error or nil. A command binding returns
+// a typed `*ExecError`, which this `errors.As`-es for its tail; a
+// path-backed binding returns an untyped error and carries no tail, and a
+// refusal raised without an invocation at all — timeout from `ctx.Err()`,
+// read-back, the gate — gets an empty `Detail` by construction rather
+// than by each call site remembering to leave it blank.
+func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err error) *Refusal {
+	r := &Refusal{
 		Class:      class,
 		Accessor:   def.Identity.Name,
 		Capability: def.Identity.Capability,
 		Role:       def.Accessor.Role,
 		Timeout:    timeout,
 	}
+	var ee *ExecError
+	if errors.As(err, &ee) {
+		r.Detail = ee.Detail
+	}
+	return r
 }
 
 // --- read ----------------------------------------------------------------
@@ -90,7 +103,9 @@ func (e *Executor) Read(ctx context.Context, name string) ReadResult {
 
 	raw := e.invokeRead(ctx, def, art, timeout, requested)
 	if raw.class != "" {
-		return ReadResult{Refusal: refusalWithKeys(def, timeout, raw.class, raw.unreadable)}
+		return ReadResult{
+			Refusal: refusalWithKeys(def, timeout, raw.class, raw.unreadable, raw.err),
+		}
 	}
 
 	// A value that reads back as the reserved `<clear>` literal did not
@@ -100,13 +115,22 @@ func (e *Executor) Read(ctx context.Context, name string) ReadResult {
 	// not apply this rule — there the literal's presence is the defect.
 	values, unread := raw.classify(requested, true)
 	if len(unread) != 0 {
-		return ReadResult{Refusal: refusalWithKeys(def, timeout, ClassIncompleteRead, unread)}
+		return ReadResult{
+			Refusal: refusalWithKeys(def, timeout, ClassIncompleteRead, unread, nil),
+		}
 	}
 	return ReadResult{Values: values}
 }
 
-func refusalWithKeys(def Definition, timeout time.Duration, class RefusalClass, keys []string) *Refusal {
-	r := refusalOf(def, timeout, class)
+// refusalWithKeys wraps refusalOf for the read path, which is the ONE
+// capability established tools bind directly and so the likeliest source
+// of a stderr tail. The error parameter threads through BOTH constructors
+// or reads silently drop their tail (`0025:C4`, A11).
+func refusalWithKeys(
+	def Definition, timeout time.Duration, class RefusalClass,
+	keys []string, err error,
+) *Refusal {
+	r := refusalOf(def, timeout, class, err)
 	r.Keys = slices.Clone(keys)
 	return r
 }
@@ -117,6 +141,9 @@ type readOutcome struct {
 	values     []KeyValue
 	unreadable []string
 	class      RefusalClass
+	// err is the offending binding error, carried so the read path can
+	// hand it to `refusalWithKeys` (`0025:C4`).
+	err error
 }
 
 // classify reduces a raw outcome to exactly the requested keys plus the
@@ -173,7 +200,7 @@ func (e *Executor) invokeRead(
 		return readOutcome{class: ClassTimeout}
 	}
 	if err != nil {
-		return readOutcome{class: ClassExecutionFailure}
+		return readOutcome{class: ClassExecutionFailure, err: err}
 	}
 	return readOutcome{values: values, unreadable: unreadable}
 }
@@ -191,7 +218,7 @@ func (e *Executor) Gate(ctx context.Context, name string) GateResult {
 
 	binding, ok := def.Binding.(GateBinding)
 	if !ok {
-		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure)}
+		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, nil)}
 	}
 
 	bounded, cancel := context.WithTimeout(ctx, timeout)
@@ -202,10 +229,10 @@ func (e *Executor) Gate(ctx context.Context, name string) GateResult {
 	// A gate's timeout or execution failure is an ACCESSOR refusal, not a
 	// gate result — never folded into `gate_indeterminate` (JDR 0001 §D9).
 	if errors.Is(bounded.Err(), context.DeadlineExceeded) {
-		return GateResult{Refusal: refusalOf(def, timeout, ClassTimeout)}
+		return GateResult{Refusal: refusalOf(def, timeout, ClassTimeout, nil)}
 	}
 	if err != nil {
-		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure)}
+		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, err)}
 	}
 
 	switch verdict {
@@ -215,11 +242,11 @@ func (e *Executor) Gate(ctx context.Context, name string) GateResult {
 		return GateResult{Verdict: verdict, Reason: reason}
 	case VerdictIndeterminate:
 		// Refusal-class, never a false allow and never a false deny.
-		r := refusalOf(def, timeout, ClassGateIndeterminate)
+		r := refusalOf(def, timeout, ClassGateIndeterminate, nil)
 		r.Reason = reason
 		return GateResult{Verdict: VerdictIndeterminate, Reason: reason, Refusal: r}
 	default:
-		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure)}
+		return GateResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, nil)}
 	}
 }
 
@@ -245,7 +272,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 
 	binding, ok := def.Binding.(WriteBinding)
 	if !ok {
-		return WriteResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure)}
+		return WriteResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, nil)}
 	}
 
 	planned := slices.Clone(plan.Writes)
@@ -263,7 +290,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// tag" among the typed refusals). The check runs BEFORE the command:
 	// the write must not reach the artifact at all (deviations D16).
 	if nonOwned := nonOwnedPlanKeys(def, e.Registry, plannedKeys); len(nonOwned) != 0 {
-		r := refusalOf(def, timeout, ClassExecutionFailure)
+		r := refusalOf(def, timeout, ClassExecutionFailure, nil)
 		r.Keys = nonOwned
 		r.Expected = planned
 		return WriteResult{Refusal: r}
@@ -332,19 +359,19 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	if appliedDeadline {
 		// The command already ran: "may have been applied and was not
 		// verified", never "the write did not occur" (`0004:C14`).
-		r := refusalOf(def, timeout, ClassTimeout)
+		r := refusalOf(def, timeout, ClassTimeout, nil)
 		r.applied = true
 		r.Expected = planned
 		return WriteResult{Refusal: r}
 	}
 	if err != nil {
 		// The command failed before mutating: this one did NOT occur.
-		return WriteResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure)}
+		return WriteResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, err)}
 	}
 
 	// --- read-back verification ----------------------------------------
 	if !hasReader {
-		r := refusalOf(def, timeout, ClassReadBackIncomplete)
+		r := refusalOf(def, timeout, ClassReadBackIncomplete, nil)
 		r.applied = true
 		r.Keys = plannedKeys
 		r.Expected = planned
@@ -369,13 +396,16 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	readTimeout, _ := reader.timeout()
 	raw := e.invokeRead(ctx, reader, art, readTimeout, compared)
 	if raw.class == ClassTimeout {
-		r := refusalOf(def, readTimeout, ClassTimeout)
+		r := refusalOf(def, readTimeout, ClassTimeout, nil)
 		r.applied = true
 		r.Expected = planned
 		return WriteResult{Refusal: r}
 	}
 	if raw.class != "" {
-		r := refusalOf(def, readTimeout, ClassReadBackIncomplete)
+		// The read-back's OWN invocation error carries the tail: the CLI
+		// composes it after the applied-sense text in its one slot
+		// (`0025:C4` detail, REQ-65).
+		r := refusalOf(def, readTimeout, ClassReadBackIncomplete, raw.err)
 		r.applied = true
 		r.Keys = compared
 		r.Expected = planned
@@ -389,7 +419,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// stored literal is exactly the presence a clear's read-back catches.
 	observedValues, unread := raw.classify(compared, false)
 	if len(unread) != 0 {
-		r := refusalOf(def, readTimeout, ClassReadBackIncomplete)
+		r := refusalOf(def, readTimeout, ClassReadBackIncomplete, nil)
 		r.applied = true
 		r.Keys = unread
 		r.Expected = planned
@@ -426,7 +456,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// not be READ, and carrying `baselineUnread` here would conflate that
 	// with "read and wrong".
 	if mismatch := verifyReadBack(planned, before, observed); mismatch {
-		r := refusalOf(def, readTimeout, ClassReadBackMismatch)
+		r := refusalOf(def, readTimeout, ClassReadBackMismatch, nil)
 		r.Expected = planned
 		r.Observed = observedTags(observedValues)
 		return WriteResult{Refusal: r}
@@ -438,7 +468,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// which asserts the artifact is wrong, and never success (`0004:C13`,
 	// REQ-62), carrying the applied-but-unverified sense (`0004:C14`).
 	if len(baselineUnread) != 0 {
-		r := refusalOf(def, timeout, ClassReadBackIncomplete)
+		r := refusalOf(def, timeout, ClassReadBackIncomplete, nil)
 		r.applied = true
 		r.Keys = baselineUnread
 		r.Expected = planned

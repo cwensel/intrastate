@@ -306,11 +306,6 @@ type Refusal struct {
 	// because `0004:C7` reserves it for a gate deny. It is EMPTY on every
 	// refusal carrying no invocation error — timeout, read-back, gate-off
 	// — and set only where a binding returned an *ExecError.
-	//
-	// PHASE 1 DECLARATION ONLY. Nothing populates it yet; the RDR 0025
-	// conformance suite is red against it by design and Phase 2 threads
-	// the error parameter through `refusalOf` AND the `refusalWithKeys`
-	// that wraps it.
 	Detail string
 
 	// applied records the post-mutation sense. It is unexported because
