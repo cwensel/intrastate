@@ -10,6 +10,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -293,4 +296,79 @@ exit 0
 			"%v deadline: the drain waits on a grandchild that inherited "+
 			"the pipe", elapsed, deadline)
 	}
+}
+
+// TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead is the second
+// half of ADV-3, which no reported test asserted.
+//
+// Not stalling the drain and not LEAKING THE PROCESS are different
+// properties, and closing the first with a pipe close alone would leave the
+// second open. `0025:C4` puts the group signal in the mechanism precisely so
+// no grandchild is orphaned, and `0025:F4` admits leakage only for a child
+// that outlives its `timeout` refusal — never one that outlives a
+// SUCCESSFUL invocation, which is the path this asserts.
+func TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead(t *testing.T) {
+	t.Parallel()
+
+	pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
+	// The tool answers correctly and exits 0, leaving a background helper
+	// that records its own pid — the shape every `tool &`-style wrapper has.
+	tool := advScript(t, `
+( sleep 20 ) &
+echo $! > `+pidFile+`
+printf '{"state.phase":"review"}'
+exit 0
+`)
+	reader := cmdbind.Reader{
+		Accessor: table.Accessor{
+			Role:    "state",
+			Command: []string{tool},
+			Keys:    []string{"state.phase"},
+		},
+		Name:   "leaking-read",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, _, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"}); err != nil {
+		t.Fatalf("the tool answered correctly and exited 0, yet the read "+
+			"refused: %v", err)
+	}
+
+	pid := advPIDFrom(t, pidFile)
+	// The group signal is sent after the direct child is reaped; give the
+	// kernel a moment to tear the grandchild down before asking.
+	time.Sleep(200 * time.Millisecond)
+	if advAlive(pid) {
+		t.Fatalf("the grandchild pid %d survived a SUCCESSFUL invocation: "+
+			"`0025:C4` signals the child's process GROUP so no grandchild is "+
+			"orphaned, and `0025:F4` admits process leakage only for a child "+
+			"that outlives its `timeout` refusal", pid)
+	}
+}
+
+// advAlive reports whether a pid names a live process.
+func advAlive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// advPIDFrom reads the grandchild pid the probe tool recorded.
+func advPIDFrom(t *testing.T, path string) int {
+	t.Helper()
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the probe tool recorded no grandchild pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatalf("the recorded pid %q is not a number: %v", b, err)
+	}
+	return pid
 }

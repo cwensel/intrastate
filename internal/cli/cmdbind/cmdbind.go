@@ -37,6 +37,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -222,30 +223,83 @@ func spawn(
 	}
 	cmd.WaitDelay = WaitDelay * time.Millisecond
 
-	// The stdout bound is enforced by BOUNDING THE READ, so an unbounded
-	// child cannot exhaust memory. One byte past the cap is read on
-	// purpose: overflow is DETECTED here rather than silently truncated.
-	outPipe, err := cmd.StdoutPipe()
+	// The two output channels are carried on pipes this function OWNS,
+	// rather than on `cmd.StdoutPipe`/`cmd.StderrPipe`, because the close
+	// ordering is load-bearing: `Cmd.Wait` closes the pipes it owns as soon
+	// as the direct child is reaped, which would truncate a read still in
+	// flight. Owning them lets the group be released FIRST and the drains
+	// then run to a true EOF (`0025:C4`).
+	outR, outW, err := os.Pipe()
 	if err != nil {
 		return invocation{}, wrap("", err)
 	}
-	errPipe, err := cmd.StderrPipe()
+	defer func() { _ = outR.Close() }()
+	errR, errW, err := os.Pipe()
 	if err != nil {
+		_ = outW.Close()
 		return invocation{}, wrap("", err)
 	}
+	defer func() { _ = errR.Close() }()
+	// An `*os.File` on these fields is handed to the child directly, with no
+	// copying goroutine and no entry in the runtime's parent-pipe set; the
+	// parent's copy of each write end is closed by `Start`.
+	cmd.Stdout = outW
+	cmd.Stderr = errW
 
-	if serr := cmd.Start(); serr != nil {
+	serr := cmd.Start()
+	_ = outW.Close()
+	_ = errW.Close()
+	if serr != nil {
 		return invocation{}, wrap("", serr)
 	}
 
-	stdout := readBounded(outPipe, StdoutCap+1)
-	// The stderr channel is read under the SAME bound as stdout so a
-	// verbose tool cannot exhaust memory, and `tail` then keeps the LAST
-	// 4 KiB — which is the diagnosis a caller wants when a tool says a lot
-	// before it fails (`0025:C4`).
-	stderr := readBounded(errPipe, StdoutCap)
+	// BOTH channels drain CONCURRENTLY. Draining stdout to completion before
+	// touching stderr deadlocks a merely VERBOSE tool: a child that fills the
+	// 64 KiB stderr pipe buffer before closing stdout blocks in `write(2)`
+	// while the parent blocks in `read(2)`, and neither moves until the
+	// deadline — well below the 1 MiB cap, so the cap does not bound it.
+	// `0025:F4` bounds the accepted residue to "a child that IGNORES
+	// termination at deadline"; this child ignores nothing (`0025:C4`).
+	//
+	// The stdout bound is enforced by BOUNDING THE READ, so an unbounded
+	// child cannot exhaust memory. One byte past the cap is read on
+	// purpose: overflow is DETECTED here rather than silently truncated.
+	// The stderr channel is read under the SAME bound so a verbose tool
+	// cannot exhaust memory, and `tail` then keeps the LAST 4 KiB — which is
+	// the diagnosis a caller wants when a tool says a lot before it fails.
+	var stdout, stderr []byte
+	var drains sync.WaitGroup
+	drains.Add(2)
+	go func() {
+		defer drains.Done()
+		stdout = readBounded(outR, StdoutCap+1)
+	}()
+	go func() {
+		defer drains.Done()
+		stderr = readBounded(errR, StdoutCap)
+	}()
 
 	werr := cmd.Wait()
+
+	// The direct child has been reaped. Signal the GROUP now, on the success
+	// path as much as the failure path: `cmd.Cancel` fires only when the
+	// context ends, so without this a grandchild the tool backgrounded — the
+	// shape every wrapper script has — survives the CLI still holding the
+	// stdout/stderr pipes it inherited, and the drain above never sees EOF.
+	// `0025:C4` states the group signal's purpose as exactly this ("dropping
+	// the group signal ORPHANS A GRANDCHILD holding the pipe"), and
+	// `0025:F4` admits process leakage only for a child that outlives its
+	// `timeout` refusal — never one that outlives a SUCCESSFUL invocation.
+	//
+	// It is safe on the success path precisely BECAUSE it runs after the
+	// wait: the direct child is already gone, so nothing legitimate is
+	// killed — whatever remains in the group is the orphan the clause names.
+	reapGroup(cmd.Process)
+
+	// Only now, with every write end of both pipes closed, do the drains
+	// reach EOF. Joining them here is what makes the reads whole: nothing is
+	// truncated by a close racing an in-flight read.
+	drains.Wait()
 
 	inv := invocation{stdout: stdout, stderr: tail(stderr)}
 	var ee *exec.ExitError
@@ -276,17 +330,33 @@ func spawn(
 	return inv, nil
 }
 
-// readBounded drains r up to limit bytes, reporting whether more remained.
+// reapGroup SIGKILLs the child's process group after the direct child has
+// been reaped, releasing any grandchild still holding the inherited pipes
+// (`0025:C4`).
+//
+// The negative-pid form addresses the GROUP, and `Setpgid` with no `Pgid`
+// makes the child its own group leader, so the group id is the child's pid.
+// The guard is not cosmetic: a pid of 0 or 1 would address the CALLER's
+// group or init, so a process record without a usable pid signals nothing.
+func reapGroup(p *os.Process) {
+	if p == nil || p.Pid <= 1 {
+		return
+	}
+	// ESRCH — the ordinary case, an empty group — is nothing to report.
+	_ = syscall.Kill(-p.Pid, syscall.SIGKILL)
+}
+
+// readBounded drains r up to limit bytes. The bound is on what is KEPT: the
+// remainder is discarded rather than left in the pipe, so a child is never
+// blocked writing into a full one.
 func readBounded(r io.Reader, limit int) []byte {
 	b, err := io.ReadAll(io.LimitReader(r, int64(limit)))
 	if err != nil {
 		return b
 	}
-	// Drain the remainder so the child is never blocked on a full pipe: the
-	// bound is on what is KEPT, and a child left writing into a full pipe
-	// would hang past its deadline rather than being reaped. Overflow is
-	// DETECTED from the kept length — the read is bounded at cap+1, so a
-	// stdout of exactly the cap is a value and one byte more is a failure.
+	// Overflow is DETECTED from the kept length — the read is bounded at
+	// cap+1, so a stdout of exactly the cap is a value and one byte more is
+	// a failure.
 	_, _ = io.Copy(io.Discard, r)
 	return b
 }
