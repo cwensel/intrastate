@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Feature
 - **Profile**: foundational — Seam Lineage ≥2 floors it; Resolve recount:
   one seam, the declared-command carrier + authority bound (C1/C2/C5/C6)
