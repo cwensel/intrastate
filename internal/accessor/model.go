@@ -300,6 +300,19 @@ type Refusal struct {
 	// into a refusal. It is never set by this package for a deny.
 	Reason string
 
+	// Detail carries the bounded stderr tail of a command-backed
+	// invocation (`0025:C4`). It is ADDITIVE: RDR 0004 pins the refusal
+	// CLASS set, not this struct's field set, and `Reason` is not reused
+	// because `0004:C7` reserves it for a gate deny. It is EMPTY on every
+	// refusal carrying no invocation error — timeout, read-back, gate-off
+	// — and set only where a binding returned an *ExecError.
+	//
+	// PHASE 1 DECLARATION ONLY. Nothing populates it yet; the RDR 0025
+	// conformance suite is red against it by design and Phase 2 threads
+	// the error parameter through `refusalOf` AND the `refusalWithKeys`
+	// that wraps it.
+	Detail string
+
 	// applied records the post-mutation sense. It is unexported because
 	// only the write path — which knows whether the command already ran —
 	// may set it.
@@ -401,3 +414,39 @@ const ClearSentinel = table.ClearSentinel
 // IsClear reports whether a planned tag value is the reserved removal
 // sentinel.
 func IsClear(value string) bool { return value == ClearSentinel }
+
+// --- RDR 0025: the invocation-error carrier -------------------------------
+
+// ExecError is the typed carrier a command-backed binding returns through
+// the binding interfaces' existing bare `error` slot, so a stderr tail
+// reaches the refusal without an interface change (`0025:C4`, A11).
+//
+// It WRAPS the offending `os/exec` error rather than flattening it, so
+// `errors.Is(err, exec.ErrNotFound)` survives the trip to the refusal
+// site and the argv0-not-found case stays distinguishable from a non-zero
+// exit. Detail is the bounded stderr tail, NOT `Err.Error()`.
+type ExecError struct {
+	// Detail is the last 4 KiB of the child's stderr (`0025:C4`).
+	Detail string
+	// Err is the offending error, wrapped and never flattened.
+	Err error
+}
+
+// Error renders the typed error.
+func (e *ExecError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return e.Detail
+}
+
+// Unwrap exposes the wrapped error so `errors.Is`/`errors.As` reach it.
+func (e *ExecError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
