@@ -274,10 +274,10 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 		// returns equal sets on every implementation, including one that
 		// never runs a reader at all. Recording HERE records what ran.
 		//
-		// The seam is FLAG-BLIND, necessarily: `--plan-only` is readable at
-		// exactly one lexical site and this is not it. Both widths drive
-		// this hook identically, which is what makes the two recordings
-		// comparable in the first place.
+		// The seam is FLAG-BLIND, necessarily: the projection flag is
+		// readable at exactly one lexical site and this is not it. Both
+		// report widths drive this hook identically, which is what makes
+		// the two recordings comparable in the first place.
 		recordReaderExecution(name)
 		result := exec.Read(ctx, name)
 		if result.Refused() {
@@ -323,9 +323,9 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 // Nil in production, so the shipped path pays one nil check and records
 // nothing; an observer installs it to collect a run's executed set. It
 // takes the reader id and nothing else — in particular it takes no flag and
-// no request, because a seam that could observe `--plan-only` would make
-// the very execution it records flag-dependent, and the flag is readable at
-// exactly one site that is not this one.
+// no request, because a seam that could observe the projection flag would
+// make the very execution it records flag-dependent, and that flag is
+// readable at exactly one site, which is not this one.
 var readerExecutionHook func(readerID string)
 
 // recordReaderExecution reports that the named reader is about to run.

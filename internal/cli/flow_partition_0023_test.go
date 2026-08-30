@@ -663,10 +663,18 @@ func TestReq35And37And40And41And42And43And44And46_TheInvokedReaderSetIsObservedE
 	// And the artifact is untouched by either run: `resolve` performs reads
 	// only, in both widths, so a projected run that "optimised away" the
 	// read pass would be the only way these could diverge.
+	//
+	// The read-back binds the `orphan` role as well as `state`. That is not
+	// a loosening: `flow read-state` is `0005:REQ-37`'s deliberate exception
+	// and runs EVERY declared reader, because a diagnostic read has no
+	// candidate set to narrow by — so the role `resolve` correctly leaves
+	// unbound is one `read-state` requires. The 0005 MVV binds both roles to
+	// the same artifact for exactly this reason.
 	readBack := func() string {
 		t.Helper()
 		return requireSuccess(t, "flow", "read-state", "--model", model,
-			"--artifact", bind, "--as=json")
+			"--artifact", bind,
+			"--artifact", artifactBinding(flowOrphanRole, art), "--as=json")
 	}
 	before := readBack()
 	requireSuccess(t, append(slices.Clone(args), "--"+planOnlyFlag, "--as=json")...)

@@ -160,29 +160,32 @@ func payloadKeyOrder(t *testing.T, stdout string) []string {
 		t.Fatalf("`data` is not a JSON object: %s", env.Data)
 	}
 
+	// At the object's top level the decoder alternates KEY, VALUE. Only the
+	// keys are wanted, so each value is CONSUMED with `json.RawMessage`
+	// after its key is read.
+	//
+	// Consuming the value is what makes the reading correct rather than
+	// approximately correct: a top-level string VALUE (`model`'s path,
+	// `rule`'s id, `outcome`'s tag) is a `string` token at the same nesting
+	// depth as a key, so a reader that only tracked delimiter depth would
+	// report those values as keys. It would then report a DIFFERENT list
+	// for the two widths for a reason that has nothing to do with key
+	// order, which is the property this helper exists to expose.
 	var keys []string
-	depth := 0
-	for dec.More() || depth > 0 {
-		tok, err := dec.Token()
-		if err != nil {
-			break
+	for dec.More() {
+		tok, terr := dec.Token()
+		if terr != nil {
+			t.Fatalf("read a `data` key: %v", terr)
 		}
-		switch v := tok.(type) {
-		case json.Delim:
-			switch v {
-			case '{', '[':
-				depth++
-			case '}', ']':
-				depth--
-			}
-		case string:
-			if depth == 0 {
-				keys = append(keys, v)
-				// Consume the value; only its DELIMITERS matter for depth.
-				if !dec.More() {
-					continue
-				}
-			}
+		key, ok := tok.(string)
+		if !ok {
+			t.Fatalf("`data` carries the non-string key token %v", tok)
+		}
+		keys = append(keys, key)
+
+		var value json.RawMessage
+		if derr := dec.Decode(&value); derr != nil {
+			t.Fatalf("read `data.%s`'s value: %v", key, derr)
 		}
 	}
 	return keys

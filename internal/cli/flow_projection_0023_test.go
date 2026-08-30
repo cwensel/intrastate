@@ -1365,7 +1365,16 @@ func TestReq47And48And49And50And53_NothingUpstreamOfPayloadAssemblyReadsTheFlag(
 			"--tag", "tier=paid", "--tag", "region=eu"), "rule"},
 		// Gate evaluation: a flag consulted in the gate run would move
 		// `gates`, whose results ride the payload.
-		{"gates", resolveArgs(gateModel, "", "decide", "--tag", "a=x"), "gates"},
+		//
+		// The `state` role is bound because `dtGateModel0010`'s two gates
+		// declare it; an unbound role refuses `flow-artifact-missing` above
+		// the gate run, and this arm exists to witness the gate run itself.
+		// The shipped 0010 oracle binds it the same way, to a fresh
+		// artifact — the gate's verdict is its declared path's suffix, not
+		// the artifact's content.
+		{"gates", resolveArgs(gateModel,
+			artifactBinding(flowStateRole, newFlowArtifact(t, "gate.artifact")),
+			"decide", "--tag", "a=x"), "gates"},
 		// The escape phase: a flag consulted there would move `escaped`.
 		{"escape", resolveArgs(escapeModel, "", "decide",
 			"--tag", "a=y", "--tag", "b=q"), "escaped"},
