@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -221,9 +222,12 @@ func spawn(
 		return invocation{}, wrap("", serr)
 	}
 
-	stdout, oflow := readBounded(outPipe, StdoutCap+1)
-	stderr, _ := readBounded(errPipe, StderrTailCap)
-	_ = oflow
+	stdout := readBounded(outPipe, StdoutCap+1)
+	// The stderr channel is read under the SAME bound as stdout so a
+	// verbose tool cannot exhaust memory, and `tail` then keeps the LAST
+	// 4 KiB — which is the diagnosis a caller wants when a tool says a lot
+	// before it fails (`0025:C4`).
+	stderr := readBounded(errPipe, StdoutCap)
 
 	werr := cmd.Wait()
 
@@ -250,16 +254,18 @@ func spawn(
 }
 
 // readBounded drains r up to limit bytes, reporting whether more remained.
-func readBounded(r io.Reader, limit int) ([]byte, bool) {
+func readBounded(r io.Reader, limit int) []byte {
 	b, err := io.ReadAll(io.LimitReader(r, int64(limit)))
 	if err != nil {
-		return b, false
+		return b
 	}
 	// Drain the remainder so the child is never blocked on a full pipe: the
 	// bound is on what is KEPT, and a child left writing into a full pipe
-	// would hang past its deadline rather than being reaped.
-	n, _ := io.Copy(io.Discard, r)
-	return b, n > 0
+	// would hang past its deadline rather than being reaped. Overflow is
+	// DETECTED from the kept length — the read is bounded at cap+1, so a
+	// stdout of exactly the cap is a value and one byte more is a failure.
+	_, _ = io.Copy(io.Discard, r)
+	return b
 }
 
 // tail keeps the LAST StderrTailCap bytes, which is the diagnosis a caller
@@ -389,9 +395,7 @@ func childEnv(acc table.Accessor, name string, capability accessor.Capability) [
 	}
 
 	// 3 — the entry's literal `env`.
-	for k, v := range acc.Env {
-		env[k] = v
-	}
+	maps.Copy(env, acc.Env)
 
 	// 4 — the overlay, which gives wrappers their context without new
 	// placeholders. C5's `command_env_conflict` makes it unshadowable.
