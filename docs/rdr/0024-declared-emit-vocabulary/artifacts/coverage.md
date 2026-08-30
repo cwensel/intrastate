@@ -4,7 +4,15 @@ REQ × test, both directions. 110 REQs from `artifacts/req-list.md`;
 **83 test functions across seven files in three packages** —
 `table_test` (external), `table` (internal), and `cli`.
 
-**Red gate.** Both touched test packages **DO NOT COMPILE** against HEAD:
+**Phase 2 status: GREEN.** Every test below passes on the implemented
+tree, and `make check` is green end to end (fmt, vet, golangci-lint,
+build, graph-lint over all four examples, docs-check, and `go test -race`
+over every package). The MVV run is recorded below. Four Phase 1 fixtures
+and two predecessor censuses moved; each is a classified entry in
+`deviations.md` (D1, D2, D5, D6) and no assertion was relaxed.
+
+**Red gate (as of Phase 1).** Both touched test packages **DID NOT
+COMPILE** against the pre-implementation HEAD:
 `table.CatMalformedEmitDeclaration`, `table.CatUnknownEmitKey`,
 `table.CatEmitValueOutOfDomain`, `table.EmitDecl`, `Model.EmitDecls`,
 `(*loader).loadEmitDecls`, `(*loader).checkRuleEmit`, and
@@ -255,6 +263,95 @@ iteration breaks it with overwhelming probability.
 |---|---|---|
 | REQ-109 | `table_test.TestReq109_0024_TheCarrierIsWrittenOnceAndReadOnlyThereafter` | RED |
 | REQ-110 | `table_test.TestReq110_0024_NoHashOrContentAddressedIdentityIsCarried` | RED (stub-visible) |
+
+---
+
+## MVV run — recorded (Phase 2)
+
+`0024:MVV`, run end to end against the built binary on the implemented
+tree. Model paths are folded to `<tmp>/`; every other byte is verbatim
+stdout. `TestMVV_0024_DeclaredEmitVocabulary` passes over the same four
+steps.
+
+**Step 1 — the defect, reproduced.** The seed's two-rule adversarial table,
+UNDECLARED: `first-rule` emits `next = "resovle"` (misspelled), and
+`second-rule` types the key `nxet`.
+
+```
+$ intrastate lint --model <tmp>/seed.toml --as=json
+{"type":"ok","data":{"findings":[]}}
+exit=0
+```
+
+Exit 0, zero findings. That is the defect.
+
+**Step 2 — declaring makes both defects visible, one per run.** Added
+`[emit.next]`, an enum with a route/stop-partitioned domain
+(`route = ["resolve", "refine"]`, `stop = ["archive"]`).
+
+Run A, both defects present:
+
+```
+$ intrastate lint --model <tmp>/declared.toml --as=json
+{"code":"model-invalid","message":"model does not conform to the transition-model schema","param":"model","detail":"emit_value_out_of_domain: rule first-rule emits next = \"resovle\": \"resovle\" is outside the declared domain","findings":[{"code":"emit_value_out_of_domain","message":"emit_value_out_of_domain: rule first-rule emits next = \"resovle\": \"resovle\" is outside the declared domain","locator":"<tmp>/declared.toml:29"}]}
+exit=2
+```
+
+Run B, after fixing the rule run A named (`resovle` -> `resolve`):
+
+```
+$ intrastate lint --model <tmp>/fix1.toml --as=json
+{"code":"model-invalid","message":"model does not conform to the transition-model schema","param":"model","detail":"unknown_emit_key: rule second-rule emits the undeclared key nxet","findings":[{"code":"unknown_emit_key","message":"unknown_emit_key: rule second-rule emits the undeclared key nxet","locator":"<tmp>/fix1.toml:38"}]}
+exit=2
+```
+
+Exit 2, ONE blocking finding each, never both in one run. Across the two
+runs both categories are observed — `emit_value_out_of_domain` for the
+misspelled value, `unknown_emit_key` for the typo'd key. Each locator
+carries the offending block's source line (`:29`, `:38`), not `:1`: line
+29 is `first-rule`'s `id` line and line 38 is `second-rule`'s, which is
+where `0024:C2` keys a rule-side defect.
+
+**Step 3 — the round trip.** Both rules fixed (`nxet = "stop"` ->
+`next = "archive"`):
+
+```
+$ intrastate lint --model <tmp>/fixed.toml --as=json
+{"type":"ok","data":{"findings":[]}}
+exit=0
+
+$ intrastate flow resolve --model <tmp>/fixed.toml --outcome decide \
+    --tag step=second --as=json
+{"type":"ok","data":{"model":"<tmp>/fixed.toml","revision":"","observed":{"step":"second"},"owned":{},"readers":[],"outcome":"decide","rule":"second-rule","gates":[],"emit":{"next":"archive"},"dispositions":{"next":"stop"},"next":{},"writes":{},"clear":[],"escaped":false}}
+exit=0
+```
+
+`second-rule` authors `next = "archive"`, which the declaration lists under
+`stop`. The payload carries the authored `emit` unchanged AND
+`dispositions` mapping the key to `stop`, positioned immediately after
+`emit`.
+
+**Step 4 — deleting the declaration restores today's behaviour.** The
+ORIGINAL defective table, no `[emit]` table at all:
+
+```
+$ intrastate lint --model <tmp>/seed.toml --as=json
+{"type":"ok","data":{"findings":[]}}
+exit=0
+
+$ intrastate flow resolve --model <tmp>/seed.toml --outcome decide \
+    --tag step=first --as=json
+{"type":"ok","data":{"model":"<tmp>/seed.toml","revision":"","observed":{"step":"first"},"owned":{},"readers":[],"outcome":"decide","rule":"first-rule","gates":[],"emit":{"next":"resovle"},"dispositions":{},"next":{},"writes":{},"clear":[],"escaped":false}}
+exit=0
+```
+
+Exit 0, no findings, `dispositions: {}`. The misspelled `resovle` answers
+verbatim once nothing declares the key — byte-identical to today apart
+from the appended empty field.
+
+**REQ-93 (`TS` "Done").** Every scenario is green (`make check` passes
+including `-race`, `go vet`, `golangci-lint`, `graph-lint` over all four
+examples, and `docs-check`), and the MVV run is recorded above.
 
 ---
 
