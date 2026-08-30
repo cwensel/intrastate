@@ -22,6 +22,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -108,8 +109,11 @@ func TestReq27And28And95And96And97And129_DefaultModeIsByteIdenticalToTheCaptured
 	// checkouts of the same commit is folded — a golden carrying it would
 	// fail everywhere but the machine that captured it, and would commit an
 	// absolute local path into a checked-in artifact.
-	got := foldEmitDispositions0024(t, foldCheckoutRoot(t,
+	got, err := foldEmitDispositions0024(foldCheckoutRoot(t,
 		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...))))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	if got != strings.TrimRight(string(want), "\n") {
 		t.Errorf("default-mode output differs from the pre-change golden:\n"+
 			"  golden = %s\n  now    = %s\n"+
@@ -780,30 +784,62 @@ func TestReq83And112And126_TheOracleBatteryIsTheFiveScenariosAndOwesNoWallTimeBu
 // additive append this record does not own. Folding it out is the same
 // move `foldCheckoutRoot` makes for the checkout prefix and narrows
 // nothing 0023 claims: byte-identity is still asserted over every other
-// key, in order, and the fold itself is EXACT — it fails on a
-// `dispositions` value that is anything but the empty object, and on a
-// record where the key does not sit immediately after `emit`.
-func foldEmitDispositions0024(t *testing.T, line string) string {
-	t.Helper()
-
+// key, in order, and the fold itself is EXACT — it accepts the EMPTY
+// OBJECT and nothing else, and only where the key sits immediately after
+// `emit`.
+//
+// The empty-object literal is the whole point of the narrowing. A needle
+// spelled `\{[^{}]*\}` on the `dispositions` half excludes only NESTED
+// braces, not content, so it would erase `{"verdict":"route"}` exactly as
+// silently as it erases `{}` — and this test is REQ-97's only pre-change
+// comparison, so a default-mode regression that started POPULATING
+// `dispositions` would be absorbed by the fold and seen nowhere else in
+// the battery. `0024:C4` ships the key as `{}` in default mode (D7: all 28
+// regenerated sites took `"dispositions":{}` exactly), so a populated
+// value here is a contract move to be adjudicated, never folded away. The
+// `emit` half stays `[^{}]*` — its value legitimately varies and is not
+// this fold's subject.
+//
+// Returning an error rather than calling `t.Fatalf` keeps the three
+// outcomes — folded, key absent, key populated — drivable from a test.
+func foldEmitDispositions0024(line string) (string, error) {
 	// The needle anchors on the PREDECESSOR key, so the fold cannot
 	// silently succeed on a record where `dispositions` drifted to some
 	// other position — which is the one thing `0024:C4` fixes about it.
-	appended := regexp.MustCompile(`("emit":\{[^{}]*\}),"dispositions":\{[^{}]*\}`)
+	appended := regexp.MustCompile(`("emit":\{[^{}]*\}),"dispositions":\{\}`)
 	folded := appended.ReplaceAllString(line, "$1")
 	if folded == line {
-		t.Fatalf("the emitted record carries no `dispositions` key "+
-			"immediately after `emit`; `0024:C4` appends one to every "+
+		if populated0024.MatchString(line) {
+			return "", fmt.Errorf("the emitted record carries a NON-EMPTY "+
+				"`dispositions` value after `emit`; `0024:C4` ships the key "+
+				"as `{}` in default mode, and this comparison is REQ-97's "+
+				"only pre-change side — \"S1-S5 all compare the new build "+
+				"against itself, so none of them can see a default-mode "+
+				"regression that moves both sides together\". Folding a "+
+				"populated value would absorb exactly that regression and "+
+				"leave it asserted nowhere, so it is reported instead:\n%s",
+				line)
+		}
+		return "", fmt.Errorf("the emitted record carries no `dispositions` "+
+			"key immediately after `emit`; `0024:C4` appends one to every "+
 			"resolve payload, present as `{}` and never omitted, so its "+
 			"absence here means the append regressed rather than that this "+
 			"fold is unnecessary:\n%s", line)
 	}
 	if strings.Contains(folded, "dispositions") {
-		t.Fatalf("the record carries `dispositions` more than once; the "+
-			"fold removes exactly the one appended key:\n%s", line)
+		return "", fmt.Errorf("the record carries `dispositions` more than "+
+			"once; the fold removes exactly the one appended key:\n%s", line)
 	}
-	return folded
+	return folded, nil
 }
+
+// populated0024 discriminates the two ways the exact fold can miss: the
+// key is absent after `emit` (the append regressed) versus present but
+// carrying a value the fold refuses (a default-mode regression). It is
+// deliberately NOT the fold's own needle — it matches any brace-free run,
+// including the nested-brace case the fold's `[^{}]*` half would also
+// decline, so the diagnostic never claims absence for a key that is there.
+var populated0024 = regexp.MustCompile(`"emit":\{[^{}]*\},"dispositions":`)
 
 func foldCheckoutRoot(t *testing.T, line string) string {
 	t.Helper()
@@ -916,5 +952,107 @@ func TestFoldCheckoutRootEncodesThePrefixTheWayTheRecordDoes(t *testing.T) {
 					"foldCheckoutRoot silently folds nothing", esc, line)
 			}
 		})
+	}
+}
+
+// D8 records that RDR 0023's pre-change golden is FOLDED rather than
+// regenerated, and states the standard the fold has to meet: "The fold is
+// exact rather than permissive, so it strengthens rather than weakens the
+// site." This oracle holds the fold to that word on the one axis a
+// position-anchored needle does not cover by itself — the VALUE.
+//
+// A `dispositions` half spelled `\{[^{}]*\}` excludes nested braces, not
+// content, so it erases `{"verdict":"route"}` verbatim. Neither of the
+// fold's guards catches that: the absence guard fires only on a total miss
+// and the duplicate guard only on a second key. The populated value would
+// therefore be folded silently, inside the battery's ONLY pre-change
+// comparison (REQ-97: "S1-S5 all compare the new build against itself, so
+// none of them can see a default-mode regression that moves both sides
+// together"). That is the regression this oracle is red for.
+//
+// The inputs are hand-built records rather than emitted ones on purpose:
+// the populated arm cannot be produced by the shipped default-mode path at
+// all, which is exactly why it must be asserted here.
+func TestD8_0024_TheDispositionsFoldAcceptsTheEmptyObjectAndNothingElse(t *testing.T) {
+	const emitted = `{"model":"m","emit":{"columns":["verdict"]}`
+
+	for _, tc := range []struct {
+		name    string
+		line    string
+		want    string
+		wantErr string
+	}{
+		{
+			// `0024:C4`'s shipped default-mode shape (D7: all 28
+			// regenerated sites took `"dispositions":{}` exactly).
+			name: "empty-object-folds",
+			line: emitted + `,"dispositions":{},"next":"n"}`,
+			want: emitted + `,"next":"n"}`,
+		},
+		{
+			// A default-mode regression that started populating the key.
+			// Folding this absorbs the very thing REQ-97 exists to see.
+			name:    "populated-object-is-refused",
+			line:    emitted + `,"dispositions":{"verdict":"route"},"next":"n"}`,
+			wantErr: "NON-EMPTY",
+		},
+		{
+			// The append itself regressed.
+			name:    "absent-key-is-refused",
+			line:    emitted + `,"next":"n"}`,
+			wantErr: "no `dispositions` key",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := foldEmitDispositions0024(tc.line)
+
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("the fold refused `0024:C4`'s shipped shape, "+
+						"which it exists to accept: %v", err)
+				}
+				if got != tc.want {
+					t.Errorf("the fold removed the wrong span:\n"+
+						"  want = %s\n  got  = %s", tc.want, got)
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("the fold ACCEPTED a record it must refuse and "+
+					"returned %s\n\nThe fold is the pre-change golden's "+
+					"only filter, and this comparison is the battery's only "+
+					"pre-change side. A value it swallows is a regression "+
+					"no other oracle can see.", got)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("the refusal does not name what moved:\n"+
+					"  want substring = %q\n  got            = %v",
+					tc.wantErr, err)
+			}
+		})
+	}
+}
+
+// The populated-value refusal must name REQ-97, because REQ-97 is the hole
+// the golden exists to close and the reason the value cannot be folded: it
+// is the requirement that says no other oracle in the battery can see a
+// default-mode regression. A message that reports only "unexpected value"
+// leaves the reader to rediscover why an exact fold is not pedantry.
+func TestD8_0024_ThePopulatedDispositionsRefusalNamesReq97sHole(t *testing.T) {
+	_, err := foldEmitDispositions0024(
+		`{"emit":{"columns":["verdict"]},"dispositions":{"verdict":"route"}}`)
+	if err == nil {
+		t.Fatal("the fold accepted a populated `dispositions` value")
+	}
+
+	// REQ-97's own words, as quoted in this file's header.
+	const hole = "compare the new build against itself"
+	if !strings.Contains(err.Error(), hole) {
+		t.Errorf("the refusal does not carry REQ-97's hole:\n"+
+			"  want substring = %q\n  got            = %v\n"+
+			"`0024:C4` ships `dispositions` as `{}` in default mode, so a "+
+			"populated value means either the append or the default-mode "+
+			"contract moved — both adjudicated, neither folded.", hole, err)
 	}
 }
