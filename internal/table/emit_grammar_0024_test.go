@@ -96,9 +96,14 @@ func TestReq4_0024_DomainTakesTwoSpellingsOfTheSameKey(t *testing.T) {
 		if !slices.Equal(d.Domain, want) {
 			t.Errorf("Domain = %v; want %v", d.Domain, want)
 		}
-		if len(d.Dispositions) != 0 {
-			t.Errorf("a flat array carries no dispositions; got %v",
-				d.Dispositions)
+		// REQ-46 fixes the carrier form, not merely the count:
+		// `Dispositions` is "`nil` when the domain carries none". An empty
+		// non-nil map is a different value, and the non-enum leg
+		// (`TestReq6_0024`) already asserts `nil`, so the flat spelling is
+		// held to the same canonical form.
+		if d.Dispositions != nil {
+			t.Errorf("Dispositions = %v; want nil — a flat array carries "+
+				"no dispositions", d.Dispositions)
 		}
 	})
 

@@ -334,6 +334,23 @@ domain = ["alpha", "beta", "gamma"]`)
 				"BYTE-EXACT", f.Category, table.CatUnknownEmitKey)
 		}
 	})
+
+	t.Run("member identity is byte-exact", func(t *testing.T) {
+		// The sibling clause: "A domain member's identity is its byte-exact
+		// string." The 0010 rules author `verdict = "alpha"`, and this
+		// declaration lists `Alpha`. Byte-exactly the value is outside the
+		// domain; under a case-folding comparison the model would load
+		// clean, which is the whole detection gap this subtest closes.
+		src := dtWithEmitDecl(`[emit.verdict]
+kind = "enum"
+domain = ["Alpha", "beta", "gamma"]`)
+		f := refuseSource(t, src, "emit-member-case-fold.toml")
+		if f.Category != table.CatEmitValueOutOfDomain {
+			t.Errorf("category = %q; want %q — a domain member's identity "+
+				"is its BYTE-EXACT string",
+				f.Category, table.CatEmitValueOutOfDomain)
+		}
+	})
 }
 
 // REQ-72 / `0024:D-selection-predicate`: "dispositions are per **domain
