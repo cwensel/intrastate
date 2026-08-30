@@ -172,6 +172,57 @@ unauthored block as `emit: (none)`.
 require and write without evaluating anything; the answer is what `flow
 resolve` selects.
 
+## `flow resolve --plan-only` and the two halves of the payload
+
+Every field of the `flow resolve` success payload belongs to exactly one of
+two groups, and the assignment is fixed:
+
+| group | fields | what it is |
+| --- | --- | --- |
+| **echo** | `model`, `observed`, `owned`, `readers`, `outcome` | the request, read back — the caller already holds all of it |
+| **plan** | `revision`, `rule`, `gates`, `emit`, `next`, `writes`, `clear`, `escaped`, `escape_class` | what the call DECIDED |
+
+`--plan-only` omits the echo group. It is report-only: the same rule is
+selected, the same gates run, the same readers are invoked, and refusals are
+byte-identical with and without it. Every field it does carry is carried
+byte-for-byte, in the same order, through the same encoder — the projection
+deletes whole keys and never rewrites a value.
+
+An omitted key is **absent**. It is never `null`, never `{}`, and never
+`""`: those would be stand-ins, and a consumer could not tell a projected
+run from one whose reader returned nothing.
+
+The full payload:
+
+```json
+{"model":"pricing.toml","revision":"","observed":{"region":"eu","tier":"free"},
+ "owned":{},"readers":[],"outcome":"decide","rule":"free-eu","gates":[],
+ "emit":{"dpa":"required","plan":"basic"},
+ "next":{},"writes":{},"clear":[],"escaped":false}
+```
+
+The same call with `--plan-only`:
+
+```json
+{"revision":"","rule":"free-eu","gates":[],
+ "emit":{"dpa":"required","plan":"basic"},
+ "next":{},"writes":{},"clear":[],"escaped":false}
+```
+
+Fields with a presence rule keep it, unchanged, inside the plan group:
+`emit` is still present as `{}` when the row authored none, and
+`escape_class` still appears exactly when it would appear by default —
+omitted on an unescaped plan in both widths. The flag neither widens nor
+narrows a producer's own rule.
+
+`--plan-only` rides `flow resolve` alone. On `next`, `read-state` or
+`set-state` it fails the parse as `command-error`, exit 2 — which is also
+what a binary predating the flag does, so a caller can never hold a
+full-width payload believing it was projected.
+
+The default width is unchanged and remains the full record; dropping the
+flag is the whole recovery procedure.
+
 ## `flow next` candidates and the `unknown` list
 
 A candidate is a rule whose match and guard both HOLD or are UNDECIDED

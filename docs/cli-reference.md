@@ -506,6 +506,7 @@ Flags:
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
       --outcome string         the recognized outcome tag to resolve
+      --plan-only              omit the request echo from a successful plan (model, observed, owned, readers, outcome); the plan itself is unchanged
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
 
 Global Flags:
@@ -533,6 +534,22 @@ Reading a successful plan
 
   The plan is data you act on. resolve applies nothing: writing it back
   is flow set-state's job, and nothing links the two calls.
+
+  The success payload has two halves. The PLAN half above is what this
+  call DECIDED. The other half is the request read back to you:
+
+  model         the model reference you passed.
+  observed      the --tag values you passed, echoed unchanged.
+  owned         the owned state the readers assembled.
+  readers       the read accessors that were invoked.
+  outcome       the --outcome you passed, echoed unchanged.
+
+  --plan-only omits that second half. Nothing else changes: the same
+  rule is selected, the same gates run, refusals are byte-identical, and
+  every field that is carried is carried byte-for-byte. Pass it when you
+  already hold the request and only want the decision — and do not pass
+  it if you were relying on the payload to tell you which model answered,
+  since model is exactly what it drops.
 
 Refusals
 

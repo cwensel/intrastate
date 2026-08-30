@@ -89,7 +89,25 @@ func TestReq27And28And95And96And97And129_DefaultModeIsByteIdenticalToTheCaptured
 			goldenPath0023, err)
 	}
 
-	got := emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...))
+	// The observed line's `model` value is the `--model` argument VERBATIM
+	// (`flow_input.go::selectModel` returns the path unchanged), and this
+	// package's tests run with `cwd = internal/cli`, so `mvvCall0023` has to
+	// pass an ABSOLUTE path for the model to resolve at all. Folding the
+	// checkout root back out is what lets the golden be the RELATIVE
+	// spelling the RDR names — `0023:MVV` step 1 and REQ-107 both write
+	// `models/examples/pricing-decision-table.toml`, and that is the
+	// spelling `evidence/spikes/a1-byte-width.md` row S1 and
+	// `a2-encoder-mechanism.md`'s reference bytes are measured on.
+	//
+	// This narrows nothing. Byte-identity is still asserted over the whole
+	// record, `model` included: the key must be present and its value must
+	// be that relative path. Only the prefix that differs between two
+	// checkouts of the same commit is folded — a golden carrying it would
+	// fail everywhere but the machine that captured it, and would commit an
+	// absolute local path into a checked-in artifact.
+	got := strings.ReplaceAll(
+		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...)),
+		repoRootFor(t)+"/", "")
 	if got != strings.TrimRight(string(want), "\n") {
 		t.Errorf("default-mode output differs from the pre-change golden:\n"+
 			"  golden = %s\n  now    = %s\n"+
@@ -341,9 +359,21 @@ func TestMVV0023_ResolveEnvelopeProjectionEndToEnd(t *testing.T) {
 			t.Fatalf("seeding the review fixture failed: %v", err)
 		}
 
+		// The release grammar's `begin` row guards on `phase = idle` and
+		// writes `build-id`, so BOTH owned keys must be established before
+		// the row is decidable — an unseeded artifact refuses
+		// `flow-owned-state-unavailable` rather than producing a plan to
+		// measure. `evidence/spikes/a1-byte-width.md` §S2b seeds exactly
+		// `phase=idle`, `build-id=none`.
 		releaseModel := releaseModelPath(t)
 		releaseArt := newFlowArtifact(t, "release.artifact")
 		releaseBind := artifactBinding("release", releaseArt)
+		if _, _, err := runCmd(t, "flow", "set-state", "--model", releaseModel,
+			"--artifact", releaseBind, "--write", "phase=idle",
+			"--write", "build-id=none", "--as=json",
+		); err != nil {
+			t.Fatalf("seeding the release fixture failed: %v", err)
+		}
 
 		for _, shape := range []struct {
 			name string
@@ -356,8 +386,16 @@ func TestMVV0023_ResolveEnvelopeProjectionEndToEnd(t *testing.T) {
 			},
 			{
 				// The gate/write-heavy fixture step 6 names beside it.
+				//
+				// The two observed `--tag`s are the A1 spike's own S2b
+				// invocation, not decoration: step 6 says to "compare
+				// against A1's baseline", and the baseline row is measured
+				// on this argv. Dropping them empties `observed` and
+				// measures a DIFFERENT shape — one whose echo group is
+				// smaller than the one the 40% bar was set against.
 				name: "release-grammar/begin",
-				args: resolveArgs(releaseModel, releaseBind, "build"),
+				args: resolveArgs(releaseModel, releaseBind, "build",
+					"--tag", "risk=0", "--tag", "checks=[]"),
 			},
 			{
 				name: "review-state-machine/approve",
@@ -535,23 +573,59 @@ func TestReq115And116And117And118And119And120_TheFlagIsDocumentedAndTheOmittedGr
 			"the model reference", named)
 	}
 
-	// The generated artifacts derive from the registration, so they must
-	// already carry the flag: a commit that registers it without
-	// regenerating them turns `make check` red on `docs-check`.
+	// `docs/cli-reference.md` derives from the flag's REGISTRATION — it
+	// renders every command's full flag set — so it must already carry the
+	// flag: a commit that registers it without regenerating turns
+	// `make check` red on `docs-check`.
+	//
+	// `llms.txt` is NOT asserted the same way. It is a command INDEX: its
+	// generator (`docs.go::writeLLMsTxt`) emits `CommandPath + Short` per
+	// command plus static prose, and renders no command's flags at all —
+	// `--all`, `--outcome`, `--artifact` and `--model` are all absent from
+	// it today. REQ-116's premise that the usage string is an input to that
+	// file does not hold of the shipped generator (deviation D-6,
+	// SPEC-DEFECT). The obligation REQ-117 actually states — that the
+	// registering commit must leave the generated artifacts NOT STALE — is
+	// asserted here for both files, by re-rendering and comparing, which is
+	// exactly what `make docs-check` does and is strictly stronger than a
+	// substring probe for the one file that does carry flags.
+	generated := t.TempDir()
+	if _, _, err := runCmd(t, "docs", "--dir", generated, "--as=json"); err != nil {
+		t.Fatalf("re-rendering the generated artifacts failed: %v", err)
+	}
 	for _, artifact := range []string{"docs/cli-reference.md", "llms.txt"} {
-		path := filepath.Join(repoRootFor(t), artifact)
-		src, err := os.ReadFile(path)
+		committed, err := os.ReadFile(filepath.Join(repoRootFor(t), artifact))
 		if err != nil {
 			t.Errorf("read %s: %v", artifact, err)
 			continue
 		}
-		if !strings.Contains(string(src), planOnlyFlag) {
-			t.Errorf("%s does not carry --%s; the generated artifacts derive "+
-				"from the flag's REGISTRATION, so the commit that registers "+
-				"it must also carry them regenerated — a phase split that "+
-				"leaves the flag registered and the artifacts stale is a red "+
-				"build by construction", artifact, planOnlyFlag)
+		fresh, err := os.ReadFile(filepath.Join(generated, artifact))
+		if err != nil {
+			t.Errorf("read the freshly rendered %s: %v", artifact, err)
+			continue
 		}
+		if string(committed) != string(fresh) {
+			t.Errorf("%s is STALE against the command tree this binary "+
+				"carries; the generated artifacts derive from the flag's "+
+				"REGISTRATION, so the commit that registers it must also carry "+
+				"them regenerated — a phase split that leaves the flag "+
+				"registered and the artifacts stale is a red build by "+
+				"construction. Run `make docs`", artifact)
+		}
+	}
+
+	// And the file that DOES render flags carries this one, with its
+	// authored usage string.
+	reference, err := os.ReadFile(
+		filepath.Join(repoRootFor(t), "docs/cli-reference.md"))
+	if err != nil {
+		t.Fatalf("read docs/cli-reference.md: %v", err)
+	}
+	if !strings.Contains(string(reference), "--"+planOnlyFlag) {
+		t.Errorf("`docs/cli-reference.md` does not carry --%s; it renders "+
+			"every command's full flag set from the live tree, so the flag's "+
+			"authored usage string reaches a committed artifact through it",
+			planOnlyFlag)
 	}
 
 	// The worked payload lands beside the full one in the output contract.
