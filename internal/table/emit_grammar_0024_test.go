@@ -415,24 +415,34 @@ func TestReq21_0024_ABareEmitTableIsIdenticalToOmittingIt(t *testing.T) {
 // the model file against itself at one point in time."
 // DOMAIN EDGE
 func TestReq22_0024_ADeclarationIsAuthorOwnedAndUnversioned(t *testing.T) {
-	wide := loadEmitDecls0024(t, declVerdictFlat, "emit-wide.toml")
-
-	// Narrow the domain to exactly the values the rules author. Nothing
-	// consults a history, so the narrowed model loads clean.
-	narrowed := loadEmitDecls0024(t, `[emit.verdict]
+	// The wide baseline declares two members beyond the three the 0010
+	// rules author. A member no rule authors is not a finding of any tier,
+	// so the widened model loads clean.
+	wide := loadEmitDecls0024(t, `[emit.verdict]
 kind = "enum"
-domain = ["alpha", "beta", "gamma"]`, "emit-narrowed.toml")
+domain = ["alpha", "beta", "gamma", "delta", "epsilon"]`, "emit-wide.toml")
+
+	// Narrow the domain back to exactly the values the rules author.
+	// Nothing consults a history, so the narrowing edit loads clean too.
+	// It cannot narrow BELOW the authored values without tripping
+	// `checkRuleEmit`'s out-of-domain refusal, which is C2's contract and
+	// not this one.
+	narrowed := loadEmitDecls0024(t, declVerdictFlat, "emit-narrowed.toml")
 
 	if len(wide.EmitDecls) != 1 || len(narrowed.EmitDecls) != 1 {
 		t.Fatalf("both models declare one key; got %d and %d",
 			len(wide.EmitDecls), len(narrowed.EmitDecls))
 	}
 
-	// Widening likewise: a member no rule authors is not a finding of any
-	// tier, and no narrowing detection exists to trip on the reverse edit.
-	loadEmitDecls0024(t, `[emit.verdict]
-kind = "enum"
-domain = ["alpha", "beta", "gamma", "delta", "epsilon"]`, "emit-widened.toml")
+	// The two legs must be observably DIFFERENT models, or the narrowing
+	// never happened and the leg would pass against an implementation that
+	// refused the edit by consulting a history.
+	if got, want := len(wide.EmitDecls["verdict"].Domain), 5; got != want {
+		t.Errorf("wide domain carries %d members; want %d", got, want)
+	}
+	if got, want := len(narrowed.EmitDecls["verdict"].Domain), 3; got != want {
+		t.Errorf("narrowed domain carries %d members; want %d", got, want)
+	}
 }
 
 // findRowIdentity returns the identity string of the single normalized row
