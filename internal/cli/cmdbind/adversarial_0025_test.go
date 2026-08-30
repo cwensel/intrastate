@@ -1,0 +1,296 @@
+package cmdbind_test
+
+// Phase 3b adversarial tests for RDR 0025.
+//
+// Each test here names a failure mode the RDR's own Failure Modes section
+// admits, and asserts the property the section claims holds. They are
+// written from the contract, not from the implementation.
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/cli/cmdbind"
+	"github.com/cwensel/intrastate/internal/table"
+)
+
+// advScript writes an executable shell script into a fresh temp dir and
+// returns its absolute path.
+func advScript(t *testing.T, body string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "tool.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatalf("writing the probe tool: %v", err)
+	}
+	return path
+}
+
+// advArtifact binds the `state` role to an absolute path, which C2
+// requires of every command entry.
+func advArtifact(t *testing.T) accessor.Artifact {
+	t.Helper()
+
+	return accessor.Artifact{Role: "state", Path: filepath.Join(t.TempDir(), "state.json")}
+}
+
+// --- ADV-1: the exit maps claim a KILLED process --------------------------
+//
+// `0025:C3` scopes the two exit maps to a process that RAN AND EXITED: "a
+// spawn failure — which has no exit code at all — can never be claimed by
+// them however broadly they are written". A child SIGKILLed at the
+// deadline, or on parent cancellation, has no exit code either — `Wait`
+// synthesizes -1 — yet the binding treats it as an exit and consults the
+// maps.
+//
+// `0025:F1` promises that a runtime refusal carries the 0004 diagnosis
+// tuple with class `timeout` or `execution_failure`. A killed child that
+// returns a VERDICT, or that establishes every declared key ABSENT, is
+// neither: it is a success minted from a corpse.
+//
+// The exit codes below are authorable and lint-green — nothing in C5's
+// `command_output_shape` arms rejects a negative code — so this is a
+// declaration a model author can write today.
+
+func TestAdvReadExitAbsentMustNotClaimAKilledChild(t *testing.T) {
+	t.Parallel()
+
+	tool := advScript(t, "exec sleep 30\n")
+	reader := cmdbind.Reader{
+		Accessor: table.Accessor{
+			Role:       "state",
+			Command:    []string{tool},
+			Keys:       []string{"state.phase"},
+			ExitAbsent: []int{-1},
+		},
+		Name:   "killed-read",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	values, unreadable, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"})
+	if err != nil {
+		return // refusing is the contract
+	}
+	t.Fatalf("a child KILLED at the deadline was claimed by `exit_absent`: "+
+		"values=%+v unreadable=%v err=nil — a killed process has no exit "+
+		"code, so `0025:C3`'s exit map may not claim it, and `0025:F1` "+
+		"promises a timeout or execution_failure refusal here, never "+
+		"established absence", values, unreadable)
+}
+
+func TestAdvGateExitVerdictsMustNotClaimAKilledChild(t *testing.T) {
+	t.Parallel()
+
+	tool := advScript(t, "exec sleep 30\n")
+	gate := cmdbind.Gate{
+		Accessor: table.Accessor{
+			Role:         "state",
+			Command:      []string{tool},
+			ExitVerdicts: map[string]string{"-1": "allow"},
+		},
+		Name:   "killed-gate",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	verdict, reason, err := gate.Gate(ctx, advArtifact(t))
+	if err != nil {
+		return // refusing is the contract
+	}
+	t.Fatalf("a gate child KILLED at the deadline was laundered into the "+
+		"verdict %q (reason %q): `0025:C3` keeps execution failure out of "+
+		"the verdict channel, and a killed process has no exit code for "+
+		"`exit_verdicts` to claim", verdict, reason)
+}
+
+// TestAdvKilledChildOnParentCancelIsNotAnAnswer is the same defect on the
+// path where nothing upstream masks it.
+//
+// `internal/accessor/executor.go::invokeRead` reclassifies only
+// `context.DeadlineExceeded`, so a DEADLINE kill is caught one layer up by
+// a second, independent decision. `0025:C6` names exactly that shape as
+// the thing a safety property may not rest on — "a coincidence between two
+// independent decisions". Parent CANCELLATION (an interrupted CLI) yields
+// `context.Canceled`, the upstream check does not fire, and the binding's
+// answer stands: every declared key ABSENT, from a tool that answered
+// nothing.
+func TestAdvKilledChildOnParentCancelIsNotAnAnswer(t *testing.T) {
+	t.Parallel()
+
+	tool := advScript(t, "exec sleep 30\n")
+	reader := cmdbind.Reader{
+		Accessor: table.Accessor{
+			Role:       "state",
+			Command:    []string{tool},
+			Keys:       []string{"state.phase"},
+			ExitAbsent: []int{-1},
+		},
+		Name:   "cancelled-read",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	parent, interrupt := context.WithCancel(context.Background())
+	// The executor wraps the caller's context in the declared timeout; the
+	// timeout is generous here, so the ONLY thing that ends the child is
+	// the parent cancellation.
+	bounded, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		interrupt()
+	}()
+
+	values, _, err := reader.Read(bounded, advArtifact(t), []string{"state.phase"})
+	if err != nil {
+		return // refusing is the contract
+	}
+	for _, v := range values {
+		if v.Absent {
+			t.Fatalf("an INTERRUPTED read established `%s` ABSENT with no "+
+				"error: nothing upstream reclassifies `context.Canceled`, "+
+				"so this absence is believed. `0025:F5`'s read_back seal "+
+				"turns on absence, so a `<clear>` verifies against a tool "+
+				"that was killed before it answered", v.Key)
+		}
+	}
+}
+
+// --- ADV-2: the stderr channel is drained only AFTER stdout ---------------
+//
+// `0025:C4`'s deadline triple is called necessary AND SUFFICIENT, and
+// `0025:F4` bounds the residual risk to "a child that IGNORES termination
+// at deadline". A child that ignores nothing — that writes a verbose
+// diagnostic to stderr and then a well-formed envelope to stdout — is
+// outside that bound and must succeed.
+//
+// It does not. `spawn` drains stdout to completion before it reads stderr
+// at all, so a child that fills the 64 KiB stderr pipe buffer before
+// closing stdout blocks on write(2) while the parent blocks on read(2).
+// Neither moves until the deadline kills the child, and the invocation
+// that should have returned in milliseconds burns its whole timeout and
+// refuses.
+//
+// The diagnosis is wrong too, which is what makes it a silent-risk rather
+// than a visible one: the refusal says the tool "produced no stdout",
+// blaming a tool that produced a correct envelope.
+func TestAdvVerboseStderrMustNotDeadlockTheDrain(t *testing.T) {
+	t.Parallel()
+
+	// 128 KiB of stderr — twice a pipe buffer — emitted BEFORE stdout is
+	// closed. Nothing here ignores termination; the tool simply talks.
+	tool := advScript(t, `
+i=0
+while [ $i -lt 1400 ]; do
+  echo "warning: this tool is chatty and says so at length ......................." >&2
+  i=$((i+1))
+done
+printf '{"state.phase":"review"}'
+`)
+	reader := cmdbind.Reader{
+		Accessor: table.Accessor{
+			Role:    "state",
+			Command: []string{tool},
+			Keys:    []string{"state.phase"},
+		},
+		Name:   "chatty-read",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	const deadline = 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+
+	start := time.Now()
+	values, unreadable, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("a chatty-but-correct tool refused after %v (deadline %v): "+
+			"%v — `0025:C4` calls the deadline triple sufficient and "+
+			"`0025:F4` bounds the residue to a child that IGNORES "+
+			"termination; this one answered correctly and was starved by "+
+			"the parent's sequential pipe drain", elapsed, deadline, err)
+	}
+	if len(unreadable) != 0 {
+		t.Fatalf("a chatty-but-correct tool left %v unreadable after %v",
+			unreadable, elapsed)
+	}
+	if len(values) != 1 || values[0].Value != "review" {
+		t.Fatalf("got %+v after %v, want state.phase=review", values, elapsed)
+	}
+	if elapsed >= deadline {
+		t.Fatalf("the read consumed its whole %v deadline (%v) for a tool "+
+			"that answers immediately", deadline, elapsed)
+	}
+}
+
+// --- ADV-3: the process group outlives the invocation --------------------
+//
+// `0025:C4` makes `Setpgid` half of the deadline mechanism, and its
+// stated purpose is that "dropping the group signal ORPHANS A GRANDCHILD
+// holding the pipe". The group signal is wired to `cmd.Cancel`, which the
+// runtime invokes only when the context ends — so on the SUCCESS path the
+// group is never signalled and a grandchild the tool spawned survives the
+// CLI, holding the pipe it inherited.
+//
+// `0025:F4` names the residue it accepts: "a child that ignores
+// termination AT DEADLINE can outlive its `timeout` refusal". A grandchild
+// outliving a SUCCESSFUL invocation is a different mode and is not
+// admitted anywhere in the RDR. Its cost is concrete: the parent's
+// `io.Copy(io.Discard, …)` drain does not see EOF until the last holder of
+// the pipe exits, so one backgrounded grandchild converts a successful
+// read into a full-deadline refusal.
+func TestAdvBackgroundGrandchildMustNotStallASuccessfulRead(t *testing.T) {
+	t.Parallel()
+
+	// The tool answers correctly and exits 0. It also leaves a background
+	// helper running — the shape every `tool &`-style wrapper has.
+	tool := advScript(t, `
+( sleep 20 ) &
+printf '{"state.phase":"review"}'
+exit 0
+`)
+	reader := cmdbind.Reader{
+		Accessor: table.Accessor{
+			Role:    "state",
+			Command: []string{tool},
+			Keys:    []string{"state.phase"},
+		},
+		Name:   "backgrounding-read",
+		Config: cmdbind.Config{AllowCommands: true},
+	}
+
+	const deadline = 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+
+	start := time.Now()
+	values, unreadable, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("a tool that answered correctly and exited 0 refused after "+
+			"%v (deadline %v): %v — the invocation is held open by a "+
+			"grandchild `0025:C4`'s group mechanism is supposed to bound, "+
+			"and `0025:F4` admits no such mode on the SUCCESS path",
+			elapsed, deadline, err)
+	}
+	if len(unreadable) != 0 || len(values) != 1 || values[0].Value != "review" {
+		t.Fatalf("values=%+v unreadable=%v after %v, want state.phase=review",
+			values, unreadable, elapsed)
+	}
+	if elapsed >= deadline {
+		t.Fatalf("a read whose tool exited 0 immediately took %v, its whole "+
+			"%v deadline: the drain waits on a grandchild that inherited "+
+			"the pipe", elapsed, deadline)
+	}
+}
