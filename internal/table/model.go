@@ -149,6 +149,30 @@ type Accessor struct {
 	ReadBack bool
 }
 
+// EmitDecl is one emit key's declaration (`0024:C3`).
+//
+// It is deliberately NOT a TagDecl — the mirror of EmitValue not being a
+// TagValue. An emit declaration carries no provenance, no accessor
+// reference, and none of `min`/`max`/`elements`/`single_valued`/`required`:
+// declaring an emit key constrains what a rule may AUTHOR for it and
+// nothing else.
+//
+// The three fields are the whole carried form:
+//
+//   - Kind is one of `enum | bool | int | scalar`.
+//   - Domain is the enum's member set, the bytewise-SORTED union across
+//     however the author spelled it. It is nil — never an empty non-nil
+//     slice — for every other kind, since none of them takes a domain.
+//   - Dispositions maps each member to the one model-authored disposition
+//     token it was listed under, and is nil when the domain carries none.
+//     The partition grouping is not carried separately: it is fully
+//     recoverable from this map.
+type EmitDecl struct {
+	Kind         string
+	Domain       []string
+	Dispositions map[string]string
+}
+
 // TagValue is one key bound to a member sequence. A set-valued write holds
 // its members as a sequence, never a delimiter-joined string (`0002:C10`).
 type TagValue struct {
@@ -158,12 +182,16 @@ type TagValue struct {
 
 // EmitValue is one `[rule.emit]` pair (`0010:C3`).
 //
-// It is deliberately NOT a TagValue. An emit key is not a tag key: it is
-// undeclared, uninterpreted, and compared by exact byte equality, and its
-// value is one authored string rather than a member sequence — so the
-// `Value []string` a TagValue carries would invite the set semantics,
-// domain conformance, and `renderValue` quoting that none of this applies
-// to.
+// It is deliberately NOT a TagValue. An emit key is not a TAG key: it is
+// never parsed, canonicalized, or converted, it is compared by exact byte
+// equality, and its value is one authored string rather than a member
+// sequence — so the `Value []string` a TagValue carries would invite the
+// set semantics and `renderValue` quoting that none of this applies to.
+//
+// An emit key MAY be declared (`0024:C1`), and a declaration constrains
+// what a rule may AUTHOR for it. It never changes what the value IS: every
+// kind check is lexical, and evaluation and the payload carry the authored
+// bytes.
 type EmitValue struct {
 	Key   string
 	Value string
@@ -436,6 +464,11 @@ type Model struct {
 	Readers map[string]Accessor
 	Writers map[string]Accessor
 	Gates   map[string]Accessor
+
+	// EmitDecls is the declared emit vocabulary, keyed by emit key
+	// (`0024:C3`) — the sibling of Tags. It is always non-nil after a
+	// successful load: empty for a zero-declaration model, never nil.
+	EmitDecls map[string]EmitDecl
 
 	// DumpOrder is presentation only and never reaches a candidate row.
 	DumpOrder []string

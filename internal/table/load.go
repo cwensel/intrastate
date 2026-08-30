@@ -82,6 +82,15 @@ func (l *loader) run() (*Model, error) {
 		l.loadModelHeader,
 		l.loadOutcomes,
 		l.loadTags,
+		// RDR 0024 `0024:C2` — the two emit steps, in this order, at this
+		// position: immediately after loadTags and ahead of normalizeRules,
+		// so both read the SOURCE rules rather than normalized rows and
+		// refuse before any row is yielded. loadEmitDecls builds the
+		// carrier checkRuleEmit reads, so the order is load-bearing for
+		// correctness, not only for reporting: the value check is
+		// safe-by-omission and depends on C1's arms having already fired.
+		l.loadEmitDecls,
+		l.checkRuleEmit,
 		l.loadAccessors,
 		l.loadDump,
 		l.loadContexts,
@@ -262,6 +271,290 @@ func (l *loader) loadTags() error {
 
 	l.model.Tags = decls
 	return nil
+}
+
+// ------------------------------------------- the declared emit vocabulary
+
+// emitKinds is RDR 0024's closed emit-kind vocabulary (`0024:C1`): RDR
+// 0003's token spellings reused verbatim, minus `set`. `set` is excluded
+// because an emit value is ONE authored string, never a member sequence
+// (`0010:C3`).
+var emitKinds = []string{"enum", "bool", "int", "scalar"}
+
+// loadEmitDecls runs C1's grammar checks over `[emit]` and builds C3's
+// carrier (`0024:C2`).
+//
+// The opt-in gate is evaluated HERE rather than by the caller: the step
+// slice is uniform and holds bound method values, so there is no room for a
+// conditional call. The trigger is the COUNT of declared keys, never the
+// presence of the table — a bare `[emit]` with zero sub-tables is a
+// zero-declaration model, identical in every observable to omitting it.
+//
+// The carrier is set unconditionally, so `Model.EmitDecls` is non-nil after
+// every successful load and empty rather than nil for a zero-declaration
+// model, matching the `Model.Tags` convention.
+//
+// The walk is over SORTED keys for the same reason `loadTags`'s
+// reserved-key scan is: load is fail-fast and reports one refusal, so which
+// of several malformed declarations is named must not be chosen by the map
+// seed.
+func (l *loader) loadEmitDecls() error {
+	l.model.EmitDecls = make(map[string]EmitDecl, len(l.doc.Emit))
+	if len(l.doc.Emit) == 0 {
+		return nil
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(l.doc.Emit)) {
+		decl, err := emitDecl(key, l.doc.Emit[key])
+		if err != nil {
+			// A declaration defect keys on the declaration's own
+			// `[emit.<key>]` header, which `tagHeaderLine`'s technique
+			// reaches unchanged. This is the only place still holding both
+			// the key and the source bytes.
+			return atLine(err, emitHeaderLine(l.src, key))
+		}
+		l.model.EmitDecls[key] = decl
+	}
+	return nil
+}
+
+// emitDecl validates one `[emit.<key>]` declaration and returns its carried
+// form (`0024:C1`).
+func emitDecl(key string, src sourceEmitDecl) (EmitDecl, error) {
+	bad := func(detail string) (EmitDecl, error) {
+		return EmitDecl{}, fail(CatMalformedEmitDeclaration, "emit "+key+": "+detail)
+	}
+
+	if !slices.Contains(emitKinds, src.Kind) {
+		return bad("kind " + strconv.Quote(src.Kind) +
+			" is not one of " + strings.Join(emitKinds, ", "))
+	}
+	if src.Kind != "enum" {
+		// None of bool, int, and scalar takes a domain, in EITHER spelling:
+		// the arm refuses the PRESENCE of the key, since the narrower
+		// reading would leave `[emit.<key>.domain]` under `kind = "bool"`
+		// silently admitted.
+		if src.Domain != nil {
+			return bad("kind " + src.Kind + " admits no domain; only an enum declares one")
+		}
+		// Domain stays nil, never an empty non-nil slice: the distinction
+		// is observable, because the carrier is asserted by value-equality.
+		return EmitDecl{Kind: src.Kind}, nil
+	}
+
+	members, dispositions, err := emitDomain(src.Domain)
+	if err != nil {
+		return bad(err.Error())
+	}
+	// "No usable domain" is ONE arm, not two: an enum declaring no `domain`
+	// key at all and one carrying an empty `[emit.<key>.domain]` sub-table
+	// BOTH decode to a nil domain, with nothing to discriminate on. An
+	// empty flat `domain = []` is distinguishable but takes the same arm.
+	if len(members) == 0 {
+		return bad("kind enum carries no usable domain")
+	}
+
+	seen := make(map[string]bool, len(members))
+	for _, m := range members {
+		if m == "" {
+			return bad("the empty string is a domain member")
+		}
+		if seen[m] {
+			// Duplicates ACROSS disposition lists included: one member, one
+			// disposition.
+			return bad("domain member " + strconv.Quote(m) + " is duplicated")
+		}
+		seen[m] = true
+	}
+
+	// The carry is value-preserving, not order-preserving: `Domain` is the
+	// union sorted bytewise, so a partitioned domain yields one value
+	// whatever order the decoder's map iteration hands the dispositions
+	// over. The partition grouping is not carried separately — it is fully
+	// recoverable from `Dispositions`.
+	slices.Sort(members)
+	return EmitDecl{Kind: "enum", Domain: members, Dispositions: dispositions}, nil
+}
+
+// emitDomain reads either authored spelling of the one `domain` key: a flat
+// member array, or a sub-table whose keys are model-authored disposition
+// tokens and whose values are member arrays (`0024:C1`).
+//
+// It returns the members in AUTHORED order — the caller sorts — plus the
+// member→disposition map, which is nil for the flat spelling.
+//
+// The shape arms here exist only because strictness cannot reach them: the
+// `any` field type is C1's carve-out for the two spellings, and it is what
+// lets a non-array domain, a non-array disposition value, nesting below the
+// disposition level, and a non-string member arrive as decoded values
+// rather than as decoder errors.
+func emitDomain(domain any) ([]string, map[string]string, error) {
+	switch d := domain.(type) {
+	case nil:
+		return nil, nil, nil
+	case []any:
+		members, err := emitMembers(d)
+		if err != nil {
+			return nil, nil, err
+		}
+		return members, nil, nil
+	case map[string]any:
+		var members []string
+		dispositions := map[string]string{}
+		// Sorted, so a malformed disposition list is named reproducibly.
+		for _, token := range slices.Sorted(maps.Keys(d)) {
+			if token == "" {
+				return nil, nil, fmt.Errorf("the empty string is a disposition token")
+			}
+			list, ok := d[token].([]any)
+			if !ok {
+				return nil, nil, fmt.Errorf("disposition %s is not an array of members",
+					strconv.Quote(token))
+			}
+			listed, err := emitMembers(list)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, m := range listed {
+				dispositions[m] = token
+			}
+			members = append(members, listed...)
+		}
+		if len(members) == 0 {
+			return nil, nil, nil
+		}
+		return members, dispositions, nil
+	default:
+		return nil, nil, fmt.Errorf(
+			"domain is neither a flat array of members nor a table of dispositions")
+	}
+}
+
+// emitMembers reads one authored member array. Every member is a STRING: a
+// non-string member is refused on its type, and any nesting below the
+// disposition level arrives here as a non-string too.
+func emitMembers(list []any) ([]string, error) {
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		m, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("domain member %v is not a string", item)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// checkRuleEmit holds every rule's authored `[rule.emit]` block to the
+// declared vocabulary (`0024:C2`).
+//
+// Two cross-checks, over the SOURCE rules rather than normalized rows,
+// because this step runs ahead of `normalizeRules`:
+//
+//   - `unknown_emit_key` — any key of any rule, ordinary or escape, not
+//     declared under `[emit]`. Strictness is whole-model, not per-key.
+//   - `emit_value_out_of_domain` — an authored value outside its key's
+//     declared enum domain, not a `bool` token, or not an `int` literal.
+//     A `scalar` value is never refused.
+//
+// The opt-in gate is evaluated here for the same reason it is in
+// loadEmitDecls: with zero declarations neither refusal is reachable and
+// the pipeline is byte-for-byte today's.
+func (l *loader) checkRuleEmit() error {
+	if len(l.model.EmitDecls) == 0 {
+		return nil
+	}
+
+	for _, rule := range l.doc.Rule {
+		ruleID := ""
+		if rule.ID != nil {
+			ruleID = *rule.ID
+		}
+		// Sorted, so which of several defects in one block is reported does
+		// not ride the map seed.
+		for _, key := range slices.Sorted(maps.Keys(rule.Emit)) {
+			decl, declared := l.model.EmitDecls[key]
+			if !declared {
+				return atLine(fail(CatUnknownEmitKey,
+					"rule "+ruleID+" emits the undeclared key "+key),
+					emitRuleLine(l.src, ruleID))
+			}
+			// A scalar key is short-circuited BEFORE the call rather than
+			// relying on conformKind's fall-through: the escape hatch is
+			// total, and the skip says so at the call site.
+			if decl.Kind == "scalar" {
+				continue
+			}
+			// The throwaway TagDecl literal IS the adapter (`0024:C3`): no
+			// extraction, no new exported helper. Min, Max and Elements stay
+			// nil, so the int arm's bounds and the set arm never fire, and
+			// the reuse is safe-by-omission — which is why C1's arms must
+			// have fired first.
+			if err := ConformValue(
+				TagDecl{Kind: decl.Kind, Domain: decl.Domain}, rule.Emit[key]); err != nil {
+				return atLine(fail(CatEmitValueOutOfDomain,
+					"rule "+ruleID+" emits "+key+" = "+
+						strconv.Quote(rule.Emit[key])+": "+err.Error()),
+					emitRuleLine(l.src, ruleID))
+			}
+		}
+	}
+	return nil
+}
+
+// emitHeaderLine reports the 1-based line of the `[emit.<key>]` header
+// declaring key, or ZERO where it cannot be identified.
+//
+// It is `tagHeaderLine`'s technique against a different prefix, and it
+// declines on anything ambiguous for the same reason: pointing at the wrong
+// text costs more than pointing at no text.
+func emitHeaderLine(src []byte, key string) int {
+	return headerLine(src, "[emit."+key+"]", "[emit."+strconv.Quote(key)+"]")
+}
+
+// emitRuleLine reports the 1-based line of the `id = "<ruleID>"` line
+// belonging to the rule that authored the offending emit block, or ZERO.
+//
+// A rule-side defect keys on the offending RULE ID rather than on its
+// `[rule.emit]` header, because a rule's emit block is not identifiable on
+// its own: `[rule.emit]` is spelled identically under every `[[rule]]`, so
+// a scan for it cannot tell which rule it belongs to. The rule id can: it
+// is authored once per rule and is the identity the refusal already names.
+//
+// The anchor matches the id's VALUE, not the bare `id` key, since `[model]`
+// carries an `id` key too — matching the key would stamp the model header's
+// line on every rule-side refusal.
+func emitRuleLine(src []byte, ruleID string) int {
+	if ruleID == "" {
+		return 0
+	}
+	return headerLine(src, "id = "+strconv.Quote(ruleID))
+}
+
+// headerLine reports the 1-based line whose decoration-stripped text equals
+// one of the accepted spellings, or ZERO when it matches zero times or more
+// than once — a second match means the scan cannot tell which line the
+// refusal belongs to.
+func headerLine(src []byte, spellings ...string) int {
+	line, matches := 0, 0
+	for i, raw := range strings.Split(string(src), "\n") {
+		// Trailing comments and surrounding space are the only decoration
+		// such a line may carry; anything else is not this line.
+		text := raw
+		if hash := strings.IndexByte(text, '#'); hash >= 0 {
+			text = text[:hash]
+		}
+		text = strings.TrimSpace(text)
+		if !slices.Contains(spellings, text) {
+			continue
+		}
+		matches++
+		line = i + 1
+	}
+	if matches != 1 {
+		return 0
+	}
+	return line
 }
 
 // checkClassAgreement holds the declared class and the owned set to the

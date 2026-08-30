@@ -39,6 +39,13 @@ const (
 	CatDuplicateRuleID                    Category = "duplicate_rule_id"
 	CatDuplicateModelID                   Category = "duplicate_model_id"
 	CatReservedTagKey                     Category = "reserved_tag_key"
+
+	// The three RDR 0024 emit-vocabulary categories (`0024:D-naming`). The
+	// wire slug and the registered category are ONE decision, so each
+	// constant here also takes an entry in Categories() below.
+	CatMalformedEmitDeclaration Category = "malformed_emit_declaration"
+	CatUnknownEmitKey           Category = "unknown_emit_key"
+	CatEmitValueOutOfDomain     Category = "emit_value_out_of_domain"
 )
 
 // Categories returns the closed load-category set in declaration order.
@@ -69,6 +76,9 @@ func Categories() []Category {
 		CatDuplicateRuleID,
 		CatDuplicateModelID,
 		CatReservedTagKey,
+		CatMalformedEmitDeclaration,
+		CatUnknownEmitKey,
+		CatEmitValueOutOfDomain,
 	}
 }
 

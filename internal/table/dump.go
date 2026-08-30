@@ -123,9 +123,13 @@ func renderAtoms(m *Model, r Row) []string {
 //
 // The value is the RAW authored string and is deliberately NOT routed
 // through renderValue, whose quoting and bracketing key on a tag's declared
-// kind and member count. An emit key has neither: it is undeclared, so
-// there is no kind to consult, and its value is one string rather than a
-// member sequence. This is a READER — it never writes back into the row.
+// kind and member count. An emit key has neither: it is not a tag, so there
+// is no TAG kind to consult, and its value is one string rather than a
+// member sequence. An `[emit]` declaration (`0024:C1`) changes nothing
+// here — its kind is checked lexically at load and no value is parsed,
+// canonicalized, or converted downstream, so a declared value renders
+// byte-identically to an undeclared one. This is a READER — it never writes
+// back into the row.
 func renderEmit(emit []EmitValue) []string {
 	out := make([]string, 0, len(emit))
 	for _, e := range emit {

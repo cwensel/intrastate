@@ -451,8 +451,8 @@ func TestReq27_AnEmitKeyIsNotATagKey(t *testing.T) {
 		}
 		f := refuseSource(t, src, "dt-match-emit-key.toml")
 		if f.Category != table.CatUnknownTag {
-			t.Errorf("category = %q; want %q — an emit key is undeclared and "+
-				"is not a tag", f.Category, table.CatUnknownTag)
+			t.Errorf("category = %q; want %q — an emit key is not a tag key, "+
+				"declared or not", f.Category, table.CatUnknownTag)
 		}
 	})
 
@@ -474,7 +474,7 @@ func TestReq27_AnEmitKeyIsNotATagKey(t *testing.T) {
 		m := loadSource(t, dtComplete, "dt-complete.toml")
 		if _, declared := m.Tags["verdict"]; declared {
 			t.Error("the emit key `verdict` appears in the model's tag table; " +
-				"emit keys are undeclared and uninterpreted")
+				"an emit key is not a tag key, declared or not")
 		}
 	})
 }

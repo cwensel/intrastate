@@ -615,8 +615,10 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 // refuses duplicate keys in the decoder, so two pairs sharing a key never
 // reach here — writing one anyway would be dead code claiming to handle an
 // unauthorable case. Keys and values are carried byte for byte: they are
-// undeclared and uninterpreted, so no case folding, trimming, or value
-// coercion is applied.
+// never parsed, canonicalized, or converted, so no case folding, trimming,
+// or value coercion is applied. A key MAY carry an `[emit]` declaration
+// (`0024:C1`), which is checked against the AUTHORED string upstream of
+// here and leaves the bytes untouched.
 //
 // An absent block and a present-but-empty one both yield the empty
 // sequence, since `emit` keys on length rather than on key presence.

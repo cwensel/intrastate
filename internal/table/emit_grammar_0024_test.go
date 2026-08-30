@@ -65,8 +65,12 @@ func TestReq3_0024_KindIsOneOfFourTokensAndSetIsExcluded(t *testing.T) {
 	}
 
 	t.Run("`set` is not an admitted emit kind", func(t *testing.T) {
+		// SINGLE DEFECT: the kind token alone. Carrying `elements` too — a
+		// tag-declaration key an emit declaration does not admit (REQ-20) —
+		// would trip the DECODER's `unknown_schema_field` first and prove
+		// nothing about `set`.
 		f := refuseEmitDecls0024(t,
-			"[emit.verdict]\nkind = \"set\"\nelements = [\"alpha\"]",
+			"[emit.verdict]\nkind = \"set\"",
 			"emit-kind-set.toml")
 		if f.Category != table.CatMalformedEmitDeclaration {
 			t.Errorf("category = %q; want %q — `set` is excluded because an "+

@@ -9,20 +9,43 @@ import (
 // sourceDoc is the closed source layout JDR 0001 §D7 fixes: root
 // `outcomes`, root `terminal`, `[model]`, `[initial]`, `[tags.<tag>]`,
 // `[read.<id>]`, `[write.<id>]`, `[gate.<id>]`, `[context.<id>]`,
-// `[[rule]]`, and `[dump]`. No other root key or table is admitted
-// (`0002:C2`).
+// `[emit.<key>]` (`0024:C1`), `[[rule]]`, and `[dump]`. No other root key
+// or table is admitted (`0002:C2`).
 type sourceDoc struct {
-	Outcomes *[]string                `toml:"outcomes"`
-	Terminal []string                 `toml:"terminal"`
-	Model    *sourceModel             `toml:"model"`
-	Initial  map[string]any           `toml:"initial"`
-	Tags     map[string]sourceTagDecl `toml:"tags"`
-	Read     map[string]sourceAcc     `toml:"read"`
-	Write    map[string]sourceAcc     `toml:"write"`
-	Gate     map[string]sourceAcc     `toml:"gate"`
-	Context  map[string]sourceContext `toml:"context"`
-	Rule     []sourceRule             `toml:"rule"`
-	Dump     *sourceDump              `toml:"dump"`
+	Outcomes *[]string                 `toml:"outcomes"`
+	Terminal []string                  `toml:"terminal"`
+	Model    *sourceModel              `toml:"model"`
+	Initial  map[string]any            `toml:"initial"`
+	Tags     map[string]sourceTagDecl  `toml:"tags"`
+	Read     map[string]sourceAcc      `toml:"read"`
+	Write    map[string]sourceAcc      `toml:"write"`
+	Gate     map[string]sourceAcc      `toml:"gate"`
+	Context  map[string]sourceContext  `toml:"context"`
+	Emit     map[string]sourceEmitDecl `toml:"emit"`
+	Rule     []sourceRule              `toml:"rule"`
+	Dump     *sourceDump               `toml:"dump"`
+}
+
+// sourceEmitDecl is one `[emit.<key>]` declaration (`0024:C1`). It carries
+// exactly two keys — `kind` and `domain` — and no tag-declaration key: an
+// emit declaration is NOT a tag declaration, so `provenance`, `min`, `max`,
+// `elements`, `single_valued` and `required` are refused by strict decoding
+// rather than by a hand-written arm.
+type sourceEmitDecl struct {
+	Kind string `toml:"kind"`
+	// Domain is declared `any` because it is TWO-SHAPED: a flat member
+	// array (`domain = [...]`) or a sub-table of disposition tokens
+	// (`[emit.<key>.domain]`) are two spellings of ONE key, and no concrete
+	// Go type accepts both. It mirrors sourceModel.Metadata.
+	//
+	// The carve-out is this FIELD TYPE, not a decoder option:
+	// `pelletier/go-toml/v2` has no per-subtree strictness switch and
+	// DisallowUnknownFields stays set for the whole document. What the
+	// `any` costs is that malformed shapes INSIDE the domain — a
+	// non-array, a non-string member, nesting below the disposition level
+	// — reach the loader instead of the decoder, which is why C1 carries
+	// explicit arms for them.
+	Domain any `toml:"domain"`
 }
 
 type sourceModel struct {

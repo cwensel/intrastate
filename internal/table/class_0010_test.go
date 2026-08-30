@@ -328,13 +328,23 @@ func TestReq12_TheAgreementCheckSitsInsideTheLicensedWindow(t *testing.T) {
 			bindingsAt, len(steps))
 	}
 
-	// The class check is whichever step is NEW relative to 0002's fixed
-	// order. Rather than guess a name, assert the loader grew exactly one
-	// step and that it landed inside the window.
+	// The class check is whichever step is NEW relative to the steps this
+	// RDR did not add. Rather than guess a name, assert the loader grew
+	// exactly one step beyond that baseline and that it landed inside the
+	// window.
+	//
+	// RDR 0024 `0024:C2` normatively inserts `loadEmitDecls` and
+	// `checkRuleEmit` immediately after `loadTags`, so they belong to the
+	// baseline here for the same reason 0002's ten do: they are not the
+	// step this test is identifying. Leaving them out would make the
+	// technique — "the added step is the one that is new" — fail on any
+	// successor that adds a loader step, which is a property of the
+	// technique, not of `0010:C1`'s window.
 	base := []string{
-		"loadModelHeader", "loadOutcomes", "loadTags", "loadAccessors",
-		"loadDump", "loadContexts", "loadInitial", "loadTerminal",
-		"normalizeRules", "checkAccessorBindings",
+		"loadModelHeader", "loadOutcomes", "loadTags", "loadEmitDecls",
+		"checkRuleEmit", "loadAccessors", "loadDump", "loadContexts",
+		"loadInitial", "loadTerminal", "normalizeRules",
+		"checkAccessorBindings",
 	}
 	var added []int
 	for i, s := range steps {
