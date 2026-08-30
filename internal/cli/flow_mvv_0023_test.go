@@ -21,6 +21,7 @@ package cli
 //     width is compared as a number.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -105,9 +106,8 @@ func TestReq27And28And95And96And97And129_DefaultModeIsByteIdenticalToTheCaptured
 	// checkouts of the same commit is folded — a golden carrying it would
 	// fail everywhere but the machine that captured it, and would commit an
 	// absolute local path into a checked-in artifact.
-	got := strings.ReplaceAll(
-		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...)),
-		repoRootFor(t)+"/", "")
+	got := foldCheckoutRoot(t,
+		emittedLine(t, requireSuccess(t, append(mvvCall0023(t), "--as=json")...)))
 	if got != strings.TrimRight(string(want), "\n") {
 		t.Errorf("default-mode output differs from the pre-change golden:\n"+
 			"  golden = %s\n  now    = %s\n"+
@@ -432,9 +432,8 @@ func TestMVV0023_ResolveEnvelopeProjectionEndToEnd(t *testing.T) {
 				// path. Folding restores the RELATIVE spelling the RDR and
 				// both spikes name as normative, making the ratio a
 				// property of the payload rather than of the filesystem.
-				root := repoRootFor(t) + "/"
-				def := len(strings.ReplaceAll(emittedLine(t, defOut), root, ""))
-				proj := len(strings.ReplaceAll(emittedLine(t, projOut), root, ""))
+				def := len(foldCheckoutRoot(t, emittedLine(t, defOut)))
+				proj := len(foldCheckoutRoot(t, emittedLine(t, projOut)))
 				saved := float64(def-proj) / float64(def) * 100
 
 				// The pass bar. Not "did not error" — a MEASURED RATIO on
@@ -736,4 +735,49 @@ func TestReq83And112And126_TheOracleBatteryIsTheFiveScenariosAndOwesNoWallTimeBu
 			"1, one (S4) a new symbol — never four plus an aspiration",
 			planOnlyFlag)
 	}
+}
+
+// foldCheckoutRoot removes the capturing machine's checkout prefix from an
+// emitted record, so a width or a golden comparison is a property of the
+// PAYLOAD rather than of the filesystem it was captured on.
+//
+// `resolvePayload.Model` carries the `--model` argument verbatim
+// (`flow_input.go::selectModel` returns `path` unchanged), and the harness
+// must pass an ABSOLUTE path because the package's tests run with
+// `cwd = internal/cli`. What lands in the record is therefore
+// checkout-specific, and `model` is an echo field the projection drops — so
+// an unfolded prefix inflates the DEFAULT side alone.
+//
+// BOTH spellings are folded, and that is the portability point. The record
+// is JSON, so on a platform whose separator needs escaping (Windows,
+// `C:\Users\…` → `C:\\Users\\…`) the RAW prefix does not occur in the
+// encoded bytes at all and a raw-only replace silently does nothing: the
+// golden would fail and the width would stay path-dependent, on the one
+// platform least likely to be running this suite. `windows` is a shipped
+// release target (`.goreleaser.yaml`), even though CI is Linux-only, so the
+// escaped form is folded too rather than left as a latent trap.
+//
+// Folding narrows nothing. Byte-identity is still asserted over every byte
+// of the record, `model` included, in the RELATIVE spelling `0023:MVV` and
+// both A1/A2 spikes name as normative; only the prefix that differs between
+// two checkouts of the same commit is removed.
+func foldCheckoutRoot(t *testing.T, line string) string {
+	t.Helper()
+
+	raw := repoRootFor(t) + "/"
+
+	// The prefix as it appears once encoded into the record. json.Marshal
+	// of a string returns it quoted; the quotes are trimmed to leave the
+	// escaped body.
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("encode the checkout prefix: %v", err)
+	}
+	esc := strings.Trim(string(encoded), `"`)
+
+	line = strings.ReplaceAll(line, esc, "")
+	if esc != raw {
+		line = strings.ReplaceAll(line, raw, "")
+	}
+	return line
 }
