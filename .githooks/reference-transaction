@@ -1,0 +1,53 @@
+#!/bin/sh
+# Backstop: refuse to land an unsigned commit on a local branch.
+#
+# `git commit` honors commit.gpgsign, but PLUMBING does not: `commit-tree`
+# ignores that config and runs no commit hooks, so a tool built on it can
+# push unsigned objects into history silently. That is exactly how 85
+# unsigned commits accumulated here. This hook sits at ref-update time,
+# which every path -- porcelain, plumbing, or rebase -- must pass through.
+#
+# Only enforced when the repo asks for signing. Escape hatch for a
+# deliberate exception:  ALLOW_UNSIGNED=1 <git command>
+
+[ "$ALLOW_UNSIGNED" = "1" ] && exit 0
+[ "$1" = "prepared" ] || exit 0          # check once, before the txn commits
+
+case "$(git config --get commit.gpgsign 2>/dev/null)" in
+  true|yes|on|1) ;;
+  *) exit 0 ;;
+esac
+
+# During a rebase/merge/cherry-pick the intermediate refs churn; the final
+# ref update still passes through here, so skipping in-progress states
+# costs no coverage and avoids fighting the sequencer.
+GITDIR=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+for d in rebase-merge rebase-apply CHERRY_PICK_HEAD MERGE_HEAD; do
+  [ -e "$GITDIR/$d" ] && exit 0
+done
+
+rc=0
+while read -r old new ref; do
+  case "$ref" in refs/heads/*) ;; *) continue ;; esac
+  case "$new" in *[!0]*) ;; *) continue ;; esac          # deletion
+  case "$old" in
+    0000000000000000000000000000000000000000) range="$new" ;;
+    *) range="$old..$new" ;;
+  esac
+  # New commits this update introduces, capped so a big import stays fast.
+  for c in $(git rev-list --no-walk=unsorted -n 50 "$range" 2>/dev/null); do
+    [ "$(git log -1 --pretty=%G? "$c" 2>/dev/null)" = "N" ] || continue
+    echo "reference-transaction: REFUSED — unsigned commit $(git rev-parse --short "$c") on $ref" >&2
+    echo "  $(git log -1 --pretty=%s "$c" 2>/dev/null | cut -c1-70)" >&2
+    rc=1
+  done
+done
+
+if [ "$rc" -ne 0 ]; then
+  echo "" >&2
+  echo "commit.gpgsign=true, so unsigned commits are refused here." >&2
+  echo "If a tool built this commit, it likely used 'git commit-tree'" >&2
+  echo "without -S: that plumbing ignores commit.gpgsign entirely." >&2
+  echo "Deliberate exception: ALLOW_UNSIGNED=1 <git command>" >&2
+fi
+exit $rc
