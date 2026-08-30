@@ -252,12 +252,13 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     `Path`. Premortem P-7/P-11's pre-dispatch site does not exist.
   - **If wrong**: each such site gains the same carrier discrimination the
     registry gets — mechanical, but it must be enumerated before build.
-- **A11 [A typed `*accessor.ExecError` returned through the existing bare
-  `error` returns carries the stderr tail to `Refusal.Detail` without
-  changing the binding interfaces or any path-backed binding]**
-  - **Status**: Pending
+- **A11 [A NET-NEW typed `*accessor.ExecError` (C4 specifies it; no such type
+  exists on `main`) returned through the existing bare `error` returns carries
+  the stderr tail to a NET-NEW `Refusal.Detail` field without changing the
+  binding interfaces or any path-backed binding]**
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify — `binding.go`'s `Read`/`Gate`/`Apply` return a
+  - **Evidence**: `binding.go`'s `Read`/`Gate`/`Apply` return a
     bare `error`, which the executor discards, keeping only
     `ClassExecutionFailure` (confirmed on `main`). Note the executor is
     **asymmetric**: only `invokeRead` exists as a helper (also reused for
@@ -271,10 +272,30 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     directly, which can carry no invocation error). The claim is now that
     threading the parameter through **both** constructors reaches every
     invocation refusal and leaves every existing binding and all production
-    `NewExecutor` callers behaving identically. Verify by reading `refusalOf`,
-    `refusalWithKeys`, and every one of their call sites, confirming each can
-    supply the offending error (or `nil`) and that no other consumer branches
-    on the discarded error.
+    `NewExecutor` callers behaving identically. **Verified**: `refusalOf` has
+    16 call sites, all in `executor.go`; `refusalWithKeys` wraps it and has
+    exactly two, both the refusal returns in `Executor.Read`. Every site can
+    supply the offending error or `nil` — the pre-selection sites in
+    `::Executor.selects` pass `nil`, and the unbound/mismatch refusal there is
+    a bare `&Refusal{...}` composite literal bypassing both constructors, which
+    can carry no invocation error (structural: no binding is selected yet).
+    No other consumer branches on the discarded error — it never leaves
+    `executor.go`: `internal/accessor/disposition.go`'s three dispositions read
+    only `Refusal.Class`, and `internal/cli/flow_exec.go::accessorFailure`
+    switches on `Class` and reads `Keys`/`Expected`/`Observed`. All three
+    production `accessor.NewExecutor` call sites
+    (`internal/cli/flow_exec.go` ×2, `internal/cli/flow_state.go`) are
+    unaffected.
+    **Three net-new facts the build must carry.** (1) `accessor.Refusal`
+    (`internal/accessor/model.go`) has fields `Class, Accessor, Capability,
+    Role, Timeout, Keys, Expected, Observed, Reason` and unexported `applied` —
+    there is **no `Detail` field**; it is additive (Capability Dependencies,
+    C4). (2) `accessor.ExecError` **does not exist anywhere in the repo**, and
+    no production code imports `os/exec` — C4 specifies the type this RDR
+    mints, it is not an existing type being threaded. (3) `readOutcome` drops
+    the error today (`return readOutcome{class: ClassExecutionFailure}`), so it
+    gains an `err` field for the read path to reach `refusalWithKeys` — the one
+    structural change inside the executor beyond the two signatures.
   - **If wrong**: the stderr tail needs an interface change on all three
     binding interfaces, which contradicts C4's "0004 executor unchanged"
     framing and widens the blast radius to every path-backed binding.
@@ -282,7 +303,7 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
 - **A12 [The CLI callers that open the model file can pass its directory to
   the command-binding constructor for C2's argv0 resolution, leaving `table`
   and in-memory model construction untouched]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: the original form of this assumption — "the loader records
     the directory on `table.Model`" — was **refuted** by the critique lens:
@@ -296,18 +317,35 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     registry is built from the model. The claim is that the base dir threads
     from that caller to the command-binding constructor as a parameter, so no
     `table.Model` field is added and no in-memory construction or fixture
-    changes. Verify by reading `buildRequest` and confirming the model path
-    is in scope there (or reaches it without a new field), and that
-    absolutizing it before `filepath.Dir` is available at that site.
+    changes.
+    **Verified, and the thread is shorter than claimed.** The caller and the
+    constructor are the SAME function body: `buildRequest` opens with
+    `model, ref, ce := selectModel(cmd)` — `ref` IS the `--model` path, from
+    `selectModel`'s third return — and constructs the registry
+    (`registry: flowbind.Registry(model)`) three statements later. The path is
+    already persisted as `flowRequest.modelRef` and read by four downstream
+    verbs, so it is a pre-existing carried value, not one this RDR introduces;
+    the four `buildRequest` callers need no change, since the threading runs
+    INWARD from `buildRequest` to `Registry`. Confirmed alongside: `Load` is
+    `func Load(src []byte, sourceID string) (*Model, error)` with no file I/O
+    (no `os.ReadFile`/`Open`/`Stat` anywhere in `internal/table`), `sourceID`
+    lives only on the unexported `loader`, and `table.Model` carries no path
+    field — the only `Path` in the package is `Accessor.Path`, the per-entry
+    declared locator. No layering obstacle: `flowbind` already imports
+    `internal/accessor`, `internal/table`, `os` and `path/filepath`, and
+    neither imported package imports `internal/cli` (pinned by a test in
+    `internal/table`), so `filepath.Abs` then `filepath.Dir` are available
+    with no new dependency and no cycle.
   - **If wrong**: separator-bearing argv0 is dropped from v1 in favour of
     PATH-resolved bare names and absolute argv0 only — C2's resolution rule
     loses one arm, and no other clause changes.
 - **A13 [The `--allow-commands` gate reaches every execution path through one
-  construction site, and the verbs that must register the flag are exactly
-  the callers of `flow_exec.go::buildRequest`]**
-  - **Status**: Pending
+  construction site, and the verbs that must resolve the flag are exactly
+  the callers of `flow_exec.go::buildRequest` — covered by ONE registration
+  on the `flow` group, whose subtree is exactly that set]**
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify — opened by the critique lens, which found the
+  - **Evidence**: opened by the critique lens, which found the
     RDR, and both critique passes, undercounting this surface. Established on
     `main`: `flowbind.Registry` is a free function
     (`func Registry(m *table.Model) accessor.Registry`) with exactly ONE
@@ -318,19 +356,42 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     `flow_state.go:135`, `flow_state.go:274`) across three verb files. The
     claim is that gating at that one construction site covers every executor
     built from the shared `flowRequest.registry`, so flag registration is the
-    only drift surface and an unregistered verb fails closed. Verify by
-    confirming no other production path constructs an `accessor.Registry` or
-    reaches a binding without `buildRequest`, and that the flag lookup on a
-    verb that never registered it returns false rather than erroring.
+    only drift surface.
+    **Verified, and one arm corrected.** No other production path constructs
+    an `accessor.Registry` or reaches a binding: the only `accessor.Registry{}`
+    literals are `registry.go` and test fixtures; the only
+    `Reader{`/`&Writer{`/`Gate{` constructions are `registry.go` ×3 plus
+    `flowbind/persistence_0005_test.go`; all four `flowRequest` literals live
+    inside `buildRequest`, three of them the zero-value error return, so
+    `flowRequest.registry` can only ever hold a `flowbind.Registry(model)`
+    value, and all three production `NewExecutor` sites read that shared field.
+    The corrected arm is the ORIGINAL claim's last clause — "the flag lookup on
+    a verb that never registered it returns false rather than erroring". That
+    is imprecise: pflag's `GetBool` on an unregistered flag returns
+    `(false, *NotExistError)` — an error, never a panic — whose text is "flag
+    accessed but not defined", i.e. the library calls it a PROGRAMMER ERROR,
+    not an answer about user intent. The repo's idiom happens to discard it
+    (`planOnly, _ := cmd.Flags().GetBool(...)`, `internal/cli/flow_projection.go`),
+    so a miss would read `false` in practice — but that makes fail-closed a
+    coincidence between two independent decisions, not a property. C6 therefore
+    no longer relies on it: ONE registration on
+    `internal/cli/flow.go::newFlowCmd`'s `PersistentFlags()` — whose subtree is
+    exactly the four `buildRequest` call sites and nothing else, with `lint` at
+    root outside it — and the lookup error CHECKED at `buildRequest` as a
+    wiring bug. Precedent is in-repo (`internal/cli/root.go` registers the
+    shared output-mode flag persistently and reads it via `Lookup` + nil check)
+    and external (`evidence/reconcile/prior-art-absence-and-gating.md`: eleven
+    mature Go CLIs, none gating on a lookup miss; etcd registers persistently
+    AND checks the error).
   - **If wrong**: the gate needs a second site per bypassing path, and C6's
     "no execution path can bypass the gate" claim narrows to the paths
     actually covered — the refusal stays correct, its completeness does not.
 - **A14 [The command-binding constructor can refuse a carrier-less entry
   instead of constructing a `Path: ""` file binding, and nothing today
   depends on that fail-open behaviour]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify — the hazard is established on `main`:
+  - **Evidence**: the hazard is established on `main`:
     `flowbind.go::load` maps a non-existent file to an EMPTY store by design
     (so a flow's first write can establish state) and `os.ReadFile("")`
     returns `ErrNotExist`, so an entry that reached the file binding with an
@@ -339,10 +400,24 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     residue unreachable through the loader, but a binding built from an
     in-memory model never passed the loader. The claim is that the
     constructor can refuse it without disturbing the deliberate
-    empty-artifact semantics for genuinely path-backed entries. Verify by
-    confirming no production path constructs an accessor entry with an empty
-    `Path` intentionally (first-write flows go through a NAMED path that does
-    not yet exist, which is a different case).
+    empty-artifact semantics for genuinely path-backed entries.
+    **Verified.** No production path constructs an accessor entry with an empty
+    `Path`: `flowbind/registry.go::Registry` sets `Path: acc.Path` from
+    `table.Accessor.Path`, and `internal/table/load.go::accessorTable` refuses
+    `a.Path == nil || *a.Path == ""` as `malformed accessor declaration` before
+    a model exists. A repo-wide sweep for `Path: ""` / `Path = ""` literals in
+    `internal/` returns ZERO hits in production and in tests alike — the only
+    literal `Path:` values in tests are named strings — so no test depends on
+    empty-`Path` construction. The two cases are cleanly separable in source: a
+    first-write flow carries a NON-EMPTY declared `Path` (the model's locator,
+    which `unreachable()` inspects and which is never the filesystem) while the
+    caller's `accessor.Artifact.Path`, set from `--artifact role=path`, names a
+    file that may not yet exist. `load` operates on the CALLER's `art.Path`, so
+    refusing on the DECLARED `Path` in the constructor cannot disturb the
+    deliberate empty-artifact semantics. Note `internal/accessor/validate.go::Validate`
+    has no empty-path arm among its eight codes, so `accessorTable` is the sole
+    existing refusal — exactly the loader-only coverage C1 assumes, which is
+    what makes the constructor-side refusal load-bearing rather than redundant.
   - **If wrong**: the residue arm is dropped and C1 relies on the loader
     alone, leaving in-memory models able to build a fail-open binding — which
     must then be named as a Failure Mode rather than refused.
@@ -367,9 +442,11 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
 - **A15 [C3's read envelope maps onto `ReadBinding.Read`'s existing split
   return without an interface change: a parsed key becomes a `KeyValue` in
   `values`, an omitted declared key a name in `unreadable`, and `exit_absent`
-  absence is a key in neither — and `WriteBinding.Invocations()` has a
-  defensible answer for a command binding]**
-  - **Status**: Pending
+  absence a `KeyValue{Absent: true}` in `values` — whole-invocation, every
+  declared key at once, the invocation being the unit; per-key absence needs
+  the JSON envelope — and `WriteBinding.Invocations()` has a defensible
+  answer for a command binding]**
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: to verify — opened by the repeatability lens, where all
     three runs invented a `Read` signature (two rendered it
@@ -379,13 +456,60 @@ rejected raw shell-out (Alt 2) or global executable allowlist (Alt 3).
     `Read(ctx context.Context, art Artifact, requested []string) (values []KeyValue, unreadable []string, err error)`,
     `::GateBinding` is `Gate(ctx, art) (Verdict, string, error)`, and
     `::WriteBinding` is `Apply(ctx, art, planned []resolve.Tag) error` plus
-    `Invocations() int`. C7 now quotes them. The claim is that UNREADABLE
-    rides the `unreadable` slice (not an error, not a sentinel value), that
-    established-absent is expressible as omission from both slices, and that
-    `Invocations()` — written for the file binding's retry accounting — has a
-    meaning for a spawn-per-invocation binding. Verify by reading
-    `executor.go::invokeRead`'s handling of both slices and every
-    `Invocations()` call site, confirming what the count is consumed for.
+    `Invocations() int`. C7 now quotes them. UNREADABLE rides the `unreadable`
+    slice (not an error, not a sentinel value) — confirmed.
+    **The omission arm was REFUTED and is repaired here.** The claim as first
+    written — established-absent expressible as omission from BOTH slices —
+    is false against source: `internal/accessor/executor.go::readOutcome.classify`
+    iterates the DEFINITION's requested set and sends a key found in neither
+    slice to `unread` ("A key the binding classified as neither read nor
+    unreadable defaults to UNREADABLE: guessing absence is the failure this
+    contract exists to prevent", `0004:C6`), whereupon
+    `::Executor.Read` refuses `ClassIncompleteRead`. Pinned by
+    `internal/accessor/read_completeness_0004_test.go::TestReq29_UnclassifiedKeyDefaultsToUnreadableNotAbsent`,
+    which drives a binding returning a key in neither list and asserts the
+    refusal. Shipped as first worded, every `exit_absent` read would have
+    refused `incomplete_read` — the opposite of the intent.
+    The repair, consult-PASSed: absence crosses as `KeyValue{Key: k, Absent:
+    true}` in `values`. `internal/accessor/binding.go::ReadBinding.Read`'s own
+    doc says it returns "one KeyValue per key it could read (present or
+    **established-absent**)", and `::KeyValue.Absent` is documented as "a VALUE
+    (the binding read the artifact successfully and the key was not there)".
+    An Absent record survives `classify` intact: the `clearIsUnreadable` arm is
+    guarded by `!v.Absent`, and the tail propagates `Absent: v.Absent` verbatim.
+    This is the channel the shipped path-backed binding already uses —
+    `internal/cli/flowbind/flowbind.go::Reader.Read` emits
+    `KeyValue{Key: key, Value: v, Absent: !held}` for every requested key — so
+    the command binding matches it rather than inventing a second convention.
+    **Two boundaries, both intact**: at the BINDING return absence is the flag;
+    at the RESOLVER seam it becomes omission, converted by
+    `internal/accessor/model.go::ReadResult.OwnedSnapshot` ("Omission, never a
+    placeholder: a sentinel would make `TagSet.has` true and silently retire
+    the refusal") and again at `internal/cli/flow_exec.go` for reported tags.
+    `0004:C8`'s "what crosses the seam omits the key entirely" governs that
+    OUTER boundary only — `KeyValue.Absent`'s doc states the split in terms
+    ("the accessor layer's INTERNAL representation; what crosses the seam omits
+    the key entirely (`0004:C8`)"). Adjudication:
+    `evidence/reconcile/two-boundary-absence.md`.
+    Granularity: `exit_absent` is a WHOLE-INVOCATION signal (C3 — "a listed
+    exit with empty stdout establishes every declared key absent"), sound only
+    because C3 admits the exit maps solely on EMPTY stdout, the one case the
+    per-key envelope structurally cannot express; a per-key absence requires
+    the envelope. That restriction is load-bearing, not incidental.
+    Prior art (`evidence/reconcile/prior-art-absence-and-gating.md`): the
+    explicit-flag form is the established pattern (`sql.Null[T].Valid`; cty's
+    `IsNull()`/`IsKnown()` split; Consul KV's two-channel 404; gorm's
+    `Nullable() (nullable, ok bool)`), and omission-as-absence is the
+    documented failure mode proto3 reversed with `optional` in v3.12/v3.15.
+    The fail-closed default matches OpenTofu's `ErrIsNotExist`, which admits
+    absence only on "an affirmative response".
+    `Invocations()` has **zero production consumers** — declared at
+    `internal/accessor/binding.go` and implemented once at
+    `internal/cli/flowbind/flowbind.go::Writer.Invocations`; all other uses are
+    test assertions of `== 0` / `== 1` proving the accessor layer performed no
+    retry, undo, or re-derivation (`0004:C14`). Counting `Apply` ENTRIES —
+    one per call, with no internal respawn — satisfies every existing assertion
+    shape (C7 states the constraint normatively).
   - **If wrong**: if the two slices cannot express the three read outcomes, C3
     needs a third outcome channel and C7's "no interface change" claim fails —
     widening the blast radius to the path-backed bindings C4 promises to leave
@@ -627,6 +751,9 @@ Omission is unreadable, not absent, because the two are different answers in
 guess: a tool that fails to report a key has not established that the key has
 no value. Establishing absence requires a positive declaration — `exit_absent`
 (this clause) — which is why that map exists for exit-speaking tools at all.
+The declaration is positive on the wire AND in the return: absence reaches the
+executor as `KeyValue{Absent: true}` in `values`, never as omission from both
+slices, which `classify` reads as unreadable (C7).
 Under `output = "raw"` the single declared key is established from stdout,
 and an empty stdout with an unlisted exit is `execution_failure`, not an empty
 string. The inherited reserved-literal rule composes unchanged **on the read path
@@ -817,7 +944,8 @@ be validated structurally"); no argv carrier reversed (reversal ledger,
 
 ```normative
 --allow-commands        # v1's ONLY opt-in: a per-invocation flag; never the model file; `lint` does not carry it
-registration: the flag is registered on every verb whose command path reaches `flow_exec.go::buildRequest` — today FOUR call sites across three verbs (`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2). An unregistered verb's lookup returns false, which REFUSES (fail-closed), so drift costs execution, never a bypass
+registration: ONE registration, on the `flow` GROUP — `internal/cli/flow.go::newFlowCmd`'s `PersistentFlags()`, whose subtree is exactly the four `buildRequest` call sites across three verbs (`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2) and nothing else. `lint` sits at ROOT, outside the group, so it does not carry the flag — which is this clause's first line, now structural rather than remembered. The repo already sets this precedent: `internal/cli/root.go` registers the shared output-mode flag on `PersistentFlags()` and reads it via `Lookup` + nil check, never a discarded `GetBool`
+lookup: `buildRequest` reads the flag with the error CHECKED, not discarded. Because persistent registration guarantees presence, a lookup miss can only be a wiring bug and MUST surface as one — pflag's own text is "flag accessed but not defined", a programmer error, never a statement about user intent. A default-deny that rests on an unregistered lookup returning the zero value is NOT the gate: it would make the safety property a coincidence between two independent decisions (no verb registers it; this site discards the error), and the dangerous edit — a parent registering it, or a verb registering a different default — silently converts the miss into a hit and fails OPEN. Prior art (`evidence/reconcile/prior-art-absence-and-gating.md`): eleven mature Go CLIs were swept and NONE gates a dangerous operation on a lookup miss; etcd is the direct precedent (security booleans on root `PersistentFlags`, read by shared helpers that check the error and exit), and hugo's exec allowlist makes its zero value deny by explicit construction rather than by absence
 absent ⇒ every command invocation refuses execution_failure before spawn, Detail naming the gate; lint (C1/C5) validates regardless
 gate site: ONE — `buildRequest` reads the flag and passes it to `flowbind.Registry`, the single production construction site (`flow_exec.go:830`), which builds refusing command bindings when it is unset. `Registry` is a free function, not a method, so this is a signature change on it plus the `flowRequest` field; every executor built from that shared registry inherits the gate, so no execution path can bypass it by reaching the executor another way
 signature: `Registry` today is `func Registry(m *table.Model) accessor.Registry`. It gains BOTH new inputs and no others, in this order: `func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Registry`. `baseDir` is A12's model-file directory (C2's argv0 resolution root), `allowCommands` this gate; the return type is unchanged and `Registry` does not gain an error return — a carrier-less or gate-refused entry yields a refusing binding (C1), not a construction failure
@@ -848,15 +976,24 @@ unset gates every present and future caller by construction. The flag
 therefore reaches `flowbind.Registry` as a new parameter, which is a
 signature change on a free function, not a method (A13).
 
-Its registration follows `buildRequest`, whose four production callers
-(`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2) are the verbs that
-declare the flag; `intrastate lint` does **not**, because validation is
-ungated and a flag that changes nothing is a false affordance. Registration
-is the one drift surface, and it drifts **safely**: an unregistered verb's
-lookup returns false, which refuses. A verb that later reaches
-`buildRequest` without declaring the flag therefore loses command execution
-loudly rather than bypassing the gate silently — which is why the coupling is
-stated to `buildRequest` rather than to a hand-kept verb list.
+Its registration follows the `flow` GROUP, whose subtree is exactly the four
+`buildRequest` callers (`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2)
+and nothing else, so ONE `PersistentFlags()` registration covers the caller set
+without a hand-kept verb list. `intrastate lint` sits at root, outside the
+group, and does **not** carry the flag — because validation is ungated and a
+flag that changes nothing is a false affordance; that exclusion is now
+structural rather than remembered. Registration was considered as the drift
+surface and deliberately removed as one: an earlier form of this clause rested
+on an unregistered verb's lookup returning false, which is imprecise (pflag
+returns `(false, NotExistError)` — "flag accessed but not defined", a
+programmer error) and would make fail-closed a coincidence between
+non-registration and a discarded error rather than a property. The dangerous
+edit under that shape fails OPEN: a parent registering the flag, or a verb
+registering a different default, silently converts the miss into a hit. With
+one registration on the group and the lookup error CHECKED at `buildRequest`,
+a verb added outside the group loses command execution loudly and a wiring bug
+surfaces immediately — which is why the coupling is stated to the group that
+contains `buildRequest`'s callers rather than to a per-verb list.
 With the gate off, a command invocation refuses
 before spawn (`execution_failure`, `Detail` naming
 `allow_commands`), while `intrastate lint` still validates the entries — the
@@ -876,7 +1013,9 @@ the three command bindings implement `internal/accessor/binding.go`'s interfaces
   Apply(ctx context.Context, art Artifact, planned []resolve.Tag) error
   Invocations() int          # on WriteBinding, beside Apply
 
-the write method is `Apply`, NOT `Write`. `Gate` returns verdict + reason + error, so C3's `reason` field crosses back through the Go return and is not dropped. C3's read envelope maps onto `Read`'s SPLIT return: a parsed key becomes a `KeyValue` in `values`, an omitted declared key a name in `unreadable` — UNREADABLE is that second slice, never an error and never an absent value. `exit_absent` establishes absence by returning the key in NEITHER slice
+the command write binding counts `Apply` ENTRIES — one per call — and performs NO internal respawn: one `Apply`, one spawn, one increment. `Invocations()` has zero production consumers (declared in `binding.go`, implemented once at `internal/cli/flowbind/flowbind.go::Writer.Invocations`); every use is a `== 0` / `== 1` test assertion that the accessor layer performed no retry, undo, or re-derivation (`0004:C14`). Those assertions are about the LAYER's re-entry, not process count, so an internally-retrying binding would both break them and misreport against C14
+
+the write method is `Apply`, NOT `Write`. `Gate` returns verdict + reason + error, so C3's `reason` field crosses back through the Go return and is not dropped. C3's read envelope maps onto `Read`'s SPLIT return: a parsed key becomes a `KeyValue` in `values`, an omitted declared key a name in `unreadable` — UNREADABLE is that second slice, never an error and never an absent value. `exit_absent` absence crosses as `KeyValue{Key: k, Absent: true}` IN `values` — a present record carrying the flag, the same channel `internal/cli/flowbind/flowbind.go::Reader.Read` already uses for the path-backed binding. Returning the key in NEITHER slice does NOT establish absence: `internal/accessor/executor.go::readOutcome.classify` defaults a requested key found in neither to UNREADABLE ("guessing absence is the failure this contract exists to prevent", `0004:C6`), so an omitted key refuses the whole read `incomplete_read`. The two boundaries are distinct and both hold: at the BINDING return absence is the flag; at the RESOLVER seam it becomes omission, converted by `internal/accessor/model.go::ReadResult.OwnedSnapshot`, which is what `0004:C8` governs. A command binding that signalled absence by omission would be refused, not believed
 ```
 
 #### Load-Bearing Decisions
@@ -947,6 +1086,8 @@ read_back = true
 | Process-group termination + drain bound | Go stdlib `os/exec` (`Setpgid`, `Cancel`, `WaitDelay`) | Available | C4 mechanism, A1 spike |
 | User-scope configuration discovery (`allow_commands`) | **none — no config subsystem exists** (no `internal/cli/config/`, no `intrastate.toml` reader) | Not built | C6 — v1 gates on `--allow-commands` alone (A10); the config surface is charted to a successor |
 | Free-text diagnosis on a refusal | `accessor.Refusal` — no `Detail` field today | Extend | C4 — additive `Detail string`; class set unchanged |
+| Typed carrier for the stderr tail | **none — `accessor.ExecError` does not exist**; no production code imports `os/exec` | Not built | C4 specifies it: `struct { Detail string; Err error }` with `Error()`/`Unwrap()`; A11 |
+| Invocation error reaching the read refusal | `accessor.readOutcome` — drops the binding error today | Extend | C4/A11 — additive `err` field; `refusalOf`/`refusalWithKeys` gain the parameter |
 
 ### Existing Infrastructure Audit
 
@@ -1374,8 +1515,9 @@ Implement command-backed `ReadBinding`/`GateBinding`/`WriteBinding` over
 Discriminate the constructor by carrier field at
 `internal/cli/flowbind/registry.go::Registry` (a signature change on a free
 function with one production call site), refusing the carrier-less residue
-rather than binding `Path: ""` (C1). Thread `--allow-commands` (C6) from the
-four `buildRequest` callers in the SAME phase: selection is the step that
+rather than binding `Path: ""` (C1). Register `--allow-commands` on the `flow`
+group's `PersistentFlags()` and thread it (C6) from `buildRequest` — reading it
+with the lookup error checked — in the SAME phase: selection is the step that
 first makes a command reachable, so the gate must not lag it by even one
 commit.
 
@@ -1424,7 +1566,9 @@ dropped; the MVV scenario is the integration proof.
    and one exiting 128; a 1 MiB + 1 byte stdout; and an argv0 that does not
    resolve, which fails with no exit code at all.
    **Expected**, in the order listed: deny; `execution_failure`;
-   `execution_failure`; deny; `execution_failure`; established-absent;
+   `execution_failure`; deny; `execution_failure`; established-absent
+   (asserted as `KeyValue{Absent: true}` in `values` for every declared key,
+   NOT as omission — omission would refuse `incomplete_read`, C7);
    `execution_failure`; `execution_failure`; `execution_failure`. Two
    different oracles, and the split is normative because the fixture covers
    only one of them.
@@ -1537,19 +1681,25 @@ dropped; the MVV scenario is the integration proof.
    `--allow-commands`; with it; `intrastate lint` under both. The executor
    callers are the wrong axis: `flowbind.Registry` has ONE production call
    site (`flow_exec.go:830`), so every `NewExecutor` shares one gated
-   registry and testing them separately tests one path repeatedly. The real
-   drift surface is **flag registration** — the four `buildRequest` callers
-   (`flow_next.go`, `flow_resolve.go`, `flow_state.go` ×2) — so the scenario
-   enumerates the verbs that reach `buildRequest` and asserts each registers
-   the flag, by a test that derives the caller set rather than restating a
-   literal four (a fifth verb must fail this test, not silently pass it).
+   registry and testing them separately tests one path repeatedly. With C6's
+   ONE registration on the `flow` group, the drift surface is **containment**,
+   not per-verb registration: the scenario derives the set of verbs reaching
+   `buildRequest` and asserts each RESOLVES the flag through the group's
+   persistent set — a structural `Flags().Lookup("allow-commands") != nil`
+   walk, never a text match on pflag's error. A fifth verb added INSIDE the
+   group inherits the flag and must pass; one added OUTSIDE it must fail this
+   test rather than silently inherit a lookup miss. The complementary arm
+   asserts `lint`, at root, does NOT resolve the flag — C6's first line, now
+   testable. The oracle derives both sets rather than restating a literal
+   four.
    Plus the C1 residue arm: an entry with neither carrier builds a
    **refusing** binding, never a `Path: ""` file binding.
    **Expected**: refusal `execution_failure` naming `allow_commands` with no
    child process spawned — asserted by **absence of a spawn** (a sentinel
    argv0 that would leave an observable trace if executed), not merely a
    non-zero exit; normal execution under the flag; lint passes in both
-   (validation is ungated); an unregistered verb refuses (fail-closed), and
+   (validation is ungated) and does not resolve the flag; every in-group verb
+   resolves it; a verb outside the group fails the containment assertion, and
    the carrier-less entry refuses rather than reading an empty artifact. v1
    has no config file to malform (A10).
 
@@ -1585,7 +1735,7 @@ the absence-of-error oracle).
 | non-empty stdout, well-formed | parsed result — wins over exit code (C4 ordering) | loud |
 | non-empty stdout, malformed | `execution_failure` | loud |
 | empty stdout, exit in `exit_verdicts` | that verdict | loud |
-| empty stdout, exit in `exit_absent` | keys established absent | loud |
+| empty stdout, exit in `exit_absent` | every declared key established absent — `KeyValue{Absent: true}` in `values` (C7) | loud |
 | empty stdout, unlisted exit (zero or not) | `execution_failure` — read and gate alike (C3) | loud |
 | stdout > 1 MiB | `execution_failure` | loud |
 | deadline exceeded | `timeout` (from `ctx.Err()`), group killed | loud |
