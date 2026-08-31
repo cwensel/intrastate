@@ -409,3 +409,53 @@ compiled matches the running platform's verdict.
 **No new public surface.** All four added identifiers are unexported; no
 identifier in the RDR's Normative Contracts changed shape, so this carries
 no additive SPEC-UNDER.
+
+## D18 — clause 3's whitespace exemption is conditional on the interpreter form
+
+**Type: IMPL-DECISION. Status: refines D6; does not reverse it.**
+
+**Situation.** D6 established the discriminator WHITESPACE for the pair
+REQ-74 / REQ-80, so `cat {artifact}` reads as a command STRING that
+clause 4 owns rather than as a malformed placeholder. The guard it
+produced was unconditional:
+
+    strings.ContainsAny(el, "{}") && strings.IndexFunc(el, unicode.IsSpace) < 0
+
+But clause 4 owns that shape only when argv0 — after `interpreterForm`'s
+`env` walk — names a LISTED interpreter. Under any other argv0 clause 4
+never fires, so a whitespace-bearing `{…}` element was checked by nothing
+and reached `execCommand` as literal, unsubstituted argv. `["reader",
+"prefix {artifact}"]`, `["echo", "hello {role}"]`, `["reader",
+"{artifact} tail"]` and `["myprog", "-c", "echo {artifact} x"]` all
+loaded clean, contradicting C2 verbatim: an element carrying a `{...}`
+token without being exactly a known placeholder is a load-time defect —
+"never silently-literal text". This is the declared-authority bound; the
+check exists so a reviewer can see from the model alone what may be
+executed.
+
+D6 adjudicated only WHICH CATEGORY the interpreter shape reports. It did
+not decide that a non-interpreter argv0 may escape both clauses; that was
+a gap it left open, and closing it leaves D6's adjudication standing.
+
+**Taken.** `interpreterForm(argv)` is computed once before clause 3's
+loop and its result reused by clause 4, and the guard narrows to:
+
+    strings.ContainsAny(el, "{}") &&
+        (!isInterp || strings.IndexFunc(el, unicode.IsSpace) < 0)
+
+The exemption now belongs to the interpreter FORM, not to whitespace as
+such. No message format changed, so REQ-86's detail assertion is
+untouched. The proof the interpreter form was not mis-categorized is that
+`TestReq74_*` and `TestReq80_*`'s "unknown placeholder outranks shell
+interpreter" arm stay unedited and green; `TestReq18_*` gains the three
+non-interpreter whitespace vectors, red before and green after.
+
+**Interaction with an under-reporting `interpreterForm`.** Where
+`interpreterForm` misses a genuine interpreter entry (option-flag-blind
+`env` walks, e.g. `["env", "-i", "sh", "-c", "cat {artifact}"]`), the
+narrowed guard makes clause 3 report `command_unknown_placeholder` rather
+than nothing. That is a refusal either way, so this change carries no
+dependency on that surface and no admit-path regression.
+
+No identifier in the RDR's Normative Contracts changed shape, so this
+carries no SPEC-UNDER.

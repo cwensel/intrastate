@@ -1092,18 +1092,26 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 			}
 		}
 
+		interpEl, isInterp := interpreterForm(argv)
+
 		// 3 — command_unknown_placeholder: an unknown or non-whole-element
 		// `{…}` token. Never silently-literal text.
 		for _, el := range argv {
 			if slices.Contains(commandPlaceholders, el) {
 				continue
 			}
-			// A brace-bearing element is a PLACEHOLDER ATTEMPT only when it
-			// is a single word. An element carrying whitespace is a command
+			// A brace-bearing element carrying whitespace is a command
 			// STRING — the `sh -c "cat {artifact}"` shape — which clause 4
 			// owns; reading it as a malformed placeholder would report the
 			// wrong defect and mask the interpreter form (deviations D6).
-			if strings.ContainsAny(el, "{}") && strings.IndexFunc(el, unicode.IsSpace) < 0 {
+			// That exemption belongs to the INTERPRETER FORM, not to
+			// whitespace as such: clause 4 fires only when argv0 (after the
+			// `env` walk) names a listed interpreter, so under any other
+			// argv0 an exempted element is owned by nothing and would reach
+			// the executor as literal, unsubstituted argv — the outcome C2
+			// forbids.
+			if strings.ContainsAny(el, "{}") &&
+				(!isInterp || strings.IndexFunc(el, unicode.IsSpace) < 0) {
 				return fail(CatCommandUnknownPlaceholder,
 					where+" declares the element "+el+
 						", which carries a `{…}` token that is not exactly a known "+
@@ -1113,9 +1121,9 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 		}
 
 		// 4 — command_shell_interpreter: argv0 plus an inline-code flag.
-		if el, ok := interpreterForm(argv); ok {
+		if isInterp {
 			return fail(CatCommandShellInterpreter,
-				where+" declares the interpreter form "+el+
+				where+" declares the interpreter form "+interpEl+
 					"; inline shell is not a declared command; put it in a script "+
 					"and declare the script as argv0")
 		}

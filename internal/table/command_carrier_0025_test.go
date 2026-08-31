@@ -514,6 +514,27 @@ role = "state"
 command = ["reader", "{artifact"]
 keys = ["status"]
 timeout = "2s"`},
+		// A brace-bearing element carrying whitespace is exempt from this
+		// clause ONLY when the entry is the interpreter form clause 4 owns
+		// (deviations D6, refined). Under a non-interpreter argv0 clause 4
+		// never fires, so an unconditional whitespace exemption would let
+		// these three reach `execCommand` as literal, unsubstituted argv —
+		// the "never silently-literal text" bound C2 draws.
+		{"known token with a prefix word under a non-interpreter argv0", `[read.state]
+role = "state"
+command = ["reader", "prefix {artifact}"]
+keys = ["status"]
+timeout = "2s"`},
+		{"unknown token with a prefix word under a non-interpreter argv0", `[read.state]
+role = "state"
+command = ["echo", "hello {role}"]
+keys = ["status"]
+timeout = "2s"`},
+		{"known token with a trailing word under a non-interpreter argv0", `[read.state]
+role = "state"
+command = ["reader", "{artifact} tail"]
+keys = ["status"]
+timeout = "2s"`},
 	}
 
 	for _, tc := range cases {
