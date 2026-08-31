@@ -19,3 +19,23 @@ func SetGOOSForTest(t *testing.T, value string) {
 	goos = value
 	t.Cleanup(func() { goos = prev })
 }
+
+// ProcGroupPlatforms is the platform set the process-group mechanism's
+// build tags name, exported to this package's test binary so the
+// drift-guard can compare it against `Unsupported()`'s refuse-list.
+var ProcGroupPlatforms = procGroupPlatforms
+
+// ProcGroupSupported reports whether the syscall-bearing half of the
+// mechanism is the one compiled into THIS binary.
+const ProcGroupSupported = procGroupSupported
+
+// UnsupportedOn reports `Unsupported()`'s verdict for an arbitrary
+// platform string, without disturbing the package's `goos` var. The
+// drift-guard needs the PREDICATE, not the running platform's answer.
+func UnsupportedOn(value string) bool {
+	prev := goos
+	goos = value
+	defer func() { goos = prev }()
+
+	return Unsupported()
+}

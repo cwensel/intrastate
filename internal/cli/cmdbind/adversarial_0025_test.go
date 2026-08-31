@@ -10,6 +10,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -371,4 +373,62 @@ func advPIDFrom(t *testing.T, path string) int {
 		t.Fatalf("the recorded pid %q is not a number: %v", b, err)
 	}
 	return pid
+}
+
+// TestProcGroupBuildTagsMatchTheRefuseList is the drift guard for the ONE
+// duplication the platform split introduces.
+//
+// `0025:C4` rejects a build constraint on the REFUSAL — "a build constraint
+// would make the refusal unbuildable-on-Windows rather than observable, and
+// lint must stay platform-neutral in the same binary". The refusal, the
+// `goos` var and lint are therefore untagged, and only the process-group
+// SYSCALLS are split by `//go:build`, because `syscall.Kill` and
+// `SysProcAttr.Setpgid` do not exist on Windows at all.
+//
+// That split states the same platform set twice: once in a `//go:build`
+// list, once in `Unsupported()`'s refuse-list predicate. If they diverge,
+// one of two silent breakages follows — a platform that compiles the
+// no-op mechanism but is NOT refused would spawn children it can never
+// terminate as a group, and a platform refused but compiling the syscall
+// half would carry unreachable Unix code. Neither shows up as a build
+// failure, so it is asserted here.
+func TestProcGroupBuildTagsMatchTheRefuseList(t *testing.T) {
+	// Direction 1: every platform the build tags name is refused, and the
+	// two lists are the SAME set. `procGroupPlatforms` is defined in both
+	// halves of the split, so whichever half compiled is the one checked.
+	for _, platform := range cmdbind.ProcGroupPlatforms {
+		if !cmdbind.UnsupportedOn(platform) {
+			t.Errorf("the build tag names %q but Unsupported() admits it: a "+
+				"binding would spawn on a platform with a no-op process "+
+				"group and could never terminate the group", platform)
+		}
+	}
+
+	// Direction 2: nothing is refused that the build tags omit. Iterating
+	// the known GOOS values keeps this honest — a refuse-list entry added
+	// to Unsupported() without a matching build tag is caught here.
+	for _, platform := range []string{
+		"aix", "android", "darwin", "dragonfly", "freebsd", "illumos", "ios",
+		"js", "linux", "netbsd", "openbsd", "plan9", "solaris", "wasip1",
+		"windows",
+	} {
+		tagged := slices.Contains(cmdbind.ProcGroupPlatforms, platform)
+		if refused := cmdbind.UnsupportedOn(platform); refused != tagged {
+			t.Errorf("platform %q: Unsupported() = %v but the build-tag "+
+				"refuse-list membership = %v; the //go:build list and the "+
+				"runtime predicate have drifted", platform, refused, tagged)
+		}
+	}
+
+	// Direction 3: the half actually compiled agrees with the running
+	// platform's own verdict. This is the check that fires if the two
+	// //go:build lines stop partitioning GOOS — if both files or neither
+	// matched, the package would not build, but a WRONG partition builds
+	// fine and is only observable as this mismatch.
+	if cmdbind.ProcGroupSupported == cmdbind.Unsupported() {
+		t.Errorf("this binary compiled the procGroupSupported=%v half but "+
+			"Unsupported() = %v on %s; the mechanism and the refusal "+
+			"disagree about the running platform",
+			cmdbind.ProcGroupSupported, cmdbind.Unsupported(), runtime.GOOS)
+	}
 }

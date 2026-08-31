@@ -210,13 +210,13 @@ func spawn(
 	// orphans a grandchild holding the pipe; dropping WaitDelay hangs
 	// `Wait` on it, and it is also what bounds the stdin write so a
 	// non-reading child cannot block the parent (`0025:C4`).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcGroup(cmd)
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return nil
 		}
 		// The GROUP, not only the direct child.
-		if kerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); kerr != nil {
+		if kerr := killGroup(cmd.Process.Pid); kerr != nil {
 			return cmd.Process.Kill()
 		}
 		return nil
@@ -343,7 +343,7 @@ func reapGroup(p *os.Process) {
 		return
 	}
 	// ESRCH — the ordinary case, an empty group — is nothing to report.
-	_ = syscall.Kill(-p.Pid, syscall.SIGKILL)
+	_ = killGroup(p.Pid)
 }
 
 // readBounded drains r up to limit bytes. The bound is on what is KEPT: the

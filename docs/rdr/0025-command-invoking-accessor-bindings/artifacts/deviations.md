@@ -362,3 +362,50 @@ signal before it exited", and the read and gate arms add that the entry's
 unchanged — `execution_failure` at the binding, which the executor still
 reclassifies to `timeout` when `ctx.Err()` is `DeadlineExceeded` — so no
 declared class or category moved; only the free-text diagnosis is new.
+
+## D17 — the process-group syscalls are build-tagged; the refusal is not
+
+**Type: IMPL-DECISION. Status: settled.**
+
+`cmdbind.go` shipped as a single untagged file calling `syscall.Kill` and
+setting `syscall.SysProcAttr.Setpgid`. Neither identifier exists on
+Windows, so `GOOS=windows go build ./...` failed on three lines, and
+because `internal/cli/flowbind` imports the package the whole CLI was
+unbuildable there — including the `windows/amd64` target `.goreleaser.yaml`
+declares. REQ-134 ("the same model passes `intrastate lint` under that
+setting, since lint is platform-neutral") is only SATISFIABLE once the
+binary builds on Windows, so this makes C4 reachable rather than changing
+it.
+
+**Scope of C4's rejection.** C4 rejects a build constraint because "a build
+constraint would make the refusal unbuildable-on-Windows rather than
+observable, and lint must stay platform-neutral in the same binary". That
+reasoning is about the REFUSAL, and it is honoured: `Unsupported()`, the
+injectable `goos` var, the pre-spawn platform arm of the refusal ladder,
+and all of lint stay untagged in one platform-neutral binary. Only the
+platform MECHANISM — the two syscall wrappers — is split, because the
+symbols it names do not exist to compile against off Unix. The unedited
+`TestReq60_ACommandEntryRefusesOnARefuseListedPlatformBeforeSpawn`,
+including its "lint stays platform-neutral in the same binary" arm, is the
+evidence the refusal did not move.
+
+**Taken.** `setProcGroup(*exec.Cmd)` and `killGroup(pid int) error` in
+`procgroup_unix.go` (`//go:build !windows && !js && !plan9`) and
+`procgroup_other.go` (`//go:build windows || js || plan9`). The non-Unix
+`killGroup` returns a non-nil error, so `cmd.Cancel`'s existing fallback to
+`cmd.Process.Kill()` is taken rather than a termination being falsely
+reported. `reapGroup`'s `p == nil || p.Pid <= 1` guard stays UNTAGGED: it
+is contract logic (D15/C4), not platform mechanism. `syscall` remains
+imported by `cmdbind.go` for `syscall.WaitStatus`, which is portable.
+
+**The one duplication, and its guard.** The split states the refuse-listed
+platform set twice — once as a `//go:build` list, once as
+`Unsupported()`'s predicate — and a divergence is silent: a platform
+compiling the no-op mechanism but NOT refused would spawn children it
+could never terminate as a group. `TestProcGroupBuildTagsMatchTheRefuseList`
+asserts the two agree in both directions and that the half actually
+compiled matches the running platform's verdict.
+
+**No new public surface.** All four added identifiers are unexported; no
+identifier in the RDR's Normative Contracts changed shape, so this carries
+no additive SPEC-UNDER.
