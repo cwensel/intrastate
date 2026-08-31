@@ -11,8 +11,10 @@ package cli
 // subject.
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"slices"
 	"strconv"
@@ -231,6 +233,161 @@ func loadFindings(path string, err error) []clierr.Finding {
 	}
 	return []clierr.Finding{finding}
 }
+
+// --- the carried plan (`--plan <file|->`) --------------------------------
+
+// planFlagName is the flag `set-state` reads a carried plan from. RDR 0005
+// deferred it as "a carried plan artifact (`--plan <file|->`) … a seed, not
+// part of this contract"; this is that seed, landed as a flag on an EXISTING
+// verb rather than a fifth one (`0005:C1` is untouched).
+//
+// It is registered on `set-state` ALONE, so it does not disturb RDR 0023's
+// `--plan-only`, which rides `resolve` alone. The two never meet on one
+// command, and pflag does no long-flag prefix matching — `--plan-only` on
+// `set-state` still fails the parse as an unknown flag through the shared
+// `command-error` bucket, exactly as `0023:C1`'s fence requires.
+const planFlagName = "plan"
+
+const planFlagUsage = "apply a `flow resolve` plan from a file, or `-` for stdin"
+
+// planStdinSentinel is the conventional spelling for "read the plan from
+// stdin", which is what makes `flow resolve … --as json | flow set-state …
+// --plan -` a pipe rather than a temporary file.
+const planStdinSentinel = "-"
+
+// carriedPlan is the writes and clears a `--plan` document supplies.
+//
+// The field names and JSON tags mirror `resolvePayload`'s `Writes` / `Clear`
+// exactly (`flow_resolve.go`), which is the whole point: `resolve` emits the
+// document this decodes, so the copy-through from plan to request is byte
+// identical (REQ-71, REQ-108) rather than a second spelling that has to be
+// kept in step.
+type carriedPlan struct {
+	Writes map[string]string `json:"writes"`
+	Clear  []string          `json:"clear"`
+}
+
+// planEnvelope is the discriminating probe over a carried plan document.
+//
+// A plan arrives in one of two shapes and BOTH are accepted: the full
+// `{"type":"ok","data":…}` envelope `respond.OK` emits, or the bare `data`
+// object a caller extracted from it (`jq .data`, say). The discriminator is
+// the presence of a top-level `"type"` key, which is unambiguous because a
+// bare `data` payload never carries one — `resolvePayload`'s fourteen keys
+// are fixed and `type` is not among them.
+//
+// `Data` is `json.RawMessage` rather than a decoded value so the bare-`data`
+// arm can re-decode the WHOLE document without a second read: presence of
+// `Type` selects which bytes are the payload, and nothing is parsed twice
+// under a shape it does not have.
+// `Code` and `Message` are the REFUSAL envelope's discriminators. A failed
+// run under `--as=json` emits the bare `CLIError` — `{"code":…,"message":…}`
+// with `findings` as a TOP-LEVEL sibling and no wrapper at all (REQ-8) — so
+// a refusal carries NO `type` key and would otherwise land in the bare-`data`
+// arm, decode to zero writes, and report a no-op SUCCESS for a transition the
+// model declined. `resolvePayload` has no `code` member, so its presence
+// separates the two without ambiguity.
+type planEnvelope struct {
+	Type    *string         `json:"type"`
+	Data    json.RawMessage `json:"data"`
+	Code    string          `json:"code"`
+	Message string          `json:"message"`
+}
+
+// readPlan loads and decodes the `--plan` document, returning the writes and
+// clears it carries.
+//
+// Every refusal here is `flow-write-invalid` on param `plan`. That reuses a
+// PUBLISHED code deliberately: RDR 0005's refusal table is closed (see
+// `writerFor`'s doc comment), and a malformed carried plan is a malformed
+// write request — the same class as `--write status=<clear>` — reaching the
+// CLI through a different carrier. Minting a `flow-plan-*` code would widen
+// a table the contract fixes, for a caller who already branches on
+// `flow-write-invalid` plus `param`.
+//
+// A REFUSAL envelope on stdin refuses. `flow resolve` writes its refusal to
+// the same stream its success goes to under `--as=json`, so a pipe that lost
+// its plan carries `{"type":"failed",…}` instead — and applying an empty
+// write set from it would report success for a transition the model refused.
+// That is the one failure mode a carried plan makes newly reachable, so it
+// is refused by name rather than by falling through to "no writes".
+func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) {
+	var src []byte
+	if path == planStdinSentinel {
+		read, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return nil, userErr(codeWriteInvalid, planFlagName,
+				"the plan could not be read from stdin: "+err.Error())
+		}
+		src = read
+	} else {
+		read, err := os.ReadFile(path)
+		if err != nil {
+			return nil, userErr(codeWriteInvalid, planFlagName,
+				"the plan at "+path+" could not be read: "+err.Error())
+		}
+		src = read
+	}
+
+	if len(bytes.TrimSpace(src)) == 0 {
+		return nil, userErr(codeWriteInvalid, planFlagName,
+			"the plan is empty; --plan takes one `flow resolve --as json` "+
+				"envelope or its `data` object")
+	}
+
+	var env planEnvelope
+	if err := json.Unmarshal(src, &env); err != nil {
+		return nil, userErr(codeWriteInvalid, planFlagName,
+			"the plan is not one JSON object: "+err.Error())
+	}
+
+	// A REFUSAL, in either of its two spellings, before anything is decoded
+	// as a plan. The bare `CLIError` arm is the load-bearing one: it carries
+	// no `type`, so without this check it would fall through to the
+	// bare-`data` arm, decode to zero writes, and report a NO-OP SUCCESS for
+	// a transition the model declined — the one failure mode a piped plan
+	// makes newly reachable, since `resolve` writes success and refusal to
+	// the same stream.
+	if env.Type == nil && env.Code != "" {
+		ce := userErr(codeWriteInvalid, planFlagName,
+			"the plan is a refusal envelope (`"+env.Code+"`), not a plan; a "+
+				"refusal carries no writes to apply")
+		ce.Hint = "the `flow resolve` that produced this refused; resolve " +
+			"that refusal first"
+		return nil, ce
+	}
+
+	// The full envelope. A non-success type is a REFUSAL that was piped in
+	// place of a plan, and there is nothing in it to apply.
+	payload := src
+	if env.Type != nil {
+		if *env.Type != planEnvelopeOK {
+			ce := userErr(codeWriteInvalid, planFlagName,
+				"the plan is a `"+*env.Type+"` envelope, not a plan; a "+
+					"refusal carries no writes to apply")
+			ce.Hint = "resolve the refusal first; `--plan` applies only a " +
+				"successful plan"
+			return nil, ce
+		}
+		if len(bytes.TrimSpace(env.Data)) == 0 {
+			return nil, userErr(codeWriteInvalid, planFlagName,
+				"the plan envelope carries no `data` object")
+		}
+		payload = env.Data
+	}
+
+	var plan carriedPlan
+	if err := json.Unmarshal(payload, &plan); err != nil {
+		return nil, userErr(codeWriteInvalid, planFlagName,
+			"the plan's `data` is not a plan object: "+err.Error())
+	}
+	return &plan, nil
+}
+
+// planEnvelopeOK is the success discriminator `respond.OK` stamps. It is
+// spelled here rather than imported so this decoder cannot be made to accept
+// a value the emitter does not produce by a change on the other side.
+const planEnvelopeOK = "ok"
 
 // --- artifact bindings ---------------------------------------------------
 

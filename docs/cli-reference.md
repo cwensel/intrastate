@@ -619,13 +619,20 @@ Writes are given as --write name=value and --clear <key>. A set value is a
 JSON array literal; the sentinel <clear> is unauthorable as a value, so use
 --clear.
 
+--plan <file|-> reads the same writes and clears out of a flow resolve
+envelope, so a plan can be applied without transcribing it:
+
+  intrastate flow resolve ... --as json | intrastate flow set-state ... --plan -
+
 Success is reported ONLY after the accessor layer's read-back confirms the
 planned values and that non-owned tags are unchanged. A read-back that could
 not complete exits 3 and says the write may have been applied.
 
 --tag on set-state is context only and is never written. Nothing links a
 set-state request to a prior resolve: the request stands on its own grammar
-and the read-back is the only commit-time check.
+and the read-back is the only commit-time check. --plan carries INPUT, not a
+linkage: every key it supplies is re-validated against the model exactly as a
+--write key is.
 ```
 
 ```
@@ -638,6 +645,7 @@ Flags:
       --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
+      --plan flow resolve      apply a flow resolve plan from a file, or `-` for stdin
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
       --write stringArray      planned owned-tag write, as name=value (repeatable)
 
@@ -667,6 +675,43 @@ The write grammar
   still bite — an owned key through --tag is refused here as anywhere —
   but a parsed --tag value cannot become a write.
 
+Applying a plan without transcribing it
+
+  --plan <file|->      read the planned writes and clears out of a
+                       `flow resolve` envelope instead of retyping them.
+
+    intrastate flow resolve --model flow.toml \
+        --artifact state=state.json --outcome advance --as json \
+      | intrastate flow set-state --model flow.toml \
+        --artifact state=state.json --plan - --as json
+
+  Two document shapes are accepted, and which one you have is decided
+  by whether a top-level "type" key is present: the full
+  {"type":"ok","data":{…}} envelope resolve emits, or the bare data
+  object alone. Everything else is flow-write-invalid on param
+  `plan`, including a {"type":"failed",…} refusal piped in place
+  of a plan — a refusal carries no writes, and applying nothing from it
+  would report success for a transition the model declined.
+
+  The plan's clear[] arrives as clears, exactly as --clear would carry
+  them. The <clear> sentinel is unauthorable in a plan's writes{} too:
+  resolve already splits removals into clear[], so a sentinel appearing
+  as a write VALUE is a malformed plan rather than a removal.
+
+  --write and --clear may be given ALONGSIDE --plan, for keys the plan
+  leaves unset — a caller-composed value the table cannot know. A key
+  the plan already sets refuses with flow-write-duplicate, the same
+  code the flag pair takes for a key given twice: two mutations for one
+  key have no defined order whichever carrier they arrived on.
+
+  --plan carries INPUT, never a linkage. Every key it supplies is
+  checked against the model's own grammar — owned, served by exactly
+  one writer, well-formed for its declared kind — on the same path a
+  --write key takes, and a set value is re-canonicalised rather than
+  trusted. So a stale plan, a plan for another model, or a plan whose
+  keys this model no longer serves refuses here; nothing about having
+  come from resolve makes a value legal.
+
 Read-back is the commit-time check
 
   Success is reported ONLY after the accessor layer reads the artifact
@@ -690,8 +735,9 @@ Nothing links this to a prior resolve
 
   set-state validates its own request against the model's own grammar.
   It does not know a resolve call happened, and there is no token or
-  session to carry. Transcribing a plan is a caller convenience; the
-  read-back is the only guarantee.
+  session to carry. Transcribing a plan — or handing one over with
+  --plan — is a caller convenience; the read-back is the only
+  guarantee.
 
 Shared refusals
 

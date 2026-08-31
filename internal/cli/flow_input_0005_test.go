@@ -447,27 +447,107 @@ func TestReq63And85_DuplicateKeyAcrossEitherFlagIsOneCode(t *testing.T) {
 }
 
 // REQ-69: "A carried plan artifact (`--plan <file|->`) is deferred as a
-// seed, not part of this contract." — no `--plan` flag ships.
+// seed, not part of this contract."
+//
+// The DEFERRAL IS DISCHARGED (kata c3xz): `--plan` now ships, on `set-state`
+// alone. REQ-69 was a scoping note about what 0005 itself decided, not a
+// permanent prohibition — 0005 names the flag, its `<file|->` argument, and
+// the byte-identical copy-through that motivates it, and defers only the
+// deciding. So this oracle is RETARGETED rather than deleted, onto the fence
+// that survives the discharge: the plan carrier rides the one verb that can
+// APPLY a plan, and the three verbs that cannot must not acquire it.
+//
+// That is the same shape `0023:C1`'s `--plan-only` fence takes on `resolve`,
+// and it is asserted the same way — three negative arms plus the POSITIVE
+// registration, because "absent from `next`" is vacuously true of a tree
+// where the flag exists nowhere and would keep passing if the feature were
+// reverted. Only the contrast discriminates.
+//
 // BOUNDARY
-func TestReq69_NoPlanFlagShipsOnAnyVerb(t *testing.T) {
+func TestReq69_ThePlanCarrierRidesSetStateAlone(t *testing.T) {
 	// Vacuously true of an unregistered group, so the verbs must exist
-	// before the absence of `--plan` on them means anything.
+	// before their flag sets mean anything.
 	if names := flowGroupNames(t); len(names) != len(flowVerbs) {
 		t.Fatalf("the `flow` group registers %v; all four verbs must exist "+
-			"before the ABSENCE of `--plan` on them is assertable", names)
+			"before the placement of `--plan` across them is assertable", names)
 	}
 
+	var checked bool
 	for _, c := range NewRootCmd().Commands() {
 		if c.Name() != "flow" {
 			continue
 		}
+		if c.Flags().Lookup(planFlagName) != nil ||
+			c.PersistentFlags().Lookup(planFlagName) != nil {
+			t.Error("the `flow` group registers --plan of its own; the plan " +
+				"carrier is VERB-LOCAL to `set-state`, and a group-level " +
+				"registration would hand it to all four verbs")
+		}
 		for _, sub := range c.Commands() {
-			if sub.Flags().Lookup("plan") != nil {
-				t.Errorf("`flow %s` registers --plan; a carried plan artifact "+
-					"is DEFERRED as a seed and not part of this contract",
-					sub.Name())
+			if sub.Name() == "set-state" {
+				checked = true
+				// The POSITIVE half. Without it the negatives below hold
+				// against a tree that never registered the flag at all.
+				if sub.Flags().Lookup(planFlagName) == nil {
+					t.Error("`flow set-state` does not register --plan; it is " +
+						"the one verb that APPLIES a plan, and until it " +
+						"accepts the flag the absences below are cobra's " +
+						"unknown-flag path rather than this placement")
+				}
+				continue
+			}
+			if sub.Flags().Lookup(planFlagName) != nil {
+				t.Errorf("`flow %s` registers --plan; only `set-state` "+
+					"applies a plan — `next` and `read-state` write nothing, "+
+					"and `resolve` PRODUCES the plan rather than consuming "+
+					"one", sub.Name())
 			}
 		}
+	}
+	if !checked {
+		t.Fatal("the `flow` group registers no `set-state` verb")
+	}
+}
+
+// The `--plan` carrier must not disturb RDR 0023's `--plan-only` fence, and
+// the fence must not have been widened to cover it. The two flags share a
+// prefix and ride different verbs, which is exactly the arrangement in which
+// a parser that did prefix matching would silently conflate them.
+//
+// ADVERSARIAL — the collision this pair makes newly reachable.
+func TestReq69_ThePlanCarrierDoesNotDisturbThePlanOnlyFence(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	// `--plan-only` on `set-state` still fails the PARSE, even though
+	// `set-state` now registers a flag `--plan-only` is a prefix-extension
+	// of. pflag does no long-flag prefix matching, so `0023:C1`'s
+	// non-registration fence holds structurally.
+	_, _, err := runCmd(t, "flow", "set-state", "--model", model,
+		"--artifact", bind, "--write", "status=draft",
+		"--"+planOnlyFlag, "--as=json")
+	if err == nil {
+		t.Fatalf("`flow set-state --%s` SUCCEEDED; registering --%s must not "+
+			"make --%s reachable on this verb — `0023:C1` places the "+
+			"projection axis on `resolve` ALONE", planOnlyFlag, planFlagName,
+			planOnlyFlag)
+	}
+	if code := clierr.ErrorCode(err); code != "command-error" {
+		t.Errorf("code = %q; want %q — `--%s` is unregistered here and pflag "+
+			"fails the parse before any RunE; a `flow-*` code would mean the "+
+			"flag was accepted and refused downstream", code, "command-error",
+			planOnlyFlag)
+	}
+
+	// And the converse: `--plan` is not reachable on `resolve`, which is
+	// where `--plan-only` lives. A caller who typed the wrong one of the
+	// pair is told so by the parse rather than having it silently absorbed.
+	if _, _, err := runCmd(t, "flow", "resolve", "--model", model,
+		"--artifact", bind, "--outcome", "hold",
+		"--"+planFlagName, "-", "--as=json"); err == nil {
+		t.Fatalf("`flow resolve --%s` SUCCEEDED; `resolve` PRODUCES a plan "+
+			"and consumes none", planFlagName)
 	}
 }
 
