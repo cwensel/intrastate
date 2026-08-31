@@ -154,19 +154,20 @@ func TestAdvKilledChildOnParentCancelIsNotAnAnswer(t *testing.T) {
 		interrupt()
 	}()
 
-	values, _, err := reader.Read(bounded, advArtifact(t), []string{"state.phase"})
+	values, unreadable, err := reader.Read(bounded, advArtifact(t), []string{"state.phase"})
 	if err != nil {
 		return // refusing is the contract
 	}
-	for _, v := range values {
-		if v.Absent {
-			t.Fatalf("an INTERRUPTED read established `%s` ABSENT with no "+
-				"error: nothing upstream reclassifies `context.Canceled`, "+
-				"so this absence is believed. `0025:F5`'s read_back seal "+
-				"turns on absence, so a `<clear>` verifies against a tool "+
-				"that was killed before it answered", v.Key)
-		}
-	}
+	t.Fatalf("an INTERRUPTED read returned NO error: values=%+v "+
+		"unreadable=%v — a child SIGKILLed on parent cancellation wrote no "+
+		"stdout and never exited, so `0025:C3` leaves it no way to carry an "+
+		"answer (\"a silent tool is a broken tool, not an answer\", and its "+
+		"`exit_absent` map is reserved for a process that ran AND exited), "+
+		"and `0025:F1` promises a runtime refusal here. Nothing upstream "+
+		"reclassifies `context.Canceled`, so whatever this read returned is "+
+		"believed: an empty success is read as a complete answer, and an "+
+		"established absence additionally arms `0025:F5`'s read_back seal "+
+		"against a tool that was killed before it answered", values, unreadable)
 }
 
 // --- ADV-2: the stderr channel is drained only AFTER stdout ---------------
