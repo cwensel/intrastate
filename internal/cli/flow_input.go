@@ -248,7 +248,11 @@ func loadFindings(path string, err error) []clierr.Finding {
 // `command-error` bucket, exactly as `0023:C1`'s fence requires.
 const planFlagName = "plan"
 
-const planFlagUsage = "apply a `flow resolve` plan from a file, or `-` for stdin"
+// planFlagUsage backticks ONLY the metavariable. pflag reads the first
+// backticked span in a usage string as the flag's metavariable name, so
+// backticking the prose `flow resolve` rendered the synopsis as
+// `--plan flow resolve` in the generated reference.
+const planFlagUsage = "apply a flow resolve plan from a `file|-` (`-` is stdin)"
 
 // planStdinSentinel is the conventional spelling for "read the plan from
 // stdin", which is what makes `flow resolve … --as json | flow set-state …
@@ -335,6 +339,21 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 				"envelope or its `data` object")
 	}
 
+	// The document must be a JSON OBJECT. `json.Unmarshal` accepts the
+	// literal `null` into a struct as a no-op, leaving a zero `planEnvelope`
+	// that carries no `type` and no `code` — so a bare `null` would fall
+	// through the refusal arm, decode to zero writes, and report a no-op
+	// SUCCESS. That is the same failure mode the refusal-envelope arm exists
+	// to close, reached by a different spelling: `jq .data` over a refusal
+	// prints `null`, since a bare `CLIError` has no `data` member. An empty,
+	// malformed, or wrong-kind carrier is `flow-write-invalid` (0005's input
+	// family names "malformed, empty, or wrong-kind" for exactly this).
+	if !isJSONObject(src) {
+		return nil, userErr(codeWriteInvalid, planFlagName,
+			"the plan is not one JSON object; --plan takes one "+
+				"`flow resolve --as json` envelope or its `data` object")
+	}
+
 	var env planEnvelope
 	if err := json.Unmarshal(src, &env); err != nil {
 		return nil, userErr(codeWriteInvalid, planFlagName,
@@ -369,7 +388,11 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 				"successful plan"
 			return nil, ce
 		}
-		if len(bytes.TrimSpace(env.Data)) == 0 {
+		// `data` must itself be an object. A literal `{"data":null}` passes
+		// the emptiness check above (`null` is four bytes) and unmarshals
+		// into `carriedPlan` as a no-op, which is the same silent-success
+		// hole the top-level check closes.
+		if len(bytes.TrimSpace(env.Data)) == 0 || !isJSONObject(env.Data) {
 			return nil, userErr(codeWriteInvalid, planFlagName,
 				"the plan envelope carries no `data` object")
 		}
@@ -382,6 +405,18 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 			"the plan's `data` is not a plan object: "+err.Error())
 	}
 	return &plan, nil
+}
+
+// isJSONObject reports whether src is a JSON object rather than a scalar,
+// an array, or the literal `null`.
+//
+// It exists because `json.Unmarshal` into a struct silently accepts `null`
+// as a no-op, so a struct decode alone cannot tell "an object with no
+// matching keys" from "not an object at all" — and the two must refuse
+// differently from a plan that legitimately carries no writes.
+func isJSONObject(src []byte) bool {
+	trimmed := bytes.TrimSpace(src)
+	return len(trimmed) > 0 && trimmed[0] == '{'
 }
 
 // planEnvelopeOK is the success discriminator `respond.OK` stamps. It is

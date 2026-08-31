@@ -572,6 +572,16 @@ func TestC3xz_AMalformedPlanDocumentRefusesUnderAPublishedCode(t *testing.T) {
 		{"not-json", "this is not a plan"},
 		{"a-json-array", `["status=final"]`},
 		{"envelope-with-no-data", `{"type":"ok"}`},
+		// `null` in either position. `json.Unmarshal` takes the literal
+		// `null` into a struct as a NO-OP, so both of these decode without
+		// error to a zero plan and would report a no-op SUCCESS for a
+		// document that carries no plan at all. `jq .data` over a refusal
+		// prints exactly `null` — a bare `CLIError` has no `data` member —
+		// so this is the piped-refusal hazard reached by a second spelling.
+		{"a-bare-null-document", `null`},
+		{"an-envelope-whose-data-is-null", `{"type":"ok","data":null}`},
+		{"a-bare-json-scalar", `"status=final"`},
+		{"data-is-a-json-scalar", `{"type":"ok","data":"status=final"}`},
 		{"writes-is-not-an-object", `{"type":"ok","data":{"writes":[]}}`},
 		{"a-write-value-is-not-a-string", `{"type":"ok","data":{"writes":{"status":7}}}`},
 		{"clear-is-not-an-array", `{"type":"ok","data":{"clear":"stale"}}`},
@@ -596,6 +606,38 @@ func TestC3xz_AMalformedPlanDocumentRefusesUnderAPublishedCode(t *testing.T) {
 		"flow", "set-state", "--model", model, "--artifact", bind,
 		"--plan", filepath.Join(t.TempDir(), "does-not-exist.json"),
 		"--as=json")
+}
+
+// An explicitly EMPTY `--plan` refuses; only an OMITTED one is the
+// flag-driven path.
+//
+// `--plan=` and `--plan "$UNSET_VAR"` are what a caller writes when the
+// path was supposed to come from a variable that never got set. Reading the
+// flag's VALUE cannot tell that from "no --plan at all", so both degrade to
+// a silent no-op success — the caller believes a plan applied when none was
+// ever read. `Changed` separates them, which is the whole fix.
+//
+// ADVERSARIAL
+func TestC3xz_AnExplicitlyEmptyPlanRefusesWhileAnOmittedOneDoesNot(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	for _, empty := range []string{"", "   "} {
+		ce := requireRefusal(t, codeWriteInvalid, 2,
+			"flow", "set-state", "--model", model, "--artifact", bind,
+			"--plan", empty, "--as=json")
+		if ce.Param != planFlagName {
+			t.Errorf("--plan %q: param = %q; want %q", empty, ce.Param,
+				planFlagName)
+		}
+	}
+
+	// The fence: OMITTING `--plan` is still the ordinary flag-driven path
+	// and must NOT be caught by the refusal above. Without this arm the fix
+	// could be "always refuse" and the suite would not notice.
+	requireSuccess(t, "flow", "set-state", "--model", model,
+		"--artifact", bind, "--write", "status=final", "--as=json")
 }
 
 // --- the empty plan ------------------------------------------------------

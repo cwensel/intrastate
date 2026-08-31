@@ -645,7 +645,7 @@ Flags:
       --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
-      --plan flow resolve      apply a flow resolve plan from a file, or `-` for stdin
+      --plan file|-            apply a flow resolve plan from a file|- (`-` is stdin)
       --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
       --write stringArray      planned owned-tag write, as name=value (repeatable)
 

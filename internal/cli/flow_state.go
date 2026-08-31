@@ -534,9 +534,19 @@ func admitPlan(
 	admitWrite func(key, value, param string) *clierr.CLIError,
 	admitClear func(key, param string) *clierr.CLIError,
 ) *clierr.CLIError {
-	path, _ := cmd.Flags().GetString(planFlagName)
-	if path == "" {
+	// An OMITTED `--plan` is the flag-driven path and carries no plan. An
+	// explicitly EMPTY one (`--plan=`, or `--plan "$UNSET"`) is a caller who
+	// meant to carry a plan and lost it to an unset variable — the same
+	// silent-success hazard as a piped refusal, and refused the same way
+	// rather than degrading to a no-op. `Changed` is what separates the two;
+	// the value alone cannot.
+	if !cmd.Flags().Changed(planFlagName) {
 		return nil
+	}
+	path, _ := cmd.Flags().GetString(planFlagName)
+	if strings.TrimSpace(path) == "" {
+		return userErr(codeWriteInvalid, planFlagName,
+			"--plan was given an empty path; it takes a file, or `-` for stdin")
 	}
 
 	plan, ce := readPlan(cmd, path)
