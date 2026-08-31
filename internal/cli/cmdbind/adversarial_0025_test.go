@@ -332,12 +332,29 @@ exit 0
 		Config: cmdbind.Config{AllowCommands: true},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	const deadline = 3 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 
-	if _, _, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"}); err != nil {
+	start := time.Now()
+	_, _, err := reader.Read(ctx, advArtifact(t), []string{"state.phase"})
+	elapsed := time.Since(start)
+
+	if err != nil {
 		t.Fatalf("the tool answered correctly and exited 0, yet the read "+
-			"refused: %v", err)
+			"refused after %v: %v", elapsed, err)
+	}
+	// The pid probe below is only evidence of a REAP if the read returned
+	// while the grandchild was still sleeping. A read that consumes its whole
+	// deadline proves the drain waited on the grandchild to finish rather
+	// than the group being signalled, and the grandchild is then found dead
+	// for the trivial reason that it exited on its own — so the check below
+	// would prove nothing about `0025:C4`'s group mechanism.
+	if elapsed >= deadline {
+		t.Fatalf("the read took %v, its whole %v deadline: the drain waited "+
+			"out the grandchild instead of the group being reaped, so the "+
+			"pid check below cannot distinguish a reap from a coincidence",
+			elapsed, deadline)
 	}
 
 	pid := advPIDFrom(t, pidFile)
