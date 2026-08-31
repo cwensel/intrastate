@@ -582,6 +582,12 @@ func TestC3xz_AMalformedPlanDocumentRefusesUnderAPublishedCode(t *testing.T) {
 		{"an-envelope-whose-data-is-null", `{"type":"ok","data":null}`},
 		{"a-bare-json-scalar", `"status=final"`},
 		{"data-is-a-json-scalar", `{"type":"ok","data":"status=final"}`},
+		// A PRESENT but null/non-string `type`. Decoded as `*string` these
+		// are nil — indistinguishable from an ABSENT key — so the document
+		// would take the bare-`data` arm. The write-carrying arm below is
+		// the sharp one: it must never silently drop a real write.
+		{"type-is-null", `{"type":null,"data":null}`},
+		{"type-is-not-a-string", `{"type":7,"data":{"writes":{"status":"final"}}}`},
 		{"writes-is-not-an-object", `{"type":"ok","data":{"writes":[]}}`},
 		{"a-write-value-is-not-a-string", `{"type":"ok","data":{"writes":{"status":7}}}`},
 		{"clear-is-not-an-array", `{"type":"ok","data":{"clear":"stale"}}`},
@@ -606,6 +612,44 @@ func TestC3xz_AMalformedPlanDocumentRefusesUnderAPublishedCode(t *testing.T) {
 		"flow", "set-state", "--model", model, "--artifact", bind,
 		"--plan", filepath.Join(t.TempDir(), "does-not-exist.json"),
 		"--as=json")
+}
+
+// A present-but-null `type` never silently DROPS the plan's writes.
+//
+// This is the sharpest arm of the null family and the reason `Type` is raw
+// bytes rather than `*string`: decoded as a pointer, an absent `type` and a
+// present `"type":null` are both nil. A document that carries real writes
+// under a null discriminator would then take the bare-`data` arm, look for
+// `writes` at the TOP level, find none, and report a no-op success — the
+// caller's transition silently discarded while the exit code says it
+// applied. A refusal is the only safe answer; applying the nested writes
+// would be guessing at a shape the document does not have.
+//
+// ADVERSARIAL
+func TestC3xz_ANullEnvelopeTypeNeverSilentlyDropsThePlansWrites(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	const carriesARealWrite = `{"type":null,"data":{"writes":{"status":"final"}}}`
+
+	ce := requireRefusalStdinC3xz(t, carriesARealWrite, codeWriteInvalid, 2,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+	if ce.Param != planFlagName {
+		t.Errorf("param = %q; want %q", ce.Param, planFlagName)
+	}
+
+	// The write must NOT have landed. A refusal that still mutated the
+	// artifact would be worse than the silent drop it replaces.
+	state := flowData(t, requireSuccess(t, "flow", "read-state",
+		"--model", model, "--artifact", bind,
+		"--artifact", artifactBinding(flowOrphanRole, art), "--as=json"))
+	if got := readerTagValue(t, state, "state", "status"); got != "draft" {
+		t.Errorf("status = %#v after a REFUSED null-type plan; want %q — the "+
+			"plan's nested write must neither apply nor vanish silently",
+			got, "draft")
+	}
 }
 
 // An explicitly EMPTY `--plan` refuses; only an OMITTED one is the

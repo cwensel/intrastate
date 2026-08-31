@@ -280,10 +280,18 @@ type carriedPlan struct {
 // bare `data` payload never carries one — `resolvePayload`'s fourteen keys
 // are fixed and `type` is not among them.
 //
-// `Data` is `json.RawMessage` rather than a decoded value so the bare-`data`
-// arm can re-decode the WHOLE document without a second read: presence of
-// `Type` selects which bytes are the payload, and nothing is parsed twice
-// under a shape it does not have.
+// `Type` and `Data` are `json.RawMessage` rather than decoded values so the
+// bare-`data` arm can re-decode the WHOLE document without a second read:
+// presence of `Type` selects which bytes are the payload, and nothing is
+// parsed twice under a shape it does not have.
+//
+// `Type` must be RAW, not `*string`. A `*string` is nil for an ABSENT key
+// and also for a present `"type":null`, so the two are indistinguishable —
+// and `{"type":null,"data":{"writes":…}}` would take the bare-`data` arm,
+// find no `writes` at the top level, and SILENTLY DROP a real write while
+// reporting success. Raw bytes make presence a byte-level fact, which is
+// what the "presence of a top-level `type` key" rule above actually says.
+//
 // `Code` and `Message` are the REFUSAL envelope's discriminators. A failed
 // run under `--as=json` emits the bare `CLIError` — `{"code":…,"message":…}`
 // with `findings` as a TOP-LEVEL sibling and no wrapper at all (REQ-8) — so
@@ -292,7 +300,7 @@ type carriedPlan struct {
 // model declined. `resolvePayload` has no `code` member, so its presence
 // separates the two without ambiguity.
 type planEnvelope struct {
-	Type    *string         `json:"type"`
+	Type    json.RawMessage `json:"type"`
 	Data    json.RawMessage `json:"data"`
 	Code    string          `json:"code"`
 	Message string          `json:"message"`
@@ -367,7 +375,8 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 	// a transition the model declined — the one failure mode a piped plan
 	// makes newly reachable, since `resolve` writes success and refusal to
 	// the same stream.
-	if env.Type == nil && env.Code != "" {
+	typePresent := len(bytes.TrimSpace(env.Type)) > 0
+	if !typePresent && env.Code != "" {
 		ce := userErr(codeWriteInvalid, planFlagName,
 			"the plan is a refusal envelope (`"+env.Code+"`), not a plan; a "+
 				"refusal carries no writes to apply")
@@ -379,10 +388,20 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 	// The full envelope. A non-success type is a REFUSAL that was piped in
 	// place of a plan, and there is nothing in it to apply.
 	payload := src
-	if env.Type != nil {
-		if *env.Type != planEnvelopeOK {
+	if typePresent {
+		// A PRESENT `type` must be the success string. Anything else — a
+		// refusal spelling, `null`, a number, an object — is not a plan this
+		// applies. Decoding into a string first means a non-string `type`
+		// refuses by name rather than being mistaken for an absent key.
+		var envType string
+		if err := json.Unmarshal(env.Type, &envType); err != nil {
+			return nil, userErr(codeWriteInvalid, planFlagName,
+				"the plan's `type` is not a string; --plan takes one "+
+					"`flow resolve --as json` envelope or its `data` object")
+		}
+		if envType != planEnvelopeOK {
 			ce := userErr(codeWriteInvalid, planFlagName,
-				"the plan is a `"+*env.Type+"` envelope, not a plan; a "+
+				"the plan is a `"+envType+"` envelope, not a plan; a "+
 					"refusal carries no writes to apply")
 			ce.Hint = "resolve the refusal first; `--plan` applies only a " +
 				"successful plan"
