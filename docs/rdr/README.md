@@ -34,6 +34,7 @@ engine README — this file is only the per-project index.
 | [0023](0023-resolve-envelope-projection.md) | Resolve-envelope projection opt-out | Implemented | High |
 | [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Implemented | High |
 | [0025](0025-command-invoking-accessor-bindings.md) | Command-invoking accessor bindings | Implemented | High |
+| [0026](0026-bounded-drain-precedence-in-the-c4-triple.md) | Bounded-drain precedence in the C4 execution-safety triple | Draft | High |
 
 ## Implementing
 
