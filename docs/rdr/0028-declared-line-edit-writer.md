@@ -132,15 +132,16 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
   - **Evidence**: —
   - **If wrong**: the MVV's README step needs `set-state` to consume the
     resolve envelope's observed tags — a linkage `--plan` deliberately refuses.
-- **A8 [0004's `execution_failure` class plus a Detail carrying the reason
-  token and `applied: false` is enough for a caller (an agent loop) to tell a
-  pre-mutation edit refusal from a command carrier's unknown-state failure; no
-  new refusal class or typed reason field is needed in v1]**
+- **A8 [0004's `execution_failure` class plus a Detail carrying the rule id and
+  the reason token, with the applied sense riding `Applied()`, is enough for a
+  caller (an agent loop) to tell a pre-mutation edit refusal from a command
+  carrier's unknown-state failure; no new refusal class or typed reason field
+  is needed in v1]**
   - **Status**: Pending
   - **Method**: Design Review
-  - **Evidence**: —
-  - **If wrong**: C3's refusal carrier gains a typed reason field (a 0025:C4
-    `ExecError`-style detail) — an additive change to the envelope, owned here.
+  - **Evidence**: JDR 0003 §D1 (constraint entry)
+  - **If wrong**: a typed reason field on the carrier is JDR 0003's decision,
+    not this record's; this RDR would carry the registry's answer by citation.
 - **A9 [A command reader can carry `{tag.<key>}` as a whole argv element under
   the same substitution site as `{artifact}` (`internal/cli/cmdbind`), so C6 is
   one more vocabulary member, not a second substitution mechanism]**
@@ -248,7 +249,7 @@ input:    the whole file is read as bytes; lines are split on "\n" and a precedi
 target:   the caller-bound artifact path for the entry's role (0004:C3), symlinks resolved; the model names no path — an `edit` entry has exactly the authority a `path` entry has over the file the CALLER binds
 select:   every rule's anchor is resolved against the PRE-EDIT content and selections are held as pre-edit line INDICES (a deletion never shifts a sibling rule's target). Each must select exactly one line: 0 ⇒ `edit_anchor_unmatched`; ≥2 ⇒ `edit_anchor_ambiguous`; two rules selecting one line ⇒ `edit_anchor_collision`. Never last-match (Ansible `lineinfile`), never first-match, never insert or append (Puppet `append_on_no_match`, Ansible `insertafter`) — creation is fenced out, and an unmatched anchor is a stale model, not a missing line
 re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
-order:    every refusal in this clause and C2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure` with a Detail naming the rule (`<id>.edit.<key>`), the reason token, and `applied: false` (A8); no new refusal class is introduced, and no pre-write refusal ever carries 0004:C14's applied-but-unverified sense. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
+order:    every refusal in this clause and C2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure` with a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8); no new refusal class is introduced, and no pre-write refusal ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
 write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). A post-edit buffer equal to the input is not written at all (no staging, no rename; MVV step 5 asserts the untouched files). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
 terminators: only "\n" — optionally preceded by "\r" — terminates a line for selection and rewriting; a bare "\r", NEL or U+2028 is line content (C2 still refuses "\r" in a VALUE). Deleting the final line of a file that had no final terminator also removes the preceding line's terminator, so the file's final-terminator state is preserved either way
 no subprocess: `edit` spawns nothing; `--allow-commands` (0025:C6) is not consulted by the write itself. `Invocations()` counts `Apply` calls exactly as `flowbind.go::Writer` does (0004:C14)
@@ -396,7 +397,7 @@ line (P-2) is refused in v1 by design (Briefly Rejected).
 
 Premortem: hardened (hardened)
 Ground-sweep: clean (35 anchors; one cosmetic citation corrected inline — the emit-payload clause is 0010:C4, not 0010:C3)
-Joint-check: fired → 0027, 0026, 0016 (home: OPEN) — all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C4 here add the `edit` arm and five tail categories and never reach clauses 2–6; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C3/A8 here for "not applied" with `applied: false` in Detail; the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C4 appends at the tail; 0014/0021 ↔ 0028 on `intrastate lint` — a tool name, not a decision. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Candidate dispositions for the human: declare-in-both (0027/`carrierDefect`, disjoint clauses), cite-don't-restate (0016:C4; 0026:C1), or hoist the write-refusal class semantics (`execution_failure` = not-applied vs unknown) to an umbrella home.
+Joint-check: fired → 0027, 0026, 0016 (home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4) — disposed 2026-08-31: 0026 hoisted (constraint — sub-reason rides `Detail`, applied sense is `Applied()`; C3 and A8 aligned, cited not restated); 0027 cite-don't-restate (disjoint deltas, 0025:C5 owns the clause map); 0016 cite-don't-restate (reliance on its fail-closed reader). all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C4 here add the `edit` arm and five tail categories and never reach clauses 2–6; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C3/A8 here for "not applied" with `applied: false` in Detail (since aligned to JDR 0003 §D1); the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C4 appends at the tail; 0014/0021 ↔ 0028 on `intrastate lint` — a tool name, not a decision. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Dispositions above.
 
 ## Alternatives Considered
 
@@ -866,6 +867,8 @@ matrix/provenance prose left from the template or Seed
 - RDR 0004 (`0004:C10`–`0004:C15`, Alt 2, Alt 5); RDR 0025 (`0025:C1`, `0025:C2`,
   `0025:C5`, `0025:C6`, Alt 2, Consequences, Selection LBD); RDR 0010 (`0010:C4`);
   RDR 0005 (`0005:C1`).
+- JDR 0003 §D1 (`docs/jdr/0003-accessor-binding-seam.md`) — the `execution_failure`
+  sub-reason carrier; cited, not restated.
 - `internal/table/load.go::carrierDefect`, `::commandPlaceholders`;
   `internal/cli/flowbind/registry.go::commandBacked`;
   `internal/cli/flowbind/flowbind.go::save`, `::Writer.Apply`;
