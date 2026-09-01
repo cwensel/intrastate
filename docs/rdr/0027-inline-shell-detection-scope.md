@@ -1,4 +1,4 @@
-# Recommendation 0027: Authority surface of the C5 interpreter deny-list
+# Recommendation 0027: What the inline-shell check on command bindings actually promises (wrappers, env flags, stdin scripts)
 
 > Revise during planning; lock at implementation. After lock, content is never
 > amended; structure may be migrated to the current template by tooling.
