@@ -706,6 +706,62 @@ func TestC3xz_AnotherVerbsEnvelopeIsNotAPlan(t *testing.T) {
 		"--plan", "-", "--as=json")
 }
 
+// `set-state`'s OWN success envelope is not a plan either.
+//
+// It carries `writes` and `clear`, so the "carries a plan key" test alone
+// admits it, and a caller who piped one set-state into another would
+// silently REPLAY the first one's mutations — a pipeline that looks like it
+// re-derived a decision when nothing consulted the table. `writers` and
+// `owned` belong to `setStatePayload` alone (`resolvePayload` has neither),
+// so they identify the wrong producer without a field allowlist.
+//
+// ADVERSARIAL
+func TestC3xz_SetStatesOwnEnvelopeIsNotAPlan(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	// A REAL set-state envelope, so the oracle tracks what the verb emits.
+	applied := requireSuccess(t, "flow", "set-state", "--model", model,
+		"--artifact", bind, "--write", "status=final", "--as=json")
+
+	ce := requireRefusalStdinC3xz(t, applied, codeWriteInvalid, 2,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+	if ce.Param != planFlagName {
+		t.Errorf("param = %q; want %q", ce.Param, planFlagName)
+	}
+
+	// The refusal must precede the accessor: state is whatever the FIRST
+	// call left, never re-written by the replay.
+	state := flowData(t, requireSuccess(t, "flow", "read-state",
+		"--model", model, "--artifact", bind,
+		"--artifact", artifactBinding(flowOrphanRole, art), "--as=json"))
+	if got := readerTagValue(t, state, "state", "status"); got != "final" {
+		t.Errorf("status = %#v; want %q — the refused replay must neither "+
+			"apply nor disturb what the first call committed", got, "final")
+	}
+
+	// `owned` must NOT be the discriminator. It looks like one — set-state
+	// echoes read-back-confirmed owned values — but `resolvePayload` ALSO
+	// declares it, in the echo group as `owned,omitempty`, so every plan
+	// not projected with `--plan-only` carries it. Discriminating on
+	// `owned` refuses real plans, which the merge-precedence suite catches;
+	// this arm names the trap where the discriminator is chosen.
+	unprojected := seedArtifact(t, model, "status=draft", "stale=obsolete")
+	plan := resolvePlanC3xz(t, model,
+		artifactBinding(flowStateRole, unprojected), "advance")
+	if !strings.Contains(plan, `"owned"`) {
+		t.Fatalf("this oracle assumes an unprojected plan echoes `owned`; "+
+			"the envelope no longer does, so the trap it guards has moved:\n%s",
+			plan)
+	}
+	requireSuccessStdinC3xz(t, plan, "flow", "set-state", "--model", model,
+		"--artifact", artifactBinding(flowStateRole,
+			seedArtifact(t, model, "status=draft", "stale=obsolete")),
+		"--plan", "-", "--as=json")
+}
+
 // An explicitly EMPTY `--plan` refuses; only an OMITTED one is the
 // flag-driven path.
 //

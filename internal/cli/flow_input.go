@@ -451,6 +451,36 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 		ce.Hint = "pipe `flow resolve … --as json`; an empty plan is `{}`"
 		return nil, ce
 	}
+
+	// `set-state`'s OWN success envelope carries `writes` and `clear` too,
+	// so the presence test above admits it and a caller who piped one
+	// set-state into another would silently REPLAY the first one's
+	// mutations.
+	//
+	// `writers` is the discriminator, and it is the ONLY safe one:
+	// `setStatePayload` alone declares it (`flow_state.go`), while `owned`
+	// — the other tempting candidate — is ALSO a `resolvePayload` field,
+	// carried in the ECHO group as `owned,omitempty` and present on every
+	// plan that was not projected with `--plan-only`. Discriminating on
+	// `owned` refuses real plans.
+	//
+	// This stays a single-key presence test rather than a field allowlist,
+	// so it keeps RDR 0023 §1195-1210's rejection of a per-verb field
+	// universe intact and holds no opinion about keys `resolve` may add.
+	//
+	// Refused rather than tolerated as idempotent: re-applying happens to
+	// converge here, but "this envelope came from the wrong verb" is a
+	// caller mistake worth naming, and a plan carrier that accepts its own
+	// output invites a pipeline that looks like it re-derived a decision
+	// when nothing consulted the table.
+	if objectHasAnyKey(payload, "writers") {
+		ce := userErr(codeWriteInvalid, planFlagName,
+			"the plan carries `writers`, which only a `flow set-state` "+
+				"envelope has; --plan takes a `flow resolve` plan")
+		ce.Hint = "pipe `flow resolve … --as json`, not another `set-state` " +
+			"result"
+		return nil, ce
+	}
 	return &plan, nil
 }
 
