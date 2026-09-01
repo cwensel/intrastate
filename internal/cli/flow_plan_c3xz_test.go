@@ -652,6 +652,60 @@ func TestC3xz_ANullEnvelopeTypeNeverSilentlyDropsThePlansWrites(t *testing.T) {
 	}
 }
 
+// Another verb's success envelope is not a plan.
+//
+// `flow read-state --as=json` is a well-formed `{"type":"ok","data":…}`
+// document carrying `model` / `artifacts` / `readers` and no `writes`, so a
+// carrier that only asks "did this decode?" takes it for an empty plan and
+// reports a no-op SUCCESS for a pipeline that never produced a plan. That is
+// the wrong-verb sibling of the piped-refusal hole, and it is reachable by
+// typing the wrong verb into a real pipeline.
+//
+// The oracle pins the DISCRIMINATION, not a field allowlist: RDR 0023
+// (§1195-1210) rejected a per-verb pickable-field universe, so unknown and
+// future keys must keep flowing through. The `{}` arm is the fence that
+// keeps this from becoming one.
+//
+// ADVERSARIAL
+func TestC3xz_AnotherVerbsEnvelopeIsNotAPlan(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	// A REAL `read-state` envelope, not a hand-written lookalike, so the
+	// oracle tracks whatever that verb actually emits.
+	readState := requireSuccess(t, "flow", "read-state", "--model", model,
+		"--artifact", bind,
+		"--artifact", artifactBinding(flowOrphanRole, art), "--as=json")
+
+	ce := requireRefusalStdinC3xz(t, readState, codeWriteInvalid, 2,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+	if ce.Param != planFlagName {
+		t.Errorf("param = %q; want %q", ce.Param, planFlagName)
+	}
+
+	// The FENCE. An empty plan is still an accepted no-op: that is the
+	// decided `none` / `stopped:*` behavior, and a fix that refused it
+	// would relax nothing but would break the row this kata must carry.
+	requireSuccessStdinC3xz(t, `{"type":"ok","data":{}}`,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+
+	// A plan carrying ONLY `clear` is a plan; the check takes either key.
+	requireSuccessStdinC3xz(t, `{"type":"ok","data":{"clear":[]}}`,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+
+	// Append-only evolution keeps working: an UNKNOWN sibling key alongside
+	// a real `writes` is tolerated, never refused. This is the arm that
+	// fails if the fix is ever tightened into a field allowlist.
+	requireSuccessStdinC3xz(t,
+		`{"type":"ok","data":{"writes":{"status":"final"},"a_future_key":42}}`,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+}
+
 // An explicitly EMPTY `--plan` refuses; only an OMITTED one is the
 // flag-driven path.
 //

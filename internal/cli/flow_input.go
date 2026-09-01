@@ -423,7 +423,64 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 		return nil, userErr(codeWriteInvalid, planFlagName,
 			"the plan's `data` is not a plan object: "+err.Error())
 	}
+
+	// A NON-EMPTY payload must carry at least one of the two plan keys.
+	//
+	// Without this, ANOTHER verb's success envelope is a valid empty plan:
+	// `flow read-state --as=json` carries `model` / `artifacts` / `readers`
+	// and no `writes`, so piping it here reported a no-op SUCCESS for a
+	// pipeline that never produced a plan — the wrong-verb sibling of the
+	// piped-refusal hole.
+	//
+	// The check is deliberately a PRESENCE test on two keys, not a field
+	// allowlist. RDR 0023 (§1195-1210) rejected "a declared pickable-field
+	// list per verb, validation, and its own refusal for an unknown field"
+	// as cost without need, and 0005 keeps the envelope append-only, so
+	// unknown and future fields must stay tolerated. This adds no opinion
+	// about any key other than the two the carrier actually reads.
+	//
+	// Safe under both projections: `writes` and `clear` carry NO `omitempty`
+	// on `resolvePayload` (unlike the echo group) and both sit in the PLAN
+	// group `--plan-only` keeps, so a real plan always emits them. An empty
+	// `{}` stays an accepted no-op plan — that is the decided `none` /
+	// `stopped:*` behavior and is not what this refuses.
+	if !isEmptyJSONObject(payload) && !objectHasAnyKey(payload, "writes", "clear") {
+		ce := userErr(codeWriteInvalid, planFlagName,
+			"the plan carries neither `writes` nor `clear`; --plan takes a "+
+				"`flow resolve` plan, not another command's envelope")
+		ce.Hint = "pipe `flow resolve … --as json`; an empty plan is `{}`"
+		return nil, ce
+	}
 	return &plan, nil
+}
+
+// isEmptyJSONObject reports whether src is the object `{}`, the one shape
+// that legitimately carries no plan keys and still applies as a no-op.
+func isEmptyJSONObject(src []byte) bool {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(src, &members); err != nil {
+		return false
+	}
+	return len(members) == 0
+}
+
+// objectHasAnyKey reports whether the JSON object src carries any of names
+// as a member, regardless of that member's value.
+//
+// Presence is what matters, not the decoded value: `{"writes":null}` is a
+// plan that carries the key and resolves to no writes, while a document
+// with no `writes` member at all did not come from `flow resolve`.
+func objectHasAnyKey(src []byte, names ...string) bool {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(src, &members); err != nil {
+		return false
+	}
+	for _, name := range names {
+		if _, ok := members[name]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // isJSONObject reports whether src is a JSON object rather than a scalar,
