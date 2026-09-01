@@ -101,3 +101,13 @@ Only 0027 hits; its reliance is 0027:C1 "clause 3 coupling … never command_unk
 ## Verdict
 
 fired → 0027, 0026, 0016 (home: OPEN). See the record's Decision Rationale `Joint-check:` line for the per-pair reading and candidate dispositions.
+
+## Dispositions (2026-08-31)
+
+Decided by the human; applied to this record only.
+
+- **0027 ↔ 0028** (`internal/table/load.go::carrierDefect`, `table.Categories()`) — cite-don't-restate, home `cli/0025:C5`. Both records fence only their own deltas against 0025:C5 (Implemented owner of the clause map and within-entry precedence); 0027's line is already symmetric. Changed here: `Joint-check:` names the home as `cli/0025:C5 for cli/0027:C1`; no fence edit.
+- **0026 ↔ 0028** (`execution_failure`) — hoisted to `JDR 0003 §D1` (graded constraint). Changed here: `0028:C3` `order:` drops `applied: false` from `Detail` (rule id `<id>.edit.<key>` and reason token remain; applied sense is `Applied()`, executor-set) and cites the entry; `0028:A8` claim aligned (Detail carries rule id + reason token, applied sense rides `Applied()`), Evidence set to the constraint entry, If-wrong "owned here" voided (a typed carrier field is the registry's decision); References gains the JDR line. Status stays Pending for Stage 4.
+- **0016 ↔ 0028** (`read_back_incomplete`) — cite-don't-restate, home `cli/0016:C4` (the pre-mutation gate check relies on 0016:C4's fail-closed `readerFor`). 0016 (Final) untouched. Changed here: `Joint-check:` names the home as `cli/0016:C4`.
+
+`Joint-check:` head now reads `(home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4)`; the OPEN candidate-dispositions sentence is replaced by `Dispositions above.` No other `applied: false` occurrences remained in the body.
