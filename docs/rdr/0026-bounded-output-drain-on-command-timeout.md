@@ -1,4 +1,4 @@
-# Recommendation 0026: Bounded-drain precedence in the C4 execution-safety triple
+# Recommendation 0026: Deliver the command timeout even when a detached grandchild holds the output pipes
 
 > Revise during planning; lock at implementation. After lock, content is never
 > amended; structure may be migrated to the current template by tooling.

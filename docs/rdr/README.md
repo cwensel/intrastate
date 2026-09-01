@@ -34,7 +34,7 @@ engine README — this file is only the per-project index.
 | [0023](0023-resolve-envelope-projection.md) | Resolve-envelope projection opt-out | Implemented | High |
 | [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Implemented | High |
 | [0025](0025-command-invoking-accessor-bindings.md) | Command-invoking accessor bindings | Implemented | High |
-| [0026](0026-bounded-drain-precedence-in-the-c4-triple.md) | Bounded-drain precedence in the C4 execution-safety triple | Draft | High |
+| [0026](0026-bounded-output-drain-on-command-timeout.md) | Deliver the command timeout even when a detached grandchild holds the output pipes | Draft | High |
 | [0027](0027-c5-interpreter-deny-list-authority-surface.md) | Authority surface of the C5 interpreter deny-list | Draft | Medium |
 | [0028](0028-declared-in-process-edit-write-carrier.md) | Declared in-process `edit` write carrier | Draft | High |
 
