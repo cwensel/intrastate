@@ -1,4 +1,4 @@
-# Recommendation 0028: Declared in-process `edit` write carrier
+# Recommendation 0028: Write a planned value into a line of a text file without a wrapper script
 
 > Revise during planning; lock at implementation. After lock, content is never
 > amended; structure may be migrated to the current template by tooling.
