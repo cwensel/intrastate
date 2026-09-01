@@ -689,9 +689,12 @@ Applying a plan without transcribing it
   by whether a top-level "type" key is present: the full
   {"type":"ok","data":{…}} envelope resolve emits, or the bare data
   object alone. Everything else is flow-write-invalid on param
-  `plan`, including a {"type":"failed",…} refusal piped in place
-  of a plan — a refusal carries no writes, and applying nothing from it
-  would report success for a transition the model declined.
+  `plan`, including a refusal piped in place of a plan — under
+  --as json a refusal is the bare error document, carrying "code" and no
+  "type" — because a refusal carries no writes, and applying nothing from
+  it would report success for a transition the model declined. Another
+  verb's envelope refuses too: a read-state result carries no writes, and
+  a set-state result or a next candidate is not a decision this may apply.
 
   The plan's clear[] arrives as clears, exactly as --clear would carry
   them. The <clear> sentinel is unauthorable in a plan's writes{} too:
@@ -708,9 +711,14 @@ Applying a plan without transcribing it
   checked against the model's own grammar — owned, served by exactly
   one writer, well-formed for its declared kind — on the same path a
   --write key takes, and a set value is re-canonicalised rather than
-  trusted. So a stale plan, a plan for another model, or a plan whose
-  keys this model no longer serves refuses here; nothing about having
-  come from resolve makes a value legal.
+  trusted. Nothing about having come from resolve makes a value legal.
+
+  That check is over the plan's CONTENT, not its provenance. Nothing
+  reads a revision, a timestamp, or which model produced the document,
+  because nothing links one call to the next: a stale plan, or a plan
+  from another model, refuses only where its keys or values are not
+  legal here, and applies where they are. Re-resolve if the state may
+  have moved; the read-back below is what confirms what actually landed.
 
 Read-back is the commit-time check
 

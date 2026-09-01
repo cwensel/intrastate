@@ -481,7 +481,44 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 			"result"
 		return nil, ce
 	}
+
+	// A `flow next` CANDIDATE also carries `writes` and `clear` and no
+	// `writers`, so `jq '.data.candidates[0]'` would otherwise apply here.
+	// It must not: a candidate's writes are the PREVIEW a normalized row
+	// exposes "without evaluating anything" (`flow_next.go`, REQ-40/A-5),
+	// its `unknown` lists facts the run could not decide, and absent
+	// `--evaluate-gates` its gates were never run. Applying one would
+	// commit a transition that skipped exact-one selection AND gate
+	// approval — the two things `resolve` exists to perform, and which
+	// 0005 places between a decision and a write.
+	//
+	// `required` and `unknown` are `candidate`'s alone; neither
+	// `resolvePayload` nor `setStatePayload` declares either, so this stays
+	// a presence test on foreign keys rather than a field allowlist.
+	if foreign := firstPresentKey(payload, "required", "unknown"); foreign != "" {
+		ce := userErr(codeWriteInvalid, planFlagName,
+			"the plan carries `"+foreign+"`, which only a `flow next` "+
+				"candidate has; a candidate is a PREVIEW that skipped "+
+				"selection and gates, not a plan")
+		ce.Hint = "resolve the outcome first: `flow resolve … --as json`"
+		return nil, ce
+	}
 	return &plan, nil
+}
+
+// firstPresentKey returns the first of names present as a member of the
+// JSON object src, or "" when none is.
+func firstPresentKey(src []byte, names ...string) string {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(src, &members); err != nil {
+		return ""
+	}
+	for _, name := range names {
+		if _, ok := members[name]; ok {
+			return name
+		}
+	}
+	return ""
 }
 
 // isEmptyJSONObject reports whether src is the object `{}`, the one shape

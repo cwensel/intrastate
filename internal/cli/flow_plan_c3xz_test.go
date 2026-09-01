@@ -706,6 +706,124 @@ func TestC3xz_AnotherVerbsEnvelopeIsNotAPlan(t *testing.T) {
 		"--plan", "-", "--as=json")
 }
 
+// A bad VALUE carried by a plan refuses on param `plan`, not on the key.
+//
+// `canonicalValue` names the KEY as the param, which is right for
+// `--write status=nope`: the caller typed that key on that flag and can go
+// fix it. A plan-carried value has no such flag — the caller typed
+// `--plan`, so `param` must name the carrier they can act on, the way every
+// other plan refusal already does. The MESSAGE still names the key, so
+// nothing is lost.
+//
+// INPUT EDGE
+func TestC3xz_ABadPlanValueRefusesOnTheCarrierNotTheKey(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	for _, tc := range []struct {
+		name string
+		plan string
+		key  string
+	}{
+		{
+			// `status` is an enum over ["draft","final"].
+			name: "out-of-domain-enum",
+			plan: `{"type":"ok","data":{"writes":{"status":"nope"},"clear":[]}}`,
+			key:  "status",
+		},
+		{
+			// `labels` is a set; a bare scalar is the wrong kind.
+			name: "wrong-kind-set",
+			plan: `{"type":"ok","data":{"writes":{"labels":"a<b"},"clear":[]}}`,
+			key:  "labels",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ce := requireRefusalStdinC3xz(t, tc.plan, codeWriteInvalid, 2,
+				"flow", "set-state", "--model", model, "--artifact", bind,
+				"--plan", "-", "--as=json")
+			if ce.Param != planFlagName {
+				t.Errorf("param = %q; want %q — the caller typed --plan, "+
+					"not --%s", ce.Param, planFlagName, tc.key)
+			}
+			if !strings.Contains(ce.Message, tc.key) {
+				t.Errorf("message = %q; want it to still name the key %q",
+					ce.Message, tc.key)
+			}
+		})
+	}
+
+	// The FENCE: the same bad value on `--write` still names the KEY. The
+	// remap is scoped to the plan carrier and must not leak.
+	ce := requireRefusal(t, codeWriteInvalid, 2,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--write", "status=nope", "--as=json")
+	if ce.Param != "status" {
+		t.Errorf("--write param = %q; want %q — only the plan carrier "+
+			"remaps", ce.Param, "status")
+	}
+}
+
+// A `flow next` CANDIDATE is not a plan.
+//
+// A candidate carries `writes` and `clear` and no `writers`, so
+// `jq '.data.candidates[0]'` reaches this carrier looking exactly like a
+// plan. It is not one: a candidate's writes are the preview a normalized
+// row exposes "without evaluating anything" (REQ-40, A-5), its `unknown`
+// lists facts the run could not decide, and absent --evaluate-gates its
+// gates were never run. Applying one commits a transition that skipped
+// both exact-one selection and gate approval — the two things `resolve`
+// performs and that 0005 places between a decision and a write.
+//
+// ADVERSARIAL
+func TestC3xz_ANextCandidateIsNotAPlan(t *testing.T) {
+	model := writeFlowModel(t, flowMVVModel)
+	art := seedArtifact(t, model, "status=draft")
+	bind := artifactBinding(flowStateRole, art)
+
+	// A REAL candidate, lifted from a real `flow next` the way a caller
+	// would lift it, so the oracle tracks what that verb actually emits.
+	next := flowData(t, requireSuccess(t, "flow", "next", "--model", model,
+		"--artifact", bind, "--as=json"))
+	candidates, ok := next["candidates"].([]any)
+	if !ok || len(candidates) == 0 {
+		t.Fatalf("`flow next` reported no candidates; this oracle needs one "+
+			"to lift. payload keys = %v", keysOf(next))
+	}
+	lifted, err := json.Marshal(candidates[0])
+	if err != nil {
+		t.Fatalf("marshalling the lifted candidate: %v", err)
+	}
+
+	// It must LOOK like a plan, or the oracle proves nothing.
+	var shape map[string]json.RawMessage
+	if err := json.Unmarshal(lifted, &shape); err != nil {
+		t.Fatalf("the lifted candidate is not an object: %v", err)
+	}
+	if _, hasWrites := shape["writes"]; !hasWrites {
+		t.Fatalf("the lifted candidate carries no `writes`, so it no longer "+
+			"resembles a plan and this oracle guards nothing:\n%s", lifted)
+	}
+
+	ce := requireRefusalStdinC3xz(t, string(lifted), codeWriteInvalid, 2,
+		"flow", "set-state", "--model", model, "--artifact", bind,
+		"--plan", "-", "--as=json")
+	if ce.Param != planFlagName {
+		t.Errorf("param = %q; want %q", ce.Param, planFlagName)
+	}
+
+	// The preview must not have been applied.
+	state := flowData(t, requireSuccess(t, "flow", "read-state",
+		"--model", model, "--artifact", bind,
+		"--artifact", artifactBinding(flowOrphanRole, art), "--as=json"))
+	if got := readerTagValue(t, state, "state", "status"); got != "draft" {
+		t.Errorf("status = %#v after a REFUSED candidate; want %q — a "+
+			"preview that skipped selection and gates must not commit",
+			got, "draft")
+	}
+}
+
 // `set-state`'s OWN success envelope is not a plan either.
 //
 // It carries `writes` and `clear`, so the "carries a plan key" test alone

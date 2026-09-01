@@ -244,9 +244,12 @@ Applying a plan without transcribing it
   by whether a top-level "type" key is present: the full
   {"type":"ok","data":{…}} envelope resolve emits, or the bare data
   object alone. Everything else is ` + codeWriteInvalid + ` on param
-  ` + "`plan`" + `, including a {"type":"failed",…} refusal piped in place
-  of a plan — a refusal carries no writes, and applying nothing from it
-  would report success for a transition the model declined.
+  ` + "`plan`" + `, including a refusal piped in place of a plan — under
+  --as json a refusal is the bare error document, carrying "code" and no
+  "type" — because a refusal carries no writes, and applying nothing from
+  it would report success for a transition the model declined. Another
+  verb's envelope refuses too: a read-state result carries no writes, and
+  a set-state result or a next candidate is not a decision this may apply.
 
   The plan's clear[] arrives as clears, exactly as --clear would carry
   them. The <clear> sentinel is unauthorable in a plan's writes{} too:
@@ -263,9 +266,14 @@ Applying a plan without transcribing it
   checked against the model's own grammar — owned, served by exactly
   one writer, well-formed for its declared kind — on the same path a
   --write key takes, and a set value is re-canonicalised rather than
-  trusted. So a stale plan, a plan for another model, or a plan whose
-  keys this model no longer serves refuses here; nothing about having
-  come from resolve makes a value legal.
+  trusted. Nothing about having come from resolve makes a value legal.
+
+  That check is over the plan's CONTENT, not its provenance. Nothing
+  reads a revision, a timestamp, or which model produced the document,
+  because nothing links one call to the next: a stale plan, or a plan
+  from another model, refuses only where its keys or values are not
+  legal here, and applies where they are. Re-resolve if the state may
+  have moved; the read-back below is what confirms what actually landed.
 
 Read-back is the commit-time check
 
@@ -461,6 +469,15 @@ func parseWrites(cmd *cobra.Command, m *table.Model) ([]resolve.Tag, []string, *
 		// lookup here is total, unlike `parseTags`'s.
 		canonical, ce := canonicalValue(key, value, m.Tags[key], "write")
 		if ce != nil {
+			// `canonicalValue` always names the KEY as the param, which is
+			// right for `--write status=…` — the caller typed that key on
+			// that flag — and wrong for a plan-carried value, where the
+			// caller typed `--plan` and has no `--status` to go fix. The
+			// admit body's own `param` already carries the right answer for
+			// both carriers (the key for a flag, `plan` for a plan), so
+			// deferring to it is what makes the refusal name something the
+			// caller can act on. The message still names the key.
+			ce.Param = param
 			return ce
 		}
 		planned = append(planned, resolve.Tag{Key: key, Value: canonical})
