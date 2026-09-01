@@ -640,6 +640,21 @@ func TestC3xz_ANullEnvelopeTypeNeverSilentlyDropsThePlansWrites(t *testing.T) {
 		t.Errorf("param = %q; want %q", ce.Param, planFlagName)
 	}
 
+	// The DIAGNOSTIC must classify this as a non-string `type`, not as a
+	// refusal envelope. `json.Unmarshal` takes `null` into a `string` as a
+	// no-op, so decoding to a non-pointer would report the document as an
+	// empty-NAMED envelope — "the plan is a `` envelope" — and attach the
+	// resolve-the-refusal hint to something that is not a refusal, sending
+	// the caller to look for a refusal that does not exist.
+	if strings.Contains(ce.Message, "`` envelope") {
+		t.Errorf("message reports an empty-named envelope: %q; a null `type` "+
+			"is a non-string discriminator, not a refusal", ce.Message)
+	}
+	if !strings.Contains(ce.Message, "not a string") {
+		t.Errorf("message = %q; want it to name the non-string `type`",
+			ce.Message)
+	}
+
 	// The write must NOT have landed. A refusal that still mutated the
 	// artifact would be worse than the silent drop it replaces.
 	state := flowData(t, requireSuccess(t, "flow", "read-state",
@@ -829,9 +844,10 @@ func TestC3xz_ANextCandidateIsNotAPlan(t *testing.T) {
 // It carries `writes` and `clear`, so the "carries a plan key" test alone
 // admits it, and a caller who piped one set-state into another would
 // silently REPLAY the first one's mutations — a pipeline that looks like it
-// re-derived a decision when nothing consulted the table. `writers` and
-// `owned` belong to `setStatePayload` alone (`resolvePayload` has neither),
-// so they identify the wrong producer without a field allowlist.
+// re-derived a decision when nothing consulted the table. `writers` is the
+// only key exclusive to `setStatePayload`, so it alone identifies the wrong
+// producer without a field allowlist — `owned` looks like a second
+// discriminator and is not one, as the final arm below shows.
 //
 // ADVERSARIAL
 func TestC3xz_SetStatesOwnEnvelopeIsNotAPlan(t *testing.T) {

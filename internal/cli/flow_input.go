@@ -393,15 +393,22 @@ func readPlan(cmd *cobra.Command, path string) (*carriedPlan, *clierr.CLIError) 
 		// refusal spelling, `null`, a number, an object — is not a plan this
 		// applies. Decoding into a string first means a non-string `type`
 		// refuses by name rather than being mistaken for an absent key.
-		var envType string
-		if err := json.Unmarshal(env.Type, &envType); err != nil {
+		//
+		// The target is `*string`, not `string`: `json.Unmarshal` takes the
+		// literal `null` into a `string` as a no-op, leaving `""`, which
+		// would report `"type":null` as an empty-named ENVELOPE and hand
+		// back the resolve-the-refusal hint for a document that is not a
+		// refusal. A pointer keeps "absent value" distinct from "the empty
+		// string", so the null lands on the non-string arm where it belongs.
+		var envType *string
+		if err := json.Unmarshal(env.Type, &envType); err != nil || envType == nil {
 			return nil, userErr(codeWriteInvalid, planFlagName,
 				"the plan's `type` is not a string; --plan takes one "+
 					"`flow resolve --as json` envelope or its `data` object")
 		}
-		if envType != planEnvelopeOK {
+		if *envType != planEnvelopeOK {
 			ce := userErr(codeWriteInvalid, planFlagName,
-				"the plan is a `"+envType+"` envelope, not a plan; a "+
+				"the plan is a `"+*envType+"` envelope, not a plan; a "+
 					"refusal carries no writes to apply")
 			ce.Hint = "resolve the refusal first; `--plan` applies only a " +
 				"successful plan"
