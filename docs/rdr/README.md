@@ -35,6 +35,7 @@ engine README — this file is only the per-project index.
 | [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Implemented | High |
 | [0025](0025-command-invoking-accessor-bindings.md) | Command-invoking accessor bindings | Implemented | High |
 | [0026](0026-bounded-drain-precedence-in-the-c4-triple.md) | Bounded-drain precedence in the C4 execution-safety triple | Draft | High |
+| [0027](0027-c5-interpreter-deny-list-authority-surface.md) | Authority surface of the C5 interpreter deny-list | Draft | Medium |
 
 ## Implementing
 
