@@ -13,7 +13,7 @@ N/A-bulleted). -->
 - **Date**: 2026-08-31
 - **Status**: Draft
 - **Type**: Architecture
-- **Profile**: mid — one contract (the predicate shape and claim wording of 0025:C5's `command_shell_interpreter` deny-list), locking what a reviewer-visible lint promises.
+- **Profile**: large — C1, the successor predicate and claim wording for 0025:C5's `command_shell_interpreter` deny-list; user-facing yes; locks format
 - **Priority**: Medium
 - **Related Issues**: intrastate#zvtg (defect tracker; stays open until Stage 8); intrastate#v0hb (closed, RDR 0025's tracker); intrastate#q2q1 (open — the contained `env` option-flag sub-fix; subsumed by C1's position-free predicate, may land first without conflict); the charted `stdin = "none"|"envelope"` successor in RDR 0025's `evidence/critique/Charted.md`
 - **Predecessors**: 0025-command-invoking-accessor-bindings
@@ -51,40 +51,40 @@ detail — the candidate answers are weighed in §Alternatives Considered.
 ## Critical Assumptions
 
 - **A1 `interpreterForm` has exactly two consumers, both inside `carrierDefect`: clause 3's whitespace exemption (the `isInterp` read) and clause 4's refusal — so one predicate change reaches both clauses and nothing else.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/table/load.go::carrierDefect` — the sole call site; a repo-wide symbol search returns no other consumer (Resolve re-runs it).
+  - **Evidence**: `internal/table/load.go::carrierDefect` is the sole call site — `interpreterForm(argv)` is invoked once (`load.go:1095`), and its `isInterp` result is read exactly twice: clause 3's whitespace exemption (`load.go:1114`, `!isInterp || …`) and clause 4's refusal (`load.go:1124`). A repo-wide search for `interpreterForm` returns only that call, the declaration and its doc comment; `isInterp` appears at those three lines and nowhere else. The reuse audit confirms no second argv scanner or command-position classifier exists anywhere in the audited paths.
   - **If wrong**: a second consumer keeps the argv0-only shape and the two disagree on which defect a wrapper form reports.
 - **A2 No binding that lints green today carries a listed interpreter basename as a non-argv0 word followed later by one of that interpreter's flags — widening the predicate refuses nothing currently accepted in the repo's fixtures or 0025's verification models.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: pending — `intrastate lint` over every `command`-carrying fixture under `internal/table/testdata/` and the 0025 MVV models with the C1 predicate; expected: zero new refusals.
+  - **Evidence**: `evidence/spikes/a2-widened-predicate-no-new-refusals.md` — both predicates computed over all 32 `command` argv vectors in `internal/table/testdata/neg/*.toml` and `command_carrier_0025_test.go` (11 green, 21 already-negative; no positive fixture declares `command`). Zero divergences: no vector moves `old=false → new=true`, so no green binding is newly refused. `["perl","-e","print 1"]` stays green under both — the widen is over argv POSITION, not over which basenames are listed, so an unlisted spelling is unaffected. `go test ./internal/table/` green before and after. Scope: this repo's fixtures and 0025's models, which is exactly the claim's scope; it says nothing about an out-of-tree user model, where the widened refusal is the intended behaviour.
   - **If wrong**: a green model turns red on upgrade and the refusal's remediation ("put it in a script") misdirects, because there is no script to extract.
 - **A3 Every wrapper form the Problem Statement names (`env -i`, `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas`) places the interpreter name and its inline-code flag as separate argv words in that order, so the position-free predicate refuses each — and a brace-bearing string under a wrapper reports `command_shell_interpreter`, not `command_unknown_placeholder`.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: the MVV's wrapper-mutant set (steps 2–3), one mutant per named wrapper plus one carrying `{artifact}` inside the string.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `evidence/spikes/a3-wrapper-argv-transparency.md` — two parts. (1) Each named wrapper was run through a real no-shell `exec.Command` harness; every one presents the interpreter and its inline-code flag as separate, ordered argv words (`["nice","sh","-c",…]`, `["env","-u","FOO","sh","-c",…]`, `["stdbuf","-o0","sh","-c",…]`, …). Four wrappers (`setsid`, `timeout`, `chpst`, `doas`) are absent from stock darwin and report `executable file not found`; their argv layout is still correct, and the layout is all the predicate reads, so host availability does not bear on the claim. (2) Both predicates computed over those exact vectors: all ten flip `false → true` under C1, each reporting `sh -c`, while `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]` and `["sh","-s"]` stay `false`. The second half (category under a wrapper) is structural: `isInterp` gates clause 3's exemption at `load.go:1114` and triggers clause 4 at `:1124` from the single call at `:1095`, so `["nice","sh","-c","cat {artifact}"]` — today `command_unknown_placeholder`, per 0025 deviation D18 — reports the interpreter form once the predicate matches. End-to-end confirmation is the MVV's step-2 `{artifact}` mutant at implementation.
   - **If wrong**: a named wrapper form still lints green and C1's promise is false at lock; or the wrapper form masks the interpreter defect (0025's D6 failure re-opened).
 - **A4 From a fixed argv executed without a shell, the only forms that spell or source shell code outside separate argv words are a one-word shell string (`env -S "sh -c …"`, or a single `"sh -c …"` element handed to a tool that re-splits it) and a stdin-fed shell (`sh -s`, bare `sh`); `sh <script` is unreachable (no redirection without a shell) and `sh script.sh` is the sanctioned wrapper-file form.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: pending — run each form through the executor's spawn path and record whether a shell executes and whether `lint` admitted it; the out-of-scope list in C1 must equal the admitted-and-executes set.
+  - **Evidence**: `evidence/spikes/a4-reachable-shell-forms-from-fixed-argv.md` — seven probes plus five adversarial candidates, each run through a real no-shell `exec.Command` harness. `sh <script` is empirically unreachable: `<` arrives as a literal filename operand and `sh` exits 127 without touching the script. `sh ./gate.sh` runs the declared FILE, not inline code. The adversarial round found no reachable third form: bundled `sh -cecho …` is rejected by `sh` itself AND fails the predicate's exact flag match; `/bin/sh -c` is still caught via `base()`; a renamed interpreter is the by-design OPEN deny-list case. `sh -es`, `python -` and `node -` do execute caller code and are admitted — but they deliver it over STDIN, the channel C1 already declares out of scope; the spike is what widened that line from "a stdin-fed shell" to the channel, since both the old and widened predicates admit all of them. So the admitted-and-executes set equals C1's named list. Platform note (per 0025:F9, recorded here and not in the contract, which stays platform-neutral): `env -S` requires GNU env — verified against GNU env 9.11, which splits the word and runs the shell — while darwin's stock BSD env rejects `-S` outright; the FORM (a shell string inside one argv word) is reachable on any host, and C1's second spelling, a single `"sh -c …"` element re-split by the receiving tool, carries no such dependency.
   - **If wrong**: a reachable form outside C1's named out-of-scope list executes a shell and the "named by name" claim is incomplete.
-- **A5 The `sh -s` / bare-`sh` hazard is owned by the charted `stdin = "none" | "envelope"` successor: withholding the envelope from a command that never declared it leaves a stdin-reading shell nothing to execute, so routing that axis there leaves no reviewer-visible gap unowned.**
-  - **Status**: Pending
+- **A5 The stdin-fed-interpreter hazard (`sh -s`, bare `sh`, and the non-shell spellings `python -` / `node -`) is owned by the charted `stdin = "none" | "envelope"` successor: withholding the envelope from a command that never declared it leaves a stdin-reading interpreter nothing to execute, so routing that axis there leaves no reviewer-visible gap unowned.**
+  - **Status**: Verified
   - **Method**: Design Decision
-  - **Evidence**: this RDR's scoping choice, resting on 0025's `evidence/critique/Charted.md` ("not statically detectable from argv, so no C5 arm can catch it"); until the successor ships, C1 names the form admitted and the reviewer reads argv.
-  - **If wrong**: the successor never ships or withholds nothing, and `sh -s` stays an unowned admitted shell.
+  - **Evidence**: this RDR's scoping choice, resting on 0025's `evidence/critique/Charted.md`, whose entry is scoped to "Declared stdin appetite (`stdin = "none" | "envelope"`) **on a command entry**" and whose motivating hazard is `tee {artifact}` — not a shell. The successor's remit is therefore what a command entry CONSUMES, which covers the non-shell spellings on the same mechanism, so C1's channel-scoped wording describes that remit rather than extending it. Corroborating prior art: consul's `command/exec/exec.go` gates stdin-as-script (`cmd == "-"`) on its declared shell flag, treating stdin delivery as one concern with shell mode. **Durability caveat**: no kata tracks the successor — it exists only as that `Charted.md` line (`kata list --status open`, 2026-09-03), so the If-wrong below is nearer than a charted item normally implies; until it ships, C1 names the forms admitted and the reviewer reads argv.
+  - **If wrong**: the successor never ships or withholds nothing, and the stdin forms stay unowned admitted interpreters.
 
 ## Proposed Solution
 
 ### Approach
 
-Decide once what 0025:C5's deny-list is the authority over: **argv words, at any position** — never the contents of a word, stdin, files, or the resolved binary. The predicate is freed from argv0: a binding is refused when a listed interpreter word is followed, at any later argv position, by one of that interpreter's inline-code flags. That closes the whole wrapper class (`env -i`, `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas`, and every wrapper not yet thought of) with **no wrapper table and no option grammar**, because nothing before the interpreter word is read at all. The `env`-chain walk in `internal/table/load.go::interpreterForm` is deleted as subsumed (intrastate#q2q1 may land first; the walk goes either way).
+Decide once what 0025:C5's deny-list is the authority over: **argv words, at any position** — never the contents of a word, stdin, files, or the resolved binary. The predicate is freed from argv0: a binding is refused when a listed interpreter word is followed, at any later argv position, by one of that interpreter's inline-code flags. That closes the whole wrapper class (`env -i`, `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas`, and every wrapper not yet thought of) with **no wrapper table and no option grammar**, because nothing before the interpreter word is read at all. The `env`-chain walk in `internal/table/load.go::interpreterForm` is deleted: this record DECIDES that C1 subsumes it, which the tracker deliberately left open (intrastate#q2q1 "ships independently, and does not foreclose any of the three answers"). Subsumption is verified, not assumed — the position-free predicate refuses all nine forms q2q1 enumerates (`-i`, `-u FOO`, `--unset=FOO`, `-0`, `-C DIR`, `--chdir=`, `--`, `A=1`, and mixed chains), since nothing before the interpreter word is read (`evidence/research/stage4-scope-wording.md` §Q3). q2q1 may still land first; the walk goes either way.
 
-The claim wording is narrowed to exactly that predicate, and the two forms an argv-level check cannot see are declared out of scope **by name**: a shell string carried inside one word (`env -S "sh -c …"`), and a shell that reads its script from stdin (`sh -s`, bare `sh`), the latter routed to the charted `stdin = "none" | "envelope"` successor, which withholds the only script source a fixed argv can reach. `sh script.sh` stays the sanctioned wrapper-file form.
+The claim wording is narrowed to exactly that predicate, and the two forms an argv-level check cannot see are declared out of scope **by name**: a shell string carried inside one word (`env -S "sh -c …"`), and an interpreter that reads its script from stdin (`sh -s`, bare `sh`, and the non-shell spellings `python -` / `node -`), the latter routed to the charted `stdin = "none" | "envelope"` successor, which withholds the only script source a fixed argv can reach. That second form is named by its CHANNEL rather than by a list of shell spellings: the deny-list already carries `python`, `ruby`, `node` and `php`, so a promise that said "a stdin-fed shell" would leave a reviewer to discover `["python","-"]` themselves — the one thing this record exists to stop. `sh script.sh` stays the sanctioned wrapper-file form.
 
-What the lint then promises a reviewer is one sentence they can hold: *if an interpreter and its inline-code flag appear as two separate words in that order, anywhere in argv, the binding is refused; a one-word shell string or a stdin script you read yourself.* This keeps C5's own frame — "the interpreter deny-list is defense in depth over that, not the barrier itself" (0025:§normative-contracts, beside C5) ⇒ the deny-list is never re-promoted to a barrier, so no wrapper table is justified; but the cost it raises is no longer defeated by one leading word, which is what a check "whose purpose is visibility" owes the reader.
+What the lint then promises a reviewer is one sentence they can hold: *if an interpreter and its inline-code flag appear as two separate words in that order, anywhere in argv, the binding is refused; a one-word shell string or a stdin-fed interpreter you read yourself.* This keeps C5's own frame — "the interpreter deny-list is defense in depth over that, not the barrier itself" (0025:§normative-contracts, beside C5) ⇒ the deny-list is never re-promoted to a barrier, so no wrapper table is justified; but the cost it raises is no longer defeated by one leading word, which is what a check "whose purpose is visibility" owes the reader.
 
 The prior-art frame supports the shape: no peer CLI detects shell-ness from argv — gh declares it (`pkg/cmd/alias/set/set.go::NewCmdSet`, `--shell` "Declare an alias to be passed through a shell interpreter") ⇒ detection is intrastate's own construction and its promise must be bounded by its own predicate, not borrowed; and Go's `os/exec` package doc ("intentionally does not invoke the system shell … pipelines, or redirections") ⇒ from a fixed argv a shell runs only through an argv word, so words are the complete surface an argv check can own and `sh <script` is not a reachable form.
 
@@ -106,11 +106,11 @@ The successor text for 0025:C5's `command_shell_interpreter` line and its `inter
 command_shell_interpreter     # a listed interpreter word followed, at ANY later argv position, by one of that interpreter's inline-code flags — under any prefix (env and its options, nice, timeout, xargs, doas, …); no opt-in in v1
 predicate:  refuse iff there exist i < j with base(argv[i]) a listed interpreter and argv[j] one of its listed flags; base = the text after the last `/`, matched exactly (no suffix or alias folding: `python3`, `nodejs`, `busybox` stay unlisted spellings under the OPEN rule). Nothing before argv[i] is read; no wrapper table exists and none may be added. The reported form is argv[i] + " " + argv[j] for the lowest i, then the lowest j
 reads:      argv WORDS only. The check never splits a word on whitespace, never reads stdin, files, PATH, or the resolved binary
-out of scope, BY NAME (admitted by lint; a shell may run): a shell string carried in ONE word (`env -S "sh -c …"`, or a single `"sh -c …"` element handed to a tool that re-splits it); a stdin-fed shell (`sh -s`, bare `sh`) — owned by the charted `stdin = "none" | "envelope"` successor. `sh script.sh` is the sanctioned wrapper-file form and never a defect
+out of scope, BY NAME (admitted by lint; an interpreter may run): a shell string carried in ONE word (`env -S "sh -c …"`, or a single `"sh -c …"` element handed to a tool that re-splits it); an interpreter that reads its script from STDIN (`sh -s`, bare `sh`, `sh -es`, `python -`, `node -`) — owned by the charted `stdin = "none" | "envelope"` successor, whose remit is what a command entry CONSUMES and so covers the non-shell spellings too. The channel is the scope: any listed interpreter taking its code on stdin rather than as a later argv word is admitted, however spelled. `sh script.sh` is the sanctioned wrapper-file form and never a defect
 interpreter set: OPEN (deny-listed, not closed), unchanged from 0025:C5 — an unlisted spelling is admitted; the list grows by amendment of THIS clause
 clause 3 coupling: 0025:C5 clause 3's whitespace exemption keys on this predicate, so a brace-bearing string under a wrapper reports the interpreter form, never command_unknown_placeholder; within-entry precedence is 0025:C5's, unchanged
 report:     category string, remediation ("inline shell is not a declared command; put it in a script and declare the script as argv0") and position in `table.Categories()` are unchanged; the detail additionally names the two matched words
-promise:    what a reviewer may rely on is the predicate line and nothing more; the lint's user-facing description states the out-of-scope forms in the words above
+promise:    what a reviewer may rely on is the predicate line and nothing more; the lint's user-facing description states the out-of-scope forms in the words above. No such description exists in the shipped code today — the only user-facing text is the refusal detail, which fires on refusal and never on admission — so Phase 3 creates it and THESE words are the text it ships
 ```
 
 #### Load-Bearing Decisions
@@ -138,7 +138,7 @@ Sample refusals (Illustrative): `["timeout","5","sh","-c","…"]` → `sh -c`; `
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| Withholding stdin from a command that never declared it (so a stdin-fed shell has no script) | Future — the charted `stdin = "none" \| "envelope"` successor | Deferred | C1 names `sh -s` out of scope and routes it there; until it ships the form is admitted and named as such |
+| Withholding stdin from a command that never declared it (so a stdin-fed interpreter has no script) | Future — the charted `stdin = "none" \| "envelope"` successor; no kata tracks it yet (A5) | Deferred | C1 names the stdin channel out of scope and routes it there; until it ships the forms are admitted and named as such |
 | Refusal category, remediation text, `Categories()` registration | Predecessor — 0025:C5 | Available | none; C1 changes only the predicate and the claim |
 
 ### Existing Infrastructure Audit
@@ -273,7 +273,7 @@ Read, not spiked: `internal/table/load.go::interpreterForm`, `::carrierDefect` (
 - Positive: every wrapper form in the defect tracker, and every wrapper not yet thought of, is refused by one predicate with no table to maintain; intrastate#q2q1's walk is deleted rather than extended.
 - Positive: the reviewer's promise is one sentence, with the two admitted forms named in it.
 - Negative: the flag-anywhere laxity stays, so a script argument that is itself `-c`/`-e` after an interpreter word is refused (already true today); the message now names the words so the fix is visible.
-- Negative: `env -S "sh -c …"` and `sh -s` are admitted and documented as such; the second waits on the stdin successor.
+- Negative: `env -S "sh -c …"` and the stdin-fed forms (`sh -s`, bare `sh`, `sh -es`, `python -`, `node -`) are admitted and documented as such; the second class waits on the stdin successor, which no kata yet tracks (A5).
 
 ### Risks and Mitigations
 
@@ -285,7 +285,7 @@ Read, not spiked: `internal/table/load.go::interpreterForm`, `::carrierDefect` (
 ### Failure Modes
 
 - Visible: a refused wrapper form names `sh -c` (the matched words) and the wrapper-file remediation; a false refusal names the two words that matched, so the author sees the script argument that collided.
-- Silent: a one-word shell string or a stdin-fed shell lints green — by contract, named in C1; diagnosis is reading argv, which C1's promise tells the reviewer to do for exactly those shapes.
+- Silent: a one-word shell string or a stdin-fed interpreter (`sh -s`, bare `sh`, `sh -es`, `python -`, `node -`) lints green — by contract, named in C1; diagnosis is reading argv, which C1's promise tells the reviewer to do for exactly those shapes.
 - Recovery: none needed for the predicate (no state); a wrong refusal is fixed by renaming the script's flag or wrapping, as the message says.
 
 ## Implementation Plan
@@ -299,7 +299,7 @@ Read, not spiked: `internal/table/load.go::interpreterForm`, `::carrierDefect` (
 
 1. Take the 0025 command-carrier model with a green `command` read binding; `intrastate lint` passes.
 2. Swap in one mutant per named wrapper — `["env","-i","sh","-c","…"]`, `["env","-u","FOO","sh","-c","…"]`, `["nice","sh","-c","…"]`, `["timeout","5","sh","-c","…"]`, `["xargs","sh","-c","…"]`, `["doas","sh","-c","…"]` — and one carrying `{artifact}` inside the string under `nice`; each refuses with `command_shell_interpreter`, the detail naming `sh -c` and the script remediation; the `{artifact}` mutant does NOT report `command_unknown_placeholder`.
-3. Swap in the admitted forms `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`; lint passes and the first two are shown, by running the model under `--allow-commands`, to behave as C1 states (the wrapper file runs; the `-S` string runs a shell).
+3. Swap in the admitted forms `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`, and the non-shell stdin spelling `["python","-"]`; lint passes for each. The first two are shown, by running the model under `--allow-commands`, to behave as C1 states (the wrapper file runs; the `-S` string runs a shell — on a host whose `env` supports `-S`, GNU env, since darwin's stock BSD env rejects it; A4). `["python","-"]` is the probe that C1's out-of-scope line is stated over the stdin CHANNEL and not over shell spellings: it must lint green and be documented as admitted.
 4. The original 0025 REQ-74 probes and the negative fixture still refuse with the same category, and `table.Categories()` order is unchanged.
 End-state: every wrapper mutant red with the right defect, every admitted form green and documented, no existing probe changed.
 
@@ -319,23 +319,66 @@ Update the C5 comments in `load.go` to cite this record's C1, and the lint's use
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Unit tests beside the existing C5 probes in
+`internal/table/command_carrier_0025_test.go`, driven through `table.Load` so
+each scenario asserts the CATEGORY a model author actually sees. Done = every
+scenario below green, the four REQ-74 probes and
+`neg/neg-command-shell-interpreter.toml` unedited and still green, and
+`go test ./internal/table/` clean. Scenarios 1–3 are the predicate; 4–5 are
+the promise, which is the half a predicate test cannot reach.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: One mutant per wrapper the Problem Statement names — `env -i`,
+   `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf -o0`,
+   `chpst`, `doas` — each wrapping `sh -c`.
+   **Expected**: each refuses `command_shell_interpreter`, detail naming the
+   matched words `sh -c` and the script remediation. Backed by A3's spike, which
+   computed all ten as `false → true` under the widened predicate
+   (`evidence/spikes/a3-wrapper-argv-transparency.md`); the wrapper binary need
+   not exist on the test host, since the predicate reads argv words only.
+
+2. **Scenario**: `["nice","sh","-c","cat {artifact}"]` — a brace-bearing command
+   string under a wrapper.
+   **Expected**: `command_shell_interpreter`, NOT `command_unknown_placeholder`.
+   This is the wrong-defect masking 0025 deviation D18 left open under a
+   wrapper; it passes only because clause 3's exemption reads the same
+   `isInterp` the widened predicate now sets (`load.go:1095/1114/1124`, A1).
+
+3. **Scenario**: The `env`-option forms intrastate#q2q1 enumerates — `-i`,
+   `-u FOO`, `--unset=FOO`, `-0`, `-C DIR`, `--chdir=DIR`, `--`, and a mixed
+   `-i A=1 -- sh -c` chain.
+   **Expected**: all refuse `command_shell_interpreter`, proving the deleted
+   `env` walk is subsumed rather than merely removed (Approach; verified in
+   `evidence/research/stage4-scope-wording.md` §Q3).
+
+4. **Scenario**: The admitted forms — `["sh","./gate.sh"]`,
+   `["env","-S","sh -c echo"]`, `["sh","-s"]`, `["sh"]`, `["sh","-es"]`,
+   `["python","-"]`, `["node","-"]`.
+   **Expected**: every one lints GREEN. These are C1's out-of-scope line as a
+   test: a future predicate change that starts refusing one of them has broken
+   the promise, not tightened it. `["python","-"]` and `["sh","-es"]` are the
+   discriminating cases — they fail under any implementation that reads the
+   out-of-scope line as shell-spellings-only (A4).
+
+5. **Scenario**: The regression set for the accepted false-refusal class —
+   `["ruby","tool.rb","-e","prod"]` (a script whose own argument is `-e`).
+   **Expected**: refuses, and the detail names `ruby -e` — the two matched
+   words — so the author can see which pair collided. The refusal is
+   already-accepted behaviour (D-selection-predicate); the message is what this
+   record adds, and the premortem names its absence as the failure mode.
+
+6. **Scenario**: `table.Categories()` membership and order, and the
+   `command_shell_interpreter` wire string.
+   **Expected**: unchanged. The edit touches `load.go` only; the category
+   constant and its position live in `category.go:60`/`:103` and are not
+   edited (C1 `report:`, Naming LBD).
 
 ### Performance Expectations
 
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+Omitted: no alternative in this record was weighed on empirical performance
+grounds. For the record the predicate is O(len(argv)²) worst case against
+O(len(argv)) today, over vectors bounded by a hand-authored model entry
+(single digits of words), run once per entry at load time — the scan is not
+on any hot path and no alternative was rejected for cost.
 
 ## Finalization Gate
 
@@ -465,5 +508,5 @@ matrix/provenance prose left from the template or Seed
 - 0004:ALT2, 0004:ALT3 (name lists rejected as authority)
 - `internal/table/load.go::interpreterForm`, `::carrierDefect`, `::shellInterpreters`, `::filepathBase`; `internal/cli/cmdbind/cmdbind.go::resolveArgv0`; `internal/table/command_carrier_0025_test.go::TestReq74_KnownInterpreterWithInlineCodeIsALoadTimeDefect`
 - Go `os/exec` package documentation (no shell, no redirection); gh `pkg/cmd/alias/set/set.go::NewCmdSet`; roborev `internal/daemon/hooks.go::(*HookRunner).runHook`; beads `internal/creds/command.go::(CommandSource).Resolve`
-- intrastate#zvtg (tracker), intrastate#q2q1 (subsumed `env` walk), intrastate#b84g (clause 3, closed)
+- intrastate#zvtg (tracker), intrastate#q2q1 (the `env` walk this record decides is subsumed; the tracker left that open), intrastate#b84g (clause 3, closed)
 - Stage 2 evidence: `evidence/research/prior-art.md`
