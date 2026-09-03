@@ -1,0 +1,969 @@
+{
+  "edges": [
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 18,
+      "line_end": 18,
+      "evidence": "RDR 0025",
+      "field": "Related Issues"
+    },
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 19,
+      "line_end": 19,
+      "evidence": "0025-command-invoking-accessor-bindings",
+      "field": "Predecessors",
+      "slug": "0025-command-invoking-accessor-bindings"
+    },
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "overrides",
+      "resolved": true,
+      "line": 20,
+      "line_end": 20,
+      "evidence": "0025",
+      "field": "Overrides"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::interpreterForm",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 21,
+      "line_end": 21,
+      "evidence": "internal/table/load.go::interpreterForm",
+      "field": "Seam Lineage"
+    },
+    {
+      "from": "0027",
+      "to": "issue/list",
+      "kind": "issue",
+      "line": 21,
+      "line_end": 21,
+      "evidence": "kata list",
+      "field": "Seam Lineage"
+    },
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 25,
+      "line_end": 25,
+      "evidence": "RDR 0025"
+    },
+    {
+      "from": "0027:A1",
+      "to": "internal/table/load.go::carrierDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 56,
+      "line_end": 56,
+      "evidence": "internal/table/load.go::carrierDefect",
+      "field": "Evidence"
+    },
+    {
+      "from": "0027:A5",
+      "to": "issue/list",
+      "kind": "issue",
+      "line": 76,
+      "line_end": 76,
+      "evidence": "kata list",
+      "field": "Evidence"
+    },
+    {
+      "from": "0027:A5",
+      "to": "issue/tracks",
+      "kind": "issue",
+      "line": 76,
+      "line_end": 76,
+      "evidence": "kata tracks",
+      "field": "Evidence"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::interpreterForm",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 83,
+      "line_end": 83,
+      "evidence": "internal/table/load.go::interpreterForm"
+    },
+    {
+      "from": "0027",
+      "to": "pkg/cmd/alias/set/set.go::NewCmdSet",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 89,
+      "line_end": 89,
+      "evidence": "pkg/cmd/alias/set/set.go::NewCmdSet"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::carrierDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 93,
+      "line_end": 93,
+      "evidence": "internal/table/load.go::carrierDefect"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::interpreterForm",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 148,
+      "line_end": 148,
+      "evidence": "internal/table/load.go::interpreterForm"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::filepathBase",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 149,
+      "line_end": 149,
+      "evidence": "internal/table/load.go::filepathBase"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::carrierDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 150,
+      "line_end": 150,
+      "evidence": "internal/table/load.go::carrierDefect"
+    },
+    {
+      "from": "0027",
+      "to": "internal/cli/cmdbind/cmdbind.go::resolveArgv0",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 151,
+      "line_end": 151,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::resolveArgv0"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/command_carrier_0025_test.go::TestReq74_KnownInterpreterWithInlineCodeIsALoadTimeDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 152,
+      "line_end": 152,
+      "evidence": "internal/table/command_carrier_0025_test.go::TestReq74_KnownInterpreterWithInlineCodeIsALoadTimeDefect"
+    },
+    {
+      "from": "0027",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 162,
+      "line_end": 162,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0027:JC1",
+      "to": "0028",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 164,
+      "line_end": 164,
+      "evidence": "0028",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0027:JC1",
+      "to": "cli/0025:C5",
+      "kind": "joint-decision-home",
+      "resolved": true,
+      "line": 164,
+      "line_end": 164,
+      "evidence": "cli/0025:C5",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0027:JC1",
+      "to": "cli/0028:C1",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 164,
+      "line_end": 164,
+      "evidence": "cli/0028:C1"
+    },
+    {
+      "from": "0027:JC1",
+      "to": "cli/0028:C4",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 164,
+      "line_end": 164,
+      "evidence": "cli/0028:C4"
+    },
+    {
+      "from": "0027:JC1",
+      "to": "internal/table/load.go::carrierDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 164,
+      "line_end": 164,
+      "evidence": "internal/table/load.go::carrierDefect"
+    },
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 226,
+      "line_end": 226,
+      "evidence": "RDR 0025"
+    },
+    {
+      "from": "0027",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 248,
+      "line_end": 248,
+      "evidence": "RDR 0025"
+    },
+    {
+      "from": "0027",
+      "to": "internal/cli/cmdbind/cmdbind.go::resolveArgv0",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 258,
+      "line_end": 258,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::resolveArgv0"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::interpreterForm",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 258,
+      "line_end": 258,
+      "evidence": "internal/table/load.go::interpreterForm"
+    },
+    {
+      "from": "0027",
+      "to": "pkg/cmd/alias/set/set.go::NewCmdSet",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 258,
+      "line_end": 258,
+      "evidence": "pkg/cmd/alias/set/set.go::NewCmdSet"
+    },
+    {
+      "from": "0027",
+      "to": "{ARTIFACT_DIR}/gate.md",
+      "kind": "artifact",
+      "line": 386,
+      "line_end": 386,
+      "evidence": "{ARTIFACT_DIR}/gate.md"
+    },
+    {
+      "from": "0027:G-assumptions",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 431,
+      "line_end": 431,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0027",
+      "to": "internal/cli/cmdbind/cmdbind.go::resolveArgv0",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 509,
+      "line_end": 509,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::resolveArgv0"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/command_carrier_0025_test.go::TestReq74_KnownInterpreterWithInlineCodeIsALoadTimeDefect",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 509,
+      "line_end": 509,
+      "evidence": "internal/table/command_carrier_0025_test.go::TestReq74_KnownInterpreterWithInlineCodeIsALoadTimeDefect"
+    },
+    {
+      "from": "0027",
+      "to": "internal/table/load.go::interpreterForm",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 509,
+      "line_end": 509,
+      "evidence": "internal/table/load.go::interpreterForm"
+    },
+    {
+      "from": "0027",
+      "to": "pkg/cmd/alias/set/set.go::NewCmdSet",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 510,
+      "line_end": 510,
+      "evidence": "pkg/cmd/alias/set/set.go::NewCmdSet"
+    }
+  ],
+  "elements": [
+    {
+      "id": "0027:A1",
+      "kind": "A",
+      "key": "1",
+      "label": "`interpreterForm` has exactly two consumers, both inside `carrierDefect`: clause 3's whitespace exemption (the `isInterp` read) and clause 4's refusal — so one predicate change reaches both clauses and nothing else.",
+      "derived": false,
+      "hash": "f7aa30f0",
+      "section": "0027:§critical-assumptions",
+      "line_start": 53,
+      "line_end": 57,
+      "bytes": 984,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A1",
+          "line_start": 54,
+          "line_end": 54,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A1",
+          "line_start": 55,
+          "line_end": 55,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`internal/table/load.go::carrierDefect` is the sole call site — `interpreterForm(argv)` is invoked once (`load.go:1095`), and its `isInterp` result is read exactly twice: clause 3's whitespace exemption (`load.go:1114`, `!isInterp || …`) and clause 4's refusal (`load.go:1124`). A repo-wide search for `interpreterForm` returns only that call, the declaration and its doc comment; `isInterp` appears at those three lines and nowhere else. The reuse audit confirms no second argv scanner or command-position classifier exists anywhere in the audited paths.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A1",
+          "line_start": 56,
+          "line_end": 56
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "a second consumer keeps the argv0-only shape and the two disagree on which defect a wrapper form reports.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A1",
+          "line_start": 57,
+          "line_end": 57
+        }
+      ]
+    },
+    {
+      "id": "0027:A2",
+      "kind": "A",
+      "key": "2",
+      "label": "No binding that lints green today carries a listed interpreter basename as a non-argv0 word followed later by one of that interpreter's flags — widening the predicate refuses nothing currently accepted in the repo's fixtures or 0025's verification models.",
+      "derived": false,
+      "hash": "85eff1c9",
+      "section": "0027:§critical-assumptions",
+      "line_start": 58,
+      "line_end": 62,
+      "bytes": 1256,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A2",
+          "line_start": 59,
+          "line_end": 59,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A2",
+          "line_start": 60,
+          "line_end": 60,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`evidence/spikes/a2-widened-predicate-no-new-refusals.md` — both predicates computed over all 32 `command` argv vectors in `internal/table/testdata/neg/*.toml` and `command_carrier_0025_test.go` (11 green, 21 already-negative; no positive fixture declares `command`). Zero divergences: no vector moves `old=false → new=true`, so no green binding is newly refused. `[\"perl\",\"-e\",\"print 1\"]` stays green under both — the widen is over argv POSITION, not over which basenames are listed, so an unlisted spelling is unaffected. `go test ./internal/table/` green before and after. Scope: this repo's fixtures and 0025's models, which is exactly the claim's scope; it says nothing about an out-of-tree user model, where the widened refusal is the intended behaviour.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A2",
+          "line_start": 61,
+          "line_end": 61
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "a green model turns red on upgrade and the refusal's remediation (\"put it in a script\") misdirects, because there is no script to extract.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A2",
+          "line_start": 62,
+          "line_end": 62
+        }
+      ]
+    },
+    {
+      "id": "0027:A3",
+      "kind": "A",
+      "key": "3",
+      "label": "Every wrapper form the Problem Statement names (`env -i`, `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas`) places the interpreter name and its inline-code flag as separate argv words in that order, so the position-free predicate refuses each — and a brace-bearing string under a wrapper reports `command_shell_interpreter`, not `command_unknown_placeholder`.",
+      "derived": false,
+      "hash": "67074a83",
+      "section": "0027:§critical-assumptions",
+      "line_start": 63,
+      "line_end": 67,
+      "bytes": 1873,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A3",
+          "line_start": 64,
+          "line_end": 64,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A3",
+          "line_start": 65,
+          "line_end": 65,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`evidence/spikes/a3-wrapper-argv-transparency.md` — two parts. (1) Each named wrapper was run through a real no-shell `exec.Command` harness; every one presents the interpreter and its inline-code flag as separate, ordered argv words (`[\"nice\",\"sh\",\"-c\",…]`, `[\"env\",\"-u\",\"FOO\",\"sh\",\"-c\",…]`, `[\"stdbuf\",\"-o0\",\"sh\",\"-c\",…]`, …). Four wrappers (`setsid`, `timeout`, `chpst`, `doas`) are absent from stock darwin and report `executable file not found`; their argv layout is still correct, and the layout is all the predicate reads, so host availability does not bear on the claim. (2) Both predicates computed over those exact vectors: all ten flip `false → true` under C1, each reporting `sh -c`, while `[\"sh\",\"./gate.sh\"]`, `[\"env\",\"-S\",\"sh -c echo\"]` and `[\"sh\",\"-s\"]` stay `false`. The second half (category under a wrapper) is structural: `isInterp` gates clause 3's exemption at `load.go:1114` and triggers clause 4 at `:1124` from the single call at `:1095`, so `[\"nice\",\"sh\",\"-c\",\"cat {artifact}\"]` — today `command_unknown_placeholder`, per 0025 deviation D18 — reports the interpreter form once the predicate matches. End-to-end confirmation is the MVV's step-2 `{artifact}` mutant at implementation.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A3",
+          "line_start": 66,
+          "line_end": 66
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "a named wrapper form still lints green and C1's promise is false at lock; or the wrapper form masks the interpreter defect (0025's D6 failure re-opened).",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A3",
+          "line_start": 67,
+          "line_end": 67
+        }
+      ]
+    },
+    {
+      "id": "0027:A4",
+      "kind": "A",
+      "key": "4",
+      "label": "From a fixed argv executed without a shell, the only forms that spell or source shell code outside separate argv words are a one-word shell string (`env -S \"sh -c …\"`, or a single `\"sh -c …\"` element handed to a tool that re-splits it) and a stdin-fed shell (`sh -s`, bare `sh`); `sh \u003cscript` is unreachable (no redirection without a shell) and `sh script.sh` is the sanctioned wrapper-file form.",
+      "derived": false,
+      "hash": "fa765210",
+      "section": "0027:§critical-assumptions",
+      "line_start": 68,
+      "line_end": 72,
+      "bytes": 2014,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A4",
+          "line_start": 69,
+          "line_end": 69,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A4",
+          "line_start": 70,
+          "line_end": 70,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`evidence/spikes/a4-reachable-shell-forms-from-fixed-argv.md` — seven probes plus five adversarial candidates, each run through a real no-shell `exec.Command` harness. `sh \u003cscript` is empirically unreachable: `\u003c` arrives as a literal filename operand and `sh` exits 127 without touching the script. `sh ./gate.sh` runs the declared FILE, not inline code. The adversarial round found no reachable third form: bundled `sh -cecho …` is rejected by `sh` itself AND fails the predicate's exact flag match; `/bin/sh -c` is still caught via `base()`; a renamed interpreter is the by-design OPEN deny-list case. `sh -es`, `python -` and `node -` do execute caller code and are admitted — but they deliver it over STDIN, the channel C1 already declares out of scope; the spike is what widened that line from \"a stdin-fed shell\" to the channel, since both the old and widened predicates admit all of them. So the admitted-and-executes set equals C1's named list. Platform note (per 0025:F9, recorded here and not in the contract, which stays platform-neutral): `env -S` requires GNU env — verified against GNU env 9.11, which splits the word and runs the shell — while darwin's stock BSD env rejects `-S` outright; the FORM (a shell string inside one argv word) is reachable on any host, and C1's second spelling, a single `\"sh -c …\"` element re-split by the receiving tool, carries no such dependency.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A4",
+          "line_start": 71,
+          "line_end": 71
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "a reachable form outside C1's named out-of-scope list executes a shell and the \"named by name\" claim is incomplete.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A4",
+          "line_start": 72,
+          "line_end": 72
+        }
+      ]
+    },
+    {
+      "id": "0027:A5",
+      "kind": "A",
+      "key": "5",
+      "label": "The stdin-fed-interpreter hazard (`sh -s`, bare `sh`, and the non-shell spellings `python -` / `node -`) is owned by the charted `stdin = \"none\" | \"envelope\"` successor: withholding the envelope from a command that never declared it leaves a stdin-reading interpreter nothing to execute, so routing that axis there leaves no reviewer-visible gap unowned.",
+      "derived": false,
+      "hash": "a1906f5b",
+      "section": "0027:§critical-assumptions",
+      "line_start": 73,
+      "line_end": 77,
+      "bytes": 1472,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A5",
+          "line_start": 74,
+          "line_end": 74,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Design Decision",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A5",
+          "line_start": 75,
+          "line_end": 75,
+          "method": {
+            "members": [
+              "Design Decision"
+            ],
+            "raw": "Design Decision"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "this RDR's scoping choice, resting on 0025's `evidence/critique/Charted.md`, whose entry is scoped to \"Declared stdin appetite (`stdin = \"none\" | \"envelope\"`) **on a command entry**\" and whose motivating hazard is `tee {artifact}` — not a shell. The successor's remit is therefore what a command entry CONSUMES, which covers the non-shell spellings on the same mechanism, so C1's channel-scoped wording describes that remit rather than extending it. Corroborating prior art: consul's `command/exec/exec.go` gates stdin-as-script (`cmd == \"-\"`) on its declared shell flag, treating stdin delivery as one concern with shell mode. **Durability caveat**: no kata tracks the successor — it exists only as that `Charted.md` line (`kata list --status open`, 2026-09-03), so the If-wrong below is nearer than a charted item normally implies; until it ships, C1 names the forms admitted and the reviewer reads argv.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A5",
+          "line_start": 76,
+          "line_end": 76
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the successor never ships or withholds nothing, and the stdin forms stay unowned admitted interpreters.",
+          "section": "0027:§critical-assumptions",
+          "element": "0027:A5",
+          "line_start": 77,
+          "line_end": 77
+        }
+      ]
+    },
+    {
+      "id": "0027:C1",
+      "kind": "C",
+      "key": "1",
+      "label": "command_shell_interpreter     # a listed interpreter word followed, at ANY later argv position, by one of that interpreter's inline-code flags — under any prefix (env and its options, nice, timeout, xargs, doas, …); no opt-in in v1",
+      "derived": false,
+      "hash": "0d14017c",
+      "section": "0027:§normative-contracts",
+      "line_start": 103,
+      "line_end": 114,
+      "bytes": 2495
+    },
+    {
+      "id": "0027:D-naming",
+      "kind": "D",
+      "key": "naming",
+      "label": "Naming",
+      "derived": false,
+      "hash": "d02e9cfb",
+      "section": "0027:§load-bearing-decisions",
+      "line_start": 118,
+      "line_end": 118,
+      "bytes": 210
+    },
+    {
+      "id": "0027:D-selection-predicate",
+      "kind": "D",
+      "key": "selection-predicate",
+      "label": "Selection / predicate",
+      "derived": false,
+      "hash": "1d811655",
+      "section": "0027:§load-bearing-decisions",
+      "line_start": 119,
+      "line_end": 119,
+      "bytes": 420
+    },
+    {
+      "id": "0027:JC1",
+      "kind": "JC",
+      "key": "1",
+      "label": "Joint-check: fired → 0028 (home: cli/0025:C5) — symmetric to 0028's arm-1 fire on `internal/table/load.go::carrierDefect` / `table.Categories()`, disposed cite-don't-restate: C1 here owns only clause 4's predicate, cli/0028:C1 and cli/0028:C4 own the `edit` arm and the tail categories, and both fence deltas against 0025:C5, which owns the clause map and within-entry precedence. Recorded at the batch propose of 2026-08-31 after this record's own check ran clear: all three arms run. Arm 1 (modify-anchors) and arm 2 (contract literals), open-only and repo-resolved: no overlaps. Arm 3 (absence, manual): the 27 Draft/Final/Implemented peers grepped for the admitted-form and wrong-defect tokens (`interpreterForm`, `env chain`, `env -i`, `xargs`, `sh -s`, `env -S`, `command_unknown_placeholder`, `command_shell_interpreter`); hits only in 0025:C5 — the line C1 succeeds, cited not relied on — and 0004's \"without raw shell strings\", which C1 keeps true. 0026 compared on its written contracts (0026:C1 amends 0025:C4's drain precedence; disjoint from C5); 0028 compared on its problem statement (an in-process `edit` carrier that runs no shell, no subprocess); no shared decision, no bridge surface.",
+      "derived": false,
+      "hash": "8a9d03b8",
+      "section": "0027:§decision-rationale",
+      "line_start": 164,
+      "line_end": 164,
+      "bytes": 1212,
+      "joint": {
+        "verdict": "fired",
+        "targets": [
+          "0028"
+        ],
+        "home": "cli/0025:C5",
+        "homes": [
+          "cli/0025:C5"
+        ],
+        "open": false
+      }
+    },
+    {
+      "id": "0027:ALT1",
+      "kind": "ALT",
+      "key": "1",
+      "label": "Alternative 1: Narrow the claim to the argv0-name heuristic",
+      "derived": false,
+      "hash": "64e94846",
+      "section": "0027:§alternative-1-narrow-the-claim-to-the-argv0-name-heuristic",
+      "line_start": 168,
+      "line_end": 182,
+      "bytes": 883
+    },
+    {
+      "id": "0027:ALT2",
+      "kind": "ALT",
+      "key": "2",
+      "label": "Alternative 2: Per-wrapper walk with a bounded wrapper table",
+      "derived": false,
+      "hash": "f6a0920c",
+      "section": "0027:§alternative-2-per-wrapper-walk-with-a-bounded-wrapper-table",
+      "line_start": 184,
+      "line_end": 198,
+      "bytes": 937
+    },
+    {
+      "id": "0027:ALT3",
+      "kind": "ALT",
+      "key": "3",
+      "label": "Alternative 3: Retire argv as the authority surface; deny-list becomes a non-load-bearing hint",
+      "derived": false,
+      "hash": "0273dee1",
+      "section": "0027:§alternative-3-retire-argv-as-the-authority-surface-deny-list-becomes-a-non-load-bearing-hint",
+      "line_start": 200,
+      "line_end": 213,
+      "bytes": 890
+    },
+    {
+      "id": "0027:BR1",
+      "kind": "BR",
+      "key": "1",
+      "label": "Declared inline-shell opt-in (a `shell` field, gh's `--shell` / `!` model)",
+      "derived": true,
+      "hash": "ca0f29dc",
+      "section": "0027:§briefly-rejected",
+      "line_start": 217,
+      "line_end": 217,
+      "bytes": 250
+    },
+    {
+      "id": "0027:BR2",
+      "kind": "BR",
+      "key": "2",
+      "label": "Exec-time identification of the resolved argv0 (`#!` / ELF read)",
+      "derived": true,
+      "hash": "ba1cfd93",
+      "section": "0027:§briefly-rejected",
+      "line_start": 218,
+      "line_end": 218,
+      "bytes": 219
+    },
+    {
+      "id": "0027:BR3",
+      "kind": "BR",
+      "key": "3",
+      "label": "Require argv0 to be a file path (no bare names)",
+      "derived": true,
+      "hash": "8cd537c8",
+      "section": "0027:§briefly-rejected",
+      "line_start": 219,
+      "line_end": 219,
+      "bytes": 188
+    },
+    {
+      "id": "0027:BR4",
+      "kind": "BR",
+      "key": "4",
+      "label": "Fold spellings (`python3` → `python`) or close the interpreter set",
+      "derived": true,
+      "hash": "4b4b91b1",
+      "section": "0027:§briefly-rejected",
+      "line_start": 220,
+      "line_end": 220,
+      "bytes": 188
+    },
+    {
+      "id": "0027:F1",
+      "kind": "F",
+      "key": "1",
+      "label": "Visible: a refused wrapper form names `sh -c` (the matched words) and the wrapper-file remediation; a false refusal names the two words that matched, so the author sees the script argument that collided.",
+      "derived": true,
+      "hash": "45b90116",
+      "section": "0027:§failure-modes",
+      "line_start": 287,
+      "line_end": 287,
+      "bytes": 206
+    },
+    {
+      "id": "0027:F2",
+      "kind": "F",
+      "key": "2",
+      "label": "Silent: a one-word shell string or a stdin-fed interpreter (`sh -s`, bare `sh`, `sh -es`, `python -`, `node -`) lints green — by contract, named in C1; diagnosis is reading argv, which C1's promise tells the reviewer to do for exactly those shapes.",
+      "derived": true,
+      "hash": "ae9a9360",
+      "section": "0027:§failure-modes",
+      "line_start": 288,
+      "line_end": 288,
+      "bytes": 253
+    },
+    {
+      "id": "0027:F3",
+      "kind": "F",
+      "key": "3",
+      "label": "Recovery: none needed for the predicate (no state); a wrong refusal is fixed by renaming the script's flag or wrapping, as the message says.",
+      "derived": true,
+      "hash": "c655949b",
+      "section": "0027:§failure-modes",
+      "line_start": 289,
+      "line_end": 289,
+      "bytes": 143
+    },
+    {
+      "id": "0027:MVV",
+      "kind": "MVV",
+      "label": "Minimum Viable Validation",
+      "derived": false,
+      "hash": "08bb6600",
+      "section": "0027:§minimum-viable-validation",
+      "line_start": 299,
+      "line_end": 304,
+      "bytes": 1428
+    },
+    {
+      "id": "0027:S1",
+      "kind": "S",
+      "key": "1",
+      "label": "One mutant per wrapper the Problem Statement names — `env -i`,",
+      "derived": false,
+      "hash": "811d8b21",
+      "section": "0027:§testing-strategy",
+      "line_start": 330,
+      "line_end": 337,
+      "bytes": 588
+    },
+    {
+      "id": "0027:S2",
+      "kind": "S",
+      "key": "2",
+      "label": "`[\"nice\",\"sh\",\"-c\",\"cat {artifact}\"]` — a brace-bearing command",
+      "derived": false,
+      "hash": "8d6b092f",
+      "section": "0027:§testing-strategy",
+      "line_start": 339,
+      "line_end": 344,
+      "bytes": 412
+    },
+    {
+      "id": "0027:S3",
+      "kind": "S",
+      "key": "3",
+      "label": "The `env`-option forms intrastate#q2q1 enumerates — `-i`,",
+      "derived": false,
+      "hash": "d29929b3",
+      "section": "0027:§testing-strategy",
+      "line_start": 346,
+      "line_end": 351,
+      "bytes": 389
+    },
+    {
+      "id": "0027:S4",
+      "kind": "S",
+      "key": "4",
+      "label": "The admitted forms — `[\"sh\",\"./gate.sh\"]`,",
+      "derived": false,
+      "hash": "17900833",
+      "section": "0027:§testing-strategy",
+      "line_start": 353,
+      "line_end": 360,
+      "bytes": 536
+    },
+    {
+      "id": "0027:S5",
+      "kind": "S",
+      "key": "5",
+      "label": "The regression set for the accepted false-refusal class —",
+      "derived": false,
+      "hash": "42183a1c",
+      "section": "0027:§testing-strategy",
+      "line_start": 362,
+      "line_end": 367,
+      "bytes": 453
+    },
+    {
+      "id": "0027:S6",
+      "kind": "S",
+      "key": "6",
+      "label": "`table.Categories()` membership and order, and the",
+      "derived": false,
+      "hash": "a525fe7e",
+      "section": "0027:§testing-strategy",
+      "line_start": 369,
+      "line_end": 373,
+      "bytes": 297
+    },
+    {
+      "id": "0027:G-contradiction",
+      "kind": "G",
+      "key": "contradiction",
+      "label": "Contradiction Check",
+      "derived": false,
+      "hash": "581cb5da",
+      "section": "0027:§contradiction-check",
+      "line_start": 408,
+      "line_end": 416,
+      "bytes": 358
+    },
+    {
+      "id": "0027:G-assumptions",
+      "kind": "G",
+      "key": "assumptions",
+      "label": "Assumption Verification",
+      "derived": false,
+      "hash": "e69b5cf1",
+      "section": "0027:§assumption-verification",
+      "line_start": 419,
+      "line_end": 434,
+      "bytes": 653
+    },
+    {
+      "id": "0027:G-scope",
+      "kind": "G",
+      "key": "scope",
+      "label": "Scope Verification",
+      "derived": false,
+      "hash": "8185d52b",
+      "section": "0027:§scope-verification",
+      "line_start": 437,
+      "line_end": 442,
+      "bytes": 164
+    },
+    {
+      "id": "0027:G-cross-cutting",
+      "kind": "G",
+      "key": "cross-cutting",
+      "label": "Cross-Cutting Concerns",
+      "derived": false,
+      "hash": "f26a8f53",
+      "section": "0027:§cross-cutting-concerns",
+      "line_start": 445,
+      "line_end": 472,
+      "bytes": 1096
+    },
+    {
+      "id": "0027:G-proportionality",
+      "kind": "G",
+      "key": "proportionality",
+      "label": "Proportionality",
+      "derived": false,
+      "hash": "68d6ac07",
+      "section": "0027:§proportionality",
+      "line_start": 475,
+      "line_end": 503,
+      "bytes": 1344
+    }
+  ],
+  "path": "/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0027-inline-shell-detection-scope.md",
+  "record": "0027",
+  "schema": "2"
+}
