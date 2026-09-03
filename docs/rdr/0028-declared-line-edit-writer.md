@@ -15,7 +15,7 @@ N/A-bulleted). -->
 - **Type**: Feature
 - **Profile**: large — one contract with clauses (carrier shape, substitution admission, execution semantics, lint) that extends 0025:C1's exactly-one carrier enum and locks a declaration grammar (the `edit` block and its placeholder vocabulary).
 - **Priority**: High
-- **Related Issues**: intrastate#zyh0 (feature tracker; stays open until Stage 8); intrastate#c3xz (closed — `set-state --plan` landed as a plain feature kata over the existing `path`/`command` writers; a prerequisite of this RDR's acceptance scenario, not a joint decision); rdr#yjye (open, blocked by intrastate#zyh0) and rdr#qmkd (closed) — the consumer whose state lives in markdown records; intrastate#v0hb (closed, RDR 0025's tracker)
+- **Related Issues**: intrastate#zyh0 (feature tracker; stays open until Stage 8); intrastate#c3xz (closed — `set-state --plan`; a prerequisite of this RDR's acceptance scenario, not a joint decision); rdr#yjye (open, blocked by intrastate#zyh0) and rdr#qmkd (closed) — the consumer whose state lives in markdown records; intrastate#v0hb (closed, RDR 0025's tracker)
 - **Predecessors**: 0025-command-invoking-accessor-bindings, 0004-accessor-execution-safety-model
 - **Overrides**: 0025:C1's exactly-one carrier rule (`path` | `command`), to be extended to admit `edit`; 0025's recorded consequence that a planned value reaches an established tool's text artifact only through a thin declared wrapper whose body the model does not carry; 0025:C2's closed argv placeholder vocabulary (`{artifact}`, "v1 complete"), extended by the `{tag.<key>}` family so a command reader over a shared artifact can be row-addressed (C6)
 - **Seam Lineage**: `internal/table/load.go` carrier admission (`command_and_path_conflict`) / `internal/accessor/binding.go::WriteBinding` (`area:internal-table`) — no prior accretion. Count provenance: no `kata-scope-review §seam-accretion` emission exists on intrastate#zyh0 (routed by `rdr-seed-triage`); taken at seed from `kata list --status closed --label area:internal-table` on 2026-08-31 — the one closed 0025 fix in this file, intrastate#b84g, is C5 placeholder-category validation, a different symbol.
@@ -172,11 +172,10 @@ entry's declared keys.
 The load-bearing clause is the **substitution-admission policy** (C2): a planned
 value is admitted only into `replace`, only as literal bytes, never re-scanned;
 a declared context tag is admitted only into `anchor`, only regex-quoted, so a
-value can choose *which* line but never *what pattern*. The hazard class of
-interpolating into line data is one thing — an embedded line terminator — and it
-is refused before mutation; there is no word-splitting, option parsing, or PATH
-resolution to defend, which is why this is not the argv interpolation 0025:C5
-refuses.
+value can choose *which* line but never *what pattern*. Interpolating into line
+data has exactly one structural hazard — an embedded line terminator, refused
+before mutation — where argv interpolation has a shell's worth; that asymmetry,
+stated as C2's `value shape`, is why 0025:C5's rejection does not reach here.
 
 `edit` is the `WriteBinding` `internal/accessor/binding.go` already constrains
 to "no shell-out, no host callback": it is a second file binding beside
@@ -249,7 +248,7 @@ input:    the whole file is read as bytes; lines are split on "\n" and a precedi
 target:   the caller-bound artifact path for the entry's role (0004:C3), symlinks resolved; the model names no path — an `edit` entry has exactly the authority a `path` entry has over the file the CALLER binds
 select:   every rule's anchor is resolved against the PRE-EDIT content and selections are held as pre-edit line INDICES (a deletion never shifts a sibling rule's target). Each must select exactly one line: 0 ⇒ `edit_anchor_unmatched`; ≥2 ⇒ `edit_anchor_ambiguous`; two rules selecting one line ⇒ `edit_anchor_collision`. Never last-match (Ansible `lineinfile`), never first-match, never insert or append (Puppet `append_on_no_match`, Ansible `insertafter`) — creation is fenced out, and an unmatched anchor is a stale model, not a missing line
 re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
-order:    every refusal in this clause and C2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure` with a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8); no new refusal class is introduced, and no pre-write refusal ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
+order:    every refusal in this clause and C2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
 write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). A post-edit buffer equal to the input is not written at all (no staging, no rename; MVV step 5 asserts the untouched files). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
 terminators: only "\n" — optionally preceded by "\r" — terminates a line for selection and rewriting; a bare "\r", NEL or U+2028 is line content (C2 still refuses "\r" in a VALUE). Deleting the final line of a file that had no final terminator also removes the preceding line's terminator, so the file's final-terminator state is preserved either way
 no subprocess: `edit` spawns nothing; `--allow-commands` (0025:C6) is not consulted by the write itself. `Invocations()` counts `Apply` calls exactly as `flowbind.go::Writer` does (0004:C14)
@@ -517,13 +516,10 @@ charted `stdin = "none"|"envelope"` successor is a different 0025:C1 field with 
 different purpose — no overlap, but precedent that C1 is extended by successor
 RDRs.
 
-Sibling history: intrastate#c3xz (`set-state --plan`) was seeded as the other
-half of one consumer capability, demoted at round-2 triage to a plain feature
-kata, and has since landed and closed (`flow set-state --plan <file|->`). The
-real fork behind resolve→apply was closed by 0005:C1 plus the no-linkage
-invariant, so no plan-carriage clause is needed here. Consequence recorded on
-the tracker: **this record owns the composed consumer acceptance scenario**,
-now the Minimum Viable Validation below.
+`flow set-state --plan <file|->` carries the resolve→apply pipe this record's
+scenario runs over. It needs no plan-carriage clause here: 0005:C1 plus the
+no-linkage invariant already decide that fork. **This record owns the composed
+consumer acceptance scenario**, below as the Minimum Viable Validation.
 
 Fenced out by the kata as filed: multi-line region edits; file creation or
 rename (a consumer's number allocation is artifact creation, not a state
@@ -622,9 +618,11 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
   anchor (`^` and the exact bullet form).
 - **Risk**: a replacement that no longer matches its own anchor, so the next
   transition cannot find the line.
-  **Mitigation**: Resolve decides whether to lint "replace satisfies anchor"
-  with a probe value (Puppet's `match`-vs-`line` check) or leave it to
-  read-back; recorded as a Testing Strategy candidate.
+  **Mitigation**: C3's re-anchor invariant refuses `edit_anchor_unstable`
+  before any write (MVV step 7). A lint-time "replace satisfies anchor" probe
+  (Puppet's `match`-vs-`line` check) would catch it one stage earlier, but
+  cannot be decided without the artifact (C4's "what lint does NOT prove") —
+  a Testing Strategy candidate, not a second apply-time check.
 - **Risk**: a value with a terminator splits the line.
   **Mitigation**: C2 `edit_value_multiline`, pre-mutation.
 - **Risk**: mode/inode change on rename breaks a consumer's hard link or
@@ -645,10 +643,13 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
 
 - Visible: `intrastate lint` names the entry, key and category for every C4
   defect; nothing loads.
-- Visible: an unmatched, ambiguous or colliding anchor, a multi-line value, an
-  unbound `{tag.<key>}`, an undeclared `<clear>`, or a gate-off command
-  read-back refuses `execution_failure` with a Detail naming `<id>.edit.<key>`
-  and the reason token — the artifact is untouched.
+- Visible: an unmatched, ambiguous or colliding anchor, a multi-line value or an
+  undeclared `<clear>` refuses `execution_failure` with a Detail naming
+  `<id>.edit.<key>` and the reason token — the artifact is untouched.
+- Visible: the two entry-level preconditions refuse the same class before
+  mutation, with no rule to name: an unbound `{tag.<key>}` (Detail names the
+  placeholder, C6) and a gate-off command read-back (Detail names the gate,
+  C3) — the artifact is untouched.
 - Silent risk: an anchor that selects the wrong single line (a look-alike
   elsewhere in the file while the real line has drifted) rewrites it; the
   read-back through the role's reader refuses `read_back_mismatch` only if the
