@@ -58,7 +58,7 @@ detail — the candidate answers are weighed in §Alternatives Considered.
 - **A2 No binding that lints green today carries a listed interpreter basename as a non-argv0 word followed later by one of that interpreter's flags — widening the predicate refuses nothing currently accepted in the repo's fixtures or 0025's verification models.**
   - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `evidence/spikes/a2-widened-predicate-no-new-refusals.md` — both predicates computed over all 32 `command` argv vectors in `internal/table/testdata/neg/*.toml` and `command_carrier_0025_test.go` (11 green, 21 already-negative; no positive fixture declares `command`). Zero divergences: no vector moves `old=false → new=true`, so no green binding is newly refused. `["perl","-e","print 1"]` stays green under both — the widen is over argv POSITION, not over which basenames are listed, so an unlisted spelling is unaffected. `go test ./internal/table/` green before and after. Scope: this repo's fixtures and 0025's models, which is exactly the claim's scope; it says nothing about an out-of-tree user model, where the widened refusal is the intended behaviour.
+  - **Evidence**: `evidence/spikes/a2-widened-predicate-no-new-refusals.md` — both predicates computed over 32 `command` argv cases drawn from `internal/table/testdata/neg/*.toml` (6, all already-negative; two of them the same `["rdr-gate", "{artifact}"]` vector) and `command_carrier_0025_test.go` (26 of that file's 27 distinct literals) — 11 green, 21 already-negative; no positive fixture declares `command`. Zero divergences: no vector moves `old=false → new=true`, so no green binding is newly refused. `["perl","-e","print 1"]` stays green under both — the widen is over argv POSITION, not over which basenames are listed, so an unlisted spelling is unaffected. `go test ./internal/table/` green before and after. Scope: this repo's fixtures and 0025's models, which is exactly the claim's scope; it says nothing about an out-of-tree user model, where the widened refusal is the intended behaviour.
   - **If wrong**: a green model turns red on upgrade and the refusal's remediation ("put it in a script") misdirects, because there is no script to extract.
 - **A3 Every wrapper form the Problem Statement names (`env -i`, `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas`) places the interpreter name and its inline-code flag as separate argv words in that order, so the position-free predicate refuses each — and a brace-bearing string under a wrapper reports `command_shell_interpreter`, not `command_unknown_placeholder`.**
   - **Status**: Verified
@@ -133,6 +133,31 @@ return "", false
 ```
 
 Sample refusals (Illustrative): `["timeout","5","sh","-c","…"]` → `sh -c`; `["env","-i","bash","-c","…"]` → `bash -c`; `["xargs","sh","-c","…"]` → `sh -c`. Admitted: `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`.
+
+#### Mini-check: `authority`
+
+Fired by the two-reader `isInterp` decision and the sibling-arm question in the infrastructure audit.
+
+| Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
+| --- | --- | --- | --- | --- | --- |
+| "is this argv an interpreter form?" (`isInterp`, `form`) | `internal/table/load.go::interpreterForm` — the only producer; C1 replaces its body, same name and signature | clause 3's whitespace exemption (`load.go:1114`, `!isInterp \|\| …`); clause 4's refusal (`load.go:1124`) | one — `load.go:1095`, inside `carrierDefect` | none: `cmdbind.go::resolveArgv0` resolves argv0 *location*, never identity, and `shellInterpreters` has one use site (`load.go:1174`). Searched repo-wide; no wrapper or command-position classifier exists | `interpreterForm` is sole source of truth; both readers consume the one call's result, so the predicate change reaches clause 3 and clause 4 together and cannot skew |
+| listed interpreter basenames | `shellInterpreters` map (`load.go:1035-1047`) | `interpreterForm` only | one (`load.go:1174`) | none | the map; OPEN deny-list, unchanged by this record |
+| category string + position | `internal/table/category.go` (`:60` declaration, `:103` in `Categories()`) | lint output / `table.Categories()` | n/a — not edited | none | `category.go`; C1's edit is confined to `load.go` |
+
+#### Mini-check: `disposition`
+
+Fired by C1's `out of scope, BY NAME` line, which admits input classes while siblings refuse.
+
+| Input class | Exit / lint outcome | Event / error | Artifact / op minted | Silent vs loud |
+| --- | --- | --- | --- | --- |
+| interpreter word + its inline-code flag at any later argv position (`["nice","sh","-c","…"]`) | refuse — load-time defect | `command_shell_interpreter`, detail names the two matched words + the script remediation | none (load fails) | **loud** |
+| the same under a brace-bearing string (`["nice","sh","-c","cat {artifact}"]`) | refuse | `command_shell_interpreter`, **not** `command_unknown_placeholder` — clause 3's exemption keys on the same `isInterp` | none | **loud**, and this is the wrong-defect masking 0025 D18 left open |
+| script argument that is itself a listed flag (`["ruby","tool.rb","-e","prod"]`) | refuse — accepted false-refusal class | `command_shell_interpreter`, detail names `ruby -e` so the collision is diagnosable | none | **loud**; already-accepted behaviour, the *message* is what this record adds |
+| shell string inside ONE word (`["env","-S","sh -c echo"]`) | green | none | binding loads; a shell may run | **silent by contract** — named in C1's out-of-scope line; no lint event is minted |
+| interpreter reading its script from stdin (`["sh","-s"]`, `["sh"]`, `["sh","-es"]`, `["python","-"]`, `["node","-"]`) | green | none | binding loads; a shell may run | **silent by contract** — named by CHANNEL, not by shell spelling; routed to the charted `stdin` successor |
+| sanctioned wrapper file (`["sh","./gate.sh"]`) | green | none | binding loads and runs the declared file | **silent, and correct** — never a defect |
+| unlisted spelling (`["python3","-c","…"]`, `["perl","-e","…"]`) | green | none | binding loads | **silent by contract** — OPEN deny-list; the list grows only by amending C1 |
+
 
 ### Capability Dependencies
 
@@ -302,6 +327,36 @@ Read, not spiked: `internal/table/load.go::interpreterForm`, `::carrierDefect` (
 3. Swap in the admitted forms `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`, and the non-shell stdin spelling `["python","-"]`; lint passes for each. The first two are shown, by running the model under `--allow-commands`, to behave as C1 states (the wrapper file runs; the `-S` string runs a shell — on a host whose `env` supports `-S`, GNU env, since darwin's stock BSD env rejects it; A4). `["python","-"]` is the probe that C1's out-of-scope line is stated over the stdin CHANNEL and not over shell spellings: it must lint green and be documented as admitted.
 4. The original 0025 REQ-74 probes and the negative fixture still refuse with the same category, and `table.Categories()` order is unchanged.
 End-state: every wrapper mutant red with the right defect, every admitted form green and documented, no existing probe changed.
+
+#### Mini-check: `oracle`
+
+Fired by MVV step 3 and Testing Strategy scenario 4, whose oracle is "lint passes" — an absence-of-error assertion that a no-op implementation also satisfies.
+
+| MVV / scenario row | Fails if X is wrong, because Y | Negative / failing control |
+| --- | --- | --- |
+| MVV 2 · S1 — one mutant per wrapper refuses | fails if the predicate is still argv0-anchored, because every mutant puts the interpreter at argv ≥ 1 and would lint green | today's code: all ten mutants green (A3 computed all ten `false → true`) |
+| MVV 2 · S2 — `["nice","sh","-c","cat {artifact}"]` reports the interpreter defect | fails if clause 3's exemption reads a different signal than the widened predicate, because the category would come back `command_unknown_placeholder` | assert the category *string*, not merely that load failed; today's code reports the placeholder defect here |
+| MVV 3 · S3 — the nine `env`-option forms refuse | fails if the deleted `env` walk was not in fact subsumed, because a form q2q1 enumerates would lint green | today's code: `-i`, `-u FOO`, `--unset=FOO`, `-0`, `-C DIR`, `--chdir=DIR`, `--` all green (the walk stops at the first non-`NAME=VALUE` token) |
+| MVV 3 · S4 — admitted forms lint GREEN | **absence-of-error oracle — the weak row.** A no-op predicate passes it. It is discriminating only as a *pair* with S1/S3: S1 forces refusal on the wrapper class, S4 pins the boundary that must not move with it | the discriminating members are `["python","-"]` and `["sh","-es"]`: any implementation reading the out-of-scope line as *shell spellings* refuses `python -` and fails S4. Control = assert green **and** that the binding loads with the argv unchanged, not merely that no error was returned |
+| S5 — `["ruby","tool.rb","-e","prod"]` refuses naming `ruby -e` | fails if the detail does not carry the matched words, because the author cannot see which pair collided | assert the detail *text* contains both words; a bare category assertion passes even with today's message |
+| S6 — `table.Categories()` membership and order unchanged | fails if the edit strays outside `load.go`, because the wire order a reviewer sees would shift | golden assertion over the full ordered slice, not a `Contains` check |
+
+#### Mini-check: `trace`
+
+Fired by C1's four normative lines (predicate, clause-3 coupling, `report:`, `promise:`) all bearing on one output surface — the category a model author sees. Walked over the MVV.
+
+| Step | Assertions in force | Witness |
+| --- | --- | --- |
+| 1 — green `command` read binding lints clean | predicate (no `i < j` pair exists); `reads: argv WORDS only` | A2 spike: 11 green vectors, zero move `old=false → new=true`. Consistent |
+| 2a — `["nice","sh","-c","…"]` refuses | predicate (`i=1` `sh`, `j=2` `-c`); `report:` names the two matched words | A3 spike: all ten wrappers compute `false → true`, form `sh -c`. Consistent — nothing before argv[i] is read, so `nice` needs no table |
+| 2b — `["nice","sh","-c","cat {artifact}"]` reports `command_shell_interpreter`, not the placeholder defect | predicate; clause-3 coupling ("clause 3's whitespace exemption keys on this predicate"); 0025:C5 within-entry precedence, unchanged | A1: clause 3 reads the same `isInterp` the predicate sets (`load.go:1114`), from the one call at `:1095`. Consistent — the two clauses cannot disagree because they read one value |
+| 3a — `["sh","./gate.sh"]` green | predicate (`./gate.sh` is not a listed flag); `out of scope` line's sanctioned wrapper-file form | A4: runs the declared FILE, not inline code. Consistent |
+| 3b — `["env","-S","sh -c echo"]` green | `reads:` line ("never splits a word on whitespace"); `out of scope` one-word form | A4: the `-S` string runs a shell on GNU env. Consistent — admitted knowingly, and `promise:` requires the shipped description to say so |
+| 3c — `["python","-"]` green | `out of scope` line scoped by CHANNEL ("any listed interpreter taking its code on stdin … however spelled"); `predicate` (`-` is not a listed flag) | A4 + A5. Consistent — and this row is why the line is channel-scoped: `python` IS on the deny-list, so a spellings-scoped line would contradict the predicate here |
+| 4 — REQ-74 probes and `table.Categories()` unchanged | `report:` line ("category string, remediation and position … are unchanged"); Naming LBD | S6: `category.go` untouched; edit confined to `load.go`. Consistent |
+
+No CONTRADICTION row: every assertion pair that meets on one output surface agrees, and the one coupling that could skew (clause 3 vs clause 4) is structurally prevented by both readers consuming a single `interpreterForm` call.
+
 
 ### Phase 1: Predicate
 
