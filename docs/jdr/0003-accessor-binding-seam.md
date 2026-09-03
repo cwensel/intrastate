@@ -1,6 +1,6 @@
 ---
 authors: Chris K Wensel <cwensel@retrofit.sh>
-state: settled
+state: open
 cluster: 0004, 0025, 0026, 0027, 0028
 labels: intrastate, accessor-binding, refusal-carrier, execution-failure, rdr-cluster
 ---
@@ -66,7 +66,7 @@ lands in it today.
   typed fact from the binding to set `applied` where its "an `Apply` error
   precedes mutation" assumption (`executor.go::Write`) is false.
 - **(c) Split the class** — a not-applied class for writes. Ruled out by P4,
-  `0004`'s closed set, and `0028:C3`'s own "no new refusal class"; it also
+  `0004`'s closed set, and `0028:C1.3`'s own "no new refusal class"; it also
   splits on the wrong axis — the caller's branch is the applied sense, which
   already rides `Applied()`.
 
@@ -91,13 +91,109 @@ Lands in **0026** — `cli/0026:C1`'s `refusal:` line: the held-pipe reason
 (pipes, bound, exit status, remediation) moves from `Err` prose into `Detail`
 ahead of the stderr tail; `Err` wraps a typed held-pipe error (its instance
 names it); the executor's write arm and the CLI's applied-sense rendering
-gain the `Applied()` derivation (rule 3). Lands in **0028** — `0028:C3`'s
+gain the `Applied()` derivation (rule 3). Lands in **0028** — `0028:C1.3`'s
 `order:` line drops `applied: false` from `Detail` (rule id and reason token
 remain); `0028:A8` is confirmed as a constraint of this entry, and its
 If-wrong "owned here" is void — a typed field on the carrier is this
 registry's, not 0028's. **0004** and **0025** are Implemented and not edited;
 0026 and 0028 are the successors at their seams and cite this entry.
 **0027** is bound as a member; nothing lands in it.
+
+## D2 — Is an argv word bound at invocation inside the inline-shell promise?
+
+**Open** — fork; spans 0027, 0028. Filed 2026-09-03 at the 7.1 cluster
+reconcile (evidence: `docs/rdr/cluster-reconcile/0026-0027-0028/`).
+
+`cli/0027:C1` promises a reviewer the predicate line plus two admitted forms
+named by name — a one-word shell string and a stdin-fed interpreter — over
+"argv WORDS only". `cli/0028:C1.6` makes `{tag.<key>}` a whole argv element
+bound from `--tag` at invocation, at any position, with no value rule:
+`["{tag.a}","{tag.b}","{tag.c}"]` lints green under both records and executes
+whatever the caller binds. Shipped code decides nothing here — `carrierDefect`
+clause 3 tests placeholder membership only, and `cmdbind.go::substitute`
+refuses a `-`-prefixed `{artifact}` value while nothing refuses a
+`-`-prefixed tag value. Neither record owns the answer: 0027 owns the
+promise's wording, 0028 the placeholder's admission.
+
+- **(a) A rule on the placeholder (0028)** — `{tag.<key>}` never at argv0,
+  and a bound value beginning with `-` refuses before spawn, mirroring
+  `substitute`'s `{artifact}` rule; the interpreter deny-list stays static.
+  Amends `0028:C1.6`'s "no other change" line — a 0028 re-lock, contract-
+  scoped.
+- **(b) Disclosure in the promise (0027)** — `0027:C1`'s out-of-scope list
+  names "an argv word bound at invocation" as a third admitted form and the
+  `--help-all` text says so. Amends `0027:C1` — a 0027 re-lock; the hole
+  stays, disclosed.
+- **(c) Both.**
+
+Recommendation: (a). The two concrete evasions (an interpreter at argv0, a
+flag-shaped value) close under a static check, and the promise stays true
+without naming a form that exists only to be admitted. Stake: a reviewer
+approves a model on the strength of the shipped promise while the executed
+argv is a string they never saw. 0028's Cross-Cutting gate response ("adds no
+new source of caller-supplied value") is false under C1.6 whichever way this
+resolves; the answer supersedes it.
+
+## D3 — Which exit group do 0028's stale-model refusals take?
+
+**Open** — fork; spans 0028, and JDR 0001 §D10's code table (landing RDR
+0005, Implemented). Filed 2026-09-03 at the 7.1 cluster reconcile.
+
+`0028:C1.3` mints `edit_anchor_unmatched` / `_ambiguous` / `_collision` /
+`_unstable`, `edit_clear_undeclared` and an unreadable target as
+`execution_failure` with "no new refusal class". JDR 0001 §D10 rule 1 maps
+execution failure to exit 3 — "repair the environment and re-run the same
+request unchanged" — and `docs/cli-output-contract.md` says a refusal about
+the request must never exit 3 or the caller spins. §D10 rule 7 already pulls
+read-back mismatch out to exit 2 on exactly that reasoning. D1 deferred this
+question "to 0028 by citation"; 0028 cites §D10 nowhere.
+
+- **(a) Exit 3 as written** — class mapping unchanged; the remedy rides
+  `Detail` prose. Cost: a retry-on-exit-3 agent loops on an artifact it must
+  instead fix.
+- **(b) Exit 2, no new class** — the executor-facing typed `Err` (D1 rule 2)
+  discriminates at `flow_exec.go::accessorFailureOf`; a distinct CLI code
+  (spelling non-normative, e.g. `flow-write-anchor-stale`) carries the rule id
+  and reason token in `findings[]` per §D10 rules 2–3. Cost: one code added
+  to 0005's table by citation repair; 0028's class set and `Detail` unchanged;
+  touches the CLI arm 0026 also re-keys (D4).
+- **(c) A new accessor refusal class** — ruled out by 0004's closed set and
+  `0028:C1.3`.
+
+Recommendation: (b). Stake: an agent that branches on exit codes retries a
+stale anchor until its budget expires. Would land in 0028 (Stage 8: the typed
+`Err` and the CLI arm) and JDR 0001 §D10's table.
+
+## D4 — How does the applied sense reach the CLI envelope?
+
+**Open** — fork; spans 0026, 0028, and JDR 0001 §D10. Filed 2026-09-03 at
+the 7.1 cluster reconcile.
+
+D1 rule 3 makes `Applied()` the discriminator at the accessor seam, and
+JD-1's stake is an agent loop deciding whether to re-read before retrying a
+write. At the envelope nothing carries it: no `json:"applied"` field exists,
+`Applied()` has no non-test caller, and 0026's applied held-pipe write refusal
+and 0028's not-applied pre-mutation refusals both render as
+`flow-accessor-failed` / exit 3, distinguished only by whether `detail`
+carries the "may have been applied" sentence (`0026:S1` asserts that prose;
+`0028:S27` asserts nothing at the envelope). §D10 rule 2: one CLI code per
+caller-branchable failure. §D10 rule 7's precedent: read-back-incomplete and
+read-back-timeout are distinct exit-3 codes whose message carries the applied
+text.
+
+- **(a) Prose** — `detailMayHaveApplied` in `detail`, code unchanged; `0026:S1`
+  as written. Cost: callers string-match `detail` to branch.
+- **(b) A distinct exit-3 CLI code for the applied write refusal** (spelling
+  non-normative, e.g. `flow-write-failed-applied`), keyed on `Applied()` in
+  `accessorFailureOf`'s write arm — the concrete form of `0026:A8`'s "gain its
+  `Applied()` key"; `detail` text unchanged. Cost: one code in 0005's table.
+  Contradicts no fence in `cli/0026:C1`; 0028's refusals keep
+  `flow-accessor-failed`.
+- **(c) A structured field** — `applied` in `findings[]`, §D10 rule 3's slot.
+  Cost: a findings entry on an accessor refusal, a new shape.
+
+Recommendation: (b). Stake: JD-1's. Would land in 0026 (Stage 8) and JDR
+0001 §D10's table; 0028 unchanged.
 
 ## Interface record
 
@@ -115,11 +211,11 @@ registry's, not 0028's. **0004** and **0025** are Implemented and not edited;
 - 0028's reliance on `cli/0016:C4`'s fail-closed read-back reader — 0028's
   instance.
 - The concrete `Detail` wording each producer emits — `cli/0026:C1` and
-  `0028:C3` respectively.
+  `0028:C1.3` respectively.
 - JDR 0001 §D10's code table and exit codes — cross-referenced, not restated.
-  Whether a stale-anchor refusal (`0028:C3`: "a stale model, not a missing
+  Whether a stale-anchor refusal (`0028:C1.3`: "a stale model, not a missing
   line") belongs in §D10's exit-2 "the model is wrong" group rather than
-  `execution_failure`'s exit-3 "repair and re-run unchanged" is §D10's
-  question; 0028 answers it there by citation.
+  `execution_failure`'s exit-3 "repair and re-run unchanged" — filed as §D3
+  (open); 0028 carries no §D10 citation today.
 - Whether a write command that exits non-zero without a held pipe may have
   mutated — 0004/0025's shipped decision, not reopened here.
