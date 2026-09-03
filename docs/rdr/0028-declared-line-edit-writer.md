@@ -97,7 +97,7 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
   point, so C1.3's pre-mutation refusal of a gate-off read-back is a check at an
   existing site, not a new ordering; failing that, the verb's plan phase in
   `internal/cli/flow_state.go` before any carrier runs is the fallback site]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/accessor/executor.go::Executor.Write` resolves
     `reader, hasReader := e.Registry.readerFor(def.Accessor.Role)` and only
@@ -110,16 +110,25 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
     `baselineUnread = slices.Clone(protected)` and PROCEEDS — so for a
     command-backed reader with the gate off that read already fails, is already
     swallowed, and the write already runs, surfacing as `read_back_incomplete`
-    applied-but-unverified. To verify: that C1.3's pre-check is the
-    authoritative detector for this case and the baseline arm needs no change.
-    `protectedKeys` returns the reader's `RequestedKeys()` MINUS the planned
-    keys, so the swallowed path is reachable only when the role's reader
-    declares a key the entry does not plan — empty, and skipped entirely, in
-    the MVV's own fixture. The gate state is baked into
-    the reader binding at construction
+    applied-but-unverified. Verified: C1.3's pre-check is the authoritative
+    detector for this case and the baseline arm needs no change.
+    `protectedKeys` (`internal/accessor/executor.go::protectedKeys`) returns the
+    reader's `RequestedKeys()` MINUS the planned keys and appends nothing when
+    every requested key is planned, so `Write`'s `if len(protected) != 0` skips
+    the pre-`Apply` `invokeRead` entirely — the swallowed path is reachable only
+    when the role's reader declares a key the entry does not plan, which is
+    empty, and skipped entirely, in the MVV's own fixture. The gate state is
+    baked into the reader binding at construction
     (`internal/cli/flowbind/registry.go`: `cfg := cmdbind.Config{BaseDir: baseDir,
-    AllowCommands: allowCommands}`), so it is inspectable at the resolution
-    point. Qualifier: today's gate check lives inside
+    AllowCommands: allowCommands}`), carried as a struct field on the concrete
+    `internal/cli/cmdbind::Reader`. It is therefore NOT readable through the
+    abstract `internal/accessor/binding.go::ReadBinding` interface, which
+    exposes no gate accessor — reading it off the resolved reader would take a
+    type assertion across the seam. This is precisely why the SITE is A10's
+    field on `accessor.Registry` rather than an interrogation of the reader:
+    the gate reaches the executor as state it already holds, and no type
+    assertion or new interface method is introduced. Qualifier: today's gate
+    check lives inside
     `internal/cli/cmdbind::spawn` and runs only during execution, so C1.3's
     pre-mutation refusal is a NEW check at an EXISTING site — not a
     re-ordering. "Not already present" holds only of a GATE check: the baseline
@@ -286,18 +295,26 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
   `accessor.Registry`, set at `flowbind.go::Registry` — so C1.3's read-back gate
   pre-check needs no new import, no `Binding` interface method, and no change to
   where the gate is enforced for spawning]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify. What is already established: `internal/accessor`
+  - **Evidence**: established and re-confirmed: `internal/accessor`
     imports no carrier package and `internal/cli/cmdbind` imports
     `internal/accessor`, so an `accessor`→`cmdbind` back-import is a cycle;
     `flowbind.go::Registry(m, baseDir, allowCommands)` is the single production
     construction site and already receives the gate for 0025:C6;
     `accessor.Registry` is a plain struct the accessor package owns; and
     "command-backed" is answerable at the executor from `def.Accessor.Command`.
-    To check: that adding the field breaks no other `accessor.Registry`
-    construction site (tests included) and that no second production path builds
-    a registry around the gate.
+    Checked: adding the field breaks NO construction site. Every
+    `accessor.Registry` literal in the tree — the one production site
+    (`internal/cli/flowbind/registry.go`) and eleven test sites
+    (`internal/cli/cmdbind/seam_0025_test.go`,
+    `internal/accessor/exec_detail_0025_test.go`,
+    `internal/accessor/fixtures_0004_test.go`) — is a KEYED composite literal;
+    no positional literal exists anywhere and there is no `NewRegistry`
+    constructor, so a new field is additive by Go's own rule. And no second
+    production path builds a registry around the gate:
+    `internal/cli/flow_exec.go` is the sole non-test caller of
+    `flowbind.Registry(…)`.
   - **If wrong**: C1.3's pre-check falls back to A2's named alternative — hoist
     it to `internal/cli/flow_state.go` before `exec.Write` — and the refusal is
     then minted by the CLI rather than the accessor, which moves where the
@@ -307,17 +324,27 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
   pre-edit index minus the count of preceding sibling deletions, so "the anchor
   selects exactly this rule's own line" is decidable without re-running
   selection semantics or re-reading the file]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify. Introduced by this pre-lock pass: C1.3
+  - **Evidence**: introduced by this pre-lock pass: C1.3
     `re-anchor:` previously asserted only a CARDINALITY (exactly one line),
     which a sibling anchor drifting onto another rule's line after a
     `clear = "line"` deletion satisfies while pointing at the wrong content.
     Established by the clause itself: selections are held as pre-edit indices
-    and `clear` is the only deletion, so the shift is a count, not a diff. To
-    check: that no rewrite can change a rule's own line COUNT (a `replace`
-    emits exactly one line — C1.2 refuses `\n` in a value), which is what makes
-    the index arithmetic exact rather than approximate.
+    and `clear` is the only deletion, so the shift is a count, not a diff.
+    Checked: no rewrite can change a rule's own line COUNT, because a `replace`
+    emits exactly one line — C1.2's `value shape:` refuses `\n` in a planned or
+    referenced-tag value (`edit_value_multiline`), decided at C1.3
+    `precedence:` step (2) before any selection. That guard is this RDR's to
+    mint, not one to reuse: a source sweep of every production
+    substitution site — `internal/cli/cmdbind::substitute` (whole argv
+    elements, an execve array with no line semantics),
+    `internal/cli/flowbind/flowbind.go`'s `load`/`save` (a flat JSON object
+    rewritten whole, no line-oriented substitution) and
+    `internal/table/load.go` (placeholder-vocabulary validation only, no
+    substitution) — finds NO newline guard anywhere, and no line-oriented
+    text substitution in production at all. So the index arithmetic is exact
+    rather than approximate, and it rests on C1.2, which owns the guarantee.
   - **If wrong**: the re-anchor pass must compare content rather than index —
     hold each rule's rewritten line bytes and assert the selected line equals
     them — which is a strictly stronger check at the cost of holding the
@@ -325,16 +352,27 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
 - **A11 [The executor's deadline arm (`internal/accessor/executor.go`) is 0004's
   and is left unchanged by this RDR, so C1.3's no-applied-sense guarantee is
   scoped to refusals the `edit` binding itself mints]**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: to verify that leaving it is right. Established: the arm
+  - **Evidence**: leaving it is right. Established and re-confirmed: the arm
     computes `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply`
     returns, without consulting `err`, and sets `applied = true` — so a
     pre-write refusal that ran past the deadline surfaces as `ClassTimeout`
     applied-but-unverified. Latent for `path` today, since
-    `flowbind.Writer.Apply` ignores its context entirely. To check: whether an
-    in-process `edit` makes this reachable in practice, and whether `timeout` is
-    still a required field for a carrier that spawns nothing.
+    `flowbind.Writer.Apply` ignores its context entirely (its signature discards
+    the parameter). Checked, both halves: (a) reachability — the arm's
+    `errors.Is` is evaluated unconditionally and its true branch shadows the
+    error branch, so an in-process `edit` slow enough to cross the deadline
+    WOULD mint the false applied sense; the exposure is real but is 0004's, not
+    this carrier's, and it is bounded by C1.3's `order:` clause, which scopes
+    the no-applied-sense guarantee to refusals THIS BINDING mints and says so
+    explicitly rather than asserting the executor-minted timeout is honest.
+    (b) `timeout` is UNCONDITIONALLY required for every accessor entry
+    regardless of carrier — `internal/table/load.go`'s `accessorTable`
+    validation refuses an absent `timeout` BEFORE `carrierDefect` branches on
+    the carrier at all, so it is neither defaulted nor carrier-optional. A
+    non-spawning carrier therefore still declares one, and no carrier-conditional
+    change to the field is owed by this RDR.
   - **If wrong**: this RDR must amend the deadline arm for non-spawning
     carriers, which widens it into `internal/accessor/executor.go` beyond A10's
     one field.
@@ -440,12 +478,12 @@ input:    the whole file is read as bytes; lines are split on "\n" and a precedi
 target:   the caller-bound artifact path for the entry's role (0004:C3), symlinks resolved; the model names no path — an `edit` entry has exactly the authority a `path` entry has over the file the CALLER binds. The reuse of `flowbind.go::save`'s discipline stops at stage-and-rename and does NOT drag along `Writer`'s unreachable-locator seal (`unreachable(path)`/`sealedKey`): that seal keys off a declared-path suffix an `edit` entry does not have, and its purpose is to make the applied-but-unverified sense atomic in a key/value artifact — a markdown target has nowhere to hold it. `edit` therefore has no seal affordance, by construction rather than by omission
 select:   every rule's anchor is resolved against the PRE-EDIT content and selections are held as pre-edit line INDICES (a deletion never shifts a sibling rule's target). Each must select exactly one line: 0 ⇒ `edit_anchor_unmatched`; ≥2 ⇒ `edit_anchor_ambiguous`; two rules selecting one line ⇒ `edit_anchor_collision`. Never last-match (Ansible `lineinfile`), never first-match, never insert or append (Puppet `append_on_no_match`, Ansible `insertafter`) — creation is fenced out, and an unmatched anchor is a stale model, not a missing line
 re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. IDENTITY, not cardinality: the selected line must BE the rule's own — its held pre-edit index, shifted by the deletions of preceding sibling rules — and a rule that selects exactly one line which is a DIFFERENT line refuses. Cardinality alone would pass a sibling whose anchor drifted onto another rule's line after a `clear = "line"` deletion shifted the buffer, or onto a line another rule reshaped. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
-order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C1.6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. Whether that arm stays 0004's, unchanged and out of this RDR's scope, is A11 and is **`Pending`**: this clause's guarantee is scoped to refusals the `edit` binding itself mints, and does NOT assert the executor-minted timeout carries a false applied sense. If A11 resolves against leaving it, this RDR must amend the deadline arm for non-spawning carriers. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
+order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C1.6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. That arm stays 0004's, unchanged and out of this RDR's scope (A11, `Verified`): this clause's guarantee is scoped to refusals the `edit` binding itself mints, and does NOT assert the executor-minted timeout carries a false applied sense. A11 resolved for leaving it — the arm is 0004's exposure, not this carrier's, and `timeout` is required of every entry regardless of carrier. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
 write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). The atomicity boundary is ONE ENTRY over ONE file, and it is not transactional across entries: a plan spanning two write entries (the consumer's record + shared index) applies each independently, so entry 1 landing and entry 2 refusing leaves the two artifacts disagreeing, with the refusal reported for entry 2 only. This is 0004's per-entry apply model, unchanged here; a cross-entry transaction is not introduced (Briefly Rejected has no cross-artifact rollback, and the artifacts are in git). Callers reconcile by re-running the pipeline once the refusal's cause is fixed: re-applying an entry that already landed rewrites its line to the same bytes and the no-op arm above writes nothing (S20 is that witness), so the retry is safe for the entry that succeeded. A post-edit buffer equal to the input is not written at all (no staging, no rename; S20 asserts it, witnessed by an unchanged inode — no MVV step covers the no-op, step 5's files being untouched by a REFUSAL instead). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
 precedence: apply-time refusals fail-fast within one entry in this order, the mirror of C1.4's for load time: (1) the two ENTRY-level preconditions — C1.6's unbound `{tag.<key>}`, then the gate-off command read-back above — since both condemn the whole entry and neither has a rule to name; (2) `edit_value_multiline` over the entry's planned values and the tag values its rules actually reference (C1.2 `value shape:`), the scope being per-USE-SITE, not per-invocation: a tag bound on the context but referenced by no `anchor` of this entry is never scanned, because the clause's stated ground is interpolation into line data and an unreferenced tag reaches none; (3) `edit_clear_undeclared` (C1.5) — a `<clear>` plan on a rule that did not declare `clear` is decided on the RAW planned value, BEFORE selection and before any `replace` expansion, so the refusal never depends on whether that rule's anchor matched; (4) per-rule cardinality, `edit_anchor_unmatched` then `edit_anchor_ambiguous`, resolved for EVERY rule of the entry before (5) the cross-rule `edit_anchor_collision` sweep, which is only decidable once every rule holds a selection; (6) `edit_anchor_unstable`, necessarily last, being post-rewrite. Within one step, siblings are map-ranged and inherit C1.4's rule unchanged — which of two equally-defective rules is named is unspecified and no test may assert it. Fail-fast here is observable only through a multi-defect input, exactly as at load time, so it earns its own scenario rather than riding the single-defect fixtures
 terminators: only "\n" — optionally preceded by "\r" — terminates a line for selection and rewriting; a bare "\r", NEL or U+2028 is line content (C1.2 still refuses "\r" in a VALUE). Deleting the final line of a file that had no final terminator also removes the preceding line's terminator, so the file's final-terminator state is preserved either way
 no subprocess: `edit` spawns nothing; `--allow-commands` (0025:C6) is not consulted by the write itself. `Invocations()` counts `Apply` calls exactly as `flowbind.go::Writer` does (0004:C14)
-read-back: unchanged — 0004:C12/0004:C13 through the role's declared reader. When that reader is command-backed and the gate is off, the write MUST refuse BEFORE mutation (Detail naming the gate), because the reader is resolved before `Apply` (A2) — a forgotten flag must not produce `read_back_incomplete` for a write that ran no command. AUTHORITATIVE DETECTOR: this pre-check, not `Executor.Write`'s existing pre-`Apply` baseline read. That baseline (`protectedKeys` non-empty ⇒ `invokeRead` before `Apply`) already fails for a gate-off command reader and already swallows the failure into `baselineUnread` and proceeds; it is reachable only when the role's reader declares a key the entry does not plan (`protectedKeys` subtracts the planned keys), so it does not fire in the consumer scenario at all. This clause does NOT amend that arm — it refuses earlier and unconditionally, so the swallow becomes unreachable for the gate-off case whether or not `protected` is empty. Whether the baseline arm needs any change is A2's open question, not this clause's claim. SITE (conditional on A10, `Pending`): both halves of that predicate are answered at the executor without a new import or a `Binding` method — command-backed from `def.Accessor.Command` (already on `Definition`), and the gate from a field on `accessor.Registry`, set at `flowbind.go::Registry`, the single production construction site, which already takes `allowCommands` for 0025:C6. `internal/accessor` does NOT import `cmdbind` (`cmdbind` imports `accessor`; the reverse is a cycle) and `AllowCommands` on `cmdbind.Config` stays where it is — the gate is carried to the accessor as state, never read across the seam (A10)
+read-back: unchanged — 0004:C12/0004:C13 through the role's declared reader. When that reader is command-backed and the gate is off, the write MUST refuse BEFORE mutation (Detail naming the gate), because the reader is resolved before `Apply` (A2) — a forgotten flag must not produce `read_back_incomplete` for a write that ran no command. AUTHORITATIVE DETECTOR: this pre-check, not `Executor.Write`'s existing pre-`Apply` baseline read. That baseline (`protectedKeys` non-empty ⇒ `invokeRead` before `Apply`) already fails for a gate-off command reader and already swallows the failure into `baselineUnread` and proceeds; it is reachable only when the role's reader declares a key the entry does not plan (`protectedKeys` subtracts the planned keys), so it does not fire in the consumer scenario at all. This clause does NOT amend that arm — it refuses earlier and unconditionally, so the swallow becomes unreachable for the gate-off case whether or not `protected` is empty. The baseline arm needs no change (A2, `Verified`); that is this clause's ground, not its claim. SITE (A10, `Verified`): both halves of that predicate are answered at the executor without a new import or a `Binding` method — command-backed from `def.Accessor.Command` (already on `Definition`), and the gate from a field on `accessor.Registry`, set at `flowbind.go::Registry`, the single production construction site, which already takes `allowCommands` for 0025:C6. `internal/accessor` does NOT import `cmdbind` (`cmdbind` imports `accessor`; the reverse is a cycle) and `AllowCommands` on `cmdbind.Config` stays where it is — the gate is carried to the accessor as state, never read across the seam (A10)
 
 --- C1.4 — load-time categories (`intrastate lint`) ---
 edit_carrier_conflict    # `edit` beside `path` or `command`; or `edit` on a read/gate entry
@@ -515,7 +553,7 @@ a fidelity exemption — it is one-way by contract, and the clause says so.
 | command-backed reader, gate off | refused pre-mutation | `execution_failure`, Detail names the gate | none | loud (never `read_back_incomplete`) |
 | unbound `{tag.<key>}` at invocation | refused pre-spawn | `execution_failure`, Detail names the placeholder | none | loud |
 | target cannot be read (ENOENT/EISDIR/EACCES) | refused pre-mutation | `execution_failure`, Detail carries the OS error — the one refusal in C1 with no `edit_*` reason token, because no rule is at fault | none — nothing opened, nothing staged | loud |
-| refusal that outruns the entry's `timeout` | refused pre-mutation by the binding, reported `ClassTimeout` applied-but-unverified by the executor | 0004 `ClassTimeout`, `Applied()` TRUE | none — no byte written | loud, but the applied sense is WRONG (A11, `Pending`) |
+| refusal that outruns the entry's `timeout` | refused pre-mutation by the binding, reported `ClassTimeout` applied-but-unverified by the executor | 0004 `ClassTimeout`, `Applied()` TRUE | none — no byte written | loud, but the applied sense is WRONG (A11, `Verified` — 0004's arm, left unchanged) |
 | load-time defects | lint finding | the five `edit_*` categories (C1.4) | lint output names entry/key/category | loud (F1) |
 | `none`/`stopped:*` resolve row | applies nothing, exit 0 | — | `dispositions` carried | loud (MVV 4) |
 
@@ -523,8 +561,8 @@ Every refusal is decided BEFORE any byte is written (C1.3 `order:`) and adds no
 new class — `execution_failure` with a Detail, per JDR 0003 §D1. Every refusal
 THIS BINDING MINTS carries `Applied()` false; the one exception is the timeout
 row above, which the executor's deadline arm mints over a binding that refused
-without writing (A11, `Pending` — the row is the honest statement of the gap,
-not a claim it is fixed here). The two silent arms are the two the contract
+without writing (A11, `Verified` — the row is the honest statement of a gap
+that stays 0004's, not a claim it is fixed here). The two silent arms are the two the contract
 states as success; there is no third.
 
 **`trace`** — the MVV walked stepwise, with the assertions in force at each step
@@ -863,9 +901,11 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
   identity needs a seam extension (A1).
 - **Documented** — `Executor.Write` resolves `readerFor(role)` before `Apply`,
   so a pre-mutation gate check has a site (A2). Resolve adds the qualifier: the
-  gate state is baked into the reader binding at construction and so is
-  inspectable there, but today's check runs inside `cmdbind::spawn` during
-  execution — C1.3's clause is a new check at that existing site.
+  gate state is baked into the reader binding at construction, but it is a field
+  on the concrete `cmdbind` type rather than anything the `ReadBinding`
+  interface exposes, and today's check runs inside `cmdbind::spawn` during
+  execution — so C1.3's clause is a new check at that existing site, reading the
+  gate from the executor's own state (A10), never off the resolved reader.
 - **Documented** — `flowbind.go::save` fixes mode 0600 and encodes JSON; the
   edit writer needs the staging discipline with mode preservation and raw bytes
   (A5).
@@ -999,6 +1039,12 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
   rule-scoped refusal above, since each condemns the whole entry (C1.3
   `precedence:`); an entry carrying both a precondition failure and a bad rule
   reports the precondition.
+- Visible: a bound target that cannot be read — absent, a directory, or
+  permission-denied — refuses `execution_failure` before mutation with the OS
+  error in the Detail (C1.3 `input:`; S27b). It is the one refusal in C1 with
+  no `edit_*` reason token, because no rule is at fault: the binding is stale,
+  and saying so is the point — reusing `edit_anchor_unmatched` would launder a
+  stale model into an anchor result.
 - Silent risk: an anchor that selects the wrong single line (a look-alike
   elsewhere in the file while the real line has drifted) rewrites it; the
   read-back through the role's reader refuses `read_back_mismatch` only if the
