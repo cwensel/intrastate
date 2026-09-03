@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Spike: RDR 0026 Critical Assumption A2.
 //
 // A2: the joining goroutine can END a pending blocking Read on an os.Pipe read

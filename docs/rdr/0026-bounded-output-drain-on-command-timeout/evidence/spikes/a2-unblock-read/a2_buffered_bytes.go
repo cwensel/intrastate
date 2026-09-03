@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Follow-up spike for RDR 0026 / A2 point 4a.
 //
 // The first spike showed that with a deadline already in the past, Read returns

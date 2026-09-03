@@ -124,9 +124,9 @@ type result struct {
 	reads    int // reads that returned n>0
 	calls    int // total Read calls, including the terminal one
 	elapsed  time.Duration
-	terminal string // "EOF" | "deadline" | other
-	deadline bool   // terminated on os.ErrDeadlineExceeded
-	complete bool   // bytes.Equal against an independently rebuilt envelope
+	terminal string        // "EOF" | "deadline" | other
+	deadline bool          // terminated on os.ErrDeadlineExceeded
+	complete bool          // bytes.Equal against an independently rebuilt envelope
 	maxGap   time.Duration // longest observed gap between consecutive reads
 }
 
@@ -193,10 +193,10 @@ func describe(err error) string {
 
 // shape selects how the child delivers the payload.
 type shape struct {
-	name   string
-	paced  bool
-	chunk  int           // paced only: bytes per Write
-	gap    time.Duration // paced only: idle time between chunks
+	name  string
+	paced bool
+	chunk int           // paced only: bytes per Write
+	gap   time.Duration // paced only: idle time between chunks
 }
 
 // burst hands the whole payload over in one Write.

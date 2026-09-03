@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -12,8 +14,9 @@ import (
 
 // Candidate anchors under test.
 // Anchor A: RDR record Metadata Status bullet (top-level, zero indent).
-//   Distinguishes from nested "- **Status**:" lines inside Assumption blocks
-//   (which are indented by at least one space) by pinning ^- at column 0.
+//
+//	Distinguishes from nested "- **Status**:" lines inside Assumption blocks
+//	(which are indented by at least one space) by pinning ^- at column 0.
 var statusAnchor = regexp.MustCompile(`^- \*\*Status\*\*: (.+)$`)
 
 // Anchor B (generic): README index row, any record number.

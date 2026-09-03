@@ -1,3 +1,5 @@
+//go:build ignore
+
 // a5-stage-and-rename spike: stage a replacement file beside the target and
 // rename over it, exercising the actual os.Rename + os.Chmod path an
 // implementation would use (not just shell `mv`).

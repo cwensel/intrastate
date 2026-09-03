@@ -206,15 +206,15 @@ const escapeeSleep = 8
 const childSleep = 6
 
 type result struct {
-	stdout             []byte
-	stderr             []byte
-	deadlineToWait     time.Duration // (a)
-	waitToJoin         time.Duration // (b)
-	total              time.Duration // (c)
-	exitDesc           string
-	childWriteReturned bool
-	report             string
-	boundFired         bool
+	stdout                     []byte
+	stderr                     []byte
+	deadlineToWait             time.Duration // (a)
+	waitToJoin                 time.Duration // (b)
+	total                      time.Duration // (c)
+	exitDesc                   string
+	childWriteReturned         bool
+	report                     string
+	boundFired                 bool
 	escapeeAliveAfterGroupKill bool
 }
 
