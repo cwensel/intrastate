@@ -1,0 +1,106 @@
+### darwin/arm64 — go1.26.6 — host run
+$ go build -o fixture fixture.go && go build -o spike spike.go && ./spike ./fixture
+
+=== RDR 0026 A3/A6 live spike ===
+platform: darwin/arm64  go: go1.26.6
+WaitDelay: 500ms (cmdbind.WaitDelay = 500 ms)
+
+--- escape-is-real check ---
+fixture fd-3 report: child pid=37707 pgid=37707 | grandchild pid=37709 pgid=37709 err=<nil>
+child-write-returned 1024
+grandchild alive AFTER kill(-pgid, SIGKILL)? true
+(the drain therefore saw no EOF from the pipe: bounded join fired = true)
+
+--- A3: FIFO / no-loss at the bound (shape-B) ---
+Claim: at the moment the bound expires, the accumulated buffer
+holds the direct child's COMPLETE envelope, byte-for-byte.
+
+case                       wrote    got       complete  childexit wrtret  note
+1KiB      prompt-drain     1024     1024      true      exit0    true    
+1KiB      delayed-drain    1024     1024      true      exit0    true    
+63KiB     prompt-drain     64512    64512     true      exit0    true    
+63KiB     delayed-drain    64512    64512     true      exit0    true    
+128KiB    prompt-drain     131072   131072    true      exit0    true    
+128KiB    delayed-drain    131072   65536     false     sig:killed false   MISMATCH prefix-ok=true child-BLOCKED-in-write
+1MiB      prompt-drain     1048576  1048576   true      exit0    true    
+1MiB      delayed-drain    1048576  65536     false     sig:killed false   MISMATCH prefix-ok=true child-BLOCKED-in-write
+
+--- A6: the total bound, escaped-grandchild case ---
+Claim: the invocation returns within timeout + 2*WaitDelay = 2.5s.
+
+shape-A (deadline, child silent), n=10
+  measure                                    min        median     max       
+  (a) ctx deadline -> Wait() returned        1.348708ms 2.4715ms   12.230584ms
+  (b) Wait() returned -> bounded join done   500.0745ms 500.431458ms 502.955417ms
+  (c) total elapsed (spawn -> all closed)    2.001935041s 2.002570667s 2.012857625s
+  budget: timeout(1.5s) + 2*WaitDelay(1s) = 2.5s
+  (a) <= WaitDelay?   true   (max 12.230584ms)
+  (b) <= WaitDelay?   false   (max 502.955417ms)
+  (c) <= budget?      true   (max 2.012857625s, margin 487.142375ms)
+  child dispositions: [sig:killed]
+
+shape-B (success, child writes 1 KiB then exits 0), n=10
+  measure                                    min        median     max       
+  (a) ctx deadline -> Wait() returned        -1.49491675s -1.493918s -1.49056125s
+  (b) Wait() returned -> bounded join done   500.309042ms 501.086209ms 501.176959ms
+  (c) total elapsed (spawn -> all closed)    506.148292ms 507.177292ms 509.761917ms
+  budget: timeout(1.5s) + 2*WaitDelay(1s) = 2.5s
+  (a) <= WaitDelay?   true   (max -1.49056125s)
+  (b) <= WaitDelay?   false   (max 501.176959ms)
+  (c) <= budget?      true   (max 509.761917ms, margin 1.990238083s)
+  child dispositions: [exit0]
+
+
+
+### linux/arm64 — go1.26.8 — docker golang:1.26
+$ docker run --rm -v <evidence-dir>:/w:ro -w /w golang:1.26 sh /w/run-linux.sh
+
+=== RDR 0026 A3/A6 live spike ===
+platform: linux/arm64  go: go1.26.8
+WaitDelay: 500ms (cmdbind.WaitDelay = 500 ms)
+
+--- escape-is-real check ---
+fixture fd-3 report: child pid=828 pgid=828 | grandchild pid=834 pgid=834 err=<nil>
+child-write-returned 1024
+grandchild alive AFTER kill(-pgid, SIGKILL)? true
+(the drain therefore saw no EOF from the pipe: bounded join fired = true)
+
+--- A3: FIFO / no-loss at the bound (shape-B) ---
+Claim: at the moment the bound expires, the accumulated buffer
+holds the direct child's COMPLETE envelope, byte-for-byte.
+
+case                       wrote    got       complete  childexit wrtret  note
+1KiB      prompt-drain     1024     1024      true      exit0    true    
+1KiB      delayed-drain    1024     1024      true      exit0    true    
+63KiB     prompt-drain     64512    64512     true      exit0    true    
+63KiB     delayed-drain    64512    64512     true      exit0    true    
+128KiB    prompt-drain     131072   131072    true      exit0    true    
+128KiB    delayed-drain    131072   65536     false     sig:killed false   MISMATCH prefix-ok=true child-BLOCKED-in-write
+1MiB      prompt-drain     1048576  1048576   true      exit0    true    
+1MiB      delayed-drain    1048576  65536     false     sig:killed false   MISMATCH prefix-ok=true child-BLOCKED-in-write
+
+--- A6: the total bound, escaped-grandchild case ---
+Claim: the invocation returns within timeout + 2*WaitDelay = 2.5s.
+
+shape-A (deadline, child silent), n=10
+  measure                                    min        median     max       
+  (a) ctx deadline -> Wait() returned        1.217876ms 6.996459ms 78.833501ms
+  (b) Wait() returned -> bounded join done   500.617334ms 501.438708ms 503.962292ms
+  (c) total elapsed (spawn -> all closed)    2.002724043s 2.009548709s 2.081655251s
+  budget: timeout(1.5s) + 2*WaitDelay(1s) = 2.5s
+  (a) <= WaitDelay?   true   (max 78.833501ms)
+  (b) <= WaitDelay?   false   (max 503.962292ms)
+  (c) <= budget?      true   (max 2.081655251s, margin 418.344749ms)
+  child dispositions: [sig:killed]
+
+shape-B (success, child writes 1 KiB then exits 0), n=10
+  measure                                    min        median     max       
+  (a) ctx deadline -> Wait() returned        -1.488766958s -1.469217959s -1.4296465s
+  (b) Wait() returned -> bounded join done   500.277292ms 502.524917ms 508.213251ms
+  (c) total elapsed (spawn -> all closed)    512.824417ms 531.09775ms 575.688875ms
+  budget: timeout(1.5s) + 2*WaitDelay(1s) = 2.5s
+  (a) <= WaitDelay?   true   (max -1.4296465s)
+  (b) <= WaitDelay?   false   (max 508.213251ms)
+  (c) <= budget?      true   (max 575.688875ms, margin 1.924311125s)
+  child dispositions: [exit0]
+

@@ -1,0 +1,166 @@
+// a5spike measures the wall time from kill(-pgid, SIGKILL) to the parent's
+// drain reaching EOF, for an IN-GROUP backgrounded grandchild that inherited
+// the parent's stdout/stderr pipes.
+//
+// It reproduces the shape of intrastate#x5vq's oracle
+// (TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead): a shell tool
+// that backgrounds `( sleep N ) &`, prints a JSON envelope, and exits 0. The
+// grandchild stays in the child's process group and holds the inherited pipe
+// write ends, so the drain does NOT see EOF when the direct child is reaped —
+// only when reapGroup's SIGKILL lands and the kernel tears the grandchild
+// down.
+//
+// The measured interval is exactly what RDR 0026's A5 bounds at WaitDelay
+// (500 ms): the residual drain time AFTER the group kill.
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"sync"
+	"syscall"
+	"time"
+)
+
+const script = `#!/bin/sh
+( sleep 20 ) &
+printf '{"state.phase":"review"}'
+exit 0
+`
+
+// one runs a single trial and returns the release latency: the time from the
+// group SIGKILL to BOTH drains reaching EOF.
+func one(tool string) (release time.Duration, total time.Duration, stdout string, err error) {
+	start := time.Now()
+
+	cmd := exec.Command(tool)
+	cmd.Stdin = bytes.NewReader([]byte("{}"))
+	// Same as cmdbind.setProcGroup: the child becomes its own group leader,
+	// so the group id is the child's pid.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Parent-OWNED pipes, exactly as cmdbind does, so Cmd.Wait does not close
+	// them when the direct child is reaped.
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		return 0, 0, "", err
+	}
+	defer outR.Close()
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		outW.Close()
+		return 0, 0, "", err
+	}
+	defer errR.Close()
+	cmd.Stdout = outW
+	cmd.Stderr = errW
+
+	if err = cmd.Start(); err != nil {
+		outW.Close()
+		errW.Close()
+		return 0, 0, "", err
+	}
+	outW.Close()
+	errW.Close()
+
+	var out, serr []byte
+	var drains sync.WaitGroup
+	drains.Add(2)
+	go func() { defer drains.Done(); out, _ = io.ReadAll(outR) }()
+	go func() { defer drains.Done(); serr, _ = io.ReadAll(errR) }()
+	_ = serr
+
+	werr := cmd.Wait()
+	if werr != nil {
+		return 0, 0, "", fmt.Errorf("wait: %w", werr)
+	}
+
+	// The direct child is reaped; the grandchild still holds both pipes.
+	// Everything from here to EOF is what WaitDelay must cover.
+	killAt := time.Now()
+	pid := cmd.Process.Pid
+	if pid > 1 {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+	}
+
+	drains.Wait()
+	release = time.Since(killAt)
+	total = time.Since(start)
+	return release, total, string(out), nil
+}
+
+func pct(sorted []time.Duration, p float64) time.Duration {
+	if len(sorted) == 0 {
+		return 0
+	}
+	i := int(p * float64(len(sorted)-1))
+	return sorted[i]
+}
+
+func main() {
+	n := 40
+	if len(os.Args) > 1 {
+		fmt.Sscanf(os.Args[1], "%d", &n)
+	}
+
+	dir, err := os.MkdirTemp("", "a5tool")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	tool := filepath.Join(dir, "tool.sh")
+	if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+		panic(err)
+	}
+
+	var releases []time.Duration
+	fails := 0
+	fmt.Printf("trial,release_ms,total_ms,stdout_ok\n")
+	for i := range n {
+		rel, tot, out, err := one(tool)
+		if err != nil {
+			fails++
+			fmt.Printf("%d,ERR,ERR,%v\n", i+1, err)
+			continue
+		}
+		ok := out == `{"state.phase":"review"}`
+		if !ok {
+			fails++
+		}
+		fmt.Printf("%d,%.3f,%.3f,%v\n", i+1,
+			float64(rel.Microseconds())/1000, float64(tot.Microseconds())/1000, ok)
+		releases = append(releases, rel)
+	}
+
+	sort.Slice(releases, func(a, b int) bool { return releases[a] < releases[b] })
+	ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+	var sum time.Duration
+	for _, r := range releases {
+		sum += r
+	}
+	fmt.Printf("\n--- release latency (kill(-pgid,SIGKILL) -> drain EOF), n=%d, failures=%d ---\n",
+		len(releases), fails)
+	if len(releases) == 0 {
+		os.Exit(1)
+	}
+	fmt.Printf("min    = %.3f ms\n", ms(releases[0]))
+	fmt.Printf("median = %.3f ms\n", ms(pct(releases, 0.50)))
+	fmt.Printf("p90    = %.3f ms\n", ms(pct(releases, 0.90)))
+	fmt.Printf("p99    = %.3f ms\n", ms(pct(releases, 0.99)))
+	fmt.Printf("max    = %.3f ms\n", ms(releases[len(releases)-1]))
+	fmt.Printf("mean   = %.3f ms\n", ms(sum/time.Duration(len(releases))))
+	fmt.Printf("bound  = 500.000 ms (cmdbind.WaitDelay)\n")
+	over := 0
+	for _, r := range releases {
+		if r >= 500*time.Millisecond {
+			over++
+		}
+	}
+	fmt.Printf("trials at or over the bound: %d/%d\n", over, len(releases))
+	fmt.Printf("margin (bound/max) = %.1fx\n", 500.0/ms(releases[len(releases)-1]))
+}

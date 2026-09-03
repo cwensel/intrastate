@@ -1,0 +1,472 @@
+====================================================================
+A5 in-group release-latency margin — captured evidence
+host: darwin/arm64, 12 cores, go1.26.6
+====================================================================
+
+### 1. WaitDelay constant (internal/cli/cmdbind/cmdbind.go:63-66)
+
+// WaitDelay bounds the stdin write and the post-kill pipe drain, so a
+// non-reading or slow-draining child cannot hang the CLI past the deadline
+// (`0025:C4`, A1's necessary-and-sufficient triple).
+const WaitDelay = 500 // milliseconds
+
+### 2. BASELINE (idle): go run spike, n=40
+$ cd /tmp/a5spike && ./a5spike 40
+(full per-trial CSV omitted; summary reproduced from the run)
+min=0.047 median=0.367 p90=0.428 p99=0.463 max=1.791 mean=0.403 (ms)
+trials at or over the 500 ms bound: 0/40 ; margin (bound/max) = 279.2x
+
+### 3. UNDER LOAD (16 busy 'yes' procs, loadavg 16.2 on 12 cores), n=60
+$ ./a5spike 60
+trial,release_ms,total_ms,stdout_ok
+1,0.632,200.463,true
+2,0.487,34.417,true
+3,1.966,67.384,true
+4,0.755,16.797,true
+5,6.457,34.124,true
+6,8.041,60.121,true
+7,0.241,32.851,true
+8,0.489,12.825,true
+9,1.187,9.431,true
+10,1.400,26.761,true
+11,0.420,7.705,true
+12,0.755,7.059,true
+13,0.627,11.654,true
+14,1.787,15.923,true
+15,0.307,11.886,true
+16,0.339,8.220,true
+17,0.605,10.017,true
+18,0.395,9.079,true
+19,0.850,10.876,true
+20,1.040,20.167,true
+21,0.474,17.979,true
+22,0.568,43.439,true
+23,0.878,13.819,true
+24,4.687,27.760,true
+25,5.127,50.418,true
+26,0.923,17.688,true
+27,0.331,12.431,true
+28,0.220,9.407,true
+29,0.186,27.906,true
+30,2.160,18.491,true
+31,4.567,36.076,true
+32,1.403,22.521,true
+33,0.847,12.071,true
+34,0.750,21.164,true
+35,13.914,42.119,true
+36,27.685,95.155,true
+37,8.127,95.134,true
+38,1.403,28.836,true
+39,5.049,77.061,true
+40,7.734,27.626,true
+41,1.151,16.085,true
+42,4.492,15.093,true
+43,4.837,51.678,true
+44,19.874,64.010,true
+45,0.474,64.999,true
+46,2.761,22.233,true
+47,8.964,80.192,true
+48,2.255,29.819,true
+49,0.793,28.419,true
+50,1.113,18.480,true
+51,5.912,58.851,true
+52,1.049,33.487,true
+53,11.920,79.645,true
+54,1.526,39.218,true
+55,1.246,31.491,true
+56,1.756,34.105,true
+57,2.599,57.820,true
+58,1.006,38.744,true
+59,9.308,28.963,true
+60,5.979,48.095,true
+
+--- release latency (kill(-pgid,SIGKILL) -> drain EOF), n=60, failures=0 ---
+min    = 0.186 ms
+median = 1.187 ms
+p90    = 8.127 ms
+p99    = 19.874 ms
+max    = 27.685 ms
+mean   = 3.414 ms
+bound  = 500.000 ms (cmdbind.WaitDelay)
+trials at or over the bound: 0/60
+margin (bound/max) = 18.1x
+
+### 4. UNDER HEAVIER LOAD (32 busy 'yes' procs, loadavg 47.5), n=60
+$ ./a5spike 60
+trial,release_ms,total_ms,stdout_ok
+1,1.148,192.808,true
+2,0.379,12.336,true
+3,0.401,18.604,true
+4,4.317,51.057,true
+5,0.668,32.986,true
+6,2.799,42.514,true
+7,7.981,59.596,true
+8,3.592,36.203,true
+9,0.541,26.723,true
+10,0.330,27.839,true
+11,0.185,12.667,true
+12,0.443,8.583,true
+13,0.515,18.293,true
+14,3.459,13.623,true
+15,0.574,8.244,true
+16,0.294,9.310,true
+17,4.701,15.035,true
+18,0.238,10.216,true
+19,0.954,12.707,true
+20,0.112,8.178,true
+21,1.308,12.963,true
+22,1.645,17.113,true
+23,3.457,21.549,true
+24,1.251,14.374,true
+25,6.156,29.976,true
+26,24.527,67.263,true
+27,4.544,64.776,true
+28,0.616,36.491,true
+29,1.274,40.529,true
+30,2.887,27.987,true
+31,0.559,59.138,true
+32,1.608,23.827,true
+33,0.429,24.500,true
+34,15.309,30.451,true
+35,0.963,47.367,true
+36,10.902,39.655,true
+37,1.040,36.766,true
+38,4.498,34.490,true
+39,0.434,17.446,true
+40,4.899,30.501,true
+41,10.578,24.662,true
+42,0.893,60.283,true
+43,5.269,48.228,true
+44,10.595,142.512,true
+45,0.696,43.457,true
+46,0.454,18.682,true
+47,4.127,34.651,true
+48,6.802,55.095,true
+49,0.881,19.709,true
+50,0.432,11.058,true
+51,0.800,11.069,true
+52,0.422,9.000,true
+53,0.550,14.278,true
+54,0.884,27.579,true
+55,0.392,18.835,true
+56,0.403,28.733,true
+57,0.232,21.438,true
+58,0.427,21.695,true
+59,0.912,34.186,true
+60,0.815,45.820,true
+
+--- release latency (kill(-pgid,SIGKILL) -> drain EOF), n=60, failures=0 ---
+min    = 0.112 ms
+median = 0.893 ms
+p90    = 6.802 ms
+p99    = 15.309 ms
+max    = 24.527 ms
+mean   = 2.808 ms
+bound  = 500.000 ms (cmdbind.WaitDelay)
+trials at or over the bound: 0/60
+margin (bound/max) = 20.4x
+
+### 5. PROJECT ORACLES, -race -count=25, under the 16-proc load
+$ go test -race -count=25 -v -timeout 900s -run 'TestAdvBackgroundGrandchildMustNotStallASuccessfulRead|TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead|TestAdvKilledChildOnParentCancelIsNotAnAnswer' ./internal/cli/cmdbind/
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.33s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.55s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.92s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.28s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.68s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.30s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.74s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.29s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.73s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.35s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.38s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.44s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.29s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.30s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.77s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.51s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.59s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.51s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.59s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.24s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.77s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.29s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.90s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.44s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.46s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.64s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.72s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.42s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.83s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.44s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.82s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.43s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.48s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.62s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.71s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.30s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.33s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.69s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.34s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.42s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.16s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.30s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.67s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.33s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.40s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.52s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.16s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.30s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.57s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.20s)
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.33s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.69s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.34s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.53s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.61s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.31s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.54s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.60s)
+=== RUN   TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== PAUSE TestAdvKilledChildOnParentCancelIsNotAnAnswer
+=== RUN   TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== RUN   TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== PAUSE TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead
+=== CONT  TestAdvBackgroundGrandchildMustNotStallASuccessfulRead
+=== CONT  TestAdvKilledChildOnParentCancelIsNotAnAnswer
+--- PASS: TestAdvKilledChildOnParentCancelIsNotAnAnswer (0.30s)
+--- PASS: TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead (0.46s)
+--- PASS: TestAdvBackgroundGrandchildMustNotStallASuccessfulRead (0.50s)
+PASS
+ok  	github.com/cwensel/intrastate/internal/cli/cmdbind	18.080s

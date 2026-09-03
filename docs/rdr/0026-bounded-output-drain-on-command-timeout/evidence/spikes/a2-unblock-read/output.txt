@@ -1,0 +1,157 @@
+############################################################
+# RUN 1 -- a2_unblock_read.go -- darwin/arm64 (go1.26.6)
+############################################################
+RDR 0026 / A2 spike -- go1.26.6 darwin/arm64
+started 2026-09-03T11:28:20-07:00
+
+=== S1: SetReadDeadline unblocks a Read already blocked on an empty pipe ===
+    (points 1, 2, 3; also point 4b: empty pipe + live writer -> expect deadline error)
+  grandchild pid=77411 holds the write end open (no preamble, pipe stays empty)
+  reader is parked in Read (did not return within 300ms)
+  SetReadDeadline(time.Now()) returned: <nil>
+  Read RETURNED 163.542µs after SetReadDeadline
+    n=0 err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    total time blocked in Read: 301.026ms
+    VERDICT S1: unblocked=true deadlineExceeded=true
+
+=== S2: buffered bytes present, writer alive but quiet, deadline set BEFORE the Read ===
+    (point 4a -- load-bearing for C1 'bytes still buffered are delivered')
+  grandchild pid=77685 wrote 27 bytes then went quiet, write end STILL OPEN
+  SetReadDeadline(time.Now()) returned: <nil>
+  Read after the deadline: n=0 elapsed=1.792µs err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    RESULT 4a: buffered bytes LOST -- deadline error preempted them (expected 27, got 0)
+  subsequent Read (buffer now empty, deadline still past): n=0 elapsed=292ns err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+
+=== S3: realistic drain loop -- writer streams, then deadline fires mid-drain ===
+    (does the loop keep the bytes it already accumulated?)
+  drain loop ended 24.584µs after SetReadDeadline
+    accumulated="CHUNK-A|CHUNK-B|CHUNK-C|" (24 bytes, expected 24)
+    terminating err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    RESULT S3: partial output PRESERVED
+
+=== S4: Close() on the read end while a Read is blocked (alternative mechanism) ===
+    (point 6)
+  grandchild pid=78813 holds the write end open (pipe empty)
+  reader is parked in Read
+  Close() returned after 34.125µs: <nil>
+  Read RETURNED 4.265334ms after Close: n=0 err=read |0: file already closed [errors.Is(err, os.ErrClosed)=true, type=*fs.PathError]
+
+=== S5: Close() on the read end with UNREAD buffered bytes ===
+    (point 6 vs point 4 -- what the Close mechanism costs you)
+  27 bytes sit unread in the pipe; now Close() the read end
+  Read after Close: n=0 err=read |0: file already closed [errors.Is(err, os.ErrClosed)=true, type=*fs.PathError]
+    RESULT S5: buffered bytes are UNREACHABLE by Close
+
+=== S6: SetReadDeadline on a file whose poller registration did not happen ===
+    (point 5 -- failure mode F5 trigger)
+  regular file  SetReadDeadline -> file type does not support deadline [type=*errors.errorString]
+    errors.Is(err, os.ErrNoDeadline) = true
+  os.Pipe read end SetReadDeadline -> <nil>
+    errors.Is(err, os.ErrNoDeadline) = false
+  os.NewFile(dup of pipe read end) SetReadDeadline -> file type does not support deadline [type=*errors.errorString]
+    errors.Is(err, os.ErrNoDeadline) = true
+  os.ErrNoDeadline value as declared by the stdlib: "file type does not support deadline"
+
+done -- all grandchildren killed via their process groups
+
+############################################################
+# RUN 2 -- a2_buffered_bytes.go -- darwin/arm64 (go1.26.6)
+############################################################
+A2 follow-up: are buffered bytes LOST or DEFERRED? -- go1.26.6 darwin/arm64
+
+=== T1: past deadline -> timeout, then SetReadDeadline(zero) -> can we still get the bytes? ===
+  Read with past deadline:      n=0 err=i/o timeout [os.ErrDeadlineExceeded]
+  Read after clearing deadline: n=27 err=<nil>
+    recovered bytes: "BUFFERED-PAYLOAD-0123456789"
+  => buffered bytes were DEFERRED (recoverable after clearing the deadline)
+
+=== T2: deadline set to a FUTURE instant; bytes already buffered ===
+  Read #1 (bytes buffered, deadline 750ms out): n=27 err=<nil>
+    delivered: "BUFFERED-PAYLOAD-0123456789"
+  Read #2 (buffer empty, writer alive): n=0 after 750ms err=i/o timeout [os.ErrDeadlineExceeded]
+  => a FUTURE deadline DRAINS buffered bytes first, then times out (this is the C1-compatible discipline)
+
+=== T3: past deadline set while pipe EMPTY, writer alive -- point 4b ===
+  Read on empty pipe w/ past deadline: n=0 after 1µs err=i/o timeout [os.ErrDeadlineExceeded]
+  => deadline error as expected (point 4b CONFIRMED)
+
+done
+
+############################################################
+# RUN 3 -- a2_unblock_read.go -- linux/arm64 (go1.26.8, docker golang:1.26)
+############################################################
+RDR 0026 / A2 spike -- go1.26.8 linux/arm64
+started 2026-09-03T18:28:32Z
+
+=== S1: SetReadDeadline unblocks a Read already blocked on an empty pipe ===
+    (points 1, 2, 3; also point 4b: empty pipe + live writer -> expect deadline error)
+  grandchild pid=835 holds the write end open (no preamble, pipe stays empty)
+  reader is parked in Read (did not return within 300ms)
+  SetReadDeadline(time.Now()) returned: <nil>
+  Read RETURNED 72.583µs after SetReadDeadline
+    n=0 err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    total time blocked in Read: 300.258709ms
+    VERDICT S1: unblocked=true deadlineExceeded=true
+
+=== S2: buffered bytes present, writer alive but quiet, deadline set BEFORE the Read ===
+    (point 4a -- load-bearing for C1 'bytes still buffered are delivered')
+  grandchild pid=840 wrote 27 bytes then went quiet, write end STILL OPEN
+  SetReadDeadline(time.Now()) returned: <nil>
+  Read after the deadline: n=0 elapsed=52.625µs err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    RESULT 4a: buffered bytes LOST -- deadline error preempted them (expected 27, got 0)
+  subsequent Read (buffer now empty, deadline still past): n=0 elapsed=291ns err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+
+=== S3: realistic drain loop -- writer streams, then deadline fires mid-drain ===
+    (does the loop keep the bytes it already accumulated?)
+  drain loop ended 15.541µs after SetReadDeadline
+    accumulated="CHUNK-A|CHUNK-B|CHUNK-C|" (24 bytes, expected 24)
+    terminating err=read |0: i/o timeout [errors.Is(err, os.ErrDeadlineExceeded)=true, type=*fs.PathError]
+    RESULT S3: partial output PRESERVED
+
+=== S4: Close() on the read end while a Read is blocked (alternative mechanism) ===
+    (point 6)
+  grandchild pid=850 holds the write end open (pipe empty)
+  reader is parked in Read
+  Close() returned after 260.833µs: <nil>
+  Read RETURNED 280.166µs after Close: n=0 err=read |0: file already closed [errors.Is(err, os.ErrClosed)=true, type=*fs.PathError]
+
+=== S5: Close() on the read end with UNREAD buffered bytes ===
+    (point 6 vs point 4 -- what the Close mechanism costs you)
+  27 bytes sit unread in the pipe; now Close() the read end
+  Read after Close: n=0 err=read |0: file already closed [errors.Is(err, os.ErrClosed)=true, type=*fs.PathError]
+    RESULT S5: buffered bytes are UNREACHABLE by Close
+
+=== S6: SetReadDeadline on a file whose poller registration did not happen ===
+    (point 5 -- failure mode F5 trigger)
+  regular file  SetReadDeadline -> file type does not support deadline [type=*errors.errorString]
+    errors.Is(err, os.ErrNoDeadline) = true
+  os.Pipe read end SetReadDeadline -> <nil>
+    errors.Is(err, os.ErrNoDeadline) = false
+  os.NewFile(dup of pipe read end) SetReadDeadline -> file type does not support deadline [type=*errors.errorString]
+    errors.Is(err, os.ErrNoDeadline) = true
+  os.ErrNoDeadline value as declared by the stdlib: "file type does not support deadline"
+
+done -- all grandchildren killed via their process groups
+
+############################################################
+# RUN 4 -- a2_buffered_bytes.go -- linux/arm64 (go1.26.8, docker golang:1.26)
+############################################################
+A2 follow-up: are buffered bytes LOST or DEFERRED? -- go1.26.8 linux/arm64
+
+=== T1: past deadline -> timeout, then SetReadDeadline(zero) -> can we still get the bytes? ===
+  Read with past deadline:      n=0 err=i/o timeout [os.ErrDeadlineExceeded]
+  Read after clearing deadline: n=27 err=<nil>
+    recovered bytes: "BUFFERED-PAYLOAD-0123456789"
+  => buffered bytes were DEFERRED (recoverable after clearing the deadline)
+
+=== T2: deadline set to a FUTURE instant; bytes already buffered ===
+  Read #1 (bytes buffered, deadline 750ms out): n=27 err=<nil>
+    delivered: "BUFFERED-PAYLOAD-0123456789"
+  Read #2 (buffer empty, writer alive): n=0 after 751ms err=i/o timeout [os.ErrDeadlineExceeded]
+  => a FUTURE deadline DRAINS buffered bytes first, then times out (this is the C1-compatible discipline)
+
+=== T3: past deadline set while pipe EMPTY, writer alive -- point 4b ===
+  Read on empty pipe w/ past deadline: n=0 after 1µs err=i/o timeout [os.ErrDeadlineExceeded]
+  => deadline error as expected (point 4b CONFIRMED)
+
+done
