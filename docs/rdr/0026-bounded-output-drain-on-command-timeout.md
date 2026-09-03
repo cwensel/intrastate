@@ -71,7 +71,7 @@ contract-level amendment, not a patch.
 - **A4 [The executor's deadline-first classification (`internal/accessor/executor.go::invokeRead`, and its Gate and Apply counterparts) turns the new refusal into `timeout` whenever the declared timeout elapsed, on every path, so `spawn` needs no timeout class of its own and the binding's error is read only when the deadline did not expire]**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: on all four paths the `DeadlineExceeded` test is the first statement after the binding call and textually precedes the `if err != nil` arm — read `internal/accessor/executor.go::invokeRead:199` ("Deadline first: … `timeout` is the one reported"), gate `(*Executor).Gate:231`, write `(*Executor).Write:356` (`appliedDeadline := errors.Is(applyCtx.Err(), context.DeadlineExceeded)`, consumed at `:359` ahead of the `err != nil` arm at `:368`). The owed read-back case resolves at `executor.go:392`: a read-back that times out inside a Write returns the WRITE's refusal (`WriteResult{Refusal: …}`, `:396`) with class `ClassTimeout` and `applied = true` — not laundered into a read result — and the generic `raw.class != ""` arm follows at `:398`, so timeout wins that ordering too. No path reads the binding's error before the context deadline.
+  - **Evidence**: on the three DIRECT binding paths the `DeadlineExceeded` test is the first statement after the binding call and textually precedes the `if err != nil` arm — read `internal/accessor/executor.go::invokeRead:199` ("Deadline first: … `timeout` is the one reported"), gate `(*Executor).Gate:231`, write `(*Executor).Write:356` (`appliedDeadline := errors.Is(applyCtx.Err(), context.DeadlineExceeded)`, consumed at `:359` ahead of the `err != nil` arm at `:368`). The fourth path, the read-back leg, reaches the same conclusion by a DIFFERENT mechanism, stated here rather than folded into the sentence above: `executor.go:392` tests `raw.class == ClassTimeout`, a class `invokeRead` already derived from ITS deadline check, so there is no second `DeadlineExceeded` test to precede anything. Deadline-first still holds transitively — the precedence was decided one frame down — and a read-back that times out returns the WRITE's refusal (`WriteResult{Refusal: …}`, `:396`) with class `ClassTimeout` and `applied = true`, not laundered into a read result, with the generic `raw.class != ""` arm following at `:398`. No path reads the binding's error before the context deadline.
   - **If wrong**: a bound-expired drain after the deadline is reported as `execution_failure` with a held-pipe reason instead of `timeout`, so a caller branching on class is misled.
 - **A5 [500 ms (`cmdbind.go::WaitDelay`) is long enough that a NON-escaping backgrounded grandchild SIGKILLed by `reapGroup` releases its pipe ends within the bound on CI, so the ordinary "wrapper script backgrounds a helper" success case (intrastate#x5vq's oracle) pays nothing and is never refused]**
   - **Status**: Verified
@@ -89,10 +89,10 @@ contract-level amendment, not a patch.
   - **Method**: Source Search
   - **Evidence**: `cmdbind.go:207` assigns `cmd.Stdin = bytes.NewReader(stdin)` (non-`*os.File`) and `:224` sets `cmd.WaitDelay = WaitDelay * time.Millisecond` (`WaitDelay = 500`, `:66`). Go's own text covers the stdin goroutine without the gloss: `os/exec/exec.go` WaitDelay doc — "those pipes are closed in order to unblock any goroutines currently blocked on Read or **Write** calls" — and the mechanism is in code, not only doc: `exec.go::childStdin:542` hands an `*os.File` stdin straight to the child with no goroutine, but the `bytes.Reader` branch (`:545-561`) appends the write end to `c.parentIOPipes` and the `io.Copy` to `c.goroutine`, which `awaitGoroutines` force-closes at `exec.go:999` before returning `ErrWaitDelay` (`:1002`). `ErrWaitDelay` is not an `*exec.ExitError`, so `errors.As` at `cmdbind.go:311` fails and control reaches the `default:` arm at `:320-322` — after `reapGroup` (`:297`) and after the join (`:302`) — refusing `execution_failure`. The third pipe does not re-open the hole.
   - **If wrong**: a write whose payload exceeds the pipe buffer hangs on a non-reading child — the third inherited pipe re-opens the hole this RDR closes for the other two.
-- **A8 [The executor's write arm can derive `Applied()` from the binding's typed held-pipe error: `internal/accessor/executor.go::Write` has, or can gain, a refusal site that matches `cmdbind.HeldPipeError` with `errors.As` after the direct child was reaped and sets the unexported applied sense there; the CLI's "may have been applied" rendering must GAIN its `Applied()` key, since the shipped mapping keys on class and phase alone and this case slips past it (JDR 0003 §D1 rule 3, which assigns that gain to this record)]**
-  - **Status**: Verified
+- **A8 [The executor's write arm can derive `Applied()` from the binding's typed held-pipe error: `internal/accessor/executor.go::Write` has, or can gain, a refusal site that matches `cmdbind.HeldPipeError` with `errors.As` after the direct child was reaped and sets the unexported applied sense there; the CLI's "may have been applied" rendering must GAIN its `Applied()` key on the DIRECT write arm, since the shipped mapping keys on class and phase alone and that one case slips past it — the read-back leg already carries both the applied sense and the rendering (JDR 0003 §D1 rule 3, which assigns that gain to this record)]**
+  - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: the setter is reachable — `internal/accessor/model.go:314` holds the unexported `applied bool` whose doc reserves it for the write path, `:323` the `Applied()` accessor; `executor.go::Write` already sets `r.applied = true` at six refusal sites (`:363`, `:375`, `:393`, `:401`, `:409`, `:472`) by direct in-package field assignment, so the proposed `errors.As` match takes the `if err != nil` arm at `:368` with no structural change. The rendering is the gain, not a found fact: `internal/cli/flow_exec.go::accessorFailureOf` (`:395`) keys `detailMayHaveApplied` (`:469`) on class plus phase at `:398-404` (`ClassTimeout` + `at == phaseWrite`) and `:410-414` (`ClassReadBackIncomplete`) and never calls `Applied()` — which has zero non-test callers repo-wide. Decisively, `ClassExecutionFailure` at `:410-412` carries no phase check and no `Detail` at all, so a held-pipe write would today render as a bare "could not be executed". JDR 0003 §D1 rule 3 records exactly this ("the shipped mapping keys on class and phase, which this case slips past") and lands the `Applied()` derivation here, so the gain is a decided constraint this record implements, not an open question. Its cost is carried in C1 `refusal:` and Testing Strategy S1.
+  - **Evidence**: the setter is reachable — `internal/accessor/model.go:314` holds the unexported `applied bool` whose doc reserves it for the write path, `:323` the `Applied()` accessor; `executor.go::Write` already sets `r.applied = true` at six refusal sites (`:363`, `:375`, `:393`, `:401`, `:409`, `:472`) by direct in-package field assignment, so the proposed `errors.As` match takes the `if err != nil` arm at `:368` with no structural change. The rendering is the gain, not a found fact: `internal/cli/flow_exec.go::accessorFailureOf` (`:395`) keys `detailMayHaveApplied` (`:469`) on class plus phase at `:398-404` (`ClassTimeout` + `at == phaseWrite`) and `:410-414` (`ClassReadBackIncomplete`) and never calls `Applied()` — which has zero non-test callers repo-wide. Decisively, `ClassExecutionFailure` at `:410-412` carries no phase check and sets no `Detail` of its own, so a held-pipe write on the DIRECT invocation renders today with no applied sense. The held-pipe REASON still reaches the user one frame up — `flow_exec.go::accessorFailure` wraps every mapping in `withStderrTail(…, refusal.Detail)`, which lands the tail in the one `Detail` slot — so what the gain adds is the applied-sense sentence ahead of that tail, not the diagnostic itself. The read-back leg is NOT part of the gain: `ClassReadBackIncomplete` at `:410-423` already sets `detailMayHaveApplied`, and `executor.go`'s read-back arm already sets `applied`, so the re-key is one site (the `err != nil` write arm), not two. JDR 0003 §D1 rule 3 records exactly this ("the shipped mapping keys on class and phase, which this case slips past") and lands the `Applied()` derivation here, so the gain is a decided constraint this record implements, not an open question. Its cost is carried in C1 `refusal:` and Testing Strategy S1.
   - **If wrong**: a held pipe on a write is rendered as a write that did not occur — the guessed absence 0004:C14 forbids — and an agent caller retries blind instead of reading back.
 
 ## Proposed Solution
@@ -171,13 +171,84 @@ clause is the successor text and `cmdbind.go`'s C4 comments re-cite it).
 
 ```normative
 precedence: a bounded wait outranks a whole read. Order in `spawn` is fixed: Wait (direct child reaped) → reapGroup (one kill(2) to -pgid, non-blocking) → drain join under ONE timer of WaitDelay covering BOTH read drains. When the timer fires the parent sets a read deadline of now + DrainGrace (50 ms) on its own read ends; each drain's FINAL read then reports the pipe's state, not the clock: bytes still buffered are delivered, EOF (every writer gone) is whole output as today, and a deadline error is a HELD pipe — empty, with a writer the group signal could not reach. The grace is what MAKES that final read happen: Go checks the deadline BEFORE attempting the syscall (`internal/poll/fd_unix.go::(*FD).Read` calls `prepareRead` ahead of `syscall.Read`), so a deadline of NOW short-circuits with n=0 and reports a held pipe without ever looking at the pipe — the elapsed-time refusal the premortem rejected (P-2: refuse on "no EOF after a final bounded read", not on elapsed time), and, one layer down, the guessed absence 0004:D-absent-vs-unreadable forbids. Verified on darwin and linux (A2). Only a held pipe refuses. After the join every read end is closed (deadline to unblock, close to release the fd)
-refusal:  a held pipe refuses through `*accessor.ExecError`, this record's instance of JDR 0003 §D1: `Detail` carries the held-pipe reason — the pipe(s) held ("stdout"/"stderr"/both), the bound, the direct child's exit status (exited N / killed by signal) and the remediation ("close or redirect the helper's inherited stdio") — composed AHEAD of the stderr tail collected up to the bound; `Err` wraps the typed held-pipe error `cmdbind.HeldPipeError` (pipes held, exit status), which the executor matches with `errors.As` at the refusal site. Applied sense: a held pipe on the write path (the write invocation, or its read-back after the write ran) after the direct child was reaped is a post-run refusal — class stays `execution_failure` and `Applied()` is true, carried per JDR 0003 §D1 through the executor's write arm. Two sites implement it, both verified as reachable at A8: the executor sets the applied sense at the `errors.As` refusal site (`executor.go::Write`'s `err != nil` arm, which today sets none), and the CLI's "may have been applied" rendering GAINS its `Applied()` key — `flow_exec.go::accessorFailureOf` keys on class plus phase today and its `ClassExecutionFailure` arm carries neither a phase check nor a `Detail`, so a held-pipe write slips past it (JDR 0003 §D1 rule 3 lands that gain here). On read and gate invocations `Applied()` is false as today. The returned invocation carries no stdout; stdout read on a held drain is never parsed on ANY path — read envelope, gate verdict, write, write read-back (JDR 0003 §D1)
+refusal:  a held pipe refuses through `*accessor.ExecError`, this record's instance of JDR 0003 §D1: `Detail` carries the held-pipe reason — the pipe(s) held ("stdout"/"stderr"/both), the bound, the direct child's exit status (exited N / killed by signal) and the remediation ("close or redirect the helper's inherited stdio") — composed AHEAD of the stderr tail collected up to the bound; `Err` wraps the typed held-pipe error `cmdbind.HeldPipeError` (pipes held, exit status), which the executor matches with `errors.As` at the refusal site. Applied sense: a held pipe on the write path after the direct child was reaped is a post-run refusal — `Applied()` is true, carried per JDR 0003 §D1 through the executor's write arm. The write's TWO legs already differ in class and this clause does not flatten them. The DIRECT write invocation refuses `execution_failure`, and it is the leg that needs the gain: `executor.go::Write`'s `err != nil` arm sets no applied sense today, and `flow_exec.go::accessorFailureOf`'s `ClassExecutionFailure` arm carries neither a phase check nor a `Detail`, so a held-pipe write slips past the "may have been applied" rendering (JDR 0003 §D1 rule 3 lands that gain here). The READ-BACK leg after the write ran is already whole and gains nothing: a held pipe there returns the write's own refusal re-classed `read_back_incomplete` with `applied` already set (`executor.go`'s `raw.class != ""` arm), which `accessorFailureOf`'s `ClassReadBackIncomplete` arm already renders with `detailMayHaveApplied`. So one site changes, not two — the read-back leg is named here because a reader who assumes the class is uniform across both legs would re-key an arm that is correct. On read and gate invocations `Applied()` is false as today. The returned invocation carries no stdout; stdout read on a held drain is never parsed on ANY path — read envelope, gate verdict, write, write read-back (JDR 0003 §D1)
 class:    the class is the executor's, as today: ctx `DeadlineExceeded` ⇒ `timeout` (deadline-first rule; per 0025:C4 a `timeout` refusal carries no Err/Detail, so the held-pipe reason survives only on `execution_failure`), else the ExecError ⇒ `execution_failure`. The binding never classifies `timeout` itself
 stdin:    unchanged and named: the child's stdin is a Cmd-owned pipe (`cmd.Stdin` is a `bytes.Reader`), bounded by Cmd's own WaitDelay; a non-reading child or escapee holding its read end ends in `exec.ErrWaitDelay` from Wait, which `spawn`'s non-ExitError arm refuses as `execution_failure` AFTER reapGroup and the join — no arm of `spawn` returns between Wait and the join
 bound:    WaitDelay (500 ms) is the ONE bound — the same constant, by design, for every "the CLI waits past the child's exit" case: Cmd's stdin write and post-Cancel wait, and the owned drain join; no second knob, not model-declarable. DrainGrace (50 ms) is NOT a second bound: it answers a different question (how far ahead the read deadline must sit for the kernel to deliver already-buffered bytes), is never model-declarable, and cannot move the refuse/accept boundary — it is a mechanism constant inside the one bound, named here because every shipped constant of this family is named in its contract (0025:C4 does the same for StdoutCap and StderrTailCap). Cancel sends one signal and returns, so Cmd's timer starts at the deadline. Per invocation, the COMMITTED return bound is timeout + 2·WaitDelay; a command write is two invocations (write, then read-back), each under its own bound. The two legs are NOT separately bounded and the contract does not claim they are: the drain join runs one full WaitDelay plus timer-fire and goroutine-scheduling latency (measured 500.1-508.2 ms in 40/40 samples, A6), which the deadline leg's unused allowance absorbs. That absorption is why the total holds, so it is stated rather than left as a coincidence between two independent decisions (0025:C6's rule); a child that RESISTS termination spends leg (a)'s allowance and is the case where the total tightens — S8 tests it
 whole:    a drain that reaches EOF — before the timer, or on its final read after it — is whole, as today; the 1 MiB stdout cap and 4 KiB stderr tail are unchanged. A child (and group) that closes its pipes observes no change. The completeness guarantee (A3) carries an antecedent, stated here because nothing structural enforces it: the two drains run CONCURRENTLY and are never stalled. A child whose payload exceeds the ~64 KiB pipe buffer blocks in write(2) until drained, so a serialized or stalled drain converts a large-answer success into a deadline kill — measured: exactly one pipe buffer (65536 bytes) survives, as a correct prefix, where a prompt drain returns the whole 1 MiB. `spawn`'s concurrent-drain comment already reasons this way for the verbose-tool deadlock it cites 0025:F4 for; this clause is what keeps a later refactor from silently voiding A3, since the prohibition is carried by the contract and S7, not by a build error
 residue:  0025:F4 restated — a process outside the child's process group may outlive the refusal; it keeps write ends whose reader is gone, so its next write fails with EPIPE (SIGPIPE under the default disposition), and whatever it wrote is never read. Leakage of a process, or of THAT process's output, is admitted; a withheld refusal is not. Diagnosis: the refusal's Detail names the held pipe(s); the leaked process is visible to `ps` until its next write
 ```
+
+#### Conditional Mini-Checks
+
+Five structural cues fire on this draft. Each table is the decision, recorded here.
+
+**`authority` — source-authority census.** Cue: a fallback path (F5), a derived
+applied-sense, and two arms classifying the same refusal.
+
+| Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
+| --- | --- | --- | --- | --- | --- |
+| Refusal class (`timeout` vs `execution_failure`) | the executor | CLI rendering, agent caller | `executor.go::invokeRead`, `Gate`, `Write` | `spawn` returns an error, never a class | the EXECUTOR; the binding never classifies `timeout` (C1 `class:`) |
+| Applied sense on a write | `executor.go::Write`, by direct field assignment | `flow_exec.go::accessorFailureOf` | direct arm (`err != nil`, gains it) and read-back arm (already sets it) | the two legs carry DIFFERENT classes | `Refusal.applied`; `Applied()` is the only reader key (A8) |
+| Held-vs-EOF terminal condition | each drain goroutine, reporting out | `heldPipes()` at the join | one join in `spawn` | none — `readBounded` today swallows it | the drain's reported condition; NOT the clock (C1 `precedence:`) |
+| Stderr tail into `Detail` | `cmdbind.go::wrap` | `withStderrTail` composes into one slot | one slot, applied-sense first | held-pipe reason and tail share the slot | `refusal.Detail`, ordered per 0025:C4 |
+| Drain bound | `cmdbind.go::WaitDelay` | `spawn`'s join timer, Cmd's own timer | one constant, two timers | `DrainGrace` is an OFFSET, not a rival bound | `WaitDelay`; no second knob (D-naming) |
+
+**`oracle` — test-discriminability.** The rows that could pass by absence-of-error
+carry their named failing control.
+
+| MVV / scenario | Fails if X is wrong because Y | Negative / failing control |
+| --- | --- | --- |
+| MVV row 3 (deadline shape) | asserts elapsed ≤ 3 s AND class `timeout` AND empty `Detail`; a withheld refusal never returns | today's code hangs unboundedly — the bug itself is the control |
+| MVV row 5 (success shape) | asserts `execution_failure` within `2·WaitDelay`, `Err` naming "stdout, stderr" and "exited 0", envelope NOT parsed | a build that parses held stdout returns values and fails the not-parsed assertion |
+| MVV row 6 (late-but-unheld) | a deadline of `now` short-circuits before the syscall and loses the buffered bytes | **this row IS the control** — it fails under the rejected mechanism (A2) |
+| S2 (existing oracles re-run) | passes by absence-of-change, so it is paired with S7's stalled arm | S7's stalled drain recovers exactly 65536 bytes where a prompt drain returns 1 MiB |
+| S3 (ordinary paths byte-for-byte) | absence-of-change oracle; discriminated by the cap boundaries | one byte past the cap must still refuse overflow |
+| S9 (late drain, no holder) | accepted-whole vs refused is the whole point | companion: escaped writer emitting a byte every 10 ms is REFUSED |
+
+**`fidelity` — round-trip / fidelity.** Byte-equality invariants this record commits.
+
+| Operation | Invariant | Lossy exemption |
+| --- | --- | --- |
+| Whole read, child closes pipes | byte-for-byte unchanged from today (C1 `whole:`, S3) | none |
+| stdout at the 1 MiB cap | exactly the cap is a value; one byte more is a detected overflow | the discarded remainder — bounded on what is KEPT, as today |
+| stderr tail | LAST 4 KiB preserved | the earlier bytes, as today |
+| Drain past the ~64 KiB pipe buffer, prompt | whole 1 MiB recovered (S7) | none while the drains stay concurrent |
+| Drain past the pipe buffer, STALLED | exactly one pipe buffer (65536 bytes) as a **correct prefix** | the remainder — admitted, and the reason S7 pins the concurrency (A3, D-the-drains-stay-concurrent) |
+| Held pipe | stdout is never parsed on ANY path | the whole stream — refused, not truncated-then-read |
+
+**`disposition` — input class → outcome.**
+
+| Input class | Exit / class | Event / error | Artifact minted | Silent vs loud |
+| --- | --- | --- | --- | --- |
+| Child closes pipes, exits 0 | success | none | envelope parsed | loud (the value) |
+| Held pipe, deadline NOT elapsed | `execution_failure` | `HeldPipeError` in `Err`, reason + tail in `Detail` | no stdout | LOUD |
+| Held pipe, deadline ALSO elapsed | `timeout` | none — 0025:C4 gives `timeout` no Err/Detail | no stdout | loud in class, **quiet in reason** (F6, S6) |
+| Held pipe on the DIRECT write | `execution_failure` + `Applied()` true | held-pipe reason | no read-back | LOUD once the re-key lands (A8) |
+| Held pipe on the write's READ-BACK | `read_back_incomplete` + `applied` already true | read-back's own error | no confirmation | LOUD today |
+| Non-reading child, stdin past the buffer | `execution_failure` | `exec.ErrWaitDelay` via `spawn`'s non-ExitError arm | none | loud (S4, A7) |
+| Non-pollable pipe (`os.ErrNoDeadline`) | unbounded join — the old hang | logged AT THE CHECK | none | **loud at the check, by design** (F5, S5) |
+| Escapee outside the group | not reaped | EPIPE on its next write | none | **SILENT — admitted residue** (C1 `residue:`, F3) |
+
+**`trace` — desk trace of the MVV.** Assertions in force at each step, with a witness.
+
+| Step | Assertions in force | Witness |
+| --- | --- | --- |
+| 1. child spawns `Setsid` grandchild, sleeps past deadline | C1 `residue:` (escapee unreachable); A1 (one spawn site) | grandchild alive after refusal, killed by the test |
+| 2. ctx deadline expires at 2 s | C1 `class:` deadline-first; A4 | `timeout` wins over any binding error |
+| 3. `Cancel` kills the group; `Wait` returns | C1 `stdin:` (no arm returns between Wait and the join) | `werr` held, not returned |
+| 4. `reapGroup` signals the group | C1 `residue:`; 0025:C4 | escapee survives — that is the case under test |
+| 5. join under ONE timer of `WaitDelay` | C1 `bound:` (one bound, both drains) | drain-join leg measured 500.1–508.2 ms, 40/40 (A6) |
+| 6. timer fires → deadline of now + `DrainGrace` | C1 `precedence:`; D-the-drain-grace | final read RUNS; A2 confirms a deadline of `now` would not |
+| 7. final read reports pipe state | C1 `precedence:` (held = empty + live writer) | empty + deadline error ⇒ held |
+| 8. read ends closed | C1 `precedence:`; Infra-Audit close-ownership row | defers already close them; no double-close hazard |
+| 9. classify | C1 `class:`; F6 | deadline elapsed ⇒ `timeout`, empty `Detail` (MVV row 3) |
+| 10. return | C1 `bound:` total | ≤ 3 s asserted; worst measured 2.013 s / 2.082 s (A6) |
+
+No CONTRADICTION row. Steps 6 and 9 are the two that a naive reading collides:
+the grace makes the final read happen, and the class still flips to `timeout`
+when the deadline elapsed — so the held-pipe REASON is computed and then not
+rendered. That is F6, recorded as under-explained rather than contradictory.
 
 #### Load-Bearing Decisions
 
@@ -259,6 +330,7 @@ plumbing is part of this change, not a pre-existing capability.
 | Deadline-first classification | `internal/accessor/executor.go::invokeRead` (+ Gate / Apply) | A4 checks the write and read-back paths | Reuse | C1 `class:` — no binding-side `timeout` |
 | Stdin bound | `cmd.Stdin` = `bytes.Reader` + `cmd.WaitDelay` (Cmd-owned pipe) | A7 confirms `ErrWaitDelay` reaches the refusing arm | Reuse | C1 `stdin:` names it; no change |
 | Escape fixture | 0025's `evidence/spikes/a1-deadline/` S2 (grandchild in group) | never escaped the group; macOS has no `setsid` binary | Extend | FX-deadline-escape adds a `Setsid: true` Go helper |
+| Read-end close on every path | `spawn` already defers both closes (`cmdbind.go::spawn`, the `defer func() { _ = outR.Close() }()` / `errR` pair set up at pipe creation) | closes at FUNCTION RETURN, which is after the join either way | Reuse | C1 `precedence:` "after the join every read end is closed" is ALREADY satisfied by the defers; the Illustrative Code's `closeReads` is shape, not a new obligation. The defers stay — an explicit close before them would double-close, and `os.File.Close` returns `ErrClosed` on the second call rather than panicking, so the shape's cost is a swallowed error, not a crash. Nothing in this change moves the fds' release |
 
 ### Decision Rationale
 
@@ -287,8 +359,11 @@ success case pays the whole bound and is refused — the regression 76c121b meas
 Sibling-path check: the bound reuses `internal/cli/cmdbind/cmdbind.go::WaitDelay`, whose doc
 already reads "bounds the stdin write and the post-kill pipe drain" — searched `internal/`
 for another deadline/timer decision (`SetReadDeadline`, `time.After`, `time.NewTimer`,
-`WaitDelay`): none besides the `cmd.WaitDelay` assignment inside `cmdbind.go::spawn` exists, so no
-parallel signal is invented.
+`WaitDelay`, `context.WithTimeout`): none besides the `cmd.WaitDelay` assignment inside
+`cmdbind.go::spawn` exists, so no parallel signal is invented. The `context.WithTimeout`
+sites in `executor.go` are not siblings: each bounds the DECLARED timeout for an
+invocation, which is the author's policy, where this bound is the CLI's own post-exit
+mechanism cost — a different decision, as D-naming states.
 
 Premortem: hardened (hardened) — critic ledger P-1…P-14 in `evidence/propose-premortem/critic.md`; folded: stdin named in C1 (P-1, A7), held-state not elapsed-time refusal via read deadline (P-2), exit status + remediation in Err (P-3, P-7), one timer for both drains and per-invocation bound (P-8), Go precedent restated as caller-decides with the peers named (P-9), shared-timer naming made deliberate (P-10), stale figure dropped (P-11), EPIPE residue (P-12), stderr-tail wording (P-13), Alt 2 reason reordered (P-14); F5/F6 added (P-4, P-6)
 Ground-sweep: clean (14 anchors, 66 sub-facts CONFIRMED; two cosmetic wording notes folded) — a fresh-context checker read every cited `path::Symbol`, the Go stdlib anchors, 0025:C4/F4/A1, commit 76c121b and the two peer-CLI anchors without the justifying prose
@@ -598,11 +673,15 @@ parsed. The MVV fixture is the deadline case; these are the rest of the matrix, 
    (write covering both its invocation and its read-back) — A1's claim that one join
    covers every path.
    **Expected**: each refuses within `timeout + 2·WaitDelay`; no envelope parsed, no
-   gate verdict derived, no write confirmed on held output; on the write path
-   `Applied()` is true AND the CLI renders the "may have been applied" text for it
-   (C1 `refusal:`) — asserted at `flow_exec.go::accessorFailureOf`, whose
-   `ClassExecutionFailure` arm carries no phase check and no `Detail` today, so this
-   scenario is what proves the `Applied()` re-key landed (A8).
+   gate verdict derived, no write confirmed on held output; on BOTH write legs
+   `Applied()` is true AND the CLI renders the "may have been applied" text. The two
+   legs assert it against different arms, and the scenario keeps them apart: the DIRECT
+   invocation refuses `execution_failure` and is what proves the re-key landed —
+   `flow_exec.go::accessorFailureOf`'s `ClassExecutionFailure` arm carries no phase
+   check and sets no `Detail` today (A8). The READ-BACK leg refuses
+   `read_back_incomplete` and is a REGRESSION assertion, not a proof of the gain: that
+   arm already sets `detailMayHaveApplied` and the executor already sets `applied`, so
+   the row fails only if the re-key broke a path that was correct (C1 `refusal:`).
 2. **Scenario**: The existing in-group grandchild-leak and cancel oracles re-run under
    the bounded join, N times under `-race` and CPU load (A5).
    **Expected**: unchanged results, elapsed far below the bound — the prior point-fixes
