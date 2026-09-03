@@ -123,6 +123,8 @@ report:     category string, remediation ("inline shell is not a declared comman
 promise:    what a reviewer may rely on is the predicate line and nothing more. CONDITIONAL on A6 (Pending): no reviewer-reachable description surface exists in the shipped code today — `table.Categories()` returns identifiers only and has no non-test consumer; `Category` is a bare string; the sole user-facing text is the refusal detail, which fires on refusal and never on admission. IF Phase 3 ships a surface, THESE words are the text it ships. Until A6 settles, this clause promises the predicate line alone, and no admitted-form disclosure may be relied on
 ```
 
+Determinacy: n/a — no new signature, type, or API surface. C1 replaces `interpreterForm`'s body at its existing name and signature, and the algorithm is pinned end to end in the clause: the quantifier (`exists i < j`), basename matching (text after the last `/`, exact, no suffix or alias folding), the tie-break (lowest `i`, then lowest `j`), the reported form (`argv[i] + " " + argv[j]`), and the read-scope (argv words only, never splitting on whitespace). The tie-break — the silence this lens most often catches — is written and defended in the Selection / predicate LBD, including the two-interpreter case. Independent reconstructions have nothing left to disagree about; what remains open (A5, A6, A7) is evidentiary, not under-determination.
+
 #### Load-Bearing Decisions
 
 - **Naming** — the category stays `command_shell_interpreter`; rejected: `command_inline_shell` (a rename re-orders nothing a reviewer sees and breaks 0025's tests and `Categories()` wire order for no gain).
