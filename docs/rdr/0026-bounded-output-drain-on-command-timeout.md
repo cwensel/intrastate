@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Bug Fix
 - **Profile**: foundational — accretion floor; C1 fixes the drain precedence at `cmdbind::spawn` (bounded wait outranks whole read, held-pipe refusal, the one bound plus DrainGrace); user-facing yes; locks cross-rdr
 - **Priority**: High
@@ -988,122 +988,15 @@ the escape is real on both (Background).
 
 ### Contradiction Check
 
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+Responses: 0026-bounded-output-drain-on-command-timeout/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ### Assumption Verification
 
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-**Stage 6 (reconcile) closed this finding — see the disposition
-note at the end of this section.** The gate's original text is
-kept below as the record of what was open at Stage 5.
-
-No `Docs Only` records. Three remain `Pending`, each with a
-plan, and **all three fail the status-consistency clause as
-written** — this is the gate's finding, not a clean pass:
-
-- **A9** (per-read re-arm bounds the idle gap) — C1
-  `precedence:` states the re-arm as settled normative text and
-  MVV row 6 is marked Normative on top of it, while no spike has
-  measured a large tail against a re-armed grace. Plan: extend
-  `evidence/spikes/a3-a6-drain-bound` per A9, run under CPU
-  contention, before Phase 1 closes. Until it runs, C1
-  `precedence:`'s re-arm sentence and MVV row 6 are contingent.
-- **A10** (pollability probe is safe and detecting) — the probe
-  runs on EVERY invocation's hot path and F5 concedes its trigger
-  is unexercised for a real `os.Pipe`. C1 `whole:`'s
-  byte-for-byte claim and S3 depend on the probe being a no-op.
-  Plan: A10's spike, plus S5, before Phase 1 closes.
-- **A8** (executor derives `Applied()` from the typed error) —
-  C1 `refusal:`'s applied-sense sentence depends on it, and the
-  gain sits in Phase 4. Method is Source Search and the sites are
-  already named; the residual is the CLI rendering gain, not a
-  found fact. Plan: verify at Phase 4 entry.
-
-Disposition: the three are survivable as `Pending` **into
-implementation** because each names a specific pre-phase
-verification and each "If wrong" is a stated, bounded regression
-rather than a redesign. They are NOT survivable into lock as
-settled prose, so the clauses that lean on them are marked
-contingent above and in C1. Stage 6 closes them; a lock taken
-with A9 or A10 still open must demote the dependent sentences
-first.
-
-**Stage 6 disposition (2026-09-03) — the contingency is
-discharged.** All five then-`Pending` records are now terminal
-and the status-consistency clause passes:
-
-- **A9 — VERIFIED by spike** (`evidence/spikes/a9-a10-regrace/`,
-  both OSes). C1 `precedence:`'s re-arm sentence and MVV row 6
-  are no longer contingent. The spike also CORRECTED the
-  assumption's witness: a 1 MiB *buffered* tail does not
-  discriminate the re-armed mechanism from a single absolute
-  deadline (both recover it whole), so MVV row 6 was amended to
-  carry a paced shape 6(b) that does — 0/12 vs 12/12, truncating
-  at 15.6% on both OSes. C1 now reads "size or total duration".
-  Duration, not size, is the operative variable.
-- **A10 — VERIFIED by spike** (same dir). The probe is detecting
-  (`os.ErrNoDeadline` on a genuine dup'd pipe fd, so it detects
-  poller registration, not file kind) and a no-op on the hot
-  path (parked-read 12/12 at 300 ms with a 10 ms probe window;
-  round-trip identical in every cell). C1 `whole:`'s
-  byte-for-byte claim and S3 are no longer contingent on it.
-- **A8 — VERIFIED by source search.** Every cited site holds
-  with no drift; the two decisive facts (the
-  `ClassExecutionFailure` arm carries no phase check and no
-  `Detail`; `Applied()` has zero non-test callers) confirm the
-  gain is real and one-sited.
-- **A12 — VERIFIED by source search.** The seam is new, the
-  hook shape is viable at `cmdbind.go:273`/`:277`, and no third
-  build tag is needed.
-- **A11 — DOWNGRADED, survivable into implementation.**
-  Unverifiable before implementation by construction: its check
-  is S3 + S7 under `-race`, and S7 needs the stall seam A12
-  confirms this record ADDS. Not MVV-critical — the MVV
-  provably cannot exercise the edge. Bound by a named plan:
-  Phase 1 closes only on S3 + S7 passing `-race -count=25`, and
-  a race report there is a Phase-1 blocker.
-
-No assumption now carries settled-fact prose it does not
-support. A11 is the one `Pending` record, and no clause states
-its claim as settled: C1 `precedence:` (b) states the
-requirement and names `-race` as the check rather than
-asserting the edge holds.
-
-No `Verified` stamp is self-referential. A5's and A6's cited
-`path::Symbol` anchors resolve on `main` (`cmdbind.go::WaitDelay`
-`:66`, applied `:224`; `drains.Wait()` `:302`); A6 carries its
-own narrowing of the per-leg claim and is stamped "Verified, with
-the per-leg claim narrowed", which is consistent.
+Responses: 0026-bounded-output-drain-on-command-timeout/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ### Scope Verification
 
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0026-bounded-output-drain-on-command-timeout/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ### Cross-Cutting Concerns
 
@@ -1166,34 +1059,7 @@ artifact.
 
 ### Proportionality
 
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Responses: 0026-bounded-output-drain-on-command-timeout/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ## References
 

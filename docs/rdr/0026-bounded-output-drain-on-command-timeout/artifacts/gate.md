@@ -6,6 +6,45 @@
 - **Profile**: foundational (accretion floor; `floor-holds`)
 - **Verdict**: **READY — PASS**. Locked to Final at this pass.
 
+**Fence disposition (author judgement, recorded because the model has nowhere to
+put it).** `--outcome fence` emits `stopped:overlap-uncited` on
+`overlap_uncited=1+`. Both arms were FIRED, not synced, and both pairs are
+INCIDENTAL — no cross-citation or JDR home is owed. Detail in
+`evidence/tooling-pass/tooling-pass.md`; the short form:
+
+- `0012 0026` on `internal/resolve` + `internal/table` — 0012 cites the two
+  packages as an *import-direction* fact fixing where a test fixture type may live
+  (`internal/table` imports `internal/resolve`, so `resolve` cannot import
+  `table`), declaring no API or shape for either. 0026's use is a quoted
+  `go list -deps ./internal/accessor` line proving `internal/accessor` has no
+  `internal/cli` edge. Two records reading the same dependency graph from opposite
+  corners for unrelated placement decisions.
+- `0016 0026` on `read_back_incomplete` — `0016:C4` decides only *when the
+  reader-resolution site emits* the class (fail closed on a multiply-bound role
+  rather than first-match), reusing it as an already-defined surface, and
+  `0016:F3` explicitly freezes its semantics as an unchanged fail-safe. 0026
+  likewise declares the read-back leg unchanged and touches only the direct write
+  leg's `execution_failure`. Both defer to RDR 0004 as the class's home; neither
+  constrains the other.
+
+**Why the fence fired at all, and why that is not a defect in it.** JC1 records
+that at 0026's propose (2026-08-31) BOTH intersect arms returned `overlaps[]`
+empty, and 0012/0016 were already open (both proposed 2026-08-28). So no peer
+moved — 0026's own text grew these literals during Stages 4-6, as quoted tool
+output and as a description of behavior this record explicitly declines to change.
+The fence caught a real post-check accretion and correctly demanded the arms be
+re-fired. They were, and the answer is that the new literals are evidence
+quotations, not decisions.
+
+This is a **fired-and-cleared** check, not a skipped one. It is recorded here
+rather than in the model because `tags.overlap_uncited` is `provenance =
+"observed"` with domain `["0","1+","unchecked"]` and the fence group takes no
+caller-supplied disposition — unlike `blocker_class` on `return` or
+`user_facing`/`locks` on `profile`. A correctly-fired check therefore has nowhere
+to land its verdict. Same shape as `joint_check_home=unhomed` in §5 below, where
+the flow's own rule is that the gate's written response vouches for what the tool
+cannot resolve. Locked on that precedent, by the author's explicit decision.
+
 Mechanical pre-sweep: `evidence/tooling-pass/tooling-pass.md` (PASS; `lint` exit 0,
 `blocking=0 resolution=0`). Item 4, Cross-Cutting Concerns, is authored once in the
 record at `cli/0026:G-cross-cutting` and is not copied here.
