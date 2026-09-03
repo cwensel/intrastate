@@ -97,22 +97,39 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
   point, so C1.3's pre-mutation refusal of a gate-off read-back is a check at an
   existing site, not a new ordering; failing that, the verb's plan phase in
   `internal/cli/flow_state.go` before any carrier runs is the fallback site]**
-  - **Status**: Verified
+  - **Status**: Pending
   - **Method**: Source Search
   - **Evidence**: `internal/accessor/executor.go::Executor.Write` resolves
     `reader, hasReader := e.Registry.readerFor(def.Accessor.Role)` and only
     afterwards calls `binding.Apply(applyCtx, art, slices.Clone(planned))` —
-    the order C1.3 requires, within one function. The gate state is baked into
+    the order C1.3 requires, within one function. The interval between them is
+    NOT empty, and an earlier stamp of this assumption read it as though it
+    were: `protected := protectedKeys(reader, hasReader, plannedKeys)` and,
+    when `len(protected) != 0`, a full bounded `e.invokeRead(...)` through that
+    same reader run BEFORE `Apply`. Its failure arm sets
+    `baselineUnread = slices.Clone(protected)` and PROCEEDS — so for a
+    command-backed reader with the gate off that read already fails, is already
+    swallowed, and the write already runs, surfacing as `read_back_incomplete`
+    applied-but-unverified. To verify: that C1.3's pre-check is the
+    authoritative detector for this case and the baseline arm needs no change.
+    `protectedKeys` returns the reader's `RequestedKeys()` MINUS the planned
+    keys, so the swallowed path is reachable only when the role's reader
+    declares a key the entry does not plan — empty, and skipped entirely, in
+    the MVV's own fixture. The gate state is baked into
     the reader binding at construction
     (`internal/cli/flowbind/registry.go`: `cfg := cmdbind.Config{BaseDir: baseDir,
     AllowCommands: allowCommands}`), so it is inspectable at the resolution
     point. Qualifier: today's gate check lives inside
     `internal/cli/cmdbind::spawn` and runs only during execution, so C1.3's
     pre-mutation refusal is a NEW check at an EXISTING site — not a
-    re-ordering, and not already present.
+    re-ordering. "Not already present" holds only of a GATE check: the baseline
+    read above is a pre-`Apply` reader invocation that already exists and
+    already swallows the same gate-off failure.
   - **If wrong**: a caller who forgets `--allow-commands` gets the post-mutation
     `read_back_incomplete` class (applied, unverified) for a write that ran no
-    command — C1.3's pre-mutation clause must then be dropped, not weakened.
+    command — C1.3's pre-mutation clause must then be dropped, not weakened. If
+    instead the baseline arm turns out to need amending, this RDR widens into
+    `Executor.Write`'s pre-write read beyond A10's one field.
 - **A3 [Go's RE2 `regexp` is expressive enough for the consumer's two anchors —
   the `- **Status**:` bullet with an optional bracketed qualifier as a capture
   group, and the README `| [NNNN](` row with the status cell as a group — with
@@ -285,6 +302,26 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
     it to `internal/cli/flow_state.go` before `exec.Write` — and the refusal is
     then minted by the CLI rather than the accessor, which moves where the
     gate-naming Detail is composed.
+- **A12 [C1.3's re-anchor IDENTITY check is computable: after the in-memory
+  rewrite, each rule's own post-edit line index is derivable from its held
+  pre-edit index minus the count of preceding sibling deletions, so "the anchor
+  selects exactly this rule's own line" is decidable without re-running
+  selection semantics or re-reading the file]**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: to verify. Introduced by this pre-lock pass: C1.3
+    `re-anchor:` previously asserted only a CARDINALITY (exactly one line),
+    which a sibling anchor drifting onto another rule's line after a
+    `clear = "line"` deletion satisfies while pointing at the wrong content.
+    Established by the clause itself: selections are held as pre-edit indices
+    and `clear` is the only deletion, so the shift is a count, not a diff. To
+    check: that no rewrite can change a rule's own line COUNT (a `replace`
+    emits exactly one line — C1.2 refuses `\n` in a value), which is what makes
+    the index arithmetic exact rather than approximate.
+  - **If wrong**: the re-anchor pass must compare content rather than index —
+    hold each rule's rewritten line bytes and assert the selected line equals
+    them — which is a strictly stronger check at the cost of holding the
+    rewritten lines, not a redesign.
 - **A11 [The executor's deadline arm (`internal/accessor/executor.go`) is 0004's
   and is left unchanged by this RDR, so C1.3's no-applied-sense guarantee is
   scoped to refusals the `edit` binding itself mints]**
@@ -368,6 +405,13 @@ or rewrite → stage + rename → executor read-back through the role's reader.
 > single fence is what says so — six separately-fenced contracts would claim
 > this record spans six seams, which it does not.
 
+Determinacy: fired — C1 locks a declaration grammar an implementer must
+reproduce exactly (C1.1's `anchor`/`replace`/`clear` keys, C1.2's two closed
+template vocabularies, C1.4's five wire strings and their registration order),
+so a second reconstruction is the probe for where that grammar is silent.
+Profile `large` ⇒ repeatability-lite: one alternate-model `run-1`, then a
+focused diff.
+
 **C1** — the `edit` write carrier.
 
 ```normative
@@ -388,19 +432,19 @@ anchor  admits: literal RE2 | {tag.<key>} — a tag key the model declares with 
 parse once: both templates are parsed at LOAD into segments (literal | group | placeholder). At apply each segment emits bytes; captured text and substituted values are never re-scanned for `${…}` or `{…}`. This is 0025:C2's whole-element rule restated for line data: runtime data is data, never grammar
 value shape: a planned value or bound tag value containing "\n" or "\r" refuses BEFORE mutation (Detail `edit_value_multiline`) — the single structural hazard of interpolation into line data. No word-splitting, option parsing, PATH resolution or shell exists on this path, which is the difference in hazard class from the argv interpolation 0025:C5 rejects
 escapes: `$$` emits a literal `$`; `{{` and `}}` emit literal braces in `replace`; a group that did not participate in the match expands to the empty string — the empty-group rule MATCHES Go `regexp.Expand`'s, but the parse is this clause's own and never a call to `Expand`, which re-scans its template at expansion time and would break `parse once:`
-vocabulary: the two templates have DIFFERENT rules, because one of them is a regexp. In `replace` the vocabulary is closed — `{<key>}`, `${N}`/`${name}`, `$$`, `{{`/`}}` — and any other `{…}` or `$…` form is `edit_template_invalid`, including a bare `$1`/`$name` without braces (`Expand` accepts those; this clause does not). In `anchor` ONLY the fixed prefix `{tag.` opens a placeholder, scanned to its closing `}`; every other `{`, `}` and `$` is passed to RE2 untouched, so `\d{4}`, `a{2,3}` and `^…$` are ordinary pattern text and `{{`/`}}` is NOT an escape there. `edit_anchor_invalid` fires when a `{tag.…}` placeholder is malformed or names a key not declared `observed`, or when the pattern fails to compile — never for a brace RE2 itself accepts. Extension is by successor amendment, as 0025:C2's is
+vocabulary: the two templates have DIFFERENT rules, because one of them is a regexp. In `replace` the vocabulary is closed — `{<key>}`, `${N}`/`${name}`, `$$`, `{{`/`}}` — and any other `{…}` or `$…` form is `edit_template_invalid`, including a bare `$1`/`$name` without braces (`Expand` accepts those; this clause does not). In `anchor` ONLY the fixed prefix `{tag.` opens a placeholder, scanned to its closing `}`; every other `{`, `}` and `$` is passed to RE2 untouched, so `\d{4}`, `a{2,3}` and `^…$` are ordinary pattern text and `{{`/`}}` is NOT an escape there. `edit_anchor_invalid` fires when a `{tag.…}` placeholder is malformed or names a key not declared `observed`, or when the pattern fails to compile — never for a brace RE2 itself accepts. A line whose CONTENT carries the literal text `{tag.` is anchored with RE2's own escape (`\{tag\.`): the placeholder scan is for the unescaped literal prefix, so an escaped brace is ordinary pattern text and reaches RE2 untouched. `{{`/`}}` remains not an escape here; the escaping dialect in `anchor` is RE2's, in `replace` it is this clause's. Extension is by successor amendment, as 0025:C2's is
 out of scope for admission: a value that is well-formed line data but wrong for the DOCUMENT (a `|` inside a markdown table cell) is not a hazard this clause can name without document knowledge — the reader's read-back is the check (0004:C12), post-mutation by contract; a per-rule value guard is a successor's (Briefly Rejected)
 
 --- C1.3 — execution semantics ---
 input:    the whole file is read as bytes; lines are split on "\n" and a preceding "\r" stays with the terminator (CRLF preserved per line); a missing final terminator is preserved; the file's mode is preserved on write (A5). A target that cannot be read refuses BEFORE mutation with the OS error in the Detail — it does NOT reuse `edit_anchor_unmatched`, and it does NOT take `flowbind.go::load`'s absent-is-empty precedent: that precedent exists so the FIRST write of a flow artifact can create it, and `edit` fences creation out (`select:`), so for this carrier a missing target is a stale model, reported as such rather than laundered into an anchor result
 target:   the caller-bound artifact path for the entry's role (0004:C3), symlinks resolved; the model names no path — an `edit` entry has exactly the authority a `path` entry has over the file the CALLER binds. The reuse of `flowbind.go::save`'s discipline stops at stage-and-rename and does NOT drag along `Writer`'s unreachable-locator seal (`unreachable(path)`/`sealedKey`): that seal keys off a declared-path suffix an `edit` entry does not have, and its purpose is to make the applied-but-unverified sense atomic in a key/value artifact — a markdown target has nowhere to hold it. `edit` therefore has no seal affordance, by construction rather than by omission
 select:   every rule's anchor is resolved against the PRE-EDIT content and selections are held as pre-edit line INDICES (a deletion never shifts a sibling rule's target). Each must select exactly one line: 0 ⇒ `edit_anchor_unmatched`; ≥2 ⇒ `edit_anchor_ambiguous`; two rules selecting one line ⇒ `edit_anchor_collision`. Never last-match (Ansible `lineinfile`), never first-match, never insert or append (Puppet `append_on_no_match`, Ansible `insertafter`) — creation is fenced out, and an unmatched anchor is a stale model, not a missing line
-re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
-order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C1.6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. That arm is 0004's, unchanged here and out of this RDR's scope (A11); the binding's own guarantee is the one stated above. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
-write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). A post-edit buffer equal to the input is not written at all (no staging, no rename; S20 asserts it, witnessed by an unchanged inode — no MVV step covers the no-op, step 5's files being untouched by a REFUSAL instead). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
+re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. IDENTITY, not cardinality: the selected line must BE the rule's own — its held pre-edit index, shifted by the deletions of preceding sibling rules — and a rule that selects exactly one line which is a DIFFERENT line refuses. Cardinality alone would pass a sibling whose anchor drifted onto another rule's line after a `clear = "line"` deletion shifted the buffer, or onto a line another rule reshaped. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
+order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C1.6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. Whether that arm stays 0004's, unchanged and out of this RDR's scope, is A11 and is **`Pending`**: this clause's guarantee is scoped to refusals the `edit` binding itself mints, and does NOT assert the executor-minted timeout carries a false applied sense. If A11 resolves against leaving it, this RDR must amend the deadline arm for non-spawning carriers. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
+write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). The atomicity boundary is ONE ENTRY over ONE file, and it is not transactional across entries: a plan spanning two write entries (the consumer's record + shared index) applies each independently, so entry 1 landing and entry 2 refusing leaves the two artifacts disagreeing, with the refusal reported for entry 2 only. This is 0004's per-entry apply model, unchanged here; a cross-entry transaction is not introduced (Briefly Rejected has no cross-artifact rollback, and the artifacts are in git). Callers reconcile by re-running the pipeline once the refusal's cause is fixed: re-applying an entry that already landed rewrites its line to the same bytes and the no-op arm above writes nothing (S20 is that witness), so the retry is safe for the entry that succeeded. A post-edit buffer equal to the input is not written at all (no staging, no rename; S20 asserts it, witnessed by an unchanged inode — no MVV step covers the no-op, step 5's files being untouched by a REFUSAL instead). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
 terminators: only "\n" — optionally preceded by "\r" — terminates a line for selection and rewriting; a bare "\r", NEL or U+2028 is line content (C1.2 still refuses "\r" in a VALUE). Deleting the final line of a file that had no final terminator also removes the preceding line's terminator, so the file's final-terminator state is preserved either way
 no subprocess: `edit` spawns nothing; `--allow-commands` (0025:C6) is not consulted by the write itself. `Invocations()` counts `Apply` calls exactly as `flowbind.go::Writer` does (0004:C14)
-read-back: unchanged — 0004:C12/0004:C13 through the role's declared reader. When that reader is command-backed and the gate is off, the write MUST refuse BEFORE mutation (Detail naming the gate), because the reader is resolved before `Apply` (A2) — a forgotten flag must not produce `read_back_incomplete` for a write that ran no command. SITE: both halves of that predicate are answered at the executor without a new import or a `Binding` method — command-backed from `def.Accessor.Command` (already on `Definition`), and the gate from a field on `accessor.Registry`, set at `flowbind.go::Registry`, the single production construction site, which already takes `allowCommands` for 0025:C6. `internal/accessor` does NOT import `cmdbind` (`cmdbind` imports `accessor`; the reverse is a cycle) and `AllowCommands` on `cmdbind.Config` stays where it is — the gate is carried to the accessor as state, never read across the seam (A10)
+read-back: unchanged — 0004:C12/0004:C13 through the role's declared reader. When that reader is command-backed and the gate is off, the write MUST refuse BEFORE mutation (Detail naming the gate), because the reader is resolved before `Apply` (A2) — a forgotten flag must not produce `read_back_incomplete` for a write that ran no command. AUTHORITATIVE DETECTOR: this pre-check, not `Executor.Write`'s existing pre-`Apply` baseline read. That baseline (`protectedKeys` non-empty ⇒ `invokeRead` before `Apply`) already fails for a gate-off command reader and already swallows the failure into `baselineUnread` and proceeds; it is reachable only when the role's reader declares a key the entry does not plan (`protectedKeys` subtracts the planned keys), so it does not fire in the consumer scenario at all. This clause does NOT amend that arm — it refuses earlier and unconditionally, so the swallow becomes unreachable for the gate-off case whether or not `protected` is empty. Whether the baseline arm needs any change is A2's open question, not this clause's claim. SITE (conditional on A10, `Pending`): both halves of that predicate are answered at the executor without a new import or a `Binding` method — command-backed from `def.Accessor.Command` (already on `Definition`), and the gate from a field on `accessor.Registry`, set at `flowbind.go::Registry`, the single production construction site, which already takes `allowCommands` for 0025:C6. `internal/accessor` does NOT import `cmdbind` (`cmdbind` imports `accessor`; the reverse is a cycle) and `AllowCommands` on `cmdbind.Config` stays where it is — the gate is carried to the accessor as state, never read across the seam (A10)
 
 --- C1.4 — load-time categories (`intrastate lint`) ---
 edit_carrier_conflict    # `edit` beside `path` or `command`; or `edit` on a read/gate entry
@@ -410,7 +454,7 @@ edit_template_invalid    # replace carries an unknown placeholder, another key's
 edit_clear_invalid       # `clear` outside the closed set {"line"}
 
 registration: appended to `table.Categories()` after 0025:C5's six, in the order above; typed `Cat…` constants beside the others; the wire strings are the contract, the identifiers are not; the list's size is not a contract (0025:C5)
-precedence: within one entry, fail-fast in the order above, evaluated after 0025:C5's clauses 1–6 (an `edit` entry never reaches clauses 2–6, which are `command`-only); across entries and tables, 0025:C5's rules apply unchanged
+precedence: within one entry, fail-fast in the order above, evaluated after 0025:C5's clauses 1–6 (an `edit` entry never reaches clauses 2–6, which are `command`-only); across entries and tables, 0025:C5's rules apply unchanged — including across the sibling `edit.<key>` tables of ONE entry, which are map-ranged like `accessorTable`'s entries: which of two equally-defective tables is reported is unspecified and no test may assert it
 what lint proves: the carrier is one, every anchor compiles, every template parses, every placeholder is closed over the entry's keys and the model's declared tags, every `keys` member has one rule. What lint does NOT prove: that an anchor matches exactly one line of a particular file — that is C1.3's apply-time refusal, by design (a model is linted without its artifacts)
 
 --- C1.5 — `<clear>` on a line rule ---
@@ -446,7 +490,7 @@ test that holds it.
 | final terminator | a missing final terminator is preserved; deleting a final line of an unterminated file also removes the preceding terminator, preserving the state either way | C1.3 `input:`/`terminators:`; S19 |
 | file mode | the ORIGINAL file's mode is copied to the staged file before rename (unlike `flowbind.go::save`'s fixed 0600) | C1.3 `write:` (A5); S21 |
 | symlinked target | the symlink is resolved before staging, so it survives and points at the new content | C1.3 `target:`; S22 |
-| no-op edit | a post-edit buffer equal to the input is not written at all — no staging, no rename; witnessed by an unchanged inode, since content cannot separate it from an identical write | C1.3 `write:`; S20 |
+| no-op edit | a post-edit buffer equal to the input is not written at all — no staging, no rename; witnessed by an unchanged inode, since content cannot separate it from an identical write. Not caller-visible: a no-op and an applied write both report success and both increment `Invocations()` (which counts `Apply` calls), so an agent-loop caller cannot tell "already in this state" from "moved to it" out of the CLI envelope — accepted for v1, since read-back proves the END state either way and that is what the caller's next decision reads | C1.3 `write:`; S20 |
 | template round-trip | captured text and substituted values emit as literal bytes, never re-scanned for `${…}`/`{…}` | C1.2 `parse once:`; S15 |
 | qualifier round-trip | a wrapped bracketed qualifier: the anchored line is rewritten via `${2}`, the continuation line is byte-identical, and the reader reports the qualifier whole | A3; S12 |
 
@@ -470,13 +514,17 @@ a fidelity exemption — it is one-way by contract, and the clause says so.
 | command-backed reader, gate off | refused pre-mutation | `execution_failure`, Detail names the gate | none | loud (never `read_back_incomplete`) |
 | unbound `{tag.<key>}` at invocation | refused pre-spawn | `execution_failure`, Detail names the placeholder | none | loud |
 | target cannot be read (ENOENT/EISDIR/EACCES) | refused pre-mutation | `execution_failure`, Detail carries the OS error — the one refusal in C1 with no `edit_*` reason token, because no rule is at fault | none — nothing opened, nothing staged | loud |
+| refusal that outruns the entry's `timeout` | refused pre-mutation by the binding, reported `ClassTimeout` applied-but-unverified by the executor | 0004 `ClassTimeout`, `Applied()` TRUE | none — no byte written | loud, but the applied sense is WRONG (A11, `Pending`) |
 | load-time defects | lint finding | the five `edit_*` categories (C1.4) | lint output names entry/key/category | loud (F1) |
 | `none`/`stopped:*` resolve row | applies nothing, exit 0 | — | `dispositions` carried | loud (MVV 4) |
 
-Every refusal is decided BEFORE any byte is written (C1.3 `order:`), carries
-`Applied()` false, and adds no new class — `execution_failure` with a Detail,
-per JDR 0003 §D1. The two silent arms are the two the contract states as
-success; there is no third.
+Every refusal is decided BEFORE any byte is written (C1.3 `order:`) and adds no
+new class — `execution_failure` with a Detail, per JDR 0003 §D1. Every refusal
+THIS BINDING MINTS carries `Applied()` false; the one exception is the timeout
+row above, which the executor's deadline arm mints over a binding that refused
+without writing (A11, `Pending` — the row is the honest statement of the gap,
+not a claim it is fixed here). The two silent arms are the two the contract
+states as success; there is no third.
 
 **`trace`** — the MVV walked stepwise, with the assertions in force at each step
 and a witness value from the normative fixtures (A3's 33-record corpus and
@@ -567,7 +615,7 @@ replace = '${1}{status}${2}'
 | Context tags crossing the write seam | This RDR | Introduced | A1 — the one seam extension |
 | `set-state --plan` (the resolve→apply pipe) | Existing (intrastate#c3xz, landed) | Available | MVV prerequisite only |
 | Command reader over the consumer record (`rdr status -json -filter status`) | Existing (0025 command reader) | Available | MVV fixture |
-| Row-addressed command reader over a shared artifact (`{tag.<key>}` in argv) | This RDR (C1.6) | Introduced | 0025:C2 vocabulary extended; the consumer adds the verb |
+| Row-addressed command reader over a shared artifact (`{tag.<key>}` in argv) | This RDR (C1.6) | Introduced | 0025:C2 vocabulary extended. The consumer's verb it invokes does NOT exist yet and is a blocking prerequisite of the MVV (Prerequisites), not of Phases 1–3 |
 
 ### Existing Infrastructure Audit
 
@@ -576,7 +624,7 @@ replace = '${1}{status}${2}'
 | Carrier admission + categories | `internal/table/load.go::carrierDefect`, `table.Categories()` | Two carriers | Extend | C1, C1.4 |
 | Carrier discriminator | `internal/cli/flowbind/registry.go::commandBacked` | Boolean | Extend to three-way | Selection LBD |
 | File write binding | `internal/cli/flowbind/flowbind.go::Writer` | JSON store only | Reuse pattern; new binding | C1.3 |
-| Atomic save | `internal/cli/flowbind/flowbind.go::save` | Fixed 0600 mode; JSON encoder | Extend or sibling (mode-preserving, bytes) | C1.3, A5 |
+| Atomic save | `internal/cli/flowbind/flowbind.go::save` | Fixed 0600 mode; JSON encoder; `MkdirAll` creation | Sibling — `save` shares only `CreateTemp`-beside-target + `Rename`; its other three behaviours are each incompatible (`MkdirAll(0o700)` is creation, which `edit` fences out; `clierr.WriteJSONLine` takes a `store`, not bytes; `Chmod(0o600)` is fixed where A5 requires the original mode). Extract `stageAndRename(dir, write, mode)` for both callers, or copy the discipline; do not extend `save` | C1.3, A5 |
 | Placeholder vocabulary | `internal/table/load.go::commandPlaceholders` | argv whole-element only | Sibling: a line-template vocabulary (C1.2) | C1.2 |
 | Write seam | `internal/accessor/binding.go::WriteBinding`, `model.go::Artifact` | No context tags cross | Extend (A1) | C1.2 |
 
@@ -598,7 +646,8 @@ wrapper (B) and emit-only (E) forms are the two shapes of the drift the record
 exists to remove.
 
 **C1.6 is scored separately, because the matrix above is about the write carrier
-and C1.6 is not one.** It is load-bearing rather than incidental: without an
+and C1.6 is not one — separately scored, not separately shippable** (see
+Proportionality: it is a dependent extension of 0025:C2, not a second seam).** It is load-bearing rather than incidental: without an
 identity in the reader's argv, a shared artifact's one reader cannot say which
 row it read, so the README half of the user outcome is unverifiable by
 construction — and it extends 0025:C2's *closed* argv vocabulary, which is why
@@ -896,6 +945,39 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
   cell.
   **Mitigation**: read-back mismatch, post-mutation by contract (C1.2); the
   artifact is in git; a value guard is a named successor.
+- **Risk (UNMITIGATED, accepted)**: read-back is named the sole defence against
+  silent wrong-line corruption (F4, F5), but it only works when the role
+  reader's selection logic is INDEPENDENT of the anchor's. Both are authored by
+  the same model author, over the same document, and nothing in C1 requires or
+  can check that independence — C1.4 says explicitly that lint does not prove
+  what a pattern matches in a particular file. An author whose reader shares the
+  anchor's blind spot (both keyed to the first bullet-shaped line) gets a
+  corrupted artifact reported as a successful, verified write. No mitigation is
+  proposed: the tool cannot inspect a consumer reader's selection logic without
+  the document knowledge this RDR fences out (ALT3). S31 tests the case where
+  the reader IS independent; the dependent case is undetectable by construction
+  and is the residual risk of the whole approach.
+- **Risk**: `clear = "line"` deletes a line that cannot be re-created — `edit`
+  fences creation out, so the next non-clear write refuses
+  `edit_anchor_unmatched` and recovery is by hand, outside the tool.
+  **Mitigation**: partial and by convention only. C1.5 says declare `clear`
+  only where the LINE is the key, but nothing enforces it: `edit_clear_invalid`
+  checks only that the value is in `{"line"}`, and no apply-time check exists.
+  Declaring it on a shared row (the README) deletes the row whole and read-back
+  reports SUCCESS, because the key genuinely is absent. The artifact is in git
+  (F7), which is the real recovery path; a per-rule guard is a named successor
+  (Briefly Rejected).
+- **Risk**: A3's anchor-uniqueness verification is a snapshot of a growing
+  corpus — 33 records and 26 rows at the spike, already 34 and 28 when S8 was
+  written — and the corpus is documentation ABOUT the format the anchor matches,
+  so every future critique, premortem or template excerpt quoting
+  `- **Status**:` is a candidate decoy.
+  **Mitigation**: none preventive in v1, and this is a mechanism gap rather than
+  a data fact. Nothing lints a corpus against its anchors; the only defence is
+  the after-the-fact `edit_anchor_ambiguous` refusal (loud, pre-mutation, F2),
+  which is correct but is discovered by the user at the moment they try to flip
+  a record. S8 is the regression test over today's corpus. A literal-anchor
+  dialect (A3's own "If wrong") is a named successor, not v1.
 - **Risk**: a reader that DEFAULTS an absent key (reports `Draft` for a missing
   bullet) makes a `clear` read back as a value.
   **Mitigation**: that reader violates 0004:C8 (genuine absence must be
@@ -943,12 +1025,19 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
 - [ ] All Critical Assumptions verified
 - [ ] A1's seam form chosen (Artifact context map vs `Write` argument)
 - [ ] A3/A4 spike: the consumer's two anchors and the reader's qualifier split
+- [ ] BLOCKING the MVV (not the unit work): the consumer's row-addressed
+      projector verb the C1.6 reader invokes must exist. The Illustrative Code
+      marks it "verb illustrative; the consumer's to add" and no such verb ships
+      today, so Phase 4's end-to-end proof cannot run until it does. Phases 1–3
+      do not depend on it; closing this record on unit tests alone with Phase 4
+      unexecuted is the failure the Problem Statement charges 0023/0024/0025
+      with.
 - [ ] Consumer-side, not blocking this RDR's implementation but blocking its
       adoption on the live README: normalize the two unlinked `| NNNN |` rows
       (0001, 0006) to the linked form (F6). Until then the feature ships
       correct and those two records cannot be flipped through it — partial
-      adoption, and the MVV passes without covering them because its fixture
-      declares all rows linked.
+      adoption. MVV step 8 covers the refusal for that shape; what the fixture
+      does not carry is the live README itself.
 
 ### Minimum Viable Validation
 
@@ -968,7 +1057,10 @@ and named in Failure Modes.
 
 1. `intrastate lint --model rdr-write.toml` passes; no wrapper script exists
    anywhere in the fixture.
-2. `flow --allow-commands resolve --model rdr-write.toml --artifact record=…
+2. ONE INVOCATION PER RECORD — `{tag.nnnn}` binds one record identity, so it
+   addresses one record file and one README row; the three fixture records are
+   three sequential runs of the pipeline below, not one. For each NNNN:
+   `flow --allow-commands resolve --model rdr-write.toml --artifact record=…
    --artifact readme=… --tag nnnn=NNNN --outcome lock --as json | flow
    --allow-commands set-state --model rdr-write.toml --artifact record=…
    --artifact readme=… --tag nnnn=NNNN --plan -` exits 0. `--tag` is bound on
@@ -983,8 +1075,11 @@ and named in Failure Modes.
    wrapped record keeps its continuation line byte-identical and its reader
    reports the qualifier whole); the
    README row's status cell reads `Final`; both confirmed by read-back through
-   the command reader; every other byte of both files is unchanged
-   (`git diff --stat` shows one line per file).
+   the command reader; every other byte of both files is unchanged. Per
+   invocation `git diff --stat` shows one changed line in that record and one in
+   the README; across the three runs the README accumulates three changed lines
+   and each record one — the invariant is one line per file PER INVOCATION, and
+   pinning a whole-run total would assert the fixture's size instead.
 4. A `none` or `stopped:*` resolve row applies nothing and exits 0 carrying
    `dispositions`.
 5. Negative: the same pipeline without `--allow-commands` on `set-state`
@@ -993,6 +1088,13 @@ and named in Failure Modes.
    `edit_anchor_ambiguous`; files untouched.
 7. Negative: a `replace` whose output no longer matches its own anchor refuses
    `edit_anchor_unstable`; files untouched.
+8. Negative, and required rather than optional: a README carrying one row in
+   the live corpus's unlinked `| NNNN |` form (F6's 0001/0006 shape) refuses
+   `edit_anchor_unmatched` for that record, names the rule in the Detail, and
+   leaves both files byte-identical. The other rows in the same README still
+   flip. Without this step the MVV proves the composed scenario only against a
+   fixture curated to exclude the one class of drift the real corpus has, and
+   the documented refusal for it is untested.
 
 ### Phase 1: Grammar and lint
 
@@ -1171,7 +1273,13 @@ named on A3 and A4 are the expected values; the spike artifacts under
     **Expected**: refuses BEFORE mutation, Detail naming the gate — never
     `read_back_incomplete` for a write that ran no command (A2, C1.3). Negative
     control: MVV step 5's whole pipeline without `--allow-commands`, both files
-    byte-identical after.
+    byte-identical after. Run it BOTH ways over `protectedKeys`: once with the
+    reader declaring only the planned key (`protected` empty, the executor's
+    pre-`Apply` baseline read never runs) and once with the reader declaring a
+    second key (`protected` non-empty, so the baseline read runs, fails on the
+    gate and is swallowed into `baselineUnread`). C1.3's pre-check must refuse
+    identically in both — that is what makes it the authoritative detector
+    rather than a duplicate of an existing arm (A2).
 26. **Scenario**: Read-back of a planned `Final` against a record carrying a
     bracketed qualifier.
     **Expected**: byte-equal — the reader reports `status=Final` with the
@@ -1204,7 +1312,16 @@ named on A3 and A4 are the expected values; the spike artifacts under
     reported, and only it (`edit_carrier_conflict` in the first case,
     `edit_key_mismatch` in the second). Fail-fast is observable ONLY through a
     multi-defect input — with one defect per fixture every evaluation order
-    passes, which is why C1.4 `precedence:` needs its own scenario.
+    passes, which is why C1.4 `precedence:` needs its own scenario. Add the
+    sibling-table case: TWO `edit.<key>` tables in one entry each carrying a
+    defect of the SAME category. The assertion is that exactly ONE category is
+    reported and it is that category — NOT which table is named. Go map
+    iteration over `edit.<key>` is randomised and C1.4 inherits 0025:C5's rule
+    that across map-ranged siblings the order is unspecified and no test may
+    assert it, so a test pinning the winning table would assert a guarantee the
+    contract does not make. The output BUFFER is unaffected either way (pre-edit
+    indices, per Performance Expectations); this is only about which refusal is
+    reported.
 29. **Scenario**: Two invocations against one artifact — a `clear = "line"` rule
     applying a planned `<clear>`, then a non-clear write through the same rule.
     **Expected**: the first deletes the line and read-back reports the key
@@ -1225,11 +1342,16 @@ named on A3 and A4 are the expected values; the spike artifacts under
     WRONG line — a quoted example or template comment that outscores the real
     bullet — so the edit applies to it.
     **Expected**: the write applies, and the read-back through the role's reader
-    then refuses `read_back_mismatch` with `Applied()` TRUE — the one arm where
-    the applied sense is set on a failure (A8), and the post-mutation net F4 and
-    F5 name as the sole defence against silent wrong-line corruption. Pre-mutation
-    refusal cannot reach this class by construction, which is why it is tested
-    here rather than folded into S27.
+    then refuses `read_back_mismatch`. `Applied()` is FALSE on this arm:
+    `Executor.Write`'s mismatch branch leaves the applied sense UNSET by an
+    explicit 0004:C14 scoping comment, which confines applied-but-unverified to
+    `read_back_incomplete` and a post-mutation timeout. So the mismatch class is
+    the witness that the wrong line was rewritten, and the applied sense is NOT
+    that witness — a test asserting `Applied()` TRUE here would fail for the
+    correct reason and must not be relaxed into deleting the check. This is the
+    post-mutation net F4 and F5 name as the sole defence against silent
+    wrong-line corruption. Pre-mutation refusal cannot reach this class by
+    construction, which is why it is tested here rather than folded into S27.
 
 **Acceptance** — the MVV's seven steps, run against the `rdr-write.toml`
 fixture, are the end-to-end gate; steps 5–7 are the negative half.
@@ -1254,9 +1376,15 @@ results from A5's spike and C1.3's clause:
   selected line is re-emitted unchanged.
 - *Encodings*: no transcoding; bytes pass through. Values are literal bytes,
   never re-scanned (C1.2).
-- *Map order*: not reachable — rules resolve against pre-edit line INDICES held
-  per rule, so iteration order over the `edit.<key>` tables cannot affect the
-  output buffer (C1.3 "select").
+- *Map order*: not reachable FOR THE OUTPUT BUFFER — rules resolve against
+  pre-edit line INDICES held per rule, and two rules selecting one line refuse
+  (`edit_anchor_collision`), so iteration order over the `edit.<key>` tables
+  cannot affect the bytes written (C1.3 "select"). For refusal REPORTING it is
+  reachable and deliberately left unspecified: C1.4 `precedence:` orders
+  categories within an entry, and across map-ranged siblings it inherits
+  0025:C5's rule unchanged — which of two equally-defective `edit.<key>` tables
+  is named is unspecified and no test may assert it (S28 asserts the category,
+  not the table).
 - *Whitespace*: preserved; `replace` names the WHOLE replacement line, so
   leading and trailing space is the template author's, not the tool's.
 - *Case folding*: none.
@@ -1367,6 +1495,31 @@ evolution.
 ### Proportionality
 
 [Gate key: proportionality]
+
+**Response.** Contract count is **one** — C1, the `edit` write carrier, whose
+clauses C1.1–C1.5 are one grammar over one seam (`internal/table/load.go`
+carrier admission plus `internal/accessor` write execution). C1.6 was scored
+separately in the Decision Rationale and is counted here rather than fenced
+past: it extends 0025:C2's argv placeholder vocabulary on the READ path, in a
+different package (`cmdbind`), which is the shape a split test is looking for.
+It is **not** an independent load-bearing contract, on the deployability test:
+`{tag.<key>}` in a command reader's argv exists solely so the write carrier's
+0004:C12 read-back can address one row of a shared artifact, it carries no state
+and no behaviour of its own, and shipping it without C1.1–C1.5 addresses rows on
+behalf of nothing. It cannot be independently justified, so it is not
+independently locked. The RDR is the sole author of one contract; no split.
+
+**Profile re-validated: `large` stands.** One contract, user-facing yes (a
+declared grammar model authors write), locks format (the `edit` block's
+declaration grammar and its closed placeholder vocabulary) — the value Resolve
+wrote still matches what the lenses found. Not `foundational`: Seam Lineage
+records no prior accretion on this seam.
+
+**Reviewed at critique:** the reverse reading — C1.6 as a second seam warranting
+its own record — was weighed and rejected above rather than deferred. What the
+critique lens did change is the honesty of the surrounding claims, not the
+count: C1.6's consumer verb is now a blocking MVV prerequisite (Prerequisites)
+rather than a Spec Impact cell.
 
 [Is the document right-sized for the change? Flag
 any sections that should be trimmed before locking.
