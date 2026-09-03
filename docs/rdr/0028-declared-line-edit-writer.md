@@ -376,6 +376,80 @@ why here: 0004:C12 read-back re-reads the SAME role; a shared artifact (an index
 no other change to 0025:C1–C1.6: stdin envelopes, exit maps, env overlay, the gate, and the shell-interpreter deny-list are untouched
 ```
 
+#### Pre-Lock Mini-Checks
+
+Cue-fired at Stage 5 (grounding pass). Three of the five fired; the
+source-authority census does not (C1.3's `target:` clause is the single
+authority — the caller binds the path, the model names none, no fallback or
+derived arm exists) and test-discriminability does not (no MVV step or Expected
+line passes by absence-of-error: every one asserts end-state bytes or a named
+refusal token, and steps 5–7 plus S21's mode-change row are negative controls).
+
+**`fidelity`** — the byte-preservation invariants C1.3 asserts, each with the
+test that holds it.
+
+| Operation | Invariant | Held by |
+|---|---|---|
+| read → split → rewrite → write | every byte outside the selected line(s) is unchanged; `diff` shows exactly one line per edited file | C1.3 `input:`/`write:`; MVV 3; S12 |
+| line terminators | CRLF preserved per line; a preceding `\r` stays with the terminator; bare `\r`, NEL, U+2028 are content, not terminators | C1.3 `terminators:`; S19 |
+| final terminator | a missing final terminator is preserved; deleting a final line of an unterminated file also removes the preceding terminator, preserving the state either way | C1.3 `input:`/`terminators:`; S19 |
+| file mode | the ORIGINAL file's mode is copied to the staged file before rename (unlike `flowbind.go::save`'s fixed 0600) | C1.3 `write:` (A5); S21 |
+| symlinked target | the symlink is resolved before staging, so it survives and points at the new content | C1.3 `target:`; S22 |
+| no-op edit | a post-edit buffer equal to the input is not written at all — no staging, no rename | C1.3 `write:`; S20; MVV 3 |
+| template round-trip | captured text and substituted values emit as literal bytes, never re-scanned for `${…}`/`{…}` | C1.2 `parse once:`; S15 |
+| qualifier round-trip | a wrapped bracketed qualifier: the anchored line is rewritten via `${2}`, the continuation line is byte-identical, and the reader reports the qualifier whole | A3; S12 |
+
+Lossy-exemption sites: none. `clear = "line"` (C1.5) is a declared deletion, not
+a fidelity exemption — it is one-way by contract, and the clause says so.
+
+**`disposition`** — every input class, and what it mints.
+
+| Input class | Outcome | Error / category | Artifact minted | Silent or loud |
+|---|---|---|---|---|
+| well-formed edit, anchor selects 1 | applied | — | rewritten file (1 line) | loud (read-back asserts) |
+| post-edit buffer equals input | success, no write | — | none — no staging, no rename | silent by design (S20) |
+| `<clear>` plan, `clear = "line"`, 1 match | applied | — | line deleted, key reads ABSENT | loud (read-back) |
+| `<clear>` plan, `clear = "line"`, 0 matches | SUCCESS, no write | — | none | silent by design (0004:C11) |
+| `<clear>` plan, `clear` absent | refused pre-mutation | `execution_failure` / `edit_clear_undeclared` | none — file untouched | loud |
+| anchor selects 0 | refused pre-mutation | `execution_failure` / `edit_anchor_unmatched` | none | loud |
+| anchor selects ≥2 | refused pre-mutation | `execution_failure` / `edit_anchor_ambiguous` | none | loud |
+| two rules select one line | refused pre-mutation | `execution_failure` / `edit_anchor_collision` | none | loud |
+| re-anchor fails post-edit | refused pre-write | `execution_failure` / `edit_anchor_unstable` | none | loud |
+| planned or bound value carries `\n`/`\r` | refused pre-mutation | `execution_failure` / `edit_value_multiline` | none | loud |
+| command-backed reader, gate off | refused pre-mutation | `execution_failure`, Detail names the gate | none | loud (never `read_back_incomplete`) |
+| unbound `{tag.<key>}` at invocation | refused pre-spawn | `execution_failure`, Detail names the placeholder | none | loud |
+| load-time defects | lint finding | the five `edit_*` categories (C1.4) | lint output names entry/key/category | loud (F1) |
+| `none`/`stopped:*` resolve row | applies nothing, exit 0 | — | `dispositions` carried | loud (MVV 4) |
+
+Every refusal is decided BEFORE any byte is written (C1.3 `order:`), carries
+`Applied()` false, and adds no new class — `execution_failure` with a Detail,
+per JDR 0003 §D1. The two silent arms are the two the contract states as
+success; there is no third.
+
+**`trace`** — the MVV walked stepwise, with the assertions in force at each step
+and a witness value from the normative fixtures (A3's 33-record corpus and
+26-row index; A4's reader output).
+
+| Step | Assertions in force | Witness | Verdict |
+|---|---|---|---|
+| 1 — `intrastate lint --model` passes | C1.4 all five categories; C1.6 admission; C1.1 exactly-one carrier | fixture declares `edit` alone on both write entries + `{tag.nnnn}` on the readme reader → no category fires; entry carrying only `edit` LOADS (0025:C5 "neither" arm does not fire — C1.1) | consistent |
+| 2 — resolve \| set-state exits 0 | C1.6 binding (`--tag nnnn=NNNN` bound on the invocation); A1 one context channel; A7 `--tag` is context, never written | `registerTagFlag` registers `--tag` as observed context; `parseTags` refuses an owned key — so `nnnn` is admissible as context and reaches both the anchor and the argv | consistent |
+| 3a — record Status `Draft`→`Final` | C1.2 `{status}` planned value; C1.3 select-exactly-one, re-anchor, write | anchor `^- \*\*Status\*\*: (.+)$` selects 1 of 33; post-edit `- **Status**: Final` re-matches its own anchor → no `edit_anchor_unstable` | consistent |
+| 3b — joint-decision record keeps qualifier | C1.2 `${N}` groups; C1.3 re-anchor | `- **Status**: Draft [joint decision → JDR 0003 §D1]` → `Final [...]` under `${2}`; re-anchor selects exactly the rewritten line | consistent |
+| 3c — wrapped-qualifier record | C1.3 `input:`/`write:` (byte preservation); A3 | `${2}` re-emits the matched line's remainder verbatim; the continuation is a different line C1.3 leaves untouched; `diff` = 1 line | consistent |
+| 3d — README row status cell | C1.6 `{tag.nnnn}` argv identity; C1.2 anchor tag quoted; C1.3 select-one | row anchor `^\| \[<id>\]\([^)]+\)[^\|]*\| [^\|]*\| ([^\|]+) \|` with `<id>` regexp-quoted from `{tag.nnnn}`; selects 1 of 26 | consistent |
+| 3e — read-back both files | 0004:C12/C13 through the role's declared reader; A2 reader resolved before `Apply`; A4 | reader reports `status=Final` with the qualifier on `status_form`/`status.qualifier` → byte-equal comparison against planned `Final` succeeds | consistent |
+| 3f — every other byte unchanged | C1.3 `write:` one buffer, one write; mode preserved | `git diff --stat` = one line per file; mode unchanged (A5) | consistent |
+| 4 — `none`/`stopped:*` row | 0005:C1 plan carriage; C1.3 (nothing selected, nothing written) | applies nothing, exits 0 carrying `dispositions` | consistent |
+| 5 — no `--allow-commands` | C1.3 `read-back:` gate pre-check (A2); C1.3 `order:` refuse-before-write | reader is command-backed and gate is off → refuses BEFORE mutation naming the gate; both files byte-identical | consistent |
+| 6 — duplicated README row | C1.3 `select:` ≥2 | `edit_anchor_ambiguous`, pre-mutation, files untouched | consistent |
+| 7 — self-de-anchoring `replace` | C1.3 `re-anchor:` | `edit_anchor_unstable` from the post-edit pass, before any write | consistent |
+
+No CONTRADICTION row. The trace's one crossing point — step 5's gate pre-check
+firing before step 3's mutation — is the ordering C1.3 `read-back:` states and
+A2 verified at `internal/accessor/executor.go` (`readerFor` resolved before
+`binding.Apply`).
+
 #### Load-Bearing Decisions
 
 - **Identity** — unchanged: the accessor identity is 0004's `(flow, name,
