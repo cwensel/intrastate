@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Architecture
 - **Profile**: large — C1, the successor predicate and claim wording for 0025:C5's `command_shell_interpreter` deny-list; user-facing yes; locks format
 - **Priority**: Medium
@@ -199,7 +199,7 @@ Premortem: hardened (paragraph). Shipped and failed: the widened scan refuses a 
 
 Ground-sweep: clean (17 anchors) — every `path::Symbol`, peer element (0025:C5, 0004:ALT2, 0004:ALT3), 0025 artifact/evidence quote and peer-system citation confirmed verbatim by a fresh-context read; `interpreterForm` has no caller outside `internal/table/load.go`.
 
-Joint-check: fired → 0028 (home: cli/0025:C5) — symmetric to 0028's arm-1 fire on `internal/table/load.go::carrierDefect` / `table.Categories()`, disposed cite-don't-restate: C1 here owns only clause 4's predicate, cli/0028:C1 and cli/0028:C4 own the `edit` arm and the tail categories, and both fence deltas against 0025:C5, which owns the clause map and within-entry precedence. Recorded at the batch propose of 2026-08-31 after this record's own check ran clear: all three arms run. Arm 1 (modify-anchors) and arm 2 (contract literals), open-only and repo-resolved: no overlaps. Arm 3 (absence, manual): the 27 Draft/Final/Implemented peers grepped for the admitted-form and wrong-defect tokens (`interpreterForm`, `env chain`, `env -i`, `xargs`, `sh -s`, `env -S`, `command_unknown_placeholder`, `command_shell_interpreter`); hits only in 0025:C5 — the line C1 succeeds, cited not relied on — and 0004's "without raw shell strings", which C1 keeps true. 0026 compared on its written contracts (0026:C1 amends 0025:C4's drain precedence; disjoint from C5); 0028 compared on its problem statement (an in-process `edit` carrier that runs no shell, no subprocess); no shared decision, no bridge surface.
+Joint-check: fired → 0028, 0022 (home: cli/0025:C5) — symmetric to 0028's arm-1 fire on `internal/table/load.go::carrierDefect` / `table.Categories()`, disposed cite-don't-restate: C1 here owns only clause 4's predicate, cli/0028:C1 owns the `edit` arm and the tail categories (its C1.4 clause), and both fence deltas against 0025:C5, which owns the clause map and within-entry precedence. Recorded at the batch propose of 2026-08-31 after this record's own check ran clear: all three arms run. Arm 1 (modify-anchors) and arm 2 (contract literals), open-only and repo-resolved: no overlaps at that date. Re-run at lock (2026-09-03) after 0022 came in-flight: arm 2 now reports 0022 ↔ 0027 sharing the literal `docs/cli-reference.md` — disposed **no shared decision**, no citation owed either way. That file is generated wholesale from the live command tree by `internal/cli/docs.go::runDocs` (`make docs`, staleness-gated in `make check`), so neither record hand-edits it and there is no format, ordering, or exclusivity claim to contend over. The two touch disjoint enums under different command sections: 0022:C4 appends a code to graphlint's blocking taxonomy (`internal/graphlint/taxonomy.go::BlockingCodes`), rendered by `internal/cli/lint.go::lintExtendedDesc` under the `lint` section — while 0027 Phase 3 adds description text for `table.Category` (`internal/table/category.go::Categories`), a load-failure discriminator whose sole consumer is `internal/cli/flow_input.go`, rendered under a `flow` section. 0022's "no new CLI surface" is a claim about the finding taxonomy it extends and is untouched by 0027 adding a body one level down on a different enum; S6 holds `Categories()` membership and order unchanged either way. Arm 3 (absence, manual): the 27 Draft/Final/Implemented peers grepped for the admitted-form and wrong-defect tokens (`interpreterForm`, `env chain`, `env -i`, `xargs`, `sh -s`, `env -S`, `command_unknown_placeholder`, `command_shell_interpreter`); hits only in 0025:C5 — the line C1 succeeds, cited not relied on — and 0004's "without raw shell strings", which C1 keeps true. 0026 compared on its written contracts (0026:C1 amends 0025:C4's drain precedence; disjoint from C5); 0028 compared on its problem statement (an in-process `edit` carrier that runs no shell, no subprocess); no shared decision, no bridge surface.
 
 ## Alternatives Considered
 
@@ -471,125 +471,20 @@ on any hot path and no alternative was rejected for cost.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0027-inline-shell-detection-scope/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+- **Versioning / incremental adoption.** The predicate widens what `intrastate lint` refuses, so a model that loaded green before an upgrade can load red after it — the one migration surface this record opens. `C1` states `no opt-in in v1`, which is deliberate: an opt-in flag would make the promise conditional and defeat the visibility the check exists for (0004:BR "opt-in" is the locked decision this conforms to). The migration is bounded and measured rather than asserted: A2 computes both predicates over 32 `command` argv cases from this repo's fixtures and 0025's verification models with **zero** `old=false → new=true` divergences, and A7 samples 264 independently-authored real-world argv bindings finding **0** occurrences of the newly-refusable false-positive shape and 23/23 true positives. What a project does hit on upgrade is a genuine wrapped shell spawn, which is the defect. The remediation text (`put it in a script and declare the script as argv0`) is unchanged from 0025:C5, and `C1`'s `report:` line adds the two matched words to the detail so the fix is readable from the message. No deprecation window, no compatibility flag, no staged rollout — the refusal set moves once, at the version that ships `C1`.
+- **Character encoding.** The predicate reads argv **words** and never splits a word on whitespace, reads stdin, files, `PATH`, or the resolved binary (`C1` `reads:`). Basename matching is `base = the text after the last /`, matched **exactly** — no suffix folding, no alias folding, no case folding (`python3`, `nodejs`, `busybox` stay unlisted spellings under the OPEN deny-list rule). So the check does no Unicode normalization, no case mapping, and no locale-dependent comparison; a listed name is a byte-exact match on the post-slash segment. This matters because a folding rule would silently widen the deny-list without amending `C1`, which the OPEN-list clause reserves to amendment of the clause itself.
+- **Determinism of the reported form.** This record does not claim byte-identical output, content-addressed identity, or replay-stable hashes, so the hash/pre-image checklist does not apply. It does pin one output determinism obligation, and pins it in the contract rather than leaving it to the implementation: when several `(interpreter, flag)` pairs qualify, the reported form is `argv[i] + " " + argv[j]` for the **lowest `i`, then the lowest `j`** (`C1` `predicate:`). The `D-selection-predicate` LBD carries the worked two-interpreter case (`["python","sh","-c","echo"]` reports `python -c`, not the `sh -c` a reader's eye goes to) and defends preferring argv position over scanning order, precisely so the reported form cannot depend on map iteration order over `internal/table/load.go::shellInterpreters`. Refusal itself is unaffected by the tie-break — either pair refuses — so this is message attribution only, and `S5` asserts the detail text carries both matched words.
+- **Concurrency model.** Not applicable in this record's own right, and named here only to record that it is inherited rather than absent: `interpreterForm` is a pure function over a fixed argv slice with no shared state, invoked from the single call site `internal/table/load.go::carrierDefect` (`load.go:1095`, A1), and this record adds no goroutine, no cache and no mutable package-level state. Whatever concurrency posture the loader has is 0025's and is untouched.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+Not applicable, and omitted rather than N/A-bulleted: build tool compatibility, licensing, deployment model, IDE compatibility, secret/credential lifecycle, memory management.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+One cross-cutting concern is deliberately **routed rather than addressed**: what a command *consumes* on stdin. `C1` names the stdin channel out of scope by name and routes it to the charted `stdin = "none" | "envelope"` successor. That routing is an **ownership claim, not a closure** — A5 (`Pending`, downgraded at Stage 6) records that no withholding point exists today (`internal/cli/cmdbind/cmdbind.go:207` sets `cmd.Stdin` unconditionally) and that no kata yet tracks the successor. A peer RDR taking that axis owns the policy; until one does, the forms are admitted and documented as such, which is what `C1`'s `promise:` clause tells a reviewer to expect.
 
 ## References
 
