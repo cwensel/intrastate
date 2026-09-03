@@ -39,20 +39,14 @@ in scope and 0025's `verification.md` records the `env`-chain form as a Phase 3a
 yet only assignment-only chains are caught (the contained flag-walk fix is
 intrastate#q2q1, not this RDR). The rest is not covered by C5's text at all: `nice`,
 `timeout`, `xargs`, `nohup`, `setsid`, `stdbuf`, `chpst`, `doas` each re-open an
-argv-position-aware wrapper class, and `sh -s` / `sh <script` / `env -S "sh -c …"` are
-a different axis — shell-string forms no argv-level check can see without modelling
-the wrapper's own parser.
+argv-position-aware wrapper class, and `sh -s` / `env -S "sh -c …"` are a different
+axis — a script carried inside one word or read from stdin, which no argv-level check
+can see without modelling the wrapper's own parser.
 
 The decision this RDR owns, exactly once: what is the *authority surface* of C5's
-deny-list, and therefore what does it promise? The triage names three defensible
-answers — (1) an argv0-name heuristic, narrowed in wording and with the wrapper and
-shell-string forms declared out of scope by name; (2) an argv-position-aware wrapper
-model that closes the class rather than enumerating binaries, with a stated bound on
-the wrapper set; (3) retiring argv as the authority surface in favour of the charted
-`stdin = "none"|"envelope"` successor, keeping the deny-list as an explicitly
-non-load-bearing hint. It is a policy/scope decision about predicate shape plus the
-claim wording verification is held to — not an implementation detail — and is not
-decided here.
+deny-list, and therefore what does it promise? It is a policy/scope decision about
+predicate shape plus the claim wording verification is held to, not an implementation
+detail — the candidate answers are weighed in §Alternatives Considered.
 
 ## Critical Assumptions
 
@@ -246,12 +240,6 @@ Threat model and impact: low on its own — C5 explicitly declines to make inlin
 impossible and states the deny-list's job as raising the cost, so a bypass voids no
 promised guarantee; reachable only under the `--allow-commands` opt-in. The cost is to
 reviewer trust in a check whose purpose is visibility.
-
-Constraints carried from the triage: the `env` option-flag walk (`-i`, `-u NAME`,
-`-0`, `-C`, `--`) is intrastate#q2q1 and ships independently without foreclosing any
-answer; answer 3 may fold into the charted stdin/envelope successor, so that successor
-should be paired with, not duplicated by, this RDR; whether `env -S "sh -c …"` is in
-scope at all is an open question the chosen answer must settle.
 
 ### Technical Environment
 
