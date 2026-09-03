@@ -75,6 +75,11 @@ detail — the candidate answers are weighed in §Alternatives Considered.
   - **Method**: Design Decision
   - **Evidence**: this RDR's scoping choice, resting on 0025's `evidence/critique/Charted.md`, whose entry is scoped to "Declared stdin appetite (`stdin = "none" | "envelope"`) **on a command entry**" and whose motivating hazard is `tee {artifact}` — not a shell. The successor's remit is therefore what a command entry CONSUMES, which covers the non-shell spellings on the same mechanism, so C1's channel-scoped wording describes that remit rather than extending it. Corroborating prior art: consul's `command/exec/exec.go` gates stdin-as-script (`cmd == "-"`) on its declared shell flag, treating stdin delivery as one concern with shell mode. **Durability caveat**: no kata tracks the successor — it exists only as that `Charted.md` line (`kata list --status open`, 2026-09-03), so the If-wrong below is nearer than a charted item normally implies; until it ships, C1 names the forms admitted and the reviewer reads argv.
   - **If wrong**: the successor never ships or withholds nothing, and the stdin forms stay unowned admitted interpreters.
+- **A6 A category description can be surfaced to a reviewer without provoking a refusal — there is somewhere for Phase 3's promise text to land and be read.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: the absence half is confirmed — `Category` is a bare string type and `Categories()` returns identifiers only (`internal/table/category.go::Categories`); the sole user-facing text today is the per-refusal `Detail` built in `internal/table/load.go::carrierDefect`, which by construction fires only on refusal and so cannot carry a promise about what is ADMITTED. What is not yet established is where the description lands: a doc-comment beside the constant is not reviewer-reachable, and the output contract (`docs/cli-output-contract.md`) governs what a verb may emit. Spike: identify the surface (a description field on the category table read by an existing verb, or a documented lint-help path) and confirm it renders without a defect present.
+  - **If wrong**: Phase 3 has no landing site, C1's `promise:` clause overstates what ships, and S7 is unwritable — the record would be back to a predicate whose scope line lives only in this document, which is the failure the premortem's second arm names.
 
 ## Proposed Solution
 
@@ -107,7 +112,7 @@ command_shell_interpreter     # a listed interpreter word followed, at ANY later
 predicate:  refuse iff there exist i < j with base(argv[i]) a listed interpreter and argv[j] one of its listed flags; base = the text after the last `/`, matched exactly (no suffix or alias folding: `python3`, `nodejs`, `busybox` stay unlisted spellings under the OPEN rule). Nothing before argv[i] is read; no wrapper table exists and none may be added. The reported form is argv[i] + " " + argv[j] for the lowest i, then the lowest j
 reads:      argv WORDS only. The check never splits a word on whitespace, never reads stdin, files, PATH, or the resolved binary
 out of scope, BY NAME (admitted by lint; an interpreter may run): a shell string carried in ONE word (`env -S "sh -c …"`, or a single `"sh -c …"` element handed to a tool that re-splits it); an interpreter that reads its script from STDIN (`sh -s`, bare `sh`, `sh -es`, `python -`, `node -`) — owned by the charted `stdin = "none" | "envelope"` successor, whose remit is what a command entry CONSUMES and so covers the non-shell spellings too. The channel is the scope: any listed interpreter taking its code on stdin rather than as a later argv word is admitted, however spelled. `sh script.sh` is the sanctioned wrapper-file form and never a defect
-interpreter set: OPEN (deny-listed, not closed), unchanged from 0025:C5 — an unlisted spelling is admitted; the list grows by amendment of THIS clause
+interpreter set: OPEN (deny-listed, not closed), unchanged from 0025:C5 — an unlisted spelling is admitted; the list grows by amendment of THIS clause. The membership itself is not restated here: it is `internal/table/load.go::shellInterpreters`, one map holding each listed name with its own inline-code flags (`sh`/`python` → `-c`, `ruby` → `-e`), which is what S4's `python -` row and S5's `ruby -e` row rest on
 clause 3 coupling: 0025:C5 clause 3's whitespace exemption keys on this predicate, so a brace-bearing string under a wrapper reports the interpreter form, never command_unknown_placeholder; within-entry precedence is 0025:C5's, unchanged
 report:     category string, remediation ("inline shell is not a declared command; put it in a script and declare the script as argv0") and position in `table.Categories()` are unchanged; the detail additionally names the two matched words
 promise:    what a reviewer may rely on is the predicate line and nothing more; the lint's user-facing description states the out-of-scope forms in the words above. No such description exists in the shipped code today — the only user-facing text is the refusal detail, which fires on refusal and never on admission — so Phase 3 creates it and THESE words are the text it ships
@@ -116,7 +121,7 @@ promise:    what a reviewer may rely on is the predicate line and nothing more; 
 #### Load-Bearing Decisions
 
 - **Naming** — the category stays `command_shell_interpreter`; rejected: `command_inline_shell` (a rename re-orders nothing a reviewer sees and breaks 0025's tests and `Categories()` wire order for no gain).
-- **Selection / predicate** — when several pairs qualify, the lowest interpreter index and then the lowest flag index are reported; order is part of the predicate (a flag word before the interpreter word never matches); the flag is matched at any later position, as today, so the already-accepted false-refusal class (a script argument that is itself `-c` / `-e`) is unchanged and is diagnosable from the named words.
+- **Selection / predicate** — when several pairs qualify, the lowest interpreter index and then the lowest flag index are reported; order is part of the predicate (a flag word before the interpreter word never matches); the flag is matched at any later position, as today, so the already-accepted false-refusal class (a script argument that is itself `-c` / `-e`) is unchanged and is diagnosable from the named words. Two listed interpreters in one argv resolve by the same rule and the outer word wins: `["python","sh","-c","echo"]` reports `python -c`, not the `sh -c` a reader's eye goes to, because `python` and `sh` both carry `-c` (`shellInterpreters`) and `python` holds the lower i. Refusal is unaffected — either pair refuses — so this is message attribution only; accepted rather than special-cased, since a tie-break that preferred the *nearest* pair would make the reported form depend on scanning order rather than on argv position.
 
 #### Illustrative Code
 
@@ -324,9 +329,10 @@ Read, not spiked: `internal/table/load.go::interpreterForm`, `::carrierDefect` (
 
 1. Take the 0025 command-carrier model with a green `command` read binding; `intrastate lint` passes.
 2. Swap in one mutant per named wrapper — `["env","-i","sh","-c","…"]`, `["env","-u","FOO","sh","-c","…"]`, `["nice","sh","-c","…"]`, `["timeout","5","sh","-c","…"]`, `["xargs","sh","-c","…"]`, `["doas","sh","-c","…"]` — and one carrying `{artifact}` inside the string under `nice`; each refuses with `command_shell_interpreter`, the detail naming `sh -c` and the script remediation; the `{artifact}` mutant does NOT report `command_unknown_placeholder`.
-3. Swap in the admitted forms `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`, and the non-shell stdin spelling `["python","-"]`; lint passes for each. The first two are shown, by running the model under `--allow-commands`, to behave as C1 states (the wrapper file runs; the `-S` string runs a shell — on a host whose `env` supports `-S`, GNU env, since darwin's stock BSD env rejects it; A4). `["python","-"]` is the probe that C1's out-of-scope line is stated over the stdin CHANNEL and not over shell spellings: it must lint green and be documented as admitted.
+3. Swap in the admitted forms `["sh","./gate.sh"]`, `["env","-S","sh -c echo"]`, `["sh","-s"]`, and the non-shell stdin spelling `["python","-"]`; each lints green AND loads with its argv unchanged (green alone is an absence-of-error oracle a no-op passes; `oracle` mini-check). The first two are shown, by running the model under `--allow-commands`, to behave as C1 states (the wrapper file runs; the `-S` string runs a shell — on a host whose `env` supports `-S`, GNU env, since darwin's stock BSD env rejects it; A4). `["python","-"]` is the probe that C1's out-of-scope line is stated over the stdin CHANNEL and not over shell spellings: it must lint green and be documented as admitted (`python` is a `shellInterpreters` member, so a spellings-scoped reading would refuse it).
 4. The original 0025 REQ-74 probes and the negative fixture still refuse with the same category, and `table.Categories()` order is unchanged.
-End-state: every wrapper mutant red with the right defect, every admitted form green and documented, no existing probe changed.
+5. The description Phase 3 ships is read without provoking a refusal and names both out-of-scope forms in C1's words (S7) — the `promise:` clause's only test; steps 1–4 all pass with no description at all.
+End-state: every wrapper mutant red with the right defect, every admitted form green and documented, the promise text shipped and asserted, no existing probe changed.
 
 #### Mini-check: `oracle`
 
@@ -340,6 +346,7 @@ Fired by MVV step 3 and Testing Strategy scenario 4, whose oracle is "lint passe
 | MVV 3 · S4 — admitted forms lint GREEN | **absence-of-error oracle — the weak row.** A no-op predicate passes it. It is discriminating only as a *pair* with S1/S3: S1 forces refusal on the wrapper class, S4 pins the boundary that must not move with it | the discriminating members are `["python","-"]` and `["sh","-es"]`: any implementation reading the out-of-scope line as *shell spellings* refuses `python -` and fails S4. Control = assert green **and** that the binding loads with the argv unchanged, not merely that no error was returned |
 | S5 — `["ruby","tool.rb","-e","prod"]` refuses naming `ruby -e` | fails if the detail does not carry the matched words, because the author cannot see which pair collided | assert the detail *text* contains both words; a bare category assertion passes even with today's message |
 | S6 — `table.Categories()` membership and order unchanged | fails if the edit strays outside `load.go`, because the wire order a reviewer sees would shift | golden assertion over the full ordered slice, not a `Contains` check |
+| MVV 5 · S7 — the shipped description names both out-of-scope forms | fails if Phase 3 ships no description, or ships one silent about the admitted forms, because scenarios 1–6 all pass with no description at all — the predicate half is fully green either way | assert the description text contains BOTH admitted forms (the one-word string and the stdin channel), not that a description is non-empty: a placeholder string passes a non-empty check. Today's code: no description surface exists (`category.go::Categories` returns identifiers only), so the control starts red by construction |
 
 #### Mini-check: `trace`
 
@@ -368,7 +375,7 @@ Add the wrapper mutants and the admitted-form probes beside the REQ-74 test; kee
 
 ### Phase 3: Promise wording
 
-Update the C5 comments in `load.go` to cite this record's C1, and the lint's user-facing description of `command_shell_interpreter` to state the predicate and the two out-of-scope forms in C1's words.
+Update the C5 comments in `load.go` to cite this record's C1, and **create** the user-facing description of `command_shell_interpreter` stating the predicate and the two out-of-scope forms in C1's words. No description surface exists today: `Category` is a bare string and `Categories()` returns identifiers only (`internal/table/category.go::Categories`), so this phase adds the surface as well as the text — the description must be reachable without provoking a refusal, which the detail string (`load.go::carrierDefect`) is not. Where it lands is the implementer's call (A6); that it ships, and carries C1's words, is S7's assertion.
 
 ## Validation
 
@@ -379,8 +386,9 @@ Unit tests beside the existing C5 probes in
 each scenario asserts the CATEGORY a model author actually sees. Done = every
 scenario below green, the four REQ-74 probes and
 `neg/neg-command-shell-interpreter.toml` unedited and still green, and
-`go test ./internal/table/` clean. Scenarios 1–3 are the predicate; 4–5 are
-the promise, which is the half a predicate test cannot reach.
+`go test ./internal/table/` clean. Scenarios 1–3 are the predicate; 4–5 and 7
+are the promise, which is the half a predicate test cannot reach — 7 depends on
+A6 resolving where the description lands.
 
 1. **Scenario**: One mutant per wrapper the Problem Statement names — `env -i`,
    `env -u FOO`, `nice`, `timeout 5`, `xargs`, `nohup`, `setsid`, `stdbuf -o0`,
@@ -401,18 +409,23 @@ the promise, which is the half a predicate test cannot reach.
 3. **Scenario**: The `env`-option forms intrastate#q2q1 enumerates — `-i`,
    `-u FOO`, `--unset=FOO`, `-0`, `-C DIR`, `--chdir=DIR`, `--`, and a mixed
    `-i A=1 -- sh -c` chain.
-   **Expected**: all refuse `command_shell_interpreter`, proving the deleted
-   `env` walk is subsumed rather than merely removed (Approach; verified in
+   **Expected**: all refuse `command_shell_interpreter`, **detail naming the
+   matched words `sh -c`** as in scenario 1 — the category alone passes even on
+   today's message (`oracle` mini-check, S5 row), and C1 `report:` makes the two
+   words part of the contract these forms exercise. Proves the deleted `env`
+   walk is subsumed rather than merely removed (Approach; verified in
    `evidence/research/stage4-scope-wording.md` §Q3).
 
 4. **Scenario**: The admitted forms — `["sh","./gate.sh"]`,
    `["env","-S","sh -c echo"]`, `["sh","-s"]`, `["sh"]`, `["sh","-es"]`,
    `["python","-"]`, `["node","-"]`.
-   **Expected**: every one lints GREEN. These are C1's out-of-scope line as a
-   test: a future predicate change that starts refusing one of them has broken
-   the promise, not tightened it. `["python","-"]` and `["sh","-es"]` are the
-   discriminating cases — they fail under any implementation that reads the
-   out-of-scope line as shell-spellings-only (A4).
+   **Expected**: every one lints GREEN **and the binding loads with its argv
+   unchanged** — not merely that no error was returned, which a no-op predicate
+   also satisfies (`oracle` mini-check, S4 row). These are C1's out-of-scope
+   line as a test: a future predicate change that starts refusing one of them
+   has broken the promise, not tightened it. `["python","-"]` and `["sh","-es"]`
+   are the discriminating cases — they fail under any implementation that reads
+   the out-of-scope line as shell-spellings-only (A4).
 
 5. **Scenario**: The regression set for the accepted false-refusal class —
    `["ruby","tool.rb","-e","prod"]` (a script whose own argument is `-e`).
@@ -426,6 +439,17 @@ the promise, which is the half a predicate test cannot reach.
    **Expected**: unchanged. The edit touches `load.go` only; the category
    constant and its position live in `category.go:60`/`:103` and are not
    edited (C1 `report:`, Naming LBD).
+
+7. **Scenario**: The description Phase 3 ships for
+   `command_shell_interpreter`, read from wherever Phase 3 lands it, without
+   provoking a refusal.
+   **Expected**: it exists, and its text names both out-of-scope forms — the
+   one-word shell string and the stdin-fed interpreter — in C1's channel-scoped
+   words. This is the `promise:` clause as a test: scenarios 1–5 assert what the
+   predicate does, and none of them would fail if the description were missing,
+   stale, or silent about the admitted forms. That gap is the premortem's second
+   failure ("a reviewer who read 'closes the wrapper class' stops reading argv")
+   reaching production with every other test green.
 
 ### Performance Expectations
 
