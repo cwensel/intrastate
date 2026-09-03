@@ -1109,31 +1109,60 @@ deferred. State the specific test or proof.]
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+- **Concurrency model** — this RDR's own seam, and the only concern it authors
+  policy for. The bounded join replaces `drains.Wait()` as the sole
+  happens-before edge between the drain goroutines' slice writes and the parent's
+  read of `inv.stdout`/`inv.stderr`; C1 `precedence:` (b) requires the join stay a
+  real join (a drain ended by the grace deadline still runs `drains.Done()`) and
+  forbids by name the design that lets the parent proceed past a live drain. The
+  edge is not asserted as settled: A11 is the open record, and its named check —
+  S3 + S7 under `-race -count=25` — is a Phase-1 exit condition, not a follow-up.
+  The drains stay concurrent (`D-the-drains-stay-concurrent`): serializing them
+  would deadlock a child that fills one pipe while the parent reads the other.
+- **Build tool compatibility** — Unix-only process-group syscalls stay behind the
+  build tags established by intrastate#1drn (`procgroup_unix.go`); Windows
+  continues to take 0025:C4's platform refusal. A12 confirms the drain-start stall
+  seam this RDR adds needs **no third build tag** — it is portable Go in
+  `cmdbind`. Every spike backing C1 (A2, A9, A10) ran on both darwin and linux, so
+  the bound is not a single-platform measurement.
+- **Memory management** — the existing 1 MiB stdout cap and 4 KiB stderr tail are
+  unchanged and remain the only bound on retained output. C1 `precedence:` rewrites
+  `readBounded`'s body into an explicit read loop, so those boundaries are
+  re-implemented rather than re-called; S3 asserts both cap boundary cases
+  (exactly `StdoutCap`, and `StdoutCap+1` as overflow) explicitly, and relaxing an
+  existing expectation to make the rewritten loop pass is that row's named failure.
+  Output read on a bound-expired drain is never parsed on any path, so a partial
+  buffer is never retained as a value.
+- **Incremental adoption** — the narrowing of 0025:C4 ("true EOF" → "whole within
+  the bound") can newly refuse a binding that answers correctly but leaves a
+  `setsid` helper holding stdout. That population is **unsurveyed**, not
+  known-empty, so Phase 5 SURVEYS before it documents: the existing
+  reader/gate/write fixtures plus the repo's own declared bindings run under the
+  new refusal, and a previously-passing binding that now refuses is a Stage-6
+  route-back, not a doc note. No opt-out flag ships and none is proposed — a
+  per-binding "accept partial output" knob is ALT1 by another name, rejected for
+  ALT1's reason; the escape hatch is redirection at the binding's command, which
+  costs no contract.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+Two more are owned elsewhere and cited, not restated:
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+- **Error/refusal surface** — the `execution_failure` sub-reason carrier (`Detail`
+  for the reason, `Err` executor-facing, `Applied()` for the applied sense) is
+  **JDR 0003 §D1**. C1 `refusal:` is this record's instance of that policy;
+  JC1 records the fire, symmetric with cli/0028:JC1's arm-2 fire on the same
+  literal. This RDR does not re-decide the carrier.
+- **Deadline triple and platform refusal** — 0025:C4, which this RDR declares in
+  Overrides and amends only at the point C4 left undecided (bound-vs-whole
+  precedence). The residue class stays 0025:F4's, restated honestly rather than
+  redefined.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+Not applicable, and deliberately not N/A-bulleted above: versioning, licensing,
+deployment model, IDE compatibility, secret/credential lifecycle, character
+encoding. This RDR claims no byte-identical output, content-addressed identity or
+replay-stable hash, so the canonical-form checklist does not apply — S3's
+"byte-for-byte unchanged" is a *regression* assertion against today's existing
+expectations on the ordinary paths, not a determinism claim about a newly minted
+artifact.
 
 ### Proportionality
 
