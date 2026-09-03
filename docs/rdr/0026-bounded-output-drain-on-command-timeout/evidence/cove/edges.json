@@ -1,0 +1,528 @@
+{
+  "edges": [
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 18,
+      "line_end": 18,
+      "evidence": "RDR 0025",
+      "field": "Related Issues"
+    },
+    {
+      "from": "0026",
+      "to": "0004",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 19,
+      "line_end": 19,
+      "evidence": "0004-accessor-execution-safety-model",
+      "field": "Predecessors",
+      "slug": "0004-accessor-execution-safety-model"
+    },
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 19,
+      "line_end": 19,
+      "evidence": "0025-command-invoking-accessor-bindings",
+      "field": "Predecessors",
+      "slug": "0025-command-invoking-accessor-bindings"
+    },
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "overrides",
+      "resolved": true,
+      "line": 20,
+      "line_end": 20,
+      "evidence": "0025",
+      "field": "Overrides"
+    },
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 20,
+      "line_end": 20,
+      "evidence": "0025",
+      "field": "Overrides"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind::drains.Wait",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 21,
+      "line_end": 21,
+      "evidence": "internal/cli/cmdbind::drains.Wait",
+      "field": "Seam Lineage"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind::reapGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 21,
+      "line_end": 21,
+      "evidence": "internal/cli/cmdbind::reapGroup",
+      "field": "Seam Lineage"
+    },
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 25,
+      "line_end": 25,
+      "evidence": "RDR 0025"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 36,
+      "line_end": 36,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn"
+    },
+    {
+      "from": "0026:A1",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 54,
+      "line_end": 54,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn"
+    },
+    {
+      "from": "0026:A1",
+      "to": "cmdbind.go::Gate.Gate",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 57,
+      "line_end": 57,
+      "evidence": "cmdbind.go::Gate.Gate",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A1",
+      "to": "cmdbind.go::Reader.Read",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 57,
+      "line_end": 57,
+      "evidence": "cmdbind.go::Reader.Read",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A1",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 57,
+      "line_end": 57,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A4",
+      "to": "internal/accessor/executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 71,
+      "line_end": 71,
+      "evidence": "internal/accessor/executor.go::invokeRead"
+    },
+    {
+      "from": "0026:A4",
+      "to": "internal/accessor/executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 74,
+      "line_end": 74,
+      "evidence": "internal/accessor/executor.go::invokeRead",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A5",
+      "to": "cmdbind.go::WaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 76,
+      "line_end": 76,
+      "evidence": "cmdbind.go::WaitDelay"
+    },
+    {
+      "from": "0026:A5",
+      "to": "adversarial_0025_test.go::TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 79,
+      "line_end": 79,
+      "evidence": "adversarial_0025_test.go::TestAdvBackgroundGrandchildDoesNotSurviveASuccessfulRead",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A7",
+      "to": "exec.go::childStdin",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 90,
+      "line_end": 90,
+      "evidence": "exec.go::childStdin",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A8",
+      "to": "internal/accessor/executor.go::Write",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 92,
+      "line_end": 92,
+      "evidence": "internal/accessor/executor.go::Write"
+    },
+    {
+      "from": "0026:A8",
+      "to": "executor.go::Write",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 95,
+      "line_end": 95,
+      "evidence": "executor.go::Write",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026:A8",
+      "to": "internal/cli/flow_exec.go::accessorFailureOf",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 95,
+      "line_end": 95,
+      "evidence": "internal/cli/flow_exec.go::accessorFailureOf",
+      "field": "Evidence"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 110,
+      "line_end": 110,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::WaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 113,
+      "line_end": 113,
+      "evidence": "cmdbind.go::WaitDelay"
+    },
+    {
+      "from": "0026:D-naming",
+      "to": "cmdbind.go::WaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 184,
+      "line_end": 184,
+      "evidence": "cmdbind.go::WaitDelay"
+    },
+    {
+      "from": "0026:D-the-drain-grace-is-a-mechanism-constant-not-the-rejected-knob",
+      "to": "os/exec/exec.go::awaitGoroutines",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 199,
+      "line_end": 199,
+      "evidence": "os/exec/exec.go::awaitGoroutines"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 253,
+      "line_end": 253,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::WaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 254,
+      "line_end": 254,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::WaitDelay"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::reapGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 256,
+      "line_end": 256,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::reapGroup"
+    },
+    {
+      "from": "0026",
+      "to": "procgroup_unix.go::killGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 256,
+      "line_end": 256,
+      "evidence": "procgroup_unix.go::killGroup"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::readBounded",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 257,
+      "line_end": 257,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::readBounded"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::wrap",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 258,
+      "line_end": 258,
+      "evidence": "cmdbind.go::wrap"
+    },
+    {
+      "from": "0026",
+      "to": "internal/accessor/executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 259,
+      "line_end": 259,
+      "evidence": "internal/accessor/executor.go::invokeRead"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::WaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 287,
+      "line_end": 287,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::WaitDelay"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 290,
+      "line_end": 290,
+      "evidence": "cmdbind.go::spawn"
+    },
+    {
+      "from": "0026",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 294,
+      "line_end": 294,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0026:JC1",
+      "to": "0028",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 295,
+      "line_end": 295,
+      "evidence": "0028",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0026:JC1",
+      "to": "cli/0028:C3",
+      "kind": "mentions",
+      "resolved": false,
+      "line": 295,
+      "line_end": 295,
+      "evidence": "cli/0028:C3"
+    },
+    {
+      "from": "0026",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 374,
+      "line_end": 374,
+      "evidence": "RDR 0025"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 428,
+      "line_end": 428,
+      "evidence": "cmdbind.go::spawn"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::readBounded",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 429,
+      "line_end": 429,
+      "evidence": "cmdbind.go::readBounded"
+    },
+    {
+      "from": "0026",
+      "to": "cmdbind.go::reapGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 429,
+      "line_end": 429,
+      "evidence": "cmdbind.go::reapGroup"
+    },
+    {
+      "from": "0026",
+      "to": "procgroup_unix.go::killGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 429,
+      "line_end": 429,
+      "evidence": "procgroup_unix.go::killGroup"
+    },
+    {
+      "from": "0026",
+      "to": "executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 430,
+      "line_end": 430,
+      "evidence": "executor.go::invokeRead"
+    },
+    {
+      "from": "0026",
+      "to": "os/file_unix.go::newFile",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 431,
+      "line_end": 431,
+      "evidence": "os/file_unix.go::newFile"
+    },
+    {
+      "from": "0026",
+      "to": "os/file_unix.go::newFile",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 442,
+      "line_end": 442,
+      "evidence": "os/file_unix.go::newFile"
+    },
+    {
+      "from": "0026",
+      "to": "executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 449,
+      "line_end": 449,
+      "evidence": "executor.go::invokeRead"
+    },
+    {
+      "from": "0026:S1",
+      "to": "flow_exec.go::accessorFailureOf",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 603,
+      "line_end": 603,
+      "evidence": "flow_exec.go::accessorFailureOf"
+    },
+    {
+      "from": "0026",
+      "to": "{ARTIFACT_DIR}/gate.md",
+      "kind": "artifact",
+      "line": 650,
+      "line_end": 650,
+      "evidence": "{ARTIFACT_DIR}/gate.md"
+    },
+    {
+      "from": "0026:G-assumptions",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 695,
+      "line_end": 695,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0026",
+      "to": "os/file_unix.go::newFile",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 772,
+      "line_end": 772,
+      "evidence": "os/file_unix.go::newFile"
+    },
+    {
+      "from": "0026",
+      "to": "internal/agent/process.go::configureSubprocess",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 774,
+      "line_end": 774,
+      "evidence": "internal/agent/process.go::configureSubprocess"
+    },
+    {
+      "from": "0026",
+      "to": "internal/storage/dolt/store.go::cliExecWaitDelay",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 774,
+      "line_end": 774,
+      "evidence": "internal/storage/dolt/store.go::cliExecWaitDelay"
+    },
+    {
+      "from": "0026",
+      "to": "internal/accessor/executor.go::invokeRead",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 775,
+      "line_end": 775,
+      "evidence": "internal/accessor/executor.go::invokeRead"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/cmdbind.go::spawn",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 775,
+      "line_end": 775,
+      "evidence": "internal/cli/cmdbind/cmdbind.go::spawn"
+    },
+    {
+      "from": "0026",
+      "to": "internal/cli/cmdbind/procgroup_unix.go::killGroup",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 775,
+      "line_end": 775,
+      "evidence": "internal/cli/cmdbind/procgroup_unix.go::killGroup"
+    },
+    {
+      "from": "0026",
+      "to": "jdr/0003",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 778,
+      "line_end": 778,
+      "evidence": "jdr/0003"
+    }
+  ],
+  "path": "/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0026-bounded-output-drain-on-command-timeout.md",
+  "record": "0026",
+  "schema": "2"
+}
