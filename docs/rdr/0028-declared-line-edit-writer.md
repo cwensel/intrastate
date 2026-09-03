@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Draft
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: large — C1, the `edit` write carrier: one contract whose six clauses (C1.1–C1.6) lock the `edit` block's declaration grammar and its closed placeholder vocabulary; user-facing yes; locks format
 - **Priority**: High
@@ -718,7 +718,7 @@ line (P-2) is refused in v1 by design (Briefly Rejected).
 
 Premortem: hardened (hardened)
 Ground-sweep: clean (35 anchors; one cosmetic citation corrected inline — the emit-payload clause is 0010:C4, not 0010:C3)
-Joint-check: fired → 0027, 0026, 0016 (home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4) — disposed 2026-08-31: 0026 hoisted (constraint — sub-reason rides `Detail`, applied sense is `Applied()`; C1.3 and A8 aligned, cited not restated); 0027 cite-don't-restate (disjoint deltas, 0025:C5 owns the clause map); 0016 cite-don't-restate (reliance on its fail-closed reader). all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C1.4 here add the `edit` arm and five tail categories and never reach clauses 2–6; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C1.3/A8 here for "not applied" with `applied: false` in Detail (since aligned to JDR 0003 §D1); the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C1.3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C1.4 appends at the tail; 0014/0021 ↔ 0028 on `intrastate lint` — a tool name, not a decision. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C1.6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C1.6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Dispositions above.
+Joint-check: fired → 0027, 0026, 0016, 0019, 0020 (home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4; cli/0019:C1 and cli/0020:C1 own their own arms) — disposed 2026-08-31, extended 2026-09-03 at finalize when the anchor-intersect surfaced 0019/0020 as uncited: 0026 hoisted (constraint — sub-reason rides `Detail`, applied sense is `Applied()`; C1.3 and A8 aligned, cited not restated); 0027 cite-don't-restate (disjoint deltas, 0025:C5 owns the clause map); 0016 cite-don't-restate (reliance on its fail-closed reader). all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C1.4 here add the `edit` arm and five tail categories and never reach clauses 2–6; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. 0019 ↔ 0028 on `internal/cli/flowbind/flowbind.go::load` — cite-don't-restate: both records read its absent-file-is-empty rule the same way and neither changes it. 0019 RELIES on it (it is what makes `init-state`'s first write possible: Approach, Investigation) while 0019:C1 forbids any read path synthesizing `[initial]`; 0028's S27b fences it OUT for the `edit` carrier, whose `input:`/`select:` refuses a target it cannot read (`execution_failure`) rather than treating absent as empty. Complementary positions on one unchanged rule — no shared answer. 0020 ↔ 0028 on `internal/cli/flow_input.go::parseTags` — cite-don't-restate: 0020:C1 governs the UNDECLARED key at `--tag` admission (pure carrier, verbatim, no new refusal code) and states the `flow-tag-owned` (REQ-27) arm is preserved "unchanged"; 0028:A7 relies on exactly that preserved arm for the context-only semantic that makes `{tag.nnnn}` bindable without a reader run. 0020 owns the undeclared-key answer, 0028 consumes the declared-and-owned refusal it leaves untouched — disjoint arms of one function. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C1.3/A8 here for "not applied" with `applied: false` in Detail (since aligned to JDR 0003 §D1); the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C1.3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C1.4 appends at the tail; `cli/0014` and `cli/0021` ↔ 0028 on `intrastate lint` — a tool name, not a decision: cli/0014:C1 is a repository-wide verification-oracle rule about which predicate class may verify a CI-gate requirement, and cli/0021 a cache-warmup ordering record; both merely INVOKE the linter, as this record does at C1.1/Phase 1. Sharing the spelling of a command is not sharing an answer, so there is nothing to hoist and nothing for either to cite of the other. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C1.6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C1.6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Dispositions above.
 
 ## Alternatives Considered
 
@@ -1470,152 +1470,77 @@ with its line, and a missing final terminator is preserved. Re-running an
 applied edit is a no-op by construction — the re-anchor pass (C1.3) requires each
 rule to select exactly its own rewritten line, and an unchanged buffer is not
 written.
+
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0028-declared-line-edit-writer/artifacts/gate.md (Gate PASS 2026-09-03)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Character encoding / byte preservation.** Owned here, and the concern this
+RDR is most exposed to: `edit` rewrites one line of a file whose other bytes a
+human authored. C1.3 `input:` fixes the policy — the target is read as BYTES,
+never decoded or re-encoded; lines split on `"\n"` with a preceding `"\r"`
+kept on the terminator, so a CRLF file round-trips per line; a missing final
+terminator is preserved. No normalization, no trailing-whitespace trimming, no
+case folding anywhere in the path. `{tag.<key>}` substitution into an anchor is
+regexp-QUOTED (C1.3 `anchor:`), so a bound value is matched as a literal
+fragment and cannot alter the pattern's structure. Peers writing text artifacts
+through a declared carrier should conform to this clause rather than restating
+it.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Determinism / byte-identical output.** This RDR claims byte-identical output
+for every line it does not target, not content-addressed identity or a hash, so
+the template's hash/pre-image checklist does not apply — there is no digest,
+no pre-image layout, and no map-iteration order in the write path. What the
+claim reduces to is fixed above under encoding, plus: selection resolves every
+rule's anchor against PRE-EDIT content and holds pre-edit line INDICES, so rule
+order cannot perturb a sibling's target (C1.3 `select:`); a post-edit buffer
+equal to the input is not written at all (no staging, no rename — S20 asserts
+it against an unchanged inode). The MVV's `git diff --stat` step (one changed
+line per file per invocation) is the executable form of the claim.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+**Concurrency model.** Explicitly out of scope, and deliberately NOT a
+divergence: C1.3 `write:` records no lock and no compare-before-rename, which
+is exactly the posture `path` entries already have. A concurrent writer to the
+same artifact is unhandled for both carriers alike. Adopting a different
+posture for `edit` would fork the concurrency story across carriers of one
+seam; if the project later wants one, it belongs in a record that answers it
+for `path` and `edit` together.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+**Deployment model / atomicity boundary.** The unit is ONE ENTRY over ONE FILE,
+staged beside the resolved target and renamed over it (`flowbind.go::save`'s
+discipline, file mode preserved per A5). This RDR does NOT introduce a
+cross-entry transaction: a plan spanning two write entries applies each
+independently, per 0004's per-entry apply model, which owns that policy —
+cited, not restated. The consequence is stated rather than mitigated (a
+partial plan leaves two artifacts disagreeing) because the artifacts are in
+git and re-running the pipeline is safe: re-applying a landed entry rewrites
+the same bytes and the no-op arm writes nothing.
 
-### Proportionality
+**Incremental adoption.** An `edit` entry is admitted alongside the existing
+`path` and `command` carriers by extending 0025:C1's exactly-one-carrier rule
+(declared Overrides), so a model gains `edit` entry-by-entry with no migration
+of existing entries and no flag day. Models that never declare an `edit`
+carrier are unaffected — the C1.6 `{tag.<key>}` argv family likewise extends
+0025:C2's closed vocabulary additively, leaving `command_unknown_placeholder`'s
+wire string unchanged for every element that was already refused.
 
-[Gate key: proportionality]
+**Secret / credential lifecycle.** Applies weakly but non-trivially, and is
+bounded rather than owned: `edit`'s planned values reach a text artifact, so a
+model could in principle write a secret into a tracked file. The fence is
+inherited, not new — the value comes from the model's declared state, the
+target is a caller-bound artifact (0004:C3), and execution requires
+`--allow-commands` for the command carrier. 0004 owns the execution safety
+model; this RDR adds no new source of caller-supplied value (A7: `--tag` is
+context-only and refuses an owned key), so it widens no existing exposure.
 
-**Response.** Contract count is **one** — C1, the `edit` write carrier, whose
-clauses C1.1–C1.5 are one grammar over one seam (`internal/table/load.go`
-carrier admission plus `internal/accessor` write execution). C1.6 was scored
-separately in the Decision Rationale and is counted here rather than fenced
-past: it extends 0025:C2's argv placeholder vocabulary on the READ path, in a
-different package (`cmdbind`), which is the shape a split test is looking for.
-It is **not** an independent load-bearing contract, on the deployability test:
-`{tag.<key>}` in a command reader's argv exists solely so the write carrier's
-0004:C12 read-back can address one row of a shared artifact, it carries no state
-and no behaviour of its own, and shipping it without C1.1–C1.5 addresses rows on
-behalf of nothing. It cannot be independently justified, so it is not
-independently locked. The RDR is the sole author of one contract; no split.
-
-**Profile re-validated: `large` stands.** One contract, user-facing yes (a
-declared grammar model authors write), locks format (the `edit` block's
-declaration grammar and its closed placeholder vocabulary) — the value Resolve
-wrote still matches what the lenses found. Not `foundational`: Seam Lineage
-records no prior accretion on this seam.
-
-**Reviewed at critique:** the reverse reading — C1.6 as a second seam warranting
-its own record — was weighed and rejected above rather than deferred. What the
-critique lens did change is the honesty of the surrounding claims, not the
-count: C1.6's consumer verb is now a blocking MVV prerequisite (Prerequisites)
-rather than a Spec Impact cell.
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Not applicable, and omitted rather than N/A-bulleted: versioning, build tool
+compatibility, licensing, IDE compatibility, memory management (the target is
+read whole, but these are markdown records — the RDR states no streaming
+requirement and none is implied at this size).
 
 ## References
 
