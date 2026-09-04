@@ -15,6 +15,7 @@ package cmdbind_test
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -345,9 +346,13 @@ func TestReq40_ANonReadingChildWithAStdinPayloadPastTheBufferRefusesAfterTheJoin
 	t.Parallel()
 
 	// A write carries a real stdin payload; the child never reads it and
-	// sleeps past its own bound, so Cmd's WaitDelay ends the stdin write.
+	// exits immediately, leaving an escapee holding the stdin READ END, so
+	// Cmd's WaitDelay is what ends the stdin write. The escapee holds
+	// stdin ALONE: the output drains reach EOF, no drain condition
+	// qualifies, and `exec.ErrWaitDelay` is the sole reason to refuse.
+	pidfile := escPIDFile(t)
 	w := &cmdbind.Writer{
-		Accessor: escEntry(t, "1s", "no-stdin", "30s"),
+		Accessor: escEntry(t, "1s", "stdin-holds-only", pidfile),
 		Name:     escName,
 		Config:   cmdbind.Config{AllowCommands: true},
 	}
@@ -359,9 +364,18 @@ func TestReq40_ANonReadingChildWithAStdinPayloadPastTheBufferRefusesAfterTheJoin
 	err := w.Apply(ctx, escArtifact(t), bigPlan())
 	elapsed := time.Since(start)
 
+	defer escKill(escReadPID(t, pidfile))
+
 	if err == nil {
 		t.Fatal("a non-reading child with a stdin payload past the pipe " +
 			"buffer reported success")
+	}
+	if !errors.Is(err, exec.ErrWaitDelay) {
+		t.Fatalf("the refusal is %q; REQ-98/REQ-125 fix the refusal for a "+
+			"non-reading child with a stdin payload past the buffer as "+
+			"`exec.ErrWaitDelay` reaching `spawn`'s non-ExitError arm — an "+
+			"error of any other kind means the case never staged, so the "+
+			"row proves nothing about that arm", err)
 	}
 	if want := escBoundFor(1 * time.Second); elapsed > want {
 		t.Fatalf("the stdin case returned after %v, past the C1 `bound:` "+

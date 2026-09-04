@@ -496,21 +496,24 @@ func TestReq79_ADrainConditionIsSelectedAheadOfTheNonExitErrorArm(t *testing.T) 
 	t.Parallel()
 
 	pidfile := escPIDFile(t)
-	// A child that never reads its stdin (so `Wait` ends in
-	// `exec.ErrWaitDelay`) AND leaves an escapee holding both pipes, so the
-	// non-ExitError arm and the held condition both qualify.
-	r := cmdbind.Reader{
-		Accessor: escEntry(t, "2s", "no-stdin-holds", pidfile, "60s"),
+	// The WRITE path is the only one that carries a stdin payload:
+	// `Reader.Read` always sends the empty object, which fits the pipe
+	// buffer and can never outlive the child. `bigPlan` is 128 KiB, past
+	// the buffer, so the parent's stdin write blocks on a read end the
+	// escapee holds open. The direct child exits normally and immediately,
+	// so nothing signals it and `Wait` ends in `exec.ErrWaitDelay` — the
+	// non-ExitError arm. The same escapee holds both output pipes, so the
+	// held condition qualifies on the same invocation and the two compete.
+	w := &cmdbind.Writer{
+		Accessor: escEntry(t, "2s", "stdin-holds-exits", pidfile),
 		Name:     escName,
 		Config:   cmdbind.Config{AllowCommands: true},
 	}
-	// The stdin payload must exceed the pipe buffer for the write to block.
-	r.Accessor.Keys = []string{escKey}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, _, err := r.Read(ctx, escArtifact(t), []string{escKey})
+	err := w.Apply(ctx, escArtifact(t), bigPlan())
 
 	pid := escReadPID(t, pidfile)
 	defer escKill(pid)

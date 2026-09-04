@@ -129,11 +129,28 @@ import (
 // escape spawns a grandchild in its OWN SESSION, so the parent's
 // group-scoped kill(2) cannot reach it. Which of the parent's own stdio the
 // grandchild inherits is the argument: that is what makes "stdout held",
-// "stderr held" and "both held" three different fixtures.
+// "stderr held" and "both held" three different fixtures. It is
+// escapeHolding with the stdin read end NOT inherited, which is what every
+// output-side fixture wants.
 func escape(pidfile string, holdOut, holdErr bool, sleep string) {
+	escapeHolding(pidfile, false, holdOut, holdErr, sleep)
+}
+
+// escapeHolding is escape with the STDIN read end also selectable. An
+// escapee holding stdin is what makes the parent's stdin write outlive the
+// direct child: the CLI's Wait then ends in exec.ErrWaitDelay rather
+// than in an ExitError, which is the ONLY way to reach spawn's
+// non-ExitError arm. A fixture that wants that arm must ALSO exit its direct
+// child normally and immediately — a child that sleeps past the deadline is
+// SIGKILLed by the group-scoped cancel and reports a signalled ExitError
+// instead, which takes a different arm entirely.
+func escapeHolding(pidfile string, holdIn, holdOut, holdErr bool, sleep string) {
 	self, _ := os.Executable()
 	sub := exec.Command(self, "hold", sleep)
 	sub.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if holdIn {
+		sub.Stdin = os.Stdin
+	}
 	if holdOut {
 		sub.Stdout = os.Stdout
 	}
@@ -330,12 +347,35 @@ func main() {
 		}
 		os.Exit(0)
 
-	// no-stdin-holds makes the werr non-ExitError arm (ErrWaitDelay from
-	// a child that never reads stdin) and the held condition both qualify.
+	// no-stdin-holds leaves an escapee holding BOTH pipes and then sleeps
+	// past the declared deadline. It does NOT reach the werr non-ExitError
+	// arm: the sleeping child is SIGKILLed by the group-scoped cancel, so
+	// Wait reports a SIGNALLED ExitError. The dual ErrWaitDelay-vs-held
+	// competition is stdin-holds-exits, below.
 	case "no-stdin-holds":
 		escape(rest[0], true, true, "60s")
 		d, _ := time.ParseDuration(rest[1])
 		time.Sleep(d)
+
+	// stdin-holds-exits stages the REQ-79 competition: the escapee holds
+	// stdin AND both output pipes, and the direct child EXITS NORMALLY AND
+	// IMMEDIATELY without reading a byte. The immediate exit is what makes
+	// this different from every sleeping mode — nothing signals the child,
+	// so Wait cannot report an ExitError, and the still-open stdin read end
+	// keeps the parent's copy alive until WaitDelay ends it as
+	// exec.ErrWaitDelay. The held output pipes qualify at the same instant,
+	// so the drain condition and the non-ExitError arm compete for real.
+	case "stdin-holds-exits":
+		escapeHolding(rest[0], true, true, true, "60s")
+		os.Exit(0)
+
+	// stdin-holds-only is the SINGLE-condition half of the same shape: the
+	// escapee holds stdin ALONE, so the output drains reach EOF and no
+	// drain condition qualifies, leaving exec.ErrWaitDelay as the only
+	// reason to refuse (S4, REQ-40/98/125).
+	case "stdin-holds-only":
+		escapeHolding(rest[0], true, false, false, "60s")
+		os.Exit(0)
 
 	// cap-exact / cap-over are S3's boundary shapes, with the child
 	// closing its pipes normally: exactly the cap is a VALUE, one byte
