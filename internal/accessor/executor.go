@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/cwensel/intrastate/internal/resolve"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // Executor invokes validated accessor definitions against
@@ -324,6 +326,53 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// The scope is this carrier's. A command-backed WRITER already
 	// refuses at its own pre-spawn ladder (0025:C6) and is not this
 	// clause's to re-decide.
+	// C1.3 `precedence:` step (1) puts C1.6's two ARGV preconditions —
+	// an unbound `{tag.<key>}`, then a `-`-prefixed bound value — ahead
+	// of everything else, "decided together before anything is spawned
+	// or read". For the read-back reader those refusals otherwise fire
+	// inside `invokeRead`, which `Write` reaches only AFTER `Apply` has
+	// already mutated the artifact: the caller is then told the write
+	// "may have been applied and was not verified" for what is purely a
+	// defect of the request. C1.3 `order:` forbids exactly that — "every
+	// refusal in this clause and C1.2's `edit_value_multiline` is decided
+	// BEFORE any byte is written".
+	//
+	// The gate arm below cannot stand in for this one: it is reachable
+	// only when the gate is OFF, and these refusals require the gate ON
+	// (a passed gate is what spawns the child that would raise them).
+	// Scoped to this carrier, like the gate arm: a command-backed WRITER
+	// keeps its own pre-spawn ladder (0025:C6).
+	if len(def.Accessor.Edit) != 0 && hasReader &&
+		len(reader.Accessor.Command) != 0 && e.Registry.AllowCommands {
+		for _, el := range reader.Accessor.Command {
+			key, ok := table.CommandTagKey(el)
+			if !ok {
+				continue
+			}
+			value, bound := art.Context[key]
+			switch {
+			case !bound:
+				r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
+				r.Detail = "the read-back for the write accessor `" + name +
+					"` goes through the command-backed reader `" +
+					reader.Identity.Name + "`, whose argv carries `{tag." +
+					key + "}` and this invocation binds no `" + key +
+					"`; refusing before mutation rather than writing and " +
+					"reporting an unverified read-back"
+				return WriteResult{Refusal: r}
+			case strings.HasPrefix(value, "-"):
+				r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
+				r.Detail = "the read-back for the write accessor `" + name +
+					"` goes through the command-backed reader `" +
+					reader.Identity.Name + "`, whose argv carries `{tag." +
+					key + "}` bound to a `-`-prefixed value; refusing " +
+					"before mutation rather than writing and reporting an " +
+					"unverified read-back"
+				return WriteResult{Refusal: r}
+			}
+		}
+	}
+
 	if len(def.Accessor.Edit) != 0 && hasReader &&
 		len(reader.Accessor.Command) != 0 && !e.Registry.AllowCommands {
 		// `ErrDeclaredRequest`, not nil: this is an ENTRY-level

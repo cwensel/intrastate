@@ -29,6 +29,7 @@ package accessor_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/accessor"
@@ -329,5 +330,119 @@ func TestReq45_TheExecutorTimeoutArmDoesNotWrapTheRequestSentinel(t *testing.T) 
 			"group. REQ-45 scopes this arm OUT of `0028:C1.3`: a command " +
 			"that ran past its deadline is an ENVIRONMENT failure and keeps " +
 			"exit 3, where re-running unchanged is the honest advice.")
+	}
+}
+
+// REQ-51 / `0028:C1.3` precedence: step (1), order:.
+//
+// TRIAGE REGRESSION (roborev job 6783). C1.3 `precedence:` puts C1.6's two
+// ARGV preconditions — an unbound `{tag.<key>}`, then a `-`-prefixed bound
+// value — first, "decided together before anything is spawned or read",
+// and `order:` requires "every refusal in this clause … decided BEFORE any
+// byte is written".
+//
+// The gate pre-check honoured that only for the GATE. When the gate is ON,
+// the read-back reader's own argv placeholders were never examined before
+// `Apply`: the edit landed, then `invokeRead` refused during read-back, and
+// the caller got `read_back_incomplete` with the applied-but-unverified
+// sense for what is purely a defect of the request. The artifact was
+// mutated where the contract says it must not be.
+//
+// Deviation D11 does NOT cover this. D11 reasoned over the gate-OFF path,
+// where no child is spawned and C1.6's refusals are unreachable. These
+// cases require the gate ON — a passed gate is exactly what spawns the
+// child that would raise them.
+//
+// ADVERSARIAL. Both arms assert the artifact is byte-identical: the point
+// is not merely which error is reported, but that no write occurred.
+func TestReq51_ReadBackReaderArgvPreconditionsRefuseBeforeMutation(t *testing.T) {
+	const before = "- **Status**: Draft\n"
+
+	for _, tc := range []struct {
+		name    string
+		context map[string]string
+		why     string
+	}{
+		{
+			name:    "unbound_tag",
+			context: nil,
+			why: "an unbound `{tag.<key>}` on the read-back reader's argv is " +
+				"a property of the REQUEST; C1.3 precedence: step (1) decides " +
+				"it before anything is spawned or read",
+		},
+		{
+			name:    "flag_shaped_value",
+			context: map[string]string{"nnnn": "--version"},
+			why: "a `-`-prefixed bound value is the second half of step (1) " +
+				"and is decided in the same place",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "record.md")
+			adv0028Write(t, path, before)
+
+			model := &table.Model{
+				ID:   "req51",
+				Tags: map[string]table.TagDecl{"status": {Provenance: table.ProvenanceOwned}},
+				Readers: map[string]table.Accessor{
+					"req51-reader": {
+						Role:     adv0028Role,
+						Keys:     []string{"status"},
+						Command:  []string{"/bin/echo", "{tag.nnnn}"},
+						Timeout:  "1s",
+						ReadBack: true,
+					},
+				},
+				Writers: map[string]table.Accessor{
+					adv0028Entry: {
+						Role:     adv0028Role,
+						Keys:     []string{"status"},
+						Timeout:  "1s",
+						ReadBack: true,
+						Edit: map[string]table.EditRule{
+							// A STATIC anchor: the writer itself has no
+							// unbound placeholder, so the only precondition
+							// in play is the READER's argv.
+							"status": {
+								Anchor:  `^- \*\*Status\*\*: .+$`,
+								Replace: "- **Status**: {status}",
+							},
+						},
+					},
+				},
+			}
+
+			// The gate is ON. That is what makes the C1.6 refusal
+			// reachable at all, and what distinguishes this from D11.
+			reg := flowbind.Registry(model, dir, true)
+			exec := accessor.NewExecutor(reg, accessor.Artifacts{
+				adv0028Role: {Role: adv0028Role, Path: path, Context: tc.context},
+			})
+
+			got := exec.Write(t.Context(), adv0028Entry, resolve.Plan{
+				Writes: []resolve.Tag{{Key: "status", Value: "Final"}},
+			})
+
+			if got.Refusal == nil {
+				t.Fatalf("Write succeeded; %s", tc.why)
+			}
+			if body := string(adv0028Read(t, path)); body != before {
+				t.Fatalf("the artifact was MUTATED before the precondition "+
+					"refused: %q. `0028:C1.3` order: requires every refusal "+
+					"in this clause to be decided BEFORE any byte is "+
+					"written.\n%s", body, tc.why)
+			}
+			if got.Refusal.Applied() {
+				t.Errorf("the refusal carries the applied-but-unverified " +
+					"sense; nothing was applied, and `0028:C1.3` order: " +
+					"forbids that sense for a pre-write refusal")
+			}
+			if !got.Refusal.DeclaredRequest() {
+				t.Errorf("the refusal is not a declared-request failure, so " +
+					"it takes exit 3's \"re-run unchanged\" advice for a " +
+					"defect no re-run can repair")
+			}
+		})
 	}
 }
