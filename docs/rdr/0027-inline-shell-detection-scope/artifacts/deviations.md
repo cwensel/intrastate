@@ -6,7 +6,8 @@ entry escalates only if the check contradicts a contract.
 
 ## D1 — S6 pins `Categories()` order relatively, not as a tail golden
 
-**Type**: TEST-FIXTURE. **Status**: OPEN (pre-seeded, 7.1 pairwise 0027×0028 PW1).
+**Type**: TEST-FIXTURE.
+**Status**: discharged (was OPEN, pre-seeded 7.1 PW1; the named check ran green in Stage 8).
 
 **Situation.** `0028:C1.4` appends five categories after 0025:C5's six.
 Shipped `internal/table/command_carrier_0025_test.go::TestReq77_…` asserts
@@ -18,6 +19,12 @@ never `len`- or tail-equality — 0025:C5 makes the list's size a non-contract.
 
 **Check.** S6 green against a `Categories()` with five extra members appended
 at the tail.
+
+**Disposition (Stage 8).** Ran green. `TestReq48_TheCategoryWireStringAndItsRelativePositionAreUnchanged`
+asserts the six C5 categories by RELATIVE clause order (indexing each and
+requiring the sequence to ascend) plus wire-string registration and
+no-duplicate-registration. No tail slice, no `len()` equality, so 0028's
+five `edit_*` appends cannot break it. No contract contradicted.
 
 ## D2 — Is the Phase 3 description surface total over `Categories()`?
 
@@ -35,7 +42,8 @@ texts. `make check`'s docs gate green after 0028's append.
 
 ## D3 — Merged clause-3 behaviour of `carrierDefect` after both land
 
-**Type**: TEST-FIXTURE. **Status**: OPEN (pre-seeded, 7.1 pairwise 0027×0028 PW4; critique C-8).
+**Type**: TEST-FIXTURE.
+**Status**: discharged (was OPEN, pre-seeded 7.1 PW4, critique C-8; the named check ran green in Stage 8).
 
 **Situation.** 0028 turns clause 3's placeholder membership test into a
 declared-tag family check (a signature change) and both records rewrite the
@@ -47,6 +55,19 @@ touched by both.
 `x` declared, and `["nice","sh","-c","cat {nope}"]`, both report
 `command_shell_interpreter`; the clause-3 exemption comment no longer reads
 "argv0".
+
+**Disposition (Stage 8).** Ran green — 0027 landed first.
+`TestReq43_ABraceBearingStringUnderAWrapperReportsTheInterpreterDefect`
+covers both named vectors (declared `{artifact}` and undeclared `{nope}`
+under `nice`), plus `timeout 5` and `env -i`, asserting the category STRING
+is `command_shell_interpreter` and explicitly NOT
+`command_unknown_placeholder` — a load-failed-only oracle would pass against
+unchanged code and prove nothing. The clause-3 exemption comment no longer
+describes an argv0 anchor; the two surviving `argv0` mentions in `load.go`
+are a historical citation of 0025:C5's superseded line and user-facing
+remediation advice, neither describing the predicate. 0028's clause-3
+signature change is still owed its own re-run when it lands. No contract
+contradicted.
 
 ---
 
