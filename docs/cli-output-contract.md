@@ -27,11 +27,21 @@ given run happens to produce:
 
 - **Scalar families** — tag, write, and artifact validation, and model
   selection — name their one offending subject in `param`.
-- **Aggregate families** — gate results, model-load categories, and
-  read-back mismatches — report in `findings`, one entry per subject,
-  **regardless of runtime cardinality**. A single denied gate and a
-  model-load error naming one category each emit a one-element `findings`
-  array and no top-level `param`.
+- **Aggregate families** — gate results, model-load categories,
+  read-back mismatches, and declared-line-edit refusals — report in
+  `findings`, one entry per subject, **regardless of runtime
+  cardinality**. A single denied gate and a model-load error naming one
+  category each emit a one-element `findings` array and no top-level
+  `param`.
+
+A declared-line-edit refusal is an aggregate family because its subject is
+a RULE — `<accessor id>.edit.<key>` — rather than a flag or an argument,
+and one write entry can carry several rules. Each finding's `message`
+carries the rule id and the refusal's reason token. These refusals are
+decided BEFORE any byte is written and take the **exit-2** group: they are
+about the request, not the environment, so re-running the same request
+unchanged cannot help. An unreadable target is the contrasting case and
+keeps exit 3.
 
 A consumer therefore selects the carrier from the refusal `code`, never
 from the number of subjects it observes.

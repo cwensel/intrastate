@@ -428,6 +428,12 @@ func (w *EditWriter) reAnchor(plans []*editRulePlan, out []editLine) error {
 func (w *EditWriter) ruleErr(key, token, detail string) error {
 	return &accessor.ExecError{
 		Detail: token + ": " + w.name + ".edit." + key + ": " + detail,
+		// These refusals are about the REQUEST — a stale anchor, an
+		// ambiguous one, a value carrying a newline — so they take the
+		// exit-2 group rather than `execution_failure`'s default exit 3.
+		// An OS error reading the target does NOT carry this: that one
+		// really is the environment and a re-run may well succeed.
+		Err: accessor.ErrDeclaredRequest,
 	}
 }
 
@@ -435,7 +441,10 @@ func (w *EditWriter) ruleErr(key, token, detail string) error {
 // has none to name: the multiline scan spans the entry's whole plan and
 // the collision sweep is a property of a PAIR.
 func (w *EditWriter) entryErr(token, detail string) error {
-	return &accessor.ExecError{Detail: token + ": " + w.name + ": " + detail}
+	return &accessor.ExecError{
+		Detail: token + ": " + w.name + ": " + detail,
+		Err:    accessor.ErrDeclaredRequest,
+	}
 }
 
 // --- line handling --------------------------------------------------------

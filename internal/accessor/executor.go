@@ -83,6 +83,9 @@ func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err er
 	if errors.As(err, &ee) {
 		r.Detail = ee.Detail
 	}
+	// The one bit RDR 0028's exit-group clause needs, carried on the
+	// existing `Err` slot rather than through a wider seam.
+	r.declaredRequest = errors.Is(err, ErrDeclaredRequest)
 	return r
 }
 

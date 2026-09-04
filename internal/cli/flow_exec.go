@@ -337,9 +337,26 @@ func recordReaderExecution(readerID string) {
 }
 
 func (r flowRequest) artifactMap() accessor.Artifacts {
+	// RDR 0028 A1 — the invocation's bound tags cross the seam on the
+	// artifact, reaching both `Apply` (an `edit` writer's `{tag.<key>}`
+	// anchors) and `Read` (a C1.6 command reader's `{tag.<key>}` argv).
+	// ONE map serves both, so a shared artifact's reader and the writer
+	// that addressed a row inside it agree on which row that was.
+	//
+	// Every role gets the SAME context, because the bindings are the
+	// invocation's, not a role's: narrowing by role would make a tag
+	// visible to the writer and invisible to the reader that verifies it.
+	var context map[string]string
+	if len(r.observed) != 0 {
+		context = make(map[string]string, len(r.observed))
+		for _, t := range r.observed {
+			context[t.Key] = t.Value
+		}
+	}
+
 	out := make(accessor.Artifacts, len(r.artifacts))
 	for role, path := range r.artifacts {
-		out[role] = accessor.Artifact{Role: role, Path: path}
+		out[role] = accessor.Artifact{Role: role, Path: path, Context: context}
 	}
 	return out
 }
@@ -408,6 +425,30 @@ func accessorFailureOf(refusal accessor.Refusal, at phase) *clierr.CLIError {
 			"the accessor `"+id+"` timed out")
 
 	case accessor.ClassExecutionFailure:
+		// RDR 0028 `0028:C1.3` EXIT GROUP: — a refusal the binding minted
+		// about the REQUEST takes exit 2, not `execution_failure`'s
+		// default exit 3. Exit 3 promises "repair the environment and
+		// re-run the same request unchanged", and a stale anchor, an
+		// ambiguous one or a value carrying a newline is none of those:
+		// re-running unchanged spins the caller forever on an input they
+		// must instead fix.
+		//
+		// No refusal class is added. The class is still
+		// `execution_failure` and the accessor-level Detail is unchanged;
+		// what moves is the exit group and the carriage — the rule id and
+		// the reason token reach the caller in `findings[]` rather than
+		// only in `detail`, because a per-subject record is what
+		// `docs/cli-output-contract.md` requires of a failure that names
+		// a subject other than a flag.
+		if refusal.DeclaredRequest() {
+			return &clierr.CLIError{
+				Code:  codeWriteEditRefused,
+				Group: clierr.GroupUserEnv,
+				Message: "the write accessor `" + id +
+					"` refused the declared line edit before mutating the artifact",
+				Findings: editRefusalFindings(refusal),
+			}
+		}
 		return envErr(codeAccessorFailed, id,
 			"the accessor `"+id+"` could not be executed")
 
@@ -475,6 +516,28 @@ const detailMayHaveApplied = "the write command already ran, so the mutation " +
 // which is why it must not exit 3 and invite a retry.
 func internalErr(code, message string) *clierr.CLIError {
 	return &clierr.CLIError{Code: code, Message: message, Group: clierr.GroupInternal}
+}
+
+// editRefusalFindings carries a declared-line-edit refusal's rule id and
+// reason token into `findings[]` (RDR 0028 `0028:C1.3` EXIT GROUP:).
+//
+// The output contract splits the two carriers by FAMILY, not by runtime
+// cardinality: a scalar family names its one offending subject in
+// `param`, and an aggregate family reports in `findings[]` even when it
+// has one entry. This family's subject is a RULE — `<id>.edit.<key>` —
+// which is not a flag or an argument, and an entry with several rules can
+// name any of them, so it is an aggregate family and takes `findings[]`
+// with no top-level `param`.
+//
+// The finding's Message is the accessor-level Detail VERBATIM, because
+// that string is the contract's own: the reason token and the rule id, in
+// the order and spelling C1.3 fixes. Re-rendering it here would fork the
+// wording a caller matches on.
+func editRefusalFindings(refusal accessor.Refusal) []clierr.Finding {
+	return []clierr.Finding{{
+		Code:    codeWriteEditRefused,
+		Message: refusal.Detail,
+	}}
 }
 
 // readBackFindings names one finding per key the read-back disagreed on

@@ -12,6 +12,7 @@
 package accessor
 
 import (
+	"errors"
 	"slices"
 	"time"
 
@@ -340,11 +341,28 @@ type Refusal struct {
 	// — and set only where a binding returned an *ExecError.
 	Detail string
 
+	// declaredRequest records that the binding's refusal is about the
+	// REQUEST rather than the environment (RDR 0028 `0028:C1.3` EXIT
+	// GROUP:). It is ADDITIVE for the same reason `Detail` is: RDR 0004
+	// pins the refusal CLASS set, not this struct's field set, and this
+	// adds no class — the class stays `execution_failure`.
+	//
+	// It is unexported with an exported reader for the same reason
+	// `applied` is: only the path that minted the refusal knows the
+	// answer, and a caller must not be able to assert it.
+	declaredRequest bool
+
 	// applied records the post-mutation sense. It is unexported because
 	// only the write path — which knows whether the command already ran —
 	// may set it.
 	applied bool
 }
+
+// DeclaredRequest reports whether the refusal is about the REQUEST rather
+// than the environment. The CLI routes a true answer to the exit-2 group
+// instead of `execution_failure`'s default exit 3, because re-running the
+// same request unchanged cannot help (`0028:C1.3` EXIT GROUP:).
+func (r Refusal) DeclaredRequest() bool { return r.declaredRequest }
 
 // Applied reports the post-mutation sense: whether the write command
 // already ran when this refusal was minted. It is TRUE for
@@ -477,3 +495,21 @@ func (e *ExecError) Unwrap() error {
 	}
 	return e.Err
 }
+
+// ErrDeclaredRequest is the typed `Err` a binding wraps into its
+// `ExecError` to say that its refusal is about the REQUEST, not the
+// environment (RDR 0028 `0028:C1.3` EXIT GROUP:).
+//
+// The distinction is a caller's retry loop. Exit 3 promises "repair the
+// environment and re-run the same request unchanged"; a stale anchor, an
+// ambiguous one, an undeclared `<clear>` or a multiline value are none of
+// those — re-running unchanged spins forever on an input the caller must
+// instead fix. So these take the exit-2 group.
+//
+// It adds no refusal CLASS: the class stays `execution_failure` and the
+// Detail stays the rule id plus the reason token, both unchanged. What it
+// carries is exactly the one bit `flow_exec.go::accessorFailureOf` needs
+// to route the refusal, and it travels on the existing `Err` slot rather
+// than widening the seam (JDR 0003 §D3 (b)).
+var ErrDeclaredRequest = errors.New("the refusal is about the request, " +
+	"not the environment; re-running it unchanged cannot help")

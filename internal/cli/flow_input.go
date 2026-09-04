@@ -66,6 +66,13 @@ const (
 	hintEscapeRowShapeBreach = "fix the table producer: an escape row must " +
 		"carry no writes"
 
+	// codeWriteEditRefused is RDR 0028 `0028:C1.3` EXIT GROUP:'s distinct
+	// code for a declared-line-edit refusal decided before mutation. Its
+	// SPELLING is this stage's to choose and is explicitly non-normative
+	// — no test may pin the string; what the contract fixes is the exit
+	// GROUP and the `findings[]` carriage.
+	codeWriteEditRefused = "flow-write-edit-refused"
+
 	codeReadBackMismatch   = "flow-write-readback-mismatch"
 	codeReadBackIncomplete = "flow-write-readback-incomplete"
 	codeReadBackTimeout    = "flow-write-readback-timeout"
