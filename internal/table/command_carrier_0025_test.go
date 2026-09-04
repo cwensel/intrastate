@@ -840,7 +840,18 @@ read_back = true`)
 // PHASE-0 READING (ASSUMPTION REQ-77): "in clause order" is the C5 block's
 // declared order — conflict, empty, unknown_placeholder, shell_interpreter,
 // output_shape, env_conflict.
-func TestReq77_TheSixCommandCategoriesAreRegisteredAtTheTailInClauseOrder(t *testing.T) {
+//
+// RDR 0028 deviation D1 — RELATIVE ORDER, not tail position. This test
+// originally asserted the six as `Categories()`'s TAIL
+// (`all[len(all)-len(want):]`). `0028:C1.4` appends six more after them,
+// so the tail slice moved with no behaviour change. The over-assertion was
+// the tail POSITION: C5's own text fixes the six as CONTIGUOUS and in
+// clause order and states outright that the list's size is not a contract
+// (REQ-79), which a length-relative slice silently converts into one. The
+// guarantee C5 actually makes — "a consumer enumerating the list sees
+// additions only at the tail" — is preserved here as "the six appear
+// contiguously, in clause order, and nothing is interleaved among them".
+func TestReq77_TheSixCommandCategoriesAreRegisteredContiguouslyInClauseOrder(t *testing.T) {
 	want := []table.Category{
 		table.CatCommandAndPathConflict,
 		table.CatCommandEmpty,
@@ -851,14 +862,19 @@ func TestReq77_TheSixCommandCategoriesAreRegisteredAtTheTailInClauseOrder(t *tes
 	}
 
 	all := table.Categories()
-	if len(all) < len(want) {
-		t.Fatalf("Categories() has %d members; cannot carry the six additions", len(all))
+	start := slices.Index(all, want[0])
+	if start < 0 {
+		t.Fatalf("Categories() does not carry %q at all; the six C5 additions "+
+			"are not registered", want[0])
 	}
-	tail := all[len(all)-len(want):]
-	if !slices.Equal(tail, want) {
-		t.Errorf("Categories() tail = %#v; want the six C5 categories appended in "+
-			"clause order %#v — a consumer enumerating the list must see "+
-			"additions only at the tail", tail, want)
+	if start+len(want) > len(all) {
+		t.Fatalf("Categories() carries only %d members from index %d; cannot "+
+			"carry the six additions contiguously", len(all)-start, start)
+	}
+	got := all[start : start+len(want)]
+	if !slices.Equal(got, want) {
+		t.Errorf("Categories()[%d:%d] = %#v; want the six C5 categories "+
+			"contiguous and in clause order %#v", start, start+len(want), got, want)
 	}
 }
 
