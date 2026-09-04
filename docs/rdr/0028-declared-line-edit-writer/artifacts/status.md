@@ -1,9 +1,8 @@
-RDR: 0028-declared-line-edit-writer | phase: 2 — Implementation | state: GREEN
-last: Phase 2 implementer landed C1.1-C1.6 over four commits; suite and lint green; MVV recorded (8/8 at the accessor seam)
+RDR: 0028-declared-line-edit-writer | phase: 3 — Self-verification | state: COMPLETE
+last: Completion gate returned COMPLETE — orphans 0, open decisions 0, REQ-MVV recorded, suite green
 blocker: none
-open: D9 (DEPENDENCY-LIMIT) — RDR 0002's one-reader/one-writer-per-owned-tag arity fences out the record's Illustrative Code shape for a shared artifact; Phase 2 took the two-key resolution and all eight MVV steps pass under it
-changed: internal/table/{model,source,load,category,dump,edit}.go internal/table/testdata/neg/neg-edit-*.toml internal/accessor/{model,executor}.go internal/cli/flowbind/{edit,registry}.go internal/cli/cmdbind/cmdbind.go internal/cli/{flow_exec,flow_input}.go internal/cli/edit_envelope_0028_test.go docs/cli-output-contract.md
+changed: internal/table/{model,source,load,category,dump,edit}.go internal/accessor/{model,executor}.go internal/cli/flowbind/{edit,registry}.go internal/cli/cmdbind/cmdbind.go internal/cli/{flow_exec,flow_input}.go docs/cli-output-contract.md + 0028 test files
 validate: go test ./... && golangci-lint run
-next: Phase 3 — roborev triage over the four Phase 2 commits
+next: roborev triage over the branch, then land
 session: 2026-09-04 | rdr-implement-triage unattended
-artifacts: req-list.md coverage.md deviations.md status.md
+artifacts: req-list.md coverage.md verification.md deviations.md
