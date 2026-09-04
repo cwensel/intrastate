@@ -279,9 +279,9 @@ the padding.
 
 ## D9 — RDR 0002's accessor arity fences out a shared-artifact reader pair
 
-**Type**: DEPENDENCY-LIMIT. **Status**: OPEN — carried to the completion
-gate. Does not block Phase 2; the unit surface and all eight MVV steps are
-green.
+**Type**: DEPENDENCY-LIMIT. **Status**: needs author decision → RESOLVED (the
+Illustrative Code is non-normative; the two-key shape stands). Does not block
+Phase 2; the unit surface and all eight MVV steps are green.
 
 **Situation.** C1.6's stated purpose is a SHARED artifact: "0004:C12
 read-back re-reads the SAME role; a shared artifact (an index) has one
@@ -331,3 +331,17 @@ the consumer's `rdr-write.toml` migration — explicitly out of scope here
 petition RDR 0002 for a per-role reader arity. Phase 2 takes the two-key
 shape because it is the only one that lints under the contracts as they
 stand.
+
+**Gate resolution (Stage 8, unattended run).** Settled from the record's own
+text, not deferred. The record marks the section `#### Illustrative Code` and
+opens it "Illustrative — the consumer's two rules as they would read in
+`rdr-write.toml` … (field spellings are C1's; the anchors are A3's spike
+subject, not normative)", and Prerequisites again calls its projector verb
+"verb illustrative; the consumer's to add". The section is therefore
+NON-NORMATIVE on its own face: no REQ derives from it, and no C1 clause
+requires the two roles to share one key. Phase 2's two-key shape is adopted as
+the resolution — it is the only shape that lints under 0002's arity as it
+stands, and every property C1.6 exists to deliver survives it. The consumer's
+`rdr-write.toml` migration is out of scope here (REQ-103, kata rdr#yjye); that
+kata carries the two-key shape. No petition to amend RDR 0002 is opened,
+because no contract of this record needs one.
