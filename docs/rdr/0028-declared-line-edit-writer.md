@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Feature
 - **Profile**: large — C1, the `edit` write carrier: one contract whose six clauses (C1.1–C1.6) lock the `edit` block's declaration grammar and its closed placeholder vocabulary; user-facing yes; locks format
 - **Priority**: High
