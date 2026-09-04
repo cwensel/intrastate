@@ -219,9 +219,17 @@ func (w *EditWriter) prepare(
 		// through literally.
 		pattern, missing, ok := table.ExpandEditAnchor(segs, art.Context)
 		if !ok {
-			return nil, &accessor.ExecError{Detail: "the placeholder `{tag." +
-				missing + "}` is not bound on this invocation's context; a " +
-				"placeholder is never passed through literally"}
+			return nil, &accessor.ExecError{
+				Detail: "the placeholder `{tag." + missing +
+					"}` is not bound on this invocation's context; a " +
+					"placeholder is never passed through literally",
+				// An entry-level precondition is about the REQUEST, not
+				// the environment, so it takes the exit-2 group like the
+				// rule-scoped refusals do (`0028:C1.3` EXIT GROUP:). A
+				// missing `--tag` is the one defect re-running the same
+				// request unchanged can never repair.
+				Err: accessor.ErrDeclaredRequest,
+			}
 		}
 		re, err := regexp.Compile(pattern)
 		if err != nil {
