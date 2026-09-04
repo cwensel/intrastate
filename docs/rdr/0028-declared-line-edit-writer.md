@@ -411,7 +411,10 @@ class it covers — a planned value into one line of a text file. One companion
 clause (C1.6) lets the same declared context tag row-address a command READER
 (`{tag.<key>}` as a whole argv element), because 0004:C12's read-back of a
 shared artifact needs a reader that knows which row — without it the README
-half of the consumer scenario is unverifiable by construction.
+half of the consumer scenario is unverifiable by construction. That clause IS
+an argv interpolation, and it carries the two rules that keep it inside 0025's
+posture rather than reopening it: never at argv0, and no flag-shaped bound
+value (JDR 0003 §D2).
 
 ### Technical Design
 
@@ -445,7 +448,7 @@ or rewrite → stage + rename → executor read-back through the role's reader.
 
 Determinacy: fired — C1 locks a declaration grammar an implementer must
 reproduce exactly (C1.1's `anchor`/`replace`/`clear` keys, C1.2's two closed
-template vocabularies, C1.4's five wire strings and their registration order),
+template vocabularies, C1.4's six wire strings and their registration order),
 so a second reconstruction is the probe for where that grammar is silent.
 Profile `large` ⇒ repeatability-lite: one alternate-model `run-1`, then a
 focused diff.
@@ -478,9 +481,9 @@ input:    the whole file is read as bytes; lines are split on "\n" and a precedi
 target:   the caller-bound artifact path for the entry's role (0004:C3), symlinks resolved; the model names no path — an `edit` entry has exactly the authority a `path` entry has over the file the CALLER binds. The reuse of `flowbind.go::save`'s discipline stops at stage-and-rename and does NOT drag along `Writer`'s unreachable-locator seal (`unreachable(path)`/`sealedKey`): that seal keys off a declared-path suffix an `edit` entry does not have, and its purpose is to make the applied-but-unverified sense atomic in a key/value artifact — a markdown target has nowhere to hold it. `edit` therefore has no seal affordance, by construction rather than by omission
 select:   every rule's anchor is resolved against the PRE-EDIT content and selections are held as pre-edit line INDICES (a deletion never shifts a sibling rule's target). Each must select exactly one line: 0 ⇒ `edit_anchor_unmatched`; ≥2 ⇒ `edit_anchor_ambiguous`; two rules selecting one line ⇒ `edit_anchor_collision`. Never last-match (Ansible `lineinfile`), never first-match, never insert or append (Puppet `append_on_no_match`, Ansible `insertafter`) — creation is fenced out, and an unmatched anchor is a stale model, not a missing line
 re-anchor: after the buffer is rewritten in memory, every rule's anchor is run again over the POST-EDIT buffer and must select exactly its own rewritten line (or, for a deleted line, zero lines); otherwise refuse `edit_anchor_unstable` before any write. IDENTITY, not cardinality: the selected line must BE the rule's own — its held pre-edit index, shifted by the deletions of preceding sibling rules — and a rule that selects exactly one line which is a DIFFERENT line refuses. Cardinality alone would pass a sibling whose anchor drifted onto another rule's line after a `clear = "line"` deletion shifted the buffer, or onto a line another rule reshaped. This is what stops a replacement from de-anchoring itself or poisoning a sibling rule's anchor on the next run (premortem P-4, P-13)
-order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the two entry-level preconditions — the read-back gate below and C1.6's unbound tag — name the gate and the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. That arm stays 0004's, unchanged and out of this RDR's scope (A11, `Verified`): this clause's guarantee is scoped to refusals the `edit` binding itself mints, and does NOT assert the executor-minted timeout carries a false applied sense. A11 resolved for leaving it — the arm is 0004's exposure, not this carrier's, and `timeout` is required of every entry regardless of carrier. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
+order:    every refusal in this clause and C1.2's `edit_value_multiline` is decided BEFORE any byte is written. A refused edit is NOT APPLIED and surfaces as 0004's `execution_failure`; a rule-scoped refusal carries a Detail naming the rule (`<id>.edit.<key>`) and the reason token (A8), and the entry-level preconditions — the read-back gate below, C1.6's unbound tag and C1.6's `-`-prefixed value — name the gate or the placeholder instead, having no rule to name; no new refusal class is introduced, and no pre-write refusal THIS BINDING MINTS ever carries 0004:C14's applied-but-unverified sense (applied sense per JDR 0003 §D1). EXIT GROUP: these refusals are about the REQUEST, not the environment, so they take the exit-2 group, not `execution_failure`'s default exit 3 — the executor-facing typed `Err` discriminates at `flow_exec.go::accessorFailureOf` and a distinct CLI code carries the rule id and reason token in `findings[]` (JDR 0003 §D3 (b), which decides this and adds no class; the class set and the Detail above are unchanged, and the code's spelling is Stage 8's, non-normative here). Cited, not restated: §D3 and JDR 0001 §D10's table own the mapping. The scoping is exact, not defensive: `internal/accessor/executor.go`'s deadline arm evaluates `errors.Is(applyCtx.Err(), context.DeadlineExceeded)` AFTER `Apply` returns without consulting its error, and sets `applied = true` — so a slow machine can mint `ClassTimeout` applied-but-unverified over an edit that refused before writing a byte. That arm stays 0004's, unchanged and out of this RDR's scope (A11, `Verified`): this clause's guarantee is scoped to refusals the `edit` binding itself mints, and does NOT assert the executor-minted timeout carries a false applied sense. A11 resolved for leaving it — the arm is 0004's exposure, not this carrier's, and `timeout` is required of every entry regardless of carrier. A rename that fails after a good staged write is also NOT APPLIED — the target is untouched by construction
 write:    all rules of one entry rewrite ONE buffer and land in ONE write: staged beside the resolved target and renamed over it (`internal/cli/flowbind/flowbind.go::save`'s discipline, mode preserved, A5). The atomicity boundary is ONE ENTRY over ONE file, and it is not transactional across entries: a plan spanning two write entries (the consumer's record + shared index) applies each independently, so entry 1 landing and entry 2 refusing leaves the two artifacts disagreeing, with the refusal reported for entry 2 only. This is 0004's per-entry apply model, unchanged here; a cross-entry transaction is not introduced (Briefly Rejected has no cross-artifact rollback, and the artifacts are in git). Callers reconcile by re-running the pipeline once the refusal's cause is fixed: re-applying an entry that already landed rewrites its line to the same bytes and the no-op arm above writes nothing (S20 is that witness), so the retry is safe for the entry that succeeded. A post-edit buffer equal to the input is not written at all (no staging, no rename; S20 asserts it, witnessed by an unchanged inode — no MVV step covers the no-op, step 5's files being untouched by a REFUSAL instead). No lock and no compare-before-rename: a concurrent writer is out of scope, as it is for `path`
-precedence: apply-time refusals fail-fast within one entry in this order, the mirror of C1.4's for load time: (1) the two ENTRY-level preconditions — C1.6's unbound `{tag.<key>}`, then the gate-off command read-back above — since both condemn the whole entry and neither has a rule to name; (2) `edit_value_multiline` over the entry's planned values and the tag values its rules actually reference (C1.2 `value shape:`), the scope being per-USE-SITE, not per-invocation: a tag bound on the context but referenced by no `anchor` of this entry is never scanned, because the clause's stated ground is interpolation into line data and an unreferenced tag reaches none; (3) `edit_clear_undeclared` (C1.5) — a `<clear>` plan on a rule that did not declare `clear` is decided on the RAW planned value, BEFORE selection and before any `replace` expansion, so the refusal never depends on whether that rule's anchor matched; (4) per-rule cardinality, `edit_anchor_unmatched` then `edit_anchor_ambiguous`, resolved for EVERY rule of the entry before (5) the cross-rule `edit_anchor_collision` sweep, which is only decidable once every rule holds a selection; (6) `edit_anchor_unstable`, necessarily last, being post-rewrite. Within one step, siblings are map-ranged and inherit C1.4's rule unchanged — which of two equally-defective rules is named is unspecified and no test may assert it. Fail-fast here is observable only through a multi-defect input, exactly as at load time, so it earns its own scenario rather than riding the single-defect fixtures
+precedence: apply-time refusals fail-fast within one entry in this order, the mirror of C1.4's for load time: (1) the ENTRY-level preconditions — C1.6's unbound `{tag.<key>}`, then C1.6's `-`-prefixed bound value (both are properties of the binding, decided together before anything is spawned or read), then the gate-off command read-back above — since each condemns the whole entry and none has a rule to name; (2) `edit_value_multiline` over the entry's planned values and the tag values its rules actually reference (C1.2 `value shape:`), the scope being per-USE-SITE, not per-invocation: a tag bound on the context but referenced by no `anchor` of this entry is never scanned, because the clause's stated ground is interpolation into line data and an unreferenced tag reaches none; (3) `edit_clear_undeclared` (C1.5) — a `<clear>` plan on a rule that did not declare `clear` is decided on the RAW planned value, BEFORE selection and before any `replace` expansion, so the refusal never depends on whether that rule's anchor matched; (4) per-rule cardinality, `edit_anchor_unmatched` then `edit_anchor_ambiguous`, resolved for EVERY rule of the entry before (5) the cross-rule `edit_anchor_collision` sweep, which is only decidable once every rule holds a selection; (6) `edit_anchor_unstable`, necessarily last, being post-rewrite. Within one step, siblings are map-ranged and inherit C1.4's rule unchanged — which of two equally-defective rules is named is unspecified and no test may assert it. Fail-fast here is observable only through a multi-defect input, exactly as at load time, so it earns its own scenario rather than riding the single-defect fixtures
 terminators: only "\n" — optionally preceded by "\r" — terminates a line for selection and rewriting; a bare "\r", NEL or U+2028 is line content (C1.2 still refuses "\r" in a VALUE). Deleting the final line of a file that had no final terminator also removes the preceding line's terminator, so the file's final-terminator state is preserved either way
 no subprocess: `edit` spawns nothing; `--allow-commands` (0025:C6) is not consulted by the write itself. `Invocations()` counts `Apply` calls exactly as `flowbind.go::Writer` does (0004:C14)
 read-back: unchanged — 0004:C12/0004:C13 through the role's declared reader. When that reader is command-backed and the gate is off, the write MUST refuse BEFORE mutation (Detail naming the gate), because the reader is resolved before `Apply` (A2) — a forgotten flag must not produce `read_back_incomplete` for a write that ran no command. AUTHORITATIVE DETECTOR: this pre-check, not `Executor.Write`'s existing pre-`Apply` baseline read. That baseline (`protectedKeys` non-empty ⇒ `invokeRead` before `Apply`) already fails for a gate-off command reader and already swallows the failure into `baselineUnread` and proceeds; it is reachable only when the role's reader declares a key the entry does not plan (`protectedKeys` subtracts the planned keys), so it does not fire in the consumer scenario at all. This clause does NOT amend that arm — it refuses earlier and unconditionally, so the swallow becomes unreachable for the gate-off case whether or not `protected` is empty. The baseline arm needs no change (A2, `Verified`); that is this clause's ground, not its claim. SITE (A10, `Verified`): both halves of that predicate are answered at the executor without a new import or a `Binding` method — command-backed from `def.Accessor.Command` (already on `Definition`), and the gate from a field on `accessor.Registry`, set at `flowbind.go::Registry`, the single production construction site, which already takes `allowCommands` for 0025:C6. `internal/accessor` does NOT import `cmdbind` (`cmdbind` imports `accessor`; the reverse is a cycle) and `AllowCommands` on `cmdbind.Config` stays where it is — the gate is carried to the accessor as state, never read across the seam (A10)
@@ -491,10 +494,11 @@ edit_key_mismatch        # a `keys` member with no `edit.<key>` table, or an `ed
 edit_anchor_invalid      # anchor fails to compile as RE2 (checked with every `{tag.<key>}` replaced by a quoted probe), names an undeclared tag key, or carries any other `{…}` form
 edit_template_invalid    # replace carries an unknown placeholder, another key's placeholder, a group reference the anchor does not define, or a malformed `${…}`/`{…}` token
 edit_clear_invalid       # `clear` outside the closed set {"line"}
+edit_tag_argv0           # a `{tag.<key>}` element at argv0 of a read, gate or write entry's `command` (C1.6)
 
-registration: appended to `table.Categories()` after 0025:C5's six, in the order above; typed `Cat…` constants beside the others; the wire strings are the contract, the identifiers are not; the list's size is not a contract (0025:C5)
-precedence: within one entry, fail-fast in the order above, evaluated after 0025:C5's clauses 1–6 (an `edit` entry never reaches clauses 2–6, which are `command`-only); across entries and tables, 0025:C5's rules apply unchanged — including across the sibling `edit.<key>` tables of ONE entry, which are map-ranged like `accessorTable`'s entries: which of two equally-defective tables is reported is unspecified and no test may assert it
-what lint proves: the carrier is one, every anchor compiles, every template parses, every placeholder is closed over the entry's keys and the model's declared tags, every `keys` member has one rule. What lint does NOT prove: that an anchor matches exactly one line of a particular file — that is C1.3's apply-time refusal, by design (a model is linted without its artifacts)
+registration: appended to `table.Categories()` after 0025:C5's six, in the order above; typed `Cat…` constants beside the others; the wire strings are the contract, the identifiers are not; the list's size is not a contract (0025:C5). `edit_tag_argv0` carries the `edit_` prefix because it is this record's category, minted with the `{tag.<key>}` family C1.6 introduces — it fires on `command` entries of every kind, including entries carrying no `edit` table, so the prefix names its owning contract and not the carrier it fires on
+precedence: within one entry, fail-fast in the order above, evaluated after 0025:C5's clauses 1–6 (an `edit` entry reaches only the clauses that are not `command`-argv-specific — 0025:C5 owns which those are, and this clause neither restates nor narrows its map); across entries and tables, 0025:C5's rules apply unchanged — including across the sibling `edit.<key>` tables of ONE entry, which are map-ranged like `accessorTable`'s entries: which of two equally-defective tables is reported is unspecified and no test may assert it. The first five categories fire on the `edit` table; `edit_tag_argv0` fires on an entry's `command` argv, so an entry carrying `command` reaches it while an `edit` entry never does — the two sets are disjoint by carrier and never race
+what lint proves: the carrier is one, every anchor compiles, every template parses, every placeholder is closed over the entry's keys and the model's declared tags, every `keys` member has one rule, and no `{tag.<key>}` sits at argv0. What lint does NOT prove: that an anchor matches exactly one line of a particular file, or that a bound tag value is not flag-shaped — those are C1.3's and C1.6's apply-time refusals, by design (a model is linted without its artifacts and without the invocation's bindings)
 
 --- C1.5 — `<clear>` on a line rule ---
 clear = "line" ⇒ a planned `<clear>` deletes the anchored line, terminator included; read-back asserts the key ABSENT through the role's reader (0004:C11 unchanged). An anchor matching ZERO lines on a `<clear>` plan is SUCCESS with no write — "clearing a key the artifact does not hold MUST succeed" (0004:C11); ≥2 matches still refuses `edit_anchor_ambiguous`
@@ -504,10 +508,10 @@ the literal string `<clear>` is never substituted into `replace` (0004:C11: a re
 
 --- C1.6 — `{tag.<key>}` as a command placeholder (0025:C2 extended) ---
 [read.<id> | gate.<id> | write.<id>]  command = [..., "{tag.<key>}", ...]
-admission: `{tag.<key>}` joins 0025:C2's vocabulary as a family, under 0025:C2's rule unchanged — WHOLE-ELEMENT only, replaced by the bound value of a tag key the model DECLARES; `<key>` undeclared is `command_unknown_placeholder` (0025:C5, unchanged wire string); a `{…}` element that is neither `{artifact}` nor a declared `{tag.<key>}` stays `command_unknown_placeholder`
-binding: the value comes from the invocation's context (the same channel as C1.2's anchor tags, A1); an unbound tag at invocation refuses `execution_failure` BEFORE spawn, Detail naming the placeholder — a placeholder is never passed through literally (0025:C2)
+admission: `{tag.<key>}` joins 0025:C2's vocabulary as a family, WHOLE-ELEMENT only under 0025:C2's substitution rule, replaced by the bound value of a tag key the model DECLARES; `<key>` undeclared is `command_unknown_placeholder` (0025:C5, unchanged wire string); a `{…}` element that is neither `{artifact}` nor a declared `{tag.<key>}` stays `command_unknown_placeholder`. POSITION: a `{tag.<key>}` element at argv0 is `edit_tag_argv0` at LINT (C1.4) — the executable is the one word a reviewer must be able to read off the model, and a caller-bound argv0 makes the deny-list an interpreter must pass (0027:C1) unenforceable against a name that does not exist until invocation. Statically decidable, so it is refused where it is visible rather than at spawn; `{artifact}` is unaffected, having no such rule and no such reviewer promise to break
+binding: the value comes from the invocation's context (the same channel as C1.2's anchor tags, A1); an unbound tag at invocation refuses `execution_failure` BEFORE spawn, Detail naming the placeholder — a placeholder is never passed through literally (0025:C2). VALUE: a bound value beginning with `-` refuses `execution_failure` BEFORE spawn, Detail naming the placeholder, mirroring `cmdbind.go::substitute`'s existing `{artifact}` rule verbatim rather than inventing a second policy — the class is argument injection (CWE-88), not shell injection, since `os/exec` runs no shell, and a flag-shaped word is read as a flag by the child. No `--` is inserted: only a child that honours the separator would be helped, and the model cannot know which do. The refusal is per-USE-SITE like C1.2's `value shape:` — a tag bound on the context but named by no argv element of this entry is never scanned
 why here: 0004:C12 read-back re-reads the SAME role; a shared artifact (an index) has one reader for many records, and without an identity in its argv that reader cannot say which row it read. The consumer's own projector stays the reader (no line-oriented READ carrier is introduced — Briefly Rejected)
-no other change to 0025:C1–C1.6: stdin envelopes, exit maps, env overlay, the gate, and the shell-interpreter deny-list are untouched
+no other change to 0025:C1–C1.6: stdin envelopes, exit maps, env overlay and the gate are untouched. The shell-interpreter deny-list stays STATIC — the two rules above are rules on this placeholder family, not entries on that list and not a widening of it, which is what keeps 0027:C1's promise ("argv WORDS only", two named admitted forms) true with no third form to disclose (JDR 0003 §D2 (a); 0027 unchanged)
 ```
 
 #### Pre-Lock Mini-Checks
@@ -552,9 +556,10 @@ a fidelity exemption — it is one-way by contract, and the clause says so.
 | planned or bound value carries `\n`/`\r` | refused pre-mutation | `execution_failure` / `edit_value_multiline` | none | loud |
 | command-backed reader, gate off | refused pre-mutation | `execution_failure`, Detail names the gate | none | loud (never `read_back_incomplete`) |
 | unbound `{tag.<key>}` at invocation | refused pre-spawn | `execution_failure`, Detail names the placeholder | none | loud |
+| bound `{tag.<key>}` value begins with `-` | refused pre-spawn | `execution_failure`, Detail names the placeholder | none | loud |
 | target cannot be read (ENOENT/EISDIR/EACCES) | refused pre-mutation | `execution_failure`, Detail carries the OS error — the one refusal in C1 with no `edit_*` reason token, because no rule is at fault | none — nothing opened, nothing staged | loud |
 | refusal that outruns the entry's `timeout` | refused pre-mutation by the binding, reported `ClassTimeout` applied-but-unverified by the executor | 0004 `ClassTimeout`, `Applied()` TRUE | none — no byte written | loud, but the applied sense is WRONG (A11, `Verified` — 0004's arm, left unchanged) |
-| load-time defects | lint finding | the five `edit_*` categories (C1.4) | lint output names entry/key/category | loud (F1) |
+| load-time defects | lint finding | the six `edit_*` categories (C1.4) | lint output names entry/key/category | loud (F1) |
 | `none`/`stopped:*` resolve row | applies nothing, exit 0 | — | `dispositions` carried | loud (MVV 4) |
 
 Every refusal is decided BEFORE any byte is written (C1.3 `order:`) and adds no
@@ -571,7 +576,7 @@ and a witness value from the normative fixtures (A3's 33-record corpus and
 
 | Step | Assertions in force | Witness | Verdict |
 |---|---|---|---|
-| 1 — `intrastate lint --model` passes | C1.4 all five categories; C1.6 admission; C1.1 exactly-one carrier | fixture declares `edit` alone on both write entries + `{tag.nnnn}` on the readme reader → no category fires; entry carrying only `edit` LOADS (0025:C5 "neither" arm does not fire — C1.1) | consistent |
+| 1 — `intrastate lint --model` passes | C1.4 all six categories; C1.6 admission and argv0 position; C1.1 exactly-one carrier | fixture declares `edit` alone on both write entries + `{tag.nnnn}` at a non-leading argv position on the readme reader → no category fires; entry carrying only `edit` LOADS (0025:C5 "neither" arm does not fire — C1.1) | consistent |
 | 2 — resolve \| set-state exits 0 | C1.6 binding (`--tag nnnn=NNNN` bound on the invocation); A1 one context channel; A7 `--tag` is context, never written | `registerTagFlag` registers `--tag` as observed context; `parseTags` refuses an owned key — so `nnnn` is admissible as context and reaches both the anchor and the argv | consistent |
 | 3a — record Status `Draft`→`Final` | C1.2 `{status}` planned value; C1.3 select-exactly-one, re-anchor, write | anchor `^- \*\*Status\*\*: (.+)$` selects 1 of 33; post-edit `- **Status**: Final` re-matches its own anchor → no `edit_anchor_unstable` | consistent |
 | 3b — joint-decision record keeps qualifier | C1.2 `${N}` groups; C1.3 re-anchor | `- **Status**: Draft [joint decision → JDR 0003 §D1]` → `Final [...]` under `${2}`; re-anchor selects exactly the rewritten line | consistent |
@@ -718,7 +723,7 @@ line (P-2) is refused in v1 by design (Briefly Rejected).
 
 Premortem: hardened (hardened)
 Ground-sweep: clean (35 anchors; one cosmetic citation corrected inline — the emit-payload clause is 0010:C4, not 0010:C3)
-Joint-check: fired → 0027, 0026, 0016, 0019, 0020 (home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4; cli/0019:C1 and cli/0020:C1 own their own arms) — disposed 2026-08-31, extended 2026-09-03 at finalize when the anchor-intersect surfaced 0019/0020 as uncited: 0026 hoisted (constraint — sub-reason rides `Detail`, applied sense is `Applied()`; C1.3 and A8 aligned, cited not restated); 0027 cite-don't-restate (disjoint deltas, 0025:C5 owns the clause map); 0016 cite-don't-restate (reliance on its fail-closed reader). all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C1.4 here add the `edit` arm and five tail categories and never reach clauses 2–6; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. 0019 ↔ 0028 on `internal/cli/flowbind/flowbind.go::load` — cite-don't-restate: both records read its absent-file-is-empty rule the same way and neither changes it. 0019 RELIES on it (it is what makes `init-state`'s first write possible: Approach, Investigation) while 0019:C1 forbids any read path synthesizing `[initial]`; 0028's S27b fences it OUT for the `edit` carrier, whose `input:`/`select:` refuses a target it cannot read (`execution_failure`) rather than treating absent as empty. Complementary positions on one unchanged rule — no shared answer. 0020 ↔ 0028 on `internal/cli/flow_input.go::parseTags` — cite-don't-restate: 0020:C1 governs the UNDECLARED key at `--tag` admission (pure carrier, verbatim, no new refusal code) and states the `flow-tag-owned` (REQ-27) arm is preserved "unchanged"; 0028:A7 relies on exactly that preserved arm for the context-only semantic that makes `{tag.nnnn}` bindable without a reader run. 0020 owns the undeclared-key answer, 0028 consumes the declared-and-owned refusal it leaves untouched — disjoint arms of one function. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C1.3/A8 here for "not applied" with `applied: false` in Detail (since aligned to JDR 0003 §D1); the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C1.3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C1.4 appends at the tail; `cli/0014` and `cli/0021` ↔ 0028 on `intrastate lint` — a tool name, not a decision: cli/0014:C1 is a repository-wide verification-oracle rule about which predicate class may verify a CI-gate requirement, and cli/0021 a cache-warmup ordering record; both merely INVOKE the linter, as this record does at C1.1/Phase 1. Sharing the spelling of a command is not sharing an answer, so there is nothing to hoist and nothing for either to cite of the other. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C1.6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C1.6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Dispositions above.
+Joint-check: fired → 0027, 0026, 0016, 0019, 0020 (home: JDR 0003 §D1 for cli/0026:C1; cli/0025:C5 for cli/0027:C1; cli/0016:C4; cli/0019:C1 and cli/0020:C1 own their own arms) — disposed 2026-08-31, extended 2026-09-03 at finalize when the anchor-intersect surfaced 0019/0020 as uncited: 0026 hoisted (constraint — sub-reason rides `Detail`, applied sense is `Applied()`; C1.3 and A8 aligned, cited not restated); 0027 cite-don't-restate (disjoint deltas, 0025:C5 owns the clause map); 0016 cite-don't-restate (reliance on its fail-closed reader). all three arms run on the written proposal (evidence: `joint-check/arms.md`). Arm 1 (modify-anchors, repo-resolved): 0027 ↔ 0028 on `internal/table/load.go::carrierDefect` — 0027:C1 rewrites clause 4's predicate; C1/C1.4 here add the `edit` arm and six tail categories; disjoint clauses of one function, no shared answer, 0027 recorded `clear` before this proposal existed. The sixth, `edit_tag_argv0`, fires on `command` argv rather than on the `edit` table (JDR 0003 §D2 (a)) and is still disjoint from 0027:C1's clause-4 predicate rewrite, which is about inline-shell detection over the argv STRING, not about placeholder position. 0019 ↔ 0028 on `internal/cli/flowbind/flowbind.go::load` — cite-don't-restate: both records read its absent-file-is-empty rule the same way and neither changes it. 0019 RELIES on it (it is what makes `init-state`'s first write possible: Approach, Investigation) while 0019:C1 forbids any read path synthesizing `[initial]`; 0028's S27b fences it OUT for the `edit` carrier, whose `input:`/`select:` refuses a target it cannot read (`execution_failure`) rather than treating absent as empty. Complementary positions on one unchanged rule — no shared answer. 0020 ↔ 0028 on `internal/cli/flow_input.go::parseTags` — cite-don't-restate: 0020:C1 governs the UNDECLARED key at `--tag` admission (pure carrier, verbatim, no new refusal code) and states the `flow-tag-owned` (REQ-27) arm is preserved "unchanged"; 0028:A7 relies on exactly that preserved arm for the context-only semantic that makes `{tag.nnnn}` bindable without a reader run. 0020 owns the undeclared-key answer, 0028 consumes the declared-and-owned refusal it leaves untouched — disjoint arms of one function. Arm 2 (contract literals): 0026 ↔ 0028 on `execution_failure` — 0026:C1 uses the class for "ran, output unproven", C1.3/A8 here for "not applied" with `applied: false` in Detail (since aligned to JDR 0003 §D1); the class's meaning for writes has no normative home (0004 is Implemented and silent on it); 0016 ↔ 0028 on `read_back_incomplete` — 0016:C4's fail-closed `readerFor` is what A2/C1.3's pre-mutation check sits on (cite, not restate); 0027 ↔ 0028 on `table.Categories()` — 0027 changes no position, C1.4 appends at the tail; `cli/0014` and `cli/0021` ↔ 0028 on `intrastate lint` — a tool name, not a decision: cli/0014:C1 is a repository-wide verification-oracle rule about which predicate class may verify a CI-gate requirement, and cli/0021 a cache-warmup ordering record; both merely INVOKE the linter, as this record does at C1.1/Phase 1. Sharing the spelling of a command is not sharing an answer, so there is nothing to hoist and nothing for either to cite of the other. Arm 3 (absence, manual): this proposal turns two refusals into acceptances — 0025:C5's "neither" arm for an entry carrying only `edit`, and `command_unknown_placeholder` for a declared `{tag.<key>}` argv element (C1.6). Open peers (Draft/Final at depth 1) grepped for `command_and_path_conflict`, `command_unknown_placeholder`, `{artifact}`, "v1 complete": only 0027 hits, and its reliance (clause-3 whitespace exemption vs the placeholder defect) is preserved by C1.6's "stays `command_unknown_placeholder`" line; 0025 (Implemented) relies on the closed vocabulary and is this record's declared Overrides target — never edited, the coupling rides to 7.1. Dispositions above.
 
 ## Alternatives Considered
 
@@ -1032,13 +1037,13 @@ as its end state. In-repo: `flowbind.go::save` (atomic staging),
 - Visible: an unmatched, ambiguous or colliding anchor, a multi-line value or an
   undeclared `<clear>` refuses `execution_failure` with a Detail naming
   `<id>.edit.<key>` and the reason token — the artifact is untouched.
-- Visible: the two entry-level preconditions refuse the same class before
-  mutation, with no rule to name: an unbound `{tag.<key>}` (Detail names the
-  placeholder, C1.6) and a gate-off command read-back (Detail names the gate,
-  C1.3) — the artifact is untouched. They are decided FIRST, ahead of every
-  rule-scoped refusal above, since each condemns the whole entry (C1.3
-  `precedence:`); an entry carrying both a precondition failure and a bad rule
-  reports the precondition.
+- Visible: the entry-level preconditions refuse the same class before
+  mutation, with no rule to name: an unbound `{tag.<key>}` and a `-`-prefixed
+  bound value (Detail names the placeholder, C1.6) and a gate-off command
+  read-back (Detail names the gate, C1.3) — the artifact is untouched. They are
+  decided FIRST, ahead of every rule-scoped refusal above, since each condemns
+  the whole entry (C1.3 `precedence:`); an entry carrying both a precondition
+  failure and a bad rule reports the precondition.
 - Visible: a bound target that cannot be read — absent, a directory, or
   permission-denied — refuses `execution_failure` before mutation with the OS
   error in the Detail (C1.3 `input:`; S27b). It is the one refusal in C1 with
@@ -1200,14 +1205,20 @@ named on A3 and A4 are the expected values; the spike artifacts under
 5. **Scenario**: `clear` set to anything outside `{"line"}`.
    **Expected**: `edit_clear_invalid`.
 6. **Scenario**: Category registration order and wire strings.
-   **Expected**: The five `edit_*` strings append after 0025:C5's six, in C1.4's
+   **Expected**: The six `edit_*` strings append after 0025:C5's six, in C1.4's
    stated order; the wire strings are asserted, the identifiers and list size
-   are not (0025:C5).
+   are not (0025:C5). The assertion is RELATIVE order, never a tail position or
+   a count — the shipped `TestReq77` pins 0025:C5's six as `Categories()`'s tail
+   and this append necessarily rewrites it (deviations D1).
 7. **Scenario**: A `{tag.<key>}` argv element on a read, gate and write entry;
    an undeclared `<key>`; a `{…}` element that is neither `{artifact}` nor a
-   declared tag.
-   **Expected**: C1.6 admits the declared form whole-element; the other two report
-   `command_unknown_placeholder` (0025:C5's wire string, unchanged).
+   declared tag; a declared `{tag.<key>}` at argv0; the same at argv1.
+   **Expected**: C1.6 admits the declared form whole-element at a non-leading
+   position; the undeclared and unrecognized forms report
+   `command_unknown_placeholder` (0025:C5's wire string, unchanged); argv0
+   reports `edit_tag_argv0` (C1.4) while argv1 lints clean — the position, not
+   the key, is what that category decides. `{artifact}` at argv0 stays admitted:
+   the rule is on this family only.
 
 **Apply-time selection and refusal (C1.2, C1.3, C1.5) — over real file fixtures**
 
@@ -1315,9 +1326,17 @@ named on A3 and A4 are the expected values; the spike artifacts under
 **Seam and read-back (A1, A2, C1.6)**
 
 24. **Scenario**: Context tags bound on the invocation reaching an anchor's
-    `{tag.<key>}`, and the same tags reaching a command reader's argv.
+    `{tag.<key>}`, and the same tags reaching a command reader's argv. A bound
+    value beginning with `-` (`--version`, `-rf`) at a `{tag.<key>}` argv
+    element; the same value bound but named by no argv element of the entry;
+    the same value reaching an `anchor` only.
     **Expected**: one channel serves both (A1); an unbound tag refuses
-    `execution_failure` before spawn, Detail naming the placeholder (C1.6).
+    `execution_failure` before spawn, Detail naming the placeholder (C1.6). The
+    flag-shaped value refuses `execution_failure` before spawn, Detail naming
+    the placeholder, and no process starts; bound-but-unreferenced is never
+    scanned (per-use-site); anchor-only is ADMITTED — `-` is ordinary regexp-
+    quoted line data there, and asserting otherwise would fence out a legitimate
+    anchor on a list-item line.
 25. **Scenario**: A write whose role's reader is command-backed while the gate
     is off.
     **Expected**: refuses BEFORE mutation, Detail naming the gate — never
@@ -1334,11 +1353,19 @@ named on A3 and A4 are the expected values; the spike artifacts under
     bracketed qualifier.
     **Expected**: byte-equal — the reader reports `status=Final` with the
     qualifier on `status_form`/`status.qualifier` (A4's normative fixture).
-27. **Scenario**: A refused edit's error surface.
+27. **Scenario**: A refused edit's error surface, asserted at the accessor seam
+    AND at the CLI envelope.
     **Expected**: 0004's `execution_failure` with `Applied()` false; Detail
-    carries the rule id `<id>.edit.<key>` and the reason token; the two
-    entry-level preconditions name the gate and the placeholder instead, having
-    no rule to name (JDR 0003 §D1). Refusal reporting follows
+    carries the rule id `<id>.edit.<key>` and the reason token; the entry-level
+    preconditions name the gate or the placeholder instead, having no rule to
+    name (JDR 0003 §D1). At the envelope the refusal exits **2**, not 3, under a
+    distinct CLI code discriminated from the typed `Err` at
+    `flow_exec.go::accessorFailureOf`, with the rule id and reason token in
+    `findings[]` (JDR 0003 §D3 (b)). The code's SPELLING is Stage 8's to choose
+    and no test may pin the string; what this scenario pins is the exit group,
+    the discriminator and the `findings[]` carriage — an exit-3 assertion here
+    is the regression this scenario exists to catch, since a retry-on-3 caller
+    would spin on a stale anchor. Refusal reporting follows
     `docs/cli-output-contract.md`: a scalar failure carries `param`, an
     aggregate carries `findings[]`, regardless of runtime cardinality.
 
@@ -1406,8 +1433,10 @@ named on A3 and A4 are the expected values; the spike artifacts under
     shape moved to the other side of the load/apply line — a planned value
     carrying `\n` on a rule whose anchor also matches zero lines; a planned
     `<clear>` on a rule that declared no `clear` and whose anchor also matches
-    zero lines; and one entry where a gate-off command read-back coincides with
-    an unmatched anchor.
+    zero lines; one entry where a gate-off command read-back coincides with
+    an unmatched anchor; and one where a `-`-prefixed bound tag value coincides
+    with a gate-off command read-back (the binding precondition is reported, per
+    C1.3 `precedence:` step 1's stated order).
     **Expected**: the earlier category in C1.3 `precedence:` is the one
     reported, and only it — `edit_value_multiline`, `edit_clear_undeclared`, and
     the gate Detail respectively; in every case the file is byte-identical
@@ -1528,14 +1557,29 @@ carrier are unaffected — the C1.6 `{tag.<key>}` argv family likewise extends
 0025:C2's closed vocabulary additively, leaving `command_unknown_placeholder`'s
 wire string unchanged for every element that was already refused.
 
-**Secret / credential lifecycle.** Applies weakly but non-trivially, and is
-bounded rather than owned: `edit`'s planned values reach a text artifact, so a
-model could in principle write a secret into a tracked file. The fence is
-inherited, not new — the value comes from the model's declared state, the
-target is a caller-bound artifact (0004:C3), and execution requires
-`--allow-commands` for the command carrier. 0004 owns the execution safety
-model; this RDR adds no new source of caller-supplied value (A7: `--tag` is
-context-only and refuses an owned key), so it widens no existing exposure.
+**Secret / credential lifecycle.** Applies non-trivially, and this RDR owns
+part of it rather than inheriting all of it. Two exposures, of different
+kinds. The first is inherited: `edit`'s planned values reach a text artifact,
+so a model could in principle write a secret into a tracked file — but the
+value comes from the model's declared state, the target is a caller-bound
+artifact (0004:C3), and 0004 owns that execution safety model unchanged.
+
+The second is NEW and this record's: C1.6 IS a new source of caller-supplied
+value on an execution path. A7 establishes only that `--tag` cannot supply an
+OWNED value (`parseTags` refuses an owned or recognized key); it does not make
+a bound tag harmless once C1.6 puts it in a child process's argv, and an
+earlier draft of this response read it as though it did. What bounds the new
+exposure is the pair of rules C1.6 states: a `{tag.<key>}` element may not sit
+at argv0 (`edit_tag_argv0` at lint), so the executable stays the word the
+reviewer read off the model and the interpreter deny-list stays enforceable;
+and a bound value beginning with `-` refuses before spawn, so a caller cannot
+turn a value slot into a flag. The hazard class is argument injection
+(CWE-88), not shell injection — `os/exec` runs no shell — and what remains
+after those two rules is a caller who can vary one non-leading argv WORD of a
+command the model declared, which is the exposure this record accepts and
+0027:C1's promise still describes accurately (JDR 0003 §D2 (a)). Substitution
+into an `anchor` is a separate and narrower path: regexp-quoted, into data,
+with no process at the end of it (C1.2).
 
 Not applicable, and omitted rather than N/A-bulleted: versioning, build tool
 compatibility, licensing, IDE compatibility, memory management (the target is
