@@ -30,6 +30,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/accessor"
@@ -442,6 +443,101 @@ func TestReq51_ReadBackReaderArgvPreconditionsRefuseBeforeMutation(t *testing.T)
 				t.Errorf("the refusal is not a declared-request failure, so " +
 					"it takes exit 3's \"re-run unchanged\" advice for a " +
 					"defect no re-run can repair")
+			}
+		})
+	}
+}
+
+// REQ-51 second leg / `0028:C1.3` precedence: step (1).
+//
+// TRIAGE REGRESSION (roborev job 6807). The clause orders the entry-level
+// preconditions "C1.6's unbound `{tag.<key>}`, THEN C1.6's `-`-prefixed
+// bound value" — all unbound keys ahead of any prefixed value. A single
+// argv walk reports whichever defect sits earlier in the vector, so an
+// argv whose prefixed value PRECEDES its unbound key inverts the
+// precedence the clause fixes.
+//
+// Observable only through a multi-defect input, which the clause says
+// outright: "Fail-fast here is observable only through a multi-defect
+// input … so it earns its own scenario rather than riding the
+// single-defect fixtures."
+//
+// BOUNDARY. Both arms carry the SAME two defects and differ only in argv
+// order; both must report the unbound key.
+func TestReq51_UnboundTagOutranksAPrefixedValueRegardlessOfArgvOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+	}{
+		{
+			name: "unbound_first",
+			argv: []string{"/bin/echo", "{tag.missing}", "{tag.flagged}"},
+		},
+		{
+			// The discriminating arm: a single walk reports the
+			// prefixed value here and inverts the precedence.
+			name: "prefixed_first",
+			argv: []string{"/bin/echo", "{tag.flagged}", "{tag.missing}"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "record.md")
+			adv0028Write(t, path, "- **Status**: Draft\n")
+
+			model := &table.Model{
+				ID:   "req51order",
+				Tags: map[string]table.TagDecl{"status": {Provenance: table.ProvenanceOwned}},
+				Readers: map[string]table.Accessor{
+					"req51order-reader": {
+						Role:     adv0028Role,
+						Keys:     []string{"status"},
+						Command:  tc.argv,
+						Timeout:  "1s",
+						ReadBack: true,
+					},
+				},
+				Writers: map[string]table.Accessor{
+					adv0028Entry: {
+						Role:     adv0028Role,
+						Keys:     []string{"status"},
+						Timeout:  "1s",
+						ReadBack: true,
+						Edit: map[string]table.EditRule{
+							"status": {
+								Anchor:  `^- \*\*Status\*\*: .+$`,
+								Replace: "- **Status**: {status}",
+							},
+						},
+					},
+				},
+			}
+
+			reg := flowbind.Registry(model, dir, true)
+			exec := accessor.NewExecutor(reg, accessor.Artifacts{
+				adv0028Role: {
+					Role: adv0028Role, Path: path,
+					// `flagged` is bound to a `-`-prefixed value;
+					// `missing` is not bound at all.
+					Context: map[string]string{"flagged": "--version"},
+				},
+			})
+
+			got := exec.Write(t.Context(), adv0028Entry, resolve.Plan{
+				Writes: []resolve.Tag{{Key: "status", Value: "Final"}},
+			})
+
+			if got.Refusal == nil {
+				t.Fatalf("Write succeeded with two entry-level precondition " +
+					"defects on the read-back reader's argv")
+			}
+			if !strings.Contains(got.Refusal.Detail, "missing") {
+				t.Errorf("the refusal names %q; want the UNBOUND key "+
+					"`missing`. `0028:C1.3` precedence: step (1) orders "+
+					"every unbound `{tag.<key>}` ahead of any `-`-prefixed "+
+					"bound value, so argv position must not decide which "+
+					"defect is reported.\nDetail = %s",
+					"flagged", got.Refusal.Detail)
 			}
 		})
 	}

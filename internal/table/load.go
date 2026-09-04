@@ -1320,9 +1320,9 @@ func editTableDefect(
 		// accident on an artifact no author aimed at.
 		if r.Anchor == nil {
 			return fail(CatEditAnchorInvalid,
-				where+" `edit."+key+"` declares no `anchor`; C1.1 marks only "+
-					"`clear` optional, and an absent anchor would match every "+
-					"line rather than none")
+				where+" `edit."+key+"` declares no `anchor`; only `clear` is "+
+					"optional, and an absent anchor would match every line "+
+					"rather than none")
 		}
 		anchor := *r.Anchor
 		segs, err := ParseEditAnchor(anchor, bindable)
@@ -1348,9 +1348,9 @@ func editTableDefect(
 		// declared explicitly.
 		if r.Replace == nil {
 			return fail(CatEditTemplateInvalid,
-				where+" `edit."+key+"` declares no `replace`; C1.1 marks only "+
-					"`clear` optional, and an absent template would blank the "+
-					"selected line rather than rewrite it (deletion is `clear`)")
+				where+" `edit."+key+"` declares no `replace`; only `clear` is "+
+					"optional, and an absent template would blank the selected "+
+					"line rather than rewrite it (deletion is `clear`)")
 		}
 		replace := *r.Replace
 		re := compiled[key]

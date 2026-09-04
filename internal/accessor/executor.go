@@ -344,31 +344,38 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// keeps its own pre-spawn ladder (0025:C6).
 	if len(def.Accessor.Edit) != 0 && hasReader &&
 		len(reader.Accessor.Command) != 0 && e.Registry.AllowCommands {
+		// TWO passes, not one. The clause orders ALL unbound tags ahead
+		// of ANY `-`-prefixed value, so a single argv walk would report
+		// whichever defect sits earlier in the vector — reversing the
+		// precedence whenever a prefixed value precedes an unbound key.
+		// Argv order is the author's; the reported category is the
+		// contract's.
+		readBackRefusal := func(key, why string) WriteResult {
+			r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
+			r.Detail = "the read-back for the write accessor `" + name +
+				"` goes through the command-backed reader `" +
+				reader.Identity.Name + "`, whose argv carries `{tag." +
+				key + "}` " + why + "; refusing before mutation rather " +
+				"than writing and reporting an unverified read-back"
+			return WriteResult{Refusal: r}
+		}
 		for _, el := range reader.Accessor.Command {
 			key, ok := table.CommandTagKey(el)
 			if !ok {
 				continue
 			}
-			value, bound := art.Context[key]
-			switch {
-			case !bound:
-				r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
-				r.Detail = "the read-back for the write accessor `" + name +
-					"` goes through the command-backed reader `" +
-					reader.Identity.Name + "`, whose argv carries `{tag." +
-					key + "}` and this invocation binds no `" + key +
-					"`; refusing before mutation rather than writing and " +
-					"reporting an unverified read-back"
-				return WriteResult{Refusal: r}
-			case strings.HasPrefix(value, "-"):
-				r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
-				r.Detail = "the read-back for the write accessor `" + name +
-					"` goes through the command-backed reader `" +
-					reader.Identity.Name + "`, whose argv carries `{tag." +
-					key + "}` bound to a `-`-prefixed value; refusing " +
-					"before mutation rather than writing and reporting an " +
-					"unverified read-back"
-				return WriteResult{Refusal: r}
+			if _, bound := art.Context[key]; !bound {
+				return readBackRefusal(key,
+					"and this invocation binds no `"+key+"`")
+			}
+		}
+		for _, el := range reader.Accessor.Command {
+			key, ok := table.CommandTagKey(el)
+			if !ok {
+				continue
+			}
+			if strings.HasPrefix(art.Context[key], "-") {
+				return readBackRefusal(key, "bound to a `-`-prefixed value")
 			}
 		}
 	}
