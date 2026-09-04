@@ -68,9 +68,9 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: foundational — provisional: one contract
-  (owned-state first-run initialization) whose clause conditions
-  or extends surfaces across RDRs 0002/0004/0005/0006/0010.
+- **Profile**: foundational — one contract (owned-state first-run
+  initialization, C1/C2) whose clauses condition or extend surfaces
+  across RDRs 0002/0004/0005/0006/0010.
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -155,12 +155,11 @@ the lint already is: RDR 0010's `decision-table` class has no
     admits: seed each through
     `internal/cli/flow_state.go::groupByWriter` and the executor into a
     fresh artifact, `set-state --write` the equivalent argv value into a
-    second fresh artifact, assert the two artifacts byte-identical
-    (premortem P-2/P-3: `--write` values enter as argv strings through
-    `parseWrites` coercion; `Model.Initial` values arrive
-    loader-typed — the premise that both reach one canonical wire form
-    is exactly the refuted-normalization-premise defect class and is
-    verified, not assumed).
+    second fresh artifact, assert the two artifacts byte-identical.
+    `--write` values enter as argv strings through `parseWrites`
+    coercion while `Model.Initial` values arrive loader-typed, so the
+    premise that both reach one canonical wire form is a
+    normalization premise — verified, not assumed.
   - **If wrong**: init's read-back mismatches on lint-clean models — or,
     worse, passes while persisting a form a manual `set-state` would not
     — and the verb needs an explicit route through the same coercion
@@ -172,10 +171,10 @@ the lint already is: RDR 0010's `decision-table` class has no
   zero-writer and the multi-writer arm) without a bypass.**
   - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: needed — the premortem (P-4) flagged this as the
-    missing-veto-clause class: lint certifies REACHABILITY of `[initial]`
+  - **Evidence**: needed — lint certifies REACHABILITY of `[initial]`
     keys, not WRITABILITY, and no cited clause ties `[initial]` (or
-    `graphlint` `ownedRequiredKeys`) to writer coverage. Find and quote
+    `graphlint` `ownedRequiredKeys`) to writer coverage: the veto
+    clause this assumption needs may simply not exist. Find and quote
     the governing lint/loader clause, or establish that none exists.
   - **If wrong**: a lint-certified model refuses at seed time
     (`flow-write-unbound`/multi-writer arm) — caught with zero writes
@@ -188,32 +187,38 @@ the lint already is: RDR 0010's `decision-table` class has no
   recordable override of a Final peer's clause.**
   - **Status**: Pending
   - **Method**: Peer RDR
-  - **Evidence**: needed — the premortem (P-5) flagged the borrowed-
-    authority class: an override's EXISTENCE (`0010:C5`'s override of
-    `0006:C18`, per `0010:A10`) does not show that an override may
-    extend a closed ENUMERATION. Resolve must quote the override provision's
-    actual text against the enumeration case, and enumerate the
-    enumeration's consumers this override must update — `flow` command
-    registration, `--help-all`, docs generation, and the `flow-*` code
-    taxonomy for the verb's new failure classes (P-6).
+  - **Evidence**: needed — an override's EXISTENCE (`0010:C5`'s
+    override of `0006:C18`, per `0010:A10`) does not show that an
+    override may extend a closed ENUMERATION; citing it for this case
+    borrows authority it may not carry. Resolve must quote the override
+    provision's actual text against the enumeration case, and enumerate
+    the enumeration's consumers this override must update — `flow`
+    command registration, `--help-all`, docs generation, and the
+    `flow-*` code taxonomy for the verb's new failure classes.
   - **If wrong**: the verb cannot be added without re-opening RDR 0005,
     and the carrier falls back to the rejected flag-on-`set-state` form.
 - **A5 The empty-store predicate preserves cleared keys under
-  unconditional automated re-invocation: after any first write, the
-  store is non-empty, so every later `init-state` — including one in a
-  deploy script or CI bootstrap that runs it every time — writes
-  nothing, and a cleared key stays absent for every reader AND every
-  writer path this RDR introduces.**
+  unconditional automated re-invocation for as long as the store
+  retains at least one key: every later `init-state` — including one in
+  a deploy script or CI bootstrap that runs it every time — writes
+  nothing, and the cleared key stays absent for every reader AND every
+  writer path this RDR introduces. The stated exception is exact:
+  clearing the LAST key empties the store and the next init-state
+  reseeds it.**
   - **Status**: Pending
   - **Method**: MVV Test
-  - **Evidence**: needed — MVV steps 6–8 (clear one key on a seeded
-    artifact, read-back absent, re-init is a no-op success whose payload
-    reports the key absent-from-`[initial]` and whose artifact bytes are
-    unchanged).
-  - **If wrong**: some path still seeds into a non-empty store and the
-    resurrect hazard the premortem (P-7) disqualified per-key seeding
-    for returns; the predicate, not the disclosure, is the safety
-    property, so the fix is in the predicate.
+  - **Evidence**: needed — MVV steps 6–8 (clear one key of a two-key
+    seeded artifact, read-back absent, re-init is a no-op success whose
+    payload reports the key absent-from-`[initial]` and whose artifact
+    bytes are unchanged), AND step 9, which clears the remaining key and
+    asserts the reseed actually happens — the boundary is verified in
+    the direction that fails, not only the direction that holds.
+  - **If wrong**: either some path seeds into a store that still carries
+    a key — the resurrect hazard the per-key variant was rejected for —
+    or the emptied-store boundary sits somewhere other than "zero keys",
+    in which case the predicate cannot be stated in terms of store
+    emptiness at all. The predicate, not the disclosure, is the safety
+    property, so either way the fix is in the predicate.
 
 ## Proposed Solution
 
@@ -236,11 +241,14 @@ and the initial-vs-existing fork is decided whole-snapshot, never as a
 per-key merge (see Investigation). Per-key semantics follow:
 init seeds if and only if the bound artifact is EMPTY, and then seeds
 every `[initial]` key; a non-empty artifact is a no-op success whose
-payload reports the `[initial]` keys the store lacks — so a cleared
-key is never resurrected by any re-invocation (the premortem's
-decisive finding, P-7), a torn seed is visible without being silently
-half-repaired, and the key-added-after-seeding case is answered by
-explicit `set-state` guided by that report. Class-keyed like the lint:
+payload reports the `[initial]` keys the store lacks — so no
+re-invocation resurrects a cleared key while the store still carries
+one, a torn seed is visible without being silently half-repaired, and
+the key-added-after-seeding case is answered by explicit `set-state`
+guided by that report. The predicate's boundary is disclosed rather
+than hidden: emptying the store by clearing its last key returns it to
+the initializable class, because an emptied store and a never-written
+one are the same store (C2). Class-keyed like the lint:
 a `decision-table` model (`internal/table/model.go::IsDecisionTable`
 ⇒ the existing class discriminator is reused, no parallel predicate)
 has no `[initial]` (`0010:C2` forbids it) and the verb refuses.
@@ -255,10 +263,9 @@ commit-time verification via the accessor executor's write + read-back
 atomicity, and this verb inherits both statements verbatim). The only new
 data flow is the *source* of the planned writes: `Model.Initial`
 (`internal/table/model.go::Model.Initial`, today written by the loader
-and read by lint only) instead of `--write`/`--clear` request flags —
-which is precisely why it is a new verb and not a `set-state` flag: a
-`set-state` payload echoes the request's planned writes, while init's
-plan comes from the model.
+and read by lint only) instead of `--write`/`--clear` request flags.
+That difference in plan source is why this is a new verb rather than a
+`set-state` flag — see Load-Bearing Decisions (Naming).
 
 #### Normative Contracts
 
@@ -298,11 +305,22 @@ partially seeded, post-clear, or fully seeded alike — is a NO-OP
 SUCCESS: zero writes, and the payload reports which `[initial]` keys
 the store does not carry (informational, so a torn or post-clear state
 is visible without being repaired, resurrected, or failed on).
-Consequences fixed here: a cleared key is NEVER re-established by
-init-state under any invocation pattern, including unconditional
-automated re-runs (the artifact is non-empty, so nothing writes); and
-a key added to `[initial]` after seeding is re-established by explicit
-`set-state`, not by init — the payload's absent-key report names it.
+Consequences fixed here: while the store retains AT LEAST ONE key, a
+cleared key is never re-established by init-state under any invocation
+pattern, including unconditional automated re-runs (the artifact is
+non-empty, so nothing writes). The boundary is exact and is a property
+of the store, not of intent: clearing the LAST remaining key empties
+the store, and an emptied store is indistinguishable at the content
+level from a never-written one — `load` yields the same zero-key store
+for an absent file and for one emptied by clears, and a clear is a key
+REMOVAL, not a tombstone (`internal/cli/flowbind/flowbind.go::load`,
+`::store.Apply`, `0004:C11`). A subsequent init-state therefore RESEEDS
+such a store. This is the accepted residual of rejecting tombstones
+(see Briefly Rejected); it is disclosed, not designed around, and no
+payload or doc may describe init-state as unable to re-establish a
+cleared key without this qualification. A key added to `[initial]`
+after seeding is re-established by explicit `set-state`, not by init —
+the payload's absent-key report names it.
 The payload MUST distinguish the seeded-all case from the no-op case,
 and its scope is exactly the `[initial]` key set — the verb claims
 nothing about owned keys `[initial]` does not assign.
@@ -350,10 +368,12 @@ the carrier, which is the fork this RDR exists to close.
   `[initial]` keys) iff the bound artifact carries no key (the store's
   own presence answer, `internal/cli/flowbind/flowbind.go::store` —
   whose writer is any prior committed `set-state`/init write; an
-  empty store means never-written or explicitly emptied, and both
-  read as "initializable" — the ambiguity the premortem's P-7 showed
-  is only safe at whole-store granularity, where a single surviving
-  key blocks seeding); class: refuse iff
+  empty store means never-written or emptied by clears, which are
+  indistinguishable at the content level, and both read as
+  "initializable" — the cleared-vs-unseeded ambiguity is not removed by
+  this predicate, it is confined to the single state where the store
+  carries nothing at all, since one surviving key blocks seeding;
+  C2 records that residual); class: refuse iff
   `internal/table/model.go::IsDecisionTable` — the shipped
   discriminator (its writer is the loader materializing `[model]
   class`, `0010:C1`), never a re-derivation from `len(owned)`.
@@ -372,13 +392,16 @@ the carrier, which is the fork this RDR exists to close.
   `[initial]` assignments into a second fresh artifact produce
   byte-identical artifacts, for every value kind `[initial]` admits
   (the A2 spike's table; catches both the hard read-back divergence
-  and the silent canonical-form divergence, premortem P-2/P-3).
-- Cleared-key preservation: `init-state ∘ (set-state --clear k)` on a
-  seeded artifact writes nothing and `read-state` still reports k
-  absent — init never re-establishes a cleared key (REQ-107's reader
-  guarantee stays untouched, and the writer-side hazard the premortem
-  named is closed by the empty-store predicate); re-establishment is
-  explicit `set-state`.
+  and the silent canonical-form divergence).
+- Cleared-key preservation, on a store that retains a key:
+  `init-state ∘ (set-state --clear k)` on a seeded artifact carrying at
+  least one key besides k writes nothing, and `read-state` still
+  reports k absent — REQ-107's reader guarantee stays untouched, and
+  the writer-side resurrect hazard is closed for this class by the
+  empty-store predicate; re-establishment is explicit `set-state`. The
+  inverse holds at the boundary and is asserted as such: clearing the
+  last key empties the store, so the next `init-state` reseeds every
+  `[initial]` key (C2's disclosed residual).
 
 #### Illustrative Code
 
@@ -407,12 +430,12 @@ intrastate flow init-state --model flow.toml \
 
 The question, scored (approaches: A lint-only status quo, B implicit
 read-fallback, C opt-in ephemeral flag on `next`/`resolve`, D explicit
-persisting init verb, empty-store predicate). The last criterion row
-was added by the premortem loop: the critic's P-7 showed the
-first-draft per-key variant of D (seed every absent key) resurrects
-cleared keys under unconditional automated re-invocation — the same
-axis that disqualified B — forcing the choice to be re-scored with
-that axis applied to every column, chosen included:
+persisting init verb, empty-store predicate). The final criterion row
+is load-bearing and applies to every column including the chosen one:
+any write predicate keyed on a key's absence resurrects cleared keys
+under unconditional automated re-invocation, which is the same axis
+that disqualifies B — so D earns its column only under the empty-store
+predicate, and only within the boundary C2 discloses:
 
 | Criterion | A lint-only | B read-fallback | C flag on read verbs | D init verb (empty-store) |
 | --- | --- | --- | --- | --- |
@@ -423,29 +446,28 @@ that axis applied to every column, chosen included:
 | Blast radius on decided contracts | none | 0004:C3 + REQ-107 both violated, silently | REQ-3 flag list + 0005:C1's "read verbs MUST NOT run write accessors" | 0005:C1 verb enum: one recorded addition |
 | Key-added-after-seeding case | manual `set-state` | uncontrolled | uncontrolled | decided — explicit `set-state`, guided by init's absent-key report |
 | Reversibility | — | hard: implicitly materialized state everywhere | medium | easy: remove the verb; artifacts stay valid |
-| Cleared-key survival under unconditional automated re-invocation | holds (nothing writes) | fails — every read resurrects | fails — every flagged call resurrects | holds — non-empty store means zero writes, so re-runs cannot resurrect |
+| Cleared-key survival under unconditional automated re-invocation | holds (nothing writes) | fails — every read resurrects | fails — every flagged call resurrects | holds while the store retains a key — zero writes; the disclosed exception is a store emptied by clears |
 
 The deciding rows are the first two, prior-art alignment, and the
-premortem's added row: B and C lose on contract violations that are
-the seed's own collision analysis (REQ-107 resurrect; 0004:C3
-synthesis; C additionally puts write authority or phantom state inside
-read verbs), and A answers the fork honestly but leaves the user
-outcome unmet while shipping docs (`docs/model-authoring.md`:
-"`[initial]` declares the owned state a model starts from") already
-promise start-state semantics the runtime does not deliver. D under
-the empty-store predicate is the only column that removes the wall,
-survives the automation axis, and leaves every decided clause intact
-except one enumerated, recordable-override addition. The re-pricing is
-honest about D's costs: it pays a new payload shape (the cost the
-`--from-initial` variant was partly rejected for — the rejection
-stands on the two-plan-sources-in-one-verb grammar muddle, not on
-payload count), and it trades the per-key variant's automatic
-schema-evolution reseed for one explicit `set-state`.
+automation axis: B and C lose on contract violations that are the
+seed's own collision analysis (REQ-107 resurrect; 0004:C3 synthesis; C
+additionally puts write authority or phantom state inside read verbs),
+and A answers the fork honestly but leaves the user outcome unmet
+while shipping docs (`docs/model-authoring.md`: "`[initial]` declares
+the owned state a model starts from") already promise start-state
+semantics the runtime does not deliver. D under the empty-store
+predicate is the only column that removes the wall, survives the
+automation axis within a stated boundary, and leaves every decided
+clause intact except one enumerated, recordable-override addition. D's
+costs are counted, not waved past: a new payload shape (which is not
+why `--from-initial` was rejected — that rejection stands on the
+two-plan-sources-in-one-verb grammar muddle), one explicit `set-state`
+for a key added to `[initial]` after seeding, and the emptied-store
+residual C2 discloses.
 
-Premortem: switched (hardened) — the init-verb approach survived; its
-per-key seeding rule was switched to the empty-store predicate on the
-critic's P-7, and P-2..P-6, P-9..P-12 folded into C2, A2–A5, and
-Failure Modes.
+Premortem: switched (hardened) — the init-verb approach survived with
+its seeding rule switched to the empty-store predicate; the remaining
+findings are folded into C2, A2–A5, and Failure Modes.
 Ground-sweep: clean (22 anchors)
 Joint-check: clear (12 peers) — context beside the verdict: 0021
 mentions `[initial]` solely in its lint-root role (the reachability
@@ -534,16 +556,19 @@ decided property.
 
 ### Briefly Rejected
 
-- **Per-key absent-only seeding (the first-draft variant of the chosen
-  verb)**: a write predicate of "key is absent" is the very observable
-  a clear produces, so an automated re-run resurrects cleared keys —
-  the premortem's P-7 showed this is the read-fallback rejection
-  reason relocated, and its re-run recovery story silently skips a
-  present-and-wrong key after a read-back mismatch (P-10).
-- **Cleared-key tombstones in the artifact**: would let per-key
-  seeding distinguish cleared from never-set, but changes the artifact
-  wire format every reader and RDR 0004's read-back comparison touch —
-  a cross-verb blast radius out of proportion to a first-run verb.
+- **Per-key absent-only seeding**: a write predicate of "key is
+  absent" is the very observable a clear produces, so an automated
+  re-run resurrects cleared keys — the read-fallback rejection reason
+  relocated to the write path. Its re-run recovery story also silently
+  skips a present-and-wrong key after a read-back mismatch.
+- **Cleared-key tombstones in the artifact**: the only mechanism that
+  distinguishes cleared from never-set — it would let per-key seeding
+  be safe, and would also close the chosen predicate's emptied-store
+  residual (C2). Rejected because it changes the artifact wire format
+  every reader and RDR 0004's read-back comparison touch — a
+  cross-verb blast radius out of proportion to a first-run verb. The
+  residual is accepted and disclosed instead; revisit this if the wire
+  format opens for another reason.
 - **`--from-initial` flag on `set-state`**: one verb with two
   write-plan sources (request vs model) muddies the payload's
   writes-echo-the-request grammar; see Load-Bearing Decisions
@@ -656,20 +681,34 @@ is that write with the model as its plan source.
   predicate); a key added to `[initial]` after seeding is a manual
   `set-state` — the disclosed price of cleared-key safety under
   automated re-invocation.
+- Negative: that safety is bounded by store emptiness, not by intent —
+  clearing the last owned key returns the artifact to the
+  initializable class and a later init reseeds it (C2). Operators who
+  clear keys individually to reset must discard the artifact or expect
+  the reseed; the boundary is contract text and a test, not a hidden
+  edge.
 
 ### Risks and Mitigations
 
 - **Risk**: a lint-certified model whose `[initial]` names a writerless
   (or multi-writer) key makes init refuse, re-creating the wall it
-  exists to remove (A3, premortem P-4).
+  exists to remove (A3).
   **Mitigation**: C2's plan-level validation guarantees the refusal
   lands with zero writes committed; Resolve verifies writer coverage,
   and if uncovered the clause gains a companion lint arm (writer
   existence-and-uniqueness for `[initial]` keys joins certification)
   rather than a direct-write bypass.
 - **Risk**: operators read init as "reset to initial".
-  **Mitigation**: the empty-store predicate makes init structurally
-  incapable of touching existing state; reset stays `set-state`'s job.
+  **Mitigation**: the empty-store predicate makes init incapable of
+  touching a store that carries any key; reset stays `set-state`'s job.
+- **Risk**: an operator clears owned keys one at a time to "start
+  over", empties the store, and a scheduled `init-state` reseeds —
+  reading as the resurrect hazard the design rejects elsewhere.
+  **Mitigation**: this is C2's disclosed residual, not a defect; the
+  no-op payload and the docs must state the boundary in store terms
+  ("while any key remains"), and MVV step 9 pins it so it cannot move
+  silently. Closing it entirely would require artifact tombstones,
+  rejected on blast radius (Briefly Rejected).
 
 ### Failure Modes
 
@@ -682,8 +721,8 @@ is that write with the model as its plan source.
 - **Torn (multi-writer)**: no cross-writer atomicity — a failed writer
   can leave the artifact seeded for some keys only. The store is then
   non-empty, so a re-run is a NO-OP whose payload lists the missing
-  `[initial]` keys (visible, premortem P-10's silent-skip hazard
-  designed out) — but it does NOT repair them: recovery is explicit
+  `[initial]` keys — visible rather than silently skipped — but it does
+  NOT repair them: recovery is explicit
   `set-state` of the listed keys, or discarding the artifact and
   re-running init. The same holds for a present-and-wrong key after a
   read-back mismatch: no re-run ever overwrites it, and no payload ever
@@ -691,7 +730,7 @@ is that write with the model as its plan source.
 - **Scope gap (disclosed)**: init's claim covers exactly the
   `[initial]` key set (C2); an owned key `[initial]` does not assign
   can still surface `unknown[].reason: absent` in `flow next` after a
-  successful init (premortem P-9). The payload's fixed scope plus
+  successful init. The payload's fixed scope plus
   `flow next`'s own unknown report are the diagnosis surface; the cure
   is authoring the key into `[initial]` (lint's
   `checkAlwaysPresentOwned` already forces exactly that for
@@ -733,6 +772,11 @@ always-present owned key and one plain owned key, both writer-served:
    with the C2 class code; against the fixture with an unbound artifact
    role it refuses in the existing artifact-binding family with zero
    writes committed.
+9. The boundary, asserted in the failing direction: clear the
+   REMAINING key so the store carries none, then `flow init-state` —
+   it seeds every `[initial]` key again. This is C2's disclosed
+   residual and the test exists so a future change cannot silently
+   move the boundary.
 
 ### Phase 1: Code Implementation
 
@@ -767,23 +811,43 @@ sentence gains its runtime carrier), `--help-all` text.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The MVV sequence above is the acceptance spine and runs as an
+integration test over a fixture model; "done" is every one of its
+steps green plus the unit coverage below. Coverage goals are stated as
+arms, not percentages — each normative arm of C2 owes at least one
+test that fails if the arm is removed.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Scenario**: Empty store, every `[initial]` key writer-served.
+   **Expected**: exit 0; every key seeded; `read-state` returns each at
+   its declared value in canonical form (RT1).
+2. **Scenario**: Re-run against the store just seeded.
+   **Expected**: exit 0; zero writes; artifact bytes unchanged (RT2);
+   payload reports the no-op arm.
+3. **Scenario**: Seeded store, one plain key cleared, then re-run.
+   **Expected**: exit 0; zero writes; the cleared key still reads
+   absent and is listed as an absent `[initial]` key in the payload
+   (RT4 / A5).
+4. **Scenario**: Fresh artifact seeded by `init-state` versus a second
+   fresh artifact written by the equivalent `set-state --write`
+   transcription, table-driven over every value kind `[initial]`
+   admits.
+   **Expected**: the two artifacts are byte-identical (RT3; this is
+   A2's spike promoted to a standing test).
+5. **Scenario**: `[initial]` names a key with zero declared writers,
+   and separately one with more than one.
+   **Expected**: refusal from the existing writer-routing family with
+   ZERO writes committed — asserted on artifact bytes, not just exit
+   code.
+6. **Scenario**: A required artifact role is unbound.
+   **Expected**: refusal in the existing artifact-binding family,
+   zero writes committed.
+7. **Scenario**: `decision-table` model.
+   **Expected**: exit 2 with the C2 class code, raised before any
+   accessor runs (asserted by a writer that fails if invoked).
+8. **Scenario**: A writer whose read-back disagrees with the value
+   written.
+   **Expected**: terminal refusal naming the key present-and-unverified;
+   a subsequent re-run is a no-op that does NOT repair it.
 
 ## Finalization Gate
 
@@ -909,7 +973,24 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- Peer records: RDR 0002 (C2, `[initial]` as lint-time graph root),
+  RDR 0004 (C3, ambient-discovery ban; read-back as the only commit
+  check), RDR 0005 (C1 verb enumeration and D-naming; REQ-3 closed
+  flag list; REQ-107 read-back), RDR 0006 (A6, C18), RDR 0010 (C1
+  model class, C2 no `[initial]` on `decision-table`, C5 override
+  precedent).
+- Source paths reviewed: `internal/graphlint/analysis.go`
+  (`checkDanglingEdge`, `checkAlwaysPresentOwned`),
+  `internal/cli/flowbind/flowbind.go` (`load`, `store`),
+  `internal/cli/flow_state.go` (`runFlowSetState`, `writerFor`,
+  `groupByWriter`), `internal/cli/flow_exec.go` (`buildRequest`),
+  `internal/table/model.go` (`Model.Initial`, `IsDecisionTable`),
+  `internal/accessor/binding.go` (`KeyValue.Absent`).
+- Project docs: `docs/model-authoring.md` (the start-state sentence),
+  `docs/cli-output-contract.md`, `docs/cli-reference.md`.
+- Prior art searched (full log:
+  `evidence/research/prior-art.md`): qmuntal/stateless
+  (`statemachine.go::NewStateMachine`), XState v5
+  (`packages/core/src/createActor.ts::_initState`), SCXML
+  (`scxmlcc/doc/user-manual.md`, `<scxml initial=...>`).
+- Related issues: kata `intrastate#7nqv` (1574).
