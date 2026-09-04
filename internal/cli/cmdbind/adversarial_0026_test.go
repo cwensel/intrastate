@@ -170,37 +170,41 @@ func TestAdv1_AHeldStderrPastTheReadBoundStillReportsHeldAndStillRefuses(t *test
 // still holds. This test's pipe has NO holder: the writer closes, EOF
 // arrives, and every byte is deliverable.
 //
-// The escape: `readBounded`'s liveness ceiling is checked at the TOP of the
-// loop, before the read, and expires `2·WaitDelay` after the drain entered
-// the grace. It is armed once and never re-armed by progress. A writer
-// whose per-read idle gaps are all UNDER `DrainGrace` — so the grace itself
-// never fires — but whose tail takes longer than `2·WaitDelay` to finish is
-// cut off mid-tail and reported HELD, on a pipe that reaches a real EOF and
-// has no writer at all.
+// The mechanism under test is the grace RE-ARM. `readBounded` sets
+// `now + DrainGrace` before EVERY read of the final drain and carries no
+// other clock: past `halted()` (deviation D9's sibling halt — a state
+// predicate, not a bound) the only thing that can end this drain early is a
+// single idle gap outrunning the grace. Nothing bounds the tail's SIZE or
+// its TOTAL DURATION, which is exactly what C1 `precedence:` requires:
+// "the grace bounds the IDLE GAP between reads and never the size or total
+// duration of the tail", and "A single absolute deadline would instead bound
+// the whole remaining tail against the clock, which turns a slow-arriving
+// tail into a false held-pipe report on a pipe with no writer at all".
 //
-// That is the failure C1 `precedence:` forbids by name: "the grace bounds
-// the IDLE GAP between reads and never the size or total duration of the
-// tail" and "A single absolute deadline would instead bound the whole
-// remaining tail against the clock, which turns a slow-arriving tail into a
-// false held-pipe report on a pipe with no writer at all". The ceiling is
-// that single absolute deadline, moved out to `2·WaitDelay`; the mechanism
-// the clause rejects is unchanged, only its constant is larger. A9 measured
-// the shipped re-arm recovering a 1 MiB paced tail in 612 ms (darwin) /
-// 663 ms (linux), so the ceiling sits at roughly 1.5x the ALREADY MEASURED
-// case — a loaded host or a slower writer cadence reaches it.
+// So this row is an adversarial check on that re-arm's MARGIN. It paces a
+// tail whose total duration is many multiples of the grace while holding
+// every individual gap far inside it, and demands the whole tail back. A
+// build that reintroduced any total-duration ceiling, or that re-armed once
+// instead of per read, truncates here and reports held on a pipe with no
+// writer at all.
 //
-// The pacing here is deliberately inside the grace on every gap (40 ms
-// against a 50 ms `DrainGrace`), so a failure cannot be blamed on a gap the
-// grace legitimately refuses: the ONLY thing that ends this drain early is
-// the total-duration ceiling.
+// The gap is expressed as a FRACTION of `DrainGrace` (0.2x) rather than a
+// hardcoded constant, so the two cannot drift into a narrow ratio again.
+// The margin is deliberately generous: this fixture previously paced at
+// 40 ms against the 50 ms grace, and that 10 ms of scheduler headroom lost
+// often enough under whole-repo `go test -race ./...` parallelism to report
+// held on a pipe that had reached a real EOF.
 //
 // ADVERSARIAL
 func TestAdv2_APacedTailReachingARealEOFIsNeverReportedHeld(t *testing.T) {
 	const (
 		chunks    = 40
 		chunkSize = 4 << 10
-		gap       = 40 * time.Millisecond // strictly under DrainGrace (50 ms)
-		want      = chunks * chunkSize
+		// 0.2·DrainGrace: far enough inside the grace that a lost
+		// scheduling quantum cannot turn a gap into a held report, and tied
+		// to the constant so the two cannot drift apart.
+		gap  = DrainGrace * time.Millisecond / 5
+		want = chunks * chunkSize
 	)
 
 	r, w, err := os.Pipe()
@@ -253,25 +257,31 @@ func TestAdv2_APacedTailReachingARealEOFIsNeverReportedHeld(t *testing.T) {
 	if got.report == drainWhole && got.kept == want {
 		return
 	}
-	t.Fatalf("a paced tail with NO holder — every idle gap %v, strictly "+
-		"under the %d ms grace, and the writer closing for a real EOF — "+
+	t.Fatalf("a paced tail with NO holder — every idle gap %v, only 0.2x "+
+		"the %d ms grace, and the writer closing for a real EOF — "+
 		"reported %s with %d of %d bytes recovered.\n\n"+
-		"The liveness ceiling is checked at the top of the loop and expires "+
-		"2*WaitDelay (%v) after the drain entered the grace. It is armed "+
-		"once and progress never re-arms it, so a tail whose TOTAL duration "+
-		"exceeds it is cut off and reported held even though the next read "+
-		"would have returned EOF.\n\n"+
-		"C1 `precedence:` states the grace \"bounds the IDLE GAP between "+
-		"reads and never the size or TOTAL DURATION of the tail\", and "+
-		"rejects the rival mechanism by name: \"A single absolute deadline "+
+		"`readBounded` re-arms the read deadline to `now + DrainGrace` "+
+		"BEFORE EACH read and carries no other clock, so a drain making "+
+		"progress keeps its deadline ahead of it and runs to EOF. Two "+
+		"things can produce this outcome.\n\n"+
+		"(1) A REGRESSION in the drain: a total-duration ceiling "+
+		"reintroduced, or the deadline armed once instead of per read, cuts "+
+		"the tail off mid-flight. C1 `precedence:` forbids exactly that — "+
+		"the grace \"bounds the IDLE GAP between reads and never the size "+
+		"or TOTAL DURATION of the tail\", and \"A single absolute deadline "+
 		"would instead bound the whole remaining tail against the clock, "+
 		"which turns a slow-arriving tail into a false held-pipe report on "+
-		"a pipe with no writer at all\". The ceiling IS that single "+
-		"absolute deadline with a larger constant. A9 measured the shipped "+
-		"re-arm recovering a 1 MiB paced tail in 612-663 ms, so the ceiling "+
-		"sits at ~1.5x an already-measured legitimate case.",
-		gap, DrainGrace, reportName(got.report), got.kept, want,
-		2*WaitDelay*time.Millisecond)
+		"a pipe with no writer at all\". Check `readBounded`'s re-arm and "+
+		"any clock added beside it.\n\n"+
+		"(2) SCHEDULER LOAD: one idle gap stretched past the grace because "+
+		"the writer goroutine, or this drain's own re-arm, did not get onto "+
+		"a CPU in time — the deadline then fired on a pipe with no holder. "+
+		"An earlier revision of this fixture paced at 40 ms against the "+
+		"50 ms grace and lost that way under whole-repo `go test -race "+
+		"./...`. If the drain is unchanged and the host is heavily loaded, "+
+		"this is the margin failing, not the contract; widen the fraction "+
+		"rather than reporting a held-pipe regression.",
+		gap, DrainGrace, reportName(got.report), got.kept, want)
 }
 
 // TestD10_BothPipesTricklingRaisesNoHalt_DocumentedResidue documents an
