@@ -10,9 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  # Runtime behaviour, not cross-compilation: RDR 0026's coverage goal for
+  # REQ-133 is that the FX-deadline-escape helper runs on darwin AND linux
+  # in CI, because pipe read deadlines, poller registration, process-group
+  # signalling and drain scheduling latency each differ between the two
+  # (0026 assumptions A2, A5, A9, A10 were measured on both). The matrix is
+  # unconditional on every push and PR — "in CI" carries no cadence
+  # carve-out, and a schedule or label gate would leave the darwin leg dark
+  # on ordinary pushes. Only this job fans out; the remaining jobs are
+  # OS-independent and stay on one ubuntu runner.
   test:
     name: Test
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
