@@ -251,9 +251,21 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
     by the caller". So `{tag.nnnn}` is bindable on the invocation with no reader
     run and no caller-typed planned value. (The RDR's quoted phrase "context
     only and is never written" is a paraphrase — the source says "observed tag";
-    the enforced behaviour matches.)
+    the enforced behaviour matches.) The two wire strings C1.6's `admission:`
+    names exist as written: `codeTagOwned = "flow-tag-owned"` fires on a key
+    the model declares as reader-owned, `codeTagReserved =
+    "flow-tag-reserved"` on `table.RecognizedTagKey` — both keyed on the KEY,
+    both in `parseTags`, which reads only `cmd.Flags().GetStringArray("tag")`
+    and invokes no reader. And the enforcement is key-scoped ONLY: the sole
+    value-touching step, `canonicalValue(key, value, decl, "tag")`, validates
+    against the declared tag kind and applies no flag-shape check. So nothing
+    upstream already refuses a `-`-prefixed bound value — C1.6's VALUE rule is
+    additive, not a restatement of an existing guard, and A7 does not make a
+    bound tag harmless once C1.6 puts it in a child's argv.
   - **If wrong**: the MVV's README step needs `set-state` to consume the
-    resolve envelope's observed tags — a linkage `--plan` deliberately refuses.
+    resolve envelope's observed tags — a linkage `--plan` deliberately refuses;
+    and if a value-shape guard did already exist upstream, C1.6's VALUE rule
+    would be duplicating it at a second site rather than closing a real gap.
 - **A8 [0004's `execution_failure` class plus a Detail carrying the rule id and
   the reason token, with the applied sense riding `Applied()`, is enough for a
   caller (an agent loop) to tell a pre-mutation edit refusal from a command
@@ -288,9 +300,20 @@ never a ticket; this RDR is that ticket. Nothing above is decided here.
     — testing each argv element for full equality against the literal
     `{artifact}`, never substring-scanning. A `{tag.<key>}` family is one more
     branch in that same loop at that same site: one vocabulary member, not a
-    second substitution mechanism.
+    second substitution mechanism. C1.6's VALUE rule mirrors a rule that is
+    already there rather than inventing one: the same else-branch refuses a
+    substituted value beginning with `-` —
+    `if !filepath.IsAbs(art.Path) || strings.HasPrefix(art.Path, "-")` —
+    through `cmdbind.go::refuse`, whose own doc comment calls it "a pre-spawn
+    refusal: a typed error carrying its own reason as the Detail, since no
+    child produced a stderr tail". It returns out of `substitute` before
+    `resolveArgv0` and before any spawn, and sits under the branch's
+    `if !substituted` guard, so it is reached only when the placeholder is
+    actually named in argv — the per-USE-SITE scope C1.6 states, inherited
+    rather than restated.
   - **If wrong**: C1.6 needs its own substitution pass in `cmdbind`, and the
-    whole-element rule must be restated there.
+    whole-element rule must be restated there; and its VALUE rule would be a
+    second, divergent flag-shape policy rather than the mirror it claims.
 - **A10 [The `--allow-commands` gate state can reach the executor as a field on
   `accessor.Registry`, set at `flowbind.go::Registry` — so C1.3's read-back gate
   pre-check needs no new import, no `Binding` interface method, and no change to
