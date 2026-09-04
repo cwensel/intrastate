@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Bug Fix
 - **Profile**: foundational — accretion floor; C1 fixes the drain precedence at `cmdbind::spawn` (bounded wait outranks whole read, held-pipe refusal, the one bound plus DrainGrace); user-facing yes; locks cross-rdr
 - **Priority**: High
