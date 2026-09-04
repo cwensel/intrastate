@@ -442,3 +442,80 @@ not poisoning; a rewrite that de-anchors a sibling refuses before mutation).
 
 No public surface is added: `unplanned` and `preHits` are unexported fields
 of an unexported struct, and `shiftHits` is an unexported helper.
+
+## D11 — C1.3 `precedence:` step (1): the gate pre-check is decided before the anchor's unbound tag
+
+**Type**: SPEC-DEFECT. **Status**: recorded; NO code change (Phase 3c).
+
+**Situation.** Phase 3a **FAIL-2** observed that an `edit` write whose ANCHOR
+carries an unbound `{tag.nnnn}`, over a command-backed reader with the gate
+OFF, reports the GATE refusal, while C1.3 `precedence:` step (1) orders the
+three entry-level preconditions "C1.6's unbound `{tag.<key>}`, then C1.6's
+`-`-prefixed bound value …, then the gate-off command read-back above".
+Phase 3a scoped the consequence itself: both arms refuse before mutation and
+the artifact is byte-identical either way, so it is a REPORTING-ORDER
+question, not a mutation-safety one.
+
+**Disposition: satisfiable as-is; no code change.** Three grounds, each
+sufficient on its own.
+
+**(a) The two refusals step (1) names are not the one that was probed.**
+Step (1) names "**C1.6's** unbound `{tag.<key>}`" and "**C1.6's**
+`-`-prefixed bound value", and C1.6 is titled "`{tag.<key>}` as a COMMAND
+PLACEHOLDER (0025:C2 extended)". Both of its refusals are argv-side, minted
+in `cmdbind.go::substitute` and stated by C1.6 `binding:`/VALUE: as firing
+"BEFORE spawn". REQ-88's own covering test
+(`TestReq88And89And90_…`) drives them through `cmdbind.Reader.Read` over a
+`command` argv, confirming the site. FAIL-2's fixture instead put the
+placeholder in the ANCHOR, whose binding is C1.2's (`anchor admits:`
+"…bound on the invocation's context (A1, A7)"). C1.2 states no refusal site
+and no precedence for it, and C1.3 step (1) does not enumerate it. So the
+observed ordering is not the ordering the clause fixes.
+
+**(b) On the path step (1) describes, the order is unrealizable in EITHER
+direction.** C1.6's two refusals fire inside the READ-BACK reader's spawn —
+`executor.go::invokeRead`, which `Write` reaches only after the gate
+pre-check and after `Apply`. The gate is precisely what prevents that spawn.
+With the gate off, no child is spawned, so neither C1.6 refusal is reachable
+at all: they are not merely sequenced later, they do not exist on that path.
+An ordering between "the gate refusal" and "a refusal only a passed gate can
+produce" has no realizable case, which is why no fixture can witness it.
+The shipped `TestReq51To54And120_…` covers steps (2)–(5) only, consistent
+with step (1)'s internal order having no observable.
+
+**(c) The record contradicts itself on the order, and the other statement
+puts the gate first.** REQ-41, one sentence earlier in the same clause,
+enumerates the same three as "the read-back gate below, C1.6's unbound tag
+and C1.6's `-`-prefixed value" — gate FIRST. Phase 3b's ADV-2 read REQ-41's
+order as governing and called the gate "**first** among the entry-level
+preconditions". The two sentences disagree; the implementation matches one
+of them. Recorded as SPEC-DEFECT for that reason rather than IMPL-DECISION:
+the defect is in the record's text, not in a choice the implementation made.
+
+**Reading taken.** Step (1)'s parenthetical — "(both are properties of the
+binding, decided together before anything is spawned OR READ)" — attaches to
+the two C1.6 refusals and explains why THEY are ordered together. The gate
+is appended to the sentence as the third member of the SET whose Detail
+discipline and exit group the clause is fixing, not as a third rung of a
+ladder anything can climb. Read that way both sentences agree, ground (b)'s
+vacuity is explained, and the clause's substantive requirements — refuse
+before mutation, Detail names the gate or the placeholder, exit-2 group —
+are all met.
+
+**What a code change would cost, had one been owed.** The gate pre-check
+must run before `Apply` (C1.3 `read-back:`: "the write MUST refuse BEFORE
+mutation … because the reader is resolved before `Apply`", A2), and the
+anchor's binding runs inside `Apply`. Inverting them needs a new
+`WriteBinding` seam method letting the executor ask the binding whether its
+entry-level preconditions would refuse — new public surface — since
+`internal/accessor` cannot import `flowbind` (`flowbind` imports
+`accessor`; the reverse is a cycle, C1.3 SITE:). Not taken, on grounds
+(a)–(c).
+
+**What the completion gate should know.** If a later author reads step (1)
+as ordering the ANCHOR's unbound tag ahead of the gate, the fix is the seam
+method above and it is a contract change, not a bug fix. The behaviour is
+unchanged either way in every property C1.3 asserts: refusal before
+mutation, byte-identical artifact, `execution_failure` class, a Detail
+naming the gate or the placeholder, and — after Phase 3c — the exit-2 group
+on both arms.

@@ -369,3 +369,210 @@ identifiers surfaced helper SIGNATURES from the Phase 1 accessor tests —
 both to avoid name collisions. No assertion, fixture or expectation was
 read, and every helper in `adversarial_0028_test.go` carries an `adv0028`
 prefix.
+
+## Phase 3c — dispositions
+
+Every Phase 3a `FAIL-N` and Phase 3b `ADV-N` above is dispositioned here.
+Entries above are unchanged; this section is append-only. Full suite green
+and `golangci-lint run` at 0 issues after each commit.
+
+Not weakened, skipped or deleted: no existing test was modified. The three
+Phase 3b probes in `internal/accessor/adversarial_0028_test.go` and every
+Phase 1 assertion pass unchanged against the fixed implementation.
+
+---
+
+### FAIL-1 — a bare `{{` in an `anchor` refuses `edit_anchor_invalid` — **FIXED**
+
+**What changed.** `internal/table/edit.go`: the anchor's brace
+discriminator was `editRepeatSpec` — "a well-formed repeat spec, or refuse".
+It is now `editPlaceholderShape` — refuse only a `{` opening a `{word}`
+(one or more of letter, digit, `_`, `-`, `.`, closed by `}`, with an
+all-digit body excluded as a repeat spec).
+
+**Why that reading.** D5's underlying reconciliation stands and was
+re-verified: `regexp.Compile` returns nil for EVERY brace shape probed —
+`{{`, `}}`, `{artifact}`, `\d{4}`, `[{}]`, `[{]`, `{`, `{}`, `{,}`,
+`{1,2,3}`, `a{2,3` — so C1.2's "never for a brace RE2 itself accepts"
+cannot be read as "never for a brace that compiles" without making C1.4's
+"carries any other `{…}` form" unreachable. What D5 got wrong was the SHAPE.
+C1.4's other two arms are "fails to compile" and "names an undeclared tag
+key", both placeholder concerns; "any other `{…}` form" read in that company
+means a form an author wrote MEANING a substitution, and the only
+substitution an anchor admits is `{tag.<key>}`. The change is strictly wider
+on the admit side and identical on the refuse side.
+
+**Constraint set, all satisfied simultaneously:**
+
+| anchor | verdict | source |
+| --- | --- | --- |
+| `^{{x$` (BARE) | loads | S14 Expected, by name — was refused |
+| `[{}]`, `[{]` | load | C1.2; Phase 3b recorded — were refused |
+| `^\d{4}$`, `^a{2,3}$`, `^\{\{x$` | load | REQ-25/28/121 — unchanged |
+| `^{artifact}$`, `^{status}$` | refuse | REQ-17/26/65 — unchanged |
+| `^{tag.absent}$`, `^{tag.nnnn$` | refuse | C1.2 placeholder scan — unchanged |
+
+**Tests.** New: `TestEditBraceShape0028_PlaceholderShapeIsTheDiscriminator`
+holds BOTH verdicts in one table, which the shipped Phase 1 pair does not —
+`TestReq17And26And65_…` and `TestReq25And28And121_…` are separate, so a
+future narrowing could satisfy one by breaking the other silently.
+`TestEditBraceShape0028_AdmittedAnchorsAreCarriedVerbatim` holds S14's
+operational half: an admitted anchor's bytes reach RE2 unmangled, not merely
+un-refused. Eight of the table's arms fail against the pre-correction
+discriminator, so the tests are load-bearing.
+
+**Deviation.** D5 UPDATED in place per the brief: status now "CORRECTED
+(Phase 3c)", the choice restated, and a "Why the original wording was wrong"
+section naming both FAIL-1 and the Phase 3b finding. Type stays SPEC-UNDER.
+
+---
+
+### FAIL-2 — the gate pre-check is decided BEFORE C1.6's unbound `{tag.<key>}` — **NO CODE CHANGE; recorded as D11**
+
+**Assessment: C1.3's stated precedence is satisfiable as-is.** Three
+independent grounds, each sufficient; the full reasoning is deviations.md
+D11 (SPEC-DEFECT).
+
+1. **The two refusals step (1) names are not the one probed.** Step (1)
+   names "C1.6's unbound `{tag.<key>}`" and "C1.6's `-`-prefixed bound
+   value"; C1.6 is "`{tag.<key>}` as a COMMAND PLACEHOLDER", both of its
+   refusals argv-side in `cmdbind.go::substitute`, and REQ-88's own covering
+   test drives them through a `command` argv. FAIL-2's fixture put the
+   placeholder in the ANCHOR, whose binding is C1.2's — a site C1.2 gives no
+   refusal order and step (1) does not enumerate.
+2. **On the path step (1) describes the order is unrealizable in EITHER
+   direction.** C1.6's refusals fire inside `executor.go::invokeRead`, the
+   read-back reader's spawn, which `Write` reaches only after the gate
+   pre-check and after `Apply`. The gate is what prevents that spawn: with
+   it off, neither C1.6 refusal is reachable at all. No fixture can witness
+   the ordering. The shipped `TestReq51To54And120_…` covers steps (2)–(5)
+   only, consistent with this.
+3. **The record contradicts itself, and its other statement puts the gate
+   first.** REQ-41, one sentence earlier in the same clause, orders the same
+   three as "the read-back gate below, C1.6's unbound tag and C1.6's
+   `-`-prefixed value". Phase 3b's ADV-2 read that order as governing and
+   called the gate "first among the entry-level preconditions". The
+   implementation matches REQ-41.
+
+**Cost had one been owed**, recorded so the completion gate can price it:
+the gate pre-check must run before `Apply` (C1.3 `read-back:`, A2) and the
+anchor's binding runs inside it, so inverting them needs a NEW
+`WriteBinding` seam method — new public surface — because
+`internal/accessor` cannot import `flowbind` (C1.3 SITE:). Not taken.
+
+Every property C1.3 asserts holds on both arms either way: refusal before
+mutation, byte-identical artifact, `execution_failure` class, a Detail
+naming the gate or the placeholder, and — after ADV-1/ADV-2 below — the
+exit-2 group.
+
+---
+
+### ADV-1 — the unbound anchor tag refuses in the WRONG exit group — **FIXED**
+
+**What changed.** `internal/cli/flowbind/edit.go::prepare`: the
+`table.ExpandEditAnchor` `!ok` arm minted a bare `&accessor.ExecError{Detail:
+…}`. It now carries `Err: accessor.ErrDeclaredRequest`, so
+`refusalOf`'s `errors.Is` discriminator sets `DeclaredRequest()` true and
+`accessorFailureOf` routes it to the exit-2 group. One field; the Detail,
+class and pre-mutation guarantee are untouched.
+
+**Test.** `TestAdv0028_1_UnboundAnchorTagTakesTheRequestExitGroup`
+(Phase 3b's, unmodified) now passes.
+
+---
+
+### ADV-2 — the gate-off read-back pre-check refuses in the WRONG exit group — **FIXED**
+
+**What changed.** `internal/accessor/executor.go`: the pre-check built its
+refusal with `refusalOf(def, timeout, ClassExecutionFailure, nil)` — the
+literal `nil` made the discriminator false BY CONSTRUCTION, as ADV-2 said, so
+this needed a different fix from ADV-1's rather than inheriting it. It now
+passes `ErrDeclaredRequest` in the same slot. The sentinel is not an
+`*ExecError`, so `refusalOf`'s `errors.As` finds no tail and contributes no
+Detail: the gate text assigned immediately below is unchanged and remains the
+whole of it.
+
+**Test.** `TestAdv0028_2_GateOffReadBackPreCheckTakesTheRequestExitGroup`
+(Phase 3b's, unmodified) now passes.
+
+---
+
+### THIRD SITE (owed by C1.3's exit-group wording, not separately pinned) — **FIXED**
+
+**Verified against C1.3 before fixing.** `order:` enumerates the entry-level
+preconditions as a set of three — "the read-back gate below, C1.6's unbound
+tag and C1.6's `-`-prefixed value" — and its EXIT GROUP: sentence speaks of
+all of them at once ("THESE refusals are about the REQUEST"). ADV-1 and ADV-2
+fixed two. C1.6's argv pair, minted through `cmdbind.go::refuse`, omitted the
+typed `Err` for the same reason and is owed the same fix.
+
+**What changed.** `internal/cli/cmdbind/cmdbind.go`: a new `refuseRequest`
+helper, a SIBLING of `refuse` rather than a widening of it, used by exactly
+the two C1.6 arms in `substitute` (the unbound `{tag.<key>}` and the
+`-`-prefixed bound value). 0025's own pre-spawn ladder — the gate, the argv0
+deny-list, a non-absolute `{artifact}` path — keeps `refuse` and its existing
+routing, which this record does not amend.
+
+**Test.** New:
+`TestExitGroup0028_CommandTagPreconditionsTakeTheRequestExitGroup`, four
+arms — the two refusals wrap `ErrDeclaredRequest` and still name the
+placeholder; a bound non-flag value is still admitted (so the fix cannot be
+read as "route everything to exit 2"); and a SCOPE CONTROL asserting 0025:C6's
+gate refusal does NOT now wrap the sentinel.
+
+---
+
+### ADV-3 — the re-anchor pass skips rules this plan did not name — **FIXED**
+
+**What changed.** `internal/cli/flowbind/edit.go`. `prepare` no longer
+`continue`s past a key the plan did not name: it builds the rule for its
+ANCHOR alone (`unplanned: true`), and `reAnchor` now runs every declared
+rule. C1.3 `re-anchor:` states the invariant with no plan qualifier and names
+this exact case as its reason for existing.
+
+**The reading, which the clause under-determines.** Its test is "exactly its
+own rewritten line", and an unplanned rule HAS no rewritten line — it writes
+nothing. Taken as STABILITY: an unplanned rule must select, after the
+rewrite, exactly the lines it selected before it, shifted by any deletions.
+The alternative, cardinality, would newly refuse over an anchor already stale
+or already ambiguous BEFORE this invocation — a defect this run neither
+caused nor touched, and one C1.3 `select:` assigns to the plan that names the
+rule. Stability fires when and only when this entry's rewrite moved the
+sibling, which is the poisoning. Recorded as **D10 (SPEC-UNDER)**.
+
+**Scope kept narrow, so no other clause moves.** An unplanned rule raises no
+refusal of its own at steps (2)–(5): no planned value to scan, `replace`
+never parsed or expanded, no deletion, no collision. An anchor it declares
+that cannot be parsed, bound or compiled makes it contribute no post-edit
+witness rather than condemn a plan that never touched it. Only step (6)
+reads it. `shiftHits` reuses the shift arithmetic the planned rules already
+use.
+
+**Tests.** `TestAdv0028_3_ReAnchorCoversRulesThisPlanDidNotName` (Phase 3b's,
+unmodified) now passes — and passes through its refusal branch, which
+requires the artifact byte-identical, not through its accidental-pass branch.
+New: `TestReAnchor0028_UnplannedSiblingRulesAreCovered`, the four arms the
+ADV-3 fixture does not reach — an untouched sibling still applies; an
+already-unmatched sibling is not this plan's refusal; a `<clear>` deletion
+that merely SHIFTS the sibling is not poisoning; a rewrite that de-anchors a
+sibling refuses before mutation.
+
+**No public surface added:** `unplanned` and `preHits` are unexported fields
+of an unexported struct and `shiftHits` is an unexported helper.
+
+---
+
+### Phase 3c new deviations
+
+- **D10** — `re-anchor:` over an UNPLANNED sibling rule: the stability
+  reading. **SPEC-UNDER.**
+- **D11** — C1.3 `precedence:` step (1): the gate pre-check is decided
+  before the anchor's unbound tag. **SPEC-DEFECT**, no code change.
+- **D5** — UPDATED in place (not a new id): the brace discriminator
+  corrected, with the reason the original scope statement was incomplete.
+  Type unchanged (SPEC-UNDER).
+
+No entry carries `Status: needs author decision`: each was settled from the
+record's own text. D11 states what a later author would have to build if the
+completion gate reads C1.3 step (1) the other way, and prices it as a
+contract change rather than a bug fix.
