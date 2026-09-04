@@ -1312,10 +1312,19 @@ func editTableDefect(
 	compiled := make(map[string]*regexp.Regexp, len(rules))
 	for _, key := range slices.Sorted(maps.Keys(rules)) {
 		r := rules[key]
-		anchor := ""
-		if r.Anchor != nil {
-			anchor = *r.Anchor
+		// `anchor` is REQUIRED. C1.1 marks only `clear` optional, so an
+		// omitted anchor is a grammar defect and not an empty pattern:
+		// "" compiles to the everything-matcher, which selects the sole
+		// line of a one-line file and rewrites it. Refusing here is what
+		// keeps `select:`'s exactly-one rule from being satisfied by
+		// accident on an artifact no author aimed at.
+		if r.Anchor == nil {
+			return fail(CatEditAnchorInvalid,
+				where+" `edit."+key+"` declares no `anchor`; C1.1 marks only "+
+					"`clear` optional, and an absent anchor would match every "+
+					"line rather than none")
 		}
+		anchor := *r.Anchor
 		segs, err := ParseEditAnchor(anchor, bindable)
 		if err != nil {
 			return fail(CatEditAnchorInvalid,
@@ -1332,10 +1341,18 @@ func editTableDefect(
 	// 4 — edit_template_invalid, over every rule.
 	for _, key := range slices.Sorted(maps.Keys(rules)) {
 		r := rules[key]
-		replace := ""
-		if r.Replace != nil {
-			replace = *r.Replace
+		// `replace` is REQUIRED for the same reason. An omitted template
+		// is not "write nothing" — it is the empty LINE, so a rule whose
+		// anchor still matches erases that line's content while
+		// reporting success. Deleting a line is `clear`'s job (C1.5),
+		// declared explicitly.
+		if r.Replace == nil {
+			return fail(CatEditTemplateInvalid,
+				where+" `edit."+key+"` declares no `replace`; C1.1 marks only "+
+					"`clear` optional, and an absent template would blank the "+
+					"selected line rather than rewrite it (deletion is `clear`)")
 		}
+		replace := *r.Replace
 		re := compiled[key]
 		if _, err := ParseEditReplace(
 			replace, key, re.NumSubexp(), re.SubexpNames(),

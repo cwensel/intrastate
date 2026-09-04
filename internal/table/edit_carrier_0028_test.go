@@ -1278,3 +1278,65 @@ func TestReq19And101_TheEditCarrierIsCarriedOnTheDumpSurface(t *testing.T) {
 		}
 	})
 }
+
+// REQ-2/REQ-3 (`0028:C1.1`): the grammar marks ONLY `clear` optional —
+// "clear   = \"line\"  # optional". `anchor` and `replace` carry no such
+// marker, so an omitted one is a grammar defect, not an empty value.
+//
+// TRIAGE REGRESSION (roborev job 6779). The loader coerced a nil `Anchor`
+// and a nil `Replace` to "" and accepted both. That is not a cosmetic
+// laxity — it is silent DATA LOSS:
+//
+//   - an empty anchor compiles to the everything-matcher, so on a
+//     one-line file it selects that line (cardinality 1, so
+//     `edit_anchor_ambiguous` never fires) and rewrites it;
+//   - an empty `replace` is not "write nothing" but the empty LINE, so a
+//     rule whose anchor still matches blanks that line's content.
+//
+// Observed before the fix, with err == nil in both cases:
+//
+//	anchor="" replace=""          "- **status**: Draft\n" -> "\n"
+//	anchor="^.*$" replace=""      "- **status**: Draft\n" -> "\n"
+//
+// Deleting a line is `clear`'s job (C1.5), declared explicitly. A rule
+// that erases one by omission is the failure C1.3 `write:` exists to
+// prevent, reported as success.
+//
+// ADVERSARIAL. Asserted by CATEGORY, per this file's oracle rule.
+func TestReq2And3_AnchorAndReplaceAreRequiredNotEmptyByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		block string
+		want  table.Category
+		why   string
+	}{
+		{
+			name: "omitted_anchor",
+			block: `[write.record.edit.status]
+replace = "- **Status**: {status}"`,
+			want: table.CatEditAnchorInvalid,
+			why: "an absent anchor would match EVERY line rather than none, " +
+				"so a one-line artifact is selected and rewritten by a rule " +
+				"that named no pattern",
+		},
+		{
+			name: "omitted_replace",
+			block: `[write.record.edit.status]
+anchor  = "^- \\*\\*Status\\*\\*: (.*)$"`,
+			want: table.CatEditTemplateInvalid,
+			why: "an absent template is the empty LINE, not 'no write', so " +
+				"the selected line is blanked while the write reports success",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := editSwap(t, editCarrierModel, `[write.record.edit.status]
+anchor  = "^- \\*\\*Status\\*\\*: (.*)$"
+replace = "- **Status**: {status}"`, tc.block)
+
+			if got := editCategoryOf(t, src, tc.name); got != tc.want {
+				t.Errorf("category = %q; want %q — `0028:C1.1` marks only "+
+					"`clear` optional.\n%s", got, tc.want, tc.why)
+			}
+		})
+	}
+}
