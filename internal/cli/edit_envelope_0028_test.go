@@ -371,6 +371,19 @@ func TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine(t *testing.T) {
 	}
 }
 
+// editApplyTimeTokens is C1.3 and C1.5's six apply-time reason tokens.
+// They are unexported in `flowbind`, so they are spelled here as the wire
+// strings the doc must carry; the disjointness assertion in the first
+// REQ-102 test below is what keeps that spelling honest.
+var editApplyTimeTokens = []string{
+	"edit_anchor_unmatched",
+	"edit_anchor_ambiguous",
+	"edit_anchor_collision",
+	"edit_anchor_unstable",
+	"edit_value_multiline",
+	"edit_clear_undeclared",
+}
+
 // REQ-102: "`docs/cli-output-contract.md` names the new categories and
 // Detail tokens" — (0028 Phase 4, §implementation-plan).
 //
@@ -405,18 +418,9 @@ func TestReq102_TheOutputContractNamesBothEditNameSets(t *testing.T) {
 		}
 	}
 
-	// C1.3 and C1.5's six apply-time reason tokens. These are unexported
-	// in flowbind, so they are spelled here as the wire strings the doc
-	// must carry; the disjointness assertion below is what keeps that
-	// honest.
-	applyTime := []string{
-		"edit_anchor_unmatched",
-		"edit_anchor_ambiguous",
-		"edit_anchor_collision",
-		"edit_anchor_unstable",
-		"edit_value_multiline",
-		"edit_clear_undeclared",
-	}
+	// C1.3 and C1.5's six apply-time reason tokens, shared with the
+	// subject-shape test below.
+	applyTime := editApplyTimeTokens
 	for _, tok := range applyTime {
 		if !strings.Contains(doc, tok) {
 			t.Errorf("cli-output-contract.md does not name apply-time reason token %q", tok)
@@ -439,5 +443,350 @@ func TestReq102_TheOutputContractNamesBothEditNameSets(t *testing.T) {
 		if !registered[string(c)] {
 			t.Errorf("load-time category %q is NOT registered in table.Categories()", c)
 		}
+	}
+}
+
+// editCollisionModel is the two-rule variant of `editEnvelopeModel`. Both
+// rules select the SAME Status bullet, which is the one defect the entry
+// carrier reports as a PAIR: `edit_anchor_collision` has two rules to name
+// and no way to attribute the defect to either alone.
+const editCollisionModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "editcollide"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final"]
+single_valued = true
+required = true
+
+[tags.owner]
+provenance = "owned"
+kind = "enum"
+domain = ["cwensel", "someone"]
+single_valued = true
+required = true
+
+[read.record]
+role = "record"
+path = "record.state"
+keys = ["status", "owner"]
+timeout = "2s"
+
+[write.record]
+role = "record"
+keys = ["status", "owner"]
+timeout = "2s"
+read_back = true
+
+[write.record.edit.status]
+anchor  = "^- \\*\\*Status\\*\\*: (.+)$"
+replace = "- **Status**: {status}"
+
+[write.record.edit.owner]
+anchor  = "^- \\*\\*Status\\*\\*: Draft$"
+replace = "- **Owner**: {owner}"
+
+[context.done]
+[context.done.match.status]
+eq = "Final"
+
+[initial]
+status = "Draft"
+owner = "cwensel"
+`
+
+// editScalarModel carries its owned key as a `scalar` rather than an enum,
+// so a value the domain would have rejected upstream reaches the edit
+// binding and earns C1.2's `edit_value_multiline`. That refusal is minted
+// by the ENTRY carrier — the multiline scan spans the whole plan — so its
+// subject is the entry with no `.edit.<key>` segment, which is the plain
+// entry-scoped shape the collision case cannot exhibit.
+const editScalarModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "editscalar"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "scalar"
+required = true
+
+[read.record]
+role = "record"
+path = "record.state"
+keys = ["status"]
+timeout = "2s"
+
+[write.record]
+role = "record"
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[write.record.edit.status]
+anchor  = "^- \\*\\*Status\\*\\*: (.+)$"
+replace = "- **Status**: {status}"
+
+[context.done]
+[context.done.match.status]
+eq = "Final"
+
+[initial]
+status = "Draft"
+`
+
+// editUnboundAnchorModel references `{tag.nnnn}` from the rule's own
+// ANCHOR. Left unbound by the invocation, it is the tokenless case: the
+// binding has no rule to name and no `edit_*` token to mint, so it names
+// the PLACEHOLDER. It is still a declared line edit, so it keeps the
+// line-edit envelope and its `findings[]`.
+const editUnboundAnchorModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "editunbound"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.nnnn]
+provenance = "observed"
+kind = "scalar"
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final"]
+single_valued = true
+required = true
+
+[read.record]
+role = "record"
+path = "record.state"
+keys = ["status"]
+timeout = "2s"
+
+[write.record]
+role = "record"
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[write.record.edit.status]
+anchor  = "^- \\*\\*{tag.nnnn}\\*\\*: (.+)$"
+replace = "- **Status**: {status}"
+
+[context.done]
+[context.done.match.status]
+eq = "Final"
+
+[initial]
+status = "Draft"
+`
+
+// REQ-102, second half: the same paragraph's claim about the SUBJECT each
+// finding names.
+//
+// DOMAIN EDGE, and the drift this exists to catch. The paragraph used to
+// say a declared-line-edit refusal names a rule, `<accessor id>.edit.<key>`,
+// full stop. Three subject shapes ship, from two carriers in
+// `internal/cli/flowbind/edit.go`: the rule-scoped carrier mints
+// `<token>: <id>.edit.<key>: <detail>` and the entry carrier mints
+// `<token>: <id>: <detail>`, the latter used for the whole-plan multiline
+// scan and for the cross-rule collision sweep, whose detail names the two
+// colliding rules. A consumer splitting a `message` on the documented
+// rule-scoped form mis-slices the other two.
+//
+// The assertion is anchored to the CODE, not to a copy of the doc's own
+// words: each case drives a real refusal through the CLI, reads the shape
+// the carrier actually minted, and only then requires the doc to describe
+// it. A rename in `edit.go` therefore reddens this test rather than
+// silently re-opening the drift.
+func TestReq102_TheOutputContractNamesEveryEditSubjectShape(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "docs", "cli-output-contract.md"))
+	if err != nil {
+		t.Fatalf("read cli-output-contract.md: %v", err)
+	}
+	doc := string(body)
+
+	// The doc must draw the distinction at all. Terms mirrored from RDR
+	// 0028's C1.3 `order:` clause rather than invented here.
+	for _, phrase := range []string{
+		"rule-scoped",
+		"entry-scoped",
+		"pair-scoped",
+		"having no rule to name",
+	} {
+		if !strings.Contains(doc, phrase) {
+			t.Errorf("cli-output-contract.md does not name the subject shape %q; "+
+				"a consumer splitting every finding on `<id>.edit.<key>` "+
+				"mis-slices the shapes it omits", phrase)
+		}
+	}
+
+	// And it must name the shapes as SHAPES, so a consumer knows what to
+	// split on rather than inferring it from one worked example.
+	for _, form := range []string{
+		"`<token>: <accessor id>.edit.<key>: <detail>`",
+		"`<token>: <accessor id>: <detail>`",
+	} {
+		if !strings.Contains(doc, form) {
+			t.Errorf("cli-output-contract.md does not spell the subject form %s", form)
+		}
+	}
+
+	// Now the anchor to behaviour. Each case is a live refusal, and the
+	// prefix asserted is the one the carrier minted on this run.
+	for _, tc := range []struct {
+		name    string
+		model   string
+		doc     string
+		args    func(model, binding string) []string
+		wantPfx string
+		// wantIn is text the detail must carry beyond the prefix. For the
+		// pair-scoped case it is the SECOND rule, which is what makes the
+		// shape a pair rather than an entry.
+		wantIn string
+		// wantAbsent is text the detail must NOT carry. An entry-scoped
+		// subject is witnessed as much by the `.edit.<key>` segment it
+		// omits as by the prefix it mints.
+		wantAbsent string
+		// wantNoToken asserts the detail carries NONE of the six
+		// apply-time reason tokens — the fourth case, which has no rule
+		// to name and mints no token either.
+		wantNoToken bool
+	}{
+		{
+			name:  "rule_scoped_carrier",
+			model: editEnvelopeModel,
+			doc:   "# a record\n\nno status bullet here\n",
+			args: func(model, binding string) []string {
+				return []string{"flow", "set-state", "--model", model,
+					"--artifact", binding, "--write", "status=Final"}
+			},
+			wantPfx: "edit_anchor_unmatched: record.edit.status: ",
+		},
+		{
+			name:  "entry_scoped_carrier_naming_a_pair",
+			model: editCollisionModel,
+			doc:   editEnvelopeDoc,
+			args: func(model, binding string) []string {
+				return []string{"flow", "set-state", "--model", model,
+					"--artifact", binding,
+					"--write", "status=Final", "--write", "owner=someone"}
+			},
+			wantPfx: "edit_anchor_collision: record: ",
+			wantIn:  "`record.edit.owner`",
+		},
+		{
+			// The PLAIN entry-scoped shape. The collision case above is
+			// entry-scoped too, but its detail names two rules, so it
+			// cannot witness a subject that names no rule at all. This
+			// one can: the multiline scan spans the entry's whole plan.
+			name:  "entry_scoped_carrier_naming_no_rule",
+			model: editScalarModel,
+			doc:   editEnvelopeDoc,
+			args: func(model, binding string) []string {
+				return []string{"flow", "set-state", "--model", model,
+					"--artifact", binding, "--write", "status=Fi\nnal"}
+			},
+			wantPfx: "edit_value_multiline: record: ",
+			// The absence is the assertion: an entry-scoped subject is
+			// the entry, never `<id>.edit.<key>`.
+			wantAbsent: "record.edit.status",
+		},
+		{
+			// The TOKENLESS case. An unbound `{tag.<key>}` in a rule's
+			// own anchor names the placeholder, having no rule to name
+			// and no `edit_*` token to mint — but it is still a declared
+			// line edit, so it keeps this envelope and its `findings[]`.
+			name:  "tokenless_unbound_anchor_placeholder",
+			model: editUnboundAnchorModel,
+			doc:   editEnvelopeDoc,
+			args: func(model, binding string) []string {
+				// No `--tag nnnn=…`: that omission is the defect.
+				return []string{"flow", "set-state", "--model", model,
+					"--artifact", binding, "--write", "status=Final"}
+			},
+			wantIn:      "{tag.nnnn}",
+			wantNoToken: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			model := writeModelFile(t, dir, "edit-shape.toml", tc.model)
+			target := filepath.Join(dir, "record.md")
+			if werr := os.WriteFile(target, []byte(tc.doc), 0o644); werr != nil {
+				t.Fatalf("writing the target document: %v", werr)
+			}
+			binding := artifactBinding(editEnvelopeRole, target)
+
+			_, _, rerr := runCmd(t, tc.args(model, binding)...)
+			if rerr == nil {
+				t.Fatalf("the invocation succeeded; want a refusal carrying %q",
+					tc.wantPfx)
+			}
+			var ce *clierr.CLIError
+			if !asCLIError(rerr, &ce) {
+				t.Fatalf("the refusal is not a structured CLIError: %v", rerr)
+			}
+			if len(ce.Findings) == 0 {
+				t.Fatalf("the envelope carries no `findings[]`: %+v", ce)
+			}
+
+			got := ce.Findings[0].Message
+			if tc.wantPfx != "" && !strings.HasPrefix(got, tc.wantPfx) {
+				t.Errorf("finding message = %q; want the prefix %q — the doc's "+
+					"subject-shape paragraph describes this carrier and must "+
+					"match what it mints", got, tc.wantPfx)
+			}
+			if tc.wantIn != "" && !strings.Contains(got, tc.wantIn) {
+				t.Errorf("finding message = %q does not carry %q", got, tc.wantIn)
+			}
+			if tc.wantAbsent != "" && strings.Contains(got, tc.wantAbsent) {
+				t.Errorf("finding message = %q names %q; an entry-scoped subject "+
+					"is the ENTRY and carries no `.edit.<key>` segment",
+					got, tc.wantAbsent)
+			}
+			if tc.wantNoToken {
+				for _, tok := range editApplyTimeTokens {
+					if strings.Contains(got, tok) {
+						t.Errorf("finding message = %q carries the reason token "+
+							"%q; the entry-level precondition names the "+
+							"placeholder and mints no token", got, tok)
+					}
+				}
+			}
+		})
+	}
+
+	// The fourth case is driven live above. The doc must also SAY so, or a
+	// consumer indexing every line-edit finding by token drops it.
+	if !strings.Contains(doc, "no** `edit_*` reason token") {
+		t.Errorf("cli-output-contract.md does not state that the entry-level " +
+			"preconditions carry no `edit_*` reason token")
 	}
 }

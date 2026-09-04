@@ -34,14 +34,41 @@ given run happens to produce:
   category each emit a one-element `findings` array and no top-level
   `param`.
 
-A declared-line-edit refusal is an aggregate family because its subject is
-a RULE — `<accessor id>.edit.<key>` — rather than a flag or an argument,
-and one write entry can carry several rules. Each finding's `message`
-carries the rule id and the refusal's reason token. These refusals are
-decided BEFORE any byte is written and take the **exit-2** group: they are
-about the request, not the environment, so re-running the same request
+A declared-line-edit refusal is an aggregate family for a reason of
+CARDINALITY: one write entry can carry several line rules, so one refusal
+can have several subjects, and none of them is a flag or an argument.
+`findings` is therefore the carrier even when a given run produces one.
+Each finding's `message` is the refusal's `Detail` verbatim. These refusals
+are decided BEFORE any byte is written and take the **exit-2** group: they
+are about the request, not the environment, so re-running the same request
 unchanged cannot help. An unreadable target is the contrasting case and
 keeps exit 3.
+
+**Do not assume the subject is a rule.** It often is, but three shapes
+ship, and a consumer splitting a `message` on the rule-scoped form
+mis-slices two of them:
+
+- **rule-scoped** — `<token>: <accessor id>.edit.<key>: <detail>`. A
+  cardinality or stability defect belongs to one rule and names it, which
+  is what lets a caller trace the refusal to one declaration among an
+  entry's siblings.
+- **entry-scoped** — `<token>: <accessor id>: <detail>`. The multiline-value
+  scan spans the entry's whole plan and the cross-rule collision sweep is a
+  property of a PAIR, so neither has a single rule to name.
+- **pair-scoped** — an entry-scoped subject whose `<detail>` names the two
+  colliding rules, `edit_anchor_collision` being the one case with two
+  rules to report and no way to attribute the defect to either alone.
+
+A fourth case carries **no** `edit_*` reason token at all. The
+**entry-level preconditions** name the gate or the placeholder instead,
+having no rule to name. An unbound `{tag.<key>}` in a rule's own *anchor*
+is still a declared line edit, so it takes this code and this `findings`
+array with the placeholder — not a token, not a rule — as its subject. The
+other entry-level preconditions are refusals of the *request* rather than
+of a line edit: the gate-off read-back check and the argv preconditions of
+any command-backed accessor take the generic request-refused code, carry no
+`findings` array at all, and name the accessor in `param`. The refusal's
+ORIGIN selects the envelope; the phase it was raised in does not.
 
 The declared-line-edit carrier names two DISJOINT sets of six. Confusing
 them is the mistake this paragraph exists to prevent: only the first set
@@ -55,8 +82,9 @@ fires on a `command` entry of any kind, including one carrying no `edit`
 table, because it belongs to the argv placeholder family rather than to
 the carrier.
 
-Apply-time reason tokens, carried on a refusal's `Detail` beside the rule
-id and registering in no category list: `edit_anchor_unmatched`,
+Apply-time reason tokens, carried on a refusal's `Detail` beside its
+subject — rule-scoped or entry-scoped, per the shapes above — and
+registering in no category list: `edit_anchor_unmatched`,
 `edit_anchor_ambiguous`, `edit_anchor_collision`, `edit_anchor_unstable`,
 `edit_value_multiline`, `edit_clear_undeclared`. Lint does not decide any
 of them — a stale anchor is a property of the artifact at apply time, not
