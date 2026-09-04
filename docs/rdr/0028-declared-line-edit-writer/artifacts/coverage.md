@@ -11,6 +11,8 @@ Test files:
   shape and parse-once, C1.3 execution, C1.5 clear, C1.6 binding, A1 seam).
 - `internal/accessor/edit_mvv_0028_test.go` — REQ-MVV's eight steps and
   REQ-MVV-BLOCK.
+- `internal/cli/edit_envelope_0028_test.go` — the CLI ENVELOPE half of
+  C1.3's exit-group clause (added in Phase 2; see the orphan notes).
 
 | REQ | Test |
 |---|---|
@@ -56,7 +58,7 @@ Test files:
 | REQ-40 | TestReq40And41And42_ARefusedEditIsExecutionFailureNotAppliedWithARuleScopedDetail |
 | REQ-41 | TestReq40And41And42_ARefusedEditIsExecutionFailureNotAppliedWithARuleScopedDetail |
 | REQ-42 | TestReq40And41And42_ARefusedEditIsExecutionFailureNotAppliedWithARuleScopedDetail |
-| REQ-43 |  |
+| REQ-43 | TestReq43And113_ADeclaredLineEditRefusalTakesTheExit2Group; TestReq43_TheDiscriminatorLeavesGenuineEnvironmentFailuresAtExit3; TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine |
 | REQ-44 |  |
 | REQ-45 |  |
 | REQ-46 | TestReq46And48_AtomicityIsOneEntryOverOneFileAndNeverCrossEntry |
@@ -126,8 +128,8 @@ Test files:
 | REQ-110 | TestReq58And110_AnEditAppliesWithTheGateOffAndInvocationsCountsApplies |
 | REQ-111 | TestReq52And111_ABoundButUnreferencedTagValueIsNeverScanned; TestReq111_AFlagShapedTagValueIsAdmittedInAnAnchor |
 | REQ-112 | TestReq59And60And112_AGateOffCommandReaderRefusesTheWriteBeforeMutation |
-| REQ-113 |  |
-| REQ-114 |  |
+| REQ-113 | TestReq43And113_ADeclaredLineEditRefusalTakesTheExit2Group |
+| REQ-114 | TestReq114_TheRefusalCarriesTheRuleAndTokenInFindings |
 | REQ-115 | TestReq32And115_AnUnreadableTargetRefusesWithTheOSErrorNotAnAnchorResult |
 | REQ-116 | TestReq71And116_TheEarlierCategoryInRegistrationOrderIsTheOneReported; TestReq72And116_SiblingTablesReportOneStableCategoryAndNoNamedWinner |
 | REQ-117 | TestReq80And117_ClearIsOneWayAndTheNextWriteRefusesUnmatched |
@@ -154,15 +156,20 @@ Eight REQs carry an empty cell. Each is unreachable from
 `internal/table/` or `internal/accessor/`, which are this phase's two test
 directories; none is a spec gap.
 
-- **REQ-43, REQ-113, REQ-114** — the CLI ENVELOPE. C1.3's exit-2 group, the
-  `flow_exec.go::accessorFailureOf` discriminator and the `findings[]`
-  carriage per `docs/cli-output-contract.md` are all observable only at
-  `internal/cli/`. The accessor-seam half of S27 (class
+- **REQ-43, REQ-113, REQ-114** — CLOSED in Phase 2 by
+  `internal/cli/edit_envelope_0028_test.go`. The three were unreachable
+  from `internal/table/` or `internal/accessor/`, which were Phase 1's two
+  test directories; the accessor-seam half of S27 (class
   `execution_failure`, `Applied()` false, the rule id and reason token in
-  the Detail) IS covered — see REQ-40/41/42. Phase 2 or 3 owes an
-  `internal/cli/*_0028_test.go` for the envelope half. REQ-44 forbids
-  pinning the CLI code STRING and REQ-113 restates it; the envelope test
-  must pin the exit GROUP and the `findings[]` shape, never the spelling.
+  the Detail) was already covered at REQ-40/41/42.
+
+  The envelope test pins the exit GROUP, the discriminator and the
+  `findings[]` shape, and NEVER the CLI code string, which REQ-44 forbids
+  and REQ-113 restates. Its load-bearing arm is the negative control: an
+  unreadable target is the SAME `execution_failure` class reached WITHOUT
+  the request bit and must still exit 3, so an implementation that moved
+  the whole class to exit 2 fails rather than passing every positive
+  assertion.
 - **REQ-44, REQ-45** — pure prohibitions with no observable behaviour in
   these packages. REQ-44 forbids a test from pinning the CLI code string,
   which is a constraint ON the envelope test above rather than a test of
@@ -206,6 +213,22 @@ reviewer does not read them as tautologies.
   the consumer ships the row-addressed projector verb, which is the signal
   that MVV Phase 4's CLI pipeline can run.
 
+## Phase 2 correction to the section above
+
+`TestReq19And101_TheEditCarrierIsCarriedOnTheDumpSurface` was NOT on the
+green-by-design list and should have been on a third list: it passed
+TAUTOLOGICALLY once the type surface existed. Its oracle is
+`strings.Contains(table.Dump(m), "edit")`, and the fixture's model id is
+`editflow`, so the assertion was satisfied by the `MODEL editflow …`
+header alone while `Dump` emitted no accessor at all. Phase 2 found the
+dump of an `edit`-carried model byte-identical to that of a carrier-less
+one and implemented the carrier line REQ-101/A6 requires; deviations D4
+records the format. The test now discriminates.
+
+The lesson generalises: a `Contains` oracle over a whole rendered surface
+can be satisfied by an unrelated substring of that surface, and a fixture
+id is the likeliest source.
+
 The other sixty-five were confirmed red behaviourally: run against a
 compiling no-op `edit` binding (a stub `NewEditWriter` whose `Apply`
 returns nil, an `Artifact.Context` field, a `Registry.AllowCommands`
@@ -213,3 +236,67 @@ field, a `table.EditRule` type and the six `Cat…` constants), all
 sixty-five fail. Against the real tree they fail at COMPILE, which is a
 stronger red but a weaker signal — the stub run is the evidence that no
 test is tautological.
+
+## REQ-MVV runner
+
+The MVV runs at the ACCESSOR SEAM, not through the CLI pipeline.
+REQ-MVV-BLOCK records why: the consumer's row-addressed projector verb the
+C1.6 README reader invokes does not ship, so `flow resolve | flow
+set-state` cannot run end to end. `TestReqMVVBlock_…` probes for that verb
+and stays green while it is absent — it flips RED the day the consumer
+ships it, which is the signal that Phase 4's CLI half can run.
+
+All eight steps are unblocked at the seam, which is what "Phases 1–3 do not
+depend on it" means. The executor, the two `edit` write bindings and a role
+reader per artifact are all real; only the projector is a stub, and it
+reads the FILE back rather than mirroring what the writer intended, so each
+read-back is a genuine re-read that can fail independently of its write.
+
+```sh
+go test ./internal/accessor/ \
+  -run 'TestMVV_DeclaredLineEditWriter|TestReqMVVBlock' -v
+```
+
+## REQ-MVV output
+
+Actual output, 2026-09-04, against the merged tree.
+
+```
+--- PASS: TestMVV_DeclaredLineEditWriter (0.02s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step1_the_model_lints_clean_with_no_wrapper_script (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step2and3_three_sequential_invocations_each_flip_one_line_per_file (0.01s)
+        --- PASS: TestMVV_DeclaredLineEditWriter/step2and3_three_sequential_invocations_each_flip_one_line_per_file/record_0027 (0.00s)
+        --- PASS: TestMVV_DeclaredLineEditWriter/step2and3_three_sequential_invocations_each_flip_one_line_per_file/record_0026 (0.00s)
+        --- PASS: TestMVV_DeclaredLineEditWriter/step2and3_three_sequential_invocations_each_flip_one_line_per_file/record_0022 (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step3_the_reader_splits_the_qualifier_and_reports_status_final (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step4_a_none_or_stopped_row_applies_nothing_and_does_not_refuse (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step5_without_allow_commands_the_write_refuses_before_mutation (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step6_a_duplicated_readme_row_refuses_edit_anchor_ambiguous (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step7_a_self_de_anchoring_replace_refuses_edit_anchor_unstable (0.00s)
+    --- PASS: TestMVV_DeclaredLineEditWriter/step8_an_unlinked_row_refuses_unmatched_while_siblings_still_flip (0.01s)
+        --- PASS: TestMVV_DeclaredLineEditWriter/step8_an_unlinked_row_refuses_unmatched_while_siblings_still_flip/the_unlinked_row_refuses_and_names_the_rule (0.00s)
+        --- PASS: TestMVV_DeclaredLineEditWriter/step8_an_unlinked_row_refuses_unmatched_while_siblings_still_flip/the_other_rows_in_the_same_readme_still_flip (0.00s)
+--- PASS: TestReqMVVBlock_ThePhase4PipelineAwaitsTheConsumersRowAddressedVerb (0.00s)
+PASS
+ok  	github.com/cwensel/intrastate/internal/accessor	0.207s
+```
+
+Step by step, and what each proves at this seam:
+
+| step | REQ | asserted |
+| --- | --- | --- |
+| 1 | REQ-MVV.1 | the model lints clean; every writer carries `edit` and neither a `command` nor a `path` — no wrapper script anywhere in the fixture |
+| 2+3 | REQ-MVV.2, .3 | three sequential invocations, one per record identity; each flips exactly ONE line per file, byte-compared against a hand-written buffer. The joint record keeps its bracketed qualifier by backreference; the wrapped record's continuation line comes through byte-identical |
+| 3 | REQ-122 | the reader reports `status=Final` with the qualifier off the value |
+| 4 | REQ-MVV.4 | an empty plan applies nothing and does not refuse; both inodes unmoved |
+| 5 | REQ-MVV.5 | with the gate OFF and both readers command-backed, both writes refuse BEFORE mutation — not `read_back_incomplete`, `Applied()` false, both files byte-identical |
+| 6 | REQ-MVV.6 | a duplicated README row refuses `edit_anchor_ambiguous`; inode unmoved |
+| 7 | REQ-MVV.7 | a self-de-anchoring `replace` refuses `edit_anchor_unstable` before any write |
+| 8 | REQ-MVV.8 | an unlinked `| NNNN |` row refuses `edit_anchor_unmatched` and NAMES the rule; the other rows of the SAME README still flip |
+
+What is deferred to Phase 4 is the ENVELOPE, not the behaviour: the
+dispositions, byte invariants and refusal tokens above are the record's own
+and are asserted here. The CLI envelope's own half — the exit group, the
+discriminator and the `findings[]` carriage — is covered separately at
+REQ-43/113/114, which no longer depend on the missing verb.
+
