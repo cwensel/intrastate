@@ -376,6 +376,21 @@ func refuse(detail string) error {
 	return &accessor.ExecError{Detail: detail}
 }
 
+// refuseRequest builds a pre-spawn refusal that is about the REQUEST
+// rather than the environment, so it takes the exit-2 group instead of
+// `execution_failure`'s default exit 3 (RDR 0028 `0028:C1.3` EXIT
+// GROUP:, which governs the entry-level preconditions `order:` names —
+// among them C1.6's unbound `{tag.<key>}` and its `-`-prefixed bound
+// value).
+//
+// It is deliberately a SIBLING of `refuse` rather than a widening of it:
+// 0025's own pre-spawn refusals — the gate, the argv0 deny-list, a
+// non-absolute `{artifact}` path — keep their existing routing, which
+// this record does not amend.
+func refuseRequest(detail string) error {
+	return &accessor.ExecError{Detail: detail, Err: accessor.ErrDeclaredRequest}
+}
+
 // wrap builds an invocation refusal, carrying the stderr tail as the
 // Detail and WRAPPING the offending error rather than flattening it, so
 // `errors.Is(err, exec.ErrNotFound)` survives to the refusal site
@@ -420,7 +435,7 @@ func substitute(declared []string, art accessor.Artifact) ([]string, error) {
 					// unbound `{tag.x}` forwarded as itself would reach
 					// the child as an argument and could be read as a
 					// filename (`0025:C2`).
-					return nil, refuse("the placeholder " + el +
+					return nil, refuseRequest("the placeholder " + el +
 						" is not bound on this invocation's context; a " +
 						"placeholder is never passed through literally")
 				}
@@ -432,7 +447,7 @@ func substitute(declared []string, art accessor.Artifact) ([]string, error) {
 					// than inventing a second policy, and no `--`
 					// separator is inserted: only a child that honours it
 					// would be helped and the model cannot know which do.
-					return nil, refuse("the placeholder " + el +
+					return nil, refuseRequest("the placeholder " + el +
 						" is bound to " + strconv.Quote(value) +
 						", which a child can parse as a flag")
 				}
