@@ -471,8 +471,23 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		return WriteResult{Refusal: r}
 	}
 	if err != nil {
-		// The command failed before mutating: this one did NOT occur.
-		return WriteResult{Refusal: refusalOf(def, timeout, ClassExecutionFailure, err)}
+		// The command failed before mutating: this one did NOT occur —
+		// EXCEPT for the one shape that is a POST-run refusal. A held pipe
+		// is reported only after the direct child was already reaped
+		// (`0026:C1` `refusal:`), so the mutation may have landed and the
+		// applied sense is owed. The match is on the held-pipe sibling and
+		// never on `*ExecError` generally: this arm is shared with every
+		// pre-mutation failure shape — a `resolveArgv0` failure, an
+		// `os.Pipe` failure, a plain non-zero exit — and flipping one of
+		// those to "may have been applied" makes an agent skip a retry that
+		// was safe, the exact inverse of the gain.
+		r := refusalOf(def, timeout, ClassExecutionFailure, err)
+		var hp *HeldPipeError
+		if errors.As(err, &hp) {
+			r.applied = true
+			r.Expected = planned
+		}
+		return WriteResult{Refusal: r}
 	}
 
 	// --- read-back verification ----------------------------------------

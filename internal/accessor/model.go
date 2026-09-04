@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/cwensel/intrastate/internal/resolve"
@@ -556,3 +557,38 @@ var ErrDeclaredRequest = errors.New("the refusal is about the request, " +
 // and it travels on the existing `Err` slot, exactly as its parent does.
 var ErrDeclaredEdit = fmt.Errorf("a declared line edit refused: %w",
 	ErrDeclaredRequest)
+
+// --- RDR 0026: the held-pipe error ----------------------------------------
+
+// HeldPipeError is the typed error a command-backed binding wraps inside
+// `ExecError.Err` when a read drain was still held past the bound: the
+// child (or a process outside its group) kept a write end open, so the
+// drain reported `os.ErrDeadlineExceeded` on its final read rather than
+// EOF (`0026:C1` `refusal:`).
+//
+// It is declared HERE and not in `internal/cli/cmdbind` because the import
+// direction is one-way — `cmdbind` imports `accessor`, never the reverse —
+// so a concrete `cmdbind` type named at the `errors.As` site inside
+// `internal/cli/executor.go` would not compile. Being matched from outside
+// its own package and populated from another, the type and both fields are
+// EXPORTED.
+type HeldPipeError struct {
+	// Held names the pipe(s) still held past the bound, in the fixed order
+	// stdout, stderr (`0026:C1` `precedence:`).
+	Held []string
+	// ExitStatus is the DIRECT child's own end — "exited N" or "killed by
+	// signal N" — composed from the fields the binding already populates
+	// from `Wait`, so no new invocation field carries it.
+	ExitStatus string
+}
+
+// Error renders the held-pipe reason. It names the pipes and the child's
+// end; the bound and the remediation ride on the carrier's `Detail`, which
+// is the slot the CLI renders.
+func (e *HeldPipeError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return "the child's " + strings.Join(e.Held, ", ") +
+		" stayed held past the drain bound (" + e.ExitStatus + ")"
+}

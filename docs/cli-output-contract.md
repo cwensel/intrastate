@@ -157,6 +157,36 @@ A read-back that did not complete carries a `detail` saying the write may
 have been applied and was not verified. It is never reported as a write
 that did not occur.
 
+A write whose command already ran and then failed carries that same
+`detail` under its own code, `flow-write-failed-applied`. It is exit 3 like
+its neighbours, and it is deliberately distinct from `flow-accessor-failed`:
+a write that could not start may be retried unchanged, and one that may
+already have landed must be inspected first.
+
+## Held output pipes on a command accessor
+
+A command accessor's stdout and stderr are drained under a bound. If a
+process still holds one of those pipes open when the bound expires — the
+usual cause being a helper that backgrounds a daemon inheriting its stdio —
+the invocation **refuses** rather than waiting. The refusal names the pipe
+or pipes that were held, the child's own exit status, and the remedy:
+*close or redirect the helper's inherited stdio*. Redirecting the
+background process's stdout and stderr (to a file, or to `/dev/null`) is
+the fix; there is no flag that accepts the partial output instead.
+
+Output read from a held pipe is never parsed. No read envelope, no gate
+verdict and no write read-back is derived from a stream whose writer the
+CLI could not reach, so a held pipe is always a refusal and never a
+half-trusted answer.
+
+Two consequences are admitted rather than hidden. A process outside the
+child's process group may **leak** — it outlives the refusal, and whatever
+it writes after that is never read; it stays visible to `ps` until its next
+write fails. And when the accessor's declared `timeout` had already elapsed,
+the refusal is classified `timeout`, which by contract carries no `detail`
+— so the held-pipe reason is reported on `flow-accessor-failed` and not on
+the timeout. The bounded refusal itself is never withheld either way.
+
 ## Illustrative invocations
 
 The `flow` command group is the skill-integration surface. These shapes

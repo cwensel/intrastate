@@ -28,7 +28,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"maps"
 	"os"
 	"os/exec"
@@ -38,6 +37,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -62,8 +62,27 @@ const StderrTailCap = 4 << 10 // 4 KiB
 
 // WaitDelay bounds the stdin write and the post-kill pipe drain, so a
 // non-reading or slow-draining child cannot hang the CLI past the deadline
-// (`0025:C4`, A1's necessary-and-sufficient triple).
+// (`0025:C4`; the drain half is now `0026:C1` `bound:`).
+//
+// It is the ONE bound for every "the CLI waits past the child's exit" case
+// — Cmd's stdin write, Cmd's post-Cancel wait, and this package's own drain
+// join — and it is in the contract, because `0026:C1` `bound:` publishes a
+// committed per-invocation return of `timeout + 2·WaitDelay`. Moving it is
+// therefore a contract change, not a tuning knob.
 const WaitDelay = 500 // milliseconds
+
+// DrainGrace is how far AHEAD of now the drain's read deadline is re-armed
+// once the join's bound has expired (`0026:C1` `bound:`).
+//
+// It is NOT a second bound. It answers a different question — how far ahead
+// the deadline must sit for the kernel to deliver bytes already buffered,
+// since Go checks the deadline BEFORE attempting the syscall, so a deadline
+// of NOW short-circuits with n=0 and never looks at the pipe. It is never
+// model-declarable and it cannot move the refuse/accept boundary: it is an
+// offset on the single existing timer's expiry. 50 ms clears the measured
+// scheduling tail (~28 ms under 4x-core saturation) with margin while
+// costing 10% of one bound.
+const DrainGrace = 50 // milliseconds
 
 // ProtocolVersion rides out-of-band in the child env as
 // `INTRASTATE_PROTOCOL`, keeping the stdout map flat (`0025:C3`).
@@ -95,6 +114,19 @@ const AllowlistedPrefix = "LC_"
 // runtime, unlike C4's deadline triple, which carries no injection seam
 // (`0025:C4` platform).
 var goos = runtime.GOOS
+
+// drainStartDelay withholds each drain goroutine's first read. It is the
+// ONE stall seam the drain scenarios share, and it is nil — the zero
+// duration — in production: portable Go rather than a build tag, and never
+// a sleep on a shipped path.
+var drainStartDelay time.Duration
+
+// nonPollableForTest forces the creation-time pollability probe to see a
+// read end that refuses a deadline, so F5's condition is simulated AT THE
+// CHECK rather than reproduced. No real `os.Pipe` read end refused a
+// deadline on either supported OS, so a fixture that reproduced it would be
+// fabricating a host condition.
+var nonPollableForTest bool
 
 // Unsupported reports whether the running platform is refuse-listed. The
 // predicate is refuse-listed, not allow-listed, so every Unix that supports
@@ -147,7 +179,50 @@ type invocation struct {
 	// signaled reports that the child was terminated by a signal, which is
 	// what the refusal text says instead of the meaningless "exited -1".
 	signaled bool
+	// nonPollable records that a read end refused a deadline at pipe
+	// creation (`os.ErrNoDeadline`), so the join on THIS invocation could
+	// not be bounded — F5's host condition, decided before any child
+	// existed. `cmdbind` has no logger and gains none, so the condition
+	// rides here and surfaces as a `Detail` line on whatever refusal this
+	// invocation produces.
+	nonPollable bool
 }
+
+// exitStatus renders the DIRECT child's own end for the held-pipe reason,
+// composed from the fields `spawn` already populates from `Wait` — so no
+// new invocation field carries it (`0026:C1` `refusal:`).
+func (inv invocation) exitStatus() string {
+	switch {
+	case inv.signaled:
+		return "killed by signal"
+	case inv.exited:
+		return "exited " + strconv.Itoa(inv.exitCode)
+	default:
+		return "did not exit"
+	}
+}
+
+// drainReport is one drain's terminal condition: the ONE three-valued,
+// totally ordered report `0026:C1` `precedence:` requires, and not a pair
+// of booleans or a bare error. The three states are mutually exclusive and
+// their order is fixed — overflow outranks held, held outranks whole — so
+// a caller cannot re-derive the precedence differently from this package.
+type drainReport int
+
+const (
+	// drainWhole is EOF: every writer is gone and the output is whole, as
+	// today. It is the LOWEST rank.
+	drainWhole drainReport = iota
+	// drainHeld is `os.ErrDeadlineExceeded` on the drain's final read under
+	// the grace: a writer the group signal could not reach still holds the
+	// pipe. It outranks whole however many bytes the grace delivered — the
+	// predicate is the REPORTED condition, never the byte count.
+	drainHeld
+	// drainOverflow is the read passing `StdoutCap`. It is the HIGHEST
+	// rank: the bytes were read, so the pipe's terminal state is not what
+	// the invocation turns on.
+	drainOverflow
+)
 
 // spawn performs the whole pre-spawn refusal ladder and, past it, one
 // bounded invocation of the declared command.
@@ -206,10 +281,12 @@ func spawn(
 	cmd.Env = childEnv(acc, name, capability)
 	cmd.Stdin = bytes.NewReader(stdin)
 
-	// A1's necessary-and-sufficient triple. Dropping the group signal
-	// orphans a grandchild holding the pipe; dropping WaitDelay hangs
-	// `Wait` on it, and it is also what bounds the stdin write so a
-	// non-reading child cannot block the parent (`0025:C4`).
+	// `0025:C4`'s deadline triple, and it was never "necessary and
+	// sufficient": dropping the group signal orphans a grandchild holding
+	// the pipe, and dropping WaitDelay hangs `Wait` on it and unbounds the
+	// stdin write — but a writer OUTSIDE the group is reachable by none of
+	// the three, which is the gap `0026:C1` closes by bounding the drain
+	// join rather than by widening the kill.
 	setProcGroup(cmd)
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
@@ -228,7 +305,9 @@ func spawn(
 	// ordering is load-bearing: `Cmd.Wait` closes the pipes it owns as soon
 	// as the direct child is reaped, which would truncate a read still in
 	// flight. Owning them lets the group be released FIRST and the drains
-	// then run to a true EOF (`0025:C4`).
+	// then run to whole output WITHIN THE BOUND (`0026:C1` `precedence:`,
+	// the successor to `0025:C4`'s "run to a true EOF" — the drains no
+	// longer promise an unbounded wait for EOF).
 	outR, outW, err := os.Pipe()
 	if err != nil {
 		return invocation{}, wrap("", err)
@@ -240,6 +319,13 @@ func spawn(
 		return invocation{}, wrap("", err)
 	}
 	defer func() { _ = errR.Close() }()
+
+	// F5's pollability probe, run ONCE at pipe creation and never at the
+	// join: a far-future deadline, immediately cleared, whose error is the
+	// signal. Deciding it here means the fallback is decided before any
+	// child exists, so a non-pollable host takes the old unbounded join by
+	// a recorded choice rather than by discovering it mid-drain.
+	nonPollable := !pollable(outR) || !pollable(errR)
 	// An `*os.File` on these fields is handed to the child directly, with no
 	// copying goroutine and no entry in the runtime's parent-pipe set; the
 	// parent's copy of each write end is closed by `Start`.
@@ -268,18 +354,97 @@ func spawn(
 	// cannot exhaust memory, and `tail` then keeps the LAST 4 KiB — which is
 	// the diagnosis a caller wants when a tool says a lot before it fails.
 	var stdout, stderr []byte
+	var outReport, errReport drainReport
+	// `stop` is the drains' shared HALT — the terminator for a drain that is
+	// making progress into output no caller will ever parse. `0026:C1` does
+	// not name it, so it is recorded as deviation D9; this comment and
+	// `readBounded`'s are its durable record.
+	//
+	// It is a STATE PREDICATE, not a second bound. It introduces no constant
+	// and reads no clock: it answers "is this invocation's outcome already a
+	// refusal", never "how long to wait". That is what keeps `0026:C1`
+	// `bound:`'s "`WaitDelay` is the ONE bound" and its "`DrainGrace` is NOT
+	// a second bound" literally true with the halt shipped. It is also the
+	// test `0026`'s own LBD fixes for a new mechanism: `DrainBound` was
+	// refused for answering the SAME question with a second value, and this
+	// answers a different question again.
+	//
+	// It follows from `0026:C1` `precedence:` (b) rather than adding to it.
+	// That clause requires the parent "MUST NOT read `inv.stdout`/
+	// `inv.stderr` until every drain goroutine has returned" and forbids a
+	// design "in which the parent proceeds past a live drain" — so once any
+	// drain has established a refusal, the only way to honour the clause is
+	// for the sibling to return too. The halt is that consequence made
+	// mechanical, not new policy.
+	//
+	// It is a different signal from the grace. The parent's deadline-set is
+	// the MARK: the bound expired and each drain's FINAL read is owed.
+	// `stop` says something else — the invocation's outcome is ALREADY a
+	// refusal, so no further byte from any drain can change it.
+	//
+	// It is raised by a drain that has itself REPORTED a refusing condition,
+	// and never on elapsed time. That distinction is what keeps this out of
+	// the mechanism `0026:C1` `precedence:` rejects by name: "A single
+	// absolute deadline would instead bound the whole remaining tail against
+	// the clock, which turns a slow-arriving tail into a false held-pipe
+	// report on a pipe with no writer at all." Nothing here reads a clock.
+	// On a drain with no holder — MVV row 6(a), 6(b), S9 — no sibling ever
+	// reports held, so `stop` is never raised and the paced tail runs to EOF
+	// however long it takes, which is the guarantee the clause fixes.
+	//
+	// The residue is the flip side of "raised only by a drain that itself
+	// reported": when an escapee trickles BOTH pipes with every gap under
+	// `DrainGrace`, neither drain reaches a refusing condition, so no drain
+	// raises `stop` and the join stays unbounded. That is an ADMITTED,
+	// named liveness residue — deviation D10; see `readBounded`.
+	var stop atomic.Bool
+	// `reaped` gates the halt's OBSERVATION on the direct child being gone.
+	// Both drains start BEFORE the wait below, and a drain raises the halt
+	// on any read error once it has overflowed — INCLUDING EOF. So a child
+	// that overflows stdout and then closes it raises the halt while it is
+	// STILL LIVE, and a sibling honouring it there would abandon a pipe that
+	// live child is still writing. The child then blocks in `write(2)`, the
+	// wait never completes, and the invocation spends its whole deadline and
+	// reports a timeout instead of the overflow refusal it owes. That is
+	// exactly the serialization `0026:C1` `whole:` forbids ("the drains run
+	// CONCURRENTLY and are never stalled") and REQ-52 states negatively.
+	//
+	// It costs the halt nothing in the shapes it exists for. Every one of
+	// them (S9's companion, deviations D9 and D10, MVV row 6) is a `setsid`
+	// ESCAPEE holding an inherited pipe, so the direct child is already
+	// gone — the refusal lands at ~`WaitDelay + DrainGrace`, necessarily
+	// after the wait completed. The gate therefore narrows the halt to
+	// precisely the window in which it is unsafe.
+	var reaped atomic.Bool
 	var drains sync.WaitGroup
 	drains.Add(2)
 	go func() {
 		defer drains.Done()
-		stdout = readBounded(outR, StdoutCap+1)
+		if drainStartDelay > 0 {
+			time.Sleep(drainStartDelay)
+		}
+		stdout, outReport = readBounded(outR, StdoutCap+1, &stop, &reaped)
 	}()
 	go func() {
 		defer drains.Done()
-		stderr = readBounded(errR, StdoutCap)
+		if drainStartDelay > 0 {
+			time.Sleep(drainStartDelay)
+		}
+		// Stderr's overflow does NOT refuse — it is TAILED rather than
+		// capped, so `spawn`'s overflow arm consults only the stdout report.
+		// `0026:C1` `precedence:` scopes the overflow rank to a drain that
+		// "REFUSES the existing overflow error", so ranking a HELD stderr as
+		// overflow would discard the condition rather than outrank it and
+		// the invocation would return with no error at all — the withheld
+		// refusal `0026:C1` `residue:` does not admit.
+		stderr, errReport = readBounded(errR, StdoutCap, &stop, &reaped)
 	}()
 
 	werr := cmd.Wait()
+	// The direct child is gone, so from here a halt raised by either drain
+	// can no longer strand the other on a pipe a live writer is filling.
+	// See the declaration of `reaped` above.
+	reaped.Store(true)
 
 	// The direct child has been reaped. Signal the GROUP now, on the success
 	// path as much as the failure path: `cmd.Cancel` fires only when the
@@ -296,12 +461,67 @@ func spawn(
 	// killed — whatever remains in the group is the orphan the clause names.
 	reapGroup(cmd.Process)
 
-	// Only now, with every write end of both pipes closed, do the drains
-	// reach EOF. Joining them here is what makes the reads whole: nothing is
-	// truncated by a close racing an in-flight read.
-	drains.Wait()
+	// Only now, with every write end of both pipes closed, does a drain with
+	// no unreachable writer reach EOF. But EOF is not owed: a writer outside
+	// the group survives `reapGroup`, and waiting for it is the hang this
+	// record exists to end. So the join is BOUNDED — a bounded wait outranks
+	// a whole read (`0026:C1` `precedence:`).
+	//
+	// ONE timer of `WaitDelay` covers BOTH drains. When it fires the parent
+	// sets a read deadline of now + `DrainGrace` on its OWN read ends: that
+	// deadline IS the join's cross-goroutine mark, and it needs no lock of
+	// its own — an `os.File`'s poller is internally synchronised, so setting
+	// a deadline against a `Read` in flight is sanctioned. Each drain's
+	// final read then reports the PIPE's state rather than the clock, and
+	// re-arms the grace before every subsequent read itself.
+	//
+	// The mark is the JOIN's mechanism and it is not the DRAIN's terminator.
+	// A drain still making progress never trips the deadline at all, so the
+	// mark alone cannot end it; what ends it is the sibling halt `stop`
+	// above, which is a shared flag and is deliberately so (deviation D9).
+	//
+	// The join stays a REAL join either way: the bound governs how long the
+	// parent waits before setting the deadline, never whether it waits for
+	// the goroutines to finish. A drain ended by the deadline still runs its
+	// `Done`, so `drains.Wait()` below is the happens-before edge between
+	// the drains' writes to the byte slices and the read of them here.
+	joined := make(chan struct{})
+	go func() {
+		drains.Wait()
+		close(joined)
+	}()
+	if nonPollable {
+		// F5: a read end that refuses a deadline cannot be unblocked, so
+		// there is nothing to bound the join WITH. The old unbounded wait
+		// is the honest fallback, taken by a choice recorded at the check.
+		<-joined
+	} else {
+		timer := time.NewTimer(WaitDelay * time.Millisecond)
+		select {
+		case <-joined:
+			timer.Stop()
+		case <-timer.C:
+			grace := time.Now().Add(DrainGrace * time.Millisecond)
+			_ = outR.SetReadDeadline(grace)
+			_ = errR.SetReadDeadline(grace)
+			<-joined
+		}
+	}
 
-	inv := invocation{stdout: stdout, stderr: tail(stderr)}
+	// `inv` is built BEFORE the arms below and every error return carries
+	// this populated value, so `inv.stdout` and `inv.exitCode` are readable
+	// on every error path. That is not a licence: the obligation `0026:C1`
+	// `refusal:` states is that EVERY caller checks `err` before touching
+	// `inv`, and the two error returns below — the drain/`werr` refusal and
+	// the overflow refusal — are where the returned stdout may be a stream
+	// whose live writer the CLI could not reach. Reading it ahead of `err`
+	// derives a verdict from unproven output, which is the silent
+	// wrong-answer class this record exists to prevent. Nothing structural
+	// enforces this; a new caller must check `err` first.
+	inv := invocation{
+		stdout: stdout, stderr: tail(stderr), nonPollable: nonPollable,
+	}
+	var werrRefusal error
 	var ee *exec.ExitError
 	switch {
 	case werr == nil:
@@ -320,14 +540,84 @@ func spawn(
 		inv.exited = true
 		inv.exitCode = ee.ExitCode()
 	default:
-		return inv, wrap(inv.stderr, werr)
+		// The non-ExitError arm — `exec.ErrWaitDelay` from a child that
+		// never read its stdin, per `0026:C1` `stdin:`. It is HELD, not
+		// returned: the drain conditions are selected first below, because a
+		// held pipe names the helper that held it and `ErrWaitDelay` does
+		// not. Both are `execution_failure`, so this orders the reason and
+		// never the class.
+		werrRefusal = werr
 	}
 
-	if len(inv.stdout) > StdoutCap {
-		return inv, wrap(inv.stderr, errors.New("the child's stdout exceeded "+
-			"the "+strconv.Itoa(StdoutCap)+" byte bound"))
+	// The drain conditions, in the total order `0026:C1` `precedence:`
+	// fixes: overflow outranks held, held outranks whole. Overflow wins
+	// because the bytes were READ, which makes the pipe's terminal state not
+	// what the invocation turns on.
+	if outReport == drainOverflow || len(inv.stdout) > StdoutCap {
+		return inv, wrap(inv.detail(""), errors.New("the child's stdout "+
+			"exceeded the "+strconv.Itoa(StdoutCap)+" byte bound"))
+	}
+	// The fold takes the two drains' REPORTED conditions as its input and
+	// derives nothing from byte counts or from closed-over state, and
+	// returns the names in the fixed order stdout, stderr.
+	if held := heldPipes(outReport, errReport); len(held) != 0 {
+		return inv, wrap(inv.detail(heldReason(held, inv.exitStatus())),
+			&accessor.HeldPipeError{Held: held, ExitStatus: inv.exitStatus()})
+	}
+	if werrRefusal != nil {
+		return inv, wrap(inv.detail(""), werrRefusal)
 	}
 	return inv, nil
+}
+
+// heldPipes folds the two drains' reported terminal conditions into the
+// held-pipe names, in the fixed order stdout, stderr, so `len(held) != 0`
+// is the consulted predicate and the single-pipe form is the bare name
+// (`0026:C1` `precedence:`).
+func heldPipes(out, err drainReport) []string {
+	var held []string
+	if out == drainHeld {
+		held = append(held, "stdout")
+	}
+	if err == drainHeld {
+		held = append(held, "stderr")
+	}
+	return held
+}
+
+// heldReason is the held-pipe reason `0026:C1` `refusal:` fixes: the pipe(s)
+// held, the bound, the direct child's exit status, and the remediation. The
+// single-pipe form is the BARE name; both is the two names comma-separated
+// in the fixed order.
+func heldReason(held []string, status string) string {
+	return "the child's " + strings.Join(held, ", ") + " stayed held past " +
+		"the " + strconv.Itoa(WaitDelay) + " ms drain bound (" + status +
+		"); close or redirect the helper's inherited stdio"
+}
+
+// detail composes this invocation's refusal `Detail` in the ONE slot: the
+// held-pipe reason LEADING, then F5's host condition when the join could
+// not be bounded, then the stderr tail collected up to the bound
+// (`0026:C1` `refusal:`). The reason leads because it is the fact the
+// author acts on; the tail is the diagnosis behind it.
+func (inv invocation) detail(reason string) string {
+	parts := make([]string, 0, 3)
+	if reason != "" {
+		parts = append(parts, reason)
+	}
+	if inv.nonPollable {
+		// F5 is carried HERE and not on a log line: `cmdbind` has no logger
+		// and gains none, so the condition recorded at pipe creation
+		// surfaces as a `Detail` line on whatever refusal this invocation
+		// produces.
+		parts = append(parts, "this host's pipes refused a read deadline "+
+			"(os.ErrNoDeadline), so the drain join for this invocation was "+
+			"not bounded")
+	}
+	if inv.stderr != "" {
+		parts = append(parts, inv.stderr)
+	}
+	return strings.Join(parts, "\n")
 }
 
 // reapGroup SIGKILLs the child's process group after the direct child has
@@ -346,19 +636,221 @@ func reapGroup(p *os.Process) {
 	_ = killGroup(p.Pid)
 }
 
-// readBounded drains r up to limit bytes. The bound is on what is KEPT: the
-// remainder is discarded rather than left in the pipe, so a child is never
-// blocked writing into a full one.
-func readBounded(r io.Reader, limit int) []byte {
-	b, err := io.ReadAll(io.LimitReader(r, int64(limit)))
-	if err != nil {
-		return b
+// pollable reports whether a read end accepts a deadline. The probe is a
+// FAR-FUTURE deadline, immediately cleared, whose error is the signal
+// (`os.ErrNoDeadline` on a fd adopted without the poller registration a
+// real `os.Pipe` end carries). It runs once at pipe creation, so F5's
+// fallback is decided before any child exists rather than discovered at the
+// join.
+func pollable(r *os.File) bool {
+	if nonPollableForTest {
+		return false
 	}
-	// Overflow is DETECTED from the kept length — the read is bounded at
-	// cap+1, so a stdout of exactly the cap is a value and one byte more is
-	// a failure.
-	_, _ = io.Copy(io.Discard, r)
-	return b
+	if err := r.SetReadDeadline(time.Now().Add(time.Hour)); err != nil {
+		return false
+	}
+	return r.SetReadDeadline(time.Time{}) == nil
+}
+
+// readBounded drains r up to limit bytes and reports its terminal
+// condition. The bound is on what is KEPT: the remainder is discarded
+// rather than left in the pipe, so a child is never blocked writing into a
+// full one.
+//
+// The loop is explicit rather than `io.ReadAll` because `0026:C1`
+// `precedence:` needs a per-read point to re-arm the deadline, and
+// `io.ReadAll` owns its own loop. Three behaviours the previous body had
+// are preserved exactly: the read stays bounded at the caller's limit — for
+// stdout that is `StdoutCap+1`, so exactly the cap is a value and one byte
+// more is a detected overflow; the discard-remainder exit carries the
+// deadline itself, since it is the same loop; and the PRE-timer path is
+// deadline-free, because nothing here arms a deadline until the parent has
+// armed one.
+//
+// The parent's deadline-set at the bound is the mark. The first
+// `os.ErrDeadlineExceeded` this loop sees is therefore not a verdict — it
+// is the notification that the grace is on, and the loop re-arms
+// `now + DrainGrace` and takes ONE more read. It is that FINAL read, taken
+// under the drain's own grace, whose result is the report: bytes still
+// buffered are delivered and the loop keeps going, EOF is whole output as
+// today, and another deadline is a HELD pipe. Refusing on "no EOF after a
+// final bounded read" and never on elapsed time is what keeps the grace
+// bounding the IDLE GAP between reads rather than the size or the total
+// duration of the tail — a single absolute deadline would truncate a slow
+// tail on a pipe with no writer at all.
+//
+// There is NO clock here beyond the grace itself — no ceiling, no absolute
+// deadline, nothing keyed on the tail's total duration. `0026:C1` `bound:`
+// names `WaitDelay` as "the ONE bound" and states `DrainGrace` "is NOT a
+// second bound", so a third constant is not the implementer's to mint.
+//
+// A writer that keeps delivering bytes FASTER than the grace but never
+// reaches EOF therefore cannot be ended by the idle-gap predicate — it
+// re-arms forever. What ends it is `stop`: a sibling drain that has already
+// reported a refusing condition raises it, because from that moment the
+// invocation's outcome is fixed as a refusal and no byte this drain could
+// still deliver would be parsed. `stop` is checked at the TOP of the loop
+// so an in-flight read is not credited past it, and the drain reports the
+// condition it has: held, because it did not reach EOF.
+//
+// `stop` is a STATE PREDICATE and NOT a second bound — it mints no constant
+// and reads no clock, so `0026:C1` `bound:`'s "`WaitDelay` is the ONE
+// bound" stays literally true. It is the mechanical consequence of
+// `0026:C1` `precedence:` (b)'s "MUST NOT read ... until every drain
+// goroutine has returned": once a refusal is established, the sibling must
+// return for the parent to honour that clause at all. `0026:C1` does not
+// name this terminator, so it is recorded as deviation D9.
+//
+// ADMITTED RESIDUE (deviation D10). The halt is raised ONLY by a drain that
+// has itself reported a refusing condition, so a shape in which no drain
+// reports leaves it unraised. That shape exists: an escapee trickling BOTH
+// pipes with every idle gap under `DrainGrace`. Both drains keep their
+// deadlines ahead of them, neither ever reports, `stop` is never raised and
+// the join above stays UNBOUNDED — the old hang, in a shape no fixture
+// exercises. It is admitted rather than closed because both mechanisms that
+// would close it are already refused by this record. A duration bound on the
+// drain is the total-duration bound `precedence:` rejects by name (and is
+// exactly what the removed liveness ceiling was). A hard close of the read
+// ends is Go's answer (`os/exec`'s `awaitGoroutines` -> `closeDescriptors`)
+// and surrenders the stderr tail naming WHICH helper held the pipe — the
+// sole justification for this record's deliberate divergence from that prior
+// art. So it takes F5's shape: recorded at the check rather than discovered
+// at the join, an admitted liveness residue rather than a silent one.
+//
+// The overflow rank is keyed on the REFUSAL boundary, `StdoutCap`, and not
+// on the caller's read limit. `0026:C1` `precedence:` gives the rank its
+// reason — "a drain past `StdoutCap` REFUSES the existing overflow error
+// whatever its terminal condition, since the bytes were read and the pipe's
+// state is then not what the invocation turns on" — so the rank exists
+// BECAUSE overflow refuses, and it is that refusal's own boundary which
+// scopes it. `spawn` refuses on `len(inv.stdout) > StdoutCap`, so this reads
+// the same predicate: exactly the cap is a value and one byte past it is the
+// detected overflow.
+//
+// Keying it on `len(kept) >= limit` instead silently launders the STDERR
+// drain, whose limit is exactly `StdoutCap` rather than `StdoutCap+1`
+// because stderr is TAILED rather than capped and has no overflow refusal to
+// take. A held stderr that reached that limit would rank overflow; `spawn`'s
+// overflow arm consults only the stdout report and `heldPipes` counts only
+// held, so neither arm would consult it and the invocation would return with
+// NO error at all — the withheld refusal `0026:C1` `residue:` does not
+// admit. The limit stays a memory bound on both drains: past it the bytes
+// are still read and discarded rather than left in the pipe.
+//
+// The optional `stop` is the sibling drains' shared halt, and the optional
+// second flag is `spawn`'s reaped-child gate for OBSERVING it. Both are
+// variadic only so the loop keeps the two-argument shape it has always had
+// at a call site that has no sibling to be halted by; a site that passes the
+// halt without the gate observes it unconditionally, as before.
+func readBounded(
+	r *os.File, limit int, stop ...*atomic.Bool,
+) ([]byte, drainReport) {
+	var halt, reaped *atomic.Bool
+	if len(stop) != 0 {
+		halt = stop[0]
+	}
+	if len(stop) > 1 {
+		reaped = stop[1]
+	}
+	// A drain may OBSERVE the halt only once the direct child has been
+	// reaped. RAISING it stays ungated — a drain always reports its own
+	// condition — but honouring it while the child is still live abandons a
+	// pipe that child may still be writing, which blocks it in `write(2)`
+	// and hangs `Wait`. See the gate's rationale in `spawn`, `0026:C1`
+	// `whole:` and REQ-52.
+	halted := func() bool {
+		if halt == nil || !halt.Load() {
+			return false
+		}
+		return reaped == nil || reaped.Load()
+	}
+	var kept []byte
+	buf := make([]byte, 32<<10)
+	graced := false
+	overflowed := func() bool { return len(kept) > StdoutCap }
+	for {
+		// The sibling halt: the terminator for a drain making progress into
+		// output no caller will parse. It is a STATE PREDICATE — "the
+		// invocation's outcome is already a refusal" — and NOT a second
+		// bound: no constant, no clock. `0026:C1` `bound:`'s "`WaitDelay` is
+		// the ONE bound" therefore still holds literally. It follows from
+		// `0026:C1` `precedence:` (b)'s "MUST NOT read ... until every drain
+		// goroutine has returned", which cannot be honoured past an
+		// established refusal unless the sibling returns. `0026:C1` names no
+		// such terminator, so it is recorded as deviation D9.
+		//
+		// It is checked BEFORE the grace re-arm and independently of it. A
+		// drain still making progress never sees a deadline error, so
+		// `graced` never becomes true on the very drain the halt exists to
+		// end — gating this on `graced` would leave the trickler running.
+		// Observation is gated on the direct child having been reaped. The
+		// halt is raised on ANY read error once a drain has overflowed —
+		// INCLUDING EOF — so a child that overflows stdout and then closes
+		// it raises it while still live. Honouring it there ends this drain
+		// on a pipe that live child is still writing: it blocks in
+		// `write(2)`, `Wait` never returns, and the invocation spends its
+		// whole deadline and reports a timeout instead of the overflow
+		// refusal it owes. That is the serialization `0026:C1` `whole:`
+		// forbids ("the drains run CONCURRENTLY and are never stalled") and
+		// REQ-52 states as a negative requirement.
+		if halted() {
+			// A sibling already reported a refusing condition, so this
+			// invocation refuses whatever this drain does next. The ranking
+			// still holds: overflow outranks held on the same drain.
+			if overflowed() {
+				return kept, drainOverflow
+			}
+			return kept, drainHeld
+		}
+		if graced {
+			_ = r.SetReadDeadline(time.Now().Add(DrainGrace * time.Millisecond))
+		}
+		n, err := r.Read(buf)
+		if n > 0 {
+			if room := limit - len(kept); room > 0 {
+				if n < room {
+					room = n
+				}
+				kept = append(kept, buf[:room]...)
+			}
+			// Past the limit the bytes are DISCARDED rather than left in
+			// the pipe, so the child is never blocked writing into a full
+			// one — and the same loop, with the same deadline, is what does
+			// the discarding.
+		}
+		if err == nil {
+			continue
+		}
+		// The report is ONE ordered value, so the ranking is applied here
+		// and not re-derived by the caller: a drain that filled its bound
+		// reports overflow WHATEVER its terminal condition, because the
+		// bytes were read and the pipe's state is then not what the
+		// invocation turns on.
+		if overflowed() {
+			if halt != nil {
+				halt.Store(true)
+			}
+			return kept, drainOverflow
+		}
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			if !graced {
+				// The parent's mark, not a verdict: the bound expired and
+				// the FINAL read under this drain's own grace is owed.
+				graced = true
+				continue
+			}
+			// A refusing condition. Raise `stop` so a sibling that is still
+			// making progress into a value that will never be parsed ends
+			// too, and the join the parent must complete returns.
+			if halt != nil {
+				halt.Store(true)
+			}
+			return kept, drainHeld
+		}
+		// EOF, or a read end closed out from under the drain: either way no
+		// writer is going to deliver more, which is whole output as today.
+		return kept, drainWhole
+	}
 }
 
 // tail keeps the LAST StderrTailCap bytes, which is the diagnosis a caller
@@ -637,11 +1129,11 @@ func (r Reader) Read(ctx context.Context, art accessor.Artifact, requested []str
 		return values, nil, nil
 	}
 	if inv.signaled {
-		return nil, nil, wrap(inv.stderr, errors.New(
+		return nil, nil, wrap(inv.detail(""), errors.New(
 			"the read command produced no stdout and was killed by a signal "+
 				"before it exited, so its `exit_absent` map does not apply"))
 	}
-	return nil, nil, wrap(inv.stderr, errors.New(
+	return nil, nil, wrap(inv.detail(""), errors.New(
 		"the read command produced no stdout and exited "+
 			strconv.Itoa(inv.exitCode)+
 			", which the entry's `exit_absent` does not list"))
@@ -657,7 +1149,7 @@ func (r Reader) parse(inv invocation, requested []string) (
 		// trailing "\n" — no trimming, no case folding, no whitespace
 		// normalization (`0025:C3`, FX-raw-read).
 		if len(requested) != 1 {
-			return nil, nil, wrap(inv.stderr, errors.New(
+			return nil, nil, wrap(inv.detail(""), errors.New(
 				"raw mode carries one declared key and this read requested "+
 					strconv.Itoa(len(requested))))
 		}
@@ -668,7 +1160,7 @@ func (r Reader) parse(inv invocation, requested []string) (
 
 	var obj map[string]string
 	if jerr := json.Unmarshal(inv.stdout, &obj); jerr != nil {
-		return nil, nil, wrap(inv.stderr, jerr)
+		return nil, nil, wrap(inv.detail(""), jerr)
 	}
 
 	var values []accessor.KeyValue
@@ -720,10 +1212,10 @@ func (g Gate) Gate(ctx context.Context, art accessor.Artifact) (
 			Reason  string `json:"reason"`
 		}
 		if jerr := json.Unmarshal(inv.stdout, &env); jerr != nil {
-			return "", "", wrap(inv.stderr, jerr)
+			return "", "", wrap(inv.detail(""), jerr)
 		}
 		if !slices.Contains(accessor.Verdicts(), accessor.Verdict(env.Verdict)) {
-			return "", "", wrap(inv.stderr, errors.New(
+			return "", "", wrap(inv.detail(""), errors.New(
 				"the gate envelope names the verdict "+strconv.Quote(env.Verdict)+
 					", which is not one of allow, deny, indeterminate"))
 		}
@@ -740,11 +1232,11 @@ func (g Gate) Gate(ctx context.Context, art accessor.Artifact) (
 		}
 	}
 	if inv.signaled {
-		return "", "", wrap(inv.stderr, errors.New(
+		return "", "", wrap(inv.detail(""), errors.New(
 			"the gate command produced no stdout and was killed by a signal "+
 				"before it exited, so its `exit_verdicts` map does not apply"))
 	}
-	return "", "", wrap(inv.stderr, errors.New(
+	return "", "", wrap(inv.detail(""), errors.New(
 		"the gate command produced no stdout and exited "+
 			strconv.Itoa(inv.exitCode)+
 			", which the entry's `exit_verdicts` does not list"))
@@ -777,11 +1269,11 @@ func (w *Writer) Apply(ctx context.Context, art accessor.Artifact, planned []res
 		return err
 	}
 	if inv.signaled {
-		return wrap(inv.stderr, errors.New(
+		return wrap(inv.detail(""), errors.New(
 			"the write command was killed by a signal before it exited"))
 	}
 	if inv.exitCode != 0 {
-		return wrap(inv.stderr, errors.New(
+		return wrap(inv.detail(""), errors.New(
 			"the write command exited "+strconv.Itoa(inv.exitCode)))
 	}
 	return nil

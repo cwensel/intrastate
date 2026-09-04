@@ -49,12 +49,19 @@ const (
 	codeGateDenied        = "flow-gate-denied"
 	codeGateIndeterminate = "flow-gate-indeterminate"
 
-	codeAccessorTimeout  = "flow-accessor-timeout"
-	codeAccessorFailed   = "flow-accessor-failed"
-	codeReadIncomplete   = "flow-read-incomplete"
-	codeAccessorUnknown  = "flow-accessor-unknown"
-	codeCapabilityMismat = "flow-accessor-capability-mismatch"
-	codeWriteNonOwned    = "flow-write-non-owned"
+	codeAccessorTimeout = "flow-accessor-timeout"
+	codeAccessorFailed  = "flow-accessor-failed"
+	// codeWriteFailedApplied is the applied WRITE refusal's own exit-3 code
+	// (JDR 0003 §D4 (b), `0026:C1` `refusal:`). A write that failed only
+	// AFTER its command already ran is a different fact from one that could
+	// not run at all, and an agent's documented branch on
+	// `flow-accessor-failed` is retry — so the two must not share a code.
+	// Not-applied execution failures keep `flow-accessor-failed`.
+	codeWriteFailedApplied = "flow-write-failed-applied"
+	codeReadIncomplete     = "flow-read-incomplete"
+	codeAccessorUnknown    = "flow-accessor-unknown"
+	codeCapabilityMismat   = "flow-accessor-capability-mismatch"
+	codeWriteNonOwned      = "flow-write-non-owned"
 
 	// codeEscapeRowShapeBreach is RDR 0009 `0009:C7`'s stable code for a
 	// kernel escape-row shape breach. Note it is deliberately NOT

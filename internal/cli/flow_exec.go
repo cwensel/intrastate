@@ -510,6 +510,32 @@ func accessorFailureOf(refusal accessor.Refusal, at phase) *clierr.CLIError {
 				Findings: editRefusalFindings(refusal),
 			}
 		}
+
+		// RDR 0026 (`0026:C1` `refusal:`). Checked after the request split
+		// above. The two conditions are DISJOINT, not ordered: every
+		// refusal 0028's marker names is decided BEFORE any byte is
+		// written (C1.3 `order:`), so `Applied()` is false on all of them,
+		// and swapping the two arms changes no outcome (verified by
+		// mutation at the 0026/0028 rebase). The sequence is written this
+		// way to keep that disjointness legible — a reader meets the
+		// pre-mutation case first — not because either arm shadows the
+		// other. A future change that lets a request refusal report
+		// applied would make the order matter; it does not today.
+		//
+		// The key here is `Applied()`, never the phase. The neighbouring
+		// `ClassTimeout` arm above keys on phase because a WRITE-phase
+		// timeout is post-command by construction; an execution failure is
+		// not — this arm is reached by every pre-mutation failure shape as
+		// well, and labelling one of those "may have been applied" makes an
+		// agent skip a retry that was safe (`0026:C1` `refusal:`, JDR 0003
+		// §D4 (b)). Only the applied refusal takes the distinct code; the
+		// rest keep `flow-accessor-failed`.
+		if refusal.Applied() {
+			ce := envErr(codeWriteFailedApplied, id,
+				"the write accessor `"+id+"` failed after its command already ran")
+			ce.Detail = detailMayHaveApplied
+			return ce
+		}
 		return envErr(codeAccessorFailed, id,
 			"the accessor `"+id+"` could not be executed")
 
