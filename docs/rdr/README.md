@@ -36,7 +36,7 @@ engine README — this file is only the per-project index.
 | [0025](0025-command-invoking-accessor-bindings.md) | Command-invoking accessor bindings | Implemented | High |
 | [0026](0026-bounded-output-drain-on-command-timeout.md) | Deliver the command timeout even when a detached grandchild holds the output pipes | Final | High |
 | [0027](0027-inline-shell-detection-scope.md) | What the inline-shell check on command bindings actually promises (wrappers, env flags, stdin scripts) | Implemented | Medium |
-| [0028](0028-declared-line-edit-writer.md) | Write a planned value into a line of a text file without a wrapper script | Draft | High |
+| [0028](0028-declared-line-edit-writer.md) | Write a planned value into a line of a text file without a wrapper script | Final | High |
 
 ## Implementing
 

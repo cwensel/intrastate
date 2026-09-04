@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Draft [revised from Final 2026-09-03; re-verify A7, A9 @refine — JDR 0003 §D2 decided (a): C1.6 gains an argv0 exclusion and a `-`-prefixed value refusal]
+- **Status**: Final
 - **Type**: Feature
 - **Profile**: large — C1, the `edit` write carrier: one contract whose six clauses (C1.1–C1.6) lock the `edit` block's declaration grammar and its closed placeholder vocabulary; user-facing yes; locks format
 - **Priority**: High
@@ -1525,7 +1525,7 @@ written.
 
 ## Finalization Gate
 
-Responses: 0028-declared-line-edit-writer/artifacts/gate.md (Gate PASS 2026-09-03)
+Responses: 0028-declared-line-edit-writer/artifacts/gate.md (Gate PASS 2026-09-04)
 
 ### Cross-Cutting Concerns
 
@@ -1630,31 +1630,3 @@ requirement and none is implied at this size).
 - intrastate#zyh0 (tracker), intrastate#c3xz (closed, `set-state --plan`),
   intrastate#v0hb (closed, 0025), rdr#yjye, rdr#qmkd.
 - Evidence: `evidence/research/prior-art.md`, `evidence/propose-premortem/critic.md`.
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-- Cluster 0026-0027-0028, 2026-09-03; peer pair 0027 × 0028; report:
-  `docs/rdr/cluster-reconcile/0026-0027-0028/reconcile-report.md`.
-- Defect: JDR 0003 §D2 decided (a) — `{tag.<key>}` never at argv0, and a
-  bound value beginning with `-` refuses before spawn. C1.6 as locked reads
-  "admission: `{tag.<key>}` joins 0025:C2's vocabulary as a family, under
-  0025:C2's rule unchanged — WHOLE-ELEMENT only" and "no other change to
-  0025:C1–C1.6: … the shell-interpreter deny-list are untouched"; neither
-  admits the two rules, so the answer contradicts fenced text. 0027:C1's
-  promise ("argv WORDS only", two named out-of-scope forms) is preserved by
-  (a); 0027 is unchanged.
-- TARGET RE-ENTRY STAGE: 3 (refine). RE-ENTRY SCOPE: STAGE-SCOPED — a
-  clause addition inside C1.6; the approach holds. Re-verify A9 (the
-  placeholder's substitution site now carries a value rule) and A7 (the
-  context-only semantics C1.6 relies on are unchanged by the rule). Then 4
-  (scoped) → 6 → 7.
-- Direction: amend C1.6 `admission:` (argv0 exclusion — a load-time defect;
-  refine picks the category under 0025:C5's clause map) and `binding:` (the
-  `-` refusal before spawn — `execution_failure`, Detail naming the
-  placeholder, mirroring `cmdbind.go::substitute`'s `{artifact}` rule).
-  Rewrite the Cross-Cutting secret/credential response: C1.6 IS a new
-  caller-supplied value source. While open, cite JDR 0003 §D3 at C1.3 for the
-  exit group (decided (b): exit 2 via the typed `Err`, one CLI code, reason in
-  `findings[]`, no new class — consistent with the frozen `order:` line; a
-  citation, not a rewrite) and carry the D3 CLI code into the Testing
-  Strategy (S27) so Stage 8 does not meet it as an unnamed surface.
