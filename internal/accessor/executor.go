@@ -326,7 +326,15 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// clause's to re-decide.
 	if len(def.Accessor.Edit) != 0 && hasReader &&
 		len(reader.Accessor.Command) != 0 && !e.Registry.AllowCommands {
-		r := refusalOf(def, timeout, ClassExecutionFailure, nil)
+		// `ErrDeclaredRequest`, not nil: this is an ENTRY-level
+		// precondition and C1.3's EXIT GROUP: sentence puts all three of
+		// them in the exit-2 group. A forgotten `--allow-commands` is a
+		// property of the REQUEST — exit 3's "re-run the same request
+		// unchanged" is advice that can never succeed here. There is no
+		// binding error to wrap, so the sentinel is passed on its own;
+		// it is not an `*ExecError`, so it contributes no Detail and the
+		// gate text below remains the whole of it.
+		r := refusalOf(def, timeout, ClassExecutionFailure, ErrDeclaredRequest)
 		// The Detail names the GATE, having no rule to name: this is an
 		// ENTRY-level precondition, not a rule-scoped refusal
 		// (`0028:C1.3` order:).
