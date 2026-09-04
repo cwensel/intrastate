@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cwensel/intrastate/internal/accessor"
 	"github.com/cwensel/intrastate/internal/cli/cmdbind"
 )
 
@@ -534,6 +535,31 @@ func TestReq79_ADrainConditionIsSelectedAheadOfTheNonExitErrorArm(t *testing.T) 
 		t.Fatalf("the refusal is `exec.ErrWaitDelay`: the drain conditions " +
 			"are selected FIRST and the non-ExitError arm refuses only if " +
 			"neither fired")
+	}
+	// C1 `refusal:` requires `Detail` to carry the DIRECT child's exit
+	// status, composed from the fields `spawn` populates from `werr`. On
+	// this arm the child exited 0 by the stdlib's own contract — `os/exec`
+	// returns `ErrWaitDelay` only after `Process.Wait()` returned nil,
+	// which requires `state.Success()` — so "did not exit" is not a vague
+	// status but the OPPOSITE of the truth, and it misdirects a reader onto
+	// the direct child when the escapee is the actual holder.
+	const wantStatus = "exited 0"
+	var held *accessor.HeldPipeError
+	if !errors.As(err, &held) {
+		t.Fatalf("the refusal does not carry an *accessor.HeldPipeError: "+
+			"%v", err)
+	}
+	if got := held.ExitStatus; got != wantStatus {
+		t.Fatalf("the held-pipe error reports ExitStatus %q, want %q: a "+
+			"child reaching this arm exited 0 by the `os/exec` contract, "+
+			"and C1 `refusal:` fixes the exit status `Detail` carries as "+
+			"the direct child's own end", got, wantStatus)
+	}
+	if !strings.Contains(escHeldDetail(t, err), "("+wantStatus+")") {
+		t.Fatalf("the detail is %q; C1 `refusal:` fixes the held-pipe "+
+			"reason as carrying the direct child's exit status, and on the "+
+			"`ErrWaitDelay` arm that status is %q",
+			escHeldDetail(t, err), wantStatus)
 	}
 }
 

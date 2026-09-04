@@ -546,6 +546,22 @@ func spawn(
 		// held pipe names the helper that held it and `ErrWaitDelay` does
 		// not. Both are `execution_failure`, so this orders the reason and
 		// never the class.
+		//
+		// The direct child EXITED 0, and that is a stdlib guarantee rather
+		// than an inference from this fixture: `os/exec` returns
+		// `ErrWaitDelay` only from `awaitGoroutines`, which runs after
+		// `Process.Wait()` has already returned a nil error, and `Wait` is
+		// nil-erroring only when `state.Success()` holds. The doc says it
+		// outright — ErrWaitDelay is returned "if the process exits with a
+		// successful status code but its output pipes are not closed before
+		// ... WaitDelay expires". So `exited`/`exitCode` are set here for
+		// the same reason the ExitError arm sets them: `exitStatus()`
+		// composes them into the held-pipe `Detail` (`0026:C1` `refusal:`),
+		// and this is the one arm where `ErrWaitDelay` and a held pipe
+		// coincide. Leaving them zero renders "did not exit" for a child
+		// that exited cleanly, pointing a reader at the wrong process.
+		inv.exited = true
+		inv.exitCode = 0
 		werrRefusal = werr
 	}
 
