@@ -29,6 +29,7 @@ package cli
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -193,11 +194,21 @@ func TestReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips
 	// shell — on a host whose `env` supports `-S`, GNU env, since darwin's
 	// stock BSD env rejects it; A4)."
 	//
-	// The `-S` half is host-conditional by the MVV's own words and skips on a
-	// BSD-`env` host. The wrapper-file half is not: `["sh","./gate.sh"]` runs
-	// the DECLARED FILE on any POSIX host, and that it runs is what makes
+	// BOTH halves are exercised below, because "the first two are shown" is
+	// unconditional in the MVV; only HOST AVAILABILITY of `-S` is conditional.
+	//
+	// The wrapper-file half runs everywhere: `["sh","./gate.sh"]` runs the
+	// DECLARED FILE on any POSIX host, and that it runs is what makes
 	// `sh script.sh` "the sanctioned wrapper-file form and never a defect"
 	// rather than a form the lint merely tolerates.
+	//
+	// The `-S` half is gated on a RUNTIME CAPABILITY PROBE of the very `env`
+	// the binding will resolve, not on `runtime.GOOS`: A4's platform note
+	// ("darwin's stock BSD env rejects `-S`") is a non-contractual observation
+	// about one machine, and `/usr/bin/env` on a current darwin DOES accept
+	// `-S`. Probing the resolved binary is the only honest gate — it skips
+	// with a reason where `-S` is genuinely absent and RUNS everywhere else,
+	// rather than declaring a whole platform untestable from a stale note.
 	t.Run("step_3_exec_the_sanctioned_wrapper_file_actually_runs", func(t *testing.T) {
 		gdir := t.TempDir()
 		artifact := filepath.Join(gdir, "state.cfg")
@@ -235,6 +246,103 @@ func TestReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips
 			t.Errorf("artifact:\n%s\nwant the value `final` the declared "+
 				"wrapper file wrote — `sh script.sh` runs the declared FILE, "+
 				"which is why it is never a defect", raw)
+		}
+	})
+
+	// The second of "the first two": `["env","-S","<one word>"]`. C1 puts a
+	// shell string carried in ONE word out of scope on the ground that the
+	// WORD, not intrastate, is what reaches a shell. That claim is asserted
+	// here by execution, not by lint-green.
+	t.Run("step_3_exec_the_env_S_one_word_shell_string_actually_runs", func(t *testing.T) {
+		// The capability probe. It resolves and runs the SAME `env` the
+		// binding will resolve — a bare argv0 goes through the parent's PATH
+		// (`0025:C2`) — so the probe and the binding cannot disagree.
+		envPath, lerr := exec.LookPath("env")
+		if lerr != nil {
+			t.Skipf("the `-S` form spawns `env` as argv0; env is not on "+
+				"PATH: %v", lerr)
+		}
+		// The probe's split string names NO PATH: `-S "A=1"` is a bare
+		// environment assignment, which exercises `-S` parsing and exits 0
+		// without resolving or executing any utility. That matters because the
+		// probe must isolate "this `env` has no `-S`" from every other reason
+		// a command can fail — probing `-S true` conflates it with a missing
+		// or shadowed `true`, and probing `-S <envPath>` reintroduces the
+		// splitter's own whitespace rule against the resolved path (an `env`
+		// under a directory with a space splits into two words and the probe
+		// reports failure on a host that does support `-S`). Both conflations
+		// let this REQUIRED execution coverage skip itself. An `env` without
+		// `-S` rejects the flag outright ("illegal option"), which is a
+		// non-zero exit here.
+		if perr := exec.Command(envPath, "-S", "A=1").Run(); perr != nil {
+			t.Skipf("%s does not support `-S`, so the one-word form cannot be "+
+				"RUN on this host (it still lints green above, which is the "+
+				"part of C1 that is platform-neutral): %v", envPath, perr)
+		}
+
+		gdir := t.TempDir()
+		artifact := filepath.Join(gdir, "state.cfg")
+
+		// The one word, plus the path as a TRAILING ELEMENT. `env -S` splits
+		// only the `-S` string; every argv element AFTER it is preserved
+		// verbatim and passed on to the utility, so `sh -c <prog> <path>`
+		// binds the path to `$0` inside the program. That keeps `{artifact}`
+		// a WHOLE element, which is the only form `0025:C2` substitutes (a
+		// non-whole-element `{…}` token is itself a refusal,
+		// `command_unknown_placeholder`), and it means the path is never text
+		// in either parser: it does not cross `env -S`'s splitter and it does
+		// not cross `sh`'s tokenizer, so no quoting of it is required and no
+		// `TMPDIR` can corrupt the program. A path carrying a quote, a
+		// backtick or a `$` runs correctly.
+		//
+		// The written value is spelled with BACKTICK command substitution:
+		// `printf final` in backticks. The oracle has to separate "a shell ran
+		// the word" from "`env -S` split the word and ran a non-shell binary",
+		// because `env -S` is itself a splitter — it performs quote removal and
+		// `${VAR}` expansion on the word before exec. So quote-based tricks are
+		// NOT discriminating: `env -S` alone concatenates `"fi""nal"` into
+		// `final` with no shell anywhere, and an oracle keyed on that recovers
+		// `final` even when the `sh -c` prefix is stripped.
+		//
+		// Backticks are discriminating, and so is `$0`: `env -S` has no
+		// command substitution (it rejects `$(…)` outright and passes
+		// backticks through as literal bytes) and no positional parameters
+		// (it rejects a bare `$0`), while a SHELL performs both. Recovering
+		// `final` FROM THE PATH BOUND TO `$0` therefore proves a shell
+		// interpreted the word on two independent counts; strip the `sh -c`
+		// prefix and `env -S` refuses the word outright. That is the whole of
+		// C1's out-of-scope claim, asserted rather than assumed.
+		const word = "sh -c 'git config --file \"$0\" " +
+			"flow.status `printf final`'"
+
+		src := mvv0027WriteModel([]string{"env", "-S", word, "{artifact}"})
+		p := writeModelFile(t, gdir, "exec-env-s.toml", src)
+
+		if _, _, err := runCmd(t, "lint", "--model", p, "--as=json"); err != nil {
+			t.Fatalf("the one-word `env -S` form must lint clean — C1 names "+
+				"it out of scope BY NAME: %v", err)
+		}
+		if _, _, err := runCmd(t, "flow", "set-state",
+			"--model", p,
+			"--artifact", "state="+artifact,
+			"--write", "status=final",
+			"--allow-commands",
+			"--as=json"); err != nil {
+			t.Fatalf("the one-word `-S` string must run under "+
+				"--allow-commands: %v", err)
+		}
+		// Value-for-value, and specifically SHELL-value-for-value.
+		raw, rerr := os.ReadFile(artifact)
+		if rerr != nil {
+			t.Fatalf("the `-S` word never ran: %v", rerr)
+		}
+		if !strings.Contains(string(raw), "status = final") {
+			t.Errorf("artifact:\n%s\nwant `status = final` — the OUTPUT of the "+
+				"backticked `printf final`, a substitution ONLY a shell "+
+				"performs (`env -S` passes backticks through literally, so "+
+				"without a shell this reads `status = ` + \"`printf\"). "+
+				"Recovering it proves the one word reached a shell, which is "+
+				"the whole of C1's out-of-scope claim", raw)
 		}
 	})
 

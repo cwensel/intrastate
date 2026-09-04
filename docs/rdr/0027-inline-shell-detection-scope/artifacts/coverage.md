@@ -294,11 +294,75 @@ stdin CHANNEL and not over shell spellings — `python` IS a `shellInterpreters`
 member, so a spellings-scoped reading would refuse it. It is green and is
 documented as admitted in the step-5 text below.
 
-**Step 3, exec arm** — `["sh", "<gate.sh>"]` lints clean and the declared
-wrapper FILE actually runs under `--allow-commands`, writing the value the model
-asks for (`flow.status = final`) into the artifact. Value-for-value, not a zero
-exit. The `env -S` half is host-conditional by the MVV's own words (GNU `env`;
-darwin's stock BSD `env` rejects `-S`, A4) and skips on this host.
+**Step 3, exec arm** — BOTH of "the first two" are shown by execution, not by
+lint-green. `["sh", "<gate.sh>"]` lints clean and the declared wrapper FILE
+actually runs under `--allow-commands`, writing the value the model asks for
+(`flow.status = final`) into the artifact. Value-for-value, not a zero exit.
+
+The `["env","-S","<one word>"]` half RUNS on this host — it is not skipped. A4's
+platform note ("darwin's stock BSD `env` rejects `-S`") is a non-contractual
+observation that does not hold for this machine's `/usr/bin/env`, which accepts
+`-S`. The arm is therefore gated on a runtime CAPABILITY PROBE of the resolved
+`env` binary rather than on `runtime.GOOS`, so it runs wherever `-S` is present
+and skips with a reason only where it genuinely is not. Observed:
+
+```
+$ /usr/bin/env -S "A=1"                                 # capability probe: exit 0
+$ intrastate lint --model exec-env-s.toml --as=json
+exit 0  {"type":"ok","data":{"findings":[]}}
+$ intrastate flow set-state --model exec-env-s.toml \
+    --artifact state=<tmp>/state.cfg --write status=final --allow-commands --as=json
+exit 0
+$ cat <tmp>/state.cfg
+[flow]
+	status = final
+```
+
+The declared word is ``sh -c 'git config --file "$0" flow.status `printf
+final`'`` with `{artifact}` as a TRAILING argv element, and the oracle is the
+recovered value `final`.
+
+The oracle has to separate "a shell ran the word" from "`env -S` split the word
+and ran a non-shell binary", because `env -S` is ITSELF a splitter: it performs
+quote removal and `${VAR}` expansion on the word before exec. Quote-based
+tricks are therefore not discriminating — `env -S` alone concatenates
+`"fi""nal"` into `final` with no shell present, so an oracle keyed on that
+would pass against a word with the `sh -c` prefix stripped. Two constructs are
+discriminating, and both are used: backtick COMMAND SUBSTITUTION (`env -S`
+rejects `$(…)` outright and passes backticks through as literal bytes) and the
+POSITIONAL PARAMETER `$0` (`env -S` supports only `${VARNAME}` and rejects a
+bare `$0`). A shell performs both. Verified by mutation — stripping the `sh -c`
+prefix makes `env -S` refuse the word outright and fails the assertion.
+Recovering `final` FROM THE PATH BOUND TO `$0` therefore proves the one word
+reached a SHELL on two independent counts, rather than merely that some process
+ran and exited zero.
+
+The path is passed as a trailing argv element rather than embedded in the word.
+`env -S` splits ONLY the `-S` string; every element after it is preserved
+verbatim and handed to the utility, so `sh -c <prog> <path>` binds the path to
+`$0` inside the program. This keeps `{artifact}` a WHOLE element, which is the
+only form `0025:C2` substitutes (a non-whole-element `{…}` token is itself a
+refusal, `command_unknown_placeholder`), and it means the path is never text in
+either parser — it crosses neither `env -S`'s splitter nor `sh`'s tokenizer. No
+quoting of it is required and no `TMPDIR` can corrupt the program: the arm runs
+green under paths carrying spaces, tabs, non-ASCII, and quotes, backticks and
+`$`. Earlier revisions embedded the path literally and guarded it with a
+character precondition; the positional form removes both the quoting and the
+skip, so the arm now has no host-path precondition at all.
+
+The `-S` capability probe names NO PATH: it is `env -S "A=1"`, a bare
+environment assignment that exercises `-S` parsing and exits 0 without
+resolving or executing any utility. The probe must isolate "this `env` has no
+`-S`" from every other reason a command can fail, and both obvious
+alternatives fail that test — `-S true` conflates it with a missing or
+shadowed `true`, and `-S <envPath>` reintroduces the splitter's own whitespace
+rule against the resolved path, so an `env` under a directory with a space
+would report failure on a host that DOES support `-S`. Either conflation lets
+this required execution coverage skip itself. An `env` without `-S` rejects
+the flag outright ("illegal option"), a non-zero exit.
+
+Since the form is executable here, the earlier record in this file that the
+half "skips on this host" was false and is corrected by this paragraph.
 
 **Step 4** — the four original 0025 REQ-74 probes still refuse with the SAME
 category, and the reported form still names the right pair. Position-freedom
