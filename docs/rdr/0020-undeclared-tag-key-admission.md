@@ -239,8 +239,10 @@ says so.
 One seam moves: the admission path in `internal/cli/flow_input.go`.
 `parseTags` switches its guarded lookup to the two-value form and
 routes an undeclared key around `canonicalValue` (or passes the
-declaredness bit into it — implementation latitude), so the
-kind/shape/domain arms run only under a real declaration. The carried
+declaredness bit into it — implementation latitude, bounded by C1's
+refusal list: whichever shape is taken, the empty-value arm must still
+fire for a carrier), so the kind/shape/domain arms run only under a
+real declaration. The carried
 value flows exactly where an undeclared scalar already flows today:
 into the kernel's Observed view (`resolve.Input.Observed`, where only
 atoms — all declaration-checked at load — can read keys) and out
@@ -265,11 +267,15 @@ kind-checks, or compares it. The only refusals reachable for an
 undeclared key are, unchanged and still preceding any accessor
 (REQ-27):
 
-- the flag grammar (`--tag` takes `name=value`) and the empty-value
-  arm, both `flow-tag-invalid` — an empty observed value is
-  indistinguishable from unset;
+- the flag grammar (`--tag` takes `name=value`), `flow-tag-invalid`;
 - `flow-tag-reserved` (REQ-26), `flow-tag-owned` (REQ-27),
-  `flow-tag-duplicate` (REQ-28).
+  `flow-tag-duplicate` (REQ-28);
+- the empty-value arm, `flow-tag-invalid` — an empty observed value is
+  indistinguishable from unset, which is a grammar-level fact about the
+  value that holds with or without a declaration. It therefore binds the
+  carrier too, and MOVES to the admission path ahead of the carrier
+  branch; today it sits inside `canonicalValue`'s `!isSet` arm, which
+  the carrier no longer enters.
 
 `flow-tag-invalid`'s kind, shape, and domain arms — including "is not
 set-valued" — are reachable only for a DECLARED key, whose loaded
@@ -301,15 +307,21 @@ enforces that declaration's kind and domain.
   `flow-tag-undeclared` is deliberately not minted (Alternatives,
   arm 2).
 - **Selection / predicate** — refusal precedence at admission is
-  unchanged: grammar → reserved → owned → duplicate → (declared keys
-  only) kind/shape/domain conformance; the carrier branch sits where
-  the conformance arms would have run.
+  unchanged in order: grammar → reserved → owned → duplicate →
+  empty-value → (declared keys only) kind/shape/domain conformance;
+  the carrier branch sits where the conformance arms would have run.
+  The empty-value arm is the one that moves — out of `canonicalValue`
+  and up to the shared path — because it must bind the carrier, which
+  no longer reaches that function.
 
 #### Illustrative Code
 
 Illustrative — shape only, not load-bearing:
 
 ```go
+if value == "" { // empty is indistinguishable from unset, declared or not
+    return nil, userErr(codeTagInvalid, key, "…was given an empty value")
+}
 decl, declared := m.Tags[key]
 if !declared {
     // Pure carrier (0020:C1): admit verbatim; nothing can read it.
@@ -585,9 +597,10 @@ rather than leaned on, and the choice rests on the in-repo anchors.
 
 ### Failure Modes
 
-Visible: declared-key refusals are unchanged — wrong kind, wrong
-shape, out-of-domain, reserved, owned, duplicate all still refuse at
-exit 2 before any accessor. Silent: a misspelled key (declared or not)
+Visible: every refusal that survives is unchanged and still fires at
+exit 2 before any accessor — reserved, owned, duplicate, grammar and
+empty-value for ANY key; wrong kind, wrong shape and out-of-domain for
+a DECLARED key only (per C1's list). Silent: a misspelled key (declared or not)
 passes as a carrier and the intended rule fails to match; resolution
 then refuses no-match or routes to an escape row. Diagnosis: the
 resolve payload's `observed` field echoes every carried key
@@ -616,14 +629,22 @@ declare the key (no guard atom needed) to put it under conformance.
    `flow-tag-invalid` "is not set-valued" — now truthfully, and the
    red test pins this beside step 2 so the asymmetry is authored, not
    incidental.
+5. Run `--tag extra=` (undeclared, empty): still refused
+   `flow-tag-invalid` "was given an empty value" — the one arm the
+   carrier does not escape, pinned so the hoist out of
+   `canonicalValue` cannot silently drop it.
 
 ### Phase 1: Code Implementation
 
 #### Step 1: Carrier branch at admission
 
 Switch `parseTags`'s guarded lookup to the two-value form and route an
-undeclared key past the conformance arms per C1 (grammar, empty-value,
-reserved, owned, duplicate refusals unchanged and in order).
+undeclared key past the conformance arms per C1. Grammar, reserved,
+owned and duplicate are unchanged and in order. The empty-value arm
+lifts out of `canonicalValue`'s `!isSet` branch onto the shared
+admission path, ahead of the carrier branch, so it still binds a key
+that no longer reaches that function; `canonicalValue` keeps its copy
+for the `--write` carrier, which enters by its own path.
 
 #### Step 2: Truthful comments
 
@@ -633,32 +654,33 @@ instead of promising a different decision elsewhere;
 
 #### Step 3: Pinned tests and docs
 
-Land the red test of MVV steps 2–4 (undeclared scalar AND array pass,
-declared-scalar-given-array still refuses), and the
-`docs/model-schema.md` line for authors composing a producer's whole
-tag output (Background's obligation).
+Land the red test of MVV steps 2–5 (undeclared scalar AND array pass,
+declared-scalar-given-array still refuses, undeclared-empty still
+refuses), and the `docs/model-schema.md` line for authors composing a
+producer's whole tag output (Background's obligation).
 
 ## Validation
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The scenarios are the Minimum Viable Validation's five steps, landed as
+the red test of Phase 1 Step 3; they are authored there and not
+restated here. Coverage goal — done is all five green, with the
+undeclared/declared pair adjacent in one test so the asymmetry C1 fixes
+is pinned by construction rather than by two tests that could drift:
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: undeclared scalar and undeclared array literal
+   admitted (MVV 2).
+   **Expected**: exit 0; `observed` echoes both byte-for-byte.
+2. **Scenario**: the same resolve with and without the carrier flags
+   (MVV 3).
+   **Expected**: identical selected rule and outcome.
+3. **Scenario**: declared scalar given an array literal (MVV 4).
+   **Expected**: refused `flow-tag-invalid`, "is not set-valued".
+4. **Scenario**: undeclared key given an empty value (MVV 5).
+   **Expected**: refused `flow-tag-invalid`, "was given an empty
+   value" — the arm the carrier does not escape.
 
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
 
 ## Finalization Gate
 
@@ -784,7 +806,19 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- `internal/cli/flow_input.go` — `parseTags` (guarded lookup, REQ-26/27/28
+  ordering) and `canonicalValue` (the `!isSet` + `looksArray` arm, the
+  empty-value arm).
+- `internal/table/load.go` — `ConformValue`'s zero-`TagDecl` doc;
+  `accessorTable`'s `_, ok := l.model.Tags[key]` presence signal.
+- `internal/table/normalize.go` — the `unknown_tag` refusal sites.
+- `internal/cli/flow_state.go` — `parseWrites`, which proves a writer
+  binding before its `canonicalValue` call (why `--write` is out of scope).
+- `internal/table/model.go` — `EmitValue`, the uninterpreted-vocabulary
+  precedent (`0010:C3`).
+- `docs/cli-output-contract.md` §Set values on the wire.
+- RDR 0005 (refusal-code table, REQ-61), RDR 0008 (reserved key
+  `recognized`), RDR 0003 (the five kind tokens), RDR 0010 / 0024 (emit
+  namespace: carrier-by-default, declare-to-tighten), RDR 0012 (declared-key
+  values one seam downstream).
+- Kata `intrastate#3exy` (1601); companion doc-gap kata `p1p6`.
