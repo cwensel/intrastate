@@ -345,3 +345,62 @@ stands, and every property C1.6 exists to deliver survives it. The consumer's
 `rdr-write.toml` migration is out of scope here (REQ-103, kata rdr#yjye); that
 kata carries the two-key shape. No petition to amend RDR 0002 is opened,
 because no contract of this record needs one.
+
+## D10 — `re-anchor:` over an UNPLANNED sibling rule: the stability reading
+
+**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 3c).
+
+**Situation.** C1.3 `re-anchor:` states the invariant with no plan
+qualifier — "**every rule's** anchor is run again over the POST-EDIT buffer
+and must select exactly its own rewritten line (or, for a deleted line, zero
+lines)" — and then names the case it exists for: "This is what stops a
+replacement from de-anchoring itself or **poisoning a sibling rule's anchor
+on the next run**". "On the next run" is decisive: a poisoned sibling only
+matters on a LATER invocation, which is exactly the invocation that did not
+plan it now. Phase 3b's ADV-3 pinned the gap — `prepare` dropped any rule
+whose key the plan did not name, so `reAnchor` never saw it, and read-back
+could not see it either (the key is not in the plan, so the oracle never
+compares it).
+
+**What the clause does not settle.** Its stated test is "exactly its own
+rewritten line", and an unplanned rule HAS no rewritten line: it writes
+nothing. Applied literally, the sentence has no referent for that rule. Two
+readings are available:
+
+- **cardinality** — an unplanned rule must select exactly one line of the
+  post-edit buffer;
+- **stability** — an unplanned rule must select, after the rewrite, exactly
+  the lines it selected before it (shifted by any deletions), i.e. this
+  entry's rewrite must not CHANGE what a sibling selects.
+
+**Choice taken: stability.** Cardinality would newly refuse invocations over
+a defect this run neither caused nor touched — an anchor already stale or
+already ambiguous before the edit would condemn every plan naming any OTHER
+key, which C1.3 `select:` assigns to the plan that names the rule
+(`edit_anchor_unmatched` / `edit_anchor_ambiguous`, step (4), scoped to the
+rules of the plan). Stability is exactly the property the clause's stated
+purpose asks for and nothing more: it fires when and only when this entry's
+rewrite moved the sibling, which is the poisoning.
+
+The shift arithmetic is the one already used for planned rules — a held
+pre-edit index moves down by the number of preceding deletions, and a hit on
+a deleted line has no post-edit counterpart.
+
+**Scope kept narrow.** An unplanned rule raises no refusal of its OWN at
+steps (2)–(5): it has no planned value to scan, its `replace` is never
+parsed or expanded, it contributes no deletion and no collision, and an
+anchor it declares that cannot be parsed, bound or compiled makes it
+contribute no post-edit witness rather than condemning a plan that never
+touched it. Only step (6) reads it. This keeps C1.3 `precedence:` steps
+(2)–(5) scoped to the plan, as their own text is, while step (6) reads
+"every rule" as written.
+
+**Covering tests.** `TestAdv0028_3_ReAnchorCoversRulesThisPlanDidNotName`
+(the poisoning arm) and
+`TestReAnchor0028_UnplannedSiblingRulesAreCovered` (the four arms around
+it: an untouched sibling still applies; an already-unmatched sibling is not
+this plan's refusal; a `<clear>` deletion that merely shifts the sibling is
+not poisoning; a rewrite that de-anchors a sibling refuses before mutation).
+
+No public surface is added: `unplanned` and `preHits` are unexported fields
+of an unexported struct, and `shiftHits` is an unexported helper.

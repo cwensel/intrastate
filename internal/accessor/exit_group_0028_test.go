@@ -33,6 +33,8 @@ import (
 
 	"github.com/cwensel/intrastate/internal/accessor"
 	"github.com/cwensel/intrastate/internal/cli/cmdbind"
+	"github.com/cwensel/intrastate/internal/cli/flowbind"
+	"github.com/cwensel/intrastate/internal/resolve"
 	"github.com/cwensel/intrastate/internal/table"
 )
 
@@ -162,6 +164,132 @@ func TestExitGroup0028_CommandTagPreconditionsTakeTheRequestExitGroup(t *testing
 			t.Errorf("`0025:C6`'s gate refusal now wraps " +
 				"`accessor.ErrDeclaredRequest`; RDR 0028 amends only C1.6's " +
 				"two argv rules and leaves 0025's pre-spawn ladder alone")
+		}
+	})
+}
+
+// --- ADV-3's re-anchor widening: the arms its fixture does not reach ------
+
+// REQ-38/REQ-39 (`0028:C1.3` re-anchor:).
+//
+// ADV-3 pins the poisoning arm: a planned rule's replacement makes an
+// UNPLANNED sibling's anchor select a line it did not select before, and
+// the write must refuse before any byte lands. These are the arms around
+// it, which the widening must not break:
+//
+//   - an unplanned rule whose anchor is untouched by the rewrite still
+//     applies cleanly (the widening is not a blanket refusal);
+//   - an unplanned rule whose anchor was ALREADY stale or ALREADY
+//     ambiguous before this invocation stays that way and is not this
+//     plan's refusal to report — the invariant is STABILITY, not
+//     cardinality, because an unplanned rule has no rewritten line of
+//     its own to be identical to;
+//   - a `<clear>` deletion shifts an unplanned rule's line without
+//     changing what it selects, so the shift arithmetic must follow it;
+//   - a rewrite that makes an unplanned rule's anchor select NOTHING is
+//     poisoning too, in the other direction.
+func TestReAnchor0028_UnplannedSiblingRulesAreCovered(t *testing.T) {
+	const statusAnchor = `^- \*\*Status\*\*: .+$`
+
+	t.Run("untouched_sibling_applies", func(t *testing.T) {
+		before := "- **Status**: Draft\n- **Owner**: alice\n"
+		path := adv0028Fixture(t, before)
+		acc := adv0028Accessor(map[string]table.EditRule{
+			"status": {Anchor: statusAnchor, Replace: "- **Status**: {status}"},
+			"owner":  {Anchor: `^- \*\*Owner\*\*: .+$`, Replace: "- **Owner**: {owner}"},
+		}, "status", "owner")
+
+		err := flowbind.NewEditWriter(acc, adv0028Entry).Apply(
+			t.Context(),
+			accessor.Artifact{Role: adv0028Role, Path: path},
+			[]resolve.Tag{{Key: "status", Value: "Final"}},
+		)
+		if err != nil {
+			t.Fatalf("a rewrite that leaves the unplanned sibling's anchor "+
+				"selecting exactly the same line refused: %v", err)
+		}
+		if got := string(adv0028Read(t, path)); got != "- **Status**: Final\n- **Owner**: alice\n" {
+			t.Fatalf("the planned rule did not apply: %q", got)
+		}
+	})
+
+	t.Run("already_unmatched_sibling_is_not_this_plans_refusal", func(t *testing.T) {
+		// `owner` matched nothing BEFORE the edit and matches nothing
+		// after it. Nothing changed, so nothing is reported: the stale
+		// sibling is the refusal of the next plan that NAMES it.
+		before := "- **Status**: Draft\n"
+		path := adv0028Fixture(t, before)
+		acc := adv0028Accessor(map[string]table.EditRule{
+			"status": {Anchor: statusAnchor, Replace: "- **Status**: {status}"},
+			"owner":  {Anchor: `^- \*\*Owner\*\*: .+$`, Replace: "- **Owner**: {owner}"},
+		}, "status", "owner")
+
+		err := flowbind.NewEditWriter(acc, adv0028Entry).Apply(
+			t.Context(),
+			accessor.Artifact{Role: adv0028Role, Path: path},
+			[]resolve.Tag{{Key: "status", Value: "Final"}},
+		)
+		if err != nil {
+			t.Fatalf("an unplanned sibling that was ALREADY unmatched before "+
+				"this invocation was reported as this plan's defect: %v", err)
+		}
+	})
+
+	t.Run("clear_deletion_shifts_the_sibling_without_poisoning_it", func(t *testing.T) {
+		// The planned `note` rule DELETES its line, which moves the
+		// unplanned `owner` rule's line up by one. The set it selects is
+		// unchanged, so the shift arithmetic must follow the deletion
+		// rather than read the move as a change.
+		before := "- **Note**: scratch\n- **Owner**: alice\n"
+		path := adv0028Fixture(t, before)
+		acc := adv0028Accessor(map[string]table.EditRule{
+			"note": {
+				Anchor:  `^- \*\*Note\*\*: .+$`,
+				Replace: "- **Note**: {note}",
+				Clear:   table.EditClearLine,
+			},
+			"owner": {Anchor: `^- \*\*Owner\*\*: .+$`, Replace: "- **Owner**: {owner}"},
+		}, "note", "owner")
+
+		err := flowbind.NewEditWriter(acc, adv0028Entry).Apply(
+			t.Context(),
+			accessor.Artifact{Role: adv0028Role, Path: path},
+			[]resolve.Tag{{Key: "note", Value: accessor.ClearSentinel}},
+		)
+		if err != nil {
+			t.Fatalf("a deletion that merely SHIFTED the unplanned sibling's "+
+				"line was read as poisoning it: %v", err)
+		}
+		if got := string(adv0028Read(t, path)); got != "- **Owner**: alice\n" {
+			t.Fatalf("the `<clear>` did not delete its line: %q", got)
+		}
+	})
+
+	t.Run("rewrite_that_de_anchors_a_sibling_refuses_before_mutation", func(t *testing.T) {
+		// Poisoning in the other direction: the replacement REMOVES the
+		// text the unplanned sibling anchored on, so its anchor now
+		// selects nothing. The next plan naming `owner` would refuse
+		// `edit_anchor_unmatched` with no way to trace the run that
+		// broke it, which is what this pass exists to prevent.
+		before := "- **Status**: Draft alice\n"
+		path := adv0028Fixture(t, before)
+		acc := adv0028Accessor(map[string]table.EditRule{
+			"status": {Anchor: statusAnchor, Replace: "- **Status**: {status}"},
+			"owner":  {Anchor: `alice`, Replace: "- **Owner**: {owner}"},
+		}, "status", "owner")
+
+		err := flowbind.NewEditWriter(acc, adv0028Entry).Apply(
+			t.Context(),
+			accessor.Artifact{Role: adv0028Role, Path: path},
+			[]resolve.Tag{{Key: "status", Value: "Final"}},
+		)
+		if err == nil {
+			t.Fatalf("the rewrite de-anchored the unplanned sibling `owner` " +
+				"and applied anyway; `0028:C1.3` re-anchor: requires " +
+				"`edit_anchor_unstable` before any write")
+		}
+		if got := string(adv0028Read(t, path)); got != before {
+			t.Fatalf("the edit refused but the artifact changed: %q", got)
 		}
 	})
 }

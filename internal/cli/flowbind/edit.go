@@ -104,6 +104,21 @@ type editRulePlan struct {
 	// can shift a sibling's held index by the deletions of the rules
 	// preceding it. The shift is a COUNT, not a diff.
 	deleted bool
+	// unplanned marks a rule of this entry whose key THIS invocation did
+	// not plan. It writes nothing and raises no refusal of its own, but
+	// `0028:C1.3` re-anchor: says "EVERY rule's anchor is run again over
+	// the POST-EDIT buffer" with no plan qualifier — and it names this
+	// case as its reason for existing, "poisoning a sibling rule's anchor
+	// ON THE NEXT RUN". The next run is precisely the invocation that
+	// does plan the key, so a rule dropped for being unplanned is the one
+	// the invariant is about.
+	unplanned bool
+	// preHits holds an UNPLANNED rule's pre-edit selection — every line
+	// its anchor matched before the rewrite. It is the baseline the
+	// re-anchor pass compares its post-edit selection against, since an
+	// unplanned rule has no "own rewritten line" to be identical to. A
+	// planned rule's baseline is `index`, which is stronger.
+	preHits []int
 }
 
 // Apply performs the planned mutation over the caller-bound artifact.
@@ -193,22 +208,32 @@ func (w *EditWriter) prepare(
 	for _, key := range keys {
 		rule := w.acc.Edit[key]
 		value, planned := values[key]
-		if !planned {
-			// A key this invocation did not plan has nothing to write.
-			// Its rule contributes no selection, no deletion, and no
-			// refusal: the plan's Writes are the only tags applied.
-			continue
-		}
 		p := &editRulePlan{
-			key:   key,
-			rule:  rule,
-			value: value,
-			clear: accessor.IsClear(value),
-			index: -1,
+			key:       key,
+			rule:      rule,
+			value:     value,
+			clear:     planned && accessor.IsClear(value),
+			index:     -1,
+			unplanned: !planned,
 		}
 
+		// A key this invocation did not plan writes nothing: it
+		// contributes no selection, no deletion and no refusal of its
+		// own, since the plan's Writes are the only tags applied. It IS
+		// still carried, because `0028:C1.3` re-anchor: runs every rule's
+		// anchor over the post-edit buffer — an unplanned sibling is
+		// exactly the rule that clause exists to protect.
+		//
+		// Nothing it declares can raise a refusal here. Its anchor may
+		// name a tag this invocation did not bind, or (defensively) fail
+		// to compile; either way the rule simply contributes no
+		// post-edit witness rather than condemning a plan that never
+		// touches it.
 		segs, err := table.ParseEditAnchor(rule.Anchor, nil)
 		if err != nil {
+			if !planned {
+				continue
+			}
 			return nil, w.ruleErr(key, "edit_anchor_invalid", err.Error())
 		}
 		p.anchorSegs = segs
@@ -219,6 +244,9 @@ func (w *EditWriter) prepare(
 		// through literally.
 		pattern, missing, ok := table.ExpandEditAnchor(segs, art.Context)
 		if !ok {
+			if !planned {
+				continue
+			}
 			return nil, &accessor.ExecError{
 				Detail: "the placeholder `{tag." + missing +
 					"}` is not bound on this invocation's context; a " +
@@ -233,9 +261,19 @@ func (w *EditWriter) prepare(
 		}
 		re, err := regexp.Compile(pattern)
 		if err != nil {
+			if !planned {
+				continue
+			}
 			return nil, w.ruleErr(key, "edit_anchor_invalid", err.Error())
 		}
 		p.re = re
+
+		// An unplanned rule's `replace` is never expanded, so it is not
+		// parsed: the anchor alone is what the re-anchor pass reads.
+		if !planned {
+			plans = append(plans, p)
+			continue
+		}
 
 		rsegs, err := table.ParseEditReplace(rule.Replace, key, re.NumSubexp(), re.SubexpNames())
 		if err != nil {
@@ -252,8 +290,14 @@ func (w *EditWriter) prepare(
 	// values are scanned per-ENTRY, tag values per-USE-SITE. A tag bound
 	// on the context but referenced by no anchor of this entry reaches no
 	// line data, so scanning it would fence out a legitimate invocation
-	// for a value the entry never touches.
+	// for a value the entry never touches. By the same reasoning an
+	// UNPLANNED rule is out of both halves' scope: it has no planned
+	// value, and its anchor interpolates a tag only to READ the buffer,
+	// never to write line data.
 	for _, p := range plans {
+		if p.unplanned {
+			continue
+		}
 		if !p.clear && multiline(p.value) {
 			return nil, w.entryErr(tokenValueMultiline,
 				"the planned value for `"+p.key+"` carries a newline or "+
@@ -261,6 +305,9 @@ func (w *EditWriter) prepare(
 		}
 	}
 	for _, p := range plans {
+		if p.unplanned {
+			continue
+		}
 		for _, tag := range table.EditAnchorTagKeys(p.anchorSegs) {
 			if multiline(art.Context[tag]) {
 				return nil, w.entryErr(tokenValueMultiline,
@@ -299,6 +346,18 @@ func (w *EditWriter) selectLines(plans []*editRulePlan, lines []editLine) error 
 			if p.re.Match(ln.content) {
 				hits = append(hits, i)
 			}
+		}
+		if p.unplanned {
+			// An unplanned rule is not held to step (4) at all: it
+			// writes nothing, so its cardinality on the PRE-edit buffer
+			// is whatever the artifact already holds and is not this
+			// invocation's defect to report. What is recorded is the
+			// selection it had BEFORE the edit, which is the baseline
+			// the re-anchor pass compares against — the invariant being
+			// that this entry's rewrite must not CHANGE what a sibling
+			// rule selects.
+			p.preHits = hits
+			continue
 		}
 		switch {
 		case len(hits) == 0:
@@ -400,6 +459,31 @@ func (w *EditWriter) reAnchor(plans []*editRulePlan, out []editLine) error {
 				hits = append(hits, i)
 			}
 		}
+		if p.unplanned {
+			// EVERY rule's anchor, with no plan qualifier — and this is
+			// the case the clause names as its reason for existing:
+			// "poisoning a sibling rule's anchor ON THE NEXT RUN". The
+			// next run is the invocation that plans the key, so a rule
+			// dropped here for being unplanned is the one the invariant
+			// protects, and read-back cannot see it: the key is not in
+			// the plan, so the oracle never compares it.
+			//
+			// The test is STABILITY, not cardinality: an unplanned rule
+			// has no rewritten line of its own to be identical to, so
+			// what must hold is that this entry's rewrite did not CHANGE
+			// what the rule selects. An anchor already stale or already
+			// ambiguous before the edit stays that way and is the next
+			// plan's refusal to report, not this one's — refusing it
+			// here would condemn a plan that never touched it.
+			if !slices.Equal(hits, shiftHits(p.preHits, plans)) {
+				return w.ruleErr(p.key, tokenAnchorUnstable,
+					"the anchor of this entry's rule `"+p.key+"`, which this "+
+						"plan did not name, selects a different set of lines "+
+						"after the rewrite than before it; a replacement must "+
+						"not poison a sibling rule's anchor for the next run")
+			}
+			continue
+		}
 		if p.index < 0 || p.deleted {
 			// A rule that deleted its line, or a `<clear>` that matched
 			// none, must select zero lines afterwards.
@@ -425,6 +509,38 @@ func (w *EditWriter) reAnchor(plans []*editRulePlan, out []editLine) error {
 		}
 	}
 	return nil
+}
+
+// shiftHits maps an UNPLANNED rule's pre-edit selection onto the
+// post-edit buffer, using the same shift arithmetic the planned rules
+// use: a held pre-edit index moves down by the number of DELETIONS that
+// precede it, and a hit on a line another rule deleted has no post-edit
+// counterpart at all.
+//
+// The result is what the rule's anchor MUST still select if this entry's
+// rewrite left it alone. Anything else — a line gained, a line lost, a
+// line moved — is the poisoning `0028:C1.3` re-anchor: forbids.
+func shiftHits(pre []int, plans []*editRulePlan) []int {
+	out := make([]int, 0, len(pre))
+	for _, i := range pre {
+		shift, dropped := 0, false
+		for _, q := range plans {
+			if !q.deleted || q.index < 0 {
+				continue
+			}
+			switch {
+			case q.index == i:
+				dropped = true
+			case q.index < i:
+				shift++
+			}
+		}
+		if dropped {
+			continue
+		}
+		out = append(out, i-shift)
+	}
+	return out
 }
 
 // --- refusal carriers -----------------------------------------------------
