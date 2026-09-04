@@ -215,23 +215,35 @@ func ParseEditAnchor(pattern string, declared func(string) bool) ([]EditSegment,
 			// "carries any other `{…}` form" (`0028:C1.4`), reconciled
 			// with "never for a brace RE2 itself accepts" (`0028:C1.2`).
 			//
-			// RE2 accepts an unescaped `{` either way: `{artifact}` and
-			// `\d{4}` both COMPILE, the first as literal text and the
-			// second as a bounded quantifier, so compilation cannot tell
-			// them apart and the two clauses would be unsatisfiable
-			// together if it had to. The discriminator that satisfies
-			// both is the brace's SHAPE: a `{` whose contents are a
-			// well-formed repeat spec (`{N}`, `{N,}`, `{N,M}`) is
-			// quantifier syntax and reaches RE2 untouched; any other
-			// unescaped `{…}` is the "other form" C1.4 refuses, which is
+			// RE2 accepts an unescaped `{` in EVERY shape: `{artifact}`,
+			// `\d{4}`, `{{`, `[{}]`, a lone `{` — all COMPILE, some as
+			// literal text and some as syntax. So "a brace RE2 accepts"
+			// cannot be read as "a brace that compiles", or C1.4's arm
+			// would be unreachable and the two clauses jointly
+			// unsatisfiable.
+			//
+			// The discriminator is PLACEHOLDER SHAPE, which is what the
+			// rest of C1.4's own list is about — the other two arms are
+			// "fails to compile" and "names an undeclared tag key", both
+			// placeholder concerns. A `{` opening a `{word}` — one or
+			// more letters, digits, `_`, `-` or `.`, closed by `}` — is
+			// something an author wrote MEANING a substitution, and the
+			// only substitution this template admits is `{tag.<key>}`.
+			// That is the "other form" C1.4 refuses, and refusing it is
 			// what stops `{artifact}` or an entry's own `{status}` from
 			// silently anchoring on literal braces the document does not
 			// carry.
-			if pattern[i] == '{' && !editRepeatSpec(pattern[i:]) {
+			//
+			// Everything else reaches RE2 untouched, as C1.2 requires:
+			// `\d{4}` and `a{2,3}` (repeat specs are digits and a comma,
+			// never a `{word}`), a bare `{{` — which S14 names BY NAME
+			// and which C1.2 pins as "NOT an escape" here — a lone `{`,
+			// `[{}]`, `[{]`. See deviations.md D5.
+			if pattern[i] == '{' && editPlaceholderShape(pattern[i:]) {
 				return nil, editAnchorErr("the `{` at offset " +
-					strconv.Itoa(i) + " opens neither a `" + editTagPrefix +
-					"<key>}` placeholder nor an RE2 repeat quantifier; escape " +
-					"it as `\\{` to anchor a literal brace")
+					strconv.Itoa(i) + " opens a `{…}` placeholder, and the " +
+					"only placeholder an anchor admits is `" + editTagPrefix +
+					"<key>}`; escape it as `\\{` to anchor a literal brace")
 			}
 			lit.WriteByte(pattern[i])
 			i++
@@ -260,24 +272,65 @@ func ParseEditAnchor(pattern string, declared func(string) bool) ([]EditSegment,
 	return out, nil
 }
 
-// editRepeatSpec reports whether s opens an RE2 repeat quantifier —
-// `{N}`, `{N,}` or `{N,M}`. It reads only the shape, never the operand it
-// applies to: whether the quantifier has something to repeat is RE2's
-// question and it answers it at compile.
-func editRepeatSpec(s string) bool {
+// editPlaceholderShape reports whether s opens a PLACEHOLDER-shaped
+// `{word}`: a `{`, one or more word bytes, and a closing `}`. A word byte
+// is an ASCII letter or digit, `_`, `-` or `.` — the bytes a placeholder
+// NAME is written from, `.` included because `{tag.<key>}` is the one
+// admitted placeholder and its own name carries one.
+//
+// This is the discriminator C1.4's "any other `{…}` form" needs, given
+// that RE2 accepts every brace shape and so cannot supply one
+// (`0028:C1.2` "never for a brace RE2 itself accepts"; deviations.md D5).
+// It reports FALSE — pattern text, straight through to RE2 — for:
+//
+//   - a repeat spec, `{4}` / `{2,3}` / `{2,}`: a comma is not a word byte
+//     and the all-digit forms are read as quantifiers by RE2, which is
+//     the reading C1.2 names for `\d{4}` and `a{2,3}`. Whether the
+//     quantifier has an operand is RE2's question, answered at compile;
+//   - a bare `{{`, which `0028` S14 names by name and C1.2 pins as "NOT
+//     an escape" in an anchor: the inner `{` is not a word byte;
+//   - `{}`, `[{}]`, `[{]`, a lone `{` at end of pattern — empty or
+//     unclosed, so no name is being written;
+//   - anything after a backslash, which the caller never brings here.
+//
+// It reports TRUE for `{artifact}`, `{status}`, `{other}` — an author
+// writing a name and meaning a substitution the anchor does not admit.
+func editPlaceholderShape(s string) bool {
 	if len(s) == 0 || s[0] != '{' {
 		return false
 	}
 	end := strings.IndexByte(s, '}')
 	if end < 0 {
+		// Unclosed: no name is being written.
 		return false
 	}
 	body := s[1:end]
-	lo, hi, comma := strings.Cut(body, ",")
-	if !editDigits(lo) {
+	if body == "" {
+		// `{}` names nothing.
 		return false
 	}
-	return !comma || hi == "" || editDigits(hi)
+	for i := range len(body) {
+		if !editWordByte(body[i]) {
+			return false
+		}
+	}
+	// An all-DIGIT body is a repeat spec, not a name: `{4}` is RE2
+	// quantifier syntax and C1.2 requires it through untouched. A name
+	// that merely CONTAINS digits (`{tag2}`) is still a name.
+	return !editDigits(body)
+}
+
+// editWordByte reports whether c is a byte a placeholder NAME is written
+// from: an ASCII letter or digit, `_`, `-` or `.`.
+func editWordByte(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	case c == '_', c == '-', c == '.':
+		return true
+	default:
+		return false
+	}
 }
 
 // editDigits reports whether s is one or more ASCII digits.

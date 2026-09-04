@@ -133,7 +133,8 @@ record made.
 
 ## D5 — `edit_anchor_invalid`'s brace discriminator in an `anchor`
 
-**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 2).
+**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 2); CORRECTED
+(Phase 3c, resolving Phase 3a FAIL-1 and a Phase 3b recorded finding).
 
 **Situation.** Two clauses constrain the same bytes and compilation cannot
 separate them:
@@ -151,17 +152,54 @@ Phase 1 pins both sides: `TestReq17And26And65` requires `^{artifact}$` and
 `^{status}$` to be `edit_anchor_invalid`, while `TestReq25And28And121`
 requires `^\d{4}$`, `^a{2,3}$` and `^\{\{x$` to load clean.
 
-**Choice taken.** The discriminator is the brace's SHAPE. An unescaped `{`
-whose contents are a well-formed repeat spec — `{N}`, `{N,}`, `{N,M}` — is
-quantifier syntax and reaches RE2 untouched; any other unescaped `{…}` is
-the "other form" C1.4 refuses. An escaped `\{` is ordinary pattern text and
-is never scanned, which is what keeps REQ-27 true.
+**Choice taken (CORRECTED, Phase 3c).** The discriminator is the brace's
+SHAPE, and the shape that matters is a PLACEHOLDER: an unescaped `{`
+followed by one or more NAME bytes (ASCII letter or digit, `_`, `-`, `.`)
+and a closing `}`, where an all-digit body is excluded as a repeat spec.
+That — and only that — is the "other form" C1.4 refuses. Every other brace
+reaches RE2 untouched. An escaped `\{` is ordinary pattern text and is never
+scanned, which is what keeps REQ-27 true.
 
-This satisfies both clauses exactly on the fixtures each pins, and it is the
-only reading that does: it refuses `{artifact}` and an entry's own
-`{status}` — neither of which the document is likely to carry literally, and
-both of which would silently anchor on literal braces — while admitting every
-quantifier form a non-trivial anchor needs.
+The rest of C1.4's own list is what settles the reading: its other two arms
+are "fails to compile" and "names an undeclared tag key", both PLACEHOLDER
+concerns. "Any other `{…}` form" read in that company means a form an author
+wrote MEANING a substitution — and the only substitution an anchor admits is
+`{tag.<key>}`. It refuses `{artifact}` and an entry's own `{status}`, which
+would otherwise silently anchor on literal braces the document does not
+carry, and it reaches nothing else.
+
+**Why the original wording was wrong.** D5 as first written took the
+discriminator to be "a well-formed repeat spec, or refuse", and claimed the
+choice "satisfies both clauses exactly on the fixtures each pins". Both
+halves were incomplete:
+
+- Phase 3a **FAIL-1**: D5 named the pinned anchor fixtures as `^\d{4}$`,
+  `^a{2,3}$` and `^\{\{x$` — the third ESCAPED. `0028` S14 names a BARE,
+  unescaped `{{` by name, and its Expected requires "every brace form
+  reaches RE2 untouched … `{{` is not an escape — and none refuses
+  `edit_anchor_invalid`". A bare `{{` is not a repeat spec, so the original
+  discriminator refused the one form S14 names to distinguish the two
+  templates' escaping dialects. D5's scope statement was narrower than the
+  behaviour it licensed.
+- Phase 3b, recorded not pinned: `[{}]` and `[{]` — ordinary RE2 character
+  classes an author writes to anchor a literal brace, both accepted by RE2 —
+  were `edit_anchor_invalid` for the same reason.
+
+The corrected discriminator admits all three (the inner `{` of `{{` is not a
+name byte; `[{}]`'s brace closes immediately and names nothing; `[{]` is
+unclosed) while keeping every fixture the original satisfied: `{artifact}`
+and `{status}` still refuse (REQ-17/26/65), and `\d{4}`, `a{2,3}` and
+`^\{\{x$` still load clean (REQ-25/28/121). It is strictly wider on the
+admit side and identical on the refuse side.
+
+**Covering test.** `TestEditBraceShape0028_PlaceholderShapeIsTheDiscriminator`
+holds both verdicts in ONE table — which the shipped Phase 1 pair
+(`TestReq17And26And65_…` / `TestReq25And28And121_…`) does not, so a future
+narrowing could satisfy one by breaking the other silently.
+`TestEditBraceShape0028_AdmittedAnchorsAreCarriedVerbatim` holds S14's
+operational half: an admitted anchor's bytes reach RE2 unmangled, not merely
+un-refused. Eight of the table's arms fail against the pre-correction
+discriminator.
 
 ## D6 — The `edit` write's read-back gate pre-check is scoped to `edit`
 
