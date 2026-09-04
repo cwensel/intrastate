@@ -61,7 +61,7 @@ can tell them from the red set:
 | --- | --- |
 | REQ-0 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
 | REQ-0a | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
-| REQ-0b | |
+| REQ-0b | TestReq0b_C5CommentsInLoadGoReciteThisRecordsSuccessorClause |
 | REQ-1 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
 | REQ-2 | Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt; Req25_TheFlagMustFollowTheInterpreterWordNotPrecedeIt |
 | REQ-3 | Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
@@ -97,12 +97,12 @@ can tell them from the red set:
 | REQ-33 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
 | REQ-MVV | ReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips |
 | REQ-34 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan; Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
-| REQ-35 | |
+| REQ-35 | TestReq35_TheFourExistingReq74ProbesSurviveUnweakened |
 | REQ-36 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req49_TheDescriptionNamesBothOutOfScopeFormsByName |
 | REQ-37 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal |
 | REQ-38 | Req38_TheDescriptionReachesTheCLIReferenceMirrorByTheSameDerivation |
 | REQ-39 | Req39_TheDescriptionRendersOffTheRespondGatewayWithNoDefectPresent |
-| REQ-40 | |
+| REQ-40 | TestReq40_TheQ2q1DispositionIsRecordedInDeviations |
 | REQ-41 | Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt; ReqMVV0027/step_4 |
 | REQ-42 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
 | REQ-43 | Req43_ABraceBearingStringUnderAWrapperReportsTheInterpreterDefect |
@@ -134,29 +134,44 @@ can tell them from the red set:
 | REQ-69 | Req69_TheCategoryStaysALoadTimeRefusalAndTheStdinAxisShipsNoCode |
 | REQ-70 | Req55_NoInlineShellOptInFieldExistsOnAnEntry; Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan; Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
 
-## Orphan REQs — why the cell is empty
+## Orphan REQs
+
+Phase 1 recorded five empty cells. Phase 3c closed three of them: REQ-0b,
+REQ-35 and REQ-40 constrain the SHAPE OF THE DIFF, which is not unobservable
+— each names a fact about the shipped tree a test can read directly, so
+`internal/table/inline_shell_authoring_0027_test.go` asserts them (all three
+mutation-verified). REQ-32 remains an orphan BY CONSTRUCTION and REQ-33 stays
+partially testable; both are explained below.
+
+### Why the remaining cell is empty
 
 Five REQs carry an empty column-2 cell. Each is a process or authoring
 obligation with no runtime behaviour a test can observe; recording them as
 uncovered is more honest than pointing a row at a test that does not in fact
 constrain them.
 
-- **REQ-0b** "0025 is not edited; `load.go`'s C5 comments re-cite this clause."
-  A source-comment citation. No behaviour changes when the comment is stale, so
-  no test can fail on it. Enforced by review of the Phase 3 diff.
+- **REQ-0b** — CLOSED in Phase 3c. The clause is a fact about the shipped
+  tree, so a test CAN read it:
+  `TestReq0b_C5CommentsInLoadGoReciteThisRecordsSuccessorClause` asserts
+  `load.go` cites `0027:C1` and that no comment still describes the live
+  predicate as argv0-anchored. Mutation-verified (stripping the citation
+  fails it).
 - **REQ-32** "Illustrative — shape only." A NEGATIVE REQ forbidding a test from
   asserting the illustrative Go literally. The compliance evidence is the
   ABSENCE of such a test, which no test can assert.
-- **REQ-35** "Phase 2: Probes — … keep the four existing probes as-is." A
-  process constraint on the diff. The property it protects — that the four
-  probes still refuse with the same category — IS covered, by
-  `Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt` and `MVV/step_4`,
-  which re-drive the same vectors. That the shipped probes are byte-unedited is
-  a `git diff` fact.
-- **REQ-40** "intrastate#q2q1's disposition recorded" — a prerequisite
-  discharged in `deviations.md`, not in code. The record itself says "either
-  way the `env` walk is removed here", and the removal IS covered by
+- **REQ-35** — CLOSED in Phase 3c.
+  `TestReq35_TheFourExistingReq74ProbesSurviveUnweakened` asserts the REQ-74
+  test still exists and still drives all four probe vectors verbatim, which is
+  what "keep the four existing probes as-is" protects: the widening must not
+  be paid for by loosening the predecessor's probes. Mutation-verified
+  (respelling one probe fails it).
+- **REQ-40** — CLOSED in Phase 3c. The prerequisite is discharged by
+  RECORDING the disposition, and the record is a readable artifact:
+  `TestReq40_TheQ2q1DispositionIsRecordedInDeviations` asserts
+  `deviations.md` names q2q1 and names which way it went. The behavioural
+  half (the `env` walk is gone) stays covered by
   `Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan`.
+  Mutation-verified.
 - **REQ-33** is NOT orphaned but is only partially testable: "the edit is
   confined to `load.go`" is a diff fact. What a test can hold is the
   consequence — `Categories()` unchanged — which `Req48_…` asserts.
