@@ -113,3 +113,159 @@ directly: every claim the shipped text makes was turned into an input and run.
   only pass/fail per package and discloses no assertion text.
 - Scratch fixtures were written under `/tmp` and deleted; the worktree carries
   only this artifact.
+
+---
+
+## Phase 3b — Adversarial review (independent agent)
+
+Written from `0027:§failure-modes` plus `artifacts/req-list.md` and the source
+tree. Phase 3a's section above was not read before this section was drafted;
+`deviations.md` and `coverage.md` were not read at all.
+
+Verdict: **PASS**. Four adversarial tests added; all four pass against the
+current implementation, and each was mutation-checked to confirm it is
+discriminating rather than vacuous. No conformance defect was found in the
+predicate or in the shipped promise text.
+
+Added: `internal/cli/inline_shell_adversarial_0027_test.go` (4 tests, 30 cases).
+
+### Threat model — the three most likely failure modes
+
+The record splits its failure modes by CHANNEL: a **Visible** refusal naming
+the two matched words plus the wrapper-file remediation, and a **Silent**
+admission "by contract, named in C1; diagnosis is reading argv, which C1's
+promise tells the reviewer to do for exactly those shapes". Both halves make
+the SHIPPED TEXT the reviewer's contract, so the three modes below are the
+three ways that contract can become false.
+
+- **ADV-1 — the promise UNDER-refuses relative to its own text (Silent side).**
+  The description names ten spellings as admitted (`env -S "sh -c …"`, `sh -s`,
+  bare `sh`, `sh -es`, `python -`, `node -`, `sh script.sh`, plus the unlisted
+  `python3`/`nodejs`/`busybox`). Predicate and text are two independently
+  maintained sources of truth for one contract and **nothing joins them**: the
+  table suite asserts admission against a list transcribed from the *record*,
+  the cli suite asserts the *text* mentions "stdin" and "one word". Adding a
+  flag to `shellInterpreters` or folding a spelling makes the shipped sentence
+  a lie with every existing test green — and `0027:S4` is explicit that a
+  change which starts refusing one of them "has broken the promise, not
+  tightened it".
+  **Caught by** `TestADV1_EveryFormTheDescriptionNamesAsAdmittedActuallyLoads`
+  — the admitted forms are transcribed OUT of the rendered `--help-all` body
+  (not out of the record) and each is fed to `table.Load`. The anchor check is
+  half the oracle: the pair cannot be re-reconciled by deleting the promise.
+  *Mutation control*: adding `-s` to `shellInterpreters["sh"]` → FAIL on
+  `sh_-s` ("the description tells a reviewer … is ADMITTED, but the loader
+  refuses it").
+
+- **ADV-2 — the promise OVER-claims relative to what the predicate detects
+  (Visible side).** The text commits to "under any prefix (env and its options,
+  nice, timeout, xargs, doas, and **wrappers nobody enumerated**). Nothing
+  before the interpreter word is read, so no wrapper table exists and none is
+  consulted." That is the record's §Risks line as a live hazard: a reviewer who
+  reads it and meets an unenumerated prefix loading green has been told the
+  class is closed when it is not. Asserting refusal alone is too weak —
+  §failure-modes makes the Visible outcome the two matched words **and** the
+  remediation.
+  **Caught by**
+  `TestADV2_EveryFormTheDescriptionClaimsToRefuseIsRefusedWithTheMatchedWords`
+  — every wrapper the text names by name, plus an unenumerated one
+  (`runitwrap`), asserted on category + matched words + unchanged remediation.
+  *Mutation control*: reintroducing a five-entry wrapper table gate → FAIL on
+  `runitwrap_-q_bash_-c_x` ("loads clean").
+
+- **ADV-4 — the promise never reaches the reviewer who is not at a terminal.**
+  `0027:C1` promise: makes `docs/cli-reference.md` half the landing site. The
+  shipped mirror assertion calls `writeCLIReference` on a live tree and greps
+  the RESULT, with a comment saying why ("so the test does not depend on `make
+  docs` having been run"). That is a strictly weaker oracle: it asserts the
+  generator *would* produce the text, never that the committed file carries it.
+  A stale or hand-softened reference leaves every other assertion green while
+  the docs reader is told the wrapper class is closed. Drift is gated only in
+  `make check`, outside the Go suite.
+  **Caught by**
+  `TestADV4_TheCommittedCLIReferenceCarriesThePromiseNotJustTheGenerator` —
+  reads the checked-in bytes, requires both out-of-scope forms and the
+  sanctioned wrapper-file line, and requires the committed text to equal the
+  accessor's current text (whitespace-normalized) so a hand-edit that says
+  something kinder than the shipped words also fails.
+  *Mutation control*: rewording "from STDIN" → "from a pipe" in the committed
+  file → FAIL on both the named-form check and the verbatim check.
+
+A fourth test, `TestADV3_TheAdmittedStdinSpellingsAreNotAlsoCoveredByTheRefusedLine`,
+holds the description's INTERNAL coherence: `sh -es` sits three lines below a
+paragraph promising "one of that interpreter's own inline-code flags" at any
+later position, and the only sentence that keeps the two paragraphs from
+contradicting each other on the same argv is `C1` reads: — "never splits a word
+on whitespace". The test requires that sentence to be present and each admitted
+stdin spelling to load with its argv unre-split.
+
+### Attack surfaces probed and found CONFORMANT (no test added, or covered)
+
+Each was exercised against the built binary or through `table.Load`; all
+matched `0027:C1` exactly, so no test was added where the shipped suite already
+holds the line.
+
+- **Position-free scan, over-refusal.** `["ls","python","-c"]`, `["cat","php","-r"]`
+  refuse — the accepted false-positive class, already pinned by the shipped
+  suite as ACCEPTED-not-suppressed. Correct per `D-selection-predicate`.
+- **Position-free scan, index boundary and `i < j` ordering.** `["sh","--","-c"]`
+  and `["sh","./gate.sh","-c"]` refuse (flag at any later position, as written);
+  a flag BEFORE the interpreter is green; `["docker","run","-c","alpine","sh"]`
+  is green because the flag precedes the interpreter word. `["myprog","--shell=sh","-c"]`
+  green — `--shell=sh` is one word and basename matching is byte-exact.
+- **Basename matching.** `/bin/sh`, `./sh` refuse; `sh/`, `SH`, `sh\n` green
+  (no case, suffix, or alias folding). The reported form is the RAW `argv[i]`
+  (`/bin/sh -c`), which is `C1` report: as written, not the basename.
+- **Two-interpreter tie-break.** `["python","sh","-c","echo"]` → `python -c`;
+  the scan iterates argv positions, never the map, so the form cannot depend on
+  map iteration order. Covered by the shipped suite.
+- **Clause-3 / clause-4 disagreement after the predicate change.** Probed the
+  argv-global reach of `isInterp`: a brace-bearing whitespace element that is
+  NOT the interpreter's code string (`["sh","./gate.sh","-c","junk {nope} here"]`,
+  `["nice","tool","run {nope} now","sh","-c","x"]`, `["sh","-c","ok","extra {nope} arg"]`)
+  is exempted from clause 3 but clause 4 refuses on the same call's `isInterp`,
+  so **no green leak exists** — the exemption can only ever change which defect
+  is reported, never whether one is. `["nice","sh","-c","{nope}"]` correctly
+  reports `command_unknown_placeholder` (no whitespace ⇒ not exempt). The two
+  clauses cannot skew because both read one `interpreterForm` call (A1).
+- **Capability coverage.** The widened predicate reaches `write` and `gate`
+  entries, not only `read`: `carrierDefect` is called once from
+  `accessorTable`, which all three capabilities share. The shipped 0027
+  predicate suite mutates only `read.state`; the behaviour is nonetheless
+  correct, so this is noted rather than tested.
+- **`Categories()` ordering / future append (RDR 0028's five `edit_*`).**
+  `lintExtendedDesc` renders descriptions by iterating `table.Categories()`, so
+  a described-but-unregistered category would silently ship no text — the
+  failure `category.go`'s own 0025 comment warns of. Verified: the one
+  described category IS registered, and the shipped suite's relative-order
+  assertion survives a tail append. No test added: the invariant holds and a
+  guard for it would duplicate the rendered-body assertions ADV-1/ADV-2/ADV-4
+  already make, which fail on the same drift for the category that matters.
+- **`CategoryDescription` opt-in contract (REQ-37).** No shipped test calls the
+  accessor directly. Probed: described → `(text, true)`; undescribed and bogus
+  → `("", false)`, never an empty string with `true`. Conformant.
+- **Over-claiming language elsewhere on the CLI surface.** `grep -i "inline
+  shell"` over `internal/cli/`, `internal/table/`, and `docs/cli-reference.md`
+  returns exactly one hit — the unchanged 0025 remediation string in the
+  refusal detail. Nothing on `flow`'s `--allow-commands` help claims shell
+  containment. REQ-21 ("the docs never say 'closes inline shell'") holds.
+
+### Suite state
+
+`gofmt -l internal/` clean; `go vet ./internal/cli/ ./internal/table/` clean;
+`go test ./internal/table/ ./internal/cli/` — both ok with the four added tests.
+
+### Notes
+
+- Phase 1 test files were read to avoid duplicating existing coverage, as the
+  brief permits; the threat model above was fixed from `§failure-modes` before
+  they were opened, and every added test attacks a seam none of them crosses
+  (predicate ↔ shipped text, and generator ↔ committed artifact).
+- One added-test anchor was initially too strict — it matched a phrase across
+  the description's terminal hard-wrap. That was a weakness in the test, not a
+  defect in the implementation, and was fixed by normalizing whitespace before
+  matching rather than by relaxing the claim.
+- Scratch probes were written into the worktree and deleted; nothing outside
+  the added test file and this section was changed. `internal/table/load.go`
+  and `docs/cli-reference.md` were mutated only to prove the added tests
+  discriminate, and restored (`git status` clean but for the new test file).
