@@ -1,13 +1,13 @@
 0028  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=6
-  conformance gate:inline                   1044-1164  the gate responses are inlined; they belong in artifacts/gate.md
+  conformance gate:inline                   1032-1152  the gate responses are inlined; they belong in artifacts/gate.md
                                                       fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
-  conformance placeholder:survived          1074-1077  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+  conformance placeholder:survived          1062-1065  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
                                                       fix: delete the bracketed guidance block, keeping whatever the author wrote around it
-  conformance placeholder:survived          1083-1095  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+  conformance placeholder:survived          1071-1083  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
                                                       fix: delete the bracketed guidance block, keeping whatever the author wrote around it
-  conformance placeholder:survived          1101-1103  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+  conformance placeholder:survived          1089-1091  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
                                                       fix: delete the bracketed guidance block, keeping whatever the author wrote around it
-  conformance placeholder:survived          1114-1118  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+  conformance placeholder:survived          1102-1106  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
                                                       fix: delete the bracketed guidance block, keeping whatever the author wrote around it
-  conformance placeholder:survived          1139-1164  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+  conformance placeholder:survived          1127-1152  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
                                                       fix: delete the bracketed guidance block, keeping whatever the author wrote around it
