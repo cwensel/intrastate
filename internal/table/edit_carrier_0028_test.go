@@ -26,6 +26,7 @@ package table_test
 // telling a consumer that a stale anchor is a lint defect (req-list A-12).
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -89,6 +90,142 @@ eq = "final"
 
 [initial]
 status = "draft"
+`
+
+// editOrderModel is a SECOND fixture, authored solely for the ordering
+// half of the dump oracle. `editCarrierModel` above declares one writer
+// with one key, so it cannot fail an ordering assertion: with a single
+// element there is no order to get wrong, and both `slices.Sorted` calls
+// in `writeEditCarriers` could be deleted with the check still green
+// (roborev job 6838). That is the very defect this file's dump test was
+// filed for, so the ordering assertion gets a fixture that can observe it
+// rather than one that merely cannot contradict it.
+//
+// FOUR writer ids, and FOUR keys inside one of them, each declared in the
+// reverse of sorted order:
+//
+//   - entry ids: `zeta`, `mid`, `beta`, `alpha`; sorted, `alpha` leads.
+//   - keys within `zeta`: `zstatus`, `nstate`, `bphase`, `astate`; sorted,
+//     `astate` leads.
+//
+// The reversal is what makes the assertion discriminating, and the WIDTH is
+// what makes it reliable. Measured: at two elements per dimension an
+// unsorted range reproduces sorted order often enough that each mutant
+// reddened only ~34 of 40 runs — a real regression would have survived CI
+// roughly one run in seven. Four elements put a coincidental pass at about
+// 1/24 per dimension, and both dimensions are asserted by one comparison.
+//
+// Each writer names only OWNED tags, every owned tag is served by exactly
+// one reader, and every `[initial]` key is served by exactly one writer —
+// the three binding arities `checkAccessorBindings` enforces.
+const editOrderModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "editflow"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.zstatus]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.nstate]
+provenance = "owned"
+kind = "scalar"
+
+[tags.bphase]
+provenance = "owned"
+kind = "scalar"
+
+[tags.astate]
+provenance = "owned"
+kind = "scalar"
+
+[tags.znote]
+provenance = "owned"
+kind = "scalar"
+
+[tags.mnote]
+provenance = "owned"
+kind = "scalar"
+
+[tags.bnote]
+provenance = "owned"
+kind = "scalar"
+
+[read.record]
+role = "record"
+path = "flows/record.toml"
+keys = ["zstatus", "nstate", "bphase", "astate", "znote", "mnote", "bnote"]
+timeout = "2s"
+
+[write.zeta]
+role = "record"
+keys = ["zstatus", "nstate", "bphase", "astate"]
+timeout = "2s"
+read_back = true
+
+[write.zeta.edit.zstatus]
+anchor  = "^- \\*\\*Status\\*\\*: (.*)$"
+replace = "- **Status**: {zstatus}"
+
+[write.zeta.edit.nstate]
+anchor  = "^- \\*\\*NState\\*\\*: (.*)$"
+replace = "- **NState**: {nstate}"
+
+[write.zeta.edit.bphase]
+anchor  = "^- \\*\\*Phase\\*\\*: (.*)$"
+replace = "- **Phase**: {bphase}"
+
+[write.zeta.edit.astate]
+anchor  = "^- \\*\\*State\\*\\*: (.*)$"
+replace = "- **State**: {astate}"
+
+[write.mid]
+role = "record"
+keys = ["znote"]
+timeout = "2s"
+read_back = true
+
+[write.mid.edit.znote]
+anchor  = "^- \\*\\*ZNote\\*\\*: (.*)$"
+replace = "- **ZNote**: {znote}"
+
+[write.beta]
+role = "record"
+keys = ["bnote"]
+timeout = "2s"
+read_back = true
+
+[write.beta.edit.bnote]
+anchor  = "^- \\*\\*BNote\\*\\*: (.*)$"
+replace = "- **BNote**: {bnote}"
+
+[write.alpha]
+role = "record"
+keys = ["mnote"]
+timeout = "2s"
+read_back = true
+
+[write.alpha.edit.mnote]
+anchor  = "^- \\*\\*Note\\*\\*: (.*)$"
+replace = "- **Note**: {mnote}"
+
+[context.done]
+[context.done.match.zstatus]
+eq = "final"
+
+[initial]
+zstatus = "draft"
 `
 
 // editWriteBlock is the write entry as authored above, so a mutant can
@@ -1255,14 +1392,101 @@ replace = "{status}"`)
 // throughout this file) and the parse is not deferred to first apply. The
 // witness available at this seam is that the defect surfaces from
 // `table.Load` with no artifact in sight.
+// editCarrierLine builds the carrier line D4 fixes as the format, using
+// the same verbs the emitter does, so a format change is a single-site
+// edit here rather than a rewrite of the assertion.
+func editCarrierLine(id, key string, rule table.EditRule) string {
+	return fmt.Sprintf("ACCESSOR write.%s carrier=edit key=%s "+
+		"anchor=%q replace=%q clear=%q",
+		id, key, rule.Anchor, rule.Replace, rule.Clear)
+}
+
 func TestReq19And101_TheEditCarrierIsCarriedOnTheDumpSurface(t *testing.T) {
 	m := mustLoadEdit(t, editCarrierModel, "edit-carrier.toml")
 
 	dumped := table.Dump(m)
-	if !strings.Contains(dumped, "edit") {
-		t.Errorf("the review dump of an `edit`-carried model does not name the "+
-			"carrier anywhere:\n%s", dumped)
+	lines := strings.Split(dumped, "\n")
+
+	// The oracle walks the DECLARED writers and demands, per declared rule,
+	// a FULL-LINE match of the carrier line carrying that rule's anchor,
+	// replace and clear. Containment is not enough and never was: the
+	// shipped oracle was `strings.Contains(dumped, "edit")`, which the
+	// `MODEL editflow …` header alone satisfies, so it stayed green with
+	// every `ACCESSOR` line deleted (D4). The fixture id is deliberately
+	// left as `editflow` — an oracle that needed it renamed would be
+	// pinning the fixture rather than the surface.
+	declared := 0
+	for id, acc := range m.Writers {
+		for key, rule := range acc.Edit {
+			declared++
+			want := editCarrierLine(id, key, rule)
+			if !slices.Contains(lines, want) {
+				t.Errorf("the review dump of an `edit`-carried model omits the "+
+					"carrier line for write.%s key=%s.\nwant line: %s\ngot dump:\n%s",
+					id, key, want, dumped)
+			}
+		}
 	}
+	if declared == 0 {
+		t.Fatalf("fixture declares no `edit` rules; the dump oracle would " +
+			"vacuously pass")
+	}
+
+	// Count as well as membership: without this a dropped rule inside a
+	// still-emitted table is invisible, and only a dropped TABLE is caught.
+	emitted := 0
+	for _, line := range lines {
+		if strings.Contains(line, " carrier=edit ") {
+			emitted++
+		}
+	}
+	if emitted != declared {
+		t.Errorf("dump emits %d carrier lines; the model declares %d rules — "+
+			"every declared rule is carried, no more and no fewer:\n%s",
+			emitted, declared, dumped)
+	}
+
+	t.Run("carrier_lines_are_in_canonical_order", func(t *testing.T) {
+		// `0002:C19`: the walk is over SORTED entry ids and SORTED keys, so
+		// repeated dumps of one model are byte-identical.
+		//
+		// The oracle is the expected canonical SEQUENCE, not two dumps
+		// agreeing with each other. Byte-identity between two calls in one
+		// process is the weaker property: Go randomizes map iteration per
+		// PROCESS, not per range, so an unsorted walk can hand back the same
+		// order twice and satisfy a self-comparison while being unsorted.
+		// Only naming the order we expect can observe that.
+		//
+		// `editOrderModel` declares its four ids and `zeta`'s four keys in
+		// the reverse of sorted order, so dropping either `slices.Sorted`
+		// reddens this.
+		om := mustLoadEdit(t, editOrderModel, "edit-order.toml")
+
+		line := func(id, key string) string {
+			return editCarrierLine(id, key, om.Writers[id].Edit[key])
+		}
+		want := []string{
+			line("alpha", "mnote"),
+			line("beta", "bnote"),
+			line("mid", "znote"),
+			line("zeta", "astate"),
+			line("zeta", "bphase"),
+			line("zeta", "nstate"),
+			line("zeta", "zstatus"),
+		}
+
+		var got []string
+		for _, line := range strings.Split(table.Dump(om), "\n") {
+			if strings.Contains(line, " carrier=edit ") {
+				got = append(got, line)
+			}
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("carrier lines are not in canonical order — the walk is "+
+				"over sorted ids then sorted keys (`0002:C19`).\ngot:\n%s\nwant:\n%s",
+				strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	})
 
 	t.Run("templates_parse_at_load_not_at_apply", func(t *testing.T) {
 		// No artifact, no binding, no apply — a defective template is

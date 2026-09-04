@@ -267,11 +267,50 @@ TAUTOLOGICALLY once the type surface existed. Its oracle is
 header alone while `Dump` emitted no accessor at all. Phase 2 found the
 dump of an `edit`-carried model byte-identical to that of a carrier-less
 one and implemented the carrier line REQ-101/A6 requires; deviations D4
-records the format. The test now discriminates.
+records the format.
 
-The lesson generalises: a `Contains` oracle over a whole rendered surface
-can be satisfied by an unrelated substring of that surface, and a fixture
-id is the likeliest source.
+Phase 2 moved the EMITTER but not the ORACLE, so this section's original
+claim that "the test now discriminates" was false as written: with the
+carrier line shipped, the assertion was still `Contains(dumped, "edit")`
+and still passed with every `ACCESSOR` line stripped from the dump. The
+oracle was rewritten afterwards to walk the declared writers and require,
+per declared rule, a FULL-LINE match of D4's carrier line carrying that
+rule's anchor, replace and clear, plus an emitted-line COUNT equal to the
+declared rule count. Confirmed by mutation: deleting the
+`writeEditCarriers` call, skipping keys inside its inner loop, and
+rendering the wrong field into `replace=` each turn the test red. The
+fixture id stays `editflow` — an oracle that needed it renamed would be
+pinning the fixture, not the surface.
+
+That rewrite also carried a two-dump byte-identity check for `0002:C19`'s
+sorted walk, and IT was vacuous in the same way for the same reason: the
+fixture declares one writer with one key, and with a single element there
+is no order to get wrong, so both `slices.Sorted` calls could be deleted
+with the check still green. The ordering guarantee now has its own fixture
+(`editOrderModel`) — four writer ids and four keys inside one of them, all
+declared in the reverse of sorted order — and the oracle names the
+expected canonical SEQUENCE rather than comparing two dumps to each other.
+Self-comparison is the weaker property: Go randomizes map iteration per
+process, not per range, so an unsorted walk can hand back the same order
+twice and satisfy it.
+
+Fixture WIDTH turned out to be load-bearing, not cosmetic. At two elements
+per dimension each ordering mutant reddened only ~34 of 40 runs, because an
+unsorted range over a two-element map reproduces sorted order often enough
+that a real regression would have survived CI about one run in seven. At
+four it is 40 of 40 for both — dropping the writer-id sort and dropping the
+key sort, measured separately.
+
+The lesson generalises three times over. A `Contains` oracle over a whole
+rendered surface can be satisfied by an unrelated substring of that
+surface, and a fixture id is the likeliest source. Shipping the surface a
+tautological test was meant to guard does not by itself repair the test —
+the oracle has to move with it, or the claim of coverage is the only thing
+that changed. And an assertion is only as discriminating as the fixture it
+runs against: an ordering, uniqueness, or precedence property asserted over
+a one-element collection cannot fail, so the fixture has to be sized to the
+property before the assertion means anything. Each of the three was found
+in the fix for the one before it.
 
 The other sixty-five were confirmed red behaviourally: run against a
 compiling no-op `edit` binding (a stub `NewEditWriter` whose `Apply`
