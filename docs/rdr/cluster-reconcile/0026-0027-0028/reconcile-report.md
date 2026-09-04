@@ -80,3 +80,23 @@ Implementation-ordering consequences once the entries are decided:
 3. If D2 resolves (a), re-lock 0028 before implementing it.
 
 Open obligation with no cluster owner: 0025:C4 `detail:` on `timeout` (R4) — a seed, at the author's discretion.
+
+## Addendum — homes answered 2026-09-03 (same pass)
+
+JDR 0003 §D2–§D4 decided the same day after a corpus/precedent pass
+(`research-d2-d4.md`): §D2 (a), §D3 (b), §D4 (b). Scoped answer-vs-fences
+checks, per sibling:
+
+| Sibling | Entry | Check | Outcome |
+| --- | --- | --- | --- |
+| 0027 | §D2 (a) | `0027:C1` promise and out-of-scope list unchanged by a 0028-side rule | consistent — stays Final, no qualifier |
+| 0028 | §D2 (a) | `0028:C1.6` "under 0025:C2's rule unchanged", "no other change to 0025:C1–C1.6" — the rule contradicts fenced text | SPEC-DEFECT → 0028 Draft, re-entry Stage 3, STAGE-SCOPED, re-verify A7, A9; README row flipped; re-entry note appended; punt-ledger row in `0028-…-postmortem.md` |
+| 0028 | §D3 (b) | `0028:C1.3` "no new refusal class", class `execution_failure` — (b) adds no class; the CLI code and typed `Err` are outside the fence | consistent; the re-entry note directs a citation of §D3 at C1.3 |
+| 0026 | §D4 (b) | `0026:C1` names no CLI code; the gain lives in A8/S1 | consistent — stays Final, no qualifier; `artifacts/deviations.md` D2 records the decided form |
+| 0028 | §D4 (b) | 0028's refusals keep `flow-accessor-failed` | consistent |
+
+Verdict after answers: **NOT RECONCILED** for 0028 only — it re-locks at its
+named scope and rejoins; 0026 and 0027 may implement. Order: 0026 first (R8),
+then 0027; 0028 after re-lock (a re-run of this gate scoped to the 0027×0028
+and 0026×0028 pairs is due if the refine touches C1.3/C1.4 beyond the
+citation).
