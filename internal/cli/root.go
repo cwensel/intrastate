@@ -16,7 +16,9 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cwensel/intrastate/internal/cli/clierr"
 	"github.com/cwensel/intrastate/internal/cli/respond"
@@ -225,6 +227,12 @@ func ExecuteAndEmit(cmd *cobra.Command, args []string) error {
 	cmd.SetArgs(args)
 	primeAsFlag(cmd, args)
 
+	// Before cobra dispatch — so the token is never mistaken for a
+	// subcommand name, and so this lands ahead of any tag validation.
+	if token, ok := argvCarriesUpstreamStop(args); ok {
+		return respond.Fail(cmd, upstreamStopError(token))
+	}
+
 	err := cmd.Execute()
 	if err == nil {
 		return nil
@@ -257,6 +265,55 @@ func primeAsFlag(cmd *cobra.Command, args []string) {
 			}
 			return
 		}
+	}
+}
+
+// upstreamStopPrefix is the shared stop-packet prefix every cooperating
+// tool writes its refusals with. A token carrying it cannot be an
+// argument a caller meant to type — it is a refusal line that was
+// command-substituted into this argv.
+const upstreamStopPrefix = "stopped:"
+
+// argvCarriesUpstreamStop reports the first argv token that is, or
+// carries as its value, an upstream tool's stop line. It walks the same
+// token forms pflag does — a bare positional, `--flag=value`, and the
+// `--flag value` pair — so a stop line is caught whichever slot the
+// substitution dropped it into. Tokens after a bare `--` are still
+// scanned: `--` ends FLAG parsing, not the substitution hazard.
+//
+// The prefix match deliberately also refuses a legitimate value that
+// happens to begin `stopped:` (e.g. `--tag k=stopped:x`). `stopped:` is
+// reserved to the stop-packet convention, so that value is unauthorable
+// rather than collateral.
+func argvCarriesUpstreamStop(args []string) (string, bool) {
+	for _, a := range args {
+		// A bare positional, or the value half of a `--flag value`
+		// pair — both reach this test as their own token.
+		if strings.HasPrefix(a, upstreamStopPrefix) {
+			return a, true
+		}
+		if strings.HasPrefix(a, "-") {
+			if _, value, found := strings.Cut(a, "="); found &&
+				strings.HasPrefix(value, upstreamStopPrefix) {
+				return value, true
+			}
+		}
+	}
+	return "", false
+}
+
+// upstreamStopError names the token as another command's refusal rather
+// than as anything this CLI can parse, so the session debugs the tool
+// that actually refused. GroupUserEnv fixes the exit at 2, the same
+// shape cobraErrorToCLIError and flow.go's bare-verb refusal use.
+func upstreamStopError(token string) *clierr.CLIError {
+	return &clierr.CLIError{
+		Code: codeArgvUpstreamStop,
+		Message: fmt.Sprintf(
+			"the argv carries %q, a refusal from the command whose output was substituted; run it alone",
+			token),
+		Group: clierr.GroupUserEnv,
+		Hint:  "re-run the substituted command by itself and act on its refusal",
 	}
 }
 

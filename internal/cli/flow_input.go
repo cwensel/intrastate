@@ -98,6 +98,13 @@ const (
 	codeReadBackMismatch   = "flow-write-readback-mismatch"
 	codeReadBackIncomplete = "flow-write-readback-incomplete"
 	codeReadBackTimeout    = "flow-write-readback-timeout"
+
+	// An argv token beginning `stopped:` is the shared stop-packet
+	// prefix of an upstream tool whose output was command-substituted
+	// into this invocation. The check fires at the root gateway
+	// (`root.go::argvCarriesUpstreamStop`) rather than in a verb, but
+	// the spelling belongs to this one table.
+	codeArgvUpstreamStop = "flow-argv-upstream-stop"
 )
 
 // userErr builds a `GroupUserEnv` refusal: the request or the model is
