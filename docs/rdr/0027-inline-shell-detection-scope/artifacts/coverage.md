@@ -1,0 +1,215 @@
+# Coverage — RDR 0027 inline-shell-detection-scope
+
+Phase 1 (launch.md — Tests first). One row per REQ in `req-list.md`. Column 2
+is the test that would FAIL if a future change broke that clause. An **EMPTY**
+column-2 cell is the orphan mark: that REQ has no test, and the empty cell —
+not prose — is how it reads as uncovered.
+
+Test files:
+
+- `internal/table/inline_shell_scope_0027_test.go` — the predicate half
+  (`0027:C1` predicate/reads/out-of-scope/report lines, S1–S6).
+- `internal/cli/inline_shell_promise_0027_test.go` — the promise half
+  (`0027:C1` `promise:` line, S7). A predicate test cannot reach this half.
+- `internal/cli/inline_shell_mvv_0027_test.go` — `0027:MVV`, one runnable
+  end-to-end test carrying all five steps plus the end state.
+
+Test names below are given without the `Test` prefix and without the
+`internal/…` path; subtests are named with `/`.
+
+## Red gate
+
+`go test ./internal/table/ ./internal/cli/` at the time of writing: every
+failing top-level test is one of the 33 added here and no pre-existing test
+regressed. 21 of the 33 are RED; the other 12 are regression guards that
+legitimately pass today (table below). The new-behaviour REQs are RED as
+required.
+
+**Genuinely red (new behaviour this record ships)** — 21 tests:
+Req42, Req5_AnUnenumeratedPrefix, Req44, Req25 (`i<j` refusal arm), Req6_LowestJ,
+Req3 (path-spelled arm), Req13 (own-flag-under-wrapper arm), Req6_LowerListed
+(later-pair arm), Req43, Req28, Req58, Req66, Req69 (load-time-refusal arm),
+Req49_HelpAllSurface, Req49_NamesBothForms, Req10_ChannelScoped,
+Req17_PredicateLine, Req39, Req38, Req20, and MVV steps 2 and 5.
+
+**Already-green regression guards** — 12 tests (and 5 subtests of otherwise-red
+tests) assert behaviour that already holds today. They are NOT tautological:
+each pins a
+property the widen could plausibly break, and the record names most of them as
+"unchanged" obligations (REQ-41, REQ-46, REQ-64). Listed explicitly so triage
+can tell them from the red set:
+
+| Test | Why it is already green | What it would catch |
+| --- | --- | --- |
+| `Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt` | the four 0025 argv0 probes already refuse | a scan written `for i := 1` — passes every wrapper row and silently un-refuses 0025's set |
+| `Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged` | all seven are green under today's argv0 predicate too | a spellings-scoped out-of-scope reading that refuses `python -` / `sh -es` (`0027:S4`'s named discriminators) |
+| `Req10_TheStdinChannelIsAdmittedForEveryListedSpelling` | same | a widen over-applied to the stdin channel |
+| `Req11_TheSanctionedWrapperFileFormIsNeverADefect` | same | the remediation the refusal prescribes becoming itself a defect |
+| `Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan` | `perl`/`python3`/`nodejs` are unlisted today | position-freedom over-applied to the NAME list (REQ-70 forbids folding) |
+| `Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit` | no word-splitting today | a "helpful" implementation that splits a word on whitespace |
+| `Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided` | flag-anywhere already fires at argv0 and the detail already interpolates the pair | narrowing the flag match (REQ-26/REQ-64 forbid it) |
+| `Req55_NoInlineShellOptInFieldExistsOnAnEntry` | no `shell` field exists | an opt-in escape hatch (REQ-55/REQ-70) |
+| `Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged` | `category.go` is untouched | the edit straying out of `load.go`, or a rename (D-naming) |
+| `Req14_TheClause3ExemptionStillRequiresTheInterpreterForm` | clause 3 already keys on `isInterp` | a widen mis-implemented as "any brace-bearing whitespace element is exempt" |
+| `Req21_TheShippedWordingNeverClaimsInlineShellIsClosed` | no description ships yet, so no overclaim exists | the premortem's second failure once Phase 3 lands |
+| `Req27_TheOuterInterpreterWordWinsTheReportedForm` | `["python","sh","-c",…]` already refuses at argv0 reporting `python -c` | a tie-break that iterated `shellInterpreters` rather than argv positions (REQ-57) |
+| `Req25/flag_before_interpreter_is_green`, `Req13/other-interpreter-flag`, `Req3/no-folding`, `Req6_LowerListed/bare-word`, `Req69/no-stdin-code` | the corresponding negative arms already hold | each is the NEGATIVE control that makes its red sibling discriminating |
+
+## Coverage table
+
+| REQ | Test |
+| --- | --- |
+| REQ-0 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-0a | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-0b | |
+| REQ-1 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
+| REQ-2 | Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt; Req25_TheFlagMustFollowTheInterpreterWordNotPrecedeIt |
+| REQ-3 | Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
+| REQ-4 | Req5_AnUnenumeratedPrefixIsRefusedBecauseNothingBeforeTheInterpreterIsRead |
+| REQ-5 | Req5_AnUnenumeratedPrefixIsRefusedBecauseNothingBeforeTheInterpreterIsRead |
+| REQ-6 | Req6_WithSeveralQualifyingFlagsTheLowestJIsReported; Req6_ALowerListedInterpreterWithNoFollowingFlagDoesNotStopTheScan; Req27_TheOuterInterpreterWordWinsTheReportedForm |
+| REQ-7 | Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit; Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
+| REQ-8 | Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit |
+| REQ-9 | Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged |
+| REQ-10 | Req10_TheStdinChannelIsAdmittedForEveryListedSpelling; Req10_TheDescriptionScopesTheStdinFormByChannelNotByShellSpelling |
+| REQ-11 | Req11_TheSanctionedWrapperFileFormIsNeverADefect |
+| REQ-12 | Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan |
+| REQ-13 | Req13_TheFlagListIsKeyedByTheInterpreterFoundNotTheUnion |
+| REQ-14 | Req43_ABraceBearingStringUnderAWrapperReportsTheInterpreterDefect; Req14_TheClause3ExemptionStillRequiresTheInterpreterForm |
+| REQ-15 | Req14_TheClause3ExemptionStillRequiresTheInterpreterForm |
+| REQ-16 | Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided; Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-17 | Req17_TheDescriptionAlsoCarriesThePredicateLine |
+| REQ-18 | Req38_TheDescriptionReachesTheCLIReferenceMirrorByTheSameDerivation |
+| REQ-19 | Req49_TheDescriptionNamesBothOutOfScopeFormsByName; Req17_TheDescriptionAlsoCarriesThePredicateLine |
+| REQ-20 | Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal |
+| REQ-21 | Req21_TheShippedWordingNeverClaimsInlineShellIsClosed |
+| REQ-22 | Req58_ThePredicateIsPureAndCarriesNoStateAcrossLoads |
+| REQ-23 | Req6_WithSeveralQualifyingFlagsTheLowestJIsReported; Req3_BasenameIsThePostSlashSegmentMatchedByteExactly; Req27_TheOuterInterpreterWordWinsTheReportedForm |
+| REQ-24 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-25 | Req25_TheFlagMustFollowTheInterpreterWordNotPrecedeIt; Req27_TheOuterInterpreterWordWinsTheReportedForm |
+| REQ-26 | Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided |
+| REQ-27 | Req27_TheOuterInterpreterWordWinsTheReportedForm |
+| REQ-28 | Req28_TheNewFalseRefusalClassIsAcceptedNotSuppressed |
+| REQ-29 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req6_ALowerListedInterpreterWithNoFollowingFlagDoesNotStopTheScan; Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
+| REQ-30 | Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit; Req5_AnUnenumeratedPrefixIsRefusedBecauseNothingBeforeTheInterpreterIsRead |
+| REQ-31 | Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan |
+| REQ-32 | |
+| REQ-33 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-MVV | ReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips |
+| REQ-34 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan; Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
+| REQ-35 | |
+| REQ-36 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req49_TheDescriptionNamesBothOutOfScopeFormsByName |
+| REQ-37 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal |
+| REQ-38 | Req38_TheDescriptionReachesTheCLIReferenceMirrorByTheSameDerivation |
+| REQ-39 | Req39_TheDescriptionRendersOffTheRespondGatewayWithNoDefectPresent |
+| REQ-40 | |
+| REQ-41 | Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt; ReqMVV0027/step_4 |
+| REQ-42 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
+| REQ-43 | Req43_ABraceBearingStringUnderAWrapperReportsTheInterpreterDefect |
+| REQ-44 | Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan |
+| REQ-45 | Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged |
+| REQ-46 | Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged; Req10_TheStdinChannelIsAdmittedForEveryListedSpelling |
+| REQ-47 | Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided |
+| REQ-48 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged; ReqMVV0027/step_4 |
+| REQ-49 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req49_TheDescriptionNamesBothOutOfScopeFormsByName; Req10_TheDescriptionScopesTheStdinFormByChannelNotByShellSpelling |
+| REQ-50 | Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal |
+| REQ-51 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
+| REQ-52 | Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit |
+| REQ-53 | Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged; Req10_TheStdinChannelIsAdmittedForEveryListedSpelling |
+| REQ-54 | Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan |
+| REQ-55 | Req55_NoInlineShellOptInFieldExistsOnAnEntry |
+| REQ-56 | Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
+| REQ-57 | Req27_TheOuterInterpreterWordWinsTheReportedForm |
+| REQ-58 | Req58_ThePredicateIsPureAndCarriesNoStateAcrossLoads |
+| REQ-59 | Req58_ThePredicateIsPureAndCarriesNoStateAcrossLoads |
+| REQ-60 | Req69_TheCategoryStaysALoadTimeRefusalAndTheStdinAxisShipsNoCode |
+| REQ-61 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided |
+| REQ-62 | Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged; Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit |
+| REQ-63 | Req58_ThePredicateIsPureAndCarriesNoStateAcrossLoads |
+| REQ-64 | Req47_TheAcceptedFalseRefusalClassNamesTheTwoWordsThatCollided |
+| REQ-65 | Req49_TheDescriptionNamesBothOutOfScopeFormsByName; Req45_TheSevenAdmittedFormsLintGreenAndLoadWithArgvUnchanged |
+| REQ-66 | Req66_ALongArgvIsScannedToTheEndWithNoBound |
+| REQ-67 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm |
+| REQ-68 | Req5_AnUnenumeratedPrefixIsRefusedBecauseNothingBeforeTheInterpreterIsRead |
+| REQ-69 | Req69_TheCategoryStaysALoadTimeRefusalAndTheStdinAxisShipsNoCode |
+| REQ-70 | Req55_NoInlineShellOptInFieldExistsOnAnEntry; Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan; Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
+
+## Orphan REQs — why the cell is empty
+
+Five REQs carry an empty column-2 cell. Each is a process or authoring
+obligation with no runtime behaviour a test can observe; recording them as
+uncovered is more honest than pointing a row at a test that does not in fact
+constrain them.
+
+- **REQ-0b** "0025 is not edited; `load.go`'s C5 comments re-cite this clause."
+  A source-comment citation. No behaviour changes when the comment is stale, so
+  no test can fail on it. Enforced by review of the Phase 3 diff.
+- **REQ-32** "Illustrative — shape only." A NEGATIVE REQ forbidding a test from
+  asserting the illustrative Go literally. The compliance evidence is the
+  ABSENCE of such a test, which no test can assert.
+- **REQ-35** "Phase 2: Probes — … keep the four existing probes as-is." A
+  process constraint on the diff. The property it protects — that the four
+  probes still refuse with the same category — IS covered, by
+  `Req2_PositionFreedomIncludesArgv0AndDoesNotExcludeIt` and `MVV/step_4`,
+  which re-drive the same vectors. That the shipped probes are byte-unedited is
+  a `git diff` fact.
+- **REQ-40** "intrastate#q2q1's disposition recorded" — a prerequisite
+  discharged in `deviations.md`, not in code. The record itself says "either
+  way the `env` walk is removed here", and the removal IS covered by
+  `Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan`.
+- **REQ-33** is NOT orphaned but is only partially testable: "the edit is
+  confined to `load.go`" is a diff fact. What a test can hold is the
+  consequence — `Categories()` unchanged — which `Req48_…` asserts.
+
+## Readings taken (unattended override; recorded per the launch prompt)
+
+**Q1 — the Phase 3 description surface is PER-CATEGORY OPT-IN, not total over
+`Categories()`.** No test here asserts that every member of `Categories()`
+carries description text. Grounds: REQ-48 forbids changing `Categories()`, and
+a totality assertion would couple this record to every future append,
+contradicting `0025:REQ-79`'s "the list's total size is not a contract at any
+point"; C1 ships text for exactly ONE category and `0027:S7` asserts exactly
+that one. This is deviation **D2**'s named disposition and is recorded there.
+
+**Q2 — "THESE words … verbatim" is SUBSTANTIVE FIDELITY, not a byte-equal
+golden.** `Req49_TheDescriptionNamesBothOutOfScopeFormsByName`,
+`Req10_TheDescriptionScopesTheStdinFormByChannelNotByShellSpelling` and
+`Req17_TheDescriptionAlsoCarriesThePredicateLine` assert that the text NAMES
+both out-of-scope forms, is channel-scoped, and states the position-free
+predicate — never byte equality against a golden string. Grounds: a byte-equal
+copy of C1's fence would ship contract syntax (`base(argv[i])`, `i < j`,
+peer-record ids) to a CLI reader, and `0027:S7`'s own oracle is "its text names
+both out-of-scope forms … in C1's channel-scoped words" — a naming assertion.
+Each assertion accepts several defensible spellings, so the wording stays an
+authoring choice while the two facts a reviewer needs stay pinned.
+
+**D1 (pre-seeded) — `Categories()` order is asserted RELATIVELY.**
+`Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged` and
+`MVV/step_4` index each of the six C5 categories in `Categories()` and require
+the sequence to ASCEND. There is no tail-slice equality and no `len()`
+assertion anywhere in the added tests, so a peer record appending members at
+the tail leaves both green while a move, drop, or reorder still fails. This is
+D1's named disposition.
+
+**REQ-42 ASSUMPTION — scenarios are driven through `table.Load`,** on the 0025
+command-carrier fixture, never by calling the unexported `interpreterForm`
+directly, so the oracle is the category a model author sees. The `internal/cli`
+MVV additionally drives step 2 and step 3 through `intrastate lint` for the
+same reason one level up.
+
+**REQ-38/REQ-36 ASSUMPTION — no Go symbol is pinned.** The promise-half tests
+read the RENDERED `--help-all` body and the generated `docs/cli-reference.md`
+text; none names the accessor function. The record fixes the SURFACE and the
+TEXT, not the symbol, consistent with `0025:REQ-15`.
+
+## Notes on two subtests that pass today for a spec-relevant reason
+
+- `Req44/--unset=FOO` and `Req44/--chdir=DIR` are already green. Today's `env`
+  walk skips any token containing `=`, so these two of S3's eight forms already
+  refuse — an accident of the walk, not a property of it. They are kept in the
+  table because `0027:S3` names all eight and because they must keep refusing
+  once the walk is deleted.
+- The MVV's steps 1, 3 (both arms) and 4 pass today by design: the record's own
+  step 5 says "steps 1–4 all pass with no description at all", and steps 1/3/4
+  assert what must NOT move. Steps 2 and 5 are the record's two deltas and both
+  are red.
