@@ -1,6 +1,6 @@
 ---
 authors: Chris K Wensel <cwensel@retrofit.sh>
-state: open
+state: settled
 cluster: 0004, 0025, 0026, 0027, 0028
 labels: intrastate, accessor-binding, refusal-carrier, execution-failure, rdr-cluster
 ---
@@ -101,8 +101,9 @@ registry's, not 0028's. **0004** and **0025** are Implemented and not edited;
 
 ## D2 — Is an argv word bound at invocation inside the inline-shell promise?
 
-**Open** — fork; spans 0027, 0028. Filed 2026-09-03 at the 7.1 cluster
-reconcile (evidence: `docs/rdr/cluster-reconcile/0026-0027-0028/`).
+**Decided** — (a), 2026-09-03; spans 0027, 0028. Filed and decided at the
+7.1 cluster reconcile (evidence and research:
+`docs/rdr/cluster-reconcile/0026-0027-0028/`, `research-d2-d4.md`).
 
 `cli/0027:C1` promises a reviewer the predicate line plus two admitted forms
 named by name — a one-word shell string and a stdin-fed interpreter — over
@@ -126,18 +127,24 @@ promise's wording, 0028 the placeholder's admission.
   stays, disclosed.
 - **(c) Both.**
 
-Recommendation: (a). The two concrete evasions (an interpreter at argv0, a
+**Resolved: (a).** The two concrete evasions (an interpreter at argv0, a
 flag-shaped value) close under a static check, and the promise stays true
 without naming a form that exists only to be admitted. Stake: a reviewer
 approves a model on the strength of the shipped promise while the executed
 argv is a string they never saw. 0028's Cross-Cutting gate response ("adds no
 new source of caller-supplied value") is false under C1.6 whichever way this
-resolves; the answer supersedes it.
+resolves; the answer supersedes it. Grounded: Go `os/exec` runs no shell,
+so the class is argument injection (CWE-88), not shell injection; Go `flag`
+and git treat a leading dash as flag-shaped and offer `--` only where every
+child honours it; `cmdbind.go::substitute` already refuses a `-`-prefixed
+`{artifact}` rather than inserting `--`. Lands in **0028** at `C1.6`
+(admission and binding) — a contract-scoped re-entry; **0027** unchanged.
 
 ## D3 — Which exit group do 0028's stale-model refusals take?
 
-**Open** — fork; spans 0028, and JDR 0001 §D10's code table (landing RDR
-0005, Implemented). Filed 2026-09-03 at the 7.1 cluster reconcile.
+**Decided** — (b), 2026-09-03; spans 0028 and JDR 0001 §D10's code table
+(landing RDR 0005, Implemented). Filed and decided at the 7.1 cluster
+reconcile.
 
 `0028:C1.3` mints `edit_anchor_unmatched` / `_ambiguous` / `_collision` /
 `_unstable`, `edit_clear_undeclared` and an unreadable target as
@@ -160,14 +167,19 @@ question "to 0028 by citation"; 0028 cites §D10 nowhere.
 - **(c) A new accessor refusal class** — ruled out by 0004's closed set and
   `0028:C1.3`.
 
-Recommendation: (b). Stake: an agent that branches on exit codes retries a
-stale anchor until its budget expires. Would land in 0028 (Stage 8: the typed
-`Err` and the CLI arm) and JDR 0001 §D10's table.
+**Resolved: (b).** Stake: an agent that branches on exit codes retries a
+stale anchor until its budget expires. Grounded: sysexits separates
+`EX_TEMPFAIL` (retry later) from `EX_DATAERR`; HTTP 412 is the client-must-act
+precedent for "the target changed underneath you"; this org's `cli/0028`
+`translateDDLError` and `cli/0120` A1 both route a stale anchor to the exit-2
+group as a loud refusal. Lands in **0028** (the typed `Err`, the CLI arm, a
+citation of this entry at `C1.3`) and JDR 0001 §D10's table (one code, by
+citation repair).
 
 ## D4 — How does the applied sense reach the CLI envelope?
 
-**Open** — fork; spans 0026, 0028, and JDR 0001 §D10. Filed 2026-09-03 at
-the 7.1 cluster reconcile.
+**Decided** — (b), 2026-09-03; spans 0026, 0028, and JDR 0001 §D10. Filed
+and decided at the 7.1 cluster reconcile.
 
 D1 rule 3 makes `Applied()` the discriminator at the accessor seam, and
 JD-1's stake is an agent loop deciding whether to re-read before retrying a
@@ -192,8 +204,13 @@ text.
 - **(c) A structured field** — `applied` in `findings[]`, §D10 rule 3's slot.
   Cost: a findings entry on an accessor refusal, a new shape.
 
-Recommendation: (b). Stake: JD-1's. Would land in 0026 (Stage 8) and JDR
-0001 §D10's table; 0028 unchanged.
+**Resolved: (b).** Stake: JD-1's. Grounded: gRPC encodes "may have
+completed" as a property of `DeadlineExceeded`/`Unknown` and picks
+`Aborted`/`Unavailable`/`FailedPrecondition` by the client's remedy — one code
+per remedy; DDIA's in-doubt 2PC state resolves by querying status before
+retry, JD-1's exact stake; REST practice ties control flow to codes, never
+message text. Lands in **0026** (Stage 8, as `0026:A8`'s `Applied()` key) and
+JDR 0001 §D10's table; **0028** unchanged.
 
 ## Interface record
 
@@ -203,6 +220,19 @@ Recommendation: (b). Stake: JD-1's. Would land in 0026 (Stage 8) and JDR
   split, no reason enum. Stake: an agent loop deciding whether it must re-read
   before retrying a write, or may retry a read unchanged. *(0026×0028
   Stage-2 joint check; `executor.go::refusalOf`, `model.go::Refusal.Applied`)*
+
+- **JD-2 Invocation-bound argv words.** *(decided)* — `{tag.<key>}` never
+  at argv0; a bound value beginning with `-` refuses before spawn; the
+  inline-shell promise is unchanged. Stake: the argv a reviewer lints is the
+  argv that executes, up to values that cannot be flag-shaped. *(§D2)*
+- **JD-3 Exit group of a stale-model write refusal.** *(decided)* — exit 2,
+  class unchanged, discriminated by the typed `Err`, one CLI code, reason in
+  `findings[]`. Stake: an exit-code-driven agent fixes the model instead of
+  retrying it. *(§D3)*
+- **JD-4 The applied sense at the envelope.** *(decided)* — a distinct exit-3
+  CLI code for the applied write refusal, keyed on `Applied()`; not-applied
+  refusals keep `flow-accessor-failed`. Stake: JD-1's, made branchable.
+  *(§D4)*
 
 ## What this does not decide
 
