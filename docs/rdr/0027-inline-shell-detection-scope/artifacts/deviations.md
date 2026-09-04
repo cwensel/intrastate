@@ -222,3 +222,64 @@ position-free scan's shape — is covered behaviourally by REQ-41..REQ-47.
 empty row. Three of the five original orphans (REQ-0b, REQ-35, REQ-40) were
 closed with real mutation-verified tests; this one was withdrawn on its
 merits. `impl_orphans` is now genuinely 0.
+
+## D9 — D8's "mutation-verified" claim was wrong for the authoring guards
+
+**Type**: TEST-FIXTURE.
+**Status**: mechanical translation (test oracles retargeted; no contract text
+is touched and no behaviour changes).
+
+**Situation.** D8 records that three of the five original orphans (REQ-0b,
+REQ-35, REQ-40) "were closed with real mutation-verified tests". The intent
+was right; the oracles were not. All three guards in
+`internal/table/inline_shell_authoring_0027_test.go` asserted file-wide
+`strings.Contains` over an `os.ReadFile` body, so a TARGETED edit to the exact
+fact each one names left the guard green. Phase 3c's verification used coarse
+global `sed`, which is why it reported green as red. Per the no-amend rule D8's
+text stands; this deviation supersedes its "mutation-verified" claim for these
+three rows.
+
+**What was actually loose.**
+
+- REQ-0b — `load.go` cites `0027:C1` at five sites; only two are the C5 comment
+  blocks the clause names. Rewriting BOTH of those to `0025:C5` left the guard
+  green off the other three.
+- REQ-35 — the four argv literals were checked ANYWHERE in
+  `command_carrier_0025_test.go`, not inside the named function. Truncating the
+  probe loop to `cases[:1]` and replacing its `t.Fatalf` with `return` left
+  every literal in place and the guard green while the probes were bypassed.
+- REQ-40 — `deviations.md` was searched file-wide, and D3 says "landed first"
+  under an unrelated deviation. D6's disposition could be gutted to `TBD` and
+  the check still passed off D3. Scoping to `## D6` alone is insufficient:
+  D6's Situation QUOTES the clause's own "landed first, or closed as subsumed"
+  wording, so the section reads the requirement back to itself.
+
+**Disposition.** The two authoring guards are retargeted to their named locus
+and the third is deleted in favour of a stronger existing oracle.
+
+- REQ-0b now locates each C5 comment block by the SUBSTANTIVE claim it makes —
+  "exemption belongs to the INTERPRETER FORM" for clause 3, "argv0 line" for
+  clause 4 — and requires `0027:C1` within that block. Each site fails
+  independently under the targeted rewrite. Anchoring on the claim rather than
+  on a line number or on the citation itself keeps the guard alive through
+  reflow and relocation while still catching the rot.
+- REQ-40 extracts the `## D6` section, then extracts D6's `**Disposition**`
+  field within it, and runs the disposition-token check against that field
+  alone. The `q2q1` check runs against the section.
+- REQ-35's file-reading guard is DELETED. The clause protects the
+  predecessor's REFUSAL BEHAVIOUR, not the byte layout of its test file, and
+  `internal/cli/inline_shell_mvv_0027_test.go`'s
+  `ReqMVV0027/step_4_the_0025_probes_still_refuse_and_the_category_order_holds`
+  already drives the same four argv — `{sh,-c,cat {artifact}}`,
+  `{bash,-c,echo hi}`, `{python,-c,print(1)}`, `{env,sh,-c,echo hi}` — through
+  `table.Load` asserting `CatCommandShellInterpreter`. Re-deriving the property
+  is strictly stronger than reading bytes: it survives any respelling or
+  relocation of the probes and cannot be defeated by gutting the loop that
+  drives them. `coverage.md` cites `ReqMVV0027/step_4` for REQ-35, the same
+  citation form the REQ-41 and REQ-48 rows already use.
+
+**Not done.** No new test was added. The reds here are TARGETED mutations, run
+and reverted: rewriting `0027:C1` to `0025:C5` at either C5 comment block alone
+fails `TestReq0b_…`, and replacing D6's `**Disposition.**` line with `TBD` while
+leaving D3 intact fails `TestReq40_…`. `impl_orphans` stays 0; the rows now
+name oracles that deliver what they claim.

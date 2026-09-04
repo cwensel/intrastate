@@ -96,7 +96,7 @@ can tell them from the red set:
 | REQ-33 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
 | REQ-MVV | ReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips |
 | REQ-34 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan; Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
-| REQ-35 | TestReq35_TheFourExistingReq74ProbesSurviveUnweakened |
+| REQ-35 | ReqMVV0027/step_4 |
 | REQ-36 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req49_TheDescriptionNamesBothOutOfScopeFormsByName |
 | REQ-37 | Req49_TheHelpAllSurfaceDescribesTheShellInterpreterCategory; Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal |
 | REQ-38 | Req38_TheDescriptionReachesTheCLIReferenceMirrorByTheSameDerivation |
@@ -138,10 +138,13 @@ can tell them from the red set:
 Phase 1 recorded five empty cells. Phase 3c resolved all of them, leaving
 no orphan rows:
 
-- REQ-0b, REQ-35, REQ-40 constrain the SHAPE OF THE DIFF, which is not the
-  same as unobservable — each names a fact about the shipped tree a test can
-  read directly, so `internal/table/inline_shell_authoring_0027_test.go`
-  asserts them (all three mutation-verified).
+- REQ-0b and REQ-40 constrain the SHAPE OF THE DIFF, which is not the same as
+  unobservable — each names a fact about the shipped tree a test can read
+  directly, so `internal/table/inline_shell_authoring_0027_test.go` asserts
+  them, each assertion scoped to the SITE the clause names.
+- REQ-35 is covered BEHAVIOURALLY by `ReqMVV0027/step_4`, which re-derives the
+  refusal the clause protects instead of reading the predecessor test file's
+  bytes. See deviation D9.
 - REQ-32 was WITHDRAWN: it is a caveat on an illustrative code block, not a
   testable clause, and was extracted in error.
 - REQ-33 was never orphaned; it is partially testable and its testable
@@ -157,28 +160,38 @@ constrain them.
 - **REQ-0b** — CLOSED in Phase 3c. The clause is a fact about the shipped
   tree, so a test CAN read it:
   `TestReq0b_C5CommentsInLoadGoReciteThisRecordsSuccessorClause` asserts
-  `load.go` cites `0027:C1` and that no comment still describes the live
-  predicate as argv0-anchored. Mutation-verified (stripping the citation
-  fails it).
+  `0027:C1` appears IN EACH of the two C5 comment blocks — located by the
+  substantive claim each makes, not by line number — and that no comment
+  still describes the live predicate as argv0-anchored. Mutation-verified
+  per site: rewriting either block's citation to `0025:C5` fails it, even
+  though `0027:C1` still appears at the file's three other cite sites. The
+  Phase 3c claim that a file-wide check was mutation-verified was wrong; see
+  deviation D9.
 - **REQ-32** — WITHDRAWN in Phase 3c, so it has no row at all rather than an
   empty one. "Illustrative — shape only." is a caveat on a code block, not a
   normative clause: `rdr inspect` confirms its line falls inside no labelled
   contract element. A clause that obliges nobody to do anything is not a
   testable REQ, and an empty coverage cell would misreport a classification
   error as a coverage gap. See deviation D8.
-- **REQ-35** — CLOSED in Phase 3c.
-  `TestReq35_TheFourExistingReq74ProbesSurviveUnweakened` asserts the REQ-74
-  test still exists and still drives all four probe vectors verbatim, which is
-  what "keep the four existing probes as-is" protects: the widening must not
-  be paid for by loosening the predecessor's probes. Mutation-verified
-  (respelling one probe fails it).
+- **REQ-35** — CLOSED behaviourally. "Keep the four existing probes as-is"
+  protects the predecessor's REFUSAL, and
+  `ReqMVV0027/step_4_the_0025_probes_still_refuse_and_the_category_order_holds`
+  drives all four argv through `table.Load` asserting
+  `CatCommandShellInterpreter`. That is stronger than reading
+  `command_carrier_0025_test.go`'s bytes, which survives both a respelling of
+  the probes and a gutting of the loop that drives them. The Phase 3c
+  file-reading guard is deleted; see deviation D9.
 - **REQ-40** — CLOSED in Phase 3c. The prerequisite is discharged by
   RECORDING the disposition, and the record is a readable artifact:
   `TestReq40_TheQ2q1DispositionIsRecordedInDeviations` asserts
-  `deviations.md` names q2q1 and names which way it went. The behavioural
-  half (the `env` walk is gone) stays covered by
+  `deviations.md`'s `## D6` section — the deviation that OWNS the
+  prerequisite — names q2q1, and that D6's own `**Disposition**` field names
+  which way it went. Both checks are scoped to D6 rather than to the file, so
+  neither D3's unrelated "landed first" nor D6's own quotation of the clause
+  wording can launder a disposition gutted to TBD. The behavioural half (the
+  `env` walk is gone) stays covered by
   `Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan`.
-  Mutation-verified.
+  Mutation-verified against that scope; see deviation D9.
 - **REQ-33** is NOT orphaned but is only partially testable: "the edit is
   confined to `load.go`" is a diff fact. What a test can hold is the
   consequence — `Categories()` unchanged — which `Req48_…` asserts.
