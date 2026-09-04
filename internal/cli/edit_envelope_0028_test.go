@@ -371,6 +371,83 @@ func TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine(t *testing.T) {
 	}
 }
 
+// RDR 0028 A1: "the invocation's bound tags cross the seam on the
+// artifact, reaching both `Apply` (an `edit` writer's `{tag.<key>}`
+// anchors) and `Read` (a C1.6 command reader's `{tag.<key>}` argv)"
+// HAPPY PATH — and the positive control the `{tag.<key>}` family lacked.
+//
+// `editUnboundAnchorModel` is driven UNBOUND everywhere else in this file:
+// the omitted `--tag` is the defect those cases assert. Nothing drove it
+// BOUND, so the wiring that carries a `--tag` from argv onto
+// `accessor.Artifact.Context` — `flow_exec.go::artifactMap`, the single
+// production site that builds the map — had no test at all. Its sibling
+// control in `request_refusal_phase_test.go` covers the READ half (a
+// command reader's argv); this is the WRITE half, an `edit` rule's own
+// anchor, which is the carrier this record introduced.
+//
+// The oracle is the DOCUMENT, and the fixture is built so only a
+// SUBSTITUTED anchor can produce it. The anchor is
+// `^- \*\*{tag.nnnn}\*\*: (.+)$`, and the target carries two bullets:
+// `Status`, which the bound value selects, and a decoy `nnnn` bullet that
+// a LITERAL pass-through would select instead. So a build that dropped the
+// context assignment cannot reach this anchor at all (it refuses on the
+// unbound placeholder), and one that passed the placeholder through
+// literally rewrites the wrong line — two distinct regressions, each
+// visible in the post-state.
+func TestReqA1_ABoundTagReachesTheArtifactContextAndTheAnchorSubstitutes(t *testing.T) {
+	// `Status` is the value `--tag nnnn=…` binds, so the anchor expands to
+	// `^- \*\*Status\*\*: (.+)$` and selects the FIRST bullet. The second
+	// is the decoy a literal `{tag.nnnn}` would need.
+	const doc = `# a record
+
+- **Status**: Draft
+- **{tag.nnnn}**: decoy
+`
+
+	dir := t.TempDir()
+	model := writeModelFile(t, dir, "edit-bound.toml", editUnboundAnchorModel)
+	target := filepath.Join(dir, "record.md")
+	if err := os.WriteFile(target, []byte(doc), 0o644); err != nil {
+		t.Fatalf("writing the target: %v", err)
+	}
+
+	_, _, err := runCmd(t, "flow", "set-state", "--model", model,
+		"--artifact", artifactBinding(editEnvelopeRole, target),
+		"--tag", "nnnn=Status", "--write", "status=Final", "--as=json")
+
+	// This model's reader is file-backed over a markdown target, so the
+	// post-mutation read-back refuses — a 0004:C12/C13 disposition
+	// downstream of everything this asserts, exactly as the sibling
+	// apply-side test above records. What must NOT appear is a refusal
+	// C1.3 mints, and least of all the unbound-placeholder one: reaching
+	// it would mean the bound tag never crossed the seam.
+	if err != nil {
+		var ce *clierr.CLIError
+		if asCLIError(err, &ce) {
+			if strings.Contains(ce.Detail, "{tag.nnnn}") {
+				t.Fatalf("a BOUND `--tag nnnn=Status` was reported unbound at the "+
+					"anchor: %v — the invocation's tags reach an `edit` rule only "+
+					"through the artifact's Context, and that is the wiring this "+
+					"asserts", ce.Detail)
+			}
+			if strings.Contains(ce.Detail, "edit_") {
+				t.Fatalf("a well-anchored edit was refused by C1.3: %v", ce.Detail)
+			}
+		}
+	}
+
+	got, rerr := os.ReadFile(target)
+	if rerr != nil {
+		t.Fatalf("reading the target back: %v", rerr)
+	}
+	want := strings.Replace(doc, "- **Status**: Draft", "- **Status**: Final", 1)
+	if string(got) != want {
+		t.Errorf("post-edit document:\n got %q\nwant %q — the anchor's "+
+			"`{tag.nnnn}` expands to the BOUND value, so it selects the Status "+
+			"bullet and leaves the decoy untouched", got, want)
+	}
+}
+
 // editApplyTimeTokens is C1.3 and C1.5's six apply-time reason tokens.
 // They are unexported in `flowbind`, so they are spelled here as the wire
 // strings the doc must carry; the disjointness assertion in the first

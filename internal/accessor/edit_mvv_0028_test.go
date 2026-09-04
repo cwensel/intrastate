@@ -52,18 +52,30 @@ import (
 
 // --- the MVV fixture ------------------------------------------------------
 
+// Every one of these is READ BACK from `mvvModelTOML` by `newMVVWorld`
+// and asserted against it, never used to hand-build an accessor. The
+// entry ids are the TOML's own table names, which is what makes
+// `<id>.edit.<key>` in a refusal Detail traceable to a declaration.
 const (
 	mvvFlow = "rdrwrite"
 
 	mvvRecordRole = "record"
 	mvvReadmeRole = "readme"
 
-	mvvRecordWriter = "record.status"
-	mvvRecordReader = "record.read"
-	mvvReadmeWriter = "readme.row"
-	mvvReadmeReader = "readme.read"
+	mvvRecordWriter = "record"
+	mvvRecordReader = "record"
+	mvvReadmeWriter = "readme"
+	mvvReadmeReader = "readme"
 
-	mvvKey = "status"
+	// TWO owned keys, one per ROLE — deviation D9. RDR 0002's
+	// `checkAccessorBindings` serves each owned tag with exactly one
+	// reader and exactly one writer, so the shared index cannot take a
+	// second accessor pair over the record's `status`: it is a second
+	// ARTIFACT and therefore takes a second key. A helper that collapsed
+	// these into one would validate a model the loader refuses, which is
+	// what `TestMVV_TheOneKeyCollapseIsWhatRDR0002Refuses` pins.
+	mvvRecordKey = "status"
+	mvvReadmeKey = "row_status"
 )
 
 // The three fixture records the MVV names: one plain `Draft`, one whose
@@ -114,26 +126,17 @@ const mvvReadme = `# Records
 | [0027](0027-inline-shell-scope.md) | inline shell scope | Draft |
 `
 
-// The record's Status anchor keeps any bracketed qualifier by
-// backreference: group 1 is the bare value, group 2 the remainder of the
-// line. That is what makes `Draft [joint decision → …]` become
-// `Final [joint decision → …]` rather than a bare `Final`.
-const (
-	mvvRecordAnchor  = `^- \*\*Status\*\*: (\w+)(.*)$`
-	mvvRecordReplace = `- **Status**: {status}${2}`
-
-	// The README row is addressed by the context tag: `{tag.nnnn}` binds
-	// ONE record identity, so it selects one row of the shared index.
-	mvvReadmeAnchor  = `^\| \[({tag.nnnn})\]\(([^)]*)\) \|([^|]*)\| (\w+) \|$`
-	mvvReadmeReplace = `| [${1}](${2}) |${3}| {status} |`
-)
-
 // mvvWorld is one invocation's artifact pair plus its bindings.
 type mvvWorld struct {
 	recordPath string
 	readmePath string
 	recordBody string
 	readmeBody string
+
+	// model is the LOADED `mvvModelTOML` every binding below was sourced
+	// from. It is held so a test can assert the runtime registry against
+	// the declaration rather than against a second literal.
+	model *table.Model
 
 	exec       *accessor.Executor
 	recordEdit accessor.WriteBinding
@@ -143,72 +146,86 @@ type mvvWorld struct {
 // newMVVWorld lays down one record and one README on disk and builds the
 // executor over them. `nnnn` is the record identity the invocation binds
 // — the MVV's ONE INVOCATION PER RECORD discipline.
+//
+// EVERY accessor comes from `mvvModelTOML`, loaded here. That is the
+// whole point of this constructor and not a convenience: a hand-built
+// registry beside the fixture is free to take a shape the loader refuses,
+// and it did — all four accessors under one `status` key, which
+// `checkAccessorBindings` rejects as `malformed_accessor_binding` (D9).
+// Step 1's load is now the oracle for every later step, so the two cannot
+// drift again.
+//
+// `mutate` is the ONLY way a caller varies the declaration, and it
+// operates on the LOADED model. A negative case that needs a different
+// rule mutates the loaded one; it never reintroduces a parallel literal,
+// which is the divergence this constructor exists to fence out.
 func newMVVWorld(
 	t *testing.T, recordBody, readmeBody, nnnn string, allowCommands bool,
-	recordRules, readmeRules map[string]table.EditRule,
-	recordReads, readmeReads map[string]string,
+	mutate func(*table.Model),
 ) *mvvWorld {
 	t.Helper()
+
+	m, err := table.Load([]byte(mvvModelTOML), "rdr-write.toml")
+	if err != nil {
+		t.Fatalf("the MVV model did not load: %v", err)
+	}
+	if m.ID != mvvFlow {
+		t.Fatalf("the MVV model's id is %q; want %q — the flow id is part of "+
+			"every accessor identity triple", m.ID, mvvFlow)
+	}
+	if mutate != nil {
+		mutate(m)
+	}
 
 	w := &mvvWorld{
 		recordPath: writeFixture(t, "record.md", recordBody),
 		readmePath: writeFixture(t, "README.md", readmeBody),
 		recordBody: recordBody,
 		readmeBody: readmeBody,
+		model:      m,
 	}
 
-	recAcc := table.Accessor{
-		Role: mvvRecordRole, Keys: []string{mvvKey}, Timeout: "2s",
-		ReadBack: true, Edit: recordRules,
-	}
-	rdmAcc := table.Accessor{
-		Role: mvvReadmeRole, Keys: []string{mvvKey}, Timeout: "2s",
-		ReadBack: true, Edit: readmeRules,
-	}
-	w.recordEdit = flowbind.NewEditWriter(recAcc, mvvRecordWriter)
-	w.readmeEdit = flowbind.NewEditWriter(rdmAcc, mvvReadmeWriter)
+	recWrite := mvvAccessor(t, m.Writers, mvvRecordWriter, "write")
+	rdmWrite := mvvAccessor(t, m.Writers, mvvReadmeWriter, "write")
+	recRead := mvvAccessor(t, m.Readers, mvvRecordReader, "read")
+	rdmRead := mvvAccessor(t, m.Readers, mvvReadmeReader, "read")
+
+	w.recordEdit = flowbind.NewEditWriter(recWrite, mvvRecordWriter)
+	w.readmeEdit = flowbind.NewEditWriter(rdmWrite, mvvReadmeWriter)
 
 	// Both readers are COMMAND-backed, exactly as the MVV fixture
 	// declares: (a) `["rdr","status","-json","-filter","status",
 	// "{artifact}"]` on role `record`, and (c) a C1.6 reader over the
-	// README row carrying `{tag.nnnn}` in its argv. The stub stands in
-	// for the consumer's projector verb, which REQ-MVV-BLOCK records as
-	// not yet shipping; what it must NOT do is stand in for the write
-	// binding, which is the unit under test.
+	// README row carrying `{tag.nnnn}` in its argv. Their `Accessor` is
+	// the DECLARED one — argv, keys and timeout all the TOML's — and only
+	// the BINDING is a stub, standing in for the consumer's projector
+	// verb that REQ-MVV-BLOCK records as not yet shipping. What it must
+	// NOT do is stand in for the write binding, which is the unit under
+	// test.
 	reg := accessor.Registry{
-		Flow:          mvvFlow,
-		OwnedTags:     []string{mvvKey},
+		Flow:          m.ID,
+		OwnedTags:     flowbind.OwnedTags(m),
 		AllowCommands: allowCommands,
 		Definitions: []accessor.Definition{
 			{
-				Identity: accessor.Identity{Flow: mvvFlow, Name: mvvRecordWriter, Capability: accessor.CapWrite},
-				Accessor: recAcc,
+				Identity: accessor.Identity{Flow: m.ID, Name: mvvRecordWriter, Capability: accessor.CapWrite},
+				Accessor: recWrite,
 				Binding:  w.recordEdit,
 			},
 			{
-				Identity: accessor.Identity{Flow: mvvFlow, Name: mvvRecordReader, Capability: accessor.CapRead},
-				Accessor: table.Accessor{
-					Role:    mvvRecordRole,
-					Command: []string{"rdr", "status", "-json", "-filter", "status", "{artifact}"},
-					Keys:    []string{mvvKey},
-					Timeout: "2s",
-				},
-				Binding: &mvvProjector{path: &w.recordPath, anchor: mvvRecordAnchor, nnnn: nnnn, canned: recordReads},
+				Identity: accessor.Identity{Flow: m.ID, Name: mvvRecordReader, Capability: accessor.CapRead},
+				Accessor: recRead,
+				Binding:  &mvvProjector{path: &w.recordPath, nnnn: nnnn},
 			},
 			{
-				Identity: accessor.Identity{Flow: mvvFlow, Name: mvvReadmeWriter, Capability: accessor.CapWrite},
-				Accessor: rdmAcc,
+				Identity: accessor.Identity{Flow: m.ID, Name: mvvReadmeWriter, Capability: accessor.CapWrite},
+				Accessor: rdmWrite,
 				Binding:  w.readmeEdit,
 			},
 			{
-				Identity: accessor.Identity{Flow: mvvFlow, Name: mvvReadmeReader, Capability: accessor.CapRead},
-				Accessor: table.Accessor{
-					Role:    mvvReadmeRole,
-					Command: []string{"rdr", "readme-row", "{tag.nnnn}", "{artifact}"},
-					Keys:    []string{mvvKey},
-					Timeout: "2s",
-				},
-				Binding: &mvvProjector{path: &w.readmePath, nnnn: nnnn, canned: readmeReads},
+				Identity: accessor.Identity{Flow: m.ID, Name: mvvReadmeReader, Capability: accessor.CapRead},
+				Accessor: rdmRead,
+				Binding:  &mvvProjector{path: &w.readmePath, nnnn: nnnn},
 			},
 		},
 	}
@@ -224,6 +241,30 @@ func newMVVWorld(
 		},
 	})
 	return w
+}
+
+// mvvAccessor pulls one declared entry out of the loaded model, failing
+// loudly rather than yielding a zero `table.Accessor` — an empty entry
+// would build a writer with no rules, which applies nothing and refuses
+// nothing, and every assertion downstream would pass vacuously.
+func mvvAccessor(
+	t *testing.T, entries map[string]table.Accessor, name, capability string,
+) table.Accessor {
+	t.Helper()
+
+	acc, ok := entries[name]
+	if !ok {
+		t.Fatalf("the MVV model declares no `[%s.%s]`", capability, name)
+	}
+	return acc
+}
+
+// mvvPlan is the write plan for one key. Each writer applies its OWN
+// key: the record writer plans `status`, the README writer plans
+// `row_status`, because D9 gives the shared index its own owned key on
+// its own role.
+func mvvPlan(key, value string) resolve.Plan {
+	return resolve.Plan{Writes: []resolve.Tag{{Key: key, Value: value}}}
 }
 
 // assertUntouched asserts BOTH artifacts are byte-identical to what they
@@ -264,12 +305,8 @@ func assertOneChangedLine(t *testing.T, what, before, want, got string) {
 // a genuine re-read of the artifact and can fail independently of the
 // write, which is the property 0004's own fixtures insist on.
 type mvvProjector struct {
-	path   *string
-	anchor string
-	nnnn   string
-	// canned overrides the file read where a step needs the reader to
-	// report a specific value (the qualifier-split assertion).
-	canned map[string]string
+	path *string
+	nnnn string
 }
 
 func (p *mvvProjector) Capability() accessor.Capability { return accessor.CapRead }
@@ -292,10 +329,6 @@ func (p *mvvProjector) Read(
 
 	var out []accessor.KeyValue
 	for _, k := range requested {
-		if v, ok := p.canned[k]; ok {
-			out = append(out, accessor.KeyValue{Key: k, Value: v})
-			continue
-		}
 		v, ok := projectStatus(body, id)
 		out = append(out, accessor.KeyValue{Key: k, Value: v, Absent: !ok})
 	}
@@ -356,13 +389,6 @@ func mvvProjectorVerbMissing() bool {
 // The gating validation for RDR 0028. Eight steps, each a sub-test named
 // for its REQ so an end-to-end failure traces to one step.
 func TestMVV_DeclaredLineEditWriter(t *testing.T) {
-	recordRules := map[string]table.EditRule{
-		mvvKey: {Anchor: mvvRecordAnchor, Replace: mvvRecordReplace},
-	}
-	readmeRules := map[string]table.EditRule{
-		mvvKey: {Anchor: mvvReadmeAnchor, Replace: mvvReadmeReplace},
-	}
-
 	// REQ-MVV.1: "`intrastate lint --model rdr-write.toml` passes; no
 	// wrapper script exists anywhere in the fixture."
 	t.Run("step1_the_model_lints_clean_with_no_wrapper_script", func(t *testing.T) {
@@ -436,15 +462,17 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 			},
 		} {
 			t.Run("record_"+tc.nnnn, func(t *testing.T) {
-				w := newMVVWorld(t, tc.record, mvvReadme, tc.nnnn, true,
-					recordRules, readmeRules, nil, nil)
+				w := newMVVWorld(t, tc.record, mvvReadme, tc.nnnn, true, nil)
 
-				plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
-
-				if res := w.exec.Write(context.Background(), mvvRecordWriter, plan); res.Refusal != nil {
+				// Each writer plans its OWN key. `status` on the record
+				// and `row_status` on the README row are two owned tags
+				// on two roles (D9), not one tag two accessors race for.
+				if res := w.exec.Write(context.Background(), mvvRecordWriter,
+					mvvPlan(mvvRecordKey, "Final")); res.Refusal != nil {
 					t.Fatalf("the record write refused: %+v", res.Refusal)
 				}
-				if res := w.exec.Write(context.Background(), mvvReadmeWriter, plan); res.Refusal != nil {
+				if res := w.exec.Write(context.Background(), mvvReadmeWriter,
+					mvvPlan(mvvReadmeKey, "Final")); res.Refusal != nil {
 					t.Fatalf("the README write refused: %+v", res.Refusal)
 				}
 
@@ -481,11 +509,10 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 	// reader reports `status=Final` with the qualifier on
 	// `status_form`/`status.qualifier` (A4's normative fixture)."
 	t.Run("step3_the_reader_splits_the_qualifier_and_reports_status_final", func(t *testing.T) {
-		w := newMVVWorld(t, mvvRecordJoint, mvvReadme, "0026", true,
-			recordRules, readmeRules, nil, nil)
+		w := newMVVWorld(t, mvvRecordJoint, mvvReadme, "0026", true, nil)
 
-		plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
-		if res := w.exec.Write(context.Background(), mvvRecordWriter, plan); res.Refusal != nil {
+		if res := w.exec.Write(context.Background(), mvvRecordWriter,
+			mvvPlan(mvvRecordKey, "Final")); res.Refusal != nil {
 			t.Fatalf("the write refused: %+v", res.Refusal)
 		}
 
@@ -504,8 +531,7 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 	// REQ-MVV.4: "A `none` or `stopped:*` resolve row applies nothing and
 	// exits 0 carrying `dispositions`."
 	t.Run("step4_a_none_or_stopped_row_applies_nothing_and_does_not_refuse", func(t *testing.T) {
-		w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", true,
-			recordRules, readmeRules, nil, nil)
+		w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", true, nil)
 		recIno := inodeOf(t, w.recordPath)
 		rdmIno := inodeOf(t, w.readmePath)
 
@@ -536,15 +562,16 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 	// byte-identical to before."
 	t.Run("step5_without_allow_commands_the_write_refuses_before_mutation", func(t *testing.T) {
 		// allowCommands = false while BOTH readers are command-backed.
-		w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", false,
-			recordRules, readmeRules, nil, nil)
+		w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", false, nil)
 		recIno := inodeOf(t, w.recordPath)
 		rdmIno := inodeOf(t, w.readmePath)
 
-		plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
-
-		for _, name := range []string{mvvRecordWriter, mvvReadmeWriter} {
-			res := w.exec.Write(context.Background(), name, plan)
+		for _, tc := range []struct{ name, key string }{
+			{mvvRecordWriter, mvvRecordKey},
+			{mvvReadmeWriter, mvvReadmeKey},
+		} {
+			name := tc.name
+			res := w.exec.Write(context.Background(), name, mvvPlan(tc.key, "Final"))
 			if res.Refusal == nil {
 				t.Fatalf("%s: the write ran with the gate OFF and a command-backed "+
 					"reader", name)
@@ -573,12 +600,11 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 	// refuses `edit_anchor_ambiguous`; files untouched."
 	t.Run("step6_a_duplicated_readme_row_refuses_edit_anchor_ambiguous", func(t *testing.T) {
 		dup := mvvReadme + "| [0027](0027-inline-shell-scope.md) | inline shell scope | Draft |\n"
-		w := newMVVWorld(t, mvvRecordPlain, dup, "0027", true,
-			recordRules, readmeRules, nil, nil)
+		w := newMVVWorld(t, mvvRecordPlain, dup, "0027", true, nil)
 		rdmIno := inodeOf(t, w.readmePath)
 
-		plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
-		res := w.exec.Write(context.Background(), mvvReadmeWriter, plan)
+		res := w.exec.Write(context.Background(), mvvReadmeWriter,
+			mvvPlan(mvvReadmeKey, "Final"))
 		if res.Refusal == nil {
 			t.Fatalf("a duplicated row applied; the anchor must select exactly one")
 		}
@@ -596,18 +622,23 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 	// REQ-MVV.7: "Negative: a `replace` whose output no longer matches its
 	// own anchor refuses `edit_anchor_unstable`; files untouched."
 	t.Run("step7_a_self_de_anchoring_replace_refuses_edit_anchor_unstable", func(t *testing.T) {
-		unstable := map[string]table.EditRule{
-			// The anchor requires the `- **Status**: ` prefix; the
-			// replacement drops it, so the rewritten line cannot be
-			// re-selected on the post-edit buffer.
-			mvvKey: {Anchor: mvvRecordAnchor, Replace: `Status is now {status}`},
-		}
+		// The declaration is the TOML's, MUTATED — only the `replace`
+		// changes, and the ANCHOR stays the loaded one. That is what
+		// makes the de-anchoring real: the anchor requires the
+		// `- **Status**: ` prefix and the replacement drops it, so the
+		// rewritten line cannot be re-selected on the post-edit buffer.
+		// Spelling a fresh rule here instead would put a second literal
+		// beside the fixture and re-open the drift this file closed.
 		w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", true,
-			unstable, readmeRules, nil, nil)
+			func(m *table.Model) {
+				rule := m.Writers[mvvRecordWriter].Edit[mvvRecordKey]
+				rule.Replace = "Status is now {" + mvvRecordKey + "}"
+				m.Writers[mvvRecordWriter].Edit[mvvRecordKey] = rule
+			})
 		recIno := inodeOf(t, w.recordPath)
 
-		plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
-		res := w.exec.Write(context.Background(), mvvRecordWriter, plan)
+		res := w.exec.Write(context.Background(), mvvRecordWriter,
+			mvvPlan(mvvRecordKey, "Final"))
 		if res.Refusal == nil {
 			t.Fatalf("a self-de-anchoring replace applied; the re-anchor pass " +
 				"must refuse it BEFORE any write")
@@ -636,11 +667,10 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 | [0026](0026-joint-decision.md) | joint decision | Draft |
 | [0027](0027-inline-shell-scope.md) | inline shell scope | Draft |
 `
-		plan := resolve.Plan{Writes: []resolve.Tag{{Key: mvvKey, Value: "Final"}}}
+		plan := mvvPlan(mvvReadmeKey, "Final")
 
 		t.Run("the_unlinked_row_refuses_and_names_the_rule", func(t *testing.T) {
-			w := newMVVWorld(t, mvvRecordPlain, drifted, "0001", true,
-				recordRules, readmeRules, nil, nil)
+			w := newMVVWorld(t, mvvRecordPlain, drifted, "0001", true, nil)
 			rdmIno := inodeOf(t, w.readmePath)
 
 			res := w.exec.Write(context.Background(), mvvReadmeWriter, plan)
@@ -652,7 +682,7 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 			if !strings.Contains(d, "edit_anchor_unmatched") {
 				t.Errorf("Detail = %q; want the token edit_anchor_unmatched", d)
 			}
-			if !strings.Contains(d, mvvReadmeWriter+".edit."+mvvKey) {
+			if !strings.Contains(d, mvvReadmeWriter+".edit."+mvvReadmeKey) {
 				t.Errorf("Detail = %q; want it to NAME the rule "+
 					"`<id>.edit.<key>`", d)
 			}
@@ -670,8 +700,7 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 			// only the refusal would leave "one bad row poisons the whole
 			// index" untested, which is the partial-adoption claim the
 			// Prerequisites make.
-			w := newMVVWorld(t, mvvRecordPlain, drifted, "0027", true,
-				recordRules, readmeRules, nil, nil)
+			w := newMVVWorld(t, mvvRecordPlain, drifted, "0027", true, nil)
 
 			if res := w.exec.Write(context.Background(), mvvReadmeWriter, plan); res.Refusal != nil {
 				t.Fatalf("a LINKED row in a README carrying an unlinked sibling "+
@@ -682,6 +711,153 @@ func TestMVV_DeclaredLineEditWriter(t *testing.T) {
 				drifted, want, readBack(t, w.readmePath))
 		})
 	})
+}
+
+// Deviation D9: "the shared index takes its own owned key on its own role
+// (`row_status` on `readme`), one reader and one writer each ... A second
+// reader and a second writer over `status` is `malformed_accessor_binding`"
+// ADVERSARIAL
+//
+// The oracle that keeps the eight steps above honest. They run over a
+// registry, and a registry is free to take a shape the LOADER refuses —
+// which is exactly what happened: all four accessors carried one `status`
+// key while the fixture beside them carried two. The eight steps passed
+// against a model `intrastate lint` rejects, so step 1's green said
+// nothing about steps 2 through 8.
+//
+// This asserts the registry each step actually runs over against the
+// DECLARATION, per role and per capability. Sourcing from the load is what
+// makes it hold; asserting it is what keeps a future hand-built shortcut
+// from quietly re-admitting the divergence.
+func TestMVV_TheRuntimeRegistryCarriesTheDeclaredKeysPerRole(t *testing.T) {
+	w := newMVVWorld(t, mvvRecordPlain, mvvReadme, "0027", true, nil)
+
+	for _, tc := range []struct {
+		name       string
+		capability accessor.Capability
+		wantRole   string
+		wantKey    string
+	}{
+		{mvvRecordWriter, accessor.CapWrite, mvvRecordRole, mvvRecordKey},
+		{mvvRecordReader, accessor.CapRead, mvvRecordRole, mvvRecordKey},
+		{mvvReadmeWriter, accessor.CapWrite, mvvReadmeRole, mvvReadmeKey},
+		{mvvReadmeReader, accessor.CapRead, mvvReadmeRole, mvvReadmeKey},
+	} {
+		t.Run(string(tc.capability)+"_"+tc.name, func(t *testing.T) {
+			def, ok := w.exec.Registry.Lookup(tc.name, tc.capability)
+			if !ok {
+				t.Fatalf("the registry binds no %s accessor `%s`",
+					tc.capability, tc.name)
+			}
+			if def.Accessor.Role != tc.wantRole {
+				t.Errorf("role = %q; want %q", def.Accessor.Role, tc.wantRole)
+			}
+			if got := def.Accessor.Keys; len(got) != 1 || got[0] != tc.wantKey {
+				t.Errorf("keys = %#v; want exactly [%q] — the record's status "+
+					"and the shared index's row status are TWO owned tags on two "+
+					"roles (D9), and a registry that collapses them validates a "+
+					"model the loader refuses", got, tc.wantKey)
+			}
+		})
+	}
+
+	// The write bindings' own view, which is what mints `<id>.edit.<key>`
+	// in a refusal Detail. A registry entry naming the right key over a
+	// binding built from the wrong accessor would still misroute.
+	for _, tc := range []struct {
+		name string
+		acc  table.Accessor
+		key  string
+	}{
+		{mvvRecordWriter, w.model.Writers[mvvRecordWriter], mvvRecordKey},
+		{mvvReadmeWriter, w.model.Writers[mvvReadmeWriter], mvvReadmeKey},
+	} {
+		if _, ok := tc.acc.Edit[tc.key]; !ok {
+			t.Errorf("write.%s declares no `edit` rule for %q; its rules are %#v",
+				tc.name, tc.key, tc.acc.Edit)
+		}
+		if len(tc.acc.Edit) != 1 {
+			t.Errorf("write.%s carries %d `edit` rules; want exactly the one for %q",
+				tc.name, len(tc.acc.Edit), tc.key)
+		}
+	}
+}
+
+// Deviation D9: "RDR 0002's arity is not this record's to amend, and no
+// clause of 0028 says it is ... the record's Illustrative Code would refuse
+// at lint exactly as the MVV fixture did."
+// ADVERSARIAL
+//
+// The shape guard, and the reason the test above is not enough on its own.
+// That one asserts what the helper DOES build; this asserts that the
+// alternative — the one-key collapse the helper used to build — is not
+// merely a different choice but a model `table.Load` REFUSES, with the
+// category D9 names.
+//
+// It collapses THIS fixture rather than spelling a second one, so a future
+// edit to `mvvModelTOML` is carried into the negative case automatically.
+// The two-key shape is not a preference here; it is the only shape that
+// lints, and that is what pins D9 against silent return.
+func TestMVV_TheOneKeyCollapseIsWhatRDR0002Refuses(t *testing.T) {
+	collapsed := mvvCollapseToOneKey(t, mvvModelTOML)
+
+	_, err := table.Load([]byte(collapsed), "collapsed.toml")
+	if err == nil {
+		t.Fatalf("the one-key collapse loaded clean; RDR 0002 serves every owned "+
+			"tag with exactly one reader and one writer, so two accessor pairs "+
+			"over %q must refuse", mvvRecordKey)
+	}
+
+	cat, ok := table.CategoryOf(err)
+	if !ok || cat != table.CatMalformedAccessorBinding {
+		t.Fatalf("category = %q (classified=%v) for %v; want %q — a collapse that "+
+			"refused for some OTHER reason (a duplicate TOML table, say) would "+
+			"prove nothing about the arity rule",
+			cat, ok, err, table.CatMalformedAccessorBinding)
+	}
+	if !strings.Contains(err.Error(), mvvRecordKey) {
+		t.Errorf("the refusal %q does not name the collapsed key %q",
+			err, mvvRecordKey)
+	}
+}
+
+// mvvCollapseToOneKey rewrites the fixture into the shape the helper used
+// to hand-build: the README role's key folded onto the record's.
+//
+// The three edits are all it takes, and each is REQUIRED: dropping the
+// `[tags.row_status]` declaration and its `[initial]` assignment first,
+// because leaving either behind makes the rename a duplicate TOML key and
+// the load fails as `malformed_toml` before the arity rule is ever
+// consulted — which would let this guard pass while proving nothing.
+func mvvCollapseToOneKey(t *testing.T, src string) string {
+	t.Helper()
+
+	decl := "[tags." + mvvReadmeKey + "]"
+	start := strings.Index(src, decl)
+	if start < 0 {
+		t.Fatalf("the fixture no longer declares %s", decl)
+	}
+	end := strings.Index(src[start:], "\n\n")
+	if end < 0 {
+		t.Fatalf("the %s declaration is not followed by a blank line", decl)
+	}
+	out := src[:start] + src[start+end+2:]
+
+	initial := mvvReadmeKey + ` = "Draft"` + "\n"
+	if !strings.Contains(out, initial) {
+		t.Fatalf("the fixture no longer assigns %s in [initial]", mvvReadmeKey)
+	}
+	out = strings.Replace(out, initial, "", 1)
+
+	// Every remaining mention is an ACCESSOR key — the two `keys` lists,
+	// the `[write.readme.edit.<key>]` table name and its `{<key>}`
+	// replacement placeholder — and each is exactly what the collapse is
+	// meant to rewrite.
+	renamed := strings.Count(out, mvvReadmeKey)
+	if renamed == 0 {
+		t.Fatalf("nothing left to collapse after dropping the declaration")
+	}
+	return strings.ReplaceAll(out, mvvReadmeKey, mvvRecordKey)
 }
 
 // replaceRowStatus rewrites the status cell of the linked row for nnnn,
