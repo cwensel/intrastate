@@ -99,6 +99,25 @@ carrying one finding per load category with the offending file in each
 finding's locator. That is a different failure from a model that loaded
 and then failed the graph invariants — branch on the code, not on the
 presence of findings.
+`)
+
+	// The load categories that ship reviewer-facing text render it here,
+	// off the refusal path: a description reachable only by provoking the
+	// defect cannot tell a reviewer what the check ADMITS, which is the
+	// half `0027:C1`'s promise: clause exists to publish. The surface is
+	// per-category opt-in (`0027:D2`), so this loop renders the described
+	// categories and stays silent about the rest rather than coupling the
+	// help text to every future append to Categories().
+	for _, c := range table.Categories() {
+		desc, ok := table.CategoryDescription(c)
+		if !ok {
+			continue
+		}
+		b.WriteString("\nLoad category " + string(c) + " — what it promises:\n\n")
+		b.WriteString(desc + "\n")
+	}
+
+	b.WriteString(`
 
 The two bounds below are implementation constants of this build, not
 per-model inputs. A guard group whose product exceeds the product bound

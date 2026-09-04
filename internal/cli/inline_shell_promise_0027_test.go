@@ -311,12 +311,23 @@ func TestReq20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal(t *te
 	// (`0027:A6`). Nothing requires it to stay silent about the forms, but a
 	// description reachable ONLY there fails the reachability half of S7,
 	// which the help-surface assertion above is what pins.
+	// DEVIATION D7 (TEST-FIXTURE): `[tags.recognized]` is declared because
+	// `table.Load` refuses a model without one as
+	// `malformed_model_declaration` (load.go:270) BEFORE reaching C5's
+	// command clauses — so without it this fixture asserts nothing about
+	// the interpreter form. The sibling MVV fixture declares it too.
 	src := `outcomes = ["advance"]
 terminal = ["done"]
 
 [model]
 id = "cmdflow"
 version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
 
 [tags.status]
 provenance = "owned"

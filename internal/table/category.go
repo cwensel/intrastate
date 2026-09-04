@@ -106,6 +106,58 @@ func Categories() []Category {
 	}
 }
 
+// categoryDescriptions carries the reviewer-facing text a category ships
+// on the `--help-all` surface. It is PER-CATEGORY OPT-IN, not total over
+// Categories(): a category absent here carries no text and renders as its
+// identifier alone.
+//
+// Opt-in rather than total because `Categories()` is append-only and its
+// total size is not a contract at any point (`0025:REQ-79`), so requiring
+// text for every member would couple this map to every future append —
+// and `0027:C1` ships text for exactly one category (`0027:D2`).
+//
+// The text states what a reviewer may RELY on. For a check that is
+// deliberately not a barrier, that means naming what it does NOT cover:
+// the promise is the predicate line plus the forms admitted by name, and a
+// description that claimed more than the predicate delivers would be worse
+// than none — a reviewer who believes the class is closed stops reading
+// argv (`0027:C1` promise:).
+var categoryDescriptions = map[Category]string{
+	CatCommandShellInterpreter: `Refused: a listed interpreter word followed, at ANY later argv
+position, by one of that interpreter's own inline-code flags — under any
+prefix (env and its options, nice, timeout, xargs, doas, and wrappers
+nobody enumerated). Nothing before the interpreter word is read, so no
+wrapper table exists and none is consulted.
+
+The check reads argv WORDS only. It never splits a word on whitespace,
+and never reads stdin, files, PATH, or the resolved binary. The
+interpreter set is an OPEN deny-list, so an unlisted spelling (python3,
+nodejs, busybox) is admitted.
+
+Out of scope, BY NAME — admitted by lint, and an interpreter may still
+run:
+
+  a shell string carried in ONE word, such as env -S "sh -c …", or a
+  single "sh -c …" element handed to a tool that re-splits it;
+
+  an interpreter that reads its script from STDIN — sh -s, bare sh,
+  sh -es, python -, node -. The channel is the scope: any listed
+  interpreter taking its code on stdin rather than as a later argv word
+  is admitted, however spelled.
+
+sh script.sh is the sanctioned wrapper-file form and never a defect.`,
+}
+
+// CategoryDescription returns the reviewer-facing text a category ships on
+// the `--help-all` surface, and whether the category carries any. The
+// surface is per-category opt-in, so a category with no text reports
+// false rather than an empty string — a caller can then render the
+// identifier alone instead of a blank line (`0027:C1` promise:, REQ-37).
+func CategoryDescription(c Category) (string, bool) {
+	d, ok := categoryDescriptions[c]
+	return d, ok
+}
+
 // Failure is a categorized load refusal. Load is fail-fast, so a document
 // yields exactly one of these and never a list (`0002:C3`).
 type Failure struct {

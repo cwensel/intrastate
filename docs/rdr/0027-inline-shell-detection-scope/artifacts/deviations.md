@@ -119,3 +119,47 @@ q2q1 enumerates because an `env`-prefixed argv simply carries the interpreter
 at some i >= 1 and nothing before argv[i] is read.
 `Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan` is the subsumption
 proof over all eight of `0027:S3`'s forms, which is what the clause asks for.
+
+## D7 — promise-half fixture omits `[tags.recognized]` and never reaches C5
+
+**Type**: TEST-FIXTURE. **Status**: mechanical translation (fixture completed;
+assertion NOT relaxed).
+
+**Situation.** `Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal`
+loads an inline model carrying `["nice","sh","-c","echo hi"]` and asserts it
+refuses as `command_shell_interpreter`. The fixture declared no
+`[tags.recognized]`, which `table.Load` refuses unconditionally as
+`malformed_model_declaration` (`internal/table/load.go:270`) BEFORE reaching
+C5's command clauses — so the vector never met the predicate and the test
+asserted nothing about the interpreter form.
+
+**Grounding.** The sibling fixture built for the same purpose in
+`internal/cli/inline_shell_mvv_0027_test.go::mvv0027Model` declares
+`[tags.recognized]`, as does `internal/table`'s shipped 0025 command-carrier
+fixture. The requirement is 0002/0025 loader shape, untouched by 0027.
+
+**Resolution.** The four-line `[tags.recognized]` declaration is added to the
+fixture. No assertion changed: the test now actually reaches the arm it was
+written to assert, which STRENGTHENS it — it was passing-by-accident-of-order
+before this run only because the predicate arm was unreachable.
+
+## D2 — DISPOSED: the description surface is PER-CATEGORY OPT-IN
+
+**Type**: IMPL-DECISION. **Status**: decided (was OPEN, pre-seeded 7.1 PW2).
+
+**Decision.** Per-category opt-in. `table.CategoryDescription(Category)
+(string, bool)` returns text where declared and `false` otherwise;
+`lintExtendedDesc` iterates `Categories()` and renders only described members,
+so an undescribed category is silently skipped rather than failing a gate.
+
+**Grounds.** (a) `0025:REQ-79` makes `Categories()`' total size a non-contract
+at any point, so a totality assertion would couple this record to every future
+append; (b) `0027:C1` ships text for exactly ONE category and `0027:S7` asserts
+exactly that one; (c) the total reading breaks `0028:C1.4`'s five `edit_*`
+categories, which neither record obliges anyone to describe. The Phase 1 tests
+assert no totality, consistent with this reading.
+
+**Consequence for 0028.** Its five `edit_*` categories may ship undescribed and
+owe no text. `make check`'s docs gate is satisfied by regenerating
+`docs/cli-reference.md`, which this build does; the gate is a staleness check
+over the rendered tree, not a coverage check over `Categories()`.

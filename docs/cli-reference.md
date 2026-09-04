@@ -839,6 +839,33 @@ finding's locator. That is a different failure from a model that loaded
 and then failed the graph invariants — branch on the code, not on the
 presence of findings.
 
+Load category command_shell_interpreter — what it promises:
+
+Refused: a listed interpreter word followed, at ANY later argv
+position, by one of that interpreter's own inline-code flags — under any
+prefix (env and its options, nice, timeout, xargs, doas, and wrappers
+nobody enumerated). Nothing before the interpreter word is read, so no
+wrapper table exists and none is consulted.
+
+The check reads argv WORDS only. It never splits a word on whitespace,
+and never reads stdin, files, PATH, or the resolved binary. The
+interpreter set is an OPEN deny-list, so an unlisted spelling (python3,
+nodejs, busybox) is admitted.
+
+Out of scope, BY NAME — admitted by lint, and an interpreter may still
+run:
+
+  a shell string carried in ONE word, such as env -S "sh -c …", or a
+  single "sh -c …" element handed to a tool that re-splits it;
+
+  an interpreter that reads its script from STDIN — sh -s, bare sh,
+  sh -es, python -, node -. The channel is the scope: any listed
+  interpreter taking its code on stdin rather than as a later argv word
+  is admitted, however spelled.
+
+sh script.sh is the sanctioned wrapper-file form and never a defect.
+
+
 The two bounds below are implementation constants of this build, not
 per-model inputs. A guard group whose product exceeds the product bound
 declines to be proven and reports graph-unprovable-coverage;
