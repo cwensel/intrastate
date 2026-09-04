@@ -37,6 +37,10 @@ func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Regis
 	reg := accessor.Registry{
 		Flow:      m.ID,
 		OwnedTags: OwnedTags(m),
+		// RDR 0028 `0028:C1.3` SITE: — the gate reaches the accessor as
+		// STATE from this single production construction site, never read
+		// across the `cmdbind` seam, which would be an import cycle.
+		AllowCommands: allowCommands,
 	}
 
 	for _, name := range slices.Sorted(keys(m.Readers)) {
@@ -56,7 +60,24 @@ func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Regis
 	for _, name := range slices.Sorted(keys(m.Writers)) {
 		acc := m.Writers[name]
 		var binding accessor.Binding = &Writer{Path: acc.Path}
-		if commandBacked(acc) {
+		switch {
+		// The `edit` arm is tested FIRST and on the carrier's own
+		// PRESENCE, never through `commandBacked`. That is deliberate:
+		// `commandBacked`'s `acc.Path == ""` arm IS the residue path, so
+		// folding `edit` into it would leave a carrier-less entry
+		// indistinguishable from an `edit`-carried one — and rerouting
+		// residue to a `Path: ""` file binding is the silent state loss
+		// C1's runtime arm exists to prevent (`0028:C1.1` in-memory:,
+		// REQ-118).
+		//
+		// `edit` is a WRITE carrier only, which is why this arm appears
+		// in this loop alone: a read or gate entry carrying `edit` is
+		// `edit_carrier_conflict` at load, and one built in memory falls
+		// through to the residue rather than becoming a second line
+		// parser.
+		case len(acc.Edit) != 0:
+			binding = NewEditWriter(acc, name)
+		case commandBacked(acc):
 			binding = &cmdbind.Writer{Accessor: acc, Name: name, Config: cfg}
 		}
 		reg.Definitions = append(reg.Definitions, accessor.Definition{

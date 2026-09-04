@@ -26,6 +26,7 @@ package table
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -171,18 +172,9 @@ func editGroupSegment(ref string, groups int, names []string) (EditSegment, erro
 		}
 		return EditSegment{Kind: EditGroup, Text: ref, Index: n}, nil
 	}
-	if names != nil {
-		found := false
-		for _, n := range names {
-			if n == ref {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return EditSegment{}, editTemplateErr("`${" + ref +
-				"}` names a group the anchor does not define")
-		}
+	if names != nil && !slices.Contains(names, ref) {
+		return EditSegment{}, editTemplateErr("`${" + ref +
+			"}` names a group the anchor does not define")
 	}
 	return EditSegment{Kind: EditGroup, Text: ref, Index: -1}, nil
 }

@@ -198,6 +198,21 @@ type Registry struct {
 	// OwnedTags names the model's owned tag keys, so validation can
 	// refuse a writer naming a non-owned tag.
 	OwnedTags []string
+
+	// AllowCommands is the `--allow-commands` gate (0025:C6), carried
+	// here as STATE (`0028:C1.3` SITE:, A10).
+	//
+	// It is a FIELD and never a read across the `cmdbind` seam: `cmdbind`
+	// imports `accessor`, so the reverse is an import cycle, and
+	// `AllowCommands` on `cmdbind.Config` stays where it is. It is set at
+	// `flowbind.Registry`, the single production construction site, which
+	// already takes the gate for 0025:C6.
+	//
+	// The executor needs it to answer C1.3's read-back pre-check: when a
+	// write's role reader is command-backed and the gate is off, the
+	// write must refuse BEFORE mutation, because a forgotten flag must
+	// not produce `read_back_incomplete` for a write that ran no command.
+	AllowCommands bool
 }
 
 // Lookup selects a binding by capability table and id: an invocation that
@@ -249,6 +264,23 @@ type Artifacts map[string]Artifact
 type Artifact struct {
 	Role string
 	Path string
+
+	// Context carries the invocation's bound tag values (RDR 0028 A1 —
+	// the ONE seam extension this record owns).
+	//
+	// It rides the ARTIFACT rather than a second `Apply` argument because
+	// the same `art` value reaches both carriers: an `edit` writer's
+	// `{tag.<key>}` anchors and a command reader's `{tag.<key>}` argv are
+	// the same channel, and a shared artifact's reader could not say
+	// which row it read without it (`0028:C1.6` why here:). A separate
+	// write-side argument would serve the anchor half and leave the read
+	// half unaddressed.
+	//
+	// It is nil for an invocation that bound no tags, and a binding that
+	// references none never reads it: the scan is per-USE-SITE, so a tag
+	// bound here but named by no anchor or argv element of an entry is
+	// never inspected on that entry's behalf.
+	Context map[string]string
 }
 
 // --- verdicts ------------------------------------------------------------

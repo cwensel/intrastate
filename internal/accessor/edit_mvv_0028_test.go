@@ -124,8 +124,8 @@ const (
 
 	// The README row is addressed by the context tag: `{tag.nnnn}` binds
 	// ONE record identity, so it selects one row of the shared index.
-	mvvReadmeAnchor  = `^\| \[{tag.nnnn}\]\(([^)]*)\) \| ([^|]*) \| (\w+) \|$`
-	mvvReadmeReplace = `| [{tag.nnnn}](${1}) |${2}| {status} |`
+	mvvReadmeAnchor  = `^\| \[({tag.nnnn})\]\(([^)]*)\) \|([^|]*)\| (\w+) \|$`
+	mvvReadmeReplace = `| [${1}](${2}) |${3}| {status} |`
 )
 
 // mvvWorld is one invocation's artifact pair plus its bindings.
@@ -732,6 +732,20 @@ domain = ["Draft", "Final"]
 single_valued = true
 required = true
 
+# The README row's status cell is a SECOND owned key, on the readme
+# role. RDR 0002 serves each owned tag with exactly one reader and one
+# writer, and this record does not amend that arity: the shared index is
+# a second ARTIFACT, so it takes a second key rather than a second
+# accessor over the first key. Nothing about the MVV's claim turns on the
+# spelling — both writers carry edit and neither declares a command or a
+# path, which is what step 1 asserts.
+[tags.row_status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final"]
+single_valued = true
+required = true
+
 [read.record]
 role = "record"
 command = ["rdr", "status", "-json", "-filter", "status", "{artifact}"]
@@ -741,7 +755,7 @@ timeout = "5s"
 [read.readme]
 role = "readme"
 command = ["rdr", "readme-row", "{tag.nnnn}", "{artifact}"]
-keys = ["status"]
+keys = ["row_status"]
 timeout = "5s"
 
 [write.record]
@@ -756,20 +770,21 @@ replace = "- **Status**: {status}${2}"
 
 [write.readme]
 role = "readme"
-keys = ["status"]
+keys = ["row_status"]
 timeout = "5s"
 read_back = true
 
-[write.readme.edit.status]
-anchor  = "^\\| \\[{tag.nnnn}\\]\\(([^)]*)\\) \\| ([^|]*) \\| (\\w+) \\|$"
-replace = "| [{tag.nnnn}](${1}) |${2}| {status} |"
+[write.readme.edit.row_status]
+anchor  = "^\\| \\[({tag.nnnn})\\]\\(([^)]*)\\) \\|([^|]*)\\| (\\w+) \\|$"
+replace = "| [${1}](${2}) |${3}| {row_status} |"
 
-[context.done]
-[context.done.match.status]
+[context.locked]
+[context.locked.match.status]
 eq = "Final"
 
 [initial]
 status = "Draft"
+row_status = "Draft"
 `
 
 // REQ-MVV-BLOCK: "BLOCKING the MVV (not the unit work): the consumer's

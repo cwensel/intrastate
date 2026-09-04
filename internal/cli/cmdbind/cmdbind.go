@@ -402,6 +402,43 @@ func substitute(declared []string, art accessor.Artifact) ([]string, error) {
 	substituted := false
 	for _, el := range declared {
 		if el != ArtifactPlaceholder {
+			// RDR 0028 `0028:C1.6` — the `{tag.<key>}` family joins this
+			// vocabulary, WHOLE-ELEMENT under the same substitution rule,
+			// replaced by the bound value of a tag key the model
+			// declares. Its two refusals are rules on THIS FAMILY and are
+			// not entries on 0027's interpreter deny-list, which stays
+			// static.
+			//
+			// The scan is per-USE-SITE: only an element that NAMES a tag
+			// is looked up, so a flag-shaped value bound on the context
+			// but referenced by no argv element of this entry reaches no
+			// child and is never scanned.
+			if key, isTag := table.CommandTagKey(el); isTag {
+				value, bound := art.Context[key]
+				if !bound {
+					// A placeholder is never passed through literally: an
+					// unbound `{tag.x}` forwarded as itself would reach
+					// the child as an argument and could be read as a
+					// filename (`0025:C2`).
+					return nil, refuse("the placeholder " + el +
+						" is not bound on this invocation's context; a " +
+						"placeholder is never passed through literally")
+				}
+				if strings.HasPrefix(value, "-") {
+					// The class is argument injection (CWE-88), not shell
+					// injection — `os/exec` runs no shell — so the hazard
+					// is a flag-shaped WORD the child reads as a flag.
+					// The rule mirrors `{artifact}`'s existing one rather
+					// than inventing a second policy, and no `--`
+					// separator is inserted: only a child that honours it
+					// would be helped and the model cannot know which do.
+					return nil, refuse("the placeholder " + el +
+						" is bound to " + strconv.Quote(value) +
+						", which a child can parse as a flag")
+				}
+				out = append(out, value)
+				continue
+			}
 			out = append(out, el)
 			continue
 		}

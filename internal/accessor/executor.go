@@ -301,6 +301,41 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// artifact and never an unrelated role (`0004:C12`, `0004:C13`).
 	reader, hasReader := e.Registry.readerFor(def.Accessor.Role)
 
+	// RDR 0028 `0028:C1.3` read-back: — the gate pre-check, and the
+	// AUTHORITATIVE detector for this case.
+	//
+	// An `edit` write spawns nothing, so the gate is not consulted by the
+	// write itself; but its read-back goes through the role's declared
+	// reader, and a command-backed reader with the gate OFF cannot run.
+	// Refusing here — before `Apply`, unconditionally — is what stops a
+	// forgotten `--allow-commands` from mutating the artifact and then
+	// reporting `read_back_incomplete`, which carries the
+	// applied-but-unverified sense for a write that ran no command.
+	//
+	// It does NOT amend `Executor.Write`'s existing pre-`Apply` baseline
+	// read below. That baseline runs only when `protected` is non-empty
+	// and SWALLOWS its failure into `baselineUnread`; this refuses
+	// earlier and unconditionally, so the swallow becomes unreachable for
+	// the gate-off case whether or not `protected` is empty (A2).
+	//
+	// The scope is this carrier's. A command-backed WRITER already
+	// refuses at its own pre-spawn ladder (0025:C6) and is not this
+	// clause's to re-decide.
+	if len(def.Accessor.Edit) != 0 && hasReader &&
+		len(reader.Accessor.Command) != 0 && !e.Registry.AllowCommands {
+		r := refusalOf(def, timeout, ClassExecutionFailure, nil)
+		// The Detail names the GATE, having no rule to name: this is an
+		// ENTRY-level precondition, not a rule-scoped refusal
+		// (`0028:C1.3` order:).
+		r.Detail = "the read-back for the write accessor `" + name +
+			"` goes through the command-backed reader `" +
+			reader.Identity.Name + "`, which requires the allow-commands " +
+			"opt-in (--allow-commands); refusing before mutation rather " +
+			"than writing and reporting an unverified read-back"
+		r.Expected = planned
+		return WriteResult{Refusal: r}
+	}
+
 	// Before the write, record the protected non-owned values this
 	// boundary can observe: the reader's declared keys, minus the plan's
 	// own owned keys, which are excluded from the comparison by

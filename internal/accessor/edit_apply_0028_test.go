@@ -84,6 +84,25 @@ const statusAnchor = `^- \*\*Status\*\*: (\w+)(.*)$`
 // and carrying the qualifier forward through group 2.
 const statusReplace = `- **Status**: {status}${2}`
 
+// statusAnchorAny is the record's own `^- \*\*Status\*\*: (.+)$` shape
+// (the RDR's Coherence table, row 3a), used wherever a scenario's claim is
+// about the VALUE rather than about anchor stability.
+//
+// `statusAnchor`'s `(\w+)` is deliberate — it splits the bare value from a
+// bracketed qualifier so `replace` can carry the qualifier by
+// backreference — but it means a value not beginning with a word
+// character rewrites the line into one the anchor can no longer select,
+// which C1.3 `re-anchor:` refuses `edit_anchor_unstable` before any write.
+// A scenario asserting that `-rf` or `$(rm -rf /)` is ordinary LINE DATA
+// therefore has to pin an anchor that admits it; pairing the narrow
+// anchor with such a value would assert the value's admission through a
+// fixture the stability pass condemns for an unrelated reason.
+const statusAnchorAny = `^- \*\*Status\*\*: (.+)$`
+
+// statusReplaceAny is its whole-line replacement. It names no group,
+// because `(.+)` captures the value the write is replacing.
+const statusReplaceAny = `- **Status**: {status}`
+
 // writeFixture writes body to a fresh temp file and returns its path.
 func writeFixture(t *testing.T, name, body string) string {
 	t.Helper()
@@ -286,17 +305,21 @@ func TestReq31And47_AnAppliedEditRewritesExactlyTheAnchoredLine(t *testing.T) {
 func TestReq2And3_ReplaceEmitsTheWholeLineNotTheMatchedSpan(t *testing.T) {
 	path := writeFixture(t, "record.md", recordDoc)
 
-	// An unpinned anchor matching only the middle of the Owner line.
+	// An unpinned anchor matching only the middle of the Owner line. The
+	// planned value carries `Owner` so the rewritten line still selects
+	// under the same anchor: C1.3's re-anchor pass runs on every apply,
+	// and a replacement that de-anchored itself would be refused for
+	// INSTABILITY before this scenario's whole-line claim could be read.
 	_, err := applyEdit(t,
 		map[string]table.EditRule{editKey: editRule(`Owner`, `{status}`, "")},
 		path, nil,
-		resolve.Tag{Key: editKey, Value: "REPLACED"})
+		resolve.Tag{Key: editKey, Value: "Owner REPLACED"})
 	if err != nil {
 		t.Fatalf("an unpinned anchor refused: %v", err)
 	}
 
 	got := readBack(t, path)
-	want := strings.Replace(recordDoc, "- **Owner**: cwensel\n", "REPLACED\n", 1)
+	want := strings.Replace(recordDoc, "- **Owner**: cwensel\n", "Owner REPLACED\n", 1)
 	if got != want {
 		t.Errorf("post-edit file:\n%q\nwant the WHOLE line replaced:\n%q", got, want)
 	}
@@ -359,12 +382,15 @@ func TestReq30And56And57_TerminatorHandlingPreservesLineShape(t *testing.T) {
 		path := writeFixture(t, "oddities.md", body)
 
 		if _, err := applyEdit(t,
-			map[string]table.EditRule{editKey: editRule(`^- \*\*Status\*\*: Draft.*$`, `{status}`, "")},
+			map[string]table.EditRule{editKey: editRule(
+				`^- \*\*Status\*\*: (.*)$`, `- **Status**: {status}`, "")},
 			path, nil, resolve.Tag{Key: editKey, Value: "X"}); err != nil {
 			t.Fatalf("a fixture carrying bare \\r/NEL/U+2028 refused: %v", err)
 		}
 
-		want := "X\n"
+		// The WHOLE run — bullet, bare \r, NEL and U+2028 alike — was one
+		// line, so one line is what the replacement emits.
+		want := "- **Status**: X\n"
 		if got := readBack(t, path); got != want {
 			t.Errorf("post-edit = %q; want %q — a bare \\r, NEL and U+2028 are "+
 				"line CONTENT, so the whole run is one line", got, want)
@@ -824,7 +850,7 @@ func TestReq20_AValueCarryingANewlineOrCarriageReturnRefusesBeforeMutation(t *te
 			ino := inodeOf(t, path)
 
 			_, err := applyEdit(t,
-				map[string]table.EditRule{editKey: editRule(statusAnchor, statusReplace, "")},
+				map[string]table.EditRule{editKey: editRule(statusAnchorAny, statusReplaceAny, "")},
 				path, nil, resolve.Tag{Key: editKey, Value: tc.value})
 
 			assertRefusedUntouched(t, err, "edit_value_multiline", "", path, recordDoc, ino)
@@ -910,7 +936,7 @@ func TestReq19And23_CapturedTextAndValuesEmitAsLiteralBytesNeverRescanned(t *tes
 		path := writeFixture(t, "record.md", recordDoc)
 
 		if _, err := applyEdit(t,
-			map[string]table.EditRule{editKey: editRule(statusAnchor, statusReplace, "")},
+			map[string]table.EditRule{editKey: editRule(statusAnchorAny, statusReplaceAny, "")},
 			path, nil, resolve.Tag{Key: editKey, Value: "${1}{status}"}); err != nil {
 			t.Fatalf("apply refused: %v", err)
 		}
@@ -941,33 +967,38 @@ func TestReq22And121_ReplaceEscapesAndNonParticipatingGroupsExpandAsStated(t *te
 		body    string
 		want    string
 	}{
+		// Every anchor here also matches its OWN output, because C1.3's
+		// re-anchor pass runs on every apply and refuses a rule whose
+		// replacement de-anchors it. A row pairing `^X$` with a
+		// replacement of `$Final` would be refused for INSTABILITY and
+		// would never reach the escape assertion it exists to make.
 		{
 			name:    "doubled_dollar_emits_one_dollar",
-			anchor:  `^X$`,
-			replace: `$${status}`,
-			body:    "X\n",
-			want:    "$Final\n",
+			anchor:  `^X: .*$`,
+			replace: `X: $${status}`,
+			body:    "X: old\n",
+			want:    "X: $Final\n",
 		},
 		{
 			name:    "doubled_braces_emit_literal_braces",
-			anchor:  `^X$`,
-			replace: `{{{status}}}`,
-			body:    "X\n",
-			want:    "{Final}\n",
+			anchor:  `^X: .*$`,
+			replace: `X: {{{status}}}`,
+			body:    "X: old\n",
+			want:    "X: {Final}\n",
 		},
 		{
 			name:    "a_group_that_did_not_participate_expands_empty",
-			anchor:  `^X(a)?$`,
-			replace: `{status}[${1}]`,
-			body:    "X\n",
-			want:    "Final[]\n",
+			anchor:  `^X: (a)?.*$`,
+			replace: `X: {status}[${1}]`,
+			body:    "X: \n",
+			want:    "X: Final[]\n",
 		},
 		{
 			name:    "a_group_that_participated_expands_to_its_text",
-			anchor:  `^X(a)?$`,
-			replace: `{status}[${1}]`,
-			body:    "Xa\n",
-			want:    "Final[a]\n",
+			anchor:  `^X: (a)?.*$`,
+			replace: `X: {status}[${1}]`,
+			body:    "X: a\n",
+			want:    "X: Final[a]\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1007,8 +1038,8 @@ func TestReq16And106_ABoundTagValueIsRegexpQuotedAndCannotAlterThePattern(t *tes
 		// Quoted, it matches the literal `a.c` row alone.
 		if _, err := applyEdit(t,
 			map[string]table.EditRule{editKey: editRule(
-				`^\| \[{tag.nnnn}\]\([^)]*\) \| (\w+) \|$`,
-				`| [{tag.nnnn}](x.md) | {status} |`, "")},
+				`^\| \[({tag.nnnn})\]\(([^)]*)\) \| (\w+) \|$`,
+				`| [${1}](${2}) | {status} |`, "")},
 			path, map[string]string{"nnnn": "a.c"},
 			resolve.Tag{Key: editKey, Value: "Final"}); err != nil {
 			t.Fatalf("a metacharacter-bearing tag value refused: %v — it is "+
@@ -1055,14 +1086,19 @@ func TestReq111_AFlagShapedTagValueIsAdmittedInAnAnchor(t *testing.T) {
 	path := writeFixture(t, "list.md", body)
 
 	if _, err := applyEdit(t,
-		map[string]table.EditRule{editKey: editRule(`^{tag.nnnn} item$`, `{status} item`, "")},
+		map[string]table.EditRule{editKey: editRule(
+			`^{tag.nnnn} item(.*)$`, `- draft item {status}`, "")},
 		path, map[string]string{"nnnn": "- draft"},
 		resolve.Tag{Key: editKey, Value: "- final"}); err != nil {
 		t.Fatalf("a `-`-prefixed value in an ANCHOR refused: %v — the argv rule "+
 			"is C1.6's and does not reach line data", err)
 	}
 
-	want := "- final item\n- other\n"
+	// The `-`-prefixed value is REGEXP-QUOTED into the anchor and reaches
+	// line data as ordinary bytes through the planned value. The
+	// replacement keeps the anchored prefix so the rule re-selects its own
+	// line, which C1.3's re-anchor pass requires of every apply.
+	want := "- draft item - final\n- other\n"
 	if got := readBack(t, path); got != want {
 		t.Errorf("post-edit = %q; want %q", got, want)
 	}
@@ -1239,7 +1275,7 @@ func TestReq82_TheClearSentinelIsReadOnThePlannedValueAndNeverOnATemplate(t *tes
 		path := writeFixture(t, "record.md", recordDoc)
 
 		if _, err := applyEdit(t,
-			map[string]table.EditRule{editKey: editRule(statusAnchor, `- **Status**: <clear> {status}`, "")},
+			map[string]table.EditRule{editKey: editRule(statusAnchorAny, `- **Status**: <clear> {status}`, "")},
 			path, nil, resolve.Tag{Key: editKey, Value: "Final"}); err != nil {
 			t.Fatalf("apply refused: %v", err)
 		}
@@ -1898,8 +1934,8 @@ func TestReq95To98_OneContextMapOnArtifactServesBothTheAnchorAndTheReader(t *tes
 	// The writer's anchor consumes the context tag.
 	acc := editAccessor(map[string]table.EditRule{
 		editKey: editRule(
-			`^\| \[{tag.nnnn}\]\([^)]*\) \| (\w+) \|$`,
-			`| [{tag.nnnn}](0028-x.md) | {status} |`, ""),
+			`^\| \[({tag.nnnn})\]\(([^)]*)\) \| (\w+) \|$`,
+			`| [${1}](${2}) | {status} |`, ""),
 	})
 	w := flowbind.NewEditWriter(acc, editWriter)
 	if err := w.Apply(context.Background(), art,
@@ -2215,7 +2251,7 @@ func TestReq21And29_OnlyNewlinesAreRefusedAndNoShellHazardIsScannedFor(t *testin
 			path := writeFixture(t, "record.md", recordDoc)
 
 			if _, err := applyEdit(t,
-				map[string]table.EditRule{editKey: editRule(statusAnchor, statusReplace, "")},
+				map[string]table.EditRule{editKey: editRule(statusAnchorAny, statusReplaceAny, "")},
 				path, nil, resolve.Tag{Key: editKey, Value: tc.value}); err != nil {
 				t.Fatalf("value %q refused: %v — the single admission hazard is a "+
 					"newline or carriage return; there is no shell, no word-"+

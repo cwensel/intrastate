@@ -1157,7 +1157,7 @@ func carrierDefect(
 			// An undeclared key, and a `{…}` element that is neither
 			// `{artifact}` nor a declared `{tag.<key>}`, keep 0025:C5's
 			// unchanged `command_unknown_placeholder` wire string.
-			if key, ok := commandTagKey(el); ok {
+			if key, ok := CommandTagKey(el); ok {
 				if _, declared := tags[key]; declared {
 					continue
 				}
@@ -1203,7 +1203,7 @@ func carrierDefect(
 		// The rule is on THIS FAMILY only: `{artifact}` at argv0 stays
 		// admitted, having no such rule and no such reviewer promise to
 		// break.
-		if _, ok := commandTagKey(argv[0]); ok {
+		if _, ok := CommandTagKey(argv[0]); ok {
 			return fail(CatEditTagArgv0,
 				where+" declares the placeholder "+argv[0]+" at argv0; the "+
 					"executable must be readable off the model, so a "+
@@ -1245,12 +1245,17 @@ func carrierDefect(
 	return nil
 }
 
-// commandTagKey reports the tag key a WHOLE argv element names as
+// CommandTagKey reports the tag key a WHOLE argv element names as
 // `{tag.<key>}`, and whether the element takes that form at all. It is
 // whole-element by construction — `x{tag.nnnn}` is not a placeholder —
 // which is 0025:C2's substitution rule that C1.6 joins rather than
 // widens.
-func commandTagKey(el string) (string, bool) {
+//
+// It is exported because the load-time admission check and the
+// apply-time substitution must recognize the SAME form: two spellings
+// would let an element lint clean and then cross to a child unsubstituted,
+// the outcome 0025:C2 forbids.
+func CommandTagKey(el string) (string, bool) {
 	if !strings.HasPrefix(el, editTagPrefix) || !strings.HasSuffix(el, "}") {
 		return "", false
 	}
