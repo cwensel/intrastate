@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-31
-- **Status**: Final
+- **Status**: Implemented
 - **Type**: Architecture
 - **Profile**: large — C1, the successor predicate and claim wording for 0025:C5's `command_shell_interpreter` deny-list; user-facing yes; locks format
 - **Priority**: Medium
