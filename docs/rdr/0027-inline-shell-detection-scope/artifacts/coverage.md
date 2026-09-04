@@ -93,7 +93,6 @@ can tell them from the red set:
 | REQ-29 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req6_ALowerListedInterpreterWithNoFollowingFlagDoesNotStopTheScan; Req3_BasenameIsThePostSlashSegmentMatchedByteExactly |
 | REQ-30 | Req8_AShellStringCarriedInOneWordIsAdmittedAndNeverSplit; Req5_AnUnenumeratedPrefixIsRefusedBecauseNothingBeforeTheInterpreterIsRead |
 | REQ-31 | Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan |
-| REQ-32 | |
 | REQ-33 | Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
 | REQ-MVV | ReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips |
 | REQ-34 | Req42_EveryNamedWrapperStillRefusesTheInterpreterForm; Req44_TheDeletedEnvWalkIsSubsumedByThePositionFreeScan; Req48_TheCategoryWireStringAndItsRelativePositionAreUnchanged |
@@ -136,14 +135,19 @@ can tell them from the red set:
 
 ## Orphan REQs
 
-Phase 1 recorded five empty cells. Phase 3c closed three of them: REQ-0b,
-REQ-35 and REQ-40 constrain the SHAPE OF THE DIFF, which is not unobservable
-— each names a fact about the shipped tree a test can read directly, so
-`internal/table/inline_shell_authoring_0027_test.go` asserts them (all three
-mutation-verified). REQ-32 remains an orphan BY CONSTRUCTION and REQ-33 stays
-partially testable; both are explained below.
+Phase 1 recorded five empty cells. Phase 3c resolved all of them, leaving
+no orphan rows:
 
-### Why the remaining cell is empty
+- REQ-0b, REQ-35, REQ-40 constrain the SHAPE OF THE DIFF, which is not the
+  same as unobservable — each names a fact about the shipped tree a test can
+  read directly, so `internal/table/inline_shell_authoring_0027_test.go`
+  asserts them (all three mutation-verified).
+- REQ-32 was WITHDRAWN: it is a caveat on an illustrative code block, not a
+  testable clause, and was extracted in error.
+- REQ-33 was never orphaned; it is partially testable and its testable
+  consequence is covered.
+
+### REQ-32 — withdrawn, not orphaned
 
 Five REQs carry an empty column-2 cell. Each is a process or authoring
 obligation with no runtime behaviour a test can observe; recording them as
@@ -156,9 +160,12 @@ constrain them.
   `load.go` cites `0027:C1` and that no comment still describes the live
   predicate as argv0-anchored. Mutation-verified (stripping the citation
   fails it).
-- **REQ-32** "Illustrative — shape only." A NEGATIVE REQ forbidding a test from
-  asserting the illustrative Go literally. The compliance evidence is the
-  ABSENCE of such a test, which no test can assert.
+- **REQ-32** — WITHDRAWN in Phase 3c, so it has no row at all rather than an
+  empty one. "Illustrative — shape only." is a caveat on a code block, not a
+  normative clause: `rdr inspect` confirms its line falls inside no labelled
+  contract element. A clause that obliges nobody to do anything is not a
+  testable REQ, and an empty coverage cell would misreport a classification
+  error as a coverage gap. See deviation D8.
 - **REQ-35** — CLOSED in Phase 3c.
   `TestReq35_TheFourExistingReq74ProbesSurviveUnweakened` asserts the REQ-74
   test still exists and still drives all four probe vectors verbatim, which is

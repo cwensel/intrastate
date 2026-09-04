@@ -191,3 +191,34 @@ assert no totality, consistent with this reading.
 owe no text. `make check`'s docs gate is satisfied by regenerating
 `docs/cli-reference.md`, which this build does; the gate is a staleness check
 over the rendered tree, not a coverage check over `Categories()`.
+
+## D8 — REQ-32 withdrawn: "Illustrative — shape only" is not a testable clause
+
+**Type**: TEST-FIXTURE.
+**Status**: mechanical translation (REQ-list classification corrected; no
+contract text is touched and no behaviour changes).
+
+**Situation.** Phase 0 extracted `0027:§illustrative-code`'s line
+"Illustrative — shape only." as `REQ-32`, a NEGATIVE REQ reading "no test
+asserts the illustrative Go literally". Phase 1 could not cover it and left
+an empty coverage cell, which made `impl_orphans` read `1+` and the
+COMPLETION GATE stop at `stopped:req-orphans`.
+
+**Why it is not a REQ.** The line is a CAVEAT ON A CODE BLOCK — it tells the
+implementer the following snippet is non-binding shape, not a contract.
+`rdr inspect 0027 --filter elements` confirms its line (136) falls inside NO
+labelled contract element; it sits outside `0027:C1` entirely, so it carries
+no normative force. A clause that obliges nobody to do anything is not a
+testable clause. Its stated "compliance evidence" was the ABSENCE of a test,
+which no assertion can express — the tell that the extraction was wrong.
+
+**Disposition.** REQ-32 is withdrawn from `req-list.md` and its coverage row
+removed rather than left empty: an empty cell would misreport a Phase 0
+classification error as a coverage gap, and the gate would be stopping on a
+REQ that should never have existed. The snippet's actual content — the
+position-free scan's shape — is covered behaviourally by REQ-41..REQ-47.
+
+**Not done.** The gate was NOT satisfied by tagging `impl_orphans=0` over an
+empty row. Three of the five original orphans (REQ-0b, REQ-35, REQ-40) were
+closed with real mutation-verified tests; this one was withdrawn on its
+merits. `impl_orphans` is now genuinely 0.

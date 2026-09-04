@@ -186,8 +186,6 @@ cites are given per section for re-verification.
 - [REQ-31] "The `env`-chain walk in `internal/table/load.go::interpreterForm`
   is deleted: this record DECIDES that C1 subsumes it" — (§approach, line 93).
   "either way the `env` walk is removed here" — (§prerequisites, line 335).
-- [REQ-32] "Illustrative — shape only." — (§illustrative-code, line 136) —
-  NEGATIVE REQ: no test asserts the illustrative Go literally.
 - [REQ-33] "the edit is confined to `load.go`" / "`category.go`; C1's edit is
   confined to `load.go`" — (§mini-check-authority, line 157) — NEGATIVE REQ:
   `internal/table/category.go` is not edited by the predicate work.
@@ -554,3 +552,15 @@ no in-record or predecessor precedent settles them. Recorded, not blocking.
   named forms rather than on byte equality (see the ASSUMPTION above). Flagged
   because the opposite reading makes S7 a golden-file test whose maintenance
   burden and failure mode differ materially.
+
+## Withdrawn REQs
+
+**REQ-32 (withdrawn in Phase 3c) — not a testable clause.** "Illustrative —
+  shape only." (§illustrative-code, line 136) is a CAVEAT ON A CODE BLOCK
+  telling the implementer the snippet is non-binding; `rdr inspect` confirms
+  line 136 falls inside NO labelled contract element, so it carries no
+  normative force. Extracting it as a REQ was a Phase 0 classification error:
+  it obliges nobody to do anything, and its "compliance evidence" would be
+  the absence of a test, which no assertion can express. Recorded as
+  deviation D8. The snippet's actual content is covered behaviourally by the
+  C1 predicate REQs (REQ-41..REQ-47).
