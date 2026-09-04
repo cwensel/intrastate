@@ -723,8 +723,7 @@ required = true
 
 [tags.nnnn]
 provenance = "observed"
-kind = "string"
-single_valued = true
+kind = "scalar"
 
 [tags.status]
 provenance = "owned"
@@ -764,6 +763,10 @@ read_back = true
 [write.readme.edit.status]
 anchor  = "^\\| \\[{tag.nnnn}\\]\\(([^)]*)\\) \\| ([^|]*) \\| (\\w+) \\|$"
 replace = "| [{tag.nnnn}](${1}) |${2}| {status} |"
+
+[context.done]
+[context.done.match.status]
+eq = "Final"
 
 [initial]
 status = "Draft"

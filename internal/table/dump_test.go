@@ -868,6 +868,15 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		table.CatCommandShellInterpreter:   "neg/neg-command-shell-interpreter.toml",
 		table.CatCommandOutputShape:        "neg/neg-command-output-shape.toml",
 		table.CatCommandEnvConflict:        "neg/neg-command-env-conflict.toml",
+
+		// RDR 0028's six `edit`-carrier categories, registered in the same
+		// map for the same reason (`0028:C1.4`).
+		table.CatEditCarrierConflict: "neg/neg-edit-carrier-conflict.toml",
+		table.CatEditKeyMismatch:     "neg/neg-edit-key-mismatch.toml",
+		table.CatEditAnchorInvalid:   "neg/neg-edit-anchor-invalid.toml",
+		table.CatEditTemplateInvalid: "neg/neg-edit-template-invalid.toml",
+		table.CatEditClearInvalid:    "neg/neg-edit-clear-invalid.toml",
+		table.CatEditTagArgv0:        "neg/neg-edit-tag-argv0.toml",
 	}
 
 	t.Run("every category the floor names is exported", func(t *testing.T) {

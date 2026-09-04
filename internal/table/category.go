@@ -60,6 +60,30 @@ const (
 	CatCommandShellInterpreter   Category = "command_shell_interpreter"
 	CatCommandOutputShape        Category = "command_output_shape"
 	CatCommandEnvConflict        Category = "command_env_conflict"
+
+	// The six RDR 0028 `edit`-carrier categories (`0028:C1.4`), in clause
+	// order, appended after 0025:C5's six. The wire STRINGS are the
+	// contract and these identifiers are not, exactly as for 0025's.
+	//
+	// These six are the LOAD-time set and they are DISJOINT from C1.3 and
+	// C1.5's six apply-time reason tokens (`edit_anchor_unmatched`,
+	// `edit_anchor_ambiguous`, `edit_anchor_collision`,
+	// `edit_anchor_unstable`, `edit_value_multiline`,
+	// `edit_clear_undeclared`), which ride a refusal's Detail and register
+	// NOWHERE: registering one here would tell a consumer that a stale
+	// anchor is a lint defect, which `what lint does NOT prove:` denies.
+	//
+	// `edit_tag_argv0` carries the `edit_` prefix because it is this
+	// record's category, minted with the `{tag.<key>}` family C1.6
+	// introduces — it fires on `command` entries of every kind, including
+	// entries carrying no `edit` table, so the prefix names its owning
+	// contract and not the carrier it fires on.
+	CatEditCarrierConflict Category = "edit_carrier_conflict"
+	CatEditKeyMismatch     Category = "edit_key_mismatch"
+	CatEditAnchorInvalid   Category = "edit_anchor_invalid"
+	CatEditTemplateInvalid Category = "edit_template_invalid"
+	CatEditClearInvalid    Category = "edit_clear_invalid"
+	CatEditTagArgv0        Category = "edit_tag_argv0"
 )
 
 // Categories returns the closed load-category set in declaration order.
@@ -103,6 +127,17 @@ func Categories() []Category {
 		CatCommandShellInterpreter,
 		CatCommandOutputShape,
 		CatCommandEnvConflict,
+
+		// The six RDR 0028 `edit`-carrier categories, appended AFTER
+		// 0025:C5's six in C1.4 clause order. The list's size is not a
+		// contract, so a consumer asserts RELATIVE order and never a tail
+		// position or a count (`0028:C1.4` registration:).
+		CatEditCarrierConflict,
+		CatEditKeyMismatch,
+		CatEditAnchorInvalid,
+		CatEditTemplateInvalid,
+		CatEditClearInvalid,
+		CatEditTagArgv0,
 	}
 }
 

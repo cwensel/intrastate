@@ -103,6 +103,28 @@ type sourceAcc struct {
 	ExitVerdicts *map[string]string `toml:"exit_verdicts"`
 	Env          *map[string]string `toml:"env"`
 	EnvPass      *[]string          `toml:"env_pass"`
+
+	// Edit is the RDR 0028 `edit` carrier's rule-table set (`0028:C1.1`).
+	// It is a POINTER to a map for the same reason `Command` is a pointer
+	// to a slice: `edit_carrier_conflict` is keyed on the table being
+	// PRESENT, not on it being non-empty, so a bare `[write.x.edit]`
+	// beside another carrier must stay distinguishable from an absent one.
+	Edit *map[string]sourceEditRule `toml:"edit"`
+}
+
+// sourceEditRule is one `[write.<id>.edit.<key>]` table. Every field is a
+// pointer so an ABSENT field is distinguishable from an authored empty
+// one: `clear = ""` is `edit_clear_invalid` while an omitted `clear` is
+// the legal undeclared disposition (`0028:C1.1`, C1.5).
+// `Clear` decodes as `any` rather than `*string` because its defect is
+// this record's `edit_clear_invalid`, not the decoder's: `clear = true`
+// and the DEFERRED table form `clear = { replace = … }` are both
+// "outside the closed set {"line"}" (`0028:C1.4`), and a `*string` field
+// would refuse them as malformed TOML before that category could fire.
+type sourceEditRule struct {
+	Anchor  *string `toml:"anchor"`
+	Replace *string `toml:"replace"`
+	Clear   any     `toml:"clear"`
 }
 
 type sourceContext struct {

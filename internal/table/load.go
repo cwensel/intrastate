@@ -3,6 +3,7 @@ package table
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -970,7 +971,7 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		// The CARRIER, before the per-key checks: C5's arms judge the
 		// entry's own declaration, and a raw-mode arity defect must not be
 		// masked by a key that happens to name the reserved kernel key.
-		if err := carrierDefect(a, capability, id, *a.Keys); err != nil {
+		if err := carrierDefect(a, capability, id, *a.Keys, l.model.Tags); err != nil {
 			return nil, err
 		}
 
@@ -1019,6 +1020,24 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		if a.EnvPass != nil {
 			acc.EnvPass = slices.Clone(*a.EnvPass)
 		}
+		if a.Edit != nil {
+			// PRESENCE survives: a bare `[write.x.edit]` decodes to a
+			// non-nil empty map, which is what the "both" arm keys on.
+			acc.Edit = make(map[string]EditRule, len(*a.Edit))
+			for key, r := range *a.Edit {
+				rule := EditRule{}
+				if r.Anchor != nil {
+					rule.Anchor = *r.Anchor
+				}
+				if r.Replace != nil {
+					rule.Replace = *r.Replace
+				}
+				if s, ok := r.Clear.(string); ok {
+					rule.Clear = s
+				}
+				acc.Edit[key] = rule
+			}
+		}
 		out[id] = acc
 	}
 	return out, nil
@@ -1057,10 +1076,17 @@ const envReservedPrefix = "INTRASTATE_"
 // clause order C5 declares: conflict, empty, unknown placeholder, shell
 // interpreter, output shape, env conflict. Load is fail-fast, so an entry
 // carrying several reports the earliest (`0025:C5` precedence).
-func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
+func carrierDefect(
+	a sourceAcc, capability, id string, keys []string, tags map[string]TagDecl,
+) error {
 	where := capability + " " + id
 	hasPath := a.Path != nil && *a.Path != ""
 	hasCommand := a.Command != nil
+	// PRESENCE, not emptiness: `edit_carrier_conflict` follows the "both"
+	// arm's discipline, so a bare `[write.x.edit]` beside another carrier
+	// is a conflict rather than a silently ignored second carrier
+	// (`0028:C1.1`).
+	hasEdit := a.Edit != nil
 
 	// 1 — command_and_path_conflict: both or neither carrier.
 	//
@@ -1069,15 +1095,39 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 	// ignored second carrier; "neither" is keyed on neither being a
 	// USABLE carrier, which is where the old "path is absent or empty"
 	// arm lands now that a command entry is legal (REQ-7, REQ-14).
+	//
+	// The "neither" arm's PREDICATE widens to "none of the three"
+	// (`0028:C1.1`) — an `edit`-only entry would otherwise be refused as
+	// carrier-less — while its wire string stays 0025:C5's
+	// `command_and_path_conflict`. Only the message text moves, to name
+	// three carriers: the wire string is the contract and the message is
+	// not.
 	switch {
 	case a.Path != nil && a.Command != nil:
 		return fail(CatCommandAndPathConflict,
 			where+" declares both `path` and `command`; an entry carries "+
 				"exactly one carrier")
-	case !hasPath && !hasCommand:
+	case !hasPath && !hasCommand && !hasEdit:
 		return fail(CatCommandAndPathConflict,
-			where+" declares neither `path` nor `command`; an entry carries "+
-				"exactly one carrier")
+			where+" declares none of `path`, `command` or `edit`; an entry "+
+				"carries exactly one carrier")
+	}
+
+	// 1b — edit_carrier_conflict: `edit` beside another carrier, or on a
+	// read or gate entry. It is evaluated with the carrier arms because
+	// it IS a carrier arm; C1.4's five edit-table categories are decided
+	// only once the carrier is established as one (`0028:C1.4`
+	// precedence:).
+	if hasEdit {
+		switch {
+		case a.Path != nil || a.Command != nil:
+			return fail(CatEditCarrierConflict,
+				where+" declares `edit` beside another carrier; an entry "+
+					"carries exactly one of `path`, `command` or `edit`")
+		case capability != "write":
+			return fail(CatEditCarrierConflict,
+				where+" declares `edit`, which is admissible on write entries only")
+		}
 	}
 
 	if hasCommand {
@@ -1101,6 +1151,16 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 		for _, el := range argv {
 			if slices.Contains(commandPlaceholders, el) {
 				continue
+			}
+			// `{tag.<key>}` joins the vocabulary as a FAMILY, admitted
+			// whole-element for a key the model declares (`0028:C1.6`).
+			// An undeclared key, and a `{…}` element that is neither
+			// `{artifact}` nor a declared `{tag.<key>}`, keep 0025:C5's
+			// unchanged `command_unknown_placeholder` wire string.
+			if key, ok := commandTagKey(el); ok {
+				if _, declared := tags[key]; declared {
+					continue
+				}
 			}
 			// A brace-bearing element carrying whitespace is a command
 			// STRING — the `sh -c "cat {artifact}"` shape — which clause 4
@@ -1131,6 +1191,24 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 					"; inline shell is not a declared command; put it in a script "+
 					"and declare the script as argv0")
 		}
+
+		// edit_tag_argv0 (`0028:C1.4`, C1.6) — a `{tag.<key>}` element at
+		// argv0 of a read, gate or WRITE entry's command. The executable
+		// is the one word a reviewer must be able to read off the model,
+		// and a caller-bound argv0 makes the interpreter deny-list
+		// unenforceable against a name that does not exist until
+		// invocation. It is statically decidable, so it is refused where
+		// it is visible rather than at spawn.
+		//
+		// The rule is on THIS FAMILY only: `{artifact}` at argv0 stays
+		// admitted, having no such rule and no such reviewer promise to
+		// break.
+		if _, ok := commandTagKey(argv[0]); ok {
+			return fail(CatEditTagArgv0,
+				where+" declares the placeholder "+argv[0]+" at argv0; the "+
+					"executable must be readable off the model, so a "+
+					"`{tag.<key>}` element is admitted at any later position only")
+		}
 	}
 
 	// 5 — command_output_shape.
@@ -1155,6 +1233,127 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 					where+" names the `env_pass` variable "+v+", which matches "+
 						"the reserved "+envReservedPrefix+" prefix the overlay owns")
 			}
+		}
+	}
+
+	// C1.4's remaining four edit-table categories, evaluated after
+	// 0025:C5's clauses 1–6 and in C1.4's own registration order
+	// (`0028:C1.4` precedence:).
+	if hasEdit {
+		return editTableDefect(*a.Edit, where, keys, tags)
+	}
+	return nil
+}
+
+// commandTagKey reports the tag key a WHOLE argv element names as
+// `{tag.<key>}`, and whether the element takes that form at all. It is
+// whole-element by construction — `x{tag.nnnn}` is not a placeholder —
+// which is 0025:C2's substitution rule that C1.6 joins rather than
+// widens.
+func commandTagKey(el string) (string, bool) {
+	if !strings.HasPrefix(el, editTagPrefix) || !strings.HasSuffix(el, "}") {
+		return "", false
+	}
+	key := el[len(editTagPrefix) : len(el)-1]
+	if key == "" || strings.ContainsAny(key, "{}") {
+		return "", false
+	}
+	return key, true
+}
+
+// editTableDefect reports the FIRST C1.4 edit-table defect an entry
+// carries, in the clause's registration order: key mismatch, anchor
+// invalid, template invalid, clear invalid.
+//
+// Sibling `edit.<key>` tables are map-ranged, exactly as `accessorTable`'s
+// entries are: which of two equally-defective tables is reported is
+// unspecified and no test may assert it. The CATEGORY is not unspecified,
+// which is why each step sweeps every rule before the next step runs
+// (`0028:C1.4` precedence:).
+func editTableDefect(
+	rules map[string]sourceEditRule, where string, keys []string,
+	tags map[string]TagDecl,
+) error {
+	// 2 — edit_key_mismatch: `keys` and the rule tables must be in
+	// bijection, which is what makes "every planned key has a rule" a
+	// lint-time guarantee rather than an apply-time surprise.
+	for _, key := range keys {
+		if _, ok := rules[key]; !ok {
+			return fail(CatEditKeyMismatch,
+				where+" declares the key "+key+" with no `edit."+key+"` table")
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		if !slices.Contains(keys, key) {
+			return fail(CatEditKeyMismatch,
+				where+" declares an `edit."+key+"` table for a key not in `keys`")
+		}
+	}
+
+	// A tag key is bindable at invocation only with `observed`
+	// provenance: `flow_input.go::parseTags` refuses an owned key
+	// (`flow-tag-owned`) and the recognized key (`flow-tag-reserved`), so
+	// a declared key of either kind is structurally unbindable and naming
+	// one is a LINT defect rather than a guaranteed runtime failure
+	// (`0028:C1.2`).
+	bindable := func(key string) bool {
+		return tags[key].Provenance == ProvenanceObserved
+	}
+
+	// 3 — edit_anchor_invalid, over every rule. The anchor is COMPILED
+	// here, with every `{tag.<key>}` replaced by a quoted probe, because
+	// clause 4 needs its capture-group arity and `regexp.QuoteMeta` emits
+	// no group syntax to perturb it.
+	compiled := make(map[string]*regexp.Regexp, len(rules))
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		r := rules[key]
+		anchor := ""
+		if r.Anchor != nil {
+			anchor = *r.Anchor
+		}
+		segs, err := ParseEditAnchor(anchor, bindable)
+		if err != nil {
+			return fail(CatEditAnchorInvalid,
+				where+" `edit."+key+"` anchor: "+err.Error())
+		}
+		re, err := regexp.Compile(EditAnchorProbe(segs))
+		if err != nil {
+			return fail(CatEditAnchorInvalid,
+				where+" `edit."+key+"` anchor does not compile as RE2: "+err.Error())
+		}
+		compiled[key] = re
+	}
+
+	// 4 — edit_template_invalid, over every rule.
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		r := rules[key]
+		replace := ""
+		if r.Replace != nil {
+			replace = *r.Replace
+		}
+		re := compiled[key]
+		if _, err := ParseEditReplace(
+			replace, key, re.NumSubexp(), re.SubexpNames(),
+		); err != nil {
+			return fail(CatEditTemplateInvalid,
+				where+" `edit."+key+"` replace: "+err.Error())
+		}
+	}
+
+	// 5 — edit_clear_invalid: `clear` outside the closed set {"line"}.
+	// The deferred table form `clear = { replace = … }` and a boolean
+	// land here rather than as malformed TOML, which is why the decoded
+	// field is `any`.
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		r := rules[key]
+		if r.Clear == nil {
+			continue
+		}
+		s, ok := r.Clear.(string)
+		if !ok || s != EditClearLine {
+			return fail(CatEditClearInvalid,
+				where+" `edit."+key+"` declares a `clear` outside the closed "+
+					"set {\""+EditClearLine+"\"}")
 		}
 	}
 	return nil

@@ -55,8 +55,42 @@ func DumpAll(models []*Model) string {
 func writeModel(b *strings.Builder, m *Model) {
 	fmt.Fprintf(b, "MODEL %s rows=%d outcomes=%s\n",
 		m.ID, len(m.Rows), strings.Join(m.Outcomes, ","))
+	writeEditCarriers(b, m)
 	for _, r := range m.Rows {
 		writeRow(b, m, r)
+	}
+}
+
+// writeEditCarriers renders one line per declared line rule, so an
+// `edit`-carried writer is VISIBLE on the review surface (`0028:C1.1`,
+// A6). A dump that rendered an `edit` model identically to a carrier-less
+// one would hide the writer from the artifact a reviewer reads — the
+// surface would not be the model that runs.
+//
+// It emits nothing for a model carrying no `edit` table, so the dump of
+// every model predating this carrier is byte-identical to what it was.
+// The walk is over SORTED entry ids and SORTED keys, never a map's range
+// order, for the same reason every other dump site is: repeated dumps of
+// one model must be byte-identical (`0002:C19`).
+func writeEditCarriers(b *strings.Builder, m *Model) {
+	for _, id := range slices.Sorted(dumpKeys(m.Writers)) {
+		acc := m.Writers[id]
+		for _, key := range slices.Sorted(dumpKeys(acc.Edit)) {
+			rule := acc.Edit[key]
+			fmt.Fprintf(b, "ACCESSOR write.%s carrier=edit key=%s "+
+				"anchor=%q replace=%q clear=%q\n",
+				id, key, rule.Anchor, rule.Replace, rule.Clear)
+		}
+	}
+}
+
+func dumpKeys[V any](m map[string]V) func(func(string) bool) {
+	return func(yield func(string) bool) {
+		for k := range m {
+			if !yield(k) {
+				return
+			}
+		}
 	}
 }
 

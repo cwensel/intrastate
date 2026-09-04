@@ -946,7 +946,13 @@ func TestReq79_TheCategorySetIsAppendOnlyAndDuplicateFree(t *testing.T) {
 	// "append-only" means for a consumer enumerating the list, and it is
 	// the property a count assertion would falsely stand in for (REQ-79
 	// forbids the count).
-	head := all[:len(all)-len(six)]
+	//
+	// The prefix is located RELATIVELY, at the index of the first
+	// addition, and never as `len(all) - 6`: the list is append-only and
+	// its size is explicitly not a contract, so a tail-position slice is a
+	// scheduled false positive that fires at the next append — which
+	// `0028:C1.4` duly makes (RDR 0028 deviations D1).
+	head := all[:slices.Index(all, six[0])]
 	if slices.Contains(head, table.CatCommandAndPathConflict) {
 		t.Error("a command category is registered before the tail; additions " +
 			"must be visible only at the tail")

@@ -172,6 +172,37 @@ type Accessor struct {
 	// EnvPass names whole parent variables to forward. It admits no
 	// pattern (`0025:C4`).
 	EnvPass []string
+
+	// RDR 0028 `0028:C1.1` — the `edit` carrier, the THIRD member of the
+	// exactly-one carrier rule and admissible on WRITE entries only. Edit
+	// holds one rule table per member of `keys`, keyed by that key.
+	//
+	// PRESENCE, not length, is what the carrier arms key on: an empty
+	// `[write.x.edit]` beside a `path` is `edit_carrier_conflict`, never a
+	// silently ignored second carrier. A decoded empty-but-present table
+	// therefore has to survive as a NON-NIL empty map.
+	Edit map[string]EditRule
+}
+
+// EditRule is one declared line rule: the identity `(entry, key)` a
+// refusal Detail names as `<id>.edit.<key>` (`0028:C1.1`).
+//
+// The three fields carry the AUTHORED bytes. Both templates are validated
+// — parsed into segments — at LOAD, so a defect is a load refusal; the
+// segments themselves are not carried, because the apply binding is also
+// constructible from an in-memory model that never passed the loader and
+// must parse for itself either way (`0028:C1.2` parse once:, C1.1
+// in-memory:).
+type EditRule struct {
+	// Anchor is the RE2 pattern selecting the line, with `{tag.<key>}`
+	// placeholders unsubstituted.
+	Anchor string
+	// Replace is the WHOLE replacement line, terminator excluded.
+	Replace string
+	// Clear is the disposition of a planned `<clear>`, from the closed set
+	// {"line"}. Empty means undeclared, which refuses a planned `<clear>`
+	// before mutation (`0028:C1.5`).
+	Clear string
 }
 
 // EmitDecl is one emit key's declaration (`0024:C3`).

@@ -58,8 +58,7 @@ required = true
 
 [tags.nnnn]
 provenance = "observed"
-kind = "string"
-single_valued = true
+kind = "scalar"
 
 [tags.status]
 provenance = "owned"
@@ -83,6 +82,10 @@ read_back = true
 [write.record.edit.status]
 anchor  = "^- \\*\\*Status\\*\\*: (.*)$"
 replace = "- **Status**: {status}"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
 
 [initial]
 status = "draft"
@@ -761,8 +764,7 @@ required = true
 
 [tags.nnnn]
 provenance = "observed"
-kind = "string"
-single_valued = true
+kind = "scalar"
 
 [tags.status]
 provenance = "owned"
@@ -790,6 +792,10 @@ command = ["rdr", "check", "{tag.nnnn}", "{artifact}"]
 exit_verdicts = { "0" = "allow", "1" = "deny" }
 keys = ["status"]
 timeout = "2s"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
 
 [initial]
 status = "draft"
