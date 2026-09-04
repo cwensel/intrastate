@@ -73,6 +73,21 @@ const (
 	// GROUP and the `findings[]` carriage.
 	codeWriteEditRefused = "flow-write-edit-refused"
 
+	// codeRequestRefused is the sibling of `codeWriteEditRefused` for every
+	// declared-request refusal a line edit did NOT mint.
+	//
+	// The two are split by ORIGIN, not by phase or carrier. C1.6's argv
+	// preconditions — an unbound `{tag.<key>}`, a `-`-prefixed bound value
+	// — are checked during argv substitution, which runs for readers,
+	// gates and command-backed WRITERS alike; the read-back preconditions
+	// come from an edit writer and are still about a reader's argv. None
+	// of those has a rule `<id>.edit.<key>` to name, so reporting them
+	// under the line-edit code invented a subject that does not exist.
+	//
+	// Its SPELLING is this stage's to choose on the same terms as its
+	// sibling's: what C1.3 fixes is the exit GROUP, which is 2 on both.
+	codeRequestRefused = "flow-accessor-request-refused"
+
 	codeReadBackMismatch   = "flow-write-readback-mismatch"
 	codeReadBackIncomplete = "flow-write-readback-incomplete"
 	codeReadBackTimeout    = "flow-write-readback-timeout"

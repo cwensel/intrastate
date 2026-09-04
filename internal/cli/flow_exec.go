@@ -376,6 +376,28 @@ const (
 	phaseWrite
 )
 
+// accessorSubject names the accessor the way the invoking phase ran it,
+// matching the spelling each phase's other refusals already use: the read
+// arm says "the read accessor `x`" as `codeReadIncomplete` does, the gate
+// arm says "the gate `x`" as `codeGateIndeterminate` does, and the write
+// arm says "the write accessor `x`" as the read-back refusals do. Naming
+// the role the accessor actually ran under is the whole point — the
+// alternative is misattributing a failure to a role that never ran.
+//
+// The phase is the right axis for the SUBJECT, and only for the subject.
+// Which ENVELOPE gets built is decided by the refusal's origin, because a
+// write-phase refusal is not necessarily a line edit's.
+func accessorSubject(at phase, id string) string {
+	switch at {
+	case phaseGate:
+		return "the gate `" + id + "`"
+	case phaseWrite:
+		return "the write accessor `" + id + "`"
+	default:
+		return "the read accessor `" + id + "`"
+	}
+}
+
 // accessorFailure maps one accessor refusal class onto its CLI code (A-9).
 //
 // The exit-3 population is exactly five classes (REQ-19, REQ-20): accessor
@@ -440,7 +462,46 @@ func accessorFailureOf(refusal accessor.Refusal, at phase) *clierr.CLIError {
 		// only in `detail`, because a per-subject record is what
 		// `docs/cli-output-contract.md` requires of a failure that names
 		// a subject other than a flag.
+		//
+		// The marker is minted at three different KINDS of site and only
+		// ONE of them is a line edit, so the envelope splits on the
+		// refusal's ORIGIN — `DeclaredEdit()` — and not on the invoking
+		// phase or the writer's carrier, neither of which can stand in for
+		// it:
+		//
+		//   - `flowbind.EditWriter` mints the rule-scoped and entry-level
+		//     refusals C1.3 was written about. These have a rule
+		//     `<id>.edit.<key>` to name and are the only ones that may be
+		//     reported as a line edit.
+		//   - `cmdbind.substitute` mints C1.6's argv preconditions, which
+		//     run for EVERY command-backed accessor. A reader's unbound
+		//     `{tag.<key>}` arrives at `phaseRead`, a gate's at
+		//     `phaseGate` — and a command-backed WRITER's at `phaseWrite`,
+		//     which is why the phase is not the axis. That writer may
+		//     carry no `edit` table at all.
+		//   - the executor mints the read-back preconditions. Those are
+		//     gated on `Edit != nil`, so the CARRIER is not the axis
+		//     either: they arrive from an edit writer and are still about
+		//     the READER's argv, with no rule to name.
+		//
+		// Reporting any of the latter two as a line edit invented a rule
+		// subject that does not exist and put an argv complaint on a
+		// caller's line-edit count. The exit GROUP is 2 on every arm, so
+		// C1.3's exit-group sentence is satisfied throughout and no
+		// contract moves.
 		if refusal.DeclaredRequest() {
+			if !refusal.DeclaredEdit() {
+				// No `findings[]`: `editRefusalFindings` codes its entry as
+				// a line-edit refusal and carries a Detail the caller reads
+				// as a rule id `<id>.edit.<key>`. There is no such rule
+				// here. The offending placeholder already reaches the
+				// caller in `refusal.Detail`, which `withStderrTail`
+				// appends, so the scalar subject is the accessor and rides
+				// `param`.
+				return userErr(codeRequestRefused, id,
+					accessorSubject(at, id)+
+						" refused this request before running")
+			}
 			return &clierr.CLIError{
 				Code:  codeWriteEditRefused,
 				Group: clierr.GroupUserEnv,

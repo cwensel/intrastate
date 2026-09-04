@@ -13,6 +13,7 @@ package accessor
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -352,6 +353,23 @@ type Refusal struct {
 	// answer, and a caller must not be able to assert it.
 	declaredRequest bool
 
+	// declaredEdit narrows `declaredRequest` to the subset a DECLARED LINE
+	// EDIT minted — the rule-scoped and entry-level refusals of
+	// `flowbind.EditWriter`, whose Detail names a rule `<id>.edit.<key>`
+	// or the entry itself.
+	//
+	// It exists because `declaredRequest` alone is not that subset and
+	// never was. The same marker rides every argv precondition
+	// `cmdbind.substitute` raises — for a reader, a gate or a
+	// command-backed WRITER — and the read-back preconditions the executor
+	// raises, none of which have any edit rule to name. Reporting one of
+	// those under the line-edit envelope invents a rule subject that does
+	// not exist, so the ORIGIN is the discriminator and neither the
+	// invoking phase nor the writer's carrier can stand in for it: an edit
+	// writer's read-back precondition is `Edit != nil` and still not a
+	// line-edit refusal.
+	declaredEdit bool
+
 	// applied records the post-mutation sense. It is unexported because
 	// only the write path — which knows whether the command already ran —
 	// may set it.
@@ -363,6 +381,12 @@ type Refusal struct {
 // instead of `execution_failure`'s default exit 3, because re-running the
 // same request unchanged cannot help (`0028:C1.3` EXIT GROUP:).
 func (r Refusal) DeclaredRequest() bool { return r.declaredRequest }
+
+// DeclaredEdit reports whether a declared line edit minted this refusal.
+// It IMPLIES DeclaredRequest — both are exit 2 — and selects which
+// envelope the CLI builds: only a true answer names a line edit and
+// carries the rule id in `findings[]`.
+func (r Refusal) DeclaredEdit() bool { return r.declaredEdit }
 
 // Applied reports the post-mutation sense: whether the write command
 // already ran when this refusal was minted. It is TRUE for
@@ -513,3 +537,22 @@ func (e *ExecError) Unwrap() error {
 // than widening the seam (JDR 0003 §D3 (b)).
 var ErrDeclaredRequest = errors.New("the refusal is about the request, " +
 	"not the environment; re-running it unchanged cannot help")
+
+// ErrDeclaredEdit is the typed `Err` the EDIT WRITER wraps to say that a
+// declared line edit is what refused. It WRAPS `ErrDeclaredRequest`, so
+// `errors.Is(err, ErrDeclaredRequest)` still answers true and the exit
+// group is unchanged — this narrows the marker rather than adding a
+// second, independent one.
+//
+// It exists because the request marker is minted at three kinds of site
+// and only one of them is a line edit: `cmdbind.substitute`'s argv
+// preconditions travel on EVERY command-backed accessor whatever its
+// role, and the executor's read-back preconditions are about the
+// READER's argv even though an edit writer is what raised them. Only a
+// refusal carrying THIS sentinel has a rule `<id>.edit.<key>` to name,
+// so only it may be reported as one.
+//
+// It adds no refusal CLASS (REQ-42): the class stays `execution_failure`
+// and it travels on the existing `Err` slot, exactly as its parent does.
+var ErrDeclaredEdit = fmt.Errorf("a declared line edit refused: %w",
+	ErrDeclaredRequest)

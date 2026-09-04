@@ -256,7 +256,11 @@ func (w *EditWriter) prepare(
 				// rule-scoped refusals do (`0028:C1.3` EXIT GROUP:). A
 				// missing `--tag` is the one defect re-running the same
 				// request unchanged can never repair.
-				Err: accessor.ErrDeclaredRequest,
+				//
+				// The EDIT sentinel, which wraps the request one: this is
+				// an edit ANCHOR's own placeholder, so the rule it names
+				// exists and the line-edit envelope is the right one.
+				Err: accessor.ErrDeclaredEdit,
 			}
 		}
 		re, err := regexp.Compile(pattern)
@@ -557,7 +561,12 @@ func (w *EditWriter) ruleErr(key, token, detail string) error {
 		// exit-2 group rather than `execution_failure`'s default exit 3.
 		// An OS error reading the target does NOT carry this: that one
 		// really is the environment and a re-run may well succeed.
-		Err: accessor.ErrDeclaredRequest,
+		//
+		// The EDIT sentinel, which WRAPS the request one so the group is
+		// unchanged. It is what entitles the CLI to name a rule
+		// `<id>.edit.<key>` in `findings[]`: the argv preconditions that
+		// carry only the parent marker have no rule to name.
+		Err: accessor.ErrDeclaredEdit,
 	}
 }
 
@@ -567,7 +576,9 @@ func (w *EditWriter) ruleErr(key, token, detail string) error {
 func (w *EditWriter) entryErr(token, detail string) error {
 	return &accessor.ExecError{
 		Detail: token + ": " + w.name + ": " + detail,
-		Err:    accessor.ErrDeclaredRequest,
+		// The EDIT sentinel: entry-level, but still a declared line
+		// edit's own refusal and named against the entry it belongs to.
+		Err: accessor.ErrDeclaredEdit,
 	}
 }
 

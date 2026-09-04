@@ -86,8 +86,12 @@ func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err er
 		r.Detail = ee.Detail
 	}
 	// The one bit RDR 0028's exit-group clause needs, carried on the
-	// existing `Err` slot rather than through a wider seam.
+	// existing `Err` slot rather than through a wider seam. `declaredEdit`
+	// narrows it to the refusals a line edit minted: `ErrDeclaredEdit`
+	// WRAPS `ErrDeclaredRequest`, so the group answer is unchanged and
+	// only the envelope's choice of subject turns on the narrower bit.
 	r.declaredRequest = errors.Is(err, ErrDeclaredRequest)
+	r.declaredEdit = errors.Is(err, ErrDeclaredEdit)
 	return r
 }
 
