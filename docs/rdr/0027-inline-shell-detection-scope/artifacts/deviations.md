@@ -28,7 +28,9 @@ five `edit_*` appends cannot break it. No contract contradicted.
 
 ## D2 — Is the Phase 3 description surface total over `Categories()`?
 
-**Type**: IMPL-DECISION. **Status**: OPEN (pre-seeded, 7.1 pairwise 0027×0028 PW2).
+**Type**: IMPL-DECISION.
+**Status**: decided (was OPEN, pre-seeded 7.1 PW2) — per-category opt-in;
+full decision and grounds under "D2 — DISPOSED" below.
 
 **Situation.** Phase 3 adds an accessor pairing a category with its text,
 rendered on `--help-all` and mirrored into `docs/cli-reference.md`. If that
@@ -75,7 +77,8 @@ contradicted.
 
 ## D4 — S4-style green row `["xargs","busybox","sh","-c","echo"]` refuses under C1
 
-**Type**: TEST-FIXTURE. **Status**: mechanical translation (fixture corrected;
+**Type**: TEST-FIXTURE.
+**Status**: mechanical translation (fixture corrected;
 assertion NOT relaxed).
 
 **Situation.** `Req12_TheInterpreterSetStaysOpenUnderThePositionFreeScan`
@@ -105,7 +108,8 @@ a wrapper, still on the OPEN-deny-list axis. The predicate is unchanged.
 
 ## D5 — `table.CategoryDescription` is a NEW exported surface
 
-**Type**: SPEC-UNDER. **Status**: mechanical translation (surface named by
+**Type**: SPEC-UNDER.
+**Status**: mechanical translation (surface named by
 REQ-37/REQ-38 as an obligation; the SYMBOL is unpinned).
 
 **Situation.** `0027:REQ-37` states in as many words that "No description
@@ -126,7 +130,8 @@ registered via `withExtendedHelp` and mirrored by
 
 ## D6 — intrastate#q2q1 prerequisite (REQ-40)
 
-**Type**: DEPENDENCY-LIMIT. **Status**: mechanical translation (discharged by
+**Type**: DEPENDENCY-LIMIT.
+**Status**: mechanical translation (discharged by
 recording, per the clause's own terms).
 
 **Situation.** `0027:§prerequisites` requires "intrastate#q2q1's disposition
@@ -143,7 +148,8 @@ proof over all eight of `0027:S3`'s forms, which is what the clause asks for.
 
 ## D7 — promise-half fixture omits `[tags.recognized]` and never reaches C5
 
-**Type**: TEST-FIXTURE. **Status**: mechanical translation (fixture completed;
+**Type**: TEST-FIXTURE.
+**Status**: mechanical translation (fixture completed;
 assertion NOT relaxed).
 
 **Situation.** `Req20_TheAdmittedFormDisclosureLivesOnTheHelpSurfaceNotInARefusal`
@@ -166,7 +172,8 @@ before this run only because the predicate arm was unreachable.
 
 ## D2 — DISPOSED: the description surface is PER-CATEGORY OPT-IN
 
-**Type**: IMPL-DECISION. **Status**: decided (was OPEN, pre-seeded 7.1 PW2).
+**Type**: IMPL-DECISION.
+**Status**: decided (was OPEN, pre-seeded 7.1 PW2).
 
 **Decision.** Per-category opt-in. `table.CategoryDescription(Category)
 (string, bool)` returns text where declared and `false` otherwise;
