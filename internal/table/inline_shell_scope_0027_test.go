@@ -496,7 +496,15 @@ func TestReq12_TheInterpreterSetStaysOpenUnderThePositionFreeScan(t *testing.T) 
 		{"python3", "-c", "print(1)"},
 		{"env", "-i", "python3", "-c", "print(1)"},
 		{"timeout", "5", "nodejs", "-e", "1"},
-		{"xargs", "busybox", "sh", "-c", "echo"},
+		// `busybox` as an unlisted spelling taking an inline-code flag.
+		// DEVIATION D4 (TEST-FIXTURE): this row was authored as
+		// `["xargs","busybox","sh","-c","echo"]`, which carries a real `sh`
+		// at i=2 and its own `-c` at j=3 and so refuses under C1's `exists
+		// i < j` quantifier — the same shape `Req28_…` requires to refuse
+		// (`["wc","-l","python","-c"]`). The discriminating property the row
+		// exists for is that `busybox` is UNLISTED, which needs no listed
+		// pair beside it.
+		{"xargs", "busybox", "-c", "echo"},
 	} {
 		wantAdmitted(t, argv)
 	}

@@ -1028,10 +1028,12 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 // A placeholder is recognized only as a WHOLE argv element.
 var commandPlaceholders = []string{"{artifact}"}
 
-// shellInterpreters is C5's OPEN deny-list: argv0 forms that take inline
-// code on a flag. It is deliberately not closed — an unlisted interpreter
-// is admitted, so the check raises the cost of an inline-shell carrier
-// without claiming to make one impossible (`0025:C5`).
+// shellInterpreters is the OPEN deny-list: interpreter words that take
+// inline code on a flag, each holding its OWN inline-code flags. It is
+// deliberately not closed — an unlisted spelling is admitted, so the check
+// raises the cost of an inline-shell carrier without claiming to make one
+// impossible. The list grows only by amending the clause (`0027:C1`,
+// succeeding `0025:C5`'s interpreter-set line).
 var shellInterpreters = map[string][]string{
 	"sh":     {"-c"},
 	"bash":   {"-c"},
@@ -1105,11 +1107,11 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 			// owns; reading it as a malformed placeholder would report the
 			// wrong defect and mask the interpreter form (deviations D6).
 			// That exemption belongs to the INTERPRETER FORM, not to
-			// whitespace as such: clause 4 fires only when argv0 (after the
-			// `env` walk) names a listed interpreter, so under any other
-			// argv0 an exempted element is owned by nothing and would reach
-			// the executor as literal, unsubstituted argv — the outcome C2
-			// forbids.
+			// whitespace as such: clause 4 fires only when some argv word
+			// names a listed interpreter followed by one of its inline-code
+			// flags (`0027:C1`), so under any other argv an exempted element
+			// is owned by nothing and would reach the executor as literal,
+			// unsubstituted argv — the outcome C2 forbids.
 			if strings.ContainsAny(el, "{}") &&
 				(!isInterp || strings.IndexFunc(el, unicode.IsSpace) < 0) {
 				return fail(CatCommandUnknownPlaceholder,
@@ -1120,7 +1122,9 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 			}
 		}
 
-		// 4 — command_shell_interpreter: argv0 plus an inline-code flag.
+		// 4 — command_shell_interpreter: a listed interpreter word plus one
+		// of its inline-code flags at any later argv position, under any
+		// prefix (`0027:C1`, succeeding `0025:C5`'s argv0 line).
 		if isInterp {
 			return fail(CatCommandShellInterpreter,
 				where+" declares the interpreter form "+interpEl+
@@ -1156,36 +1160,46 @@ func carrierDefect(a sourceAcc, capability, id string, keys []string) error {
 	return nil
 }
 
-// interpreterForm reports the offending element when argv names a known
-// interpreter followed by that interpreter's inline-code flag, walking
-// through an `env` chain so `["env", "sh", "-c", …]` is caught too.
+// interpreterForm reports the offending pair when argv carries a listed
+// interpreter word followed, at ANY later argv position, by one of THAT
+// interpreter's inline-code flags — under any prefix (`env` and its
+// options, `nice`, `timeout`, `xargs`, `doas`, …). It is a two-index scan:
+// refuse iff there exist i < j with `filepathBase(argv[i])` a listed
+// interpreter and `argv[j]` one of its listed flags, reporting
+// `argv[i] + " " + argv[j]` for the lowest i, then the lowest j.
+//
+// Nothing before argv[i] is read: no wrapper table exists and none may be
+// added, so an unenumerated prefix is caught by the same rule the named
+// ones are. A listed word with no qualifying flag after it does not stop
+// the scan — the tie-break is on the lowest PAIR, not the lowest listed
+// basename. The scan iterates argv positions, never `shellInterpreters`,
+// so the reported form cannot depend on map iteration order.
+//
+// The check reads argv WORDS only: it never splits a word on whitespace,
+// and never reads stdin, files, PATH, or the resolved binary. A shell
+// string carried in ONE word (`env -S "sh -c …"`) and an interpreter
+// reading its script from stdin (`sh -s`, bare `sh`, `python -`) are out
+// of scope BY NAME and stay green (`0027:C1`).
 func interpreterForm(argv []string) (string, bool) {
-	i := 0
-	for i < len(argv) && filepathBase(argv[i]) == "env" {
-		i++
-		// Skip `env`'s own NAME=VALUE assignments.
-		for i < len(argv) && strings.Contains(argv[i], "=") {
-			i++
+	for i, word := range argv {
+		flags, known := shellInterpreters[filepathBase(word)]
+		if !known {
+			continue
 		}
-	}
-	if i >= len(argv) {
-		return "", false
-	}
-	flags, known := shellInterpreters[filepathBase(argv[i])]
-	if !known {
-		return "", false
-	}
-	for _, arg := range argv[i+1:] {
-		if slices.Contains(flags, arg) {
-			return argv[i] + " " + arg, true
+		for _, arg := range argv[i+1:] {
+			if slices.Contains(flags, arg) {
+				return word + " " + arg, true
+			}
 		}
 	}
 	return "", false
 }
 
-// filepathBase is `path.Base` over the declared argv0 spelling, so
-// `/bin/sh -c` is recognized as the same form as `sh -c`. It stays a
-// string operation: this package performs no path RESOLUTION (`0002:EIA`).
+// filepathBase is `path.Base` over a declared argv word, so `/bin/sh -c`
+// is recognized as the same form as `sh -c`. The post-slash segment is
+// matched byte-exactly — no suffix, alias, or case folding (`0027:C1`). It
+// stays a string operation: this package performs no path RESOLUTION
+// (`0002:EIA`).
 func filepathBase(s string) string {
 	if i := strings.LastIndexByte(s, '/'); i >= 0 {
 		return s[i+1:]
