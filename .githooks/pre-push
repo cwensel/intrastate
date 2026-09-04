@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Pre-push hook: refuse to publish commits carrying agent attribution.
+#
+# Banned in a commit message:
+#   Co-Authored-By: ...                   any co-author trailer
+#   Claude-<Anything>: ...                e.g. Claude-Session, Claude-Model
+#   Generated with ... Claude Code        attribution blurb
+#   claude.ai/code                        session links
+#
+# Authorship in this repository is the commit's single Author header.
+#
+# The commit-msg hook checks the same patterns, but it does not run for
+# rebase, merge, cherry-pick, revert or --no-verify -- which is exactly how
+# such trailers reach a branch tip in practice. This push-time check reads
+# the refs git feeds it on stdin, so it judges what is actually being
+# published rather than whatever happens to be checked out.
+#
+# Bypass with `git push --no-verify` if you must.
+
+set -uo pipefail
+
+zero=$(git hash-object --stdin </dev/null | tr '[:xdigit:]' '0')
+attrib_failed=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+	# Branch deletion: nothing to inspect.
+	[ "$local_sha" = "$zero" ] && continue
+
+	if [ "$remote_sha" = "$zero" ]; then
+		# New branch on the remote. Bound the walk to commits not already
+		# reachable from some other remote ref, so creating a branch does
+		# not re-scan (and re-litigate) all of published history.
+		mapfile -t range_args < <(git for-each-ref --format='^%(refname)' refs/remotes/)
+		commits=$(git rev-list "$local_sha" "${range_args[@]}" 2>/dev/null)
+	else
+		commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null)
+	fi
+
+	[ -z "$commits" ] && continue
+
+	while read -r sha; do
+		[ -z "$sha" ] && continue
+
+		# Report which shape hit so the fix is obvious without re-reading
+		# the commit.
+		msg=$(git log -1 --pretty='%B' "$sha")
+		trailer=""
+		if printf '%s\n' "$msg" | grep -Eiq '^[[:space:]]*Co-Authored-By[[:space:]]*:'; then
+			trailer="Co-Authored-By"
+		elif printf '%s\n' "$msg" | grep -Eiq '^[[:space:]]*Claude-[A-Za-z0-9_-]+[[:space:]]*:'; then
+			trailer="Claude-*"
+		elif printf '%s\n' "$msg" | grep -Eiq 'Generated with .*Claude Code|claude\.ai/code'; then
+			trailer="Claude Code link"
+		fi
+
+		if [ -n "$trailer" ]; then
+			if [ "$attrib_failed" -eq 0 ]; then
+				echo "pre-push: refusing to push commits with agent-attribution trailers:" >&2
+				echo "" >&2
+			fi
+			echo "  [$trailer] $(git log -1 --pretty='%h %s' "$sha")" >&2
+			attrib_failed=1
+		fi
+	done <<<"$commits"
+done
+
+if [ "$attrib_failed" -ne 0 ]; then
+	cat >&2 <<'EOF'
+
+Commit messages in this repository must not carry agent attribution:
+Co-Authored-By trailers, Claude-* trailers (Claude-Session and friends), or
+"Generated with Claude Code" / claude.ai/code links. Authorship is the
+Author header alone.
+
+Rewrite the named commits before pushing, e.g. to strip them across a range:
+
+    git filter-branch -f --msg-filter \
+      'grep -Eiv "^[[:space:]]*(Co-Authored-By|Claude-[A-Za-z0-9_-]+)[[:space:]]*:|Generated with .*Claude Code|claude\.ai/code"' \
+      <base>..HEAD
+
+Bypass (not recommended — published attribution requires a force-push to
+remove):
+    git push --no-verify
+EOF
+	exit 1
+fi
+
+exit 0
