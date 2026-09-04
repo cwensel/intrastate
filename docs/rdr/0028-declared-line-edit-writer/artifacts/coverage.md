@@ -59,8 +59,8 @@ Test files:
 | REQ-41 | TestReq40And41And42_ARefusedEditIsExecutionFailureNotAppliedWithARuleScopedDetail |
 | REQ-42 | TestReq40And41And42_ARefusedEditIsExecutionFailureNotAppliedWithARuleScopedDetail |
 | REQ-43 | TestReq43And113_ADeclaredLineEditRefusalTakesTheExit2Group; TestReq43_TheDiscriminatorLeavesGenuineEnvironmentFailuresAtExit3; TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine |
-| REQ-44 |  |
-| REQ-45 |  |
+| REQ-44 | `TestReq43And113_ADeclaredLineEditRefusalTakesTheExit2Group` + `TestReq114_TheRefusalCarriesTheRuleAndTokenInFindings` (negative: property asserted instead) |
+| REQ-45 | `TestReq45_TheExecutorTimeoutArmDoesNotWrapTheRequestSentinel` |
 | REQ-46 | TestReq46And48_AtomicityIsOneEntryOverOneFileAndNeverCrossEntry |
 | REQ-47 | TestReq31And47_AnAppliedEditRewritesExactlyTheAnchoredLine |
 | REQ-48 | TestReq46And48_AtomicityIsOneEntryOverOneFileAndNeverCrossEntry |
@@ -117,8 +117,8 @@ Test files:
 | REQ-99 | TestReq99_TheNonOwnedCheckRunsBeforeApplyAndTheBindingIsNeverReached |
 | REQ-100 | TestReq34And100_TheEditWriteEmitsNoSealAndCreatesNoSidecar |
 | REQ-101 | TestReq19And101_TheEditCarrierIsCarriedOnTheDumpSurface |
-| REQ-102 |  |
-| REQ-103 |  |
+| REQ-102 | `TestReq102_TheOutputContractNamesBothEditNameSets` (cli) |
+| REQ-103 | `TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine` (negative: scope control) |
 | REQ-104 | TestReq104_ThePinnedAnchorSelectsExactlyOneLinePerInScopeFile |
 | REQ-105 | TestReq105_AStatusValueOnTheContinuationLineIsUnmatchedNotRewritten |
 | REQ-106 | TestReq16And106_ABoundTagValueIsRegexpQuotedAndCannotAlterThePattern |
@@ -138,7 +138,7 @@ Test files:
 | REQ-120 | TestReq51To54And120_ApplyTimeRefusalsFailFastInPrecedenceOrder |
 | REQ-121 | TestReq25And28And121_AnchorBracesReachRE2Untouched; TestReq22And121_ReplaceEscapesAndDefinedGroupsAreAdmitted; TestReq22And121_ReplaceEscapesAndNonParticipatingGroupsExpandAsStated |
 | REQ-122 | TestMVV_DeclaredLineEditWriter/step3_the_reader_splits_the_qualifier_and_reports_status_final |
-| REQ-123 |  |
+| REQ-123 | `TestReq106_EveryNamedCategoryExistsAndIsWitnessed` (leg 2) + this file (legs 1, 3) |
 | REQ-MVV | TestMVV_DeclaredLineEditWriter |
 | REQ-MVV.1 | TestMVV_DeclaredLineEditWriter/step1_the_model_lints_clean_with_no_wrapper_script |
 | REQ-MVV.2 | TestMVV_DeclaredLineEditWriter/step2and3_three_sequential_invocations_each_flip_one_line_per_file |
@@ -170,21 +170,65 @@ directories; none is a spec gap.
   the request bit and must still exit 3, so an implementation that moved
   the whole class to exit 2 fails rather than passing every positive
   assertion.
-- **REQ-44, REQ-45** — pure prohibitions with no observable behaviour in
-  these packages. REQ-44 forbids a test from pinning the CLI code string,
-  which is a constraint ON the envelope test above rather than a test of
-  its own. REQ-45 scopes `internal/accessor/executor.go`'s deadline arm OUT
-  of this RDR and asserts nothing about it; writing a test would assert
-  0004's behaviour under 0028's id.
-- **REQ-102** — `docs/cli-output-contract.md` naming the new categories and
-  Detail tokens. A DOCS obligation, Phase 4's. The repo has a docs gate
-  (`internal/cli/docs_test.go`) that is the natural home once the
-  categories exist.
-- **REQ-103** — the consumer's `rdr-write.toml` migration, explicitly
-  out of scope ("the consumer's kata rdr#yjye, not this plan's").
-- **REQ-123** — the Done statement. It is the phase-exit criterion this
-  file and the suite together satisfy, not a testable behaviour. Note its
-  "seven MVV steps" is the stale count req-list A-7 records; eight run.
+- **REQ-45** — CLOSED at the completion gate, no longer an orphan. The
+  original note was half right: asserting the applied sense here WOULD
+  restate 0004 (`TestReq63_PostMutationRefusalsCarryTheAppliedButUnverifiedSense`
+  already pins it). But the REQ also bounds THIS record's own change —
+  ADV-1/ADV-2 widened `ErrDeclaredRequest` to the entry-level
+  preconditions, and REQ-45 is what says the executor's deadline arm is
+  not among them. That is a property only 0028 can break, so it earns a
+  0028 test:
+  `TestReq45_TheExecutorTimeoutArmDoesNotWrapTheRequestSentinel`.
+  Mutation-verified — wrapping the sentinel at `executor.go`'s timeout arm
+  makes it fail.
+
+- **REQ-44** — a pure prohibition with no observable behaviour: it forbids
+  a test from pinning the CLI code string, which is a constraint ON the
+  envelope tests rather than a test of its own. Honoured by
+  `TestReq43And113_…`, which pins the exit GROUP and the `findings[]`
+  shape and never the spelling.
+- **REQ-102** — CLOSED at the completion gate, no longer an orphan. The
+  doc named neither name set: Phase 2 documented the exit-group behaviour
+  but not the twelve wire strings the REQ requires. Both DISJOINT sets of
+  six are now written into `docs/cli-output-contract.md` — C1.4's six
+  load-time categories and C1.3/C1.5's six apply-time reason tokens, with
+  the disjointness stated — and pinned by
+  `TestReq102_TheOutputContractNamesBothEditNameSets`, which also asserts
+  the disjointness holds of the shipped `table.Categories()` so the doc
+  cannot document a distinction the code stops making. Verified
+  non-tautological: it fails against the pre-edit doc.
+- **REQ-103** — CLOSED as a negative REQ under the predecessor's own
+  convention (`0025` coverage.md, "How the negative REQs are covered"): a
+  clause that FORBIDS something is covered by a test of the property it
+  protects, plus a positive control. The property is that the carrier
+  works against a fixture the TEST builds, so no consumer `rdr-write.toml`
+  is needed for it to pass — verified: no such file exists anywhere in the
+  tree, and the suite is green. The positive control is that the carrier
+  is genuinely live, or the claim would be vacuous.
+
+## How the negative REQs are covered
+
+Two clauses FORBID rather than require, so neither has a direct oracle.
+Each is covered by a test of the property it protects, paired with a
+positive control so the assertion cannot pass vacuously — the convention
+RDR 0025's coverage.md sets under this same heading.
+
+| REQ | Property asserted instead | Positive control |
+| --- | --- | --- |
+| REQ-44 | the envelope tests pin the exit GROUP and the `findings[]` SHAPE, never the CLI code's spelling — grep the file: no test compares a code string literal | the refusal must actually reach the envelope and be routed, or the claim is vacuous (`TestReq43_TheDiscriminatorLeavesGenuineEnvironmentFailuresAtExit3` is the contrasting arm) |
+| REQ-103 | the carrier is exercised entirely from test-built fixtures; no consumer `rdr-write.toml` is added or required, and none exists in the tree | the carrier must be live end to end (`TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine` rewrites a real anchored line) |
+- **REQ-123** — the Done statement, now PARTLY pinned rather than wholly
+  unwitnessed. It has three legs. Leg 2 — "every refusal category fires on
+  a fixture that earns it" — is a real testable property and is carried by
+  the repo's existing floor test,
+  `internal/table/dump_test.go::TestReq106_EveryNamedCategoryExistsAndIsWitnessed`,
+  which all six `edit_*` categories are registered in with a checked-in
+  `testdata/neg/*.toml` witness each. That test asserts BOTH directions,
+  so a seventh category shipping without a witness fails it. Legs 1
+  ("every C1–C1.6 clause has a test") and 3 ("the MVV's steps pass end to
+  end") are the phase-exit criterion this file and the suite satisfy, not
+  behaviours a test can assert about itself. Its "seven MVV steps" is the
+  stale count req-list A-7 records; eight run.
 
 ## Green-by-design tests
 

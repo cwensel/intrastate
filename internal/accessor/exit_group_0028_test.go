@@ -293,3 +293,41 @@ func TestReAnchor0028_UnplannedSiblingRulesAreCovered(t *testing.T) {
 		}
 	})
 }
+
+// REQ-45: "That arm stays 0004's, unchanged and out of this RDR's scope
+// (A11, `Verified`): this clause's guarantee is scoped to refusals the
+// `edit` binding itself mints, and does NOT assert the executor-minted
+// timeout carries a false applied sense." — (0028:C1.3).
+//
+// BOUNDARY. This is the NEGATIVE half of the exit-group clause and the
+// stopping point of the ADV-1/ADV-2 fix. Those widened
+// `ErrDeclaredRequest` to the ENTRY-LEVEL preconditions; REQ-45 says the
+// executor's own deadline arm is NOT one of them. Without a test the fix
+// has no stated boundary, and a later author "finishing" it by wrapping
+// the timeout arm would reclassify a genuine ENVIRONMENT failure as a
+// request defect — telling a caller whose command merely ran slow that
+// re-running the same request cannot help, which is the opposite of true.
+//
+// The applied-but-unverified sense this REQ also declines to disturb is
+// already pinned by `TestReq63_PostMutationRefusalsCarryTheAppliedButUnverifiedSense`
+// (0004). What is asserted HERE is only what THIS record could break: the
+// sentinel it introduced must not reach 0004's arm.
+func TestReq45_TheExecutorTimeoutArmDoesNotWrapTheRequestSentinel(t *testing.T) {
+	s := newStore(map[string]string{keyStatus: "Draft"})
+	// The mutation lands, THEN the invocation runs past its deadline —
+	// 0004's post-mutation timeout, reached without any `edit` carrier.
+	w := &writeBinding{store: s, delay: 10 * fixtureTimeout}
+	e := writeExec(t, s, w, &readBinding{store: s}, keyStatus)
+
+	got := e.Write(ctxOf(t), writerName,
+		planWriting(resolve.Tag{Key: keyStatus, Value: "Final"}))
+
+	ref := mustWriteRefuse(t, got, accessor.ClassTimeout)
+	if ref.DeclaredRequest() {
+		t.Errorf("the executor-minted timeout reports DeclaredRequest() = " +
+			"true, so `accessorFailureOf` routes it to the exit-2 REQUEST " +
+			"group. REQ-45 scopes this arm OUT of `0028:C1.3`: a command " +
+			"that ran past its deadline is an ENVIRONMENT failure and keeps " +
+			"exit 3, where re-running unchanged is the honest advice.")
+	}
+}

@@ -8,7 +8,8 @@ D1–D3 are the pre-seeded three, now discharged. D4 onward are Phase 2's.
 
 ## D1 — `TestReq77`'s tail-slice assertion breaks on C1.4's append
 
-**Type**: TEST-FIXTURE. **Status**: RESOLVED (Phase 2, 2026-09-04).
+Type: TEST-FIXTURE
+Status: RESOLVED (Phase 2, 2026-09-04).
 
 **Situation.** `internal/table/command_carrier_0025_test.go::TestReq77_…`
 asserts 0025:C5's six categories as the TAIL of `Categories()`
@@ -35,7 +36,8 @@ assertion is RELATIVE order, "never a tail position or a count".
 
 ## D2 — Description text for the five `edit_*` categories
 
-**Type**: SPEC-UNDER. **Status**: RESOLVED — no-op (Phase 2, 2026-09-04).
+Type: SPEC-UNDER
+Status: RESOLVED — no-op (Phase 2, 2026-09-04).
 
 **Situation.** 0027 Phase 3 ships a per-category description surface. C1.4
 names wire strings, constants and order only. If 0027's surface is total over
@@ -66,7 +68,8 @@ req-list ASSUMPTION A-2 records; C1.4 locks SIX and six were appended.
 
 ## D3 — Merged clause-3 behaviour of `carrierDefect` after both land
 
-**Type**: TEST-FIXTURE. **Status**: RESOLVED (Phase 2, 2026-09-04).
+Type: TEST-FIXTURE
+Status: RESOLVED (Phase 2, 2026-09-04).
 
 **Situation.** C1.6's declared-tag family check changes clause 3's membership
 test and `carrierDefect`'s signature; 0027 rewrites the adjacent exemption
@@ -95,7 +98,8 @@ predicate is untouched.
 
 ## D4 — `Dump` gains an ACCESSOR line for a declared line rule
 
-**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 2).
+Type: SPEC-UNDER
+Status: recorded; implemented (Phase 2).
 
 **Situation.** REQ-101 requires "dump/normalize round-trip carries it (A6)"
 and Phase 1 asserts `strings.Contains(table.Dump(m), "edit")`. The shipped
@@ -133,7 +137,8 @@ record made.
 
 ## D5 — `edit_anchor_invalid`'s brace discriminator in an `anchor`
 
-**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 2); CORRECTED
+Type: SPEC-UNDER
+Status: recorded; implemented (Phase 2); CORRECTED
 (Phase 3c, resolving Phase 3a FAIL-1 and a Phase 3b recorded finding).
 
 **Situation.** Two clauses constrain the same bytes and compilation cannot
@@ -203,7 +208,8 @@ discriminator.
 
 ## D6 — The `edit` write's read-back gate pre-check is scoped to `edit`
 
-**Type**: IMPL-DECISION. **Status**: recorded; implemented (Phase 2).
+Type: IMPL-DECISION
+Status: recorded; implemented (Phase 2).
 
 **Situation.** C1.3 `read-back:` requires a write whose role reader is
 command-backed to refuse BEFORE mutation when the gate is off. The clause
@@ -222,7 +228,8 @@ changing 0025's behaviour, not this one's.
 
 ## D7 — `ErrDeclaredRequest` and `Refusal.DeclaredRequest()`
 
-**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 2).
+Type: SPEC-UNDER
+Status: recorded; implemented (Phase 2).
 
 **Situation.** C1.3 EXIT GROUP: says "the executor-facing typed `Err`
 discriminates at `flow_exec.go::accessorFailureOf`" but names no sentinel,
@@ -253,7 +260,8 @@ pins it.
 
 ## D8 — Phase 1 fixture corrections
 
-**Type**: TEST-FIXTURE. **Status**: RESOLVED (Phase 2).
+Type: TEST-FIXTURE
+Status: RESOLVED (Phase 2).
 
 Phase 1's fixtures carried defects that blocked whole files or contradicted
 a clause the same suite pins elsewhere. Each correction is listed with the
@@ -317,7 +325,8 @@ the padding.
 
 ## D9 — RDR 0002's accessor arity fences out a shared-artifact reader pair
 
-**Type**: DEPENDENCY-LIMIT. **Status**: needs author decision → RESOLVED (the
+Type: DEPENDENCY-LIMIT
+Status: needs author decision → RESOLVED (the
 Illustrative Code is non-normative; the two-key shape stands). Does not block
 Phase 2; the unit surface and all eight MVV steps are green.
 
@@ -386,7 +395,8 @@ because no contract of this record needs one.
 
 ## D10 — `re-anchor:` over an UNPLANNED sibling rule: the stability reading
 
-**Type**: SPEC-UNDER. **Status**: recorded; implemented (Phase 3c).
+Type: SPEC-UNDER
+Status: recorded; implemented (Phase 3c).
 
 **Situation.** C1.3 `re-anchor:` states the invariant with no plan
 qualifier — "**every rule's** anchor is run again over the POST-EDIT buffer
@@ -445,7 +455,8 @@ of an unexported struct, and `shiftHits` is an unexported helper.
 
 ## D11 — C1.3 `precedence:` step (1): the gate pre-check is decided before the anchor's unbound tag
 
-**Type**: SPEC-DEFECT. **Status**: recorded; NO code change (Phase 3c).
+Type: SPEC-DEFECT
+Status: recorded; NO code change (Phase 3c).
 
 **Situation.** Phase 3a **FAIL-2** observed that an `edit` write whose ANCHOR
 carries an unbound `{tag.nnnn}`, over a command-backed reader with the gate

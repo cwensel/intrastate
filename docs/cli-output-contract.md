@@ -43,6 +43,25 @@ about the request, not the environment, so re-running the same request
 unchanged cannot help. An unreadable target is the contrasting case and
 keeps exit 3.
 
+The declared-line-edit carrier names two DISJOINT sets of six. Confusing
+them is the mistake this paragraph exists to prevent: only the first set
+registers in the load-category list, and a consumer matching an apply-time
+token against that list will never find it.
+
+Load-time categories, reported by `lint` when a model is read:
+`edit_carrier_conflict`, `edit_key_mismatch`, `edit_anchor_invalid`,
+`edit_template_invalid`, `edit_clear_invalid`, `edit_tag_argv0`. The last
+fires on a `command` entry of any kind, including one carrying no `edit`
+table, because it belongs to the argv placeholder family rather than to
+the carrier.
+
+Apply-time reason tokens, carried on a refusal's `Detail` beside the rule
+id and registering in no category list: `edit_anchor_unmatched`,
+`edit_anchor_ambiguous`, `edit_anchor_collision`, `edit_anchor_unstable`,
+`edit_value_multiline`, `edit_clear_undeclared`. Lint does not decide any
+of them — a stale anchor is a property of the artifact at apply time, not
+of the model.
+
 A consumer therefore selects the carrier from the refusal `code`, never
 from the number of subjects it observes.
 

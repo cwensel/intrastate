@@ -44,6 +44,7 @@ import (
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/cli/clierr"
+	"github.com/cwensel/intrastate/internal/table"
 )
 
 // --- the fixture ----------------------------------------------------------
@@ -367,5 +368,76 @@ func TestReq43_TheEditBindingIsReachedAndRewritesTheAnchoredLine(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("post-edit document:\n got %q\nwant %q — exactly the anchored "+
 			"line is rewritten and every other byte is unchanged", got, want)
+	}
+}
+
+// REQ-102: "`docs/cli-output-contract.md` names the new categories and
+// Detail tokens" — (0028 Phase 4, §implementation-plan).
+//
+// DOMAIN EDGE. The doc is the consumer-facing contract, and C1.4's six
+// load-time wire strings and C1.3/C1.5's six apply-time reason tokens are
+// DISJOINT sets: only the former register in `table.Categories()`. A
+// consumer matching an apply-time token against the load-category list
+// finds nothing, so the doc has to name both sets and say they are
+// separate. This test is the drift gate on that paragraph — it pins the
+// NAMES, which are wire strings, not the prose around them.
+func TestReq102_TheOutputContractNamesBothEditNameSets(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "docs", "cli-output-contract.md"))
+	if err != nil {
+		t.Fatalf("read cli-output-contract.md: %v", err)
+	}
+	doc := string(body)
+
+	// C1.4's six load-time categories, in the order Categories() registers
+	// them. Sourced from the table package so a rename cannot drift the
+	// doc and the code apart silently.
+	loadTime := []table.Category{
+		table.CatEditCarrierConflict,
+		table.CatEditKeyMismatch,
+		table.CatEditAnchorInvalid,
+		table.CatEditTemplateInvalid,
+		table.CatEditClearInvalid,
+		table.CatEditTagArgv0,
+	}
+	for _, c := range loadTime {
+		if !strings.Contains(doc, string(c)) {
+			t.Errorf("cli-output-contract.md does not name load-time category %q", c)
+		}
+	}
+
+	// C1.3 and C1.5's six apply-time reason tokens. These are unexported
+	// in flowbind, so they are spelled here as the wire strings the doc
+	// must carry; the disjointness assertion below is what keeps that
+	// honest.
+	applyTime := []string{
+		"edit_anchor_unmatched",
+		"edit_anchor_ambiguous",
+		"edit_anchor_collision",
+		"edit_anchor_unstable",
+		"edit_value_multiline",
+		"edit_clear_undeclared",
+	}
+	for _, tok := range applyTime {
+		if !strings.Contains(doc, tok) {
+			t.Errorf("cli-output-contract.md does not name apply-time reason token %q", tok)
+		}
+	}
+
+	// The disjointness the doc asserts must be TRUE of the shipped code,
+	// or the doc documents a distinction that does not exist.
+	registered := make(map[string]bool)
+	for _, c := range table.Categories() {
+		registered[string(c)] = true
+	}
+	for _, tok := range applyTime {
+		if registered[tok] {
+			t.Errorf("apply-time reason token %q is registered in table.Categories(); "+
+				"C1.4's load-time set and C1.3/C1.5's apply-time set must stay disjoint", tok)
+		}
+	}
+	for _, c := range loadTime {
+		if !registered[string(c)] {
+			t.Errorf("load-time category %q is NOT registered in table.Categories()", c)
+		}
 	}
 }
