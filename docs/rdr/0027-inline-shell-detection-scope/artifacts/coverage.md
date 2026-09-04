@@ -213,3 +213,130 @@ TEXT, not the symbol, consistent with `0025:REQ-15`.
   step 5 says "steps 1–4 all pass with no description at all", and steps 1/3/4
   assert what must NOT move. Steps 2 and 5 are the record's two deltas and both
   are red.
+
+## REQ-MVV output
+
+Recorded from the built binary and the runnable test after Phase 2
+implementation landed. All five steps plus the exec arm and the end state PASS.
+
+**Step 1** — the baseline command-carrier model with a green `command` read
+binding lints clean, and the declared argv survives onto the loaded binding:
+
+```
+$ intrastate lint --model mvv0027-base.toml --as=json
+exit 0  {"type":"ok","data":{"findings":[]}}
+loaded argv == ["git","config","--file","{artifact}","--get","flow.status"]
+```
+
+**Step 2** — every wrapper mutant refuses with `command_shell_interpreter`,
+the detail naming the matched words `sh -c` and the unchanged script
+remediation. The `{artifact}` mutant does NOT report
+`command_unknown_placeholder`:
+
+```
+$ intrastate lint --model nice.toml --as=json          # exit 2
+{"code":"model-invalid","message":"model does not conform to the transition-model schema",
+ "param":"model",
+ "detail":"command_shell_interpreter: read state declares the interpreter form sh -c; inline shell is not a declared command; put it in a script and declare the script as argv0",
+ "findings":[{"code":"command_shell_interpreter","message":"command_shell_interpreter: read state declares the interpreter form sh -c; inline shell is not a declared command; put it in a script and declare the script as argv0","locator":"nice.toml:1"}]}
+```
+
+Identical category, detail and remediation for every named mutant — the wrapper
+prefix changes nothing, because nothing before the interpreter word is read:
+
+```
+["env","-i","sh","-c","cat flow.status"]      -> exit 2  command_shell_interpreter  form="sh -c"
+["env","-u","FOO","sh","-c","cat flow.status"] -> exit 2  command_shell_interpreter  form="sh -c"
+["nice","sh","-c","cat flow.status"]          -> exit 2  command_shell_interpreter  form="sh -c"
+["timeout","5","sh","-c","cat flow.status"]   -> exit 2  command_shell_interpreter  form="sh -c"
+["xargs","sh","-c","cat flow.status"]         -> exit 2  command_shell_interpreter  form="sh -c"
+["doas","sh","-c","cat flow.status"]          -> exit 2  command_shell_interpreter  form="sh -c"
+["nice","sh","-c","cat {artifact}"]           -> exit 2  command_shell_interpreter  form="sh -c"
+```
+
+The last row is the one that moved: it reported `command_unknown_placeholder`
+before this build, and clause 3's exemption now keys on the widened predicate.
+
+**Step 3** — every admitted form lints green AND loads with its argv unchanged
+(element-wise equal to the declared vector, not merely no error returned):
+
+```
+["sh","./gate.sh"]          -> exit 0  {"type":"ok","data":{"findings":[]}}   argv unchanged
+["env","-S","sh -c echo"]   -> exit 0  {"type":"ok","data":{"findings":[]}}   argv unchanged
+["sh","-s"]                 -> exit 0  {"type":"ok","data":{"findings":[]}}   argv unchanged
+["python","-"]              -> exit 0  {"type":"ok","data":{"findings":[]}}   argv unchanged
+```
+
+`["python","-"]` is the probe that C1's out-of-scope line is stated over the
+stdin CHANNEL and not over shell spellings — `python` IS a `shellInterpreters`
+member, so a spellings-scoped reading would refuse it. It is green and is
+documented as admitted in the step-5 text below.
+
+**Step 3, exec arm** — `["sh", "<gate.sh>"]` lints clean and the declared
+wrapper FILE actually runs under `--allow-commands`, writing the value the model
+asks for (`flow.status = final`) into the artifact. Value-for-value, not a zero
+exit. The `env -S` half is host-conditional by the MVV's own words (GNU `env`;
+darwin's stock BSD `env` rejects `-S`, A4) and skips on this host.
+
+**Step 4** — the four original 0025 REQ-74 probes still refuse with the SAME
+category, and the reported form still names the right pair. Position-freedom
+widens the set and never excludes argv0:
+
+```
+["sh","-c","cat {artifact}"]  -> exit 2  command_shell_interpreter  form="sh -c"
+["bash","-c","echo hi"]       -> exit 2  command_shell_interpreter  form="bash -c"
+["python","-c","print(1)"]    -> exit 2  command_shell_interpreter  form="python -c"
+["env","sh","-c","echo hi"]   -> exit 2  command_shell_interpreter  form="sh -c"
+```
+
+`table.Categories()` order holds: the six C5 categories index in ascending
+relative order (deviation D1's reading — no tail or `len` coupling). The four
+probes and `neg/neg-command-shell-interpreter.toml` are byte-unedited; the whole
+shipped 0025 suite is green.
+
+**Step 5** — the description ships and is read with NO model loaded and no
+defect provoked, naming both out-of-scope forms in C1's channel-scoped words:
+
+```
+$ intrastate lint --help-all
+
+Load category command_shell_interpreter — what it promises:
+
+Refused: a listed interpreter word followed, at ANY later argv
+position, by one of that interpreter's own inline-code flags — under any
+prefix (env and its options, nice, timeout, xargs, doas, and wrappers
+nobody enumerated). Nothing before the interpreter word is read, so no
+wrapper table exists and none is consulted.
+
+The check reads argv WORDS only. It never splits a word on whitespace,
+and never reads stdin, files, PATH, or the resolved binary. The
+interpreter set is an OPEN deny-list, so an unlisted spelling (python3,
+nodejs, busybox) is admitted.
+
+Out of scope, BY NAME — admitted by lint, and an interpreter may still
+run:
+
+  a shell string carried in ONE word, such as env -S "sh -c …", or a
+  single "sh -c …" element handed to a tool that re-splits it;
+
+  an interpreter that reads its script from STDIN — sh -s, bare sh,
+  sh -es, python -, node -. The channel is the scope: any listed
+  interpreter taking its code on stdin rather than as a later argv word
+  is admitted, however spelled.
+
+sh script.sh is the sanctioned wrapper-file form and never a defect.
+```
+
+The same text reaches `docs/cli-reference.md` by the same derivation
+(`internal/cli/docs.go::runDocs`), and `make check`'s staleness gate is green
+against the regenerated file.
+
+**End state** — "every wrapper mutant red with the right defect, every admitted
+form green and documented, the promise text shipped and asserted, no existing
+probe changed": all four hold. `go test ./...` is clean across the repository.
+
+## REQ-MVV runner
+
+```sh
+go test ./internal/cli/ -run TestReqMVV0027_TheWrapperClassRefusesTheAdmittedFormsLoadAndThePromiseShips -v
+```
