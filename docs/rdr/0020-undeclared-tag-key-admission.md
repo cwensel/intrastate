@@ -322,7 +322,8 @@ One seam moves: the admission path in `internal/cli/flow_input.go`.
 routes an undeclared key around `canonicalValue` (or passes the
 declaredness bit into it — implementation latitude, bounded by C1's
 refusal list: whichever shape is taken, the empty-value arm must still
-fire for a carrier), so the kind/shape/domain arms run only under a
+fire for a carrier and must still leave a declared set on its
+conformance message), so the kind/shape/domain arms run only under a
 real declaration. The carried
 value flows exactly where an undeclared scalar already flows today:
 into the kernel's Observed view (`resolve.Input.Observed`, where only
@@ -369,6 +370,18 @@ undeclared key are, unchanged and still preceding any accessor
   and takes a JSON array literal; got ") is a CONFORMANCE message and
   stays declared-only, inside the arms below: it presupposes a
   declared kind, which a carrier by definition has none of.
+  The hoisted arm is therefore NOT unconditional on `value == ""`: it
+  fires for a key that is undeclared, or declared with a NON-set kind,
+  and it must not intercept a declared SET key, whose empty value keeps
+  the set-specific conformance message (normative fixture **G**,
+  `evidence/spikes/g-declared-set-empty.txt`: `--tag labels=` ⇒ ``the
+  tag `labels` is set-valued and takes a JSON array literal; got ``).
+  A declared scalar's empty value keeps the scalar message it has at
+  HEAD (`evidence/spikes/e-declared-empty.txt`), which is the same
+  string the hoisted arm emits, so routing it through either site is
+  byte-identical. Hoisting on the bare value test alone would move a
+  declared set key off its conformance message — a declared-key change
+  this RDR does not make.
 
 `flow-tag-invalid`'s kind, shape, and domain arms — including "is not
 set-valued" — are reachable only for a DECLARED key, whose loaded
@@ -401,7 +414,8 @@ enforces that declaration's kind and domain.
   arm 2).
 - **Selection / predicate** — refusal precedence at admission is
   unchanged in order: grammar → reserved → owned → duplicate →
-  empty-value → (declared keys only) kind/shape/domain conformance;
+  empty-value (undeclared or non-set-declared keys) → (declared keys
+  only) kind/shape/domain conformance;
   the carrier branch sits where the conformance arms would have run.
   The empty-value arm is the one that moves — out of `canonicalValue`
   and up to the shared path — because it must bind the carrier, which
@@ -442,7 +456,7 @@ Fired: C1 assigns exit outcomes across input classes at one admission seam.
 
 #### Desk trace
 
-Fired: C1, four Testing Strategy Expected lines, and fixtures F1–F4 all bear
+Fired: C1, the Testing Strategy Expected lines, and fixtures F1–F4 and G all bear
 on one output surface (the admission refusal path and the `observed` echo).
 Walk of the MVV, each step against the assertions in force, with a witness
 from the named spike.
@@ -454,9 +468,12 @@ from the named spike.
 | 3 — same resolve without carriers | C1 (nothing can read it); A2 runtime leg; Testing 2; F2 | `selection-diff-a2-vs-b.txt` empty; `"rule":"free"`, `"emit":{"plan":"basic"}` both runs | consistent |
 | 4 — declared scalar given array | C1's kind arm, declared-only; Testing 3; F3 | `c-declared-scalar-array.txt`: exit 2, "the tag `tier` is not set-valued; got the array literal [\"a\",\"b\"]" | consistent — and the message is now truthful, since `tier` IS declared |
 | 5 — undeclared key, empty value | C1's hoisted empty-value arm (scalar-shaped message, binds carriers); Testing 4; F4 | `d-undeclared-empty.txt`: exit 2, "the tag `extra` was given an empty value" — byte-identical to HEAD | consistent — hoist is behaviour-preserving on the witness |
-| end state | `D-selection-predicate` order: grammar → reserved → owned → duplicate → empty-value → (declared only) conformance | source order confirmed at grounding: duplicate (`flow_input.go:663`) precedes `canonicalValue` (:677); empty-value today sits at :723 inside `!isSet` | consistent — the hoist moves one arm forward across no other arm |
+| 5b — declared SET key, empty value (not an MVV step; the hoist's blast radius) | C1's guard: the hoisted arm skips a declared set, which keeps the conformance message; Testing 5; fixture G | `g-declared-set-empty.txt`: exit 2, "the tag `labels` is set-valued and takes a JSON array literal; got " | consistent ONLY with the guarded arm — an unconditional `value == ""` test ahead of the declared lookup would emit the scalar message here and regress a declared key |
+| end state | `D-selection-predicate` order: grammar → reserved → owned → duplicate → empty-value (undeclared or non-set-declared) → (declared only) conformance | source order confirmed at grounding: duplicate (`flow_input.go:663`) precedes `canonicalValue` (:677); empty-value today sits at :723 inside `!isSet` | consistent — the hoist moves one arm forward across no other arm, and the guard keeps declared sets on their existing arm |
 
-No CONTRADICTION row.
+No CONTRADICTION row. Row 5b was a contradiction at the repeatability
+lens (the Illustrative Code's unconditional `value == ""` test against
+this table's declared-set row) and is resolved by C1's guard.
 
 #### Illustrative Code
 
@@ -470,10 +487,12 @@ case seen[key]: // duplicate — still precedes the empty-value arm
 }
 seen[key] = true
 
-if value == "" { // empty is indistinguishable from unset, declared or not
+decl, declared := m.Tags[key]
+if value == "" && (!declared || !decl.IsSet()) {
+    // Empty is indistinguishable from unset. Binds carriers and declared
+    // scalars; a declared SET key keeps its conformance message (fixture G).
     return nil, userErr(codeTagInvalid, key, "…was given an empty value")
 }
-decl, declared := m.Tags[key]
 if !declared {
     // Pure carrier (0020:C1): admit verbatim; nothing can read it.
     out = append(out, resolveTag{Key: key, Value: value})
@@ -766,8 +785,10 @@ it does not carry it.
 ### Failure Modes
 
 Visible: every refusal that survives is unchanged and still fires at
-exit 2 before any accessor — reserved, owned, duplicate, grammar and
-empty-value for ANY key; wrong kind, wrong shape and out-of-domain for
+exit 2 before any accessor — reserved, owned, duplicate and grammar for
+ANY key, and empty-value for any key that is not a declared set (a
+declared set's empty value refuses on its conformance message instead);
+wrong kind, wrong shape and out-of-domain for
 a DECLARED key only (per C1's list). Silent: a misspelled key (declared or not)
 passes as a carrier and the intended rule fails to match; resolution
 then refuses no-match or routes to an escape row. Diagnosis: the
@@ -811,7 +832,10 @@ undeclared key past the conformance arms per C1. Grammar, reserved,
 owned and duplicate are unchanged and in order. The empty-value arm
 lifts out of `canonicalValue`'s `!isSet` branch onto the shared
 admission path, ahead of the carrier branch, so it still binds a key
-that no longer reaches that function; `canonicalValue` keeps its copy
+that no longer reaches that function — guarded to fire only for an
+undeclared or non-set-declared key, since a declared set's empty value
+must keep the set-specific conformance message (fixture G);
+`canonicalValue` keeps its copy
 for the `--write` carrier, which enters by its own path.
 
 #### Step 2: Truthful comments
@@ -833,7 +857,7 @@ producer's whole tag output (Background's obligation).
 
 The scenarios are the Minimum Viable Validation's five steps, landed as
 the red test of Phase 1 Step 3; they are authored there and not
-restated here. Coverage goal — done is all five green, with the
+restated here. Coverage goal — done is all six green, with the
 undeclared/declared pair adjacent in one test so the asymmetry C1 fixes
 is pinned by construction rather than by two tests that could drift:
 
@@ -879,6 +903,17 @@ is pinned by construction rather than by two tests that could drift:
    (`evidence/spikes/g-declared-set-empty.txt`: "is set-valued and
    takes a JSON array literal; got ") and stays inside the
    conformance arms, declared-only.
+5. **Scenario**: declared SET key given an empty value — the hoist's
+   one regression risk, pinned beside scenario 4 so the guard on the
+   hoisted arm cannot be dropped silently.
+   **Expected**: refused `flow-tag-invalid` on the SET-specific
+   conformance message, not the scalar-shaped one. Normative fixture
+   **G** (`evidence/spikes/g-declared-set-empty.txt`): `--tag labels=`
+   ⇒ exit 2, ``{"code":"flow-tag-invalid","message":"the tag `labels`
+   is set-valued and takes a JSON array literal; got ","param":"labels"}``
+   — byte-identical to HEAD. An unconditional `value == ""` test ahead
+   of the declared lookup fails this scenario, which is what makes it
+   the guard's witness.
 
 
 ## Finalization Gate
