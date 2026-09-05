@@ -344,7 +344,7 @@ the lint already is: RDR 0010's `decision-table` class has no
   cardinality probe, or a `read-state`-family surface — and the chosen
   carrier does not disturb the shipped `ReadBinding` contract for its
   existing implementations.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search + Spike
   - **Evidence**: Opened by the cove lens, which established the gap:
     `internal/accessor/binding.go::ReadBinding.Read` is key-scoped
@@ -377,6 +377,35 @@ the lint already is: RDR 0010's `decision-table` class has no
     write loop. That is independent ground for C1's carrier refusal —
     an edit-carried model cannot answer emptiness because it has no
     read binding, not merely because it has no JSON store.
+    VERIFIED at reconcile: candidate (b), an exported `flowbind`
+    cardinality probe, is the surviving carrier; the assumption holds.
+    The implementer count is EXACTLY TWO as claimed —
+    `internal/accessor/executor.go::Executor.Read` is not a third,
+    since its signature `Read(ctx, name string) ReadResult` does not
+    satisfy `ReadBinding` (it is the driver that type-asserts
+    `def.Binding.(ReadBinding)` at `::Executor.invokeRead`). The seam
+    reports no cardinality anywhere on `Binding`/`ReadBinding`, and
+    `::store` is a package-private `map[string]string` with `load` and
+    `save` unexported, no exported member returning a count. The
+    sealed-store sub-claim resolves on WHERE the short-circuit lives:
+    `::Reader.Read` does return every requested key unreadable on the
+    seal, but that test is in `Read`'s BODY, not in `::load` — `load`
+    returns the whole map including `::sealedKey`, which
+    `::Writer.Apply` writes as an ordinary entry. So `len(load(path))`
+    is 1 on a read-back-sealed store: the real count C1's sealed arm
+    needs, obtained without entering the seal branch, which is what
+    keeps S9 a no-op success at exit 0 instead of an exit-3 refusal.
+    That is also why (b) beats (a): a new `ReadBinding` method would
+    force `cmdbind.Reader` and the accessor test doubles to answer a
+    question the carrier gate guarantees is never asked of them, and
+    (a) is viable ONLY as a distinct method — reusing `Read` inherits
+    the short-circuit and fails outright. Candidate (c) is not a
+    carrier at all: no `read-state` symbol exists under `internal/`,
+    so it would sit on (a) or (b) regardless. 0004:C3 is satisfied —
+    the probe takes the artifact from the per-invocation
+    `accessor.Artifact` exactly as `::Reader.Read` and
+    `::Writer.Apply` already do, discovering nothing from ambient
+    process state.
   - **If wrong**: if no carrier can answer emptiness without either
     breaking `ReadBinding`'s existing implementers or reading the
     artifact directly, the empty-store predicate cannot be implemented
@@ -436,10 +465,12 @@ the lint already is: RDR 0010's `decision-table` class has no
   `flowbind.Reader` and `cmdbind.Reader` (not pointers, as on the
   write side), mutually exclusive and exhaustive, so admitting
   only `flowbind.Reader` is exactly the file-backed read set — and
-  the reader a needed role resolves to
-  (`internal/accessor/model.go::Registry.readerFor`) is reachable from
-  `internal/cli` at carrier-gate time, before any accessor runs.**
-  - **Status**: Pending
+  the reader a needed role resolves to is derivable from
+  `internal/cli` at carrier-gate time, before any accessor runs, over
+  the exported `internal/accessor/model.go::Registry.Definitions` —
+  NOT over `::Registry.readerFor`, which is unexported and whose
+  first-match selection semantics the gate reproduces instead.**
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: Opened by the critique lens, which established that
     C1's carrier gate type-switched on the WRITE binding alone while
@@ -463,9 +494,42 @@ the lint already is: RDR 0010's `decision-table` class has no
     types are the complete set (no third arm, no shared type, and — as
     on the write side — whether the file-backed reader is a residue
     whose reachability depends on a predicate the verb cannot call); and
-    confirm `::readerFor`'s result is available to the gate before
+    confirm the role's reader is resolvable by the gate before
     invocation, since a discrimination the verb can only make after
     running an accessor cannot serve a refusal C1 orders before one.
+    VERIFIED at reconcile, in two parts with different answers. Part
+    (i) holds exactly as spelled: the read loop is
+    `var binding accessor.Binding = Reader{Path: acc.Path}` with a
+    single `if commandBacked(acc)` arm to `cmdbind.Reader{…}` — two
+    arms, no third, no shared type, no `default`, both VALUES against
+    the write loop's `&Writer{…}`/`&cmdbind.Writer{…}` POINTERS, with
+    `Read` on value receivers in both packages. `::EditWriter` is not
+    a read-side carrier: it declares `CapWrite` and has no `Read`
+    method, and the registry constructs it only in the write loop.
+    Nor is the file-backed reader a residue as it is on the write
+    side — `::commandBacked` is `len(acc.Command) != 0 || acc.Path ==
+    ""`, so `flowbind.Reader` is reachable on exactly a declared path
+    with no command, requiring no predicate the verb must call.
+    Part (ii) was REFUTED as originally stated and the contract
+    amended: `func (reg Registry) readerFor(role string)` is
+    UNEXPORTED, its only non-test caller
+    `internal/accessor/executor.go` inside the declaring package, so
+    `internal/cli` cannot call it — the same defect C1 already records
+    for `::commandBacked`, one package over. The repair keeps the
+    property and changes the spelling: `::Registry.Definitions` is an
+    exported field and `Identity`, `Accessor`, `Binding`,
+    `accessor.CapRead` and `table.Accessor.Role` are all exported, so
+    the gate re-derives the role's reader in-package. Equivalence is
+    exact rather than approximate — `::readerFor`'s body is a bare
+    first-match `for` over `Definitions` on
+    `Identity.Capability == CapRead && Accessor.Role == role`, with no
+    `::bound` check, no ordering rule, and no normalization (the
+    loader stores `Role: *a.Role` verbatim) — which is why C1 now
+    makes FIRST MATCH IN REGISTRY ORDER normative rather than leaving
+    the filter's shape to the implementer. The no-accessor-invoked
+    property strengthens under the repair: `Binding`'s only method is
+    `Capability()`, `Read` lives on `ReadBinding`, and a type switch
+    invokes nothing, so the gate reads fields and a type tag only.
   - **If wrong**: if the read side has a carrier the type-switch does
     not name, or the reader cannot be resolved before invocation, the
     gate cannot be stated over both capabilities as C1 now requires —
@@ -713,8 +777,8 @@ emptiness answer it cannot compute.
 The carrier gate is over BOTH capabilities, not the write side alone.
 Readers and writers are resolved independently — `::Registry` loops
 `m.Readers` and `m.Writers` separately, and read-back resolves its
-binding by ROLE over `CapRead`
-(`internal/accessor/model.go::Registry.readerFor`) — so a model may
+binding by ROLE over `CapRead` (in-package, at
+`internal/accessor/model.go::Registry.readerFor`) — so a model may
 declare a file-backed WRITE accessor and a command-backed READ
 accessor on the same role, and the write-side type-switch alone would
 admit it. It must not: the emptiness answer and the commit-time
@@ -751,6 +815,38 @@ BANNED on the same ground the class arm bans re-deriving from
 `len(owned)` (Selection / predicate): it would duplicate a
 discriminator whose writer is the registry. Exporting `commandBacked`
 is not required and is not authorized here.
+
+SELECTING the role's reader is subject to the same reachability rule,
+and it is a SEPARATE step from detecting its carrier. `::readerFor` is
+UNEXPORTED, with its only non-test caller inside `internal/accessor`
+(`internal/accessor/executor.go`), so — exactly as with
+`::commandBacked` — the citation above identifies the in-package
+selector whose semantics the gate REPRODUCES, not a call the verb can
+make. The verb selects over the exported `::Registry.Definitions`
+slice, admitting the FIRST definition whose `Identity.Capability` is
+`accessor.CapRead` and whose `Accessor.Role` is the needed role.
+FIRST MATCH IN REGISTRY ORDER is normative, not incidental: role
+uniqueness on the read side is NOT enforced today — neither
+`internal/accessor/validate.go` nor the loader's `::accessorTable`
+carries a uniqueness arm (0016, which would make role→reader a
+function, is Draft) — so two same-role readers are constructible, and
+a gate that collected matches and refused on ambiguity would be WIDER
+than `::readerFor`, refusing models the executor serves. Selecting the
+last, likewise, would disagree. A no-match is the flat `false`
+`::readerFor` returns, which reaches the unbound-needed-role arm
+above; it MUST NOT be split into a separate missing-reader code. This
+is selection by ROLE, not carrier re-derivation, so it does not touch
+the ban just stated: the carrier still comes from the constructed
+binding's type, and the registry remains its sole author. The gate
+reads `Identity`, `Accessor`, and `Binding` as FIELDS and invokes no
+`Binding` method — `Read` lives on `ReadBinding`, not `Binding`, and a
+type switch calls nothing — which is what makes S10's
+no-accessor-invoked assertion true by construction rather than by
+timing. Exporting `readerFor` would serve equally but is an
+`internal/accessor` API change this RDR does not authorize, on the
+same ground as `commandBacked`; the gate must not sort, filter, or
+re-order `Definitions` before scanning, since the equivalence rides on
+sharing the registry's own slice order.
 
 ORDERING: the CLASS refusal precedes the CARRIER refusal. Both are
 pre-invocation, so nothing above orders them, and the combination is
@@ -1050,7 +1146,7 @@ a note about it.
 | Model class | loader `[model] class` (0010:C1) | `::IsDecisionTable` callers | `len(owned)==0` re-derivation | `::IsDecisionTable` — never re-derived |
 | Store emptiness | the artifact's own key presence | **no shipped reader** — carrier undecided (A6) | per-key absent over `[initial]` | STORE-key count, incl. `::sealedKey` (C1) |
 | Write carrier | registry write loop's constructed type (`::Definition.Binding`) | this verb's type-switch | `table.Accessor`'s `Edit`/`Command` fields; `::commandBacked` (unexported) | the constructed type — admits `*flowbind.Writer` only (C1, A7) |
-| Read carrier | registry read construction, resolved by role (`::readerFor`) | this verb's type-switch | the WRITE binding, as a proxy for both | the constructed read type — admits the VALUE `flowbind.Reader` only, never the pointer spelling (C1, A8) |
+| Read carrier | registry read construction, resolved by role over the exported `::Registry.Definitions`, first match (C1) | this verb's type-switch | the WRITE binding, as a proxy for both | the constructed read type — admits the VALUE `flowbind.Reader` only, never the pointer spelling (C1, A8) |
 | Value encoding | kind-dispatched: `::canonicalSet` (set) / `members[0]` (scalar), JDR 0001 §D13 | `set-state`, this verb | loader `conform` (kind/domain only); `::canonicalSet` for every kind | the kind-dispatched pair — the byte-equality source (C1) |
 | Writer for a key | loader `::checkAccessorBindings` (exactly-one) | `::writerFor` | none | load-time binding (A3) |
 | Exit group of a shared refusal | the raise site's `clierr.Group`, not the code table | `::ExitCodeFor` | the code table's header rule ("spellings normative, group fixes the exit") | the raise site — mismatch 2, incomplete/timeout 3 (C1) |
@@ -1172,7 +1268,8 @@ automation axis within a stated boundary, and leaves every decided
 clause intact except one enumerated, recordable-override addition. D's
 costs are counted, not waved past: a new payload shape (which is not
 why `--from-initial` was rejected — that rejection stands on the
-two-plan-sources-in-one-verb grammar muddle), one explicit `set-state`
+PREDICATE, per D-naming: a flag cannot make `set-state` conditional
+on store emptiness without changing what the verb means), one explicit `set-state`
 for a key added to `[initial]` after seeding, and the emptied-store
 residual C1 discloses.
 
@@ -1872,6 +1969,26 @@ test that fails if the arm is removed.
    passes every other scenario, because on a single-writer fixture torn
    and post-clear are indistinguishable. C1's ban on documenting the
    re-run as recovery is what this asserts.
+13. **Scenario**: The no-synthesis prohibition, asserted as an
+   invariant rather than a snapshot. Over a model declaring `[initial]`
+   for a key, bind an artifact in which that key is ABSENT — never
+   seeded, as distinct from cleared — and read it back on every path
+   that loads state: `read-state`, and `next`'s candidate computation.
+   **Expected**: the key reports ABSENT on every path, and `next`
+   reports it under `unknown[].reason: absent`. No read path returns
+   the `[initial]` value. This is the only scenario pinning C1's "no
+   accessor read path may synthesize, default, or fall back to
+   `[initial]` values when a key is absent" — the clause that makes
+   REQ-107's cleared-≠-unseeded distinction hold and that separates
+   this design from rejected Alternative 2, whose whole defect was
+   read-time synthesis (`0004:C3`: a synthesized value is a fact no
+   accessor established). A1 verifies the runtime-consumer set is
+   empty TODAY; this asserts it stays empty, so a later reader added
+   with a well-meaning `[initial]` fallback fails here rather than
+   silently resurrecting the semantics three alternatives were
+   rejected to avoid. The discriminating control is that the same
+   fixture with the key PRESENT reads back its stored value, so a test
+   that trivially reports absent for everything does not pass.
 
 ## Finalization Gate
 
