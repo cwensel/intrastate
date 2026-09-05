@@ -27,7 +27,7 @@ engine README — this file is only the per-project index.
 | [0016](0016-artifact-role-reader-cardinality.md) | Reader cardinality of the artifact-role read binding | Draft | Medium |
 | [0017](0017-per-finding-code-identity.md) | Per-finding code identity on mixed-disposition rows | Draft | Medium |
 | [0018](0018-dual-breach-precedence-and-error-carrier.md) | Dual-breach precondition precedence and error carrier | Draft | Medium |
-| [0019](0019-owned-state-initialization-semantics.md) | Owned-state initialization semantics | Draft | Low |
+| [0019](0019-owned-state-initialization-semantics.md) | Owned-state initialization semantics | Final | Low |
 | [0020](0020-undeclared-tag-key-admission.md) | Undeclared --tag key admission — what the zero TagDecl means | Implemented | Medium |
 | [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Draft | Low |
 | [0022](0022-terminal-reachability-liveness-invariant.md) | Terminal-reachability liveness invariant | Draft | Low |

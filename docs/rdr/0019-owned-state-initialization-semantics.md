@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -1277,15 +1277,37 @@ Premortem: switched (hardened) — the init-verb approach survived with
 its seeding rule switched to the empty-store predicate; the remaining
 findings are folded into C1, A2–A5, and Failure Modes.
 Ground-sweep: clean (22 anchors)
-Joint-check: clear (12 peers) — context beside the verdict: 0021
-mentions `[initial]` solely in its lint-root role (the reachability
-relation lint already computes), which C1 leaves unchanged; 0016's
-read-back and 0023's `set-state` mentions are closed-0004/0005
-vocabulary (reader cardinality and the four-verb list), not this RDR's
-initialization decision. Absence arm vacuous: no open peer is `Final`,
-and every closed record is `Implemented` (outside the peer set); the
-refusal this RDR converts (unconsumed `Model.Initial` at runtime) is
-relied on by no peer text found.
+Joint-check: fired → 0028 (home: cli/0019:C1) — this record owns the
+arm; symmetric to cli/0028's fire, disposed there cite-don't-restate:
+both read `internal/cli/flowbind/flowbind.go::load`'s
+absent-file-is-empty rule unchanged (this record relies on it for the
+first write; cli/0028's `edit` carrier fences it out). Re-run
+2026-09-05 at finalize over the nine open peers, all three arms on the
+written proposal. Arm 1 (modify-anchors, repo-resolved): cli/0016 ↔
+this record on `internal/table/load.go::checkAccessorBindings` and
+`internal/cli/flow_state.go::writerFor` — cite-don't-restate:
+cli/0016:C1/C2 ADD a role-arity walk beside the per-key writer-arity
+walk; this record MODIFIES neither, relying on the writer-arity walk
+as shipped (A3, S5) and on `writerFor`'s routing (C1) — disjoint arms
+of one function, no shared answer. cli/0015, cli/0021, cli/0022 ↔ this
+record on `internal/graphlint/reach.go::reach` — all four READ the
+fixpoint unchanged (here: root seeding from `[initial]`, A1; cli/0015
+as the merged-node writer, cli/0021 as a determinism spike subject,
+cli/0022 reused as-is); none proposes to change it. Arm 2 (contract
+literals): cli/0021 on `[initial]`/`--flow` — its lint-root and
+lint-flag roles, which C1 leaves unchanged (the `--flow` grammar is
+0005:C1's, consumed by both); cli/0016 on `0004:C13`/
+`malformed_accessor_binding` — cli/0016 reads C13's "read definition"
+as singular by construction, this record relies on C13's read-back
+seal (A5), and both reuse the load category without changing it;
+cli/0017 on `flow-*` — cli/0017 decides per-finding code identity
+against the table, this record ADDS codes to it (the 0005:C1
+override), neither decides the other's question; cli/0012 on `false`
+— a bare boolean literal, not a decision. Arm 3 (absence): vacuous as
+at propose — no open peer is `Final`, every closed record is
+`Implemented` (outside the peer set), and the refusal this record
+converts (unconsumed `Model.Initial` at runtime) is relied on by no
+peer text found.
 
 ## Alternatives Considered
 
@@ -1992,125 +2014,70 @@ test that fails if the arm is removed.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0019-owned-state-initialization-semantics/artifacts/gate.md (Gate PASS 2026-09-05)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Read purity / never-fill.** Owned by 0004:C3 (owned state is
+assembled only from caller-bound artifacts; no ambient discovery) and
+REQ-107 (a cleared key reads back absent). This RDR conforms rather
+than restates: C1 places initialization on the WRITE path as an
+explicit, persisting verb, and forbids every read verb, artifact load
+and accessor read path from synthesizing, defaulting or falling back
+to `[initial]` (S13 asserts the prohibition). Peers adding a read-time
+convenience should cite 0004:C3 and this clause, not re-decide them.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Concurrency model.** Inherited, not owned: `init-state` routes every
+seed through the declared write accessors with commit-time read-back
+on the same writer-routing / no-cross-writer-atomicity terms as
+`set-state` (0005:C1 owns those terms; C1 inherits them verbatim). The
+verb adds no lock of its own, so a concurrent `set-state` against the
+same artifact is unhandled here exactly as it is for `set-state`. A
+writer failure mid-seed leaves a torn, non-empty store; the no-op
+re-run reports the absent `[initial]` keys and never repairs them (F2)
+— visibility over silent merge is the posture, and the repair route is
+explicit `set-state` of the listed keys.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+**Canonical-form / determinism.** This RDR claims read-back BYTE
+EQUALITY per seeded value (D-identity, REQ-107's form), not a hash,
+content-addressed identity or a replay-stable digest — so hash
+function, pre-image layout and a version marker do not apply, and the
+artifact's whole-file byte layout stays `internal/cli/flowbind`'s,
+unchanged (D-wire-byte-format). What the claim reduces to is fixed in
+C1 and verified by A2's spike: one encoder, `set-state`'s own,
+dispatched on the DECLARED kind — JDR 0001 §D13 canonical form,
+`canonicalSet` (sort, compact JSON array) for sets and `members[0]`
+verbatim for scalars — with no third encoding and no re-conform of a
+loader-normalized value (RT3, S4 over every kind). Whitespace and case
+folding: none introduced; the only normalization is the loader's
+`[initial]` admission, upstream of the verb. Empty / null / absent:
+a cleared key is REMOVAL, never a tombstone; the empty scalar `""`
+seeds PRESENT and reads back distinct from absent (F5, decided for the
+seed route only — the argv asymmetry is routed to RDR 0002); empty set
+versus absent stays JDR 0001 §D11's.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+**Incremental adoption.** Additive: one verb enters the `flow` group
+under a recorded override of 0005:C1's closed enumeration (A4, on the
+0010 → 0002:C19 precedent); no existing verb, flag, artifact shape or
+model schema changes. A flow already seeded by hand has a non-empty
+store, so `init-state` is a no-op on it (RT2) — adopting the verb on a
+live flow costs nothing and rewrites nothing. Disclosed scope gap: the
+verb serves the FILE-BACKED write carrier only; a model binding an
+edit-carried (cli/0028) or command-backed (cli/0025) write accessor is
+refused with the carrier code (C1, S10), and those flows keep the
+manual first run until a successor extends the emptiness predicate
+(gated on A6's carrier decision).
 
-### Proportionality
-
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+**Versioning.** No wire or byte format is introduced; the success
+payload rides the 0005:C1 envelope, with field NAMES deferred to
+implementation and CONTENT fixed by C1 (seeded key names on the seed
+arm, the absent list on the no-op arm). The `flow-*` refusal taxonomy
+gains the codes C1 records, under 0005:C1's ownership of that table;
+per-finding code identity against it is cli/0017's question, not
+this record's. Phase 2 makes `docs/model-authoring.md`'s existing
+start-state sentence true and adds the verb to `docs/cli-reference.md`.
 
 ## References
 
