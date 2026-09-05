@@ -29,6 +29,7 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -322,6 +323,25 @@ func TestAdv2_0020_AnAdmissionRefusalLeavesNoAccessorSideEffect(t *testing.T) {
 // This pins the acceptance: the previously-refusing argv now SUCCEEDS and
 // performs its declared write, and the carried key appears in NEITHER the
 // persisted state nor the write set.
+//
+// ORACLE CONSTRUCTION, because the obvious oracle here is VACUOUS. Asking
+// the MVV model's own `read-state` whether it reports `stray` cannot fail:
+// `flowbind.Reader.Read` answers only the keys its caller REQUESTED, and
+// those come from the model's declared `[read.*].keys`. The MVV model
+// declares no `stray`, so its payload could never name one however the
+// artifact were persisted, and the assertion would hold just as firmly in
+// the world where the carrier DID reach owned state.
+//
+// So the read-back goes through a SECOND model — `carrierObserverModel` —
+// which declares `stray` as an owned scalar and requests it, over the same
+// role and the same caller-supplied artifact. Its payload therefore names
+// `stray` in `keys` on every run, and carries it in `tags` exactly when the
+// artifact holds it. The assertion is "declared, requested, and ABSENT",
+// which is a claim about the artifact rather than about the model's
+// vocabulary — and one that fails the moment a carrier is persisted.
+//
+// The observer is READ-ONLY (no `[write.*]`, an escape row for its single
+// rule), so it cannot itself be the thing that puts `stray` on disk.
 func TestAdv2b_0020_TheAdmittedArrayRunsAccessorsWithoutReachingOwnedState(t *testing.T) {
 	model := writeFlowModel(t, flowMVVModel)
 	artifact := seedArtifact(t, model, "status=draft")
@@ -334,22 +354,141 @@ func TestAdv2b_0020_TheAdmittedArrayRunsAccessorsWithoutReachingOwnedState(t *te
 		"--write", "status=final", "--as=json")
 	t.Logf("previously-refusing argv now succeeds: %s", strings.TrimSpace(stdout))
 
-	// The oracle for owned state goes through the CLI, per the suite's
-	// standing rule that no test asserts on the artifact's on-disk format.
-	state := requireSuccess(t, "flow", "read-state", "--model", model,
-		"--artifact", bind, "--artifact",
-		artifactBinding(flowOrphanRole, artifact), "--as=json")
+	// --- the WRITE SET -----------------------------------------------
+	//
+	// `writes` is the mutation the verb planned and applied. The carrier
+	// must not appear in it: an admitted carrier that reached the plan
+	// would be a write nothing declared, which is the other half of
+	// Decision Rationale (b)'s "unwritable by every model-side path".
+	writes, ok := flowData(t, stdout)["writes"].(map[string]any)
+	if !ok {
+		t.Fatalf("`set-state` reports no `writes` object: %#v",
+			flowData(t, stdout)["writes"])
+	}
+	if got := writes["status"]; got != "final" {
+		t.Errorf("writes[\"status\"] = %#v; want %q — the declared write "+
+			"must survive the admitted carrier", got, "final")
+	}
+	if len(writes) != 1 {
+		t.Errorf("the write set is %#v; want exactly the requested "+
+			"`status=final`. A carried key that reached the plan is a "+
+			"write no model declared", writes)
+	}
 
-	if !strings.Contains(state, `"status":"final"`) {
-		t.Errorf("the declared write did not reach owned state; the "+
-			"admitted carrier must not suppress it: %s",
-			strings.TrimSpace(state))
+	// --- OWNED STATE, read back through an observer that CAN see it ---
+	//
+	// The oracle goes through the CLI, per the suite's standing rule that
+	// no test asserts on the artifact's on-disk format.
+	state := flowData(t, requireSuccess(t, "flow", "read-state",
+		"--model", model, "--artifact", bind, "--artifact",
+		artifactBinding(flowOrphanRole, artifact), "--as=json"))
+
+	if got := readerTagValue(t, state, flowStateRole, "status"); got != "final" {
+		t.Errorf("owned `status` = %#v; want %q — the admitted carrier "+
+			"must not suppress the declared write", got, "final")
 	}
-	if strings.Contains(state, "stray") {
-		t.Errorf("the CARRIED key reached owned state: %s — Decision "+
-			"Rationale (b) rests on a carrier being unreadable and "+
-			"unwritable by every model-side path", strings.TrimSpace(state))
+
+	observer := writeFlowModel(t, carrierObserverModel)
+	seen := flowData(t, requireSuccess(t, "flow", "read-state",
+		"--model", observer, "--artifact", bind, "--as=json"))
+
+	// The observer must actually have ASKED for `stray`. Without this the
+	// absence below would be unfalsifiable again — a reader that never
+	// requests a key reports it missing no matter what is on disk.
+	keys := observerKeysAdv0020(t, seen)
+	if !slices.Contains(keys, carrierStrayKeyAdv0020) {
+		t.Fatalf("the observer reader's declared key set is %v and does "+
+			"not request %q; the absence assertion below would be vacuous",
+			keys, carrierStrayKeyAdv0020)
 	}
+	// Control: the observer's read genuinely surfaces what the artifact
+	// holds, so "absent" below is a fact about the artifact.
+	if got := readerTagValue(t, seen, flowStateRole, "status"); got != "final" {
+		t.Fatalf("the observer reads `status` = %#v; want %q. It cannot "+
+			"see this artifact at all, so its report of %q proves nothing",
+			got, "final", carrierStrayKeyAdv0020)
+	}
+
+	if got, held := readerTag(t, seen, flowStateRole, carrierStrayKeyAdv0020); held {
+		t.Errorf("the CARRIED key %q reached owned state with value %#v — "+
+			"Decision Rationale (b) rests on a carrier being unreadable "+
+			"and unwritable by every model-side path",
+			carrierStrayKeyAdv0020, got)
+	}
+}
+
+// carrierStrayKeyAdv0020 is the undeclared key ADV-2b carries. The MVV
+// model does not declare it, which is what makes it a CARRIER there; the
+// observer below declares it, which is what makes its absence observable.
+const carrierStrayKeyAdv0020 = "stray"
+
+// carrierObserverModel is ADV-2b's read-back instrument: a second model
+// bound to the SAME artifact role that DECLARES `stray` as owned state and
+// requests it, so `flow read-state` can report whether the artifact holds
+// it.
+//
+// It is deliberately READ-ONLY — no `[write.*]` block, and its single rule
+// is an escape row rather than a writing one — so the instrument cannot
+// itself write the key it is asked to look for.
+const carrierObserverModel = `outcomes = ["advance"]
+
+[model]
+id = "carrier-adv-observer-0020"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.` + carrierStrayKeyAdv0020 + `]
+provenance = "owned"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "` + carrierStrayKeyAdv0020 + `"]
+timeout = "2s"
+
+[[rule]]
+id = "observe"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "advance"
+`
+
+// observerKeysAdv0020 returns the DECLARED key set the observer's `state`
+// reader reports, so a test can prove the key it asserts absent was one the
+// reader actually asked for.
+func observerKeysAdv0020(t *testing.T, data map[string]any) []string {
+	t.Helper()
+
+	readers, ok := objectsAt(data, "readers")
+	if !ok {
+		t.Fatalf("`readers` is not an array of objects: %#v", data["readers"])
+	}
+	for _, r := range readers {
+		if r["id"] != flowStateRole {
+			continue
+		}
+		keys, ok := stringsAt(r, "keys")
+		if !ok {
+			t.Fatalf("reader %q carries no `keys` array: %#v",
+				flowStateRole, r["keys"])
+		}
+		return keys
+	}
+	t.Fatalf("the observer reported no reader %q", flowStateRole)
+	return nil
 }
 
 // readArtifactAdv0020 reads the caller-owned artifact's raw bytes.
