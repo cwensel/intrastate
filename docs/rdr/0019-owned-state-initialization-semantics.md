@@ -68,32 +68,7 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: foundational — one contract (owned-state first-run
-  initialization, C1/C2) whose clauses condition or extend surfaces
-  across RDRs 0002/0004/0005/0006/0010.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
+- **Profile**: foundational — owned-state first-run initialization: `[initial]` as both lint root and runtime bootstrap source, materialized by the `flow init-state` verb (C1); user-facing yes; locks cross-rdr
 - **Priority**: Low
 - **Related Issues**: kata `intrastate#7nqv` (1574)
 - **Predecessors**: 0002-transition-table-as-reviewable-data,
@@ -101,6 +76,16 @@ N/A-bulleted). -->
   0005-skill-integration-cli-contract,
   0006-graph-lint-authority-and-guarantees,
   0010-stateless-decision-tables
+- **Overrides**: 0005:C1 and 0005:D-naming (the closed `flow` verb
+  enumeration gains exactly one verb, `init-state`) — **appended, not
+  conditioned**, and additive on its owner's grammar: no existing verb
+  changes and nothing is withdrawn. The new verb inherits C1's
+  per-verb MUSTs (`respond.ValidateMode` first, `respond.OK`/`Fail`,
+  `SilenceErrors`/`SilenceUsage`) unchanged, and the refusal classes
+  new to it are recorded in C1's `flow-*` taxonomy. Precedent for
+  extending a closed enumeration this way: `0010`'s override of
+  `0002:C19` (closed dump column vocabulary gains `emit`), recorded as
+  an ordinary additive override (A4).
 - **Seam Lineage**: no prior accretion
 
 ## Problem Statement
@@ -138,63 +123,132 @@ the lint already is: RDR 0010's `decision-table` class has no
 
 - **A1 No runtime path reads `Model.Initial`, so making the init verb its
   sole runtime consumer conflicts with nothing.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: grep over `internal/cli` and `internal/resolve` for
-    `Initial` hits tests only (`lint_gate_0006_test.go`,
-    `mvv_0010_test.go`); re-verify at Resolve.
+  - **Evidence**: repo-wide sweep for `.Initial` returns no
+    non-test consumer in `internal/cli` or `internal/resolve`. The
+    only non-test readers are lint —
+    `internal/graphlint/reach.go::reach` (root seeding, and the
+    `len(m.Initial) == 0 && !table.IsDecisionTable(m)` arm),
+    `internal/graphlint/analysis.go::checkAlwaysPresentOwned`,
+    `::checkUnreachableRules` — and the loader itself,
+    `internal/table/load.go::(*loader).loadInitial` (the write site)
+    and `::checkAccessorBindings` (which reads it to build the
+    `written` set, see A3). Every other hit is a test
+    (`lint_gate_0006_test.go`, `mvv_0010_test.go`,
+    `internal/table/*_test.go`, `internal/graphlint/*_0006_test.go`).
+    The runtime-consumer class is empty.
   - **If wrong**: a hidden reader already assigns `[initial]` different
     runtime semantics and the clause here contradicts shipped behavior.
-- **A2 The `set-state` write path can carry model-sourced values: a
-  `table.TagValue` from `Model.Initial` renders to the same canonical wire
-  form `parseWrites` produces for a request value, so read-back equality
-  (REQ-107's value-for-value form) holds for seeded keys.**
-  - **Status**: Pending
+- **A2 The `set-state` write path can carry model-sourced values, over the
+  admission set the two routes SHARE: a `table.TagValue` from
+  `Model.Initial` renders to the same canonical wire form `parseWrites`
+  produces for the equivalent argv value, so read-back equality
+  (REQ-107's value-for-value form) holds for seeded keys. The loader's
+  `[initial]` admission set is a proper SUPERSET of the argv route's, so
+  init-state seeds from the loader-normalized value rather than by
+  transcribing to argv (C1).**
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: needed — table-driven over EVERY value kind `[initial]`
-    admits: seed each through
-    `internal/cli/flow_state.go::groupByWriter` and the executor into a
-    fresh artifact, `set-state --write` the equivalent argv value into a
-    second fresh artifact, assert the two artifacts byte-identical.
-    `--write` values enter as argv strings through `parseWrites`
-    coercion while `Model.Initial` values arrive loader-typed, so the
-    premise that both reach one canonical wire form is a
-    normalization premise — verified, not assumed.
+  - **Evidence**: `go test ./internal/cli/ -run 'TestSpikeA2' -v`,
+    table-driven over every value kind `[initial]` admits, comparing two
+    fresh artifacts byte-for-byte — the strong form, not value-level
+    (`evidence/spikes/a2-canonical-form.md`, raw output
+    `a2-canonical-form-run.txt`, source `a2-spike-source.go.txt`).
+    RENDERING agrees byte-identically on all 9 kinds both routes admit:
+    enum, scalar string, bool, int, float, set array (sorted), set with
+    duplicates and HTML characters (deduped, escaping off), empty set
+    `[]`, single-member set. ADMISSION diverges on 3, and this is
+    decided behavior, not a defect: `internal/cli/flow_input.go::canonicalValue`
+    refuses a bare scalar for a `kind="set"` tag and an array literal
+    for a scalar tag per **JDR 0001 §D11** ("a bare scalar for a set
+    key, or an array for a scalar key, is `flow-write-invalid`"), whose
+    stated ground is argv parsing ambiguity — "the model declares the
+    kind, so parsing is unambiguous". A model-sourced seed has no argv
+    string to disambiguate, so §D11's refusals do not govern it, and
+    §D13's canonical form ("the same byte form the CLI accepts in
+    `--write` … so 0004's read-back equality is byte equality and no
+    third encoding exists") is preserved by conforming each member with
+    `table.ConformValue` and rendering through the same
+    `::canonicalSet`. The third divergence, an empty scalar
+    (`note = ""`), is unwritable by EITHER route today — loader-admitted,
+    `canonicalValue`-refused unconditionally — and is recorded as a
+    loader asymmetry out of scope here (see Failure Modes).
   - **If wrong**: init's read-back mismatches on lint-clean models — or,
     worse, passes while persisting a form a manual `set-state` would not
     — and the verb needs an explicit route through the same coercion
     stage `--write` uses, changing the design's reuse claim.
-- **A3 Every `[initial]` key of a lint-certified state-machine model is
-  served by EXACTLY ONE declared `[write.<id>].keys` writer — existence
-  AND uniqueness — so init can route every seed through
+- **A3 Every `[initial]` key of a model that LOADS is served by EXACTLY
+  ONE declared `[write.<id>].keys` writer — existence AND uniqueness —
+  so init can route every seed through
   `internal/cli/flow_state.go::writerFor` (which refuses both the
   zero-writer and the multi-writer arm) without a bypass.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: needed — lint certifies REACHABILITY of `[initial]`
-    keys, not WRITABILITY, and no cited clause ties `[initial]` (or
-    `graphlint` `ownedRequiredKeys`) to writer coverage: the veto
-    clause this assumption needs may simply not exist. Find and quote
-    the governing lint/loader clause, or establish that none exists.
-  - **If wrong**: a lint-certified model refuses at seed time
+  - **Evidence**: the guarantee holds, but its site is the LOADER, not
+    lint — the assumption originally looked for a lint arm and there is
+    none. `internal/table/load.go::(*loader).checkAccessorBindings`
+    builds a `written` set from every key a rule writes or clears AND
+    every key `[initial]` assigns (`for _, t := range l.model.Initial {
+    written[t.Key] = true }`), then refuses any `written` key whose
+    writer count is not exactly 1: `CatMalformedAccessorBinding`,
+    "written tag %s is served by %d writers; want exactly one". Its
+    own comment states the clause: "Every key any rule's write block or
+    clear list names, and every key `[initial]` assigns, MUST be served
+    by exactly one writer." Confirmed absent from lint:
+    `internal/graphlint` has no non-test reference to `m.Writers` at
+    all, and `::checkAlwaysPresentOwned` covers a strict SUBSET
+    (owned tags with `decl.Required == true`) and checks state
+    presence, not writer coverage. Because this runs at load, any model
+    the CLI can see already satisfies it by construction — a stronger
+    and earlier guarantee than lint certification, so the assumption's
+    scope widens from "lint-certified" to "loads at all", and
+    `writerFor` needs no bypass. Matching arms confirmed at
+    `internal/cli/flow_state.go::writerFor` (`n == 0` and `n > 1` both
+    user errors).
+  - **If wrong**: a model refuses at seed time
     (`flow-write-unbound`/multi-writer arm) — caught with zero writes
-    committed by C2's plan-level validation, but still a wall; the
+    committed by C1's plan-level validation, but still a wall; the
     clause then needs a companion lint arm making writer
     existence-and-uniqueness for `[initial]` keys a certification
     requirement (the preferred cure — fail at lint time), or a decided
     direct-write bypass.
 - **A4 Extending 0005:C1's closed verb enumeration by one verb is a
   recordable override of a Final peer's clause.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: needed — an override's EXISTENCE (`0010:C5`'s
-    override of `0006:C18`, per `0010:A10`) does not show that an
-    override may extend a closed ENUMERATION; citing it for this case
-    borrows authority it may not carry. Resolve must quote the override
-    provision's actual text against the enumeration case, and enumerate
-    the enumeration's consumers this override must update — `flow`
-    command registration, `--help-all`, docs generation, and the
-    `flow-*` code taxonomy for the verb's new failure classes.
+  - **Evidence**: the assumption's own caution was right — `0010:C5`'s
+    override of `0006:C18` is a CLASS-CONDITIONING of a substantive
+    rule (it narrows scope; nothing is added to a set) and does not
+    reach the enumeration case. The governing precedent is a different
+    entry on the same `0010` Overrides line: **`0002:C19` (closed dump
+    column vocabulary gains `emit`)** — recorded as an ordinary
+    additive override of a Final peer, with no assent clause and no
+    special provision. `0002:C19` fixes "That closed list is the column
+    vocabulary" and refuses an `order` naming an unknown identifier at
+    load, so it is a genuinely closed enumeration extended by exactly
+    one member. `0010`'s own line marks the contrasting strict case —
+    `0006`'s `reason` set, "**appended, not conditioned** … the one
+    clause of this RDR that is not additive on its owner's grammar, so
+    it needs 0006's assent (A14)" — which does not govern here: adding
+    a verb takes nothing from `0005` and changes no existing verb, so
+    it is additive on its owner's grammar, sitting with `0002:C19`.
+    Shipped code already anticipates the extension:
+    `internal/cli/flow.go:87` — "a fifth verb added inside the group
+    inherits the gate". Consumers this override must update, verified
+    against `internal/cli/flow.go`: (1) `::newFlowCmd` registration;
+    (2) its `Long` body and (3) `::flowExtendedDesc`, BOTH of which
+    hard-code the cardinal "four verbs"; (4) the bare-`flow`
+    `command-error` message, which enumerates the verbs verbatim —
+    user-visible and previously unnamed; (5) `internal/cli/docs.go`
+    generation and the checked-in `llms.txt`, which must be
+    regenerated and committed; (6) the `flow-*` taxonomy in
+    `docs/cli-output-contract.md`; (7) `0005:D-naming`'s verb list;
+    (8) narrative prose in `README.md`, `docs/model-authoring.md`, and
+    `internal/cli/root.go`. The verb also inherits `0005:C1`'s
+    per-verb MUSTs (`respond.ValidateMode` first, `respond.OK`,
+    `respond.Fail`, `SilenceErrors`/`SilenceUsage`), which 0005's test
+    corpus asserts verb-by-verb.
   - **If wrong**: the verb cannot be added without re-opening RDR 0005,
     and the carrier falls back to the rejected flag-on-`set-state` form.
 - **A5 The empty-store predicate preserves cleared keys under
@@ -205,14 +259,36 @@ the lint already is: RDR 0010's `decision-table` class has no
   writer path this RDR introduces. The stated exception is exact:
   clearing the LAST key empties the store and the next init-state
   reseeds it.**
-  - **Status**: Pending
-  - **Method**: MVV Test
-  - **Evidence**: needed — MVV steps 6–8 (clear one key of a two-key
-    seeded artifact, read-back absent, re-init is a no-op success whose
-    payload reports the key absent-from-`[initial]` and whose artifact
-    bytes are unchanged), AND step 9, which clears the remaining key and
-    asserts the reseed actually happens — the boundary is verified in
-    the direction that fails, not only the direction that holds.
+  - **Status**: Verified
+  - **Method**: Spike
+  - **Evidence**: `init-state` does not exist yet, so the spike verified
+    the SUBSTRATE property the predicate rests on, against the shipped
+    CLI and at the Go level, and they agree
+    (`evidence/spikes/a5-empty-store.md`; steps
+    `a5-step-i-absent.txt` … `a5-step-v-diff.txt`,
+    `a5-step-go-load-apply.txt`). A clear is key REMOVAL —
+    `internal/cli/flowbind/flowbind.go::Writer.Apply` does
+    `delete(s, t.Key)`, no tombstone. Clearing the last key leaves
+    exactly `{}` + newline (3 bytes; `xxd` captured), with no header,
+    version marker, or retained key names, and
+    `::load` returns the same zero-key store for it as for an absent
+    file (`diff` of the two `read-state` envelopes exits 0 modulo the
+    echoed path; `reflect.DeepEqual` true). A subsequent write over the
+    emptied store and over a fresh one are byte-identical (`cmp`). A
+    store retaining one key reports `len == 1`, so the predicate
+    correctly declines. EMPTIED == ABSENT confirmed; the only surviving
+    distinction is that the file exists on disk, which no content-level
+    predicate can see. The MVV steps 6–9 remain the standing
+    regression once the verb ships.
+    Boundary found by the spike and now named in C1: a read-back-SEALED
+    artifact (`::sealedKey`, the NUL-prefixed
+    `flow.readback-unreachable` marker persisted per `0004:C13`/`C14`,
+    REQ-104) whose owned keys are all cleared is a ONE-key store — so
+    the count that makes the predicate safe is over STORE keys, not
+    owned keys. Such an artifact is already exit-3 unreadable to every
+    reader (`::Reader` reports every requested key UNREADABLE, not
+    absent, per `0004:C7`), and the seal is dropped by the next
+    reachable-locator write.
   - **If wrong**: either some path seeds into a store that still carries
     a key — the resurrect hazard the per-key variant was rejected for —
     or the emptied-store boundary sits somewhere other than "zero keys",
@@ -248,7 +324,7 @@ the key-added-after-seeding case is answered by explicit `set-state`
 guided by that report. The predicate's boundary is disclosed rather
 than hidden: emptying the store by clearing its last key returns it to
 the initializable class, because an emptied store and a never-written
-one are the same store (C2). Class-keyed like the lint:
+one are the same store (C1). Class-keyed like the lint:
 a `decision-table` model (`internal/table/model.go::IsDecisionTable`
 ⇒ the existing class discriminator is reused, no parallel predicate)
 has no `[initial]` (`0010:C2` forbids it) and the verb refuses.
@@ -283,11 +359,7 @@ state is assembled only from caller-bound artifacts (0004:C3
 unchanged). A `decision-table` model has no `[initial]` (0010:C2) and
 therefore no bootstrap to materialize; initialization MUST refuse for
 that class rather than succeed vacuously.
-```
 
-**C2**
-
-```normative
 CARRIER. The `flow` group gains one verb, `init-state` — an override
 extending 0005:C1's verb enumeration and 0005:D-naming's verb list by
 exactly this spelling. It takes the shared selection flags
@@ -298,9 +370,38 @@ accessors with commit-time read-back, on the same
 writer-routing/no-cross-writer-atomicity terms as `set-state`
 (0005:C1); it MUST NOT write an artifact directly.
 
+Seed values are taken from the LOADER-NORMALIZED `Model.Initial`
+assignments, NOT by transcribing them to their `--write` argv spelling:
+each value is held to its declaration with `table.ConformValue` and
+rendered in JDR 0001 §D13's canonical form (the same encoder
+`set-state` uses), so read-back equality stays byte equality and no
+third encoding exists. This is deliberate, because the loader's
+`[initial]` admission set is a proper SUPERSET of the argv route's: a
+bare scalar for a set-valued tag and an array literal for a scalar tag
+both load and normalize, and are refused only on the argv surface
+(`internal/cli/flow_input.go::canonicalValue`) under JDR 0001 §D11,
+whose stated ground is that the model declares the kind so argv parsing
+is unambiguous — a disambiguation duty a model-sourced seed does not
+carry. Transcribing through argv would therefore refuse at seed time
+models that load clean, re-creating the first-run wall this verb
+exists to remove (A2).
+
 Seeding is ALL-OR-NOTHING over an EMPTY store, never a per-key merge:
 init-state seeds if and only if the bound artifact carries NO key, and
-then it seeds every `[initial]` key. A non-empty artifact — torn,
+then it seeds every `[initial]` key. The count is over STORE keys, not
+owned keys, and the difference is reachable: a read-back-SEALED
+artifact carries `internal/cli/flowbind/flowbind.go::sealedKey` (the
+NUL-prefixed `flow.readback-unreachable` marker persisted in the
+artifact per `0004:C13`/`0004:C14`, REQ-104), so an artifact whose
+owned keys have all been cleared but whose last write declared an
+unreachable read-back locator is a ONE-key, NON-EMPTY store that
+init-state declines to seed. That is the correct arm and it is stated
+rather than incidental: such an artifact is already exit 3 unreadable
+to every reader — the read accessor reports every requested key
+UNREADABLE rather than absent (`0004:C7`) — so seeding into it would
+write beneath an unverifiable state. The seal is dropped by the next
+write whose locator IS reachable, which returns the artifact to the
+ordinary classes above. A non-empty artifact — torn,
 partially seeded, post-clear, or fully seeded alike — is a NO-OP
 SUCCESS: zero writes, and the payload reports which `[initial]` keys
 the store does not carry (informational, so a torn or post-clear state
@@ -344,7 +445,7 @@ unchanged, and the classes new to this verb get codes recorded in the
 ```
 
 Exact payload field names, the refusal-code spelling, and help text are
-deliberately deferred to Resolve/Pre-Lock; C1/C2 fix the semantics and
+deliberately deferred to Resolve/Pre-Lock; C1 fixes the semantics and
 the carrier, which is the fork this RDR exists to close.
 
 #### Load-Bearing Decisions
@@ -365,15 +466,18 @@ the carrier, which is the fork this RDR exists to close.
   comes from the model — one verb with two write-plan sources muddies
   both grammars and REQ-3's flag list anyway).
 - **Selection / predicate** — per store, not per key: seed (all
-  `[initial]` keys) iff the bound artifact carries no key (the store's
+  `[initial]` keys) iff the bound artifact carries no key — every
+  STORE key, not only the owned ones, so a read-back seal counts
+  (`::sealedKey`, C1) — (the store's
   own presence answer, `internal/cli/flowbind/flowbind.go::store` —
   whose writer is any prior committed `set-state`/init write; an
   empty store means never-written or emptied by clears, which are
-  indistinguishable at the content level, and both read as
+  indistinguishable at the content level — verified byte-level at
+  Resolve, A5 — and both read as
   "initializable" — the cleared-vs-unseeded ambiguity is not removed by
   this predicate, it is confined to the single state where the store
   carries nothing at all, since one surviving key blocks seeding;
-  C2 records that residual); class: refuse iff
+  C1 records that residual); class: refuse iff
   `internal/table/model.go::IsDecisionTable` — the shipped
   discriminator (its writer is the loader materializing `[model]
   class`, `0010:C1`), never a re-derivation from `len(owned)`.
@@ -390,9 +494,15 @@ the carrier, which is the fork this RDR exists to close.
 - Equivalence with the manual path: `init-state` into a fresh
   artifact and the `set-state --write` transcription of the same
   `[initial]` assignments into a second fresh artifact produce
-  byte-identical artifacts, for every value kind `[initial]` admits
+  byte-identical artifacts, for every value kind BOTH routes admit
   (the A2 spike's table; catches both the hard read-back divergence
-  and the silent canonical-form divergence).
+  and the silent canonical-form divergence). The qualifier is exact
+  and load-bearing: the loader's `[initial]` admission set is a proper
+  superset of the argv route's, so the three kinds only the loader
+  admits (bare scalar for a set tag, array for a scalar tag, empty
+  scalar) have no `--write` transcription to compare against and are
+  outside this invariant — they are covered instead by the
+  conform-and-canonicalize path C1 fixes.
 - Cleared-key preservation, on a store that retains a key:
   `init-state ∘ (set-state --clear k)` on a seeded artifact carrying at
   least one key besides k writes nothing, and `read-state` still
@@ -401,7 +511,7 @@ the carrier, which is the fork this RDR exists to close.
   empty-store predicate; re-establishment is explicit `set-state`. The
   inverse holds at the boundary and is asserted as such: clearing the
   last key empties the store, so the next `init-state` reseeds every
-  `[initial]` key (C2's disclosed residual).
+  `[initial]` key (C1's disclosed residual).
 
 #### Illustrative Code
 
@@ -420,9 +530,9 @@ intrastate flow init-state --model flow.toml \
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Initial assignments in the normalized model | `internal/table/model.go::Model.Initial` (loader-validated, `CatMalformedInitialDeclaration`) | today read by lint only (A1) | Reuse | none — no schema change |
-| Class discrimination | `internal/table/model.go::IsDecisionTable` | none | Reuse | C2's class refusal keys on it |
-| Writer routing | `internal/cli/flow_state.go::writerFor`, `::groupByWriter` | requires exactly one writer per key (A3) | Reuse | init refuses writerless `[initial]` keys unless A3 forces a lint arm |
-| Write + read-back | accessor executor (`accessor.NewExecutor`, `Write`) | no cross-writer atomicity (stated, inherited) | Reuse | C2 inherits `set-state`'s terms verbatim |
+| Class discrimination | `internal/table/model.go::IsDecisionTable` | none | Reuse | C1's class refusal keys on it |
+| Writer routing | `internal/cli/flow_state.go::writerFor`, `::groupByWriter` | requires exactly one writer per key — guaranteed at load by `internal/table/load.go::(*loader).checkAccessorBindings` for every `[initial]` key (A3) | Reuse | none — no lint arm owed; a model that loads already satisfies it |
+| Write + read-back | accessor executor (`accessor.NewExecutor`, `Write`) | no cross-writer atomicity (stated, inherited) | Reuse | C1 inherits `set-state`'s terms verbatim |
 | Request assembly / selection flags | shared `flow` path (`internal/cli/flow_exec.go::buildRequest`) | none | Reuse | new verb registers like the four shipped verbs |
 | Verb surface | `flow` group (0005:C1 closed verb enum) | closed enumeration | Extend | recorded override adding `init-state` (A4) |
 
@@ -435,7 +545,7 @@ is load-bearing and applies to every column including the chosen one:
 any write predicate keyed on a key's absence resurrects cleared keys
 under unconditional automated re-invocation, which is the same axis
 that disqualifies B — so D earns its column only under the empty-store
-predicate, and only within the boundary C2 discloses:
+predicate, and only within the boundary C1 discloses:
 
 | Criterion | A lint-only | B read-fallback | C flag on read verbs | D init verb (empty-store) |
 | --- | --- | --- | --- | --- |
@@ -463,11 +573,11 @@ costs are counted, not waved past: a new payload shape (which is not
 why `--from-initial` was rejected — that rejection stands on the
 two-plan-sources-in-one-verb grammar muddle), one explicit `set-state`
 for a key added to `[initial]` after seeding, and the emptied-store
-residual C2 discloses.
+residual C1 discloses.
 
 Premortem: switched (hardened) — the init-verb approach survived with
 its seeding rule switched to the empty-store predicate; the remaining
-findings are folded into C2, A2–A5, and Failure Modes.
+findings are folded into C1, A2–A5, and Failure Modes.
 Ground-sweep: clean (22 anchors)
 Joint-check: clear (12 peers) — context beside the verdict: 0021
 mentions `[initial]` solely in its lint-root role (the reachability
@@ -564,7 +674,7 @@ decided property.
 - **Cleared-key tombstones in the artifact**: the only mechanism that
   distinguishes cleared from never-set — it would let per-key seeding
   be safe, and would also close the chosen predicate's emptied-store
-  residual (C2). Rejected because it changes the artifact wire format
+  residual (C1). Rejected because it changes the artifact wire format
   every reader and RDR 0004's read-back comparison touch — a
   cross-verb blast radius out of proportion to a first-run verb. The
   residual is accepted and disclosed instead; revisit this if the wire
@@ -658,9 +768,21 @@ is that write with the model as its plan source.
   `checkAlwaysPresentOwned` enforces that `[initial]` establishes every
   always-present owned key — so for the always-present subset, seeding
   from `[initial]` is guaranteed complete by certification.
-- **Assumed** — canonical-form fidelity of model-sourced values through
-  the set-state write path (A2) and writer coverage of `[initial]` keys
-  (A3) need Resolve verification before the reuse claim is load-bearing.
+- **Documented** — writer coverage of `[initial]` keys is guaranteed at
+  LOAD, not at lint: `internal/table/load.go::(*loader).checkAccessorBindings`
+  folds every `[initial]` key into its `written` set and refuses any
+  whose writer count is not exactly one. `internal/graphlint` has no
+  non-test reference to `m.Writers` at all. The guarantee is therefore
+  stronger and earlier than the RDR first assumed — it holds for any
+  model that loads, certified or not (A3).
+- **Documented** — canonical-form fidelity holds for every value kind
+  both write routes admit, verified byte-for-byte on the artifact; what
+  diverges is ADMISSION, the loader's `[initial]` set being a proper
+  superset of the argv route's. The two set/scalar-shape divergences are
+  JDR 0001 §D11's decided argv-disambiguation refusals, which do not
+  govern a model-sourced seed; the empty scalar is an undecided
+  loader/write-surface asymmetry routed out of this RDR (A2, Failure
+  Modes).
 
 ## Trade-offs
 
@@ -683,28 +805,31 @@ is that write with the model as its plan source.
   automated re-invocation.
 - Negative: that safety is bounded by store emptiness, not by intent —
   clearing the last owned key returns the artifact to the
-  initializable class and a later init reseeds it (C2). Operators who
+  initializable class and a later init reseeds it (C1). Operators who
   clear keys individually to reset must discard the artifact or expect
   the reseed; the boundary is contract text and a test, not a hidden
   edge.
 
 ### Risks and Mitigations
 
-- **Risk**: a lint-certified model whose `[initial]` names a writerless
+- **Risk**: a model whose `[initial]` names a writerless
   (or multi-writer) key makes init refuse, re-creating the wall it
   exists to remove (A3).
-  **Mitigation**: C2's plan-level validation guarantees the refusal
-  lands with zero writes committed; Resolve verifies writer coverage,
-  and if uncovered the clause gains a companion lint arm (writer
-  existence-and-uniqueness for `[initial]` keys joins certification)
-  rather than a direct-write bypass.
+  **Mitigation**: discharged at Resolve — the case cannot arise. The
+  loader already refuses such a model outright
+  (`internal/table/load.go::(*loader).checkAccessorBindings`,
+  `CatMalformedAccessorBinding`), so a model the CLI can load has
+  exactly one writer for every `[initial]` key. No companion lint arm
+  is owed and no direct-write bypass is needed; C1's plan-level
+  validation stays as defense in depth, guaranteeing any residual
+  refusal lands with zero writes committed.
 - **Risk**: operators read init as "reset to initial".
   **Mitigation**: the empty-store predicate makes init incapable of
   touching a store that carries any key; reset stays `set-state`'s job.
 - **Risk**: an operator clears owned keys one at a time to "start
   over", empties the store, and a scheduled `init-state` reseeds —
   reading as the resurrect hazard the design rejects elsewhere.
-  **Mitigation**: this is C2's disclosed residual, not a defect; the
+  **Mitigation**: this is C1's disclosed residual, not a defect; the
   no-op payload and the docs must state the boundary in store terms
   ("while any key remains"), and MVV step 9 pins it so it cannot move
   silently. Closing it entirely would require artifact tombstones,
@@ -712,7 +837,7 @@ is that write with the model as its plan source.
 
 ### Failure Modes
 
-- **Visible**: init on a decision-table model refuses with the C2 class
+- **Visible**: init on a decision-table model refuses with the C1 class
   code before any accessor runs; a writerless or multi-writer
   `[initial]` key refuses at plan validation with zero writes
   committed; read-back disagreement is a terminal refusal naming the
@@ -728,7 +853,7 @@ is that write with the model as its plan source.
   read-back mismatch: no re-run ever overwrites it, and no payload ever
   calls it correct.
 - **Scope gap (disclosed)**: init's claim covers exactly the
-  `[initial]` key set (C2); an owned key `[initial]` does not assign
+  `[initial]` key set (C1); an owned key `[initial]` does not assign
   can still surface `unknown[].reason: absent` in `flow next` after a
   successful init. The payload's fixed scope plus
   `flow next`'s own unknown report are the diagnosis surface; the cure
@@ -739,6 +864,19 @@ is that write with the model as its plan source.
   after seeding is not materialized by any automatic path — one
   explicit `set-state`, guided by init's absent-key report. Accepted
   as the price of cleared-key safety under automation.
+- **Empty scalar (disclosed, out of scope)**: an `[initial]` key whose
+  value is an empty scalar (`note = ""`) is admitted by the loader —
+  no kind or domain rule rejects it and its arity is 1 — yet refused
+  unconditionally by `internal/cli/flow_input.go::canonicalValue` for
+  non-set tags ("the tag `note` was given an empty value"), so it is
+  unwritable by EITHER route today (A2's spike). No written source
+  decides it: JDR 0001 §D11 settled the empty SET against absent
+  (`[]` and `--clear` "stay distinct") but never the empty scalar, and
+  the corpora are silent. This is a loader/write-surface asymmetry that
+  predates this RDR and is NOT decided here — it is routed to RDR 0002
+  as a seed. C1's seed path assumes it cannot arrive; if the asymmetry
+  is instead resolved toward admitting it, C1's conform step accepts it
+  with no clause change.
 
 ## Implementation Plan
 
@@ -769,12 +907,12 @@ always-present owned key and one plain owned key, both writer-served:
    `[initial]` key, `flow read-state` still reports it absent —
    invariant 4 / A5.
 8. `flow init-state` against a decision-table model refuses (exit 2)
-   with the C2 class code; against the fixture with an unbound artifact
+   with the C1 class code; against the fixture with an unbound artifact
    role it refuses in the existing artifact-binding family with zero
    writes committed.
 9. The boundary, asserted in the failing direction: clear the
    REMAINING key so the store carries none, then `flow init-state` —
-   it seeds every `[initial]` key again. This is C2's disclosed
+   it seeds every `[initial]` key again. This is C1's disclosed
    residual and the test exists so a future change cannot silently
    move the boundary.
 
@@ -814,7 +952,7 @@ sentence gains its runtime carrier), `--help-all` text.
 The MVV sequence above is the acceptance spine and runs as an
 integration test over a fixture model; "done" is every one of its
 steps green plus the unit coverage below. Coverage goals are stated as
-arms, not percentages — each normative arm of C2 owes at least one
+arms, not percentages — each normative arm of C1 owes at least one
 test that fails if the arm is removed.
 
 1. **Scenario**: Empty store, every `[initial]` key writer-served.
@@ -829,10 +967,15 @@ test that fails if the arm is removed.
    (RT4 / A5).
 4. **Scenario**: Fresh artifact seeded by `init-state` versus a second
    fresh artifact written by the equivalent `set-state --write`
-   transcription, table-driven over every value kind `[initial]`
-   admits.
+   transcription, table-driven over every value kind BOTH routes admit
+   (9 kinds: enum, scalar string, bool, int, float, set array, set with
+   duplicates and HTML characters, empty set, single-member set).
    **Expected**: the two artifacts are byte-identical (RT3; this is
-   A2's spike promoted to a standing test).
+   A2's spike promoted to a standing test). Separately, the 3 kinds
+   only the loader admits (bare scalar for a set tag, array for a
+   scalar tag) seed successfully via the normalized path and read back
+   value-for-value — they have no argv counterpart to diff against, so
+   the assertion is read-back equality, not cross-route byte identity.
 5. **Scenario**: `[initial]` names a key with zero declared writers,
    and separately one with more than one.
    **Expected**: refusal from the existing writer-routing family with
@@ -842,12 +985,22 @@ test that fails if the arm is removed.
    **Expected**: refusal in the existing artifact-binding family,
    zero writes committed.
 7. **Scenario**: `decision-table` model.
-   **Expected**: exit 2 with the C2 class code, raised before any
+   **Expected**: exit 2 with the C1 class code, raised before any
    accessor runs (asserted by a writer that fails if invoked).
 8. **Scenario**: A writer whose read-back disagrees with the value
    written.
    **Expected**: terminal refusal naming the key present-and-unverified;
    a subsequent re-run is a no-op that does NOT repair it.
+9. **Scenario**: A read-back-sealed artifact whose owned keys have all
+   been cleared — write through a writer with an unreachable read-back
+   locator (the artifact gains `flowbind::sealedKey`), then clear every
+   owned key, then run `init-state`.
+   **Expected**: NO-OP SUCCESS with zero writes — the store carries the
+   seal and is therefore non-empty, even though it holds no owned key.
+   Asserted on artifact bytes, not just exit code. This pins the
+   predicate's count to STORE keys; a future change that counted owned
+   keys instead would seed beneath an unverifiable state and fail here
+   (A5, C1).
 
 ## Finalization Gate
 
