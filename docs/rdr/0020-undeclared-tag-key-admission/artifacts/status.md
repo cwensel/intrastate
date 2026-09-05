@@ -1,9 +1,9 @@
-RDR: 0020-undeclared-tag-key-admission | phase: 0 — spec audit | state: IN-PROGRESS
-last: Phase 0 complete — 59 REQs + REQ-MVV, impact rows: 6, 2 questions recorded as D1/D2
+RDR: 0020-undeclared-tag-key-admission | phase: 2 — implementation | state: IN-PROGRESS
+last: Phase 1 PASS — 28 tests, red gate confirmed (15 new REQs red), no orphans @886e600
 blocker: none
-changed: artifacts/req-list.md, artifacts/impact.md, artifacts/deviations.md
+changed: internal/cli/flow_carrier*0020_test.go, artifacts/coverage.md
 validate: go test ./...
 baseline: green @d97f2c5
-next: Phase 1 — tests first (delegated)
+next: Phase 2 leg 1 — Phase 1 tests, then TestAdv0008, TestMVV0008, then full suite
 session: 2026-09-04
 artifacts: req-list.md impact.md coverage.md verification.md deviations.md
