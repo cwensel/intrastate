@@ -28,7 +28,10 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -468,15 +471,80 @@ eq = "advance"
 stage = "final"
 `
 
-// initMismatchModel binds the READ accessor to a DIFFERENT artifact path
-// than its writer, which is S8's construction: the read-back reads a store
-// the write never touched, so a value pre-seeded there conflicts and the
-// read-back COMPLETES AND DISAGREES.
+// --- the read-back MISMATCH route ---------------------------------------
 //
-// The two roles are what makes the divergence bindable from argv: the
-// writer takes `state`, the reader takes `mirror`, and the invocation
-// points them at different files.
-const initMismatchModel = `outcomes = ["advance"]
+// S8's WRITTEN recipe — bind the read accessor to a different artifact
+// path than its writer — is UNCONSTRUCTIBLE, and no fixture here should
+// attempt it. `internal/accessor/executor.go::Executor.Write` resolves the
+// artifact from the WRITE definition's role and passes that SAME artifact
+// to `invokeRead`, so the read-back always re-reads the WRITER's artifact;
+// `internal/cli/flowbind/flowbind.go::Reader.Read` reads `art.Path` (the
+// caller's binding) and consults its declared `r.Path` only for the
+// unreachable short-circuit; and `::Registry.readerFor` selects the reader
+// by the WRITER's role, so a two-role fixture finds no reader at all and
+// degrades to `read_back_incomplete` at exit 3 — the very class S8 wants
+// to be DISTINCT from.
+//
+// The mismatch class IS reachable, by the other arm of `verifyReadBack`:
+// its second loop compares the `before` baseline of PROTECTED NON-OWNED
+// keys (`::protectedKeys` — the reader's declared keys MINUS the plan's
+// owned keys) against the completed re-read. So the divergence is bound by
+// pairing a COMMAND-backed writer with a FILE-backed reader on the SAME
+// role — `flowbind.Registry` dispatches readers and writers independently
+// by carrier — and letting the write command corrupt a protected key the
+// plan never named. The re-read completes and disagrees: exit 2.
+
+// initMismatchProtectedKey is the PROTECTED non-owned key the write
+// command clobbers. The reader declares it and the write plan does NOT
+// name it, which is exactly what puts it in `::protectedKeys`; it is
+// ESTABLISHED in the artifact pre-write so the `before` baseline holds a
+// value to disagree with. Both halves are load-bearing — an unestablished
+// baseline makes the comparison unevaluable and the refusal degrades to
+// the incomplete arm.
+const initMismatchProtectedKey = "profile"
+
+// initMismatchOwnedKey is the key the write plan DOES name. The command
+// applies it CORRECTLY, so the first `verifyReadBack` loop passes and the
+// refusal can only come from the protected-key loop.
+const initMismatchOwnedKey = "stage"
+
+// initMismatchClobberScript writes the corrupting write command and
+// returns its absolute path. It consumes the stdin envelope, applies the
+// planned owned key correctly, and ALSO overwrites the protected
+// non-owned key.
+//
+// It is a SCRIPT FILE named as argv0 — the only shape a model may carry,
+// since a declared `["sh", "-c", …]` vector is the `0025:C5`
+// `command_shell_interpreter` defect and would refuse at LOAD.
+func initMismatchClobberScript(t *testing.T, dir string) string {
+	t.Helper()
+
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skipf("no POSIX sh on PATH for the clobbering write command: %v", err)
+	}
+	p := filepath.Join(dir, "clobber-write")
+	const body = `#!/bin/sh
+# stdin: the write envelope, consumed and discarded.  argv: <artifact>
+set -e
+cat > /dev/null
+printf '{"` + initMismatchProtectedKey + `":"clobbered","` +
+		initMismatchOwnedKey + `":"final"}\n' > "$1"
+`
+	if err := os.WriteFile(p, []byte(body), 0o700); err != nil {
+		t.Fatalf("writing the clobbering write command: %v", err)
+	}
+	return p
+}
+
+// initMismatchModel renders the model whose write accessor is the supplied
+// clobbering COMMAND and whose read accessor is FILE-backed on the SAME
+// role. The reader declares the protected key; the writer's `keys` names
+// only the owned one.
+//
+// A command entry requires an ABSOLUTE artifact path, so every invocation
+// over this model must bind one.
+func initMismatchModel(script string) string {
+	return `outcomes = ["advance"]
 terminal = ["done"]
 
 [model]
@@ -489,39 +557,49 @@ kind = "enum"
 single_valued = true
 required = true
 
-[tags.stage]
+[tags.` + initMismatchOwnedKey + `]
 provenance = "owned"
-kind = "scalar"
+kind = "enum"
+domain = ["seeded", "final"]
+single_valued = true
+required = true
+
+[tags.` + initMismatchProtectedKey + `]
+provenance = "owned"
+kind = "enum"
+domain = ["intact", "clobbered"]
+single_valued = true
 
 [read.state]
-role = "mirror"
+role = "state"
 path = "flow.state"
-keys = ["stage"]
-timeout = "2s"
+keys = ["` + initMismatchOwnedKey + `", "` + initMismatchProtectedKey + `"]
+timeout = "5s"
 
 [write.state]
 role = "state"
-path = "flow.state"
-keys = ["stage"]
-timeout = "2s"
+command = [` + strconv.Quote(script) + `, "{artifact}"]
+keys = ["` + initMismatchOwnedKey + `"]
+timeout = "10s"
 read_back = true
 
 [initial]
-stage = "seeded"
+` + initMismatchOwnedKey + ` = "seeded"
 
 [context.done]
-[context.done.match.stage]
+[context.done.match.` + initMismatchOwnedKey + `]
 eq = "final"
 
 [[rule]]
 id = "advance"
-[rule.match.stage]
+[rule.match.` + initMismatchOwnedKey + `]
 eq = "seeded"
 [rule.match.recognized]
 eq = "advance"
 [rule.write]
-stage = "final"
+` + initMismatchOwnedKey + ` = "final"
 `
+}
 
 // --- invocation builders -------------------------------------------------
 

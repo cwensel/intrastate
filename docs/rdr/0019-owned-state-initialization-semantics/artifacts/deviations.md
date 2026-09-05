@@ -192,9 +192,9 @@ REQ-67's no-op re-run stay asserted, by the two tests that own them.
 
 ---
 
-## DEV-9 — a read-back MISMATCH is unreachable through the file-backed carrier
+## DEV-9 — S8's read-back MISMATCH recipe is unconstructible; the class is not
 
-**Type**: SPEC-DEFECT
+**Type**: TEST-FIXTURE
 
 `0019:C1` fixes a PRESENT-AND-UNVERIFIED refusal at exit 2 for "a
 read-back that COMPLETED and disagreed", distinct from the
@@ -228,44 +228,49 @@ independent counts, each verified in source:
    the scenario asks to be distinguished FROM. The fixture's own setup
    `set-state` refuses at exit 3 before the scenario begins.
 
-With the artifact fixed and both reads going through
-`flowbind::Reader` over the file the writer just wrote, every remaining
-route to `::verifyReadBack`'s true branch is closed: planned keys read
-back byte-identically, `classify` turns an unanswered key into
-`unread` (which is INCOMPLETE, not mismatch), and `::Writer.Apply`
-touches only planned keys so no protected baseline can diverge.
+**What is defective is S8's BINDING TOPOLOGY, not the class.** The
+mismatch is reachable, and `flow-write-readback-mismatch` is not a dead
+code. The route is `::verifyReadBack`'s SECOND loop, over the `before`
+baseline of PROTECTED NON-OWNED keys — `::protectedKeys`, the reader's
+declared keys MINUS the plan's owned keys. `flowbind::Registry`
+dispatches readers and writers INDEPENDENTLY by carrier, so a model may
+pair a COMMAND-backed writer with a FILE-backed reader on the SAME
+role. The write command applies the planned owned key correctly and
+also mutates a protected key the plan never named; the completed
+file-backed re-read observes the divergence; `::verifyReadBack` returns
+true and the refusal is the mismatch.
 
-This is not a defect this record introduces. RDR 0005's own suite never
-reaches the class either — `internal/cli/flow_setstate_0005_test.go`'s
-read-back test asserts the INCOMPLETE/TIMEOUT pair and names the
-mismatch code only to exclude it — so `flow-write-readback-mismatch` is
-a shipped code with no `flowbind` witness.
+Verified end to end through the CLI: the invocation refuses
+`flow-write-readback-mismatch` at **exit 2** with the finding "a tag
+the write did not plan to mutate changed during the write", and a
+subsequent re-run exits 0 while leaving the corrupted protected key
+exactly as it was — the non-repairing re-run REQ-63 requires be
+asserted. One layer down, `internal/accessor/adversarial_0004_test.go:806`
+already covers this shape directly, asserting
+`ClassReadBackMismatch` on an established-then-clobbered protected key.
 
-**Consequence.** `TestReq63And67And87_0019_AReadBackMismatchRefusesAtExitTwoAndTheReRunDoesNotRepairIt`
-is RED and stays red. Its assertion is the contract's, not a fixture
-error, so it is not weakened; and the state it asserts is not
-constructible, so it is not made to pass.
+**`init-state` itself cannot reach it**, by `0019:C1` design: its
+carrier gate refuses a command-backed writer with
+`flow-init-carrier-unsupported` at exit 2 before any write. So the
+mismatch is driven through `set-state`. REQ-63 and REQ-67 remain
+CORRECT AS WRITTEN — both speak to the class and its exit group, not to
+a binding topology — and only S8's stated recipe is defective.
 
-**Why the evidence cannot close it.** The three routes to a reachable
-mismatch are all changes this record forbids or does not carry:
+**Resolution.**
+`TestReq63And67And87_0019_AReadBackMismatchRefusesAtExitTwoAndTheReRunDoesNotRepairIt`
+is GREEN, on the protected-key route, with its assertion unweakened: it
+still asserts exit 2, distinctness from the exit-3 incomplete class, and
+the non-repairing re-run. Its doc comment records why the S8-as-written
+recipe is unconstructible so a reader does not restore it. The two-role
+`initMismatchModel` fixture is retired and replaced by a
+command-writer/file-reader model over one role. Per ASSUMPTION-3 the
+exit group and distinctness are asserted; no code spelling is pinned.
 
-- making the read-back resolve its artifact by the READER's role is a
-  change to `internal/accessor`'s read-back seam (`0004:C12`/`C13`),
-  which REQ-99 rules out ("no existing verb, flag, artifact shape or
-  model schema changes") and which this record carries no override for;
-- making `flowbind::Reader` read its DECLARED `Path` rather than the
-  caller's artifact contradicts `0004:C3`'s ban on ambient artifact
-  discovery, which REQ-3 restates as unchanged;
-- retiring the arm — declaring the mismatch class unreachable for the
-  file-backed carrier and scoping C1's PRESENT-AND-UNVERIFIED sentence
-  and S8 accordingly — is an amendment to a Final record.
+**Residual.** S8's scenario TEXT in a Final record still states the
+unconstructible recipe. The record is not amended here; the correction
+is tracked as a follow-up kata under `batch:rdr-0019`.
 
-Which of the three is right is a design decision, and the record's own
-evidence does not pick one: A1–A8 are silent on the read-back's
-artifact resolution, and the Testing Strategy asserts S8 as
-constructible on a premise source refutes.
-
-**Status**: needs author decision
+**Status**: mechanical translation
 
 ---
 

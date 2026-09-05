@@ -16,6 +16,8 @@ package cli
 //     missing or wrongly-scoped key set is.
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -612,36 +614,76 @@ func TestReq60_0019_ThePlanIsValidatedWholeBeforeAnyWriteCommits(t *testing.T) {
 // is a no-op that does NOT repair it and MUST NOT be documented as its
 // recovery — recovery is an explicit `set-state` (or discarding the
 // artifact and re-running init)."
-// REQ-87 / `0019:S8`: "the fixture binds the READ accessor to a different
-// artifact path than its writer, pre-seeded with a conflicting value for
-// the same key … **Expected**: terminal refusal naming the key
-// present-and-unverified, distinct from the read-back-INCOMPLETE class an
-// unreachable locator raises; a subsequent re-run is a no-op that does NOT
-// repair it — asserted, since C1 forbids documenting the re-run as
-// recovery."
 // REQ-67: "a read-back that COMPLETED and disagreed is exit 2
 // (`GroupUserEnv`), while a read-back that could not complete — the
 // unreachable-locator and timeout arms — is exit 3
 // (`GroupEnvUnavailable`) … So the PRESENT-AND-UNVERIFIED refusal above is
 // exit 2, and a seed whose read-back is incomplete exits 3"
-// DOMAIN EDGE — the mismatch arm and its non-recovery. The re-run assertion
-// is what C1 explicitly requires be ASSERTED rather than merely documented.
+// REQ-87 / `0019:S8`: "**Expected**: terminal refusal naming the key
+// present-and-unverified, distinct from the read-back-INCOMPLETE class an
+// unreachable locator raises; a subsequent re-run is a no-op that does NOT
+// repair it — asserted, since C1 forbids documenting the re-run as
+// recovery."
+//
+// TEST-FIXTURE (deviations DEV-9) — S8's stated RECIPE is unconstructible
+// and must not be restored. Do NOT "fix" this back to a two-role model
+// that binds the read accessor to a different artifact path than its
+// writer: `internal/accessor/executor.go::Executor.Write` resolves the
+// artifact from the WRITE definition's role and hands that SAME artifact
+// to `invokeRead`, so the read-back re-reads the WRITER's artifact no
+// matter what the reader is bound to; `flowbind.Reader.Read` reads
+// `art.Path`, consulting its declared `Path` only for the unreachable
+// short-circuit; and `::Registry.readerFor` selects by the WRITER's role,
+// so a two-role fixture yields no reader and the refusal degrades to
+// `read_back_incomplete` at exit 3 — precisely the class this test must
+// be DISTINCT from, which would make it pass for the wrong reason.
+//
+// The mismatch class is reached instead by `::verifyReadBack`'s SECOND
+// loop, over the `before` baseline of PROTECTED NON-OWNED keys
+// (`::protectedKeys`). A COMMAND-backed writer is paired with a
+// FILE-backed reader on the SAME role — `flowbind.Registry` dispatches
+// readers and writers independently by carrier — and the write command
+// applies the planned owned key CORRECTLY while clobbering a protected
+// key the plan never named. The re-read COMPLETES and disagrees: exit 2.
+//
+// The verb driven is `set-state`, not `init-state`: by `0019:C1` design
+// init-state refuses a command-backed writer at its own carrier gate
+// (`flow-init-carrier-unsupported`), so the mismatch is unreachable
+// THROUGH init-state. That leaves REQ-63/REQ-67 correct as written — only
+// S8's binding topology was defective.
+//
+// DOMAIN EDGE — the mismatch arm and its non-recovery. The re-run
+// assertion is what C1 explicitly requires be ASSERTED rather than merely
+// documented. Per ASSUMPTION-3 the EXIT GROUP and DISTINCTNESS are
+// asserted; no code spelling is pinned.
 func TestReq63And67And87_0019_AReadBackMismatchRefusesAtExitTwoAndTheReRunDoesNotRepairIt(t *testing.T) {
-	model := writeFlowModel(t, initMismatchModel)
-	writeArt := newFlowArtifact(t, "write.artifact")
-	readArt := newFlowArtifact(t, "read.artifact")
-	writeBind := artifactBinding("state", writeArt)
-	readBind := artifactBinding("mirror", readArt)
+	dir := t.TempDir()
+	model := writeFlowModel(t, initMismatchModel(initMismatchClobberScript(t, dir)))
+	art := filepath.Join(dir, "state.artifact")
+	bind := artifactBinding(initRoleA, art)
 
-	// The READ accessor's artifact is pre-seeded with a CONFLICTING value
-	// for the same key, so the read-back COMPLETES and DISAGREES.
-	requireSuccess(t, "flow", "set-state", "--model", model,
-		"--artifact", artifactBinding("state", readArt),
-		"--artifact", artifactBinding("mirror", readArt),
-		"--write", "stage=conflicting", "--as=json")
+	// The PROTECTED key is ESTABLISHED pre-write, so the `before` baseline
+	// holds a value for the completed re-read to disagree WITH. Without it
+	// the comparison is unevaluable and the refusal degrades to the exit-3
+	// incomplete arm — which would make this test pass for the wrong
+	// reason.
+	//
+	// The baseline is staged as BYTES rather than through `set-state`,
+	// necessarily: a protected key is by construction one NO writer's
+	// `keys` list names, so writing it through the CLI is
+	// `flow-write-unbound`. The file-backed reader's store is the flat
+	// JSON object `flowbind` loads, so the seed is written in that form.
+	seed := `{"` + initMismatchOwnedKey + `":"seeded","` +
+		initMismatchProtectedKey + `":"intact"}` + "\n"
+	if err := os.WriteFile(art, []byte(seed), 0o600); err != nil {
+		t.Fatalf("seeding the protected key's baseline: %v", err)
+	}
 
-	// The mismatch: exit 2, because the read-back COMPLETED.
-	mismatch := initRefusal(t, 2, initStateArgs(model, writeBind, readBind)...)
+	// The mismatch: exit 2, because the read-back COMPLETED and disagreed.
+	mismatch := initRefusal(t, 2, "flow", "set-state", "--model", model,
+		"--artifact", bind,
+		"--write", initMismatchOwnedKey+"=final",
+		"--allow-commands", "--as=json")
 
 	// DISTINCT from the read-back-INCOMPLETE class, which is exit 3.
 	sealModel := writeFlowModel(t, initSealModel)
@@ -656,14 +698,27 @@ func TestReq63And67And87_0019_AReadBackMismatchRefusesAtExitTwoAndTheReRunDoesNo
 			"are distinct refusals", mismatch.Code)
 	}
 
-	// The store is now non-empty, so a RE-RUN is a no-op that does NOT
-	// repair it. C1 forbids documenting the re-run as recovery, so this is
-	// asserted rather than assumed.
-	before, existed := snapshot(t, writeArt)
-	requireSuccess(t, initStateArgs(model, writeBind, readBind)...)
-	requireBytesUnchanged(t, writeArt, before, existed,
+	// The store is now non-empty AND corrupted: the protected key holds
+	// the clobbered value the write never planned.
+	corrupted, existed := snapshot(t, art)
+	if !existed || !strings.Contains(string(corrupted), "clobbered") {
+		t.Fatalf("the protected key %q was not left clobbered (exists=%v):\n%s\n"+
+			"without the corruption in place the re-run assertion below "+
+			"proves nothing", initMismatchProtectedKey, existed, corrupted)
+	}
+
+	// A RE-RUN is a no-op that does NOT repair it. C1 forbids documenting
+	// the re-run as recovery, so this is asserted rather than assumed.
+	// Re-running the SAME planned write now succeeds — the owned key was
+	// applied correctly all along — and leaves the corrupted protected key
+	// exactly as it was.
+	requireSuccess(t, "flow", "set-state", "--model", model,
+		"--artifact", bind,
+		"--write", initMismatchOwnedKey+"=final",
+		"--allow-commands", "--as=json")
+	requireBytesUnchanged(t, art, corrupted, existed,
 		"the re-run is a NO-OP that does NOT repair a present-and-unverified "+
-			"key — recovery is an explicit `set-state`")
+			"key — recovery is an explicit `set-state` that names the key")
 }
 
 // --- refusal codes and exit groups ---------------------------------------
