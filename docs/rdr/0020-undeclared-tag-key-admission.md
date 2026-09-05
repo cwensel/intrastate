@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -940,103 +940,50 @@ is pinned by construction rather than by two tests that could drift:
 > citable as `cli/NNNN:G-cross-cutting`. Cite it that
 > way, not by section name.
 
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0020-undeclared-tag-key-admission/artifacts/gate.md (Gate PASS 2026-09-04)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Incremental adoption.** This is the concern the decision turns on.
+C1 widens what admission accepts and narrows nothing, so no shipped
+invocation changes meaning: undeclared scalars passed before and pass
+now, and the only behaviour change is that an undeclared array is
+admitted where it was refused. The tightening path is opt-in and
+per-model — declaring a key subjects it to that declaration's kind and
+domain — which is the same carrier-by-default, declare-to-tighten
+shape the emit namespace shipped under `0010:C3` and later gave opt-in
+declarations in 0024. This RDR conforms to that pattern rather than
+authoring a new one. The one arm that does not widen, the empty-value
+refusal, is hoisted rather than changed and is byte-identical for both
+affected input classes (fixtures F4, E, G), so it needs no migration
+either.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Character encoding.** A carried value is admitted VERBATIM —
+byte-preserved, with no canonicalisation, folding, normalisation, or
+re-encoding — and echoes in the resolve payload's `observed` field as
+given. That is the whole encoding policy for undeclared keys: the CLI
+takes no position on the bytes because nothing downstream may
+interpret them. Declared set values keep the canonical-array form of
+`docs/cli-output-contract.md` §Set values on the wire, which this RDR
+leaves untouched; the output contract owns that policy.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+**Canonical-form / determinism.** This RDR makes no byte-identical
+output, content-addressed identity, or replay-stable hash claim, so
+the determinism checklist does not apply. The two "byte-identical"
+uses in C1 are narrower: they assert message-string equality between
+two refusal sites across the hoist, each pinned to a named normative
+fixture (F4 at the undeclared-empty site; E and G at the declared
+scalar and declared set sites). No hash function, pre-image layout,
+map iteration order, or version marker is implicated. Determinacy is
+recorded as fired on C1 for identity (presence in `m.Tags`,
+byte-exact, no folding or sentinel) and step order (the admission
+refusal precedence the carrier branch splices into).
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Versioning, build tool compatibility, licensing, deployment model, IDE
+compatibility, secret/credential lifecycle, memory management, and
+concurrency model do not apply to this change.
 
 ## References
 
