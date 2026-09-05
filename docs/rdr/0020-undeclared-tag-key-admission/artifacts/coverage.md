@@ -115,3 +115,70 @@ green row above was checked against HEAD explicitly:
   hoist PRESERVES that agreement; the third row (declared SET) is the
   one an unconditional `value == ""` hoist breaks, and it is asserted on
   the full message string including its trailing space.
+
+## REQ-MVV runner
+
+The fixture model is `internal/cli/flow_carrier_fixtures_0020_test.go`'s
+`carrierTableModel`, written to a file verbatim. `$IS` is a binary built
+from the worktree at the implementing commit.
+
+```sh
+$IS flow resolve --model carrier.toml --outcome decide \
+  --tag tier=free --tag 'labels=["security"]' \
+  --tag extra=plain --tag 'extras=["a","b"]' --as=json          # MVV 2
+$IS flow resolve --model carrier.toml --outcome decide \
+  --tag tier=free --tag 'labels=["security"]' --as=json          # MVV 3
+$IS flow resolve --model carrier.toml --outcome decide \
+  --tag 'tier=["a","b"]' --tag 'labels=["security"]' --as=json   # MVV 4
+$IS flow resolve --model carrier.toml --outcome decide \
+  --tag tier=free --tag 'labels=["security"]' --tag extra= --as=json  # MVV 5
+```
+
+## REQ-MVV output
+
+MVV 1 — the fixture model declares scalar `tier` and set `labels`, and
+declares nothing named `extra` or `extras` (`grep '^\[tags\.'`):
+
+```
+[tags.recognized]
+[tags.tier]
+[tags.labels]
+```
+
+MVV 2 — both carriers admitted, exit 0, `observed` byte-for-byte as given
+(the array literal rides as the raw argument text, a JSON STRING — fixture
+F1's shape extended by the array leg, REQ-50/REQ-51):
+
+```
+{"type":"ok","data":{"model":"carrier.toml","revision":"","observed":{"extra":"plain","extras":"[\"a\",\"b\"]","labels":"[\"security\"]","tier":"free"},"owned":{},"readers":[],"outcome":"decide","rule":"free","gates":[],"emit":{"plan":"basic"},"dispositions":{},"next":{},"writes":{},"clear":[],"escaped":false}}
+exit=0
+```
+
+MVV 3 — the same invocation without the two carrier flags. Fixture F2:
+`"rule":"free"`, `"emit":{"plan":"basic"}`, `gates`/`next`/`writes`/`clear`
+empty and `escaped:false` in BOTH runs; the sole payload delta is `observed`
+gaining `extra` and `extras`:
+
+```
+{"type":"ok","data":{"model":"carrier.toml","revision":"","observed":{"labels":"[\"security\"]","tier":"free"},"owned":{},"readers":[],"outcome":"decide","rule":"free","gates":[],"emit":{"plan":"basic"},"dispositions":{},"next":{},"writes":{},"clear":[],"escaped":false}}
+exit=0
+```
+
+MVV 4 — the DECLARED scalar handed the same array literal MVV 2 carries.
+Refused, now truthfully (fixture F3):
+
+```
+{"code":"flow-tag-invalid","message":"the tag `tier` is not set-valued; got the array literal [\"a\",\"b\"]","param":"tier"}
+exit=2
+```
+
+MVV 5 — the undeclared key given an empty value, the one arm the carrier
+does not escape (fixture F4, byte-identical to HEAD):
+
+```
+{"code":"flow-tag-invalid","message":"the tag `extra` was given an empty value","param":"extra"}
+exit=2
+```
+
+All five steps demonstrably satisfied; `go test ./...` green at the same
+commit.
