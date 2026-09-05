@@ -1,0 +1,15 @@
+0020  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=7
+  conformance prose:exactness                361-361   an exactness term of art in a normative claim: "byte-identical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance gate:inline                    860-980   the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived           890-893   TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived           899-911   TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived           917-919   TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived           930-934   TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived           955-980   TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
