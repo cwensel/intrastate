@@ -76,6 +76,20 @@ Answer `initAbsentKeys` per role: for each `[initial]` assignment, test its key
 against the key set of the store its own writer's role names, rather than
 against the union.
 
+**RESOLVED (Phase 3c).** `::initAbsentKeys` now asks the question PER ROLE.
+It takes the `flowRequest` rather than the bare model and, for each `[initial]`
+assignment, resolves the key's own writer's role through the new
+`::initRoleFor` (`initWriterFor` to the writer, then
+`registry.Lookup(name, accessor.CapWrite).Accessor.Role`) — the identical two
+steps `::initNeededRoles` takes, so the report's domain cannot drift from the
+domain the emptiness predicate read. Membership is then tested against
+`stores[role]` alone. The three properties the function's comment fixes are
+untouched: the scope is still exactly the `[initial]` key set, the answer still
+comes from the same `flowbind.StoreKeys` sets the predicate read (so a SEALED
+store stays an exit-0 no-op rather than an exit-3 refusal), and the output is
+still sorted. `TestAdv2_0019_TheAbsentReportIsAnsweredPerRoleNotFromTheUnionOfStores`
+PASSES unweakened.
+
 ### Discarded probe — F1 exit-group confusion — PASSED, redundant
 
 "An exit-3 seed leaves an APPLIED store the re-run will not reseed" (REQ-67,
@@ -145,6 +159,16 @@ report is named at line 762 — while the Phase 1 Step 1 cardinal edit at line
 **Suggested repair (a later step's job; nothing edited here).** Change
 `docs/model-authoring.md:15` "the same four `flow` verbs" to name five.
 
+**RESOLVED (Phase 3c).** `docs/model-authoring.md:15` now reads "the same five
+`flow` verbs", matching the file's own enumeration at lines 380-384 and the
+five other cardinal sites REQ-15 names. A repo-wide sweep for the stale
+cardinal outside `docs/rdr/` returns no further site (the two remaining
+"same four" hits are unrelated prose in
+`internal/table/inline_shell_authoring_0027_test.go` and
+`internal/graphlint/fixtures_0006_test.go`, counting argv and rules). The
+"four" occurrences inside `docs/rdr/` are immutable record history and were
+not touched.
+
 ### FAIL-2 — REQ-47/REQ-51, the absent report is answered from the UNION of stores
 
 Reproduced INDEPENDENTLY of Phase 3b's ADV-2, through the CLI rather than the
@@ -176,6 +200,19 @@ the store does not carry". `beta`'s store is role `rb`'s, which is EMPTY, so
 A's unrelated `beta` suppresses role B's genuine absence. REQ-51's repair
 route — "explicit `set-state` of the listed keys" — is therefore incomplete:
 an operator who writes exactly what the payload lists leaves `beta` absent.
+
+**RESOLVED (Phase 3c).** Same repair as ADV-2's, which this corroborates: the
+absent report is now role-scoped. Re-run of THIS finding's CLI input against
+the rebuilt `bin/intrastate` — role `ra`'s store carrying only `beta`, role
+`rb`'s artifact absent — answers:
+
+```json
+{"type":"ok","data":{"...":"...","seeded":[],"absent":["alpha","beta"]}}
+```
+
+at exit 0, which is the correct report the finding named. REQ-51's repair
+route is complete again: an operator who runs `set-state` on exactly the listed
+keys leaves nothing absent.
 
 ---
 
@@ -364,3 +401,37 @@ Recorded rather than converted into FAILs.
   by the writer's own role, so both necessarily resolve to the same path. A
   role with no reader reaches `flow-artifact-missing` (REQ-44), a different
   arm. The mismatch class is reachable only from the test harness.
+
+---
+
+## Phase 3c — fixup pass
+
+Both findings the two verification passes returned are repaired; no others
+were opened. Full `go test ./...` green and `make check` clean at exit 0.
+
+- **FAIL-1** (REQ-15, stale verb cardinal) — one word in
+  `docs/model-authoring.md`. Doc-only.
+- **FAIL-2 / ADV-2** (REQ-47/REQ-51, union-scoped absent report) — one
+  quantifier in `internal/cli/flow_initstate.go::initAbsentKeys`, plus the
+  `::initRoleFor` helper it resolves through. Production code.
+
+**No deviation recorded for either.** Both are ordinary implementation
+defects: a mechanical edit missed in Phase 1 Step 1, and a helper that failed
+to scope a quantifier the record already fixed as per-store (REQ-47's "which
+`[initial]` keys THE STORE does not carry", `0019:F2`'s "names precisely the
+keys to pass"). Neither alters the contract, the validation surface, or a
+future reading of the record — the spec was right and the code did not match
+it — so under `<art>/deviations.md`'s own rule ("do not record ordinary
+implementation choices unless they affect contract, validation, or future
+interpretation") neither warrants an entry. DEV-10, which documents this
+seam for REQ-101's named successor, remains accurate as written: the report
+still rides the one `flowbind.StoreKeys` probe the predicate reads, and the
+fix tightens that alignment rather than changing the carrier.
+
+**No new regression test.** `TestAdv2_0019` pins the cross-role masking
+(role A carries `note`, whose writer is role B's, and role B is empty →
+both keys absent) and `TestAdv1_0019` pins the positive direction across the
+same two roles (`note` present in the store its OWN writer serves is
+correctly omitted, while `stage` is correctly listed). Together they
+discriminate the union reading from the per-role one in both directions, so
+a third test would be a duplicate.

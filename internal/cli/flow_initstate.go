@@ -293,7 +293,11 @@ func runFlowInitState(cmd *cobra.Command, _ []string) error {
 		// The NO-OP arm. Zero writes; the payload reports which `[initial]`
 		// keys the store does not carry, so a torn or post-clear state is
 		// VISIBLE without being repaired, resurrected, or failed on.
-		payload.Absent = initAbsentKeys(req.model, stores)
+		absent, ce := initAbsentKeys(req, stores)
+		if ce != nil {
+			return respond.Fail(cmd, ce)
+		}
+		payload.Absent = absent
 		return respond.OK(cmd, respond.Success{Data: payload})
 	}
 
@@ -618,19 +622,47 @@ func initNeededRoles(req flowRequest, needed []string) map[string]bool {
 // keeps the sealed store a no-op SUCCESS: routing this report through the
 // declared readers would re-enter the unreadable short-circuit and turn the
 // arm into an exit-3 refusal.
-func initAbsentKeys(m *table.Model, stores map[string][]string) []string {
-	present := map[string]bool{}
-	for _, keys := range stores {
-		for _, key := range keys {
-			present[key] = true
-		}
-	}
+//
+// The question is asked PER ROLE, like every other quantifier in this verb:
+// a key is present only if the store bound to the role its OWN declared
+// writer names carries it. Answering from the UNION of stores lets a key
+// carried by an unrelated role suppress its own absent entry, which makes
+// `0019:F2`'s "it names precisely the keys to pass" false — the repair route
+// is `set-state` of the listed keys, and `set-state` routes each key to that
+// same writer's artifact.
+func initAbsentKeys(req flowRequest, stores map[string][]string) ([]string, *clierr.CLIError) {
 	absent := []string{}
-	for _, assignment := range m.Initial {
-		if !present[assignment.Key] {
+	for _, assignment := range req.model.Initial {
+		role, ce := initRoleFor(req, assignment.Key)
+		if ce != nil {
+			return nil, ce
+		}
+		if !slices.Contains(stores[role], assignment.Key) {
 			absent = append(absent, assignment.Key)
 		}
 	}
 	slices.Sort(absent)
-	return absent
+	return absent, nil
+}
+
+// initRoleFor names the artifact role serving key: the role its single
+// declared write accessor names.
+//
+// It is `initNeededRoles`' resolution for ONE key — `initWriterFor` to the
+// writer, then the registry to that writer's role — and it is deliberately
+// the same two steps, so the domain the absent report ranges over cannot
+// drift from the domain the emptiness predicate read. Both refusals are
+// unreachable from the no-op arm: `neededWriters` already resolved every
+// `[initial]` key's writer, and gate 3 already looked every needed writer up.
+func initRoleFor(req flowRequest, key string) (string, *clierr.CLIError) {
+	name, ce := initWriterFor(req.model, key)
+	if ce != nil {
+		return "", ce
+	}
+	def, ok := req.registry.Lookup(name, accessor.CapWrite)
+	if !ok {
+		return "", internalErr(codeAccessorUnknown,
+			"the write accessor `"+name+"` is not bound")
+	}
+	return def.Accessor.Role, nil
 }
