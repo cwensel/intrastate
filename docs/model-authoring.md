@@ -12,7 +12,7 @@ Two model classes ship, and they answer different questions:
   it owns no state and advances nothing.
 
 Both are authored in the same grammar, both are linted by the same
-analysis, and both are driven by the same four `flow` verbs. The class is
+analysis, and both are driven by the same five `flow` verbs. The class is
 declared in `[model]`, and it decides which invariants apply.
 
 Worked, CI-linted examples live under
