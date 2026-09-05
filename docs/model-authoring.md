@@ -1084,26 +1084,49 @@ intrastate flow resolve --model triage.toml \
   --outcome triage --tag 'labels=["security"]' --tag severity=3 --as=json
 ```
 
-**An undeclared tag whose value is an array is refused.** A `--tag` naming
-a key the model does not declare passes through harmlessly *as a scalar* —
-but it is validated against the zero declaration, whose kind is not `set`,
-so an array literal there returns `flow-tag-invalid` ("the tag `x` is not
-set-valued") and the call exits 2.
+**An undeclared tag is a pure carrier.** A `--tag` naming a key the model
+does not declare is admitted verbatim — byte-preserved, array literals
+included — and is never canonicalised, conformed, or kind-checked. It
+echoes in the payload's `observed` field exactly as it was spelled on argv.
+With no declaration there is no kind to check, so nothing about the value's
+shape can refuse it.
 
-This bites a caller that pipes a producer's whole tag output through one
-invocation: **every set-valued key the caller passes must be declared, even
-one no row guards on.** Declaring it costs the coverage product nothing —
-only guard atoms contribute dimensions, so a declared-but-unguarded tag adds
-no cell to prove:
+This is what lets a caller pipe a **producer's whole tag output** through
+one invocation without first declaring every key in it: the model declares
+the keys its rules actually discriminate on, and the rest ride along as
+inert context. The only refusals an undeclared key can reach are the flag
+grammar (`--tag` takes `name=value`), the provenance guards
+(`flow-tag-reserved`, `flow-tag-owned`, `flow-tag-duplicate`), and the
+empty-value arm — `--tag x=` is `flow-tag-invalid` ("the tag `x` was given
+an empty value"), because an empty observed value is indistinguishable from
+unset whether or not a declaration exists.
+
+Declaring a key is the opt-in tightening: admission then enforces that
+declaration's kind and domain, and a `set` declaration is what makes an
+array literal parse as a set — re-canonicalised on the wire (sorted,
+duplicate-free, compact) rather than carried verbatim. A declared scalar
+handed an array literal refuses `flow-tag-invalid` ("the tag `x` is not
+set-valued"), and that message is now truthful: there is a declaration, and
+it is what the message reports.
+
+Declaring an unguarded tag costs the coverage product nothing — only guard
+atoms contribute dimensions, so a declared-but-unguarded tag adds no cell to
+prove. Declare one when you want its values held to a domain:
 
 ```toml
-# received and ignored; declared only so the array literal parses
+# received and ignored by the rules; declared so the array literal is
+# parsed as a set and its members are held to `elements`
 [tags.labels]
 provenance = "observed"
 kind = "set"
 elements = ["security", "docs"]
 required = true
 ```
+
+The trade is that an undeclared key is carried **silently** — a misspelled
+key is just another carrier, not an error. The diagnosis is the echo: every
+carried key sits beside the declared ones in the same `observed` map, so a
+stray spelling is visible in the payload.
 
 ## References
 
