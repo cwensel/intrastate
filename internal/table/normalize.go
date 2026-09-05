@@ -346,6 +346,14 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 			return nil, fail(CatMalformedEscapeDeclaration, "escape rule "+id+" carries a clear list")
 		case rule.Gate != nil:
 			return nil, fail(CatMalformedEscapeDeclaration, "escape rule "+id+" carries a gate list")
+		case rule.Advance != nil:
+			// An escape row already advances nothing — it carries no write
+			// block and no clear list, so its successor equals its source.
+			// `advance` on it is a redundant declaration of what the escape
+			// list already fixes, and it joins the presence-keyed list above
+			// rather than being silently accepted.
+			return nil, fail(CatMalformedEscapeDeclaration,
+				"escape rule "+id+" carries an advance declaration")
 		}
 		// The list admits only the two resolver failure classes RDR 0001
 		// allows the table to model (`0002:C5`).
@@ -360,15 +368,8 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 		if len(*rule.Escape) == 0 {
 			return nil, fail(CatMalformedEscapeDeclaration, "escape rule "+id+" models no failure class")
 		}
-	} else if rule.Write == nil && !IsDecisionTable(l.model) {
-		// An ordinary transition rule MUST contain a write block
-		// (`0002:C4`) — conditioned on CLASS by `0010:C2`. The arm binds
-		// the state-machine class only: a decision table owns no state, so
-		// there is nothing for an ordinary rule to write, and demanding a
-		// write block would make the class unauthorable. Every other rule
-		// obligation — the match block, the outcome binding, rule ids,
-		// gates, escape shape — is unchanged in both classes.
-		return nil, fail(CatMalformedRuleShape, "ordinary rule "+id+" carries no write block")
+	} else if err := l.checkOrdinaryWriteShape(rule, id); err != nil {
+		return nil, err
 	}
 
 	// EVERY transition rule MUST carry a local match block (`0002:C4`).
@@ -468,6 +469,73 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 	}
 
 	return expand(base, predicates, outcomeAtom, writes), nil
+}
+
+// checkOrdinaryWriteShape enforces `0002:C4`'s write-block obligation over
+// an ORDINARY rule, as conditioned on class by `0010:C2` and as opted out
+// of, per rule, by `advance = false`.
+//
+// An ordinary transition rule MUST contain a write block (`0002:C4`) —
+// conditioned on CLASS by `0010:C2`. That arm binds the state-machine class
+// only: a decision table owns no state, so there is nothing for an ordinary
+// rule to write, and demanding a write block would make the class
+// unauthorable. Every other rule obligation — the match block, the outcome
+// binding, rule ids, gates, escape shape — is unchanged in both classes.
+//
+// `advance = false` is the third form: a state-machine rule that DECIDES
+// without advancing. A real flow is mixed — some rows edit the record, and
+// the rows that refuse must emit their reason and write nothing — and
+// before this marker a model was entirely decide-only or entirely
+// write-per-rule. The declaration is EXPLICIT rather than inferred from the
+// absent block, so an author who merely forgot `[rule.write]` still takes
+// the refusal; and it is a rule-level marker rather than a reading of the
+// emit's disposition, because RDR 0024 fixes no disposition vocabulary and
+// intrastate never interprets a disposition token, so the loader has no
+// `stop`/`none` spelling to key on.
+func (l *loader) checkOrdinaryWriteShape(rule *sourceRule, id string) error {
+	if !ruleDeclaresNoAdvance(rule) {
+		if rule.Write == nil && !IsDecisionTable(l.model) {
+			return fail(CatMalformedRuleShape, "ordinary rule "+id+" carries no write block")
+		}
+		return nil
+	}
+	// A decision table owns no state (`0010:C1`, C2), so NO row in it ever
+	// advances and the marker declares nothing the class does not already
+	// fix. It joins the escape arm above rather than being silently
+	// accepted: admitting it would make `advance = false` read as a
+	// meaningful per-row property in a class where it has none.
+	if IsDecisionTable(l.model) {
+		return fail(CatMalformedRuleShape,
+			"decision-table rule "+id+" carries an advance declaration")
+	}
+	// A non-advancing row's successor must EQUAL its source, which a write
+	// block or a clear list would falsify. Both are presence-keyed, the
+	// same way the escape arms above are.
+	switch {
+	case rule.Write != nil:
+		return fail(CatMalformedRuleShape,
+			"non-advancing rule "+id+" carries a write block")
+	case rule.Clear != nil:
+		return fail(CatMalformedRuleShape,
+			"non-advancing rule "+id+" carries a clear list")
+	}
+	// A row that neither advances nor answers is INERT: it can be selected
+	// and contributes nothing the caller can branch on. `[rule.emit]` is
+	// what makes declining to advance an outcome rather than a silent
+	// no-op, so it is required here.
+	if len(rule.Emit) == 0 {
+		return fail(CatMalformedRuleShape,
+			"non-advancing rule "+id+" carries no emit block")
+	}
+	return nil
+}
+
+// ruleDeclaresNoAdvance reports whether the rule carries the explicit
+// `advance = false` opt-out. An absent `advance` and `advance = true` are
+// both the advancing default; only the explicit false lifts the
+// write-block obligation.
+func ruleDeclaresNoAdvance(rule *sourceRule) bool {
+	return rule.Advance != nil && !*rule.Advance
 }
 
 // outcomeBinding finds the single `recognized` atom the rule's match blocks

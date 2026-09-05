@@ -47,7 +47,9 @@ carry `[rule.write]` and `[rule.emit]` together, and `flow resolve`
 answers with `emit` beside `writes` and `next`. What differs is the
 REQUIREMENT — an ordinary state-machine rule must advance owned state, so
 it must carry a write block, while a decision-table rule owns no state and
-may carry none.
+may carry none. A state-machine rule that must DECIDE without advancing
+opts out of that requirement per rule with `advance = false`; see
+[Deciding without advancing](#deciding-without-advancing) below.
 
 The class is **declared, not inferred** from the owned set. A
 `decision-table` model that declares an owned tag is refused at load as a
@@ -326,8 +328,8 @@ Contexts serve a second job unrelated to rules: `terminal` names them, which
 
 ### Rule-level keys and where they go
 
-`id`, `use`, `gate`, `clear`, `escape`, and `source` belong to the
-`[[rule]]` table itself, so they **must precede the first `[rule.*]`
+`id`, `use`, `gate`, `clear`, `escape`, `advance`, and `source` belong to
+the `[[rule]]` table itself, so they **must precede the first `[rule.*]`
 sub-table**. TOML reads
 a key written after one as belonging to *that* table — `clear` placed after
 `[rule.guard.all.build-id]` parses as a guard atom and refuses with
@@ -815,6 +817,59 @@ has.
 
 Note the placement — `clear` is a rule-level key, so it precedes the first
 `[rule.*]` sub-table. See
+[rule-level keys](#rule-level-keys-and-where-they-go).
+
+#### Deciding without advancing
+
+A real flow is mixed. Some rows edit the record; the rows that refuse must
+say *why* and change nothing. `advance = false` is how a state-machine rule
+declares the second shape:
+
+```toml
+[[rule]]
+id = "lock-no-gate"
+advance = false
+[rule.match.recognized]
+eq = "lock"
+[rule.guard.all.gate_written]
+eq = "false"
+[rule.emit]
+op = "stopped:no-gate-written"
+why = "the record carries no gate response"
+```
+
+`flow resolve --outcome lock` selects this row and answers with its `emit`
+and the disposition the declaration assigns it, and with `writes` and
+`next` both **empty**. There is nothing for `flow set-state --plan -` to
+apply, so a refusal can never be reported as a successful write.
+
+The marker is per rule, not per model: a sibling rule carrying
+`[rule.write]` still advances, and one model both applies and refuses.
+
+Four things make it a declaration rather than a loophole:
+
+- It is **explicit**. A rule that simply omits `[rule.write]` is still
+  `malformed_rule_shape` — an author who *forgot* the block gets the same
+  refusal as before. Only the literal `advance = false` lifts it;
+  `advance = true` restates the default and changes nothing.
+- It requires `[rule.emit]`. A row that neither advances nor answers is
+  inert — selectable, and contributing nothing a caller can branch on —
+  so `malformed_rule_shape` refuses it.
+- It refuses a `[rule.write]` block or a `clear` list on the same rule.
+  Both would advance the state the marker says the row leaves alone.
+- It refuses on an escape row (`malformed_escape_declaration`) and on a
+  decision-table rule, where the class already fixes that nothing advances.
+
+To graph lint the row is a **modeled self-loop**: it is an ordinary row
+bound to an outcome, so it counts as an outgoing edge and its node is not
+reported `graph-dead-end` — unlike an escape row, which is a resolver
+rescue rather than a decision and never counts as progress. It changes no
+owned value, so it satisfies a terminal predicate only if the *unchanged*
+state already did, and it declares no failure class, so it never closes
+coverage as `graph-coverage-closed-by-escape`.
+
+Note the placement — `advance` is a rule-level key, so it precedes the
+first `[rule.*]` sub-table. See
 [rule-level keys](#rule-level-keys-and-where-they-go).
 
 ### Terminals are predicates, not state names

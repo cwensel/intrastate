@@ -145,6 +145,16 @@ type sourceRule struct {
 	Gate   *[]string `toml:"gate"`
 	Escape *[]string `toml:"escape"`
 
+	// Advance is the rule-level declaration that this row DECIDES without
+	// advancing the owned state. It is a POINTER for the same reason
+	// `sourceAcc.ReadBack` is: absence and `advance = true` must stay
+	// distinguishable from `advance = false`, because only the explicit
+	// false lifts `0002:C4`'s write-block obligation. An author who merely
+	// FORGOT `[rule.write]` leaves this absent and still takes the
+	// `malformed_rule_shape` refusal, which is the whole point of making
+	// the opt-out explicit rather than inferring it from the missing block.
+	Advance *bool `toml:"advance"`
+
 	Match map[string]map[string]any `toml:"match"`
 	Guard *sourceGuard              `toml:"guard"`
 	Write *map[string]any           `toml:"write"`
