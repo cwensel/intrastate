@@ -143,12 +143,18 @@ output contract speaks to the undeclared-key/array case.
   - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: the message literal has one producer,
-    `internal/cli/flow_input.go::canonicalValue`, and one asserting
-    test — `internal/cli/flow_input_0005_test.go`
+    `internal/cli/flow_input.go::canonicalValue`, and NO asserting
+    test — `grep "is not set-valued" --include="*_test.go"` returns
+    zero repo-wide; the string's only occurrence anywhere is that
+    producer. One test reaches the arm without asserting its text:
+    `internal/cli/flow_input_0005_test.go`
     `TestReq29And80_WrongKindAndEmptyTagValuesAreFlowTagInvalid`,
     subtest `array-for-scalar-key`, which uses `--tag profile=[…]`
     against a key DECLARED at `internal/cli/flow_fixtures_0005_test.go`
-    `[tags.profile]` — i.e. the declared arm, which C1 keeps. Every
+    `[tags.profile]` (`kind = "enum"`, `single_valued = true` — a
+    declared non-set kind, so the `!isSet` arm fires) — i.e. the
+    declared arm, which C1 keeps; it asserts code and `param` only,
+    via `requireRefusal`, never `ce.Message`. Every
     other `flow-tag-invalid` assertion is a different arm (empty
     `--outcome`, malformed no-`=` tag, declared-enum domain
     violation). The repo asserts the converse directly:
@@ -177,9 +183,14 @@ output contract speaks to the undeclared-key/array case.
     undeclared keys), and lookups keyed by a rule-atom/accessor/initial
     key (each already past one of the five refusals). Runtime: the
     observed tag enters the kernel view at
-    `internal/resolve/resolve.go::assemble`, but the view is read only
-    through `matches` (iterating `row.Match` — rule atoms only), `has`,
-    and guard `Lookup`; `internal/resolve/precondition.go::CheckInput`
+    `internal/resolve/resolve.go::assemble`, but the view has exactly
+    four readers, none able to surface an undeclared key's value:
+    `matches` (iterating `row.Match` — rule atoms only), `has` (keyed
+    by `row.RequiresOwned`), guard `Lookup` (keyed by `atom.Key`), and
+    `internal/resolve/resolve.go::conflicting`, which is value-blind —
+    it returns `s.tags[key].conflicted`, a bool, and guard
+    `evaluateAtom` reads it only to answer `ReasonUncomparable`;
+    `internal/resolve/precondition.go::CheckInput`
     reads `Observed` only for the reserved key NAME, never a value.
     Runtime leg — spike `evidence/spikes/selection-diff-a2-vs-b.txt`
     (empty): selection is byte-identical with and without an undeclared
@@ -196,10 +207,15 @@ output contract speaks to the undeclared-key/array case.
   consumes it, so verbatim (non-canonicalised) carry is safe.
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: byte-equality lives in exactly one place,
-    `internal/accessor/executor.go::verifyReadBack`, whose read-domain
-    is the write plan, the accessor-read baseline, and the accessor
-    RE-READ values — never the `--tag` observed slice. The plan comes
+  - **Evidence**: tag-value byte-equality lives in exactly two places,
+    both confined to one domain — the write plan, the accessor-read
+    baseline, and the accessor RE-READ values — and neither reads the
+    `--tag` observed slice: `internal/accessor/executor.go::verifyReadBack`,
+    and its CLI-side re-rendering
+    `internal/cli/flow_exec.go::readBackFindings` (REQ-103, one finding
+    per divergent key), whose inputs are `accessor.Refusal`'s
+    `Expected`/`Observed` — the same plan-vs-re-read pair, already
+    compared upstream. The plan comes
     from `internal/cli/flow_state.go::parseWrites`, which proves a
     declaration via `writerFor` BEFORE calling `canonicalValue` (its
     lookup "is total, unlike `parseTags`'s"), so every byte-compared
@@ -386,6 +402,49 @@ enforces that declaration's kind and domain.
   The empty-value arm is the one that moves — out of `canonicalValue`
   and up to the shared path — because it must bind the carrier, which
   no longer reaches that function.
+
+#### Authority census
+
+Fired: the draft names three in-code authorities on the zero `TagDecl`'s
+meaning and adjudicates between them (two promise carrier, one dissents).
+
+| Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
+| --- | --- | --- | --- | --- | --- |
+| "is this key declared?" at `--tag` admission | model author (`[tags.*]`) | `parseTags` | `flow_input.go::parseTags` (one-value today; two-value under C1) | `accessorTable`, `loadInitial`, `atomsFromBlock`, `renderWrites` write/clear arms — all `_, ok := Tags[key]` | **the two-value `m.Tags[key]` presence test** — C1 adopts the sibling form; no new signal |
+| what a zero `TagDecl` MEANS | — | `parseTags` comment (carrier); `ConformValue` doc (carrier); `canonicalValue`'s `!isSet && looksArray` (refuse) | `flow_input.go:669-675`, `load.go:1811`, `flow_input.go:718-722` | the two comments agree; the third dissents | **C1** — the comments are right, the `looksArray` arm is the bug |
+| the carried value's meaning | caller | payload `observed` echo only | `groupEcho` via `flow_partition.go` | model-side readers all refuse at load (`unknown_tag`, 5 sites) | **uninterpreted** — no reader can resolve it (A2) |
+
+#### Disposition
+
+Fired: C1 assigns exit outcomes across input classes at one admission seam.
+
+| Input class | Exit | Code / message | Artifact | Silent or loud |
+| --- | --- | --- | --- | --- |
+| undeclared key, scalar value | 0 | — | `observed` echo, verbatim | loud (echoed) |
+| undeclared key, array literal | 0 (**changed**; refuses at HEAD) | — | `observed` echo, verbatim | loud (echoed) |
+| undeclared key, empty value | 2 | `flow-tag-invalid` "was given an empty value" | none | loud |
+| undeclared key that is a MISSPELLING of a declared one | 0 | — | `observed` echo, verbatim | **silent** — accepted open-world cost; diagnosis is the echo (Failure Modes) |
+| declared scalar/enum key, array literal | 2 | `flow-tag-invalid` "is not set-valued" — now truthful | none | loud |
+| declared set key, empty value | 2 | `flow-tag-invalid` "is set-valued and takes a JSON array literal; got " | none | loud |
+| reserved / owned / duplicate key, any value | 2 | `flow-tag-reserved` / `-owned` / `-duplicate` | none | loud (unchanged, still first) |
+
+#### Desk trace
+
+Fired: C1, four Testing Strategy Expected lines, and fixtures F1–F4 all bear
+on one output surface (the admission refusal path and the `observed` echo).
+Walk of the MVV, each step against the assertions in force, with a witness
+from the named spike.
+
+| MVV step | Assertions in force | Witness | Verdict |
+| --- | --- | --- | --- |
+| 1 — fixture model: scalar `tier`, set `labels`, nothing named `extra`/`extras` | C1's identity rule (absence from `m.Tags`) | `evidence/spikes/carrier-table.toml` | consistent |
+| 2 — `--tag extra=plain --tag extras=["a","b"]` | C1 carrier admits verbatim; Testing 1 (exit 0, byte-for-byte echo); F1 | F1 scalar leg at HEAD: `"observed":{"extra":"plain","labels":"[\"security\"]","tier":"free"}`; array leg is post-change, red test adds it | consistent — the array leg is the only unwitnessed cell, correctly marked post-change |
+| 3 — same resolve without carriers | C1 (nothing can read it); A2 runtime leg; Testing 2; F2 | `selection-diff-a2-vs-b.txt` empty; `"rule":"free"`, `"emit":{"plan":"basic"}` both runs | consistent |
+| 4 — declared scalar given array | C1's kind arm, declared-only; Testing 3; F3 | `c-declared-scalar-array.txt`: exit 2, "the tag `tier` is not set-valued; got the array literal [\"a\",\"b\"]" | consistent — and the message is now truthful, since `tier` IS declared |
+| 5 — undeclared key, empty value | C1's hoisted empty-value arm (scalar-shaped message, binds carriers); Testing 4; F4 | `d-undeclared-empty.txt`: exit 2, "the tag `extra` was given an empty value" — byte-identical to HEAD | consistent — hoist is behaviour-preserving on the witness |
+| end state | `D-selection-predicate` order: grammar → reserved → owned → duplicate → empty-value → (declared only) conformance | source order confirmed at grounding: duplicate (`flow_input.go:663`) precedes `canonicalValue` (:677); empty-value today sits at :723 inside `!isSet` | consistent — the hoist moves one arm forward across no other arm |
+
+No CONTRADICTION row.
 
 #### Illustrative Code
 
@@ -636,14 +695,17 @@ it does not carry it.
   compared by exact byte equality" (`0010:C3`), with declarations
   arriving later as opt-in (0024) ⇒ carrier-by-default,
   declare-to-tighten is the established house pattern.
-- **Documented** (Resolve) — no caller load-bears on the
-  undeclared-array refusal: the "is not set-valued" literal has one
-  producer and one asserting test, over a DECLARED key, and the repo
-  already asserts the converse ("an undeclared observed key still
-  passes") ⇒ A1 verified. No byte-equality path reads an undeclared
-  observed value: `internal/accessor/executor.go::verifyReadBack` is
-  the sole comparison site and its domain is the declaration-proved
-  write plan ⇒ A3 verified.
+- **Documented** (Resolve, corrected at grounding) — no caller
+  load-bears on the undeclared-array refusal: the "is not set-valued"
+  literal has one producer and NO asserting test (the one test that
+  reaches the arm is over a DECLARED key and asserts code and `param`
+  only), and the repo already asserts the converse ("an undeclared
+  observed key still passes") ⇒ A1 verified, more strongly than the
+  Resolve reading. No byte-equality path reads an undeclared observed
+  value: the two comparison sites
+  (`internal/accessor/executor.go::verifyReadBack` and its CLI
+  re-rendering `internal/cli/flow_exec.go::readBackFindings`) share
+  one domain, the declaration-proved write plan ⇒ A3 verified.
 - **Documented** (Resolve) — external prior art aligns after all: the
   Propose-stage corpus negative reproduced, but the primary specs
   opened cleanly on the web fallback — SCXML §5.4 vs §5.10.1,
