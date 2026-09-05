@@ -337,6 +337,10 @@ from `parseTags` alone.
 
 One contract — the meaning of the zero `TagDecl` at `--tag` admission.
 
+Determinacy: fired — C1 (identity: presence in `m.Tags`, byte-exact, no
+folding or sentinel; and step order: the admission refusal precedence the
+carrier branch splices into).
+
 **C1**
 
 ```normative
@@ -401,7 +405,15 @@ enforces that declaration's kind and domain.
   the carrier branch sits where the conformance arms would have run.
   The empty-value arm is the one that moves — out of `canonicalValue`
   and up to the shared path — because it must bind the carrier, which
-  no longer reaches that function.
+  no longer reaches that function. It lands AFTER the duplicate arm and
+  the `seen[key]` mark, not before: at HEAD the duplicate check already
+  precedes the empty-value site (`flow_input.go:663` vs the `:723` arm
+  inside `canonicalValue`), so a repeated key refuses
+  `flow-tag-duplicate` today and must still do so — hoisting the arm
+  ahead of the duplicate case would invert that precedence and change
+  behaviour this RDR does not touch. The order above is the whole
+  constraint on the splice point; where the arm sits within it is
+  implementation latitude.
 
 #### Authority census
 
@@ -451,6 +463,13 @@ No CONTRADICTION row.
 Illustrative — shape only, not load-bearing:
 
 ```go
+switch { // unchanged, and still first
+case key == table.RecognizedTagKey: // reserved
+case slices.Contains(owned, key): // owned
+case seen[key]: // duplicate — still precedes the empty-value arm
+}
+seen[key] = true
+
 if value == "" { // empty is indistinguishable from unset, declared or not
     return nil, userErr(codeTagInvalid, key, "…was given an empty value")
 }
@@ -827,7 +846,12 @@ is pinned by construction rather than by two tests that could drift:
    `--tag tier=free --tag labels=["security"] --tag extra=plain` ⇒
    `"observed":{"extra":"plain","labels":"[\"security\"]","tier":"free"}`.
    The array leg (`extras=["a","b"]` echoing verbatim) is the
-   post-change extension of F1 and is what the red test adds.
+   post-change extension of F1 and is what the red test adds; it has no
+   HEAD witness (the array literal refuses there), so the asserted wire
+   form follows from `resolve.Input.Observed`'s `map[string]string`
+   type — the raw argument text as a string value,
+   `"extras":"[\"a\",\"b\"]"`, the same shape F1 already witnesses
+   for the declared set key `labels`.
 2. **Scenario**: the same resolve with and without the carrier flags
    (MVV 3).
    **Expected**: identical selected rule and outcome. Normative
