@@ -172,9 +172,24 @@ func TestReq58_ExecErrorWrapsRatherThanFlattensTheOffendingError(t *testing.T) {
 			"the wrap must survive the trip to the refusal site",
 			b.Refusal.Detail)
 	}
-	if a.Refusal.Detail != "" {
-		t.Errorf("the spawn-failure refusal Detail = %q; a spawn failure "+
-			"produced no stderr and Detail is the TAIL, not Err.Error()",
+	// The spawn failure wrote no stderr, so it has no TAIL to carry — but
+	// the clause's own point is that the two cases "stay distinguishable"
+	// at the refusal site, and a Detail that is empty whatever went wrong
+	// is the opposite of distinguishable (kata zwdn). With no tail, the
+	// wrapped error's own text is the only thing there is, which is what
+	// `cmdbind.wrap` already assumes when it builds the tail-less carrier.
+	if a.Refusal.Detail == "" {
+		t.Error("the spawn-failure refusal carries an empty Detail; the wrap " +
+			"must survive the trip to the refusal site, and with no stderr " +
+			"tail the error's own text is the only thing that names the cause")
+	}
+	if !strings.Contains(a.Refusal.Detail, exec.ErrNotFound.Error()) {
+		t.Errorf("the spawn-failure refusal Detail = %q; want it to name %q",
+			a.Refusal.Detail, exec.ErrNotFound.Error())
+	}
+	if a.Refusal.Detail == b.Refusal.Detail {
+		t.Errorf("the spawn failure and the non-zero exit both read %q; the "+
+			"two cases must stay distinguishable at the refusal site",
 			a.Refusal.Detail)
 	}
 }

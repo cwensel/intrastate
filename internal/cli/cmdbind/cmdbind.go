@@ -1176,7 +1176,15 @@ func (r Reader) parse(inv invocation, requested []string) (
 
 	var obj map[string]string
 	if jerr := json.Unmarshal(inv.stdout, &obj); jerr != nil {
-		return nil, nil, wrap(inv.detail(""), jerr)
+		// Name the SHAPE, not just the decoder's complaint. The remedy is
+		// to PROJECT the tool's output onto `0025:C3`'s wire shape, and
+		// `encoding/json`'s own text ("cannot unmarshal array into Go
+		// value of type string") names a Go type the author never wrote.
+		// The clause id stays in this comment: the author's remedy is the
+		// shape, and a record id is provenance they cannot act on.
+		return nil, nil, wrap(inv.detail(""), errors.New(
+			"the read command's stdout is not a flat JSON object of "+
+				"string values: "+jerr.Error()))
 	}
 
 	var values []accessor.KeyValue
@@ -1228,7 +1236,11 @@ func (g Gate) Gate(ctx context.Context, art accessor.Artifact) (
 			Reason  string `json:"reason"`
 		}
 		if jerr := json.Unmarshal(inv.stdout, &env); jerr != nil {
-			return "", "", wrap(inv.detail(""), jerr)
+			// Same reason as the reader's: the shape is the remedy, and the
+			// decoder's Go-type text does not state it.
+			return "", "", wrap(inv.detail(""), errors.New(
+				"the gate command's stdout is not a JSON object carrying "+
+					"the string fields `verdict` and `reason`: "+jerr.Error()))
 		}
 		if !slices.Contains(accessor.Verdicts(), accessor.Verdict(env.Verdict)) {
 			return "", "", wrap(inv.detail(""), errors.New(

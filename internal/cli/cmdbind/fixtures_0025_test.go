@@ -101,6 +101,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -157,6 +158,15 @@ func main() {
 	case "silent":
 		code, _ := strconv.Atoi(rest[0])
 		os.Exit(code)
+
+	// self-signal writes nothing and SIGKILLs itself, so Wait reports a
+	// signal and NO exit code at all. It is the "the exit map cannot
+	// apply" fixture: a signalled child never reaches an exit status for
+	// exit_absent or exit_verdicts to claim.
+	case "self-signal":
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(syscall.SIGKILL)
+		time.Sleep(10 * time.Second)
 
 	// flood writes N bytes on stdout and exits zero.
 	case "flood":

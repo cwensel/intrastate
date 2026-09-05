@@ -68,7 +68,8 @@ func (e *Executor) selects(name string, capability Capability) (
 // plus the bounded stderr tail an invocation error carries (`0025:C4`).
 //
 // `err` is the offending binding error or nil. A command binding returns
-// a typed `*ExecError`, which this `errors.As`-es for its tail; a
+// a typed `*ExecError`, which this `errors.As`-es for its tail and, where
+// the child wrote none, for its cause (`execDetail`); a
 // path-backed binding returns an untyped error and carries no tail, and a
 // refusal raised without an invocation at all — timeout from `ctx.Err()`,
 // read-back, the gate — gets an empty `Detail` by construction rather
@@ -83,7 +84,7 @@ func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err er
 	}
 	var ee *ExecError
 	if errors.As(err, &ee) {
-		r.Detail = ee.Detail
+		r.Detail = execDetail(ee)
 	}
 	// The one bit RDR 0028's exit-group clause needs, carried on the
 	// existing `Err` slot rather than through a wider seam. `declaredEdit`
@@ -93,6 +94,37 @@ func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err er
 	r.declaredRequest = errors.Is(err, ErrDeclaredRequest)
 	r.declaredEdit = errors.Is(err, ErrDeclaredEdit)
 	return r
+}
+
+// execDetail reads the refusal `Detail` off an invocation error: the
+// bounded stderr tail where the child wrote one (`0025:C4`), and otherwise
+// the error's own text.
+//
+// The tail alone is not enough. A child that wrote NO stderr — a
+// command-not-found spawn, a stdout that is not the declared wire shape, an
+// exit the entry's map does not list — leaves `ExecError.Detail` empty
+// while `Err` holds the only text naming the cause, so copying the tail
+// alone drops the diagnosis and every such refusal reads identically as
+// "could not be executed" (`0004:FM` requires the diagnosis, not just the
+// identity tuple). This is what the binding's own `wrap` already assumes:
+// "a refusal with no tail still needs a diagnosable Detail; the error's own
+// text is the only thing there is."
+//
+// The fallback is deliberately EXCLUSIVE rather than a prepend. A present
+// Detail is already the binding's composed diagnosis — `cmdbind`'s
+// `invocation.detail` puts the held-pipe reason and the non-pollable note
+// ahead of the tail itself — and `Err` alongside it is either the bare
+// `exec.ExitError` status, which the tail already explains, or a ROUTING
+// sentinel (`ErrDeclaredRequest`, `ErrDeclaredEdit`) whose text is a retry
+// instruction and not a cause at all; RDR 0028 pins that Detail to "the
+// rule id plus the reason token, both unchanged". Prepending would bury the
+// acted-on fact under either. `Reason` carries neither: `0004:C7` reserves
+// it for a gate deny.
+func execDetail(ee *ExecError) string {
+	if ee.Detail != "" || ee.Err == nil {
+		return ee.Detail
+	}
+	return ee.Err.Error()
 }
 
 // --- read ----------------------------------------------------------------
