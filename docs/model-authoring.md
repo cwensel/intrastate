@@ -36,9 +36,18 @@ drift from one the tool accepts.
 | `[initial]` | required — the root owned state | none |
 | `terminal` / `[context.*]` | declares where the machine stops | none |
 | accessors | `[read.*]` and `[write.*]` per owned tag | none |
-| ordinary rule | carries `[rule.write]` | carries `[rule.emit]`, no write |
-| `flow resolve` answers | `rule` + `writes` / `next` | `rule` + `emit` |
+| ordinary rule | carries `[rule.write]` (required), and MAY also carry `[rule.emit]` | carries `[rule.emit]`, no write (it owns no state) |
+| `flow resolve` answers | `rule` + `writes` / `next`, plus `emit` where the row authored one | `rule` + `emit` |
 | `--artifact` at runtime | required — readers must be bound | not required |
+
+The `[rule.emit]` row is the one place the table reads as narrower than
+it is. `[rule.emit]` is not a decision-table construct: the write block is
+what the class conditions, not the emit block. A `state-machine` rule may
+carry `[rule.write]` and `[rule.emit]` together, and `flow resolve`
+answers with `emit` beside `writes` and `next`. What differs is the
+REQUIREMENT — an ordinary state-machine rule must advance owned state, so
+it must carry a write block, while a decision-table rule owns no state and
+may carry none.
 
 The class is **declared, not inferred** from the owned set. A
 `decision-table` model that declares an owned tag is refused at load as a
@@ -523,12 +532,165 @@ read_back = true
 what makes `flow set-state` verify a write by reading it back rather than
 trusting that it landed.
 
-Every accessor entry needs all four of `role`, `path`, `keys`, and a
-positive Go-duration `timeout` — any one absent or empty is
+Every accessor entry needs `role`, `keys`, and a positive Go-duration
+`timeout` — any one absent, empty or ill-formed is
 `malformed_accessor_declaration`. `read_back` is a **write-entry key**:
 a write entry must carry `read_back = true`, and a read or gate entry
 carrying it at all is refused. No accessor of any capability may name the
 reserved `recognized` key.
+
+#### The carrier
+
+Those three keys say WHICH tags an entry serves and how long it may take.
+The **carrier** says how it reaches them, and an entry declares **exactly
+one** of three:
+
+- `path` — a dotted locator into the caller-bound artifact, the carrier
+  the example above uses;
+- `command` — an argv vector the CLI spawns, admissible on read, gate and
+  write entries;
+- `edit` — a table of declared line rules that rewrite lines of a text
+  artifact in place, admissible on **write entries only**.
+
+Declaring none of the three is `command_and_path_conflict`, whose wire
+string predates the third carrier and did not move when the carrier set
+widened; declaring both `path` and `command` carries the same string.
+`edit` beside either of the others, or `edit` on a read or gate entry, is
+`edit_carrier_conflict`. That category keys on the `[write.<id>.edit]`
+table being **present**, not on it being non-empty — a bare `[write.x.edit]`
+beside a `path` is a conflict, never a silently ignored second carrier.
+
+#### The `edit` carrier
+
+An `edit` writer rewrites **declared lines** of the artifact its `role`
+binds. It spawns nothing, runs no shell, and does no word-splitting or
+PATH resolution. Each member of the entry's `keys` gets its own
+`[write.<id>.edit.<key>]` table, and that pair — entry and key — is the
+identity a refusal names as `<id>.edit.<key>`:
+
+- `anchor` (**required**) — an RE2 pattern that must select **exactly
+  one** line;
+- `replace` (**required**) — the whole replacement line, terminator
+  excluded;
+- `clear` (optional) — the disposition of a planned `<clear>`, from the
+  closed set `{"line"}`.
+
+Both required keys are required for a reason an author feels only at
+apply time. An absent `anchor` is not "match nothing": the empty pattern
+compiles to the everything-matcher and would select the sole line of a
+one-line file. An absent `replace` is not "write nothing": it is the empty
+LINE, so a still-matching anchor blanks that line's content and reports
+success. Deleting a line is `clear`'s job, declared explicitly.
+
+`keys` and the rule tables must be in **bijection** — a declared key with
+no rule table, or a rule table for a key not in `keys`, is
+`edit_key_mismatch`. That is what makes "every planned key has a rule" a
+load-time guarantee rather than an apply-time surprise.
+
+##### The two template vocabularies
+
+`anchor` and `replace` do not share a vocabulary, because one of them is a
+regexp:
+
+- `replace` is **closed**. It admits `{<key>}` — the planned value of the
+  ONE key this rule's table is named for, and no other key — plus
+  `${N}` and `${name}` for the anchor's capture groups, `$$` for a literal
+  `$`, and `{{` / `}}` for literal braces. Every other `{…}` or `$…` form
+  is `edit_template_invalid`, **including a bare `$1`**, which
+  `regexp.Expand` would have accepted. A `${…}` naming a group the anchor
+  does not define is refused at load rather than expanding empty at apply.
+- `anchor` opens a placeholder on the fixed prefix `{tag.` **only**.
+  Every other `{`, `}` and `$` is RE2's: `\d{4}`, `a{2,3}`, `[{}]` and
+  `^…$` are ordinary pattern text, and `{{` is **not** an escape here.
+  What is refused is a `{…}` an author wrote MEANING a substitution — a
+  brace opening a name of letters, digits, `_`, `-` or `.` — since
+  `{tag.<key>}` is the only substitution an anchor admits. A literal brace
+  is anchored by escaping it, `\{`. Defects here are
+  `edit_anchor_invalid`, as is a pattern that does not compile as RE2.
+
+`{tag.<key>}` is an **anchor-only** placeholder family. Writing it in a
+`replace` is `edit_template_invalid`, because a `replace` admits its own
+key and capture groups and nothing else. It names a tag the CALLER binds
+at invocation, so the key must be declared with `observed` provenance —
+an owned key or the reserved `recognized` key is structurally unbindable
+and naming one is `edit_anchor_invalid`. A bound value is interpolated
+**regexp-quoted**, so it matches literally and can never alter the
+pattern's structure.
+
+Do not confuse it with `{artifact}`, the argv placeholder a `command`
+entry uses. The same `{tag.<key>}` spelling joins that argv vocabulary as
+a whole-element form — `x{tag.nnnn}` is not a placeholder — so a command
+reader can be addressed at the same row an edit writer anchors on. At
+**argv0** it is refused as `edit_tag_argv0`: the executable must be
+readable off the model, and a caller-bound argv0 makes the interpreter
+deny-list unenforceable against a name that does not exist until
+invocation. `{artifact}` at argv0 stays admitted, having no such promise
+to break. `edit_tag_argv0` fires on a `command` entry of any kind,
+including one carrying no `edit` table — it belongs to the argv
+placeholder family, not to the carrier.
+
+##### What lint decides, and what it does not
+
+The carrier adds six **load-time** categories, reported by `lint`:
+`edit_carrier_conflict`, `edit_key_mismatch`, `edit_anchor_invalid`,
+`edit_template_invalid`, `edit_clear_invalid`, `edit_tag_argv0`.
+
+It also mints six **apply-time** reason tokens, which ride a refusal's
+detail and register in **no** category list:
+`edit_anchor_unmatched`, `edit_anchor_ambiguous`, `edit_anchor_collision`,
+`edit_anchor_unstable`, `edit_value_multiline`, `edit_clear_undeclared`.
+The two sets are disjoint, and a consumer matching an apply-time token
+against the load-category list will never find it. Lint cannot decide any
+of them: whether an anchor still selects exactly one line is a property of
+the **artifact at apply time**, not of the model. A model that lints clean
+can still refuse to write.
+
+##### Apply time
+
+Every refusal is decided **before any byte is written**. Selection, the
+cross-rule collision sweep and a post-rewrite re-anchor pass all run over
+in-memory buffers, so a caller that sees one of these refusals knows the
+artifact is untouched — it is exit 2, about the request, and re-running it
+unchanged cannot help. The refusals are ordered: entry-level preconditions,
+then `edit_value_multiline`, then `edit_clear_undeclared`, then per-rule
+cardinality for every rule, then the collision sweep, then the re-anchor
+pass.
+
+The re-anchor pass is what stops a rewrite from quietly poisoning its
+siblings. After the rewrite, EVERY rule of the entry — including one whose
+key this invocation did not plan — runs its anchor again over the
+post-edit buffer, and the pass asserts line **identity**, not cardinality:
+a planned rule must still select its own rewritten line. A rule dropped
+for being unplanned is precisely the one the invariant is about, because
+the next invocation is the one that plans it.
+
+Two apply-time properties are worth authoring against. A rewritten line
+carries its own terminator, so CRLF and a missing final terminator survive
+a rewrite, and a bare `\r`, NEL and U+2028 are line CONTENT rather than
+line breaks. And a post-edit buffer equal to its input is not written at
+all.
+
+##### Read-back through the role's reader
+
+A write entry requires `read_back = true`, and an `edit` writer's
+read-back goes through the **reader bound to the same role** — the
+carrier is a write-side choice and does not give the entry a reader of its
+own. Where that reader is `command`-backed, the reader's own
+preconditions are checked **before** the mutation rather than after it:
+without the `--allow-commands` opt-in, or with a `{tag.<key>}` in the
+reader's argv that this invocation left unbound or bound to a
+`-`-prefixed value, the write refuses up front. Otherwise a caller would
+be told the mutation "may have been applied and was not verified" for what
+is purely a defect of the request.
+
+Those three are refusals of the REQUEST and take the generic
+request-refused code, naming the accessor. Refusals a line rule itself
+minted take the distinct declared-line-edit code and report in
+`findings[]`, one entry per subject — including an unbound `{tag.<key>}`
+in a rule's own ANCHOR, which is a line edit and names the placeholder
+rather than a reason token. See
+[cli-output-contract.md](cli-output-contract.md), which fixes the envelope,
+the three subject shapes a message can take, and both sets of six.
 
 #### Gates
 
