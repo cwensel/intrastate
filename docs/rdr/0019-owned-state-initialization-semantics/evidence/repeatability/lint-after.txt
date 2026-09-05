@@ -1,0 +1,23 @@
+0019  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=11
+  conformance evidence:over-budget           157-206   this Evidence field is 50 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
+  conformance evidence:over-budget           250-292   this Evidence field is 43 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
+  conformance evidence:over-budget           349-379   this Evidence field is 31 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
+  conformance evidence:over-budget           396-426   this Evidence field is 31 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
+  conformance prose:exactness                597-597   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance gate:inline                   1863-1983  the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived          1893-1896  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1902-1914  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1920-1922  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1933-1937  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1958-1983  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
