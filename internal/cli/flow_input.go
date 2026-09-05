@@ -667,12 +667,35 @@ func parseTags(cmd *cobra.Command, m *table.Model) ([]resolveTag, *clierr.CLIErr
 		seen[key] = true
 
 		// A `--tag` legitimately carries an observed key the model does not
-		// declare, so the lookup is GUARDED: a missing declaration yields
-		// the zero `TagDecl`, which conforms everything and leaves the
-		// shape-only behaviour a caller already relies on intact. Refusing
-		// an undeclared key is a different decision, under a different code,
-		// and this is not the place that makes it.
-		decl := m.Tags[key]
+		// declare, and `0020:C1` decides what that absence MEANS here: a key
+		// absent from the normalized tag table is a PURE CARRIER — the value
+		// crosses VERBATIM, byte-preserved, JSON array literals included, and
+		// is never canonicalised, conformed, kind-checked, or compared. The
+		// lookup is therefore the two-value form: `declared` selects the
+		// arm, and the kind/shape/domain arms below run only under a real
+		// declaration, which is what makes their messages truthful.
+		decl, declared := m.Tags[key]
+
+		// The empty-value arm is HOISTED out of `canonicalValue` (`0020:C1`):
+		// an empty observed value is indistinguishable from unset, a
+		// grammar-level fact about the value that holds with or without a
+		// declaration, so it binds the carrier too. It sits AFTER the
+		// duplicate arm and the `seen[key]` mark, never before, so a
+		// repeated key still refuses `flow-tag-duplicate`.
+		//
+		// The arm is GUARDED, not unconditional on `value == ""`: a declared
+		// SET key keeps the set-specific CONFORMANCE message below, which
+		// presupposes a declared kind a carrier by definition has none of.
+		if value == "" && (!declared || decl.Kind != "set") {
+			return nil, userErr(codeTagInvalid, key,
+				"the tag `"+key+"` was given an empty value")
+		}
+
+		// The carrier branch sits where the conformance arms would have run.
+		if !declared {
+			out = append(out, resolveTag{Key: key, Value: value})
+			continue
+		}
 
 		canonical, ce := canonicalValue(key, value, decl, "tag")
 		if ce != nil {
