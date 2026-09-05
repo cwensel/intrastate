@@ -142,3 +142,57 @@ Test files:
 
 **Orphans:** 0 — none; every REQ carries at least one test.
 
+
+## REQ-MVV runner
+
+```sh
+B=./bin/intrastate; M=models/rdr.toml; A="$(mktemp -d)/rdr.artifact"
+"$B" flow init-state  --model "$M" --artifact "rdr=$A" --as=json
+"$B" flow read-state  --model "$M" --artifact "rdr=$A" --as=json
+"$B" flow next        --model "$M" --artifact "rdr=$A" --as=json \
+  | jq -c '[.data.candidates[].unknown[] | select(.reason=="absent")]'
+"$B" flow init-state  --model "$M" --artifact "rdr=$A" --as=json          # re-run
+"$B" flow set-state   --model "$M" --artifact "rdr=$A" --clear status --as=json
+"$B" flow init-state  --model "$M" --artifact "rdr=$A" --as=json          # after clear
+```
+
+## REQ-MVV output
+
+Run against the SHIPPED `models/rdr.toml` (REQ-MVV.10, ASSUMPTION-7) — the
+user outcome, not a fixture. The artifact path is elided to `<fresh>` /
+`<same>`; every other byte is verbatim.
+
+```console
+$ intrastate flow init-state --model models/rdr.toml --artifact rdr=<fresh> --as=json
+{"type":"ok","data":{"model":"models/rdr.toml","revision":"","artifacts":{"rdr":"<fresh>"},"seeded":["gate_passed","stage","status"],"absent":[]}}
+
+$ intrastate flow read-state --model models/rdr.toml --artifact rdr=<same> --as=json
+{"type":"ok","data":{"model":"models/rdr.toml","revision":"","artifacts":{"rdr":"<same>"},"readers":[{"id":"rdr-status","keys":["stage","status","gate_passed"],"tags":{"gate_passed":"false","stage":"seeded","status":"draft"}}]}}
+
+$ intrastate flow next --model models/rdr.toml --artifact rdr=<same> --as=json | jq -c '[.data.candidates[].unknown[] | select(.reason=="absent")]'
+[]
+
+$ intrastate flow init-state --model models/rdr.toml --artifact rdr=<same> --as=json   # re-run
+{"type":"ok","data":{"model":"models/rdr.toml","revision":"","artifacts":{"rdr":"<same>"},"seeded":[],"absent":[]}}
+
+$ intrastate flow set-state --model models/rdr.toml --artifact rdr=<same> --clear status --as=json
+{"type":"ok","data":{"model":"models/rdr.toml","revision":"","artifacts":{"rdr":"<same>"},"writers":["rdr-status"],"writes":{},"clear":["status"],"owned":{}}}
+
+$ intrastate flow init-state --model models/rdr.toml --artifact rdr=<same> --as=json   # after clear
+{"type":"ok","data":{"model":"models/rdr.toml","revision":"","artifacts":{"rdr":"<same>"},"seeded":[],"absent":["status"]}}
+```
+
+Reading it against the ten steps: step 2's seeding arm names all three
+`[initial]` keys and an EMPTY absent list; step 3 reads every one back at
+its declared value; step 4's `absent` filter is empty, so the first-run wall
+is gone; step 5's re-run reports the no-op arm (`seeded: []`) and wrote
+nothing; steps 6–7 clear `status` and the next run reports it as an absent
+`[initial]` key WITHOUT resurrecting it. Steps 1, 8 and 9 are asserted by
+`TestReqMVV_0019_InitStateAcceptanceSpine` over the fixture model, which
+carries the decision-table, unbound-role and carrier arms step 8 needs.
+
+**Phase 2 status.** Every REQ above is green except REQ-63 / REQ-67 /
+REQ-87's read-back MISMATCH arm, which is unreachable through the
+file-backed carrier — see `deviations.md` DEV-9 (SPEC-DEFECT, needs author
+decision). The exit-3 INCOMPLETE half of REQ-67 is green
+(`TestReq67_0019_AnIncompleteReadBackExitsThreeAndLeavesANonEmptyStore`).
