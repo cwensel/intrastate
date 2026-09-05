@@ -359,7 +359,14 @@ the lint already is: RDR 0010's `decision-table` class has no
     `internal/cli/flowbind/flowbind.go::Reader.Read` and
     `internal/cli/cmdbind/cmdbind.go::Reader.Read` — and confirm one
     candidate can answer emptiness for the file-backed carrier with no
-    change to the other implementer's behavior. The carrier gate now
+    change to the other implementer's behavior. The candidate MUST also
+    answer cardinality on a READ-BACK-SEALED store — returning 1, not an
+    unreadable short-circuit — since C1's sealed arm is a no-op success
+    at exit 0 that depends on the count being obtainable there; a
+    candidate inheriting `::Reader.Read`'s seal short-circuit degrades
+    that arm to an exit-3 refusal and fails S9. Added at the
+    repeatability lens, which found the two dispositions stated without
+    the constraint that reconciles them. The carrier gate now
     covers the READ capability as well as the write one (C1, A8), so
     the candidate need only answer emptiness for `flowbind.Reader` —
     a command-backed reader is refused before the emptiness question
@@ -574,7 +581,13 @@ extending 0005:C1's verb enumeration and 0005:D-naming's verb list by
 exactly this spelling. It takes the shared selection flags
 (`--flow`|`--model`), explicit `--artifact role=path` bindings, and no
 write grammar: its planned writes are the model's `[initial]`
-assignments. It MUST route every seed through the declared write
+assignments. It also carries `--allow-commands`, not by declaring it
+but by INHERITING it: the flag is registered once on the `flow` group's
+persistent set (`internal/cli/flow.go::newFlowCmd`), so every child verb
+takes it structurally and this one cannot decline it. The enumeration
+above is the verb's OWN grammar, not the closed set of flags it accepts
+— a reader who takes it as closed concludes the ORDERING clause below
+preempts a flag the verb does not have. It MUST route every seed through the declared write
 accessors with commit-time read-back, on the same
 writer-routing/no-cross-writer-atomicity terms as `set-state`
 (0005:C1); it MUST NOT write an artifact directly.
@@ -628,11 +641,29 @@ otherwise, so the artifacts quantified over here are exactly the ones
 that clause already established. An unbound needed role is therefore a
 REFUSAL, never an artifact treated as empty — the reading that would
 let a half-bound invocation seed a model on the strength of the roles
-it happened to name. The quantifier is ALL, not
+it happened to name.
+That dependence FIXES AN ORDER, and it is stated here because the
+outcome differs: the ROLE-BINDING half of plan validation runs BEFORE
+the emptiness read, so an invocation that leaves a needed role unbound
+refuses at exit 2 REGARDLESS of what the bound stores contain — it does
+not reach the predicate and cannot take the no-op arm. It runs AFTER
+the carrier gate, which is likewise observable: an invocation against a
+non-file-backed model that ALSO omits a needed artifact flag refuses
+under the carrier code, not the artifact-binding family. Carrier before
+role-binding is the order because the carrier fact is a property of the
+model alone while role-binding is a property of the invocation, and the
+refusal that names the model's own defect is the more useful one. The WRITER-ARITY
+half is not ordered here at all, having already been settled at load
+(below). Only encoding and the write follow the predicate. Without this
+order the domain is not established when the quantifier runs, and a
+half-bound invocation against a non-empty store would exit 0 as a no-op
+while an otherwise identical invocation against an empty one refuses —
+the same defect reported under two outcomes. The quantifier is ALL, not
 ANY and not per-artifact, and it is load-bearing rather than
 stylistic: a model may declare N write accessors over N roles
-(`internal/table/model.go::Model.Writers`, which `::runFlowSetState`
-already iterates per writer, checking `req.artifacts[role]` for each),
+(`internal/table/model.go::Model.Writers`, a `map[string]Accessor`
+which `::runFlowSetState` already iterates per writer, checking
+`req.artifacts[role]` for each),
 so a per-artifact or ANY reading would seed into a store that still
 carries a key whenever a SIBLING artifact happened to be empty —
 precisely the resurrect hazard A5 exists to exclude and the ground the
@@ -649,7 +680,18 @@ init-state declines to seed. That is the correct arm and it is stated
 rather than incidental: such an artifact is already exit 3 unreadable
 to every reader — the read accessor reports every requested key
 UNREADABLE rather than absent (`0004:C7`) — so seeding into it would
-write beneath an unverifiable state. The seal is dropped by the next
+write beneath an unverifiable state. The sealed store is nonetheless a
+NO-OP SUCCESS at exit 0 here, not an exit-3 refusal, and the two facts
+do not conflict: exit 3 is what a READ-BACK on a sealed artifact
+returns, and init-state performs no write and therefore no read-back on
+this arm. What it needs is a key COUNT, which the predicate obtains
+without reading key values — the seal makes the store non-empty at
+cardinality 1 and the verb declines before any write is planned. That a
+key-scoped reader short-circuiting on the seal cannot itself supply
+that count is precisely A6's undecided carrier: whichever carrier lands
+MUST answer cardinality on a sealed store rather than inheriting
+`::Reader.Read`'s unreadable short-circuit, or this arm degrades from
+no-op success to an exit-3 refusal and S9 fails. The seal is dropped by the next
 write whose locator IS reachable, which returns the artifact to the
 ordinary classes above.
 
@@ -710,7 +752,19 @@ BANNED on the same ground the class arm bans re-deriving from
 discriminator whose writer is the registry. Exporting `commandBacked`
 is not required and is not authorized here.
 
-ORDERING: the carrier refusal is decided AFTER registry construction
+ORDERING: the CLASS refusal precedes the CARRIER refusal. Both are
+pre-invocation, so nothing above orders them, and the combination is
+constructible against the code even though it is not against the
+loader's admitted models: the class arm keys on `::IsDecisionTable`,
+which is answerable from the loaded model alone, while the carrier arm
+needs the constructed registry. Class-first is therefore the cheaper
+order as well as the stated one — a decision-table model refuses
+without a registry being built. The rule matters only for a model that
+would trip BOTH arms; since no admitted decision-table model carries
+`[initial]` or can bind an owned-tag writer, such a model does not
+reach the verb today, and the order is fixed here so an implementer
+does not have to re-derive that it cannot. The carrier refusal is
+decided AFTER registry construction
 (it reads the constructed binding) but BEFORE any accessor is invoked,
 and it PREEMPTS the `--allow-commands` refusal
 (`internal/accessor/model.go::Registry.AllowCommands`, also exit 2). A
@@ -773,9 +827,29 @@ payload or doc may describe init-state as unable to re-establish a
 cleared key without this qualification. A key added to `[initial]`
 after seeding is re-established by explicit `set-state`, not by init —
 the payload's absent-key report names it.
+An `[initial]` value that is an EMPTY SCALAR (`note = ""`) seeds like
+any other: the scalar arm renders `members[0]`, the artifact carries
+`{"note":""}`, and the key reads back PRESENT — distinct from a cleared
+key, which leaves the object entirely. It creates no third encoding and
+is not refused at seed time, because refusing it would require
+re-conforming a loader-normalized value, which this clause rules out
+above. The ARGV route's contrary refusal (`::canonicalValue` rejects
+`--write note=`) is a loader/write-surface asymmetry predating this RDR
+and is NOT resolved here in either direction (F5, routed to RDR 0002) —
+what is decided here is only what the seed route does, because this
+verb is the route that reaches it.
 The payload MUST distinguish the seeded-all case from the no-op case,
 and its scope is exactly the `[initial]` key set — the verb claims
-nothing about owned keys `[initial]` does not assign.
+nothing about owned keys `[initial]` does not assign. Its CONTENT is
+fixed here even though its field NAMES are deferred (Wire / byte
+format): the payload reports seeded keys by NAME and does not echo
+their values — `read-state` is the surface that reports values (RT1),
+and echoing them here would create a second place a seeded value can be
+read from, with no invariant tying the two. The absent-key report
+belongs to the NO-OP arm, which is the only arm where the set can be
+non-empty; on the seeded arm every `[initial]` key was just written, so
+an absent list there is necessarily empty and MUST NOT be reported as
+if it carried information.
 
 The ENTIRE plan is validated before any write: every `[initial]` key
 must route to exactly one declared writer and every needed artifact
@@ -829,10 +903,22 @@ codes this verb adds join the carved-out minority, and the reader who
 checks the header alone will conclude the opposite of what this clause
 fixes;
 S7, S10 and MVV steps 7–8 assert the group and the distinctness.
-Shared refusal classes (model selection, artifact binding, writer
-routing, read-back) reuse the existing `flow-*` codes unchanged, and
-the classes new to this verb get codes recorded in the 0005:C1
-taxonomy extension this override carries.
+Shared refusal classes reuse the existing `flow-*` codes unchanged, at
+the groups those codes already carry — this verb introduces no new
+group for them and may not re-map one. Model selection
+(`::selectModel`/`::selectModelPath`), artifact binding and writer
+routing (`internal/cli/flow_state.go::writerFor`) are all
+`clierr.GroupUserEnv`, exit 2. Read-back splits, and the split is
+load-bearing rather than incidental: a read-back that COMPLETED and
+disagreed is exit 2 (`GroupUserEnv`), while a read-back that could not
+complete — the unreachable-locator and timeout arms — is exit 3
+(`GroupEnvUnavailable`), per `internal/cli/clierr/clierr.go::ExitCodeFor`
+and the raise sites in `internal/cli/flow_exec.go::accessorFailureOf`.
+So the PRESENT-AND-UNVERIFIED refusal above is exit 2, and a seed whose
+read-back is incomplete exits 3 with the same partial-write disposition;
+both leave a non-empty store, so both make a re-run a no-op that does
+not repair. The classes new to this verb get codes recorded in the
+0005:C1 taxonomy extension this override carries.
 ```
 
 Exact payload field names, the refusal-code spelling, and help text are
@@ -847,8 +933,9 @@ the carrier, which is the fork this RDR exists to close.
   already verifies, not a new one (A2 verifies the rendering path).
 - **Wire / byte format** — none new; artifacts keep
   `internal/cli/flowbind` shape, and the success payload rides the
-  0005:C1 envelope. Field names deferred to Resolve/Pre-Lock, owned
-  here.
+  0005:C1 envelope. Field names deferred to implementation, owned here;
+  the payload's CONTENT is not deferred — C1 fixes it (key names not
+  values on the seeded arm, the absent list on the no-op arm only).
 - **Naming** — `init-state`, completing the `read-state`/`set-state`
   family. Rejected: `init` (reads as scaffolding a model file, not
   seeding state), `seed` (outside the `*-state` family the group
@@ -881,8 +968,10 @@ the carrier, which is the fork this RDR exists to close.
   reports no cardinality, and
   `internal/cli/flowbind/flowbind.go::store` is package-private — the
   emptiness read is a second new data flow, not a free consequence of
-  the existing one; scoped to the file-backed carrier, with the other
-  two (`::NewEditWriter`, `cmdbind.Writer`) refused, per C1 —
+  the existing one; scoped to the file-backed carrier on BOTH
+  capabilities, with the other write carriers (`::NewEditWriter`,
+  `cmdbind.Writer`) and the command-backed reader (`cmdbind.Reader`)
+  alike refused, per C1 —
   whose writer is any prior committed `set-state`/init write; an
   empty store means never-written or emptied by clears, which are
   indistinguishable at the content level — verified byte-level at
@@ -964,6 +1053,7 @@ a note about it.
 | Read carrier | registry read construction, resolved by role (`::readerFor`) | this verb's type-switch | the WRITE binding, as a proxy for both | the constructed read type — admits the VALUE `flowbind.Reader` only, never the pointer spelling (C1, A8) |
 | Value encoding | kind-dispatched: `::canonicalSet` (set) / `members[0]` (scalar), JDR 0001 §D13 | `set-state`, this verb | loader `conform` (kind/domain only); `::canonicalSet` for every kind | the kind-dispatched pair — the byte-equality source (C1) |
 | Writer for a key | loader `::checkAccessorBindings` (exactly-one) | `::writerFor` | none | load-time binding (A3) |
+| Exit group of a shared refusal | the raise site's `clierr.Group`, not the code table | `::ExitCodeFor` | the code table's header rule ("spellings normative, group fixes the exit") | the raise site — mismatch 2, incomplete/timeout 3 (C1) |
 
 **`oracle`** — each MVV row fails if the right thing is wrong.
 
@@ -1001,7 +1091,8 @@ a note about it.
 | Non-file-backed write carrier | 2 | zero | carrier refusal naming the WRITE capability (C1 carrier scope) |
 | Non-file-backed read carrier (file-backed writer) | 2 | zero | carrier refusal naming the READ capability (C1 carrier scope, A8) |
 | Empty-scalar `[initial]` value | 0 | the key, as `""` | seeded-all; reads back present, distinct from cleared (F5) |
-| Read-back mismatch | non-zero | partial, per-key | key PRESENT-AND-UNVERIFIED |
+| Read-back mismatch (completed, disagreed) | 2 | partial, per-key | key PRESENT-AND-UNVERIFIED |
+| Read-back incomplete / timeout (could not complete) | 3 | partial, per-key | inherited `flow-write-readback-incomplete`/`-timeout` (C1) |
 
 **`trace`** — the MVV walked stepwise against the assertions in force.
 
@@ -1010,8 +1101,9 @@ a note about it.
 | bind model + artifacts | C1 carrier (route via accessors), class arm | fixture: state-machine model, file-backed writer |
 | class check | C1 class arm keyed on `::IsDecisionTable` | decision-table fixture → exit 2, no artifact (S7) |
 | carrier check | C1 carrier scope, both capabilities | edit/command-backed writer → exit 2; command-backed reader behind a file-backed writer → exit 2 (A8); pointer/value spelling per capability — writers `*Writer`, readers `Reader` (C1) |
+| role-binding validation | C1 all-or-nothing, ordered AFTER the carrier gate and BEFORE the predicate | every role a needed writer names is bound; unbound → exit 2, no predicate (S6); non-file-backed + unbound → the carrier code |
 | emptiness read | C1 predicate (ALL bound artifacts, STORE keys), **A6 carrier undecided** | empty: `{}`+newline, 3 bytes (A5 spike); sealed: `len==1` |
-| plan validation | C1 all-or-nothing, A3 exactly-one-writer | every `[initial]` key routes to 1 writer |
+| plan encode | C1 all-or-nothing; writer arity already settled at LOAD (A3) | every `[initial]` key routes to 1 writer |
 | encode + write | C1 canonical form, kind-dispatched (`::canonicalSet` set / `members[0]` scalar) | RT3 byte-identity vs `set-state`, both arms (A2 spike: 9 kinds) |
 | read-back | 0004 read-back-is-the-only-commit-check | mismatch → PRESENT-AND-UNVERIFIED |
 | second run | RT2 idempotence | bytes unchanged |
@@ -1534,10 +1626,15 @@ their change is the new verb's own entry (Activation Step 1).
 
 #### Step 2: Predicate and plan
 
-Read the bound store; non-empty → the no-op arm (report absent
-`[initial]` keys, write nothing). Empty → plan every `[initial]`
-assignment and validate the WHOLE plan (`writerFor` per key, artifact
-roles bound) before any accessor runs.
+Gate the carrier on both capabilities (Step 1's class refusal has
+already fired); non-file-backed → refuse (exit 2). Then validate that
+every role a needed writer names is bound; unbound → refuse (exit 2)
+without reading any store. Then read the bound stores;
+non-empty → the no-op arm (report absent `[initial]` keys, write
+nothing). Empty → plan and encode every `[initial]` assignment
+(`writerFor` per key) before any accessor runs. The order is C1's, not
+this step's, and the role-binding half precedes the predicate there —
+see C1 for why the outcome depends on it.
 
 #### Step 3: Apply and report
 
@@ -1665,9 +1762,11 @@ test that fails if the arm is removed.
    writer's — nothing requires the two to name one artifact. So one
    reader and one writer over the same key, on differing paths, loads
    clean and is the construction this scenario needs.
-   (A command-backed READER is the other legal construction — C1's
-   carrier refusal is scoped to WRITE accessors — but needs a helper
-   binary and `--allow-commands`.)
+   (A command-backed READER is NOT an alternative construction for this
+   scenario: C1's carrier gate covers the READ capability too, so such a
+   model refuses at exit 2 before any read-back runs and can never
+   produce the completed-and-disagreeing read-back this fixture needs.
+   That is S10's read-side row, not this one.)
    **Expected**: terminal refusal naming the key present-and-unverified,
    distinct from the read-back-INCOMPLETE class an unreachable locator
    raises; a subsequent re-run is a no-op that does NOT repair it —
