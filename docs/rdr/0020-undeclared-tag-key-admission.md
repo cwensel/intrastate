@@ -68,9 +68,7 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Bug Fix
-- **Profile**: mid — provisional: one contract (the zero
-  `TagDecl`'s meaning at `--tag` admission), a user-facing
-  refusal-code and admission surface.
+- **Profile**: mid — the meaning of the zero `TagDecl` at `--tag` admission; user-facing yes; locks contract
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -142,13 +140,23 @@ output contract speaks to the undeclared-key/array case.
   refusal** — nothing branches on `flow-tag-invalid` fired for a key
   the model does not declare (the "is not set-valued" arm over the
   zero decl).
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: (Resolve) sweep the repo's tests/fixtures and the
-    motivating consumer for assertions on `flow-tag-invalid` over an
-    undeclared key; the anchor is the message literal
-    `is not set-valued` beside a key absent from the fixture's
-    `[tags]`.
+  - **Evidence**: the message literal has one producer,
+    `internal/cli/flow_input.go::canonicalValue`, and one asserting
+    test — `internal/cli/flow_input_0005_test.go`
+    `TestReq29And80_WrongKindAndEmptyTagValuesAreFlowTagInvalid`,
+    subtest `array-for-scalar-key`, which uses `--tag profile=[…]`
+    against a key DECLARED at `internal/cli/flow_fixtures_0005_test.go`
+    `[tags.profile]` — i.e. the declared arm, which C1 keeps. Every
+    other `flow-tag-invalid` assertion is a different arm (empty
+    `--outcome`, malformed no-`=` tag, declared-enum domain
+    violation). The repo asserts the converse directly:
+    `internal/cli/flow_input_0005_test.go`'s `an undeclared observed
+    key still passes` requires success for
+    `--tag sidechannel=whatever-the-caller-likes`.
+    negative: no assertion, caller branch, or fixture requires
+    `flow-tag-invalid` over an UNDECLARED key.
   - **If wrong**: the acceptance-conversion silently changes a
     consumer's error-handling path; surfaces as a caller branch on
     `flow-tag-invalid` that never fires again.
@@ -156,50 +164,107 @@ output contract speaks to the undeclared-key/array case.
   dimensions come only from rule atoms, and every model-side reference
   to an undeclared tag refuses at load, so the carried value is
   structurally unreadable.
-  - **Status**: Pending
-  - **Method**: Source Search
-  - **Evidence**: (Resolve) the `unknown_tag` refusal sites —
-    `internal/table/normalize.go` ("references/writes/clears the
-    undeclared tag"), `internal/table/load.go::accessorTable` ("names
-    the undeclared tag"), the `[initial]` arm — plus an MVV run showing
-    identical selection with and without the carried key.
+  - **Status**: Verified
+  - **Method**: Source Search + Spike
+  - **Evidence**: all five `CatUnknownTag` refusal sites confirmed —
+    `internal/table/normalize.go::atomsFromBlock` (match/guard/unless
+    atoms in every block), the write-block and clear-list arms of
+    `internal/table/normalize.go`, `internal/table/load.go::accessorTable`,
+    and `internal/table/load.go::loadInitial`. Closed-world reader
+    enumeration over every non-test `m.Tags` read found two disjoint
+    shapes, neither able to observe an undeclared key's value:
+    iterations over the model's OWN key set (vacuously excluding
+    undeclared keys), and lookups keyed by a rule-atom/accessor/initial
+    key (each already past one of the five refusals). Runtime: the
+    observed tag enters the kernel view at
+    `internal/resolve/resolve.go::assemble`, but the view is read only
+    through `matches` (iterating `row.Match` — rule atoms only), `has`,
+    and guard `Lookup`; `internal/resolve/precondition.go::CheckInput`
+    reads `Observed` only for the reserved key NAME, never a value.
+    Runtime leg — spike `evidence/spikes/selection-diff-a2-vs-b.txt`
+    (empty): selection is byte-identical with and without an undeclared
+    scalar carrier; every projected field (rule, emit, dispositions,
+    gates, next, writes, clear, escaped, outcome) diffs empty and the
+    only payload change is `observed` gaining the carried key. The
+    array-carrier leg is not runtime-verifiable until the change lands
+    (it refuses at HEAD) and is covered by MVV 2/3.
   - **If wrong**: pass-through becomes semantically live and the
     carrier arm's safety argument collapses — routing could depend on
     unvalidated bytes; surfaces as a selection diff in the MVV pair.
 - **A3 No byte-equality obligation reads an undeclared observed
   value** — no read-back, plan copy-through, or comparison path
   consumes it, so verbatim (non-canonicalised) carry is safe.
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: (Resolve) trace consumers of the kernel Observed view
-    and the payload `observed` field; read-back equality is confined to
-    `--write` (`internal/cli/flow_state.go::parseWrites`, which proves
-    a declaration first).
+  - **Evidence**: byte-equality lives in exactly one place,
+    `internal/accessor/executor.go::verifyReadBack`, whose read-domain
+    is the write plan, the accessor-read baseline, and the accessor
+    RE-READ values — never the `--tag` observed slice. The plan comes
+    from `internal/cli/flow_state.go::parseWrites`, which proves a
+    declaration via `writerFor` BEFORE calling `canonicalValue` (its
+    lookup "is total, unlike `parseTags`'s"), so every byte-compared
+    value is canonicalised under a real declaration. All other
+    consumers of a `--tag` observed value are non-comparing verbatim
+    copies: `internal/cli/flow_exec.go`'s `observedTagMap` /
+    `kernelTags`, and the payload `observed` echo
+    (`internal/cli/flow_resolve.go`, routed to `groupEcho` by
+    `internal/cli/flow_partition.go`). `internal/resolve/resolve.go`'s
+    `merge` does compare a repeated key's value, but
+    `internal/cli/flow_input.go` refuses a repeated `--tag` key under
+    `codeTagDuplicate` (REQ-28) before the kernel sees it.
+    negative: no read-back, plan copy-through, hash, sort, or dedupe
+    path consumes an UNDECLARED observed value.
   - **If wrong**: a verbatim (unsorted/duplicated) array breaks an
     equality check somewhere downstream; surfaces as a spurious
     mismatch refusal.
 - **A4 External prior art aligns with the carrier arm** — SCXML's
   declared-datamodel/open-event-data split, protobuf unknown-field
-  retention, Kubernetes-style open label vocabularies (demoted: not
-  quotable from the corpora at Propose; see
-  `evidence/research/propose-research.md`).
-  - **Status**: Pending
-  - **Method**: Prior art
-  - **Evidence**: (Resolve) one opened citation per named system, or a
-    recorded negative; the choice does not rest on this — in-repo
-    anchors carry it.
+  retention, Kubernetes-style open label vocabularies.
+  - **Status**: Verified
+  - **Method**: Prior Art
+  - **Evidence**: three opened citations, trail at
+    `evidence/research/resolve-prior-art.md`. SCXML — W3C SCXML
+    Recommendation §5.4 (`<assign>`): an illegal or non-existent
+    datamodel location MUST raise `error.execution` (the closed,
+    declared arm), against §5.10.1 (`_event`): the processor "SHOULD
+    reformat this data to match its data model, but MUST NOT otherwise
+    modify it" (the open, carried arm). Protobuf — Language Guide
+    (proto3) §Unknown Fields: "Proto3 messages preserve unknown fields
+    and include them during parsing and in the serialized output."
+    Kubernetes — *Mastering Kubernetes* (Packt) §Label/§Annotation,
+    pp.6–7: key/value SYNTAX is validated while the value's meaning is
+    not ("Kubernetes just stores the annotations"); analogous rather
+    than identical, since the API server has no declared-key table.
+    Corpus-first per the budget: `StateMachineRes` / `StateMachineLit`
+    / `DevRef` / `PapersFast` were negative for the SCXML and protobuf
+    instance claims (the Propose-stage negative reproduced); the web
+    fallback fetched the two primary specs without a 403.
   - **If wrong**: the alignment claim weakens; the decision still
     stands on the in-repo anchors (non-fatal — record and move on).
 - **A5 RDR 0005's stable code table tolerates an arm of
   `flow-tag-invalid` becoming unreachable for undeclared keys** — the
   table fixes spellings and exit groups, not per-arm reachability, so
   no amendment of 0005 is required.
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: (Resolve) cite the 0005 element that fixes the code
-    table (`0005:FM`, mirrored at `internal/cli/flow_input.go`'s
-    constant block) and confirm no clause pins the undeclared-array
-    refusal itself.
+  - **Evidence**: `0005:§failure-modes`'s table header fixes the scope
+    exactly — "Stable code strings (the spellings are normative; the
+    group fixes the exit)": spellings and exit group, nothing about
+    which inputs reach which arm. `0005:§normative-contracts` C1's only
+    `--tag` clauses cover the owned/reserved refusal and "`--tag`
+    values MUST enter as observed context"; no clause addresses an
+    undeclared, non-owned, non-reserved key's kind-checking. The
+    nearest text, `0005:§technical-design` "State input" ("a bare
+    scalar for a set key, or an array for a scalar key, is
+    `flow-tag-invalid`"), is conditioned on a KNOWN declared kind, so
+    it does not reach the undeclared case. Message text is nowhere
+    contract in 0005 — C1 requires only that `Finding.message` be
+    self-sufficient, not verbatim-pinned. Spellings mirror at
+    `internal/cli/flow_input.go`'s constant block
+    (`codeTagInvalid`/`codeTagDuplicate`/`codeTagReserved`/`codeTagOwned`),
+    unchanged by C1. 0005 Status: Implemented.
+    negative: no 0005 clause pins the undeclared-array refusal or ties
+    the "is not set-valued" message to any input class.
   - **If wrong**: the change needs a successor-RDR amendment path for
     0005's table before it can land; surfaces at Stage 7's
     contradiction check.
@@ -275,7 +340,15 @@ undeclared key are, unchanged and still preceding any accessor
   value that holds with or without a declaration. It therefore binds the
   carrier too, and MOVES to the admission path ahead of the carrier
   branch; today it sits inside `canonicalValue`'s `!isSet` arm, which
-  the carrier no longer enters.
+  the carrier no longer enters. The hoisted arm carries the
+  SCALAR-shaped message for a carrier — ``the tag `X` was given an
+  empty value`` — which is byte-identical to what an undeclared key
+  already receives at HEAD (normative fixture **F4**, Testing Strategy
+  scenario 4, from `evidence/spikes/d-undeclared-empty.txt`), so the
+  hoist is behaviour-preserving. The set-specific empty-value message ("is set-valued
+  and takes a JSON array literal; got ") is a CONFORMANCE message and
+  stays declared-only, inside the arms below: it presupposes a
+  declared kind, which a carrier by definition has none of.
 
 `flow-tag-invalid`'s kind, shape, and domain arms — including "is not
 set-valued" — are reachable only for a DECLARED key, whose loaded
@@ -528,9 +601,13 @@ emit-namespace precedent (`internal/table/model.go::EmitValue`,
 the sibling proposals 0012 / 0018 / 0024 via the projector. External
 corpus reads (4 arc queries over `StateMachineRes`) surfaced no
 quotable passage for the class "undeclared caller-context key
-admission in peer engines"; ⚠ no prior-art coverage (quotable) for
-that external class — the external analogies were demoted to A4
+admission in peer engines"; the external analogies were demoted to A4
 rather than leaned on, and the choice rests on the in-repo anchors.
+Resolve reproduced that corpus negative instance-by-instance (SCXML,
+protobuf) and closed the gap on the web fallback: the primary specs
+fetched without a 403 and A4 now carries three opened citations. The
+choice still rests on the in-repo anchors — prior art corroborates it,
+it does not carry it.
 
 ### Key Discoveries
 
@@ -559,9 +636,19 @@ rather than leaned on, and the choice rests on the in-repo anchors.
   compared by exact byte equality" (`0010:C3`), with declarations
   arriving later as opt-in (0024) ⇒ carrier-by-default,
   declare-to-tighten is the established house pattern.
-- **Assumed** — no caller load-bears on the undeclared-array refusal
-  (A1) and no byte-equality path reads an undeclared observed value
-  (A3); Resolve verifies both.
+- **Documented** (Resolve) — no caller load-bears on the
+  undeclared-array refusal: the "is not set-valued" literal has one
+  producer and one asserting test, over a DECLARED key, and the repo
+  already asserts the converse ("an undeclared observed key still
+  passes") ⇒ A1 verified. No byte-equality path reads an undeclared
+  observed value: `internal/accessor/executor.go::verifyReadBack` is
+  the sole comparison site and its domain is the declaration-proved
+  write plan ⇒ A3 verified.
+- **Documented** (Resolve) — external prior art aligns after all: the
+  Propose-stage corpus negative reproduced, but the primary specs
+  opened cleanly on the web fallback — SCXML §5.4 vs §5.10.1,
+  protobuf proto3 §Unknown Fields, and Kubernetes labels/annotations
+  ⇒ A4 verified, trail at `evidence/research/resolve-prior-art.md`.
 
 ## Trade-offs
 
@@ -672,14 +759,40 @@ is pinned by construction rather than by two tests that could drift:
 1. **Scenario**: undeclared scalar and undeclared array literal
    admitted (MVV 2).
    **Expected**: exit 0; `observed` echoes both byte-for-byte.
+   Normative fixture **F1** (scalar leg, read at HEAD from
+   `evidence/spikes/a2-undeclared-scalar-only.txt`), for a model
+   declaring scalar `tier` and set `labels` and nothing named `extra`:
+   `--tag tier=free --tag labels=["security"] --tag extra=plain` ⇒
+   `"observed":{"extra":"plain","labels":"[\"security\"]","tier":"free"}`.
+   The array leg (`extras=["a","b"]` echoing verbatim) is the
+   post-change extension of F1 and is what the red test adds.
 2. **Scenario**: the same resolve with and without the carrier flags
    (MVV 3).
-   **Expected**: identical selected rule and outcome.
+   **Expected**: identical selected rule and outcome. Normative
+   fixture **F2** (`evidence/spikes/b-baseline-no-carriers.txt`,
+   diffed at `evidence/spikes/selection-diff-a2-vs-b.txt`, empty):
+   `"rule":"free"`, `"emit":{"plan":"basic"}`, with `gates`, `next`,
+   `writes`, `clear` empty and `escaped:false` in both runs — every
+   projected field diffs empty and the sole payload delta is
+   `observed` gaining the carried key.
 3. **Scenario**: declared scalar given an array literal (MVV 4).
    **Expected**: refused `flow-tag-invalid`, "is not set-valued".
+   Normative fixture **F3**
+   (`evidence/spikes/c-declared-scalar-array.txt`): `--tag
+   tier=["a","b"]` ⇒ exit 2, ``{"code":"flow-tag-invalid","message":"the
+   tag `tier` is not set-valued; got the array literal
+   [\"a\",\"b\"]","param":"tier"}``.
 4. **Scenario**: undeclared key given an empty value (MVV 5).
    **Expected**: refused `flow-tag-invalid`, "was given an empty
-   value" — the arm the carrier does not escape.
+   value" — the arm the carrier does not escape. Normative fixture
+   **F4** (`evidence/spikes/d-undeclared-empty.txt`): `--tag extra=`
+   ⇒ exit 2, ``{"code":"flow-tag-invalid","message":"the tag `extra`
+   was given an empty value","param":"extra"}`` — byte-identical to
+   HEAD, so C1's hoist of this arm is behaviour-preserving. The
+   declared-SET empty-value message differs
+   (`evidence/spikes/g-declared-set-empty.txt`: "is set-valued and
+   takes a JSON array literal; got ") and stays inside the
+   conformance arms, declared-only.
 
 
 ## Finalization Gate
