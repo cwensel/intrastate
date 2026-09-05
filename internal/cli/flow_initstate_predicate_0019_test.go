@@ -170,6 +170,18 @@ func TestReq27And28And29And88And89_0019_ASealedStoreIsANonEmptyOneKeyStoreAndANo
 			"locator is declared unreachable, so it must refuse at exit 3 " +
 			"and leave the artifact SEALED")
 	}
+	// TEST-FIXTURE (Phase 2): the sealing write APPLIES its mutation and
+	// then seals, in one atomic save (`0004:C14` — the applied-but-unverified
+	// sense is a claim about an artifact that really was mutated), so the
+	// store carries the seal AND `stage`. S9 needs the artifact "whose owned
+	// keys have ALL been cleared", which the setup reaches by clearing them:
+	// a clear through the same unreachable-locator writer removes the key and
+	// re-seals, leaving exactly `{sealedKey}`.
+	if _, _, err := runCmd(t, "flow", "set-state", "--model", model,
+		"--artifact", bind, "--clear", "stage", "--as=json"); err == nil {
+		t.Fatalf("the sealing clear SUCCEEDED; the fixture's read-back " +
+			"locator is declared unreachable, so it must refuse at exit 3")
+	}
 
 	// SETUP OBLIGATION (REQ-89): assert the post-setup bytes BEFORE the
 	// scenario runs, and FAIL LOUDLY rather than skip. A representation
@@ -213,6 +225,13 @@ func TestReq29_0019_TheEmptinessReadDoesNotInheritTheUnreadableShortCircuit(t *t
 	if _, _, err := runCmd(t, "flow", "set-state", "--model", model,
 		"--artifact", bind, "--write", "stage=seeded", "--as=json"); err == nil {
 		t.Fatalf("the sealing write SUCCEEDED; the fixture must seal")
+	}
+	// TEST-FIXTURE (Phase 2): see the sibling scenario — the sealing write
+	// leaves `stage` beside the seal, and this arm needs the store whose ONLY
+	// key is the seal.
+	if _, _, err := runCmd(t, "flow", "set-state", "--model", model,
+		"--artifact", bind, "--clear", "stage", "--as=json"); err == nil {
+		t.Fatalf("the sealing clear SUCCEEDED; the fixture must seal")
 	}
 
 	stdout, _, err := runCmd(t, initStateArgs(model, bind)...)

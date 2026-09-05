@@ -399,6 +399,15 @@ func TestReq43And46_0019_TheReaderIsTheFirstMatchInRegistryOrder(t *testing.T) {
 // is not enforced on the read side today, so this model is constructible.
 // The registry appends readers in SORTED NAME order, so `a-file` (file-
 // backed) precedes `z-command` (command-backed) in `Definitions`.
+//
+// TEST-FIXTURE (Phase 2): the two readers serve DIFFERENT keys. What the
+// loader enforces is per-KEY reader uniqueness — ::checkAccessorBindings
+// refuses "owned tag <k> is served by N readers; want exactly one" — not
+// per-ROLE uniqueness, which is exactly the gap `0019:C1` names ("role
+// uniqueness on the read side is NOT enforced today"). Two readers on one
+// role sharing one key trips the KEY arm and never reaches the verb, so the
+// second reader takes its own owned key and the ROLE collision — the thing
+// this test discriminates — stands.
 const initTwoReaderModel = `outcomes = ["advance"]
 terminal = ["done"]
 
@@ -418,6 +427,10 @@ kind = "enum"
 domain = ["seeded", "final"]
 single_valued = true
 
+[tags.shadow]
+provenance = "owned"
+kind = "scalar"
+
 [read.a-file]
 role = "state"
 path = "flow.state"
@@ -428,13 +441,13 @@ timeout = "2s"
 role = "state"
 command = ["cat", "{artifact}"]
 output = "raw"
-keys = ["stage"]
+keys = ["shadow"]
 timeout = "10s"
 
 [write.state]
 role = "state"
 path = "flow.state"
-keys = ["stage"]
+keys = ["stage", "shadow"]
 timeout = "2s"
 read_back = true
 

@@ -59,8 +59,14 @@ single_valued = true
 
 [tags.k_float]
 provenance = "owned"
-kind = "float"
-single_valued = true
+# TEST-FIXTURE (Phase 2): float is NOT one of RDR 0003's five declared
+# kinds -- the closed vocabulary in internal/table/model.go is
+# {enum, bool, int, set, scalar}. A2's VERIFIED evidence states it
+# outright: "a TOML float reaches the seed encoder under scalar, which
+# conformKind passes through unchecked". S4's "float" row is a float
+# VALUE, not a float KIND, so the declaration is scalar and the row still
+# exercises the numeric spelling divergence it exists for.
+kind = "scalar"
 
 [tags.k_set]
 provenance = "owned"
@@ -215,8 +221,9 @@ required = true
 
 [tags.threshold]
 provenance = "owned"
-kind = "float"
-single_valued = true
+# TEST-FIXTURE (Phase 2): see initKindModel's k_float -- float is not a
+# declared kind, and a TOML float reaches the seed encoder under scalar.
+kind = "scalar"
 
 [tags.anchor]
 provenance = "owned"
@@ -393,8 +400,14 @@ func TestReq18And19_0019_SetSeedsTakeTheCanonicalSortedCompactUnescapedForm(t *t
 	requireReadsBack(t, owned, "k_set_empty", `[]`)
 	requireReadsBack(t, owned, "k_set_one", `["only"]`)
 
-	if body := string(mustReadArtifact(t, art)); strings.Contains(body, `<`) ||
-		strings.Contains(body, `&`) {
+	// TEST-FIXTURE (Phase 2): the predicate is the presence of the ESCAPED
+	// spelling, not of `<` and `&` themselves. Escaping DISABLED is exactly
+	// what leaves those two bytes in the artifact verbatim, so a check for
+	// their absence asserts the opposite of the clause and can never pass
+	// against a conforming encoder. `escapedSetLiteral` is the defect
+	// spelling the fixture already names.
+	if body := string(mustReadArtifact(t, art)); strings.Contains(body, `\u003c`) ||
+		strings.Contains(body, `\u0026`) {
 		t.Errorf("the artifact carries HTML-ESCAPED members; the canonical "+
 			"form disables HTML escaping, and %s is the defect spelling\n"+
 			"artifact: %s", escapedSetLiteral, body)

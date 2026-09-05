@@ -1,6 +1,6 @@
 package cli
 
-// RDR 0005 — the shared execution path the four verbs sit on: which read
+// RDR 0005 — the shared execution path the flow verbs sit on: which read
 // accessors run, how their refusals become CLI codes, and how a kernel
 // refusal is rendered.
 

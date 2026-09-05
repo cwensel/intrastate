@@ -2,12 +2,14 @@ package cli
 
 // RDR 0005 — the `flow` command group: the skill-integration CLI contract.
 //
-// One group, four verbs (`0005:C1`, `0005:D-naming`):
+// One group, five verbs (`0005:C1`, `0005:D-naming`, extended by
+// `0019:C1`'s verb-enumeration override):
 //
 //	flow next        enumerate the legal outcomes and their candidate rows
 //	flow resolve     select exactly one plan, or refuse
 //	flow read-state  report declared readers' tags, diagnostically
 //	flow set-state   apply planned owned-tag writes, read-back-verified
+//	flow init-state  seed owned state from the model's `[initial]` root
 //
 // The group owns the CLI contract and nothing beneath it. Transition-model
 // representation is RDR 0002's, guard semantics RDR 0003's, the resolution
@@ -39,12 +41,13 @@ func newFlowCmd() *cobra.Command {
 		Short: "Drive a transition model from a skill",
 		Long: `Drive a transition model from a skill.
 
-The four verbs are the whole skill-integration surface:
+The five verbs are the whole skill-integration surface:
 
   next        list the legal recognized outcomes and their candidate rows
   resolve     map one recognized outcome to exactly one plan, or refuse
   read-state  report what the declared read accessors see
   set-state   apply planned owned-tag writes and verify them by read-back
+  init-state  seed owned state from the model's [initial] root, once
 
 Every verb takes exactly one of --model <path> or --flow <id>, and binds
 each artifact explicitly as --artifact role=path: nothing about a flow's
@@ -96,20 +99,24 @@ Run any verb with --help-all for its refusal codes and worked calls.`,
 		newFlowResolveCmd(),
 		newFlowReadStateCmd(),
 		newFlowSetStateCmd(),
+		newFlowInitStateCmd(),
 	)
 	withExtendedHelp(cmd, flowExtendedDesc)
 	return cmd
 }
 
 // flowExtendedDesc is the group's --help-all body: the shared grammar
-// and the division of labour among the four verbs. Per-verb refusals
-// live on each verb's own extended body.
-const flowExtendedDesc = `The four verbs divide one job, and the division is deliberate:
+// and the division of labour among the verbs. Per-verb refusals live on
+// each verb's own extended body.
+const flowExtendedDesc = `The five verbs divide one job, and the division is deliberate:
 
   next        reports what the state does not exclude. It never selects.
   resolve     selects exactly one row, or refuses. It never writes.
   set-state   writes, and verifies by read-back. It never selects.
   read-state  reports what the readers see. It decides nothing.
+  init-state  seeds the model's [initial] root into an EMPTY store, once.
+              It never merges, never repairs, and never resurrects a
+              cleared key while the store carries another.
 
 Nothing links one call to the next. A resolve plan is data you may act
 on; set-state re-derives its own legality from its own request, and the

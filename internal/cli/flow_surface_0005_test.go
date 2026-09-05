@@ -17,8 +17,11 @@ import (
 	"github.com/cwensel/intrastate/internal/cli/clierr"
 )
 
-// flowVerbs is the exact verb set REQ-1 and REQ-3 fix.
-var flowVerbs = []string{"next", "resolve", "read-state", "set-state"}
+// flowVerbs is the exact verb set REQ-1 and REQ-3 fix, as extended by RDR
+// 0019's verb-enumeration override (`0019:C1` CARRIER, REQ-14): that record
+// adds exactly the `init-state` spelling and withdraws nothing, so the set
+// equality this file asserts gains that one member and no other.
+var flowVerbs = []string{"next", "resolve", "read-state", "set-state", "init-state"}
 
 // flowSubcommand returns the `flow` group's subcommand named name, or nil.
 func flowSubcommand(t *testing.T, name string) bool {

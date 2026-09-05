@@ -329,3 +329,45 @@ func (g Gate) Gate(_ context.Context, _ accessor.Artifact) (accessor.Verdict, st
 		return accessor.VerdictAllow, "", nil
 	}
 }
+
+// --- cardinality (RDR 0019 A6) -------------------------------------------
+
+// StoreKeys reports which keys the artifact at path carries, sorted.
+//
+// It is RDR 0019 A6's surviving carrier for the emptiness read: `init-state`
+// seeds if and only if EVERY bound artifact carries NO key, and the shipped
+// accessor seam is strictly KEY-SCOPED — `ReadBinding.Read` answers only the
+// keys it is handed and reports no store cardinality — so no verb sitting on
+// that seam as it ships can evaluate the predicate.
+//
+// It reads the store directly and DELIBERATELY does not enter `Reader.Read`'s
+// sealed short-circuit. A read-back-SEALED artifact carries `::sealedKey` and
+// nothing else once its owned keys are cleared: that is a ONE-key, NON-EMPTY
+// store, and `0019:C1` fixes it as a no-op SUCCESS at exit 0 rather than the
+// exit-3 refusal a key-scoped read returns. A carrier that inherited the
+// unreadable short-circuit would degrade that arm from no-op success to a
+// refusal. What the predicate needs is a COUNT, obtained without reading key
+// VALUES, and what the no-op arm's report needs is which `[initial]` keys the
+// store does not carry — both are answered by the key set alone, which is why
+// one probe serves both and no key value crosses this seam.
+//
+// The seal is REPORTED, not filtered: `0019:C1` fixes the count as over STORE
+// keys and not owned keys, and names the sealed store as the arm where the two
+// differ. A probe that hid the seal would make that store read empty and seed
+// beneath an unverifiable state.
+//
+// An absent file is an EMPTY artifact and carries no key, matching `::load` —
+// a never-written store and one emptied by clears are the same store, since a
+// clear is a key REMOVAL and not a tombstone (`0004:C11`).
+func StoreKeys(path string) ([]string, error) {
+	s, err := load(path)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(s))
+	for key := range s {
+		out = append(out, key)
+	}
+	slices.Sort(out)
+	return out, nil
+}

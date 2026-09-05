@@ -556,10 +556,21 @@ const codeCobraUnregistered = "command-error"
 // requireVerbRegistered fails when err is cobra's unregistered-command
 // refusal. Every oracle that accepts a refusal calls it first, so no
 // assertion in this suite can be satisfied by the verb's ABSENCE.
+//
+// TEST-FIXTURE (Phase 2): the CODE alone does not discriminate.
+// `::cobraErrorToCLIError` maps EVERY cobra/pflag error to `command-error`,
+// so an unknown FLAG on a registered verb carries the same code as an
+// unregistered COMMAND — and REQ-10 and REQ-102 both assert precisely that
+// unknown-flag refusal, which a code-only guard rejects as the tautology.
+// The two are separable by cobra's own message: an unregistered command says
+// `unknown command "<name>" for "<parent>"`. Keying on the message is what
+// makes the guard exclude the tautology it names WITHOUT excluding the
+// refusals the contract fixes.
 func requireVerbRegistered(t *testing.T, ce *clierr.CLIError) {
 	t.Helper()
 
-	if ce.Code == codeCobraUnregistered {
+	if ce.Code == codeCobraUnregistered &&
+		strings.Contains(ce.Message, "unknown command") {
 		t.Fatalf("the `flow %s` verb is not registered — cobra refused the "+
 			"COMMAND (%s: %s), so this assertion says nothing about the "+
 			"contract. A refusal that only proves the verb is missing is "+

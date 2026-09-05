@@ -211,7 +211,14 @@ func TestReq10_0019_InitStateTakesTheSharedSelectionFlags(t *testing.T) {
 func TestReq11_0019_AllowCommandsIsInheritedNotDeclared(t *testing.T) {
 	cmd := initStateCommand(t)
 
-	if cmd.Flags().Lookup("allow-commands") == nil {
+	// TEST-FIXTURE (Phase 2): the probe for INHERITANCE is
+	// `InheritedFlags()`, not `Flags()`. Cobra merges a parent's persistent
+	// set into a child's `Flags()` only during `Execute`, so on an
+	// unexecuted tree `Flags().Lookup` returns nil for EVERY child of the
+	// group — the four shipped verbs included. The assertion is unchanged:
+	// the flag must RESOLVE on the verb by inheritance, and must NOT be
+	// declared on its own set.
+	if cmd.InheritedFlags().Lookup("allow-commands") == nil {
 		t.Errorf("--allow-commands does not resolve on `init-state`; the flag " +
 			"is registered on the `flow` group's PERSISTENT set, so every " +
 			"child verb takes it structurally and this one cannot decline it")
