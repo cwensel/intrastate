@@ -1,0 +1,5 @@
+0020  Final  live  PASS  blocking=0 resolution=0 placeholder=0 advisory=2
+  conformance prose:exactness                366-366   an exactness term of art in a normative claim: "byte-identical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                382-382   an exactness term of art in a normative claim: "byte-identical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
