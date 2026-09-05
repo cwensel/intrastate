@@ -162,7 +162,10 @@ the lint already is: RDR 0010's `decision-table` class has no
     RENDERING agrees byte-identically on all 9 kinds both routes admit:
     enum, scalar string, bool, int, float, set array (sorted), set with
     duplicates and HTML characters (deduped, escaping off), empty set
-    `[]`, single-member set. ADMISSION diverges on 3, and this is
+    `[]`, single-member set. The spike varied the value's KIND, and one
+    value per kind; it did not vary the SPELLING of a value within a
+    kind, which is where the numeric routes diverge (below).
+    ADMISSION diverges on 3, and this is
     decided behavior, not a defect: `internal/cli/flow_input.go::canonicalValue`
     refuses a bare scalar for a `kind="set"` tag and an array literal
     for a scalar tag per **JDR 0001 §D11** ("a bare scalar for a set
@@ -178,9 +181,29 @@ the lint already is: RDR 0010's `decision-table` class has no
     — C1) — the encoder alone carries the byte-equality property; conformance to the declaration is already
     held by the loader (`::loadInitial`'s `conform`) and is not
     re-established at seed time (C1). The third divergence, an empty scalar
-    (`note = ""`), is unwritable by EITHER route today — loader-admitted,
-    `canonicalValue`-refused unconditionally — and is recorded as a
-    loader asymmetry out of scope here (see Failure Modes).
+    (`note = ""`), is unwritable by the ARGV route today —
+    loader-admitted, `canonicalValue`-refused unconditionally — while
+    the seed route admits and persists it (`{"note":""}`, reading back
+    present); the residual argv asymmetry is recorded as out of scope
+    here (see Failure Modes).
+    SPELLING, as distinct from kind, is the boundary of the claim and
+    is verified against source rather than the spike: on the numeric
+    kinds the two routes normalize the same VALUE to different BYTES.
+    `internal/table/load.go::valueMembers` renders through `strconv`
+    (`FormatInt`, `FormatFloat(_, 'g', -1, 64)`) while
+    `::canonicalValue` returns the argv string verbatim, and
+    `internal/table/load.go::conformKind`'s `int` arm admits a leading
+    `+` (`strconv.Atoi`). Probed: `valueMembers(float64(1.0)) == "1"`
+    against `--write threshold=1.0` storing `"1.0"`; `+5` against `5`
+    on an `int` tag. (`float` is not a declared kind — the closed
+    vocabulary in `internal/table/model.go` is
+    `{enum, bool, int, set, scalar}` — so a TOML float reaches the
+    seed encoder under `scalar`, which `conformKind` passes through
+    unchecked.) This does NOT break the claim this assumption makes:
+    each route is internally canonical and read-back equality holds
+    within it, which is what the seed path needs. It bounds RT3, whose
+    equivalence is between the two routes and therefore cannot bind an
+    operator's choice of spelling.
   - **If wrong**: init's read-back mismatches on lint-clean models — or,
     worse, passes while persisting a form a manual `set-state` would not
     — and the verb needs an explicit route through the same coercion
@@ -243,19 +266,30 @@ the lint already is: RDR 0010's `decision-table` class has no
     Shipped code already anticipates the extension:
     `internal/cli/flow.go:87` — "a fifth verb added inside the group
     inherits the gate". Consumers this override must update, verified
-    against `internal/cli/flow.go`: (1) `::newFlowCmd` registration;
-    (2) its `Long` body and (3) `::flowExtendedDesc`, BOTH of which
-    hard-code the cardinal "four verbs"; (4) the bare-`flow`
-    `command-error` message, which enumerates the verbs verbatim —
-    user-visible and previously unnamed; (5) `internal/cli/docs.go`
-    generation and the checked-in `llms.txt`, which must be
-    regenerated and committed; (6) the `flow-*` taxonomy in
-    `docs/cli-output-contract.md`; (7) `0005:D-naming`'s verb list;
-    (8) narrative prose in `README.md`, `docs/model-authoring.md`, and
-    `internal/cli/root.go`. The verb also inherits `0005:C1`'s
-    per-verb MUSTs (`respond.ValidateMode` first, `respond.OK`,
-    `respond.Fail`, `SilenceErrors`/`SilenceUsage`), which 0005's test
-    corpus asserts verb-by-verb.
+    by grep across the tree and split by WHAT changes, since the two
+    classes fail differently. Sites hard-coding the CARDINAL, six:
+    (1) `internal/cli/flow.go`'s package comment ("One group, four
+    verbs"); (2) `::newFlowCmd`'s `Long` body; (3)
+    `::flowExtendedDesc`; (4) `internal/cli/flow_exec.go`'s header
+    comment; (5) `docs/cli-reference.md`, two strings mirroring
+    flow.go; (6) `docs/model-authoring.md` ("The same four verbs.").
+    Sites that gain an ENTRY but state no cardinal: the bare-`flow`
+    `command-error` message, which enumerates the verbs verbatim;
+    `internal/cli/docs.go` generation and the checked-in `llms.txt`
+    (bullet-enumerated — regenerate and commit); the `flow-*` taxonomy
+    in `docs/cli-output-contract.md` ("each verb", generic);
+    `0005:D-naming`'s verb list; and narrative prose in `README.md`
+    and `internal/cli/root.go`. (`internal/cli/flow_state.go`'s "The
+    four the contract…" is a cardinal about REFUSALS, not verbs, and
+    does not change.) The verb also inherits `0005:C1`'s per-verb MUSTs
+    (`respond.ValidateMode` first, `respond.OK`, `respond.Fail`,
+    `SilenceErrors`/`SilenceUsage`), which 0005's test corpus asserts
+    verb-by-verb; the binding constraint is
+    `internal/cli/flow_surface_0005_test.go`'s
+    `TestReq1And3_FlowGroupExposesExactlyTheFourNormativeVerbs`, whose
+    `flowVerbs` slice is asserted SET-EQUAL to the registered group, so
+    a fifth verb fails it until that slice is extended — independently
+    of any doc string (Phase 1 Step 1).
   - **If wrong**: the verb cannot be added without re-opening RDR 0005,
     and the carrier falls back to the rejected flag-on-`set-state` form.
 - **A5 The empty-store predicate preserves cleared keys under
@@ -325,7 +359,12 @@ the lint already is: RDR 0010's `decision-table` class has no
     `internal/cli/flowbind/flowbind.go::Reader.Read` and
     `internal/cli/cmdbind/cmdbind.go::Reader.Read` — and confirm one
     candidate can answer emptiness for the file-backed carrier with no
-    change to the other implementer's behavior. The EDIT carrier is not
+    change to the other implementer's behavior. The carrier gate now
+    covers the READ capability as well as the write one (C1, A8), so
+    the candidate need only answer emptiness for `flowbind.Reader` —
+    a command-backed reader is refused before the emptiness question
+    is asked, which removes the need for any candidate to define a
+    cardinality answer for `cmdbind`. The EDIT carrier is not
     a third implementer: `::EditWriter` declares `CapWrite` and has no
     `Read` method at all, and the registry constructs it only in the
     write loop. That is independent ground for C1's carrier refusal —
@@ -345,23 +384,39 @@ the lint already is: RDR 0010's `decision-table` class has no
   `flowbind::commandBacked` and without re-deriving the carrier from
   `table.Accessor` — and the three constructed binding types are
   mutually exclusive and exhaustive over the registry's branches.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: Opened by the 3amigo lens (implementer persona),
     which established the gap C1's carrier-scope clause had: the
     discriminator C1 originally named,
     `internal/cli/flowbind/registry.go::commandBacked`, is UNEXPORTED,
     so `internal/cli` cannot call it and the contract named a check the
-    verb could not perform. Confirmed so far:
+    verb could not perform. Confirmed:
     `::Definition.Binding` is an exported field of an exported struct
     holding an exported `Binding` interface, and all three constructed
     types are exported (`flowbind::Writer`, `flowbind::EditWriter` via
-    `::NewEditWriter`, `cmdbind::Writer`). To verify: read
-    `::Registry`'s write-construction branches and confirm those three
-    are the complete set a write accessor can yield (no fourth arm, no
-    shared type between two branches), so that admitting only
-    `*flowbind.Writer` is exactly the file-backed set rather than a
-    proxy for it.
+    `::NewEditWriter`, `cmdbind::Writer`).
+    `::Registry`'s write loop yields EXACTLY those three, with no
+    fourth arm and no type shared between two branches. The shape is
+    an initializer plus a two-arm `switch`, not a switch with a
+    `default:` clause — `var binding accessor.Binding =
+    &Writer{Path: acc.Path}` precedes `case len(acc.Edit) != 0:`
+    (→ `NewEditWriter`) and `case commandBacked(acc):`
+    (→ `&cmdbind.Writer{…}`) — so the JSON writer is the residue, not
+    a branch. That distinction is what makes the type-switch sound
+    rather than accidentally sound, and it turns on a second fact:
+    `::commandBacked` is `len(acc.Command) != 0 || acc.Path == ""`, so
+    the residue is reachable only when `acc.Path != ""`. A
+    `*flowbind.Writer` carrying an empty `Path` — which would `load("")`
+    to an empty store and let the verb seed every key into nothing — is
+    therefore UNCONSTRUCTIBLE here, and the arm ordering is commented
+    in-source to protect exactly that property. Admitting only
+    `*flowbind.Writer` is thus exactly the file-backed set, not a proxy
+    for it. (The registry as a whole constructs six binding types; the
+    other three are `Reader`/`cmdbind.Reader` and `Gate`/`cmdbind.Gate`
+    — all VALUE types, where this loop's three are pointers (A8),
+    none of them write bindings, so they are outside this type-switch's
+    domain.)
   - **If wrong**: if the registry can yield a fourth write binding type
     or two carriers share one type, the type-switch admits or refuses
     the wrong carrier silently — seeding on an emptiness answer C1
@@ -369,6 +424,51 @@ the lint already is: RDR 0010's `decision-table` class has no
     fallback is exporting a carrier predicate from `flowbind` (a
     `flowbind` API change this RDR does not currently authorize), so a
     refutation is a contract change here, not an implementation detail.
+- **A8 The same carrier discrimination holds on the READ side: the
+  registry's read-construction yields exactly the VALUE types
+  `flowbind.Reader` and `cmdbind.Reader` (not pointers, as on the
+  write side), mutually exclusive and exhaustive, so admitting
+  only `flowbind.Reader` is exactly the file-backed read set — and
+  the reader a needed role resolves to
+  (`internal/accessor/model.go::Registry.readerFor`) is reachable from
+  `internal/cli` at carrier-gate time, before any accessor runs.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: Opened by the critique lens, which established that
+    C1's carrier gate type-switched on the WRITE binding alone while
+    the emptiness read and the commit-time read-back both travel the
+    READ binding. Confirmed so far: readers and writers ARE resolved
+    independently — `::Registry` loops `m.Readers` and `m.Writers` in
+    separate passes, and `::readerFor` selects by ROLE over `CapRead`
+    — so a file-backed writer paired with a command-backed reader on
+    one role is constructible and the write-side switch would admit
+    it. Also confirmed, and the reason this assumption states the
+    spelling: the read loop constructs VALUES where the write loop
+    constructs POINTERS — `var binding accessor.Binding =
+    Reader{Path: acc.Path}`, reassigned to `cmdbind.Reader{…}` under
+    `commandBacked`, with `Read` declared on value receivers in both
+    packages, against the write loop's `&Writer{…}` and pointer
+    receivers on `Apply`. A read-side case spelled `*flowbind.Reader`
+    matches neither constructed type and would refuse every model,
+    which is why C1 fixes the spelling rather than leaving it to the
+    implementer. To verify: read the registry's READ-construction
+    branches as A7's evidence read the write loop, confirming the two
+    types are the complete set (no third arm, no shared type, and — as
+    on the write side — whether the file-backed reader is a residue
+    whose reachability depends on a predicate the verb cannot call); and
+    confirm `::readerFor`'s result is available to the gate before
+    invocation, since a discrimination the verb can only make after
+    running an accessor cannot serve a refusal C1 orders before one.
+  - **If wrong**: if the read side has a carrier the type-switch does
+    not name, or the reader cannot be resolved before invocation, the
+    gate cannot be stated over both capabilities as C1 now requires —
+    either the read-side refusal moves later (losing the
+    no-accessor-invoked property S10 asserts) or the emptiness answer
+    is taken from a reader whose carrier was never checked, which is
+    the UNDEFINED case C1 exists to refuse. The fallback is scoping
+    the verb to models whose read and write accessors share one
+    file-backed carrier declaration, a narrower admission set than
+    this RDR currently claims.
 
 ## Proposed Solution
 
@@ -521,7 +621,14 @@ exists to remove (A2).
 
 Seeding is ALL-OR-NOTHING over an EMPTY store, never a per-key merge:
 init-state seeds if and only if EVERY bound artifact carries NO key,
-and then it seeds every `[initial]` key. The quantifier is ALL, not
+and then it seeds every `[initial]` key. "Bound" is not a filter that
+can shrink the quantifier's domain: the plan-validation clause below
+requires every role a needed writer names to BE bound, and refuses
+otherwise, so the artifacts quantified over here are exactly the ones
+that clause already established. An unbound needed role is therefore a
+REFUSAL, never an artifact treated as empty — the reading that would
+let a half-bound invocation seed a model on the strength of the roles
+it happened to name. The quantifier is ALL, not
 ANY and not per-artifact, and it is load-bearing rather than
 stylistic: a model may declare N write accessors over N roles
 (`internal/table/model.go::Model.Writers`, which `::runFlowSetState`
@@ -561,6 +668,23 @@ init-state MUST refuse — a distinct terminal refusal in the `flow-*`
 family naming the accessor and its carrier — rather than seed on an
 emptiness answer it cannot compute.
 
+The carrier gate is over BOTH capabilities, not the write side alone.
+Readers and writers are resolved independently — `::Registry` loops
+`m.Readers` and `m.Writers` separately, and read-back resolves its
+binding by ROLE over `CapRead`
+(`internal/accessor/model.go::Registry.readerFor`) — so a model may
+declare a file-backed WRITE accessor and a command-backed READ
+accessor on the same role, and the write-side type-switch alone would
+admit it. It must not: the emptiness answer and the commit-time
+read-back both travel the READ binding, so a non-file-backed reader
+leaves "the store carries no key" exactly as UNDEFINED as a
+non-file-backed writer does, and admitting the model on its write
+carrier would refuse late, under an unrelated code, after the gate
+already said file-backed. The refusal therefore fires when EITHER the
+bound write binding or the bound read binding for a needed role is not
+the file-backed type, and it names which capability and which accessor
+failed. S10 gains the read-side row.
+
 The verb detects the carrier by the CONSTRUCTED BINDING'S TYPE, not by
 re-reading the accessor declaration: `::commandBacked` is UNEXPORTED
 (`internal/cli/flowbind/registry.go`), so the verb's package
@@ -568,8 +692,18 @@ re-reading the accessor declaration: `::commandBacked` is UNEXPORTED
 identifies the registry's branch, it does not name the verb's call. The
 verb type-switches on `internal/accessor/model.go::Definition.Binding`
 (an exported field holding the exported binding type the registry
-selected) and admits ONLY `*flowbind.Writer`, refusing
-`*flowbind.EditWriter` and `*cmdbind.Writer`. Re-deriving the carrier
+selected), on the write and read bindings alike: it admits ONLY
+`*flowbind.Writer` on the write side, refusing `*flowbind.EditWriter`
+and `*cmdbind.Writer`, and ONLY `flowbind.Reader` on the read side,
+refusing `cmdbind.Reader`. The POINTER/VALUE spelling differs between
+the two capabilities and is normative here, because a type-switch case
+on the wrong one matches nothing: the registry constructs writers as
+POINTERS (`&Writer{Path: acc.Path}`, `&cmdbind.Writer{…}`, both with
+pointer receivers) and readers as VALUES (`Reader{Path: acc.Path}`,
+`cmdbind.Reader{…}`, both with value receivers on `Read`). A read-side
+case written `*flowbind.Reader` would therefore refuse EVERY model,
+file-backed ones included — the failure is total rather than partial,
+so S10's read-side row also serves as its detector. Re-deriving the carrier
 in `internal/cli` from `table.Accessor`'s `Edit`/`Command` fields is
 BANNED on the same ground the class arm bans re-deriving from
 `len(owned)` (Selection / predicate): it would duplicate a
@@ -583,7 +717,17 @@ and it PREEMPTS the `--allow-commands` refusal
 command-backed accessor therefore yields the carrier code whether or
 not the opt-in was passed — otherwise the same model would refuse under
 two different codes depending on a flag irrelevant to the carrier fact,
-and S10's command-backed row would pass on the wrong one. Extending the predicate to those
+and S10's command-backed row would pass on the wrong one. The
+preemption is a real ordering, not a tautology, and it holds against
+BOTH of the gate's refusal sites: `Registry.AllowCommands` is carried
+as state through construction, which always succeeds, and the refusal
+fires later either at invocation
+(`internal/cli/cmdbind/cmdbind.go::spawn`'s first pre-spawn rung) or,
+for an `edit` write whose role reader is command-backed, at the
+pre-mutation read-back check in `internal/accessor/executor.go`. Both
+sites are past construction; the carrier refusal is at it. So S10's
+command-backed row discriminates: a carrier check moved after registry
+invocation would reach `::spawn` first and fail that row. Extending the predicate to those
 carriers is deliberately out of scope here (see A6, and the successor
 noted in Consequences); this clause fixes the boundary so the verb
 cannot silently do the wrong thing at it.
@@ -671,7 +815,19 @@ above is `flow-init-carrier-unsupported`. Both follow the shipped
 NORMATIVELY is the exit GROUP (2 on both) and that the two are
 DISTINCT codes and distinct from each other and from the shared
 classes — the literal spellings are non-normative on the precedent of
-`0028:C1.3`'s `codeWriteEditRefused`, so no test may pin the string;
+`0028:C1.3`'s `codeWriteEditRefused`, so no test may pin the string.
+That precedent is a deliberate CARVE-OUT from the code table's general
+rule, not an application of it, and the distinction is load-bearing
+because the general rule says the opposite: the table's header comment
+in `internal/cli/flow_input.go` states "The spellings are normative and
+the group fixes the exit", while `::codeWriteEditRefused`'s own doc
+comment states its "SPELLING is this stage's to choose and is
+explicitly non-normative — no test may pin the string; what the
+contract fixes is the exit GROUP and the `findings[]` carriage" (its
+sibling `::codeRequestRefused` carries the same carve-out). So the two
+codes this verb adds join the carved-out minority, and the reader who
+checks the header alone will conclude the opposite of what this clause
+fixes;
 S7, S10 and MVV steps 7–8 assert the group and the distinctness.
 Shared refusal classes (model selection, artifact binding, writer
 routing, read-back) reuse the existing `flow-*` codes unchanged, and
@@ -753,16 +909,35 @@ the carrier, which is the fork this RDR exists to close.
   artifact and the `set-state --write` transcription of the same
   `[initial]` assignments into a second fresh artifact produce
   byte-identical artifacts, for every value kind BOTH routes admit
-  (the A2 spike's table; catches both the hard read-back divergence
-  and the silent canonical-form divergence). The qualifier is exact
-  and load-bearing: the loader's `[initial]` admission set is a proper
-  superset of the argv route's, so the three kinds only the loader
-  admits (bare scalar for a set tag, array for a scalar tag, empty
-  scalar) have no `--write` transcription to compare against and are
-  outside this invariant — they are covered instead by the
+  AND every VALUE whose two routes carry the same spelling (the A2
+  spike's table; catches both the hard read-back divergence and the
+  silent canonical-form divergence). Two qualifiers, both exact and
+  load-bearing. FIRST, the loader's `[initial]` admission set is a
+  proper superset of the argv route's, so the three kinds only the
+  loader admits (bare scalar for a set tag, array for a scalar tag,
+  empty scalar) have no `--write` transcription to compare against and
+  are outside this invariant — they are covered instead by the
   conform-and-canonicalize path C1 fixes, and TWO of the three are
-  testable there by read-back equality (S4); the empty scalar is
-  unwritable by either route (F5) and has no test at all.
+  testable there by read-back equality (S4) — including the empty
+  scalar, which the seed route persists as `""` and reads back present
+  even though argv refuses it (F5).
+  SECOND, on the numeric kinds the two routes agree on the value and
+  may DISAGREE on its spelling, so the invariant is scoped to the
+  spelling the loader normalizes to. `internal/table/load.go::valueMembers`
+  renders a TOML numeric through `strconv`
+  (`FormatFloat(_, 'g', -1, 64)`, `FormatInt`), while
+  `internal/cli/flow_input.go::canonicalValue` returns the argv string
+  VERBATIM after conformance — and `::conformKind`'s `int` arm admits
+  a leading `+` via `strconv.Atoi`. So `[initial] threshold = 1.0`
+  seeds `"1"` where `--write threshold=1.0` writes `"1.0"`, and
+  `--write n=+5` writes `"+5"` where the loader seeds `"5"`. This is a
+  divergence in the TRANSCRIPTION, not in either route's canonical
+  form: each route is internally consistent and read-back equality
+  holds within it. The transcription is the operator's, so the
+  invariant cannot bind it — S4 compares the two routes on values
+  whose spellings coincide, and A2 records the numeric-spelling
+  divergence as the boundary of the byte-identity claim rather than a
+  defect in either encoder.
 - Cleared-key preservation, on a store that retains a key:
   `init-state ∘ (set-state --clear k)` on a seeded artifact carrying at
   least one key besides k writes nothing, and `read-state` still
@@ -785,6 +960,8 @@ a note about it.
 | Seed values | loader `::loadInitial` → `Model.Initial` | lint (`graphlint`), this verb | argv `--write` transcription | `Model.Initial` — argv route rejected (C1, A2) |
 | Model class | loader `[model] class` (0010:C1) | `::IsDecisionTable` callers | `len(owned)==0` re-derivation | `::IsDecisionTable` — never re-derived |
 | Store emptiness | the artifact's own key presence | **no shipped reader** — carrier undecided (A6) | per-key absent over `[initial]` | STORE-key count, incl. `::sealedKey` (C1) |
+| Write carrier | registry write loop's constructed type (`::Definition.Binding`) | this verb's type-switch | `table.Accessor`'s `Edit`/`Command` fields; `::commandBacked` (unexported) | the constructed type — admits `*flowbind.Writer` only (C1, A7) |
+| Read carrier | registry read construction, resolved by role (`::readerFor`) | this verb's type-switch | the WRITE binding, as a proxy for both | the constructed read type — admits the VALUE `flowbind.Reader` only, never the pointer spelling (C1, A8) |
 | Value encoding | kind-dispatched: `::canonicalSet` (set) / `members[0]` (scalar), JDR 0001 §D13 | `set-state`, this verb | loader `conform` (kind/domain only); `::canonicalSet` for every kind | the kind-dispatched pair — the byte-equality source (C1) |
 | Writer for a key | loader `::checkAccessorBindings` (exactly-one) | `::writerFor` | none | load-time binding (A3) |
 
@@ -797,7 +974,7 @@ a note about it.
 | 4–5 cleared-key preservation | a clear is resurrected → `read-state` reports k present | per-key variant → k reappears |
 | 7–8 decision-table refusal | refusal raised after accessor setup → no accessor ran, artifact untouched | move the class check after routing → artifact created |
 | 9 sealed artifact declined | seal not counted → store reads empty and seeds | count owned keys only → seeds into sealed store |
-| 10 non-file-backed carrier refused | carrier check missing → seeds on an undefined emptiness answer | remove the check → the edit case attempts a write |
+| 10 non-file-backed carrier refused | carrier check missing → seeds on an undefined emptiness answer | remove the check → the edit case attempts a write; gate the WRITE side only → the command-backed-reader row is admitted (A8) |
 | S11 ALL quantifier (two roles, one empty) | predicate read per-artifact → seeds the empty sibling | switch to ANY/per-artifact → role B gains its key; every single-artifact row still passes |
 | S12 torn seed re-run | re-run repairs a partial seed → A's bytes rewritten | complete-on-re-run → B seeded, F2's no-repair property lost |
 
@@ -807,7 +984,7 @@ a note about it.
 | --- | --- | --- |
 | `read-state ∘ init-state` | every `[initial]` key reports its declared value, canonical form (RT1) | — |
 | `init-state ∘ init-state` | all bound artifact bytes unchanged (RT2) | file-backed carrier only |
-| init vs `set-state` transcription | byte-identical artifacts (RT3) | the 3 kinds only the loader admits — no argv spelling exists (2 are testable; the empty scalar is unwritable, F5) |
+| init vs `set-state` transcription | byte-identical artifacts (RT3) | the 3 kinds only the loader admits — no argv spelling exists, so all 3 are covered by seed-side read-back instead (F5); and numeric values whose two routes carry different spellings (`1.0`/`1`, `+5`/`5` — A2) |
 | clear then init | k stays absent while any key remains (RT4) | last-key clear → reseed (disclosed residual) |
 
 **`disposition`** — every input class to its outcome.
@@ -821,7 +998,9 @@ a note about it.
 | Role unbound (reached at the verb; S6) | 2 | zero (plan-level) | existing artifact-binding `flow-*` family |
 | `[initial]` key with ≠1 writer | 2 | zero — the model never loads | `flow-model-invalid` at LOAD, before the verb (S5) |
 | Torn (partially seeded, multi-writer) | 0 | zero | no-op + the un-seeded `[initial]` keys; committed ones NOT rewritten (F2, S12) |
-| Non-file-backed write carrier | 2 | zero | carrier refusal (C1 carrier scope) |
+| Non-file-backed write carrier | 2 | zero | carrier refusal naming the WRITE capability (C1 carrier scope) |
+| Non-file-backed read carrier (file-backed writer) | 2 | zero | carrier refusal naming the READ capability (C1 carrier scope, A8) |
+| Empty-scalar `[initial]` value | 0 | the key, as `""` | seeded-all; reads back present, distinct from cleared (F5) |
 | Read-back mismatch | non-zero | partial, per-key | key PRESENT-AND-UNVERIFIED |
 
 **`trace`** — the MVV walked stepwise against the assertions in force.
@@ -830,16 +1009,18 @@ a note about it.
 | --- | --- | --- |
 | bind model + artifacts | C1 carrier (route via accessors), class arm | fixture: state-machine model, file-backed writer |
 | class check | C1 class arm keyed on `::IsDecisionTable` | decision-table fixture → exit 2, no artifact (S7) |
-| carrier check | C1 carrier scope | edit/command-backed writer → exit 2 |
+| carrier check | C1 carrier scope, both capabilities | edit/command-backed writer → exit 2; command-backed reader behind a file-backed writer → exit 2 (A8); pointer/value spelling per capability — writers `*Writer`, readers `Reader` (C1) |
 | emptiness read | C1 predicate (ALL bound artifacts, STORE keys), **A6 carrier undecided** | empty: `{}`+newline, 3 bytes (A5 spike); sealed: `len==1` |
 | plan validation | C1 all-or-nothing, A3 exactly-one-writer | every `[initial]` key routes to 1 writer |
 | encode + write | C1 canonical form, kind-dispatched (`::canonicalSet` set / `members[0]` scalar) | RT3 byte-identity vs `set-state`, both arms (A2 spike: 9 kinds) |
 | read-back | 0004 read-back-is-the-only-commit-check | mismatch → PRESENT-AND-UNVERIFIED |
 | second run | RT2 idempotence | bytes unchanged |
 
-No CONTRADICTION row. The one unresolved cell is the emptiness read's
-carrier (A6, Pending) — an under-specified mechanism, not a conflict
-between assertions.
+No CONTRADICTION row. Two unresolved cells, both under-specified
+mechanisms rather than conflicts between assertions: the emptiness
+read's carrier (A6, Pending), and the read-side carrier
+discrimination the gate now requires (A8, Pending — opened by the
+critique lens, which found the gate stated over write bindings alone).
 
 #### Illustrative Code
 
@@ -1110,10 +1291,14 @@ is that write with the model as its plan source.
 - **Documented** — canonical-form fidelity holds for every value kind
   both write routes admit, verified byte-for-byte on the artifact; what
   diverges is ADMISSION, the loader's `[initial]` set being a proper
-  superset of the argv route's. The two set/scalar-shape divergences are
+  superset of the argv route's, and — within the numeric kinds — the
+  SPELLING each route normalizes a value to (`1.0` seeds `"1"`; `+5`
+  writes `"+5"`), which bounds RT3 without disturbing either route's
+  internal canonical form (A2). The two set/scalar-shape divergences are
   JDR 0001 §D11's decided argv-disambiguation refusals, which do not
-  govern a model-sourced seed; the empty scalar is an undecided
-  loader/write-surface asymmetry routed out of this RDR (A2, Failure
+  govern a model-sourced seed; the empty scalar seeds and reads back
+  present on the model route, while the argv route's refusal of it
+  stays an undecided asymmetry routed out of this RDR (A2, Failure
   Modes).
 
 ## Trade-offs
@@ -1191,6 +1376,25 @@ is that write with the model as its plan source.
   re-running init. The same holds for a present-and-wrong key after a
   read-back mismatch: no re-run ever overwrites it, and no payload ever
   calls it correct.
+  The two recovery routes are not equally available, and the asymmetry
+  is the accepted cost of no-repair. Discarding is only safe when the
+  artifact holds nothing but `[initial]` keys: an artifact can also
+  carry owned keys `[initial]` does not assign, committed by an
+  ordinary `set-state` before or after the torn seed, and discarding
+  destroys those too. Where they exist, explicit `set-state` of the
+  listed keys is the ONLY correct recovery — which on a wide
+  `[initial]` block is the hand transcription this verb exists to
+  remove, now on the unhappy path. This is accepted rather than solved:
+  a repairing re-run would have to write into a non-empty store, which
+  is exactly the per-key merge C1 rejects and the resurrect hazard A5
+  excludes, so the safety property and the recovery ergonomics trade
+  directly against each other. The payload's absent-key list is what
+  keeps the manual route mechanical — it names precisely the keys to
+  pass — and tearing requires a multi-writer model plus a writer
+  failure, so the exposure is narrow. A repair path that preserved the
+  cleared-key guarantee (a seed scoped to the failed writer's role,
+  gated on that role's artifact being empty) is a successor's, not
+  this record's.
 - **Scope gap (disclosed)**: init's claim covers exactly the
   `[initial]` key set (C1); an owned key `[initial]` does not assign
   can still surface `unknown[].reason: absent` in `flow next` after a
@@ -1208,19 +1412,35 @@ is that write with the model as its plan source.
   no kind or domain rule rejects it and its arity is 1 — yet refused
   unconditionally by `internal/cli/flow_input.go::canonicalValue` for
   non-set tags ("the tag `note` was given an empty value"), so it is
-  unwritable by EITHER route today (A2's spike). No written source
+  unwritable by the ARGV route today (A2's spike). No written source
   decides it: JDR 0001 §D11 settled the empty SET against absent
   (`[]` and `--clear` "stay distinct") but never the empty scalar, and
   the corpora are silent. This is a loader/write-surface asymmetry that
   predates this RDR and is NOT decided here — it is routed to RDR 0002
-  as a seed. C1's seed path assumes it cannot arrive. If the asymmetry
-  is instead resolved toward admitting it, the governing clause is the
-  LOADER's admission (`::loadInitial`'s `conform`), not any seed-time
-  step — C1 re-conforms nothing — so whether an admitted empty scalar
-  seeds cleanly is decided wholly by what C1's SCALAR encoder arm
-  renders for it — `members[0]`, i.e. the empty string;
-  `::canonicalSet` is the set arm and never reaches a scalar key. That is a clause change here if the encoder has no defined form
-  for it; this RDR does not pre-decide one.
+  as a seed.
+  What this RDR MUST decide, because it adds the route that reaches it,
+  is what init-state does with one. It ARRIVES: `::loadInitial`'s
+  guards are undeclared-tag, `valueMembers` error, the `<clear>`
+  sentinel, `conform`, and an arity check — an empty string is the
+  one-member sequence `[""]`, so arity passes and `conformKind` has no
+  `scalar` arm, so `conform` returns nil. Probed: the model loads with
+  `Initial = {Key:"note", Value:[""]}`, and C1's SCALAR arm
+  (`members[0]`) hands `""` to `flowbind::Writer.Apply`, whose only
+  special case is `accessor.IsClear`; the artifact becomes
+  `{"note":""}` and reads back `Absent:false` — PRESENT, distinct from
+  a cleared key, which leaves the object entirely. So the earlier
+  reading that C1's seed path "assumes it cannot arrive" was wrong:
+  it can, and it seeds cleanly.
+  This RDR takes that as the DECIDED behavior for the seed route
+  — the encoder has a defined form for it (`members[0]`), it
+  round-trips, and refusing it at seed time would require re-conforming
+  a loader-normalized value, which C1 rules out. It creates no third
+  encoding: `""` is what the scalar arm renders for a one-member
+  sequence, as for any other. What stays undecided in RDR 0002 is the
+  ARGV asymmetry — that `--write note=` is refused while the model
+  route admits it — which this RDR does not resolve in either
+  direction. S4 covers the seeded empty scalar by read-back rather than
+  by cross-route diff, since there is no argv counterpart to diff.
 
 ## Implementation Plan
 
@@ -1273,6 +1493,20 @@ always-present owned key and one plain owned key, both writer-served:
    proves the user outcome on the repo's own gate model, whose three
    owned keys span two value kinds (enum, bool) the fixture's two keys
    do not.
+   One property of that model is an AUTHORING choice this step must not
+   silently depend on: `[tags.gate_passed]` declares `kind = "bool"`
+   while `[initial]` assigns it the TOML STRING `"false"`, not the TOML
+   bool `false`. Both load — `conformKind`'s `bool` arm parses the
+   string, and `valueMembers` returns a Go `string` verbatim where it
+   would take its `bool` arm for the other spelling — and both
+   normalize to `"false"`, so the step passes either way. It is
+   recorded because the two spellings reach the seed encoder through
+   DIFFERENT arms: if `models/rdr.toml` is later "corrected" to
+   `gate_passed = false`, this step still passes but is exercising the
+   bool arm rather than the string one. The step's claim is the user
+   outcome, not encoder coverage, so the substitution is harmless — but
+   S4's kind table is what covers the arms, and this step must not be
+   read as doing so.
 
 ### Phase 1: Code Implementation
 
@@ -1281,6 +1515,22 @@ always-present owned key and one plain owned key, both writer-served:
 `newFlowInitStateCmd` beside the four shipped verbs in `internal/cli`:
 shared selection/tag/artifact registration, `ValidateMode`/respond
 gateway, class refusal via `table.IsDecisionTable` before any accessor.
+
+Registration lands A4's override in the SAME step, because the surface
+test fails the moment the verb registers and no later step would
+explain why. `internal/cli/flow_surface_0005_test.go` fixes
+`flowVerbs = {next, resolve, read-state, set-state}` and asserts SET
+EQUALITY against the registered group, so it must gain `init-state`
+here; it also asserts `0005:C1`'s per-verb MUSTs verb-by-verb, which
+the new verb inherits. Six code/doc sites hard-code the cardinal and
+change with it: `internal/cli/flow.go`'s package comment,
+`::newFlowCmd`'s `Long` body, `::flowExtendedDesc`,
+`internal/cli/flow_exec.go`'s header comment,
+`docs/cli-reference.md` (two strings), and `docs/model-authoring.md`.
+Regenerate and commit `llms.txt` (`internal/cli/docs.go`); it
+enumerates the verbs as bullets and hard-codes no cardinal, as does
+`docs/cli-output-contract.md`, so neither needs a cardinal edit —
+their change is the new verb's own entry (Activation Step 1).
 
 #### Step 2: Predicate and plan
 
@@ -1310,6 +1560,20 @@ automatic-invocation routes, so `init-state` is typed by hand and an
 undiscoverable manual `init-state` would only move the wall rather than
 remove it.
 
+That second constraint is DOCUMENTATION, and this RDR deliberately
+leaves it there rather than making it a payload change. Pointing an
+operator from `flow next` to `init-state` in-band would mean adding a
+field or a reason-string to another verb's payload, which is an
+override of `0005:C1`'s I/O for `next` that this record does not carry
+— its override is the verb enumeration, nothing more. The disclosed
+consequence is that discovery rests on the reference docs and on the
+`--help` text for the group, and an operator who reads neither meets
+`unknown[].reason: absent` exactly as before. That is a real residual
+of the two-command first run already recorded in Consequences, and the
+successor that carries a `next`-side pointer is the right home for it:
+the pointer is worth having, but not at the price of an unrecorded
+second override here.
+
 ## Validation
 
 ### Testing Strategy
@@ -1334,16 +1598,28 @@ test that fails if the arm is removed.
    fresh artifact written by the equivalent `set-state --write`
    transcription, table-driven over every value kind BOTH routes admit
    (9 kinds: enum, scalar string, bool, int, float, set array, set with
-   duplicates and HTML characters, empty set, single-member set).
+   duplicates and HTML characters, empty set, single-member set). Each
+   row's `--write` argv MUST use the spelling the loader normalizes to
+   (`1`, not `1.0`; `5`, not `+5`) — the numeric rows otherwise diff on
+   a transcription difference RT3 does not claim, and a test written
+   the other way fails on day one for the wrong reason (A2).
    **Expected**: the two artifacts are byte-identical (RT3; this is
-   A2's spike promoted to a standing test). Separately, the 2 kinds
-   only the loader admits AND that are writable (bare scalar for a set
-   tag, array for a
+   A2's spike promoted to a standing test). One ADDITIONAL row asserts
+   the boundary rather than the invariant: `[initial] threshold = 1.0`
+   seeded, against `--write threshold=1.0`, produces artifacts that
+   DIFFER (`"1"` vs `"1.0"`) and both read back their own value — the
+   divergence is pinned as decided behavior, so a later change that
+   silently unified the two encoders would be caught. Separately, the 2 kinds
+   only the loader admits (bare scalar for a set tag, array for a
    scalar tag) seed successfully via the normalized path and read back
    value-for-value — they have no argv counterpart to diff against, so
    the assertion is read-back equality, not cross-route byte identity.
-   The empty scalar is the loader's THIRD divergence but is unwritable
-   by either route (F5), so it is not a row here.
+   The empty scalar is the loader's THIRD such divergence and IS a row
+   here on the same terms: `[initial] note = ""` seeds, the artifact
+   carries `{"note":""}`, and the key reads back PRESENT with an empty
+   value — asserted distinct from a cleared key, which reads absent
+   (F5). Argv refuses `--write note=`, so this row too is read-back
+   only.
 5. **Scenario**: `[initial]` names a key with zero declared writers,
    and separately one with more than one.
    **Expected**: refusal at LOAD (`flow-model-invalid`), BEFORE the
@@ -1381,6 +1657,14 @@ test that fails if the arm is removed.
    loads), so a disagreement is NOT constructible by writing alone; the
    fixture binds the READ accessor to a different artifact path than
    its writer, pre-seeded with a conflicting value for the same key.
+   That shape is legal, which is worth stating because the fixture
+   looks like it should refuse at load:
+   `internal/table/load.go::checkAccessorBindings` counts READERS and
+   WRITERS per KEY (an owned tag owes exactly one of each) and
+   constrains no relationship between a reader's `Path` and its
+   writer's — nothing requires the two to name one artifact. So one
+   reader and one writer over the same key, on differing paths, loads
+   clean and is the construction this scenario needs.
    (A command-backed READER is the other legal construction — C1's
    carrier refusal is scoped to WRITE accessors — but needs a helper
    binary and `--allow-commands`.)
@@ -1414,12 +1698,40 @@ test that fails if the arm is removed.
    predicate's count to STORE keys; a future change that counted owned
    keys instead would seed beneath an unverifiable state and fail here
    (A5, C1).
-10. **Scenario**: A model whose bound write accessor is NOT file-backed
-   — run twice, once with an edit-carried accessor (`[write.x]` with an
-   `edit` block, routed to `flowbind::NewEditWriter`) and once with a
-   command-backed one (`[write.x]` with `command = [...]`, routed to
-   `cmdbind.Writer` via `flowbind::commandBacked`) — over an otherwise
-   S1-shaped fixture.
+   **Coupling, recorded because it is a liability, not a guarantee**:
+   every mechanism this construction rides is PRIVATE to `flowbind` —
+   `::unreachable` and its suffix vocabulary, `::sealedKey`'s spelling,
+   `::store`/`::load`/`::save`, and `Apply`'s one-save seal-plus-mutate
+   ordering are all unexported, and that package's own comment records
+   the artifact format as an IMPL-DECISION which "RDR 0005 fixes the
+   CLI contract, not a file schema". Only `Reader`/`Writer`/`Gate`,
+   their seam methods, and the two format properties (key PRESENCE
+   distinguishes empty-set from cleared; values stored VERBATIM) are
+   contract. So a `flowbind` change to the seal representation breaks
+   this fixture's SETUP, and a fixture that breaks in setup can be
+   quietly deleted or skipped — taking with it the only assertion that
+   the predicate counts store keys. Two obligations follow. The test
+   MUST fail loudly rather than skip if its setup does not produce
+   exactly `{sealedKey}` — assert the post-setup bytes before the
+   scenario runs, so a representation change surfaces as a failure
+   naming this coupling. And when A6's carrier lands, if it can
+   construct the sealed state directly, this fixture MUST be rewritten
+   onto it: the CLI-only route is stated here because it is the only
+   one available today, not because it is the one this scenario wants.
+10. **Scenario**: A model whose bound accessor is NOT file-backed on
+   one of its two capabilities — run three times over an otherwise
+   S1-shaped fixture. Twice on the WRITE side: once with an
+   edit-carried accessor (`[write.x]` with an `edit` block, routed to
+   `flowbind::NewEditWriter`) and once with a command-backed one
+   (`[write.x]` with `command = [...]`, routed to `cmdbind.Writer` via
+   `flowbind::commandBacked`). Once on the READ side: a file-backed
+   `[write.x]` paired with a command-backed `[read.x]` on the same
+   role, which the write-side type-switch alone would ADMIT — the row
+   that fails if the carrier gate is written over writers only. S1
+   itself is this row's second control: readers are constructed as
+   VALUES and writers as POINTERS (C1, A8), so a read-side case
+   spelled `*flowbind.Reader` matches nothing and refuses every model
+   — S1 goes red, not just this row.
    **Expected**: exit 2 with the carrier refusal code, naming the
    accessor and its carrier, with ZERO writes and no accessor
    invocation. This is the only terminal arm guarding an emptiness
@@ -1428,10 +1740,13 @@ test that fails if the arm is removed.
    is that removing the carrier check makes the edit case attempt a
    write. For the edit carrier the refusal is over-determined — that
    type implements no `Read` at all (A6) — and the test must still see
-   the carrier code, not a missing-reader error. The command-backed row
-   is run with `--allow-commands` UNSET and asserts the carrier code
-   rather than the allow-commands refusal, pinning the ordering C1
-   fixes; no helper binary is needed, since no accessor runs.
+   the carrier code, not a missing-reader error. The command-backed
+   rows are run with `--allow-commands` UNSET and assert the carrier
+   code rather than the allow-commands refusal; no helper binary is
+   needed, since no accessor runs. The read-side row asserts the
+   refusal names the READ capability and its accessor, distinguishing
+   it from the write-side rows' payload — the assertion that would
+   fail against a gate reading only `Definition.Binding` on writers.
 11. **Scenario**: A model declaring TWO write accessors over two roles
    (`Model.Writers`, which `::runFlowSetState` already iterates per
    writer), each serving its own `[initial]` key. Role A's artifact
