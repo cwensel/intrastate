@@ -1,0 +1,971 @@
+{
+  "edges": [
+    {
+      "from": "0020",
+      "to": "issue/p1p6",
+      "kind": "issue",
+      "line": 96,
+      "line_end": 97,
+      "evidence": "kata `p1p6",
+      "field": "Related Issues"
+    },
+    {
+      "from": "0020",
+      "to": "0005",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 98,
+      "line_end": 99,
+      "evidence": "0005-skill-integration-cli-contract",
+      "field": "Predecessors",
+      "slug": "0005-skill-integration-cli-contract"
+    },
+    {
+      "from": "0020",
+      "to": "0008",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 98,
+      "line_end": 99,
+      "evidence": "0008-recognized-tag-key-ownership",
+      "field": "Predecessors",
+      "slug": "0008-recognized-tag-key-ownership"
+    },
+    {
+      "from": "0020",
+      "to": "0008",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 133,
+      "line_end": 133,
+      "evidence": "RDR 0008"
+    },
+    {
+      "from": "0020:A1",
+      "to": "internal/cli/flow_input.go::canonicalValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 145,
+      "line_end": 159,
+      "evidence": "internal/cli/flow_input.go::canonicalValue",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A2",
+      "to": "internal/resolve/precondition.go::CheckInput",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 169,
+      "line_end": 190,
+      "evidence": "internal/resolve/precondition.go::CheckInput",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A2",
+      "to": "internal/resolve/resolve.go::assemble",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 169,
+      "line_end": 190,
+      "evidence": "internal/resolve/resolve.go::assemble",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A2",
+      "to": "internal/table/load.go::accessorTable",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 169,
+      "line_end": 190,
+      "evidence": "internal/table/load.go::accessorTable",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A2",
+      "to": "internal/table/load.go::loadInitial",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 169,
+      "line_end": 190,
+      "evidence": "internal/table/load.go::loadInitial",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A2",
+      "to": "internal/table/normalize.go::atomsFromBlock",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 169,
+      "line_end": 190,
+      "evidence": "internal/table/normalize.go::atomsFromBlock",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A3",
+      "to": "internal/accessor/executor.go::verifyReadBack",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 199,
+      "line_end": 216,
+      "evidence": "internal/accessor/executor.go::verifyReadBack",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A3",
+      "to": "internal/cli/flow_state.go::parseWrites",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 199,
+      "line_end": 216,
+      "evidence": "internal/cli/flow_state.go::parseWrites",
+      "field": "Evidence"
+    },
+    {
+      "from": "0020:A5",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 244,
+      "line_end": 244,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0020",
+      "to": "internal/cli/flow_input.go::parseTags",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 278,
+      "line_end": 278,
+      "evidence": "internal/cli/flow_input.go::parseTags"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/load.go::ConformValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 280,
+      "line_end": 280,
+      "evidence": "internal/table/load.go::ConformValue"
+    },
+    {
+      "from": "0020",
+      "to": "internal/cli/flow_input.go::canonicalValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 283,
+      "line_end": 283,
+      "evidence": "internal/cli/flow_input.go::canonicalValue"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/model.go::EmitValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 294,
+      "line_end": 294,
+      "evidence": "internal/table/model.go::EmitValue"
+    },
+    {
+      "from": "0020:D-identity",
+      "to": "internal/table/load.go::accessorTable",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 372,
+      "line_end": 372,
+      "evidence": "internal/table/load.go::accessorTable"
+    },
+    {
+      "from": "0020",
+      "to": "internal/cli/flow_input.go::parseTags",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 411,
+      "line_end": 411,
+      "evidence": "internal/cli/flow_input.go::parseTags"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/load.go::accessorTable",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 412,
+      "line_end": 412,
+      "evidence": "internal/table/load.go::accessorTable"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/model.go::EmitValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 413,
+      "line_end": 413,
+      "evidence": "internal/table/model.go::EmitValue"
+    },
+    {
+      "from": "0020:JC1",
+      "to": "0025",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 460,
+      "line_end": 460,
+      "evidence": "0025",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0020:JC1",
+      "to": "cli/0020:§normative-contracts",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 460,
+      "line_end": 460,
+      "evidence": "cli/0020 §Normative Contracts C1"
+    },
+    {
+      "from": "0020",
+      "to": "cli/0025:§normative-contracts-c1-mutual-tolerance",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 461,
+      "line_end": 461,
+      "evidence": "cli/0025 §Normative Contracts C1 — mutual tolerance"
+    },
+    {
+      "from": "0020",
+      "to": "flow_input.go::loadFindings",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 471,
+      "line_end": 471,
+      "evidence": "flow_input.go::loadFindings"
+    },
+    {
+      "from": "0020",
+      "to": "0010",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 564,
+      "line_end": 564,
+      "evidence": "RDR 0010"
+    },
+    {
+      "from": "0020",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 585,
+      "line_end": 585,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0020",
+      "to": "0008",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 585,
+      "line_end": 585,
+      "evidence": "RDR 0008"
+    },
+    {
+      "from": "0020",
+      "to": "internal/cli/flow_input.go::parseTags",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 593,
+      "line_end": 593,
+      "evidence": "internal/cli/flow_input.go::parseTags"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/load.go::ConformValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 595,
+      "line_end": 595,
+      "evidence": "internal/table/load.go::ConformValue"
+    },
+    {
+      "from": "0020",
+      "to": "load.go::accessorTable",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 597,
+      "line_end": 597,
+      "evidence": "load.go::accessorTable"
+    },
+    {
+      "from": "0020",
+      "to": "internal/cli/flow_state.go::parseWrites",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 598,
+      "line_end": 598,
+      "evidence": "internal/cli/flow_state.go::parseWrites"
+    },
+    {
+      "from": "0020",
+      "to": "internal/table/model.go::EmitValue",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 599,
+      "line_end": 599,
+      "evidence": "internal/table/model.go::EmitValue"
+    },
+    {
+      "from": "0020",
+      "to": "0003",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 627,
+      "line_end": 627,
+      "evidence": "RDR 0003"
+    },
+    {
+      "from": "0020",
+      "to": "internal/accessor/executor.go::verifyReadBack",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 644,
+      "line_end": 644,
+      "evidence": "internal/accessor/executor.go::verifyReadBack"
+    },
+    {
+      "from": "0020",
+      "to": "{ARTIFACT_DIR}/gate.md",
+      "kind": "artifact",
+      "line": 801,
+      "line_end": 801,
+      "evidence": "{ARTIFACT_DIR}/gate.md"
+    },
+    {
+      "from": "0020:G-assumptions",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 846,
+      "line_end": 846,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0020",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 933,
+      "line_end": 933,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0020",
+      "to": "0008",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 933,
+      "line_end": 933,
+      "evidence": "RDR 0008"
+    },
+    {
+      "from": "0020",
+      "to": "0003",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 934,
+      "line_end": 934,
+      "evidence": "RDR 0003"
+    },
+    {
+      "from": "0020",
+      "to": "0010",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 934,
+      "line_end": 934,
+      "evidence": "RDR 0010"
+    },
+    {
+      "from": "0020",
+      "to": "0012",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 935,
+      "line_end": 935,
+      "evidence": "RDR 0012"
+    }
+  ],
+  "elements": [
+    {
+      "id": "0020:A1",
+      "kind": "A",
+      "key": "1",
+      "label": "No caller, test, or fixture load-bears on the undeclared-array refusal",
+      "derived": false,
+      "hash": "de4e1472",
+      "section": "0020:§critical-assumptions",
+      "line_start": 139,
+      "line_end": 162,
+      "bytes": 1361,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A1",
+          "line_start": 143,
+          "line_end": 143,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A1",
+          "line_start": 144,
+          "line_end": 144,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "the message literal has one producer, `internal/cli/flow_input.go::canonicalValue`, and one asserting test — `internal/cli/flow_input_0005_test.go` `TestReq29And80_WrongKindAndEmptyTagValuesAreFlowTagInvalid`, subtest `array-for-scalar-key`, which uses `--tag profile=[…]` against a key DECLARED at `internal/cli/flow_fixtures_0005_test.go` `[tags.profile]` — i.e. the declared arm, which C1 keeps. Every other `flow-tag-invalid` assertion is a different arm (empty `--outcome`, malformed no-`=` tag, declared-enum domain violation). The repo asserts the converse directly: `internal/cli/flow_input_0005_test.go`'s `an undeclared observed key still passes` requires success for `--tag sidechannel=whatever-the-caller-likes`. negative: no assertion, caller branch, or fixture requires `flow-tag-invalid` over an UNDECLARED key.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A1",
+          "line_start": 145,
+          "line_end": 159
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the acceptance-conversion silently changes a consumer's error-handling path; surfaces as a caller branch on `flow-tag-invalid` that never fires again.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A1",
+          "line_start": 160,
+          "line_end": 162
+        }
+      ]
+    },
+    {
+      "id": "0020:A2",
+      "kind": "A",
+      "key": "2",
+      "label": "An undeclared `--tag` value cannot influence resolution",
+      "derived": false,
+      "hash": "0e3b2718",
+      "section": "0020:§critical-assumptions",
+      "line_start": 163,
+      "line_end": 193,
+      "bytes": 1985,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A2",
+          "line_start": 167,
+          "line_end": 167,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search + Spike",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A2",
+          "line_start": 168,
+          "line_end": 168,
+          "method": {
+            "members": [
+              "Source Search",
+              "Spike"
+            ],
+            "raw": "Source Search + Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "all five `CatUnknownTag` refusal sites confirmed — `internal/table/normalize.go::atomsFromBlock` (match/guard/unless atoms in every block), the write-block and clear-list arms of `internal/table/normalize.go`, `internal/table/load.go::accessorTable`, and `internal/table/load.go::loadInitial`. Closed-world reader enumeration over every non-test `m.Tags` read found two disjoint shapes, neither able to observe an undeclared key's value: iterations over the model's OWN key set (vacuously excluding undeclared keys), and lookups keyed by a rule-atom/accessor/initial key (each already past one of the five refusals). Runtime: the observed tag enters the kernel view at `internal/resolve/resolve.go::assemble`, but the view is read only through `matches` (iterating `row.Match` — rule atoms only), `has`, and guard `Lookup`; `internal/resolve/precondition.go::CheckInput` reads `Observed` only for the reserved key NAME, never a value. Runtime leg — spike `evidence/spikes/selection-diff-a2-vs-b.txt` (empty): selection is byte-identical with and without an undeclared scalar carrier; every projected field (rule, emit, dispositions, gates, next, writes, clear, escaped, outcome) diffs empty and the only payload change is `observed` gaining the carried key. The array-carrier leg is not runtime-verifiable until the change lands (it refuses at HEAD) and is covered by MVV 2/3.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A2",
+          "line_start": 169,
+          "line_end": 190
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "pass-through becomes semantically live and the carrier arm's safety argument collapses — routing could depend on unvalidated bytes; surfaces as a selection diff in the MVV pair.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A2",
+          "line_start": 191,
+          "line_end": 193
+        }
+      ]
+    },
+    {
+      "id": "0020:A3",
+      "kind": "A",
+      "key": "3",
+      "label": "No byte-equality obligation reads an undeclared observed value",
+      "derived": false,
+      "hash": "27e870ea",
+      "section": "0020:§critical-assumptions",
+      "line_start": 194,
+      "line_end": 219,
+      "bytes": 1551,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A3",
+          "line_start": 197,
+          "line_end": 197,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A3",
+          "line_start": 198,
+          "line_end": 198,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "byte-equality lives in exactly one place, `internal/accessor/executor.go::verifyReadBack`, whose read-domain is the write plan, the accessor-read baseline, and the accessor RE-READ values — never the `--tag` observed slice. The plan comes from `internal/cli/flow_state.go::parseWrites`, which proves a declaration via `writerFor` BEFORE calling `canonicalValue` (its lookup \"is total, unlike `parseTags`'s\"), so every byte-compared value is canonicalised under a real declaration. All other consumers of a `--tag` observed value are non-comparing verbatim copies: `internal/cli/flow_exec.go`'s `observedTagMap` / `kernelTags`, and the payload `observed` echo (`internal/cli/flow_resolve.go`, routed to `groupEcho` by `internal/cli/flow_partition.go`). `internal/resolve/resolve.go`'s `merge` does compare a repeated key's value, but `internal/cli/flow_input.go` refuses a repeated `--tag` key under `codeTagDuplicate` (REQ-28) before the kernel sees it. negative: no read-back, plan copy-through, hash, sort, or dedupe path consumes an UNDECLARED observed value.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A3",
+          "line_start": 199,
+          "line_end": 216
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "a verbatim (unsorted/duplicated) array breaks an equality check somewhere downstream; surfaces as a spurious mismatch refusal.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A3",
+          "line_start": 217,
+          "line_end": 219
+        }
+      ]
+    },
+    {
+      "id": "0020:A4",
+      "kind": "A",
+      "key": "4",
+      "label": "External prior art aligns with the carrier arm",
+      "derived": false,
+      "hash": "fab00f5f",
+      "section": "0020:§critical-assumptions",
+      "line_start": 220,
+      "line_end": 243,
+      "bytes": 1524,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A4",
+          "line_start": 223,
+          "line_end": 223,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Prior Art",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A4",
+          "line_start": 224,
+          "line_end": 224,
+          "method": {
+            "members": [
+              "Prior Art"
+            ],
+            "raw": "Prior Art"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "three opened citations, trail at `evidence/research/resolve-prior-art.md`. SCXML — W3C SCXML Recommendation §5.4 (`\u003cassign\u003e`): an illegal or non-existent datamodel location MUST raise `error.execution` (the closed, declared arm), against §5.10.1 (`_event`): the processor \"SHOULD reformat this data to match its data model, but MUST NOT otherwise modify it\" (the open, carried arm). Protobuf — Language Guide (proto3) §Unknown Fields: \"Proto3 messages preserve unknown fields and include them during parsing and in the serialized output.\" Kubernetes — *Mastering Kubernetes* (Packt) §Label/§Annotation, pp.6–7: key/value SYNTAX is validated while the value's meaning is not (\"Kubernetes just stores the annotations\"); analogous rather than identical, since the API server has no declared-key table. Corpus-first per the budget: `StateMachineRes` / `StateMachineLit` / `DevRef` / `PapersFast` were negative for the SCXML and protobuf instance claims (the Propose-stage negative reproduced); the web fallback fetched the two primary specs without a 403.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A4",
+          "line_start": 225,
+          "line_end": 241
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the alignment claim weakens; the decision still stands on the in-repo anchors (non-fatal — record and move on).",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A4",
+          "line_start": 242,
+          "line_end": 243
+        }
+      ]
+    },
+    {
+      "id": "0020:A5",
+      "kind": "A",
+      "key": "5",
+      "label": "RDR 0005's stable code table tolerates an arm of `flow-tag-invalid` becoming unreachable for undeclared keys",
+      "derived": false,
+      "hash": "aadbdaef",
+      "section": "0020:§critical-assumptions",
+      "line_start": 244,
+      "line_end": 270,
+      "bytes": 1613,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A5",
+          "line_start": 248,
+          "line_end": 248,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Peer RDR",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A5",
+          "line_start": 249,
+          "line_end": 249,
+          "method": {
+            "members": [
+              "Peer RDR"
+            ],
+            "raw": "Peer RDR"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`0005:§failure-modes`'s table header fixes the scope exactly — \"Stable code strings (the spellings are normative; the group fixes the exit)\": spellings and exit group, nothing about which inputs reach which arm. `0005:§normative-contracts` C1's only `--tag` clauses cover the owned/reserved refusal and \"`--tag` values MUST enter as observed context\"; no clause addresses an undeclared, non-owned, non-reserved key's kind-checking. The nearest text, `0005:§technical-design` \"State input\" (\"a bare scalar for a set key, or an array for a scalar key, is `flow-tag-invalid`\"), is conditioned on a KNOWN declared kind, so it does not reach the undeclared case. Message text is nowhere contract in 0005 — C1 requires only that `Finding.message` be self-sufficient, not verbatim-pinned. Spellings mirror at `internal/cli/flow_input.go`'s constant block (`codeTagInvalid`/`codeTagDuplicate`/`codeTagReserved`/`codeTagOwned`), unchanged by C1. 0005 Status: Implemented. negative: no 0005 clause pins the undeclared-array refusal or ties the \"is not set-valued\" message to any input class.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A5",
+          "line_start": 250,
+          "line_end": 267
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the change needs a successor-RDR amendment path for 0005's table before it can land; surfaces at Stage 7's contradiction check.",
+          "section": "0020:§critical-assumptions",
+          "element": "0020:A5",
+          "line_start": 268,
+          "line_end": 270
+        }
+      ]
+    },
+    {
+      "id": "0020:C1",
+      "kind": "C",
+      "key": "1",
+      "label": "PURE CARRIER. At `--tag` admission, a key ABSENT from the loaded",
+      "derived": false,
+      "hash": "a54bb513",
+      "section": "0020:§normative-contracts",
+      "line_start": 324,
+      "line_end": 366,
+      "bytes": 2424
+    },
+    {
+      "id": "0020:D-identity",
+      "kind": "D",
+      "key": "identity",
+      "label": "Identity",
+      "derived": false,
+      "hash": "c97c506b",
+      "section": "0020:§load-bearing-decisions",
+      "line_start": 370,
+      "line_end": 374,
+      "bytes": 321
+    },
+    {
+      "id": "0020:D-wire-byte-format",
+      "kind": "D",
+      "key": "wire-byte-format",
+      "label": "Wire / byte format",
+      "derived": false,
+      "hash": "9f3fa466",
+      "section": "0020:§load-bearing-decisions",
+      "line_start": 375,
+      "line_end": 378,
+      "bytes": 269
+    },
+    {
+      "id": "0020:D-naming",
+      "kind": "D",
+      "key": "naming",
+      "label": "Naming",
+      "derived": false,
+      "hash": "ddde59dc",
+      "section": "0020:§load-bearing-decisions",
+      "line_start": 379,
+      "line_end": 381,
+      "bytes": 133
+    },
+    {
+      "id": "0020:D-selection-predicate",
+      "kind": "D",
+      "key": "selection-predicate",
+      "label": "Selection / predicate",
+      "derived": false,
+      "hash": "2ef1d5c3",
+      "section": "0020:§load-bearing-decisions",
+      "line_start": 382,
+      "line_end": 388,
+      "bytes": 456
+    },
+    {
+      "id": "0020:JC1",
+      "kind": "JC",
+      "key": "1",
+      "label": "Joint-check: fired → 0025 (home: cli/0020 §Normative Contracts C1 /",
+      "derived": false,
+      "hash": "08e96841",
+      "section": "0020:§decision-rationale",
+      "line_start": 460,
+      "line_end": 460,
+      "bytes": 71,
+      "joint": {
+        "verdict": "fired",
+        "targets": [
+          "0025"
+        ],
+        "open": false
+      }
+    },
+    {
+      "id": "0020:ALT1",
+      "kind": "ALT",
+      "key": "1",
+      "label": "Alternative 1: Declaration as identity precondition (`flow-tag-undeclared`)",
+      "derived": false,
+      "hash": "ec9d0e16",
+      "section": "0020:§alternative-1-declaration-as-identity-precondition-flow-tag-undeclared",
+      "line_start": 491,
+      "line_end": 521,
+      "bytes": 1418
+    },
+    {
+      "id": "0020:ALT2",
+      "kind": "ALT",
+      "key": "2",
+      "label": "Alternative 2: Ratify today's split, rewrite the message",
+      "derived": false,
+      "hash": "e45f9a35",
+      "section": "0020:§alternative-2-ratify-today-s-split-rewrite-the-message",
+      "line_start": 523,
+      "line_end": 547,
+      "bytes": 1016
+    },
+    {
+      "id": "0020:BR1",
+      "kind": "BR",
+      "key": "1",
+      "label": "BR1 Per-model opt-in strictness (the 0024 shape — a model switch",
+      "derived": true,
+      "hash": "d558fc27",
+      "section": "0020:§briefly-rejected",
+      "line_start": 551,
+      "line_end": 555,
+      "bytes": 324
+    },
+    {
+      "id": "0020:BR2",
+      "kind": "BR",
+      "key": "2",
+      "label": "BR2 Canonicalise undeclared array-looking values as sets",
+      "derived": true,
+      "hash": "cfaf4e61",
+      "section": "0020:§briefly-rejected",
+      "line_start": 556,
+      "line_end": 558,
+      "bytes": 190
+    },
+    {
+      "id": "0020:MVV",
+      "kind": "MVV",
+      "label": "Minimum Viable Validation",
+      "derived": false,
+      "hash": "d7979a0b",
+      "section": "0020:§minimum-viable-validation",
+      "line_start": 705,
+      "line_end": 722,
+      "bytes": 943
+    },
+    {
+      "id": "0020:S1",
+      "kind": "S",
+      "key": "1",
+      "label": "undeclared scalar and undeclared array literal",
+      "derived": false,
+      "hash": "a4ec15d2",
+      "section": "0020:§testing-strategy",
+      "line_start": 759,
+      "line_end": 768,
+      "bytes": 611
+    },
+    {
+      "id": "0020:S2",
+      "kind": "S",
+      "key": "2",
+      "label": "the same resolve with and without the carrier flags",
+      "derived": false,
+      "hash": "bda97105",
+      "section": "0020:§testing-strategy",
+      "line_start": 769,
+      "line_end": 777,
+      "bytes": 516
+    },
+    {
+      "id": "0020:S3",
+      "kind": "S",
+      "key": "3",
+      "label": "declared scalar given an array literal (MVV 4).",
+      "derived": false,
+      "hash": "24d5b192",
+      "section": "0020:§testing-strategy",
+      "line_start": 778,
+      "line_end": 784,
+      "bytes": 385
+    },
+    {
+      "id": "0020:S4",
+      "kind": "S",
+      "key": "4",
+      "label": "undeclared key given an empty value (MVV 5).",
+      "derived": false,
+      "hash": "343d0783",
+      "section": "0020:§testing-strategy",
+      "line_start": 785,
+      "line_end": 795,
+      "bytes": 676
+    },
+    {
+      "id": "0020:G-contradiction",
+      "kind": "G",
+      "key": "contradiction",
+      "label": "Contradiction Check",
+      "derived": false,
+      "hash": "581cb5da",
+      "section": "0020:§contradiction-check",
+      "line_start": 823,
+      "line_end": 831,
+      "bytes": 358
+    },
+    {
+      "id": "0020:G-assumptions",
+      "kind": "G",
+      "key": "assumptions",
+      "label": "Assumption Verification",
+      "derived": false,
+      "hash": "e69b5cf1",
+      "section": "0020:§assumption-verification",
+      "line_start": 834,
+      "line_end": 849,
+      "bytes": 653
+    },
+    {
+      "id": "0020:G-scope",
+      "kind": "G",
+      "key": "scope",
+      "label": "Scope Verification",
+      "derived": false,
+      "hash": "8185d52b",
+      "section": "0020:§scope-verification",
+      "line_start": 852,
+      "line_end": 857,
+      "bytes": 164
+    },
+    {
+      "id": "0020:G-cross-cutting",
+      "kind": "G",
+      "key": "cross-cutting",
+      "label": "Cross-Cutting Concerns",
+      "derived": false,
+      "hash": "f26a8f53",
+      "section": "0020:§cross-cutting-concerns",
+      "line_start": 860,
+      "line_end": 887,
+      "bytes": 1096
+    },
+    {
+      "id": "0020:G-proportionality",
+      "kind": "G",
+      "key": "proportionality",
+      "label": "Proportionality",
+      "derived": false,
+      "hash": "68d6ac07",
+      "section": "0020:§proportionality",
+      "line_start": 890,
+      "line_end": 918,
+      "bytes": 1344
+    }
+  ],
+  "path": "/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0020-undeclared-tag-key-admission.md",
+  "record": "0020",
+  "schema": "2"
+}
