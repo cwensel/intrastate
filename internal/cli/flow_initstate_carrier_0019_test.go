@@ -645,3 +645,238 @@ func initArtifactExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// --- the carrier gate's ordering against the artifact-binding family -----
+
+// REQ-33: "It runs AFTER the carrier gate, which is likewise observable: an
+// invocation against a non-file-backed model that ALSO omits a needed
+// artifact flag refuses under the carrier code, not the artifact-binding
+// family."
+// REQ-44: "A no-match is the flat `false` `::readerFor` returns, which
+// reaches the unbound-needed-role arm above; it MUST NOT be split into a
+// separate missing-reader code."
+// ADVERSARIAL — the ordering asserted where the two REQs MEET. REQ-44 puts
+// the reader-less role's refusal in the artifact-binding family; REQ-33
+// puts that whole family AFTER the carrier gate. A gate that emits the
+// reader-less refusal INLINE, mid-loop, satisfies REQ-44's code while
+// violating REQ-33's ordinal: it returns before a LATER-sorting writer's
+// carrier is ever inspected.
+//
+// The fixture makes that visible. `needed` is `slices.Sorted`, so
+// `a-orphan` (file-backed, on a role NO reader serves) is inspected before
+// `z-state` (command-backed). Every role IS `--artifact`-bound, so GATE 3
+// is not the discriminator and the only two candidate refusals are the
+// carrier one and the reader-less one.
+func TestReq33And44_0019_ACarrierDefectPreemptsAReaderLessRoleWhicheverSortsFirst(t *testing.T) {
+	for name, src := range map[string]string{
+		// The RED case: the reader-less writer sorts FIRST. A single-pass
+		// gate returns its artifact-binding refusal here and never reaches
+		// the command-backed writer's carrier.
+		"reader-less-writer-sorts-first": initOrphanFirstCarrierModel,
+		// The CONTROL: the same topology with the command-backed writer
+		// sorting FIRST. It must yield the IDENTICAL code — the fix is an
+		// ordering of REFUSAL CLASSES, not a flipped bias between two
+		// accessor names.
+		"carrier-defect-sorts-first": initCarrierFirstOrphanModel,
+	} {
+		t.Run(name, func(t *testing.T) {
+			model := writeFlowModel(t, src)
+			artA := newFlowArtifact(t, "state.artifact")
+			artB := newFlowArtifact(t, "orphan.artifact")
+
+			beforeA, existedA := snapshot(t, artA)
+			beforeB, existedB := snapshot(t, artB)
+
+			// BOTH needed roles are bound, so an artifact-binding refusal
+			// here can only be the reader-less arm — never GATE 3's.
+			ce := initRefusal(t, 2, initStateArgs(model,
+				artifactBinding(initRoleA, artA),
+				artifactBinding(initOrphanRole, artB))...)
+
+			if ce.Code == codeArtifactMissing {
+				t.Errorf("the refusal is the ARTIFACT-BINDING family (%s); "+
+					"the reader-less role's refusal is in that family "+
+					"(REQ-44) and the carrier gate runs BEFORE the whole "+
+					"family (REQ-33), so a model that is ALSO non-file-backed "+
+					"refuses under the CARRIER code — regardless of which "+
+					"accessor name sorts first", ce.Code)
+			}
+			if ce.Code != codeInitCarrierUnsupported {
+				t.Errorf("the refusal code is %q; want the carrier refusal "+
+					"%q — a two-defect model reports its CARRIER defect",
+					ce.Code, codeInitCarrierUnsupported)
+			}
+
+			// ZERO writes: the carrier refusal is decided before any
+			// accessor is invoked, on either ordering.
+			requireBytesUnchanged(t, artA, beforeA, existedA,
+				"the carrier refusal is decided BEFORE any accessor is invoked")
+			requireBytesUnchanged(t, artB, beforeB, existedB,
+				"the reader-less role's artifact is never touched either")
+		})
+	}
+}
+
+// initOrphanRole is the role served by a file-backed WRITER and by NO
+// reader at all. It is bound by the two-defect fixtures so GATE 3's
+// unbound-role arm cannot be what fires.
+const initOrphanRole = "orphan"
+
+// initOrphanFirstCarrierModel carries BOTH defects at once:
+//
+//   - `[write.a-orphan]` is FILE-BACKED on role `orphan`, which NO `[read.*]`
+//     serves — the reader-less arm, an artifact-binding-family refusal. Its
+//     key `note` IS read, by `[read.elsewhere]` on a DIFFERENT role: the
+//     loader enforces per-KEY reader uniqueness ("owned tag note is served
+//     by 0 readers"), never per-ROLE, so an owned key with no reader at all
+//     refuses at LOAD and never reaches the verb. Role uniqueness on the
+//     read side is exactly the gap `0019:C1` names;
+//   - `[write.z-state]`  is COMMAND-BACKED on role `state` — the carrier arm.
+//
+// `needed` is sorted, so `a-orphan` is inspected FIRST. A gate emitting the
+// reader-less refusal inline returns before `z-state`'s carrier is seen.
+//
+// TEST-FIXTURE: BOTH writers declare `read_back = true`. The loader refuses
+// a write accessor that omits it as a malformed accessor declaration, so a
+// fixture without it would never reach the verb and the test would assert
+// nothing about the gate.
+const initOrphanFirstCarrierModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "initorphanfirst"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["seeded", "final"]
+single_valued = true
+required = true
+
+[tags.note]
+provenance = "owned"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["stage"]
+timeout = "2s"
+
+[read.elsewhere]
+role = "elsewhere"
+path = "flow.elsewhere"
+keys = ["note"]
+timeout = "2s"
+
+[write.a-orphan]
+role = "orphan"
+path = "flow.orphan"
+keys = ["note"]
+timeout = "2s"
+read_back = true
+
+[write.z-state]
+role = "state"
+command = ["true", "{artifact}"]
+keys = ["stage"]
+timeout = "10s"
+read_back = true
+
+[initial]
+stage = "seeded"
+note = "hello"
+
+[context.done]
+[context.done.match.stage]
+eq = "final"
+
+[[rule]]
+id = "advance"
+[rule.match.stage]
+eq = "seeded"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "final"
+`
+
+// initCarrierFirstOrphanModel is initOrphanFirstCarrierModel with the two
+// writer NAMES swapped, so the COMMAND-BACKED writer sorts first. The
+// single-pass gate already returns the carrier code here, which is exactly
+// why this row is the control: it proves the fix makes the answer
+// ORDER-INDEPENDENT rather than flipping which name wins.
+const initCarrierFirstOrphanModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "initcarrierfirst"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["seeded", "final"]
+single_valued = true
+required = true
+
+[tags.note]
+provenance = "owned"
+kind = "scalar"
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["stage"]
+timeout = "2s"
+
+[read.elsewhere]
+role = "elsewhere"
+path = "flow.elsewhere"
+keys = ["note"]
+timeout = "2s"
+
+[write.a-state]
+role = "state"
+command = ["true", "{artifact}"]
+keys = ["stage"]
+timeout = "10s"
+read_back = true
+
+[write.z-orphan]
+role = "orphan"
+path = "flow.orphan"
+keys = ["note"]
+timeout = "2s"
+read_back = true
+
+[initial]
+stage = "seeded"
+note = "hello"
+
+[context.done]
+[context.done.match.stage]
+eq = "final"
+
+[[rule]]
+id = "advance"
+[rule.match.stage]
+eq = "seeded"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+stage = "final"
+`

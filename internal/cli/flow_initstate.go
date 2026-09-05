@@ -454,11 +454,36 @@ func initSeedValue(m *table.Model, assignment table.TagValue) (string, *clierr.C
 //
 // The gate reads `Identity`, `Accessor`, and `Binding` as FIELDS and invokes
 // no `Binding` method — a type switch calls nothing — which is what makes the
-// no-accessor-invoked property true by construction.
+// no-accessor-invoked property true by construction. That holds of BOTH
+// passes below.
+//
+// It runs in TWO passes over the same `needed` slice because one of its arms
+// is not a carrier refusal at all: a needed writer whose role no reader
+// serves refuses in the ARTIFACT-BINDING family, which C1 orders AFTER the
+// carrier gate in full. Emitting it inline would return before a
+// later-sorting writer's carrier was ever inspected, so a model carrying
+// both defects would report whichever one its accessor NAMES happened to
+// sort first. Pass one answers every carrier question; pass two reports the
+// first deferred reader-less role.
 func initCarrierGate(reg accessor.Registry, needed []string) *clierr.CLIError {
+	// PASS ONE — every CARRIER question, over every needed writer. A
+	// reader-less role is RECORDED rather than refused, because that refusal
+	// is in the artifact-binding family and C1 orders the whole
+	// artifact-binding family AFTER the carrier gate. Refusing it inline
+	// would let an earlier-sorting reader-less writer preempt a
+	// later-sorting writer's carrier refusal, which is the ordering C1's
+	// "refuses under the carrier code, not the artifact-binding family"
+	// forbids — `needed` is sorted, so which defect a two-defect model
+	// reported would otherwise turn on accessor NAMES.
+	var readerless []initMissingReader
+
 	for _, name := range needed {
 		def, ok := reg.Lookup(name, accessor.CapWrite)
 		if !ok {
+			// Registry INTEGRITY, not a user-facing ordering question: an
+			// unlooked-up needed writer is an internal inconsistency, and
+			// deferring it would only report it later against a registry
+			// already known to be broken.
 			return internalErr(codeAccessorUnknown,
 				"the write accessor `"+name+"` is not bound")
 		}
@@ -474,19 +499,40 @@ func initCarrierGate(reg accessor.Registry, needed []string) *clierr.CLIError {
 		// scanned in the registry's own slice order, unsorted and unfiltered.
 		reader, found := initReaderFor(reg, def.Accessor.Role)
 		if !found {
-			// A no-match is the flat `false` the executor's selector returns
-			// and reaches the unbound-needed-role arm; it is NOT split into a
-			// missing-reader code of its own.
-			return userErr(codeArtifactMissing, def.Accessor.Role,
-				"the artifact role `"+def.Accessor.Role+"` that the write "+
-					"accessor `"+name+"` needs is served by no declared read "+
-					"accessor, so its commit-time read-back has no reader")
+			readerless = append(readerless,
+				initMissingReader{writer: name, role: def.Accessor.Role})
+			continue
 		}
 		if carrier := initReadCarrier(reader.Binding); carrier != "" {
 			return initCarrierRefusal("read", reader.Identity.Name, carrier)
 		}
 	}
+
+	// PASS TWO — the deferred reader-less roles, once no carrier answer is
+	// outstanding. The FIRST in `needed` order is reported, which is the
+	// writer the single-pass form selected, so the deterministic choice
+	// among several reader-less writers is unchanged.
+	//
+	// A no-match is the flat `false` the executor's selector returns and
+	// reaches the unbound-needed-role arm; it is NOT split into a
+	// missing-reader code of its own (REQ-44 — the CODE — which is
+	// orthogonal to REQ-33's ordering of it).
+	if len(readerless) != 0 {
+		first := readerless[0]
+		return userErr(codeArtifactMissing, first.role,
+			"the artifact role `"+first.role+"` that the write "+
+				"accessor `"+first.writer+"` needs is served by no declared read "+
+				"accessor, so its commit-time read-back has no reader")
+	}
 	return nil
+}
+
+// initMissingReader is one needed writer whose role no declared reader
+// serves — carried from the carrier gate's first pass to its second so the
+// refusal it earns is emitted after every carrier answer is in.
+type initMissingReader struct {
+	writer string
+	role   string
 }
 
 // initReaderFor reproduces `internal/accessor::Registry.readerFor`'s
