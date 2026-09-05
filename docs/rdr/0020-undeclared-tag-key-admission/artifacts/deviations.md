@@ -23,9 +23,19 @@ item, per the unattended override. It is not a halt.
   would leave a shipped doc asserting the exact behaviour the RDR
   retires. The correction is owed either way under REQ-57 ("no shipped
   invocation changes meaning") and REQ-31.
-- **Status**: needs author decision (proceeding under reading (b);
-  evidence supports it but the filename literal in the locked record is
-  wrong either way, so the author should confirm the record's intent)
+- **Status**: needs author decision → RESOLVED (reading (b): the
+  obligation is satisfied against `docs/model-authoring.md`, which is
+  corrected on this branch). Grounds for resolving without the author:
+  this is not a live design fork. `docs/model-schema.md` does not
+  exist, so reading (a) cannot be satisfied by editing anything; and the
+  `model-authoring.md` correction is owed under REQ-57 ("no shipped
+  invocation changes meaning") and REQ-31 REGARDLESS of which file
+  carries the new guidance — a shipped doc asserting the behaviour C1
+  retires is a defect either way. What remains is a naming error in the
+  locked record's REQ-40/41, which under the never-amend rule is a
+  post-mortem note, not an implementation choice, and is tracked as
+  `intrastate#g3ks` so the record's wording is corrected at its own stage
+  rather than silently absorbed here.
 
 ## D2 — REQ-33 misspelled-key row carries no MVV obligation
 
@@ -77,4 +87,30 @@ item, per the unattended override. It is not a halt.
   amend the Failure Modes claim, or specify the echo on the refusal
   envelope in a follow-on RDR — is the author's call. Routed to triage as
   an rdr-seed candidate.
-- **Status**: needs author decision
+- **Status**: needs author decision → RESOLVED (deferred to a
+  successor RDR; no code change on this branch). Grounds: the two
+  remedies — amend the Failure Modes claim, or specify the `observed`
+  echo onto the refusal envelope — are BOTH record-level, and neither is
+  an implementation choice this launch may make. Adding the echo would
+  be a new public output surface no Normative Contract names
+  (additive-is-not-exempt). Under the never-amend rule the locked text
+  is not edited here. The finding is preserved as a behavioural pin
+  (`TestAdv3_0020_...`, inverted to fail the moment the echo appears)
+  and routed to RDR authoring as `intrastate#fk4n`
+  (`kind:rdr-seed`), which is where a design fork of this shape belongs. Nothing about D3 is outstanding
+  *for the code* on this branch.
+
+## Spun-off work (filed to kata, `batch:rdr-0020`)
+
+Findings that are real but NOT this branch's to fix. Filed so the branch can
+close honestly rather than carrying them as open decisions.
+
+| kata | route | what |
+|---|---|---|
+| `intrastate#r41t` | `type:bug` `lifecycle:queued` — drainable | ill-formed UTF-8 in a `--tag` value collapses to U+FFFD in the `observed` echo, so two distinct values echo identically. Pre-existing and provenance-blind (ADV-1b proves the declared-scalar arm mangles identically), so NOT a 0020 regression — but 0020 makes `observed` load-bearing and widens which bytes reach the seam. Any fix must move BOTH arms together or it breaches `0020:G-cross-cutting`. |
+| `intrastate#fk4n` | `kind:rdr-seed` — RDR authoring | D3: the silent-typo acceptance rests on an echo the refusal envelope does not carry. Fork: amend the diagnosis claim, or spec `observed` onto the error envelope (a CLI output-contract change touching every refusing verb). |
+| `intrastate#g3ks` | `kind:rdr-seed` — RDR authoring | D1's residue: REQ-40/41 names `docs/model-schema.md`, which does not exist. Post-mortem note for 0020, plus an optional finalize-time check that Implementation Plan path literals resolve. |
+
+`kind:rdr-seed` children are refused by `kata-ship` gate 4 by design — their
+deliverable is an RDR draft, not a red/green code change — so a
+`--label batch:rdr-0020 --drain` flight ships `r41t` only.
