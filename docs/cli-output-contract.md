@@ -412,6 +412,34 @@ full-width payload believing it was projected.
 The default width is unchanged and remains the full record; dropping the
 flag is the whole recovery procedure.
 
+## `flow set-state`, and how a no-op is told from an applied write
+
+The `flow set-state` success payload carries `writers`, the accessors that
+actually applied keys, alongside the `writes` and `clear` it was asked for.
+A plan that plans nothing — empty `writes` and an absent or empty `clear`,
+which is what a `stopped:*` or `none` row resolves to — is a **no-op success
+at exit 0**, not a refusal. `writers` and `writes` emptiness is what tells
+the two apart, and it is the sanctioned check:
+
+```json
+{"model":"flow.toml","revision":"","artifacts":{"state":"./state.json"},
+ "writers":[],"writes":{},"clear":[],"owned":{}}
+```
+
+`writers` is `[]` exactly when nothing was applied and non-empty on any real
+write, because it is appended to only as each writer's read-back confirms.
+It cannot be `[]` on a write that was meant to land: a key no declared write
+accessor serves refuses with `write-unbound` rather than applying nothing,
+so an empty `writers` never stands in for a silently dropped key.
+
+`dispositions` is deliberately **absent** from this payload. A disposition
+is joined from the SELECTED ROW's authored `emit`, and
+`set-state` selects no row — echoing a caller-supplied plan's blob back
+under that name would give one wire key two provenances. `flow next` omits
+it for the same reason. A caller that wants the disposition reads it off the
+`flow resolve` envelope it piped in, where it is joined to a real row; a
+caller that wants to know whether the write landed reads `writers`.
+
 ## `flow next` candidates and the `unknown` list
 
 A candidate is a rule whose match and guard both HOLD or are UNDECIDED

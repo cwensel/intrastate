@@ -185,6 +185,14 @@ Success is reported ONLY after the accessor layer's read-back confirms the
 planned values and that non-owned tags are unchanged. A read-back that could
 not complete exits 3 and says the write may have been applied.
 
+An applied write is told from a no-op by writers/writes EMPTINESS. A plan
+carrying no writes and no clears — a stopped or none row — is a success at
+exit 0 with writers [] and writes {}; nothing was applied. Branch on that.
+
+dispositions is deliberately absent from this payload. It is a resolve-side
+join over the SELECTED ROW's authored emit, and set-state selects no row, so
+there is nothing here to join it from.
+
 --tag on set-state is context only and is never written. Nothing links a
 set-state request to a prior resolve: the request stands on its own grammar
 and the read-back is the only commit-time check. --plan carries INPUT, not a
@@ -267,6 +275,23 @@ Applying a plan without transcribing it
   one writer, well-formed for its declared kind — on the same path a
   --write key takes, and a set value is re-canonicalised rather than
   trusted. Nothing about having come from resolve makes a value legal.
+
+  A plan that plans NOTHING — empty writes{} and an absent or empty
+  clear[], which is what a stopped:* or none row resolves to — is a
+  no-op SUCCESS at exit 0, not a refusal. Telling that from an applied
+  write is writers/writes emptiness: writers[] lists only the writers
+  that actually applied keys, so it is [] exactly when nothing was
+  applied, and non-empty on any real write. A write naming no declared
+  accessor refuses rather than quietly applying nothing, so an empty
+  writers[] never hides one. That is the sanctioned check.
+
+  dispositions is deliberately ABSENT from this verb's payload, and its
+  absence is not an omission to work around. A disposition is joined
+  from the SELECTED ROW's authored emit; set-state selects no row, so a
+  caller-supplied blob echoed back under that name would give
+  one wire key two provenances. flow next carries none for the same
+  reason. Branch on writers/writes, or read the disposition off the
+  resolve envelope you piped in, where it is joined to a real row.
 
   That check is over the plan's CONTENT, not its provenance. Nothing
   reads a revision, a timestamp, or which model produced the document,
