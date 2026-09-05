@@ -43,3 +43,38 @@ item, per the unattended override. It is not a halt.
   undeclared key). Pinned as OPTIONAL coverage, never counted as an MVV
   gate.
 - **Status**: mechanical translation
+
+## D3 — the Diagnosis clause's echo is absent from the refusing exit
+
+- **Type**: SPEC-DEFECT
+- **Phase**: 3b (adversarial review)
+- **Gap**: the record's Failure Modes section accepts the silent-typo cost
+  on the strength of one compensating control: "the resolve payload's
+  `observed` field echoes every carried key byte-for-byte — the stray
+  spelling sits beside the declared keys **in the same envelope the
+  refusal rides**." The Silent clause's outcome is a REFUSAL (no-match) or
+  an escape route, but `observed` is a field of the SUCCESS payload only.
+  On the refusing exit the operator gets an envelope naming the DECLARED
+  key as absent and carrying no trace of the stray key they typed.
+- **Evidence**: verified against the built CLI — `clierr.CLIError` is
+  `{code, message, param, detail, hint, findings}`
+  (`internal/cli/clierr/clierr.go:50`); `Observed` exists only on the
+  resolve payload (`internal/cli/flow_resolve.go:53`). Reproduced by
+  `TestAdv3_0020_TheStraySpellingDoesNotRideTheRefusalEnvelope`
+  (`teir=free` vs declared `tier`): refusal envelope keys are
+  `[code message findings]`. `TestAdv3b_...` pins the OTHER exit, where
+  the echo IS present and carries the typo verbatim — the echo is real,
+  it is just on the wrong exit.
+- **NOT an implementation defect**: the admission seam does exactly what
+  C1 says, and NO REQ in `req-list.md` obligates the refusal envelope to
+  echo (REQ-38 asserts only that `observed` echoes every carried key).
+  Adding the echo to the refusal envelope would be a NEW public output
+  surface no Normative Contract names — additive-is-not-exempt, so it is
+  not a Phase 3c fixup and was not added silently.
+- **Resolution**: the ADV-3 test was inverted to PIN the shipped shape
+  (it fails the moment the refusal envelope gains the echo, which is
+  exactly when this deviation is resolved). The record-level remedy —
+  amend the Failure Modes claim, or specify the echo on the refusal
+  envelope in a follow-on RDR — is the author's call. Routed to triage as
+  an rdr-seed candidate.
+- **Status**: needs author decision
