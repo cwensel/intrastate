@@ -377,9 +377,11 @@ The other shared properties:
 - **The escape row is the only default.** An ordinary catch-all row
   overlaps everything it is meant to catch; the escape row is the
   construct that does not.
-- **The same four verbs.** `flow next`, `flow resolve`, `flow read-state`,
-  and `flow set-state` drive both classes — though a decision table has no
-  state to read or set, so only `next` and `resolve` are meaningful for it.
+- **The same verbs.** `flow next`, `flow resolve`, `flow read-state`,
+  `flow set-state`, and `flow init-state` drive both classes — though a
+  decision table has no state to read, set, or initialize, so only `next`
+  and `resolve` are meaningful for it. `flow init-state` refuses a decision
+  table outright rather than succeeding vacuously.
 
 ## Where the two classes come from
 
@@ -745,6 +747,34 @@ status = "draft"
 A machine with no `[initial]` is rootless: lint reports
 `graph-dangling-edge` against the model, because a transition graph with
 no root has nothing to reach its rules from.
+
+`[initial]` is not only a lint-time root. It is also the RUNTIME bootstrap
+source, and `flow init-state` is what materializes it:
+
+```console
+$ intrastate flow init-state --model flow.toml --artifact state=./state.json
+```
+
+Materializing it is an EXPLICIT, PERSISTING act. No read verb, no artifact
+load, and no accessor read path falls back to an `[initial]` value for a key
+the artifact does not carry, so an un-seeded store is exactly what it looks
+like: `flow next` reports every un-established owned key under
+`unknown[].reason: absent`, and that report is where an operator meets the
+wall `init-state` exists to remove. A cleared key stays absent for every
+reader.
+
+The scope is the FILE-BACKED write carrier — a `[write.<id>]` and
+`[read.<id>]` pair declaring `path`. A model whose needed accessor is
+edit-carried or command-backed is refused by `init-state`, because store
+emptiness is undefined for a carrier with no JSON store; seed such a model
+with explicit `flow set-state --write` instead.
+
+Seeding is all-or-nothing over an EMPTY store: `init-state` seeds if and only
+if every bound artifact carries no key, and then it seeds every `[initial]`
+key. A store that already carries any key is a no-op success — nothing is
+rewritten, nothing is repaired, and a cleared key is not resurrected. The
+payload names the `[initial]` keys the store does not carry, so a torn or
+post-clear state is visible; repairing one is an explicit `set-state`.
 
 ### Rules advance the state
 

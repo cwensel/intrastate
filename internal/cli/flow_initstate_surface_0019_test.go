@@ -567,5 +567,13 @@ func TestReq12_0019_EverySeedIsRoutedThroughTheWriteAccessorWithCommitTimeReadBa
 	}
 	// And it is the READ-BACK that refused: exit 3, the environment group
 	// the incomplete-read-back arm carries.
-	initRefusal(t, 3, initStateArgs(model, bind)...)
+	//
+	// TEST-FIXTURE (Phase 2): the exit is re-asserted over a FRESH artifact,
+	// not the one the run above already sealed. C1 fixes that the incomplete
+	// read-back "leaves a non-empty store, so a re-run is a no-op that does
+	// not repair" — so re-running against the sealed artifact is the exit-0
+	// no-op arm by contract (REQ-67), and asserting exit 3 on it would
+	// contradict the very clause the sibling test pins.
+	fresh := artifactBinding(initRoleA, newFlowArtifact(t, "sealed.artifact"))
+	initRefusal(t, 3, initStateArgs(model, fresh)...)
 }

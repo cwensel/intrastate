@@ -21,6 +21,7 @@ intrastate <cmd> --as=json # one terminal JSON envelope per run
 ## Commands
 
 - `intrastate flow`: Drive a transition model from a skill
+- `intrastate flow init-state`: Seed owned state from the model's [initial] root
 - `intrastate flow next`: Report the candidate rules the supplied state can take
 - `intrastate flow read-state`: Report what the declared read accessors see
 - `intrastate flow resolve`: Map one recognized outcome to exactly one plan

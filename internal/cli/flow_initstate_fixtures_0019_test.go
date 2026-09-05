@@ -64,6 +64,16 @@ const (
 // It is deliberately NOT a decision table and its `[initial]` names both
 // owned keys, so the seeded arm has two keys to report and the no-op arm
 // has a non-empty absent list available.
+//
+// TEST-FIXTURE (Phase 2): the rule carries NO guard on `note`. `0019:MVV`
+// requires only "one always-present owned key and one plain owned key, both
+// writer-served", and MVV step 1 requires the fixture to LINT CLEAN with
+// 0006's arms all green. A guard atom over `note` — an OPTIONAL scalar with
+// no finite declared domain — is a blocking `graph-unprovable-coverage`
+// under two of 0006's arms at once (`row-can-refuse` and
+// `dimension-not-finite`), so a fixture carrying one can never satisfy step 1.
+// Dropping the atom costs the MVV nothing: `note` is the CLEAR target of
+// steps 6 and 9, and neither reads it through a guard.
 const initMVVModel = `outcomes = ["advance"]
 terminal = ["done"]
 
@@ -115,8 +125,6 @@ id = "advance"
 eq = "seeded"
 [rule.match.recognized]
 eq = "advance"
-[rule.guard.all.note]
-eq = "hello"
 [rule.write]
 stage = "final"
 `

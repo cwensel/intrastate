@@ -225,6 +225,11 @@ intrastate flow set-state --model flow.toml \
   --artifact state=./state.json \
   --write status=final --write 'labels=["cli","final"]' \
   --clear stale --as=json
+
+# Seed owned state from the model's [initial] root, once. It carries no
+# write grammar: the model's own root is the plan.
+intrastate flow init-state --model flow.toml \
+  --artifact state=./state.json --as=json
 ```
 
 ## `flow resolve`, the `emit` answer, and its `dispositions`
@@ -474,3 +479,63 @@ a closed set:
             {"key":"gate_passed","reason":"absent"}],
  "next":{"stage":"prelocked"},"writes":{"stage":"prelocked"},"clear":[]}
 ```
+
+## `flow init-state`, and how a seed is told from a no-op
+
+`flow init-state` writes the model's `[initial]` assignments through the
+declared write accessors, verified by read-back — the same route `set-state`
+takes. It has no write grammar of its own, so nothing a caller types can
+become a seeded value.
+
+Seeding is ALL-OR-NOTHING over an EMPTY store. It seeds if and only if every
+bound artifact carries no key, and then it seeds every `[initial]` key. The
+quantifier is over the whole bound set: one surviving key ANYWHERE blocks the
+whole seed, so a cleared key is never re-established while the store retains
+another. A store that carries any key — torn, partially seeded, post-clear, or
+fully seeded alike — is a no-op SUCCESS at exit 0 with zero writes.
+
+The success payload carries `seeded` and `absent`, and which arm ran is read
+off them:
+
+| field | meaning |
+| --- | --- |
+| `seeded` | the `[initial]` keys this run wrote. Non-empty on exactly the seeding arm. Key NAMES only — `flow read-state` is the surface that reports values. |
+| `absent` | the `[initial]` keys the store does not carry. It belongs to the no-op arm; on the seeded arm every key was just written, so it is necessarily empty. |
+
+Both fields are present as `[]` rather than omitted, so one consumer struct
+parses either arm.
+
+```json
+{"model":"flow.toml","revision":"","artifacts":{"state":"./state.json"},
+ "seeded":["note","stage"],"absent":[]}
+```
+
+The scope is the FILE-BACKED carrier. An edit-carried or command-backed
+accessor has no JSON store, so "the store carries no key" is undefined for
+it, and a model whose needed write OR read binding is not file-backed refuses
+at exit 2 naming the capability and the accessor. That refusal is decided at
+registry construction, before any accessor is invoked, so it preempts the
+`--allow-commands` refusal: a command-backed accessor yields the carrier code
+whether or not the opt-in was passed.
+
+Two refusal classes are this verb's own, both exit 2 and both distinct from
+each other and from the shared classes:
+
+| condition | disposition |
+| --- | --- |
+| the model's class declares no `[initial]` root to materialize (a decision table) | exit 2, before any accessor runs and with no artifact touched |
+| a needed role's write or read binding is not the file-backed carrier | exit 2, naming which capability and which accessor failed, with zero writes |
+
+Everything else reuses the shared `flow-*` codes unchanged, at the groups
+those codes already carry: an unbound needed role is `flow-artifact-missing`,
+a model routing one `[initial]` key to two writers refuses at LOAD as
+`flow-model-invalid`, and the read-back splits the way it does for
+`set-state` — completed-and-disagreed is exit 2, could-not-complete is exit 3.
+Both leave a NON-EMPTY store, so a re-run is a no-op that does NOT repair
+either; recovery is an explicit `set-state`, or discarding the artifact and
+re-running init.
+
+One boundary is disclosed rather than designed around: clearing the LAST
+remaining key empties the store, and an emptied store is indistinguishable at
+the content level from a never-written one — a clear is a key REMOVAL, not a
+tombstone. A subsequent `init-state` therefore RESEEDS such a store.

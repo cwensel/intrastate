@@ -318,8 +318,6 @@ id = "advance"
 eq = "seeded"
 [rule.match.recognized]
 eq = "advance"
-[rule.guard.all.note]
-eq = "hello"
 [rule.write]
 stage = "final"
 `

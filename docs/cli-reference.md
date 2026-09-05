@@ -178,12 +178,13 @@ Drive a transition model from a skill
 ```
 Drive a transition model from a skill.
 
-The four verbs are the whole skill-integration surface:
+The five verbs are the whole skill-integration surface:
 
   next        list the legal recognized outcomes and their candidate rows
   resolve     map one recognized outcome to exactly one plan, or refuse
   read-state  report what the declared read accessors see
   set-state   apply planned owned-tag writes and verify them by read-back
+  init-state  seed owned state from the model's [initial] root, once
 
 Every verb takes exactly one of --model <path> or --flow <id>, and binds
 each artifact explicitly as --artifact role=path: nothing about a flow's
@@ -199,6 +200,7 @@ Usage:
   intrastate flow [command]
 
 Available Commands:
+  init-state  Seed owned state from the model's [initial] root
   next        Report the candidate rules the supplied state can take
   read-state  Report what the declared read accessors see
   resolve     Map one recognized outcome to exactly one plan
@@ -215,12 +217,15 @@ Use "intrastate flow [command] --help" for more information about a command.
 ```
 
 ```
-The four verbs divide one job, and the division is deliberate:
+The five verbs divide one job, and the division is deliberate:
 
   next        reports what the state does not exclude. It never selects.
   resolve     selects exactly one row, or refuses. It never writes.
   set-state   writes, and verifies by read-back. It never selects.
   read-state  reports what the readers see. It decides nothing.
+  init-state  seeds the model's [initial] root into an EMPTY store, once.
+              It never merges, never repairs, and never resurrects a
+              cleared key while the store carries another.
 
 Nothing links one call to the next. A resolve plan is data you may act
 on; set-state re-derives its own legality from its own request, and the
@@ -277,6 +282,153 @@ Environment failures
   flow-read-incomplete exit 3: the environment could not be
   consulted and the identical request may be re-run once it is repaired.
   Every refusal about the request itself exits 2.
+```
+
+## intrastate flow init-state
+
+Seed owned state from the model's [initial] root
+
+```
+Seed owned state from the model's [initial] root.
+
+init-state writes the model's [initial] assignments through the declared
+write accessors, verified by read-back — the same route set-state takes. It
+carries no write grammar of its own: the model's own root is the plan.
+
+Seeding is ALL-OR-NOTHING over an EMPTY store. It seeds if and only if every
+bound artifact carries no key, and then it seeds every [initial] key. A store
+that carries any key — torn, partially seeded, post-clear, or fully seeded
+alike — is a no-op SUCCESS at exit 0: nothing is written, and the payload
+reports which [initial] keys the store does not carry so the state is visible
+without being repaired or resurrected.
+
+The scope is the FILE-BACKED carrier. A model whose needed write or read
+accessor is edit-carried or command-backed refuses: store emptiness is
+undefined for a carrier with no JSON store.
+
+A decision-table model declares no [initial] and refuses rather than
+succeeding vacuously.
+```
+
+```
+Usage:
+  intrastate flow init-state [flags]
+
+Flags:
+      --artifact stringArray   artifact role binding, as role=path (repeatable)
+      --flow string            flow id (reserved; this build resolves none — use --model)
+      --help-all               show extended help (vocabulary, wire shapes, exit codes)
+      --model string           path to the transition model
+
+Global Flags:
+      --allow-commands   permit model-declared command accessors to execute (off by default)
+      --as string        output mode: text | json (default "text")
+```
+
+```
+init-state answers "make this model's declared root real, once", and
+nothing else. It selects no rule, evaluates no guard, and takes no
+caller-authored value.
+
+Where the plan comes from
+
+  The plan is the model's [initial] block, taken from the LOADER-NORMALIZED
+  assignments rather than transcribed to a --write spelling. Each value is
+  rendered in the canonical form for its DECLARED KIND: a set is sorted,
+  deduplicated and compact; every scalar kind is its single member verbatim.
+  That is what makes read-back equality byte equality and leaves no third
+  encoding.
+
+  The loader admits [initial] spellings the argv route does not — a bare
+  scalar for a set-valued tag, a single-member array for a scalar tag, an
+  empty scalar. All three seed here, because conformance is already held by
+  the loader and is not re-established at seed time. Transcribing through
+  argv would refuse at seed time models that load clean.
+
+The empty-store predicate
+
+  Seeding is ALL-OR-NOTHING over an EMPTY store, never a per-key merge. The
+  quantifier is ALL over every bound artifact, not ANY and not per-artifact:
+  one surviving key ANYWHERE blocks the whole seed, so a cleared key is never
+  re-established while the store retains at least one other.
+
+  The count is over STORE keys, not owned keys. A read-back-sealed artifact
+  carries the seal and no owned key: that is a one-key, NON-EMPTY store, and
+  init-state declines to seed it — at exit 0, as a no-op, since no write and
+  therefore no read-back happens on that arm.
+
+  Clearing the LAST remaining key empties the store, and an emptied store is
+  indistinguishable at the content level from a never-written one: a clear is
+  a key REMOVAL, not a tombstone. A subsequent init-state therefore RESEEDS
+  such a store. That is the accepted residual of rejecting tombstones, and it
+  is the one qualification on the cleared-key guarantee above.
+
+  A key added to [initial] after seeding is re-established by explicit
+  set-state, not by init — the payload's absent-key report names it, and
+  `--write` of the listed keys is the repair route.
+
+Reading the output
+
+  seeded[]  the [initial] keys this run wrote. Non-empty on exactly the
+            seeding arm. Keys only: read-state is the surface that reports
+            values.
+  absent[]  the [initial] keys the store does not carry. It belongs to the
+            no-op arm; on the seeded arm every key was just written, so it is
+            necessarily empty.
+
+The carrier scope
+
+  Everything above about store keys and artifact bytes is scoped to the
+  FILE-BACKED write carrier. An edit-carried or command-backed accessor has
+  no JSON store, so "the store carries no key" is undefined for it, and a
+  model whose needed write OR read binding is not file-backed refuses at
+  exit 2 naming the capability and the accessor. That refusal is decided at
+  registry construction, before any accessor is invoked, so it preempts the
+  --allow-commands refusal: a command-backed accessor yields the carrier code
+  whether or not the opt-in was passed. Extending the predicate to those
+  carriers is out of scope here.
+
+Ordering
+
+  The CLASS refusal precedes the CARRIER refusal, which precedes the
+  ROLE-BINDING refusal, which precedes the emptiness read. An invocation that
+  leaves a needed role unbound refuses at exit 2 regardless of what the bound
+  stores contain: it does not reach the predicate and cannot take the no-op
+  arm.
+
+  The writer-arity half is not ordered here at all — a model routing one
+  [initial] key to two writers refuses at LOAD as flow-model-invalid,
+  never in the writer-routing family.
+
+Read-back is the commit-time check
+
+  Every seed routes through the declared write accessor with commit-time
+  read-back; nothing writes an artifact directly. A read-back that completed
+  and DISAGREED is flow-write-readback-mismatch at exit 2, naming the key
+  present-and-unverified. One that could not complete is
+  flow-write-readback-incomplete at exit 3. Both leave a NON-EMPTY store, so
+  a re-run is a no-op that does NOT repair either — recovery is an explicit
+  set-state, or discarding the artifact and re-running init.
+
+Shared refusals
+
+  The codes above are the ones specific to this verb. Model selection,
+  artifact validation, and the accessor and environment failures are common
+  to every flow verb and are listed once under "intrastate flow --help-all".
+
+Exits
+
+  0  every [initial] key seeded, or the store was non-empty and nothing was
+     written.
+  2  the request or the model is wrong, a role is unbound, the model's class
+     or a needed accessor's carrier is unsupported, or the read-back
+     disagreed.
+  3  a writer or the read-back could not complete.
+
+Worked call
+
+  intrastate flow init-state --model flow.toml \
+      --artifact state=state.json --as json
 ```
 
 ## intrastate flow next
