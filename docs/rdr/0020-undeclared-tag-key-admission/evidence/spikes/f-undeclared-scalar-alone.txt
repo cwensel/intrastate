@@ -1,0 +1,4 @@
+$ /tmp/intrastate-spike flow resolve --model carrier-table.toml --outcome decide --tag tier=paid --tag labels=["docs"] --tag extra=plain --as=json
+--- stdout+stderr ---
+{"type":"ok","data":{"model":"carrier-table.toml","revision":"","observed":{"extra":"plain","labels":"[\"docs\"]","tier":"paid"},"owned":{},"readers":[],"outcome":"decide","rule":"paid","gates":[],"emit":{"plan":"pro"},"dispositions":{},"next":{},"writes":{},"clear":[],"escaped":false}}
+--- exit=0 ---

@@ -1,0 +1,4 @@
+## 2026-09-04 — resolve (Stage 4)
+
+- **fixtures F1–F4** — RULED: approved as normative. F1 undeclared scalar carried + echoed verbatim; F2 selection byte-identical with/without the carrier; F3 declared scalar given an array literal still refused "is not set-valued"; F4 undeclared key given an empty value still refused "was given an empty value". All read from the HEAD spike under `evidence/spikes/`. — absorbed @resolve 2026-09-04
+- **Q1 empty-value arm's message for the carrier** — RULED: the hoisted empty-value arm keeps the scalar-shaped message `the tag `X` was given an empty value` for an undeclared key — byte-identical to HEAD (spike run d), so the hoist is behaviour-preserving. The set-specific variant (`is set-valued and takes a JSON array literal; got `) stays inside the conformance arms, declared-only. No new wording is minted. — absorbed @resolve 2026-09-04

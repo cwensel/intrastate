@@ -1,0 +1,56 @@
+# SPIKE fixture for RDR 0020 (undeclared --tag key admission), HEAD baseline.
+#
+# A decision table so no reader/--artifact is needed. It declares:
+#   - `tier`   : a DECLARED enum (single-valued) that a rule guards on,
+#                so a resolve actually selects a row;
+#   - `labels` : a DECLARED set, unguarded, present only to prove that a
+#                declared set parses an array literal today.
+# It declares NOTHING named `extra` or `extras`.
+
+outcomes = ["decide"]
+
+[model]
+id = "carrier-spike"
+version = 1
+class = "decision-table"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.tier]
+provenance = "observed"
+kind = "enum"
+domain = ["free", "paid"]
+single_valued = true
+required = true
+
+[tags.labels]
+provenance = "observed"
+kind = "set"
+elements = ["security", "docs"]
+required = true
+
+[emit.plan]
+kind = "enum"
+domain = ["basic", "pro"]
+
+[[rule]]
+id = "free"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "free"
+[rule.emit]
+plan = "basic"
+
+[[rule]]
+id = "paid"
+[rule.match.recognized]
+eq = "decide"
+[rule.guard.all.tier]
+eq = "paid"
+[rule.emit]
+plan = "pro"

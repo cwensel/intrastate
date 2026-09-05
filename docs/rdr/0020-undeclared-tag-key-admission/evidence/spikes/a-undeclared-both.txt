@@ -1,0 +1,4 @@
+$ /tmp/intrastate-spike flow resolve --model carrier-table.toml --outcome decide --tag tier=free --tag labels=["security"] --tag extra=plain --tag extras=["a","b"] --as=json
+--- stdout+stderr ---
+{"code":"flow-tag-invalid","message":"the tag `extras` is not set-valued; got the array literal [\"a\",\"b\"]","param":"extras"}
+--- exit=2 ---
