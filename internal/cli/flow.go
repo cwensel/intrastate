@@ -77,7 +77,7 @@ Run any verb with --help-all for its refusal codes and worked calls.`,
 			return respond.Fail(cmd, &clierr.CLIError{
 				Code: "command-error",
 				Message: "`flow` requires a verb: next, resolve, " +
-					"read-state, set-state",
+					"read-state, set-state, init-state",
 				Group: clierr.GroupUserEnv,
 				Hint:  "run `intrastate flow --help` to list the verbs",
 			})
