@@ -1,0 +1,281 @@
+package cli
+
+// SPIKE A2 (throwaway): does a `[initial]` value from Model.Initial reach the
+// SAME canonical wire form that parseWrites produces for the equivalent argv
+// string? Two comparisons per admitted value kind:
+//
+//	value-level: canonicalFromInitial(TagValue) vs canonicalValue(argv)
+//	byte-level:  artifact written via seed-shaped write vs via --write argv
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/cwensel/intrastate/internal/table"
+)
+
+// spikeModel declares one owned tag per admitted [initial] value kind.
+const spikeModel = `outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "spikea2"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.note]
+provenance = "owned"
+kind = "scalar"
+
+[tags.flag]
+provenance = "owned"
+kind = "bool"
+
+[tags.count]
+provenance = "owned"
+kind = "int"
+
+[tags.ratio]
+provenance = "owned"
+kind = "scalar"
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+elements = ["a<b", "x&y", "plain", "b", "a"]
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "note", "flag", "count", "ratio", "labels"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "note", "flag", "count", "ratio", "labels"]
+timeout = "2s"
+read_back = true
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "advance-draft"
+[rule.match.status]
+eq = "draft"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"
+`
+
+// spikeCase is one admitted [initial] value kind.
+type spikeCase struct {
+	name string
+	key  string
+	toml string // the [initial] RHS as authored in TOML
+	argv string // the EQUIVALENT --write value a caller would type
+}
+
+var spikeCases = []spikeCase{
+	{"scalar-string/enum", "status", `"draft"`, "draft"},
+	{"scalar-string/free", "note", `"hello world"`, "hello world"},
+	{"bool", "flag", `true`, "true"},
+	{"int", "count", `7`, "7"},
+	{"float", "ratio", `1.5`, "1.5"},
+	{"set/array", "labels", `["b", "a"]`, `["b","a"]`},
+	{"set/array-dup-unsorted", "labels", `["x&y", "a<b", "a<b"]`, `["x&y","a<b","a<b"]`},
+	{"set/empty-array", "labels", `[]`, `[]`},
+	{"set/single-member-array", "labels", `["plain"]`, `["plain"]`},
+	// A bare scalar authored for a set-kind tag: TOML admits it (valueMembers
+	// yields one member) and the loader's arity check permits it because
+	// decl.Kind == "set". There is NO argv spelling for it: canonicalValue
+	// refuses a non-array for a set tag.
+	{"set/bare-scalar", "labels", `"plain"`, "plain"},
+	// A scalar tag authored the EMPTY string. The loader admits it; the argv
+	// route refuses an empty value for a non-set tag outright.
+	{"scalar/empty-string", "note", `""`, ""},
+	// A one-element ARRAY on a scalar tag. The loader admits it (arity 1
+	// satisfies the non-set check) and flattens it to the bare member. The
+	// argv spelling of the same authoring is the array literal, which the
+	// argv route refuses for a non-set tag.
+	{"scalar/single-elem-array", "note", `["a"]`, `["a"]`},
+}
+
+// canonicalFromInitial is the ONLY render available today for a loader-typed
+// TagValue on the write path: resolve.Tag.Value is one string, TagValue.Value
+// is []string. This is the candidate the RDR's seed verb would have to use.
+// There is no such function in the tree -- the seed surface does not exist --
+// so the spike states the candidate explicitly and tests it.
+func canonicalFromInitial(decl table.TagDecl, tv table.TagValue) (string, bool) {
+	if decl.Kind == "set" {
+		return canonicalSet(tv.Value), true
+	}
+	if len(tv.Value) != 1 {
+		return "", false
+	}
+	return tv.Value[0], true
+}
+
+func TestSpikeA2_ValueLevel(t *testing.T) {
+	for _, tc := range spikeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := spikeModel + "\n[initial]\n" + tc.key + " = " + tc.toml + "\n"
+			path := writeFlowModel(t, src)
+			m, err := table.Load([]byte(src), path)
+			if err != nil {
+				t.Fatalf("LOADER REFUSED [initial] %s = %s: %v", tc.key, tc.toml, err)
+			}
+			var tv *table.TagValue
+			for i := range m.Initial {
+				if m.Initial[i].Key == tc.key {
+					tv = &m.Initial[i]
+				}
+			}
+			if tv == nil {
+				t.Fatalf("model.Initial holds no %s", tc.key)
+			}
+			decl := m.Tags[tc.key]
+			seedWire, ok := canonicalFromInitial(decl, *tv)
+			if !ok {
+				t.Fatalf("NO SEED RENDER: TagValue.Value = %#v for kind %q", tv.Value, decl.Kind)
+			}
+
+			argvWire, ce := canonicalValue(tc.key, tc.argv, decl, "write")
+			if ce != nil {
+				t.Logf("loader-typed members = %#v -> seed wire %q", tv.Value, seedWire)
+				t.Fatalf("ARGV ROUTE REFUSED %q: %s", tc.argv, ce.Message)
+			}
+
+			if seedWire != argvWire {
+				t.Fatalf("DIVERGE: seed %q != argv %q (members %#v)",
+					seedWire, argvWire, tv.Value)
+			}
+			t.Logf("AGREE: %q (members %#v)", seedWire, tv.Value)
+		})
+	}
+}
+
+// TestSpikeA2_ByteLevel is the stronger form: write the SAME logical value
+// into two fresh artifacts, one via the seed-shaped wire string and one via
+// the argv --write string, and diff the artifact bytes.
+func TestSpikeA2_ByteLevel(t *testing.T) {
+	for _, tc := range spikeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := spikeModel + "\n[initial]\n" + tc.key + " = " + tc.toml + "\n"
+			path := writeFlowModel(t, src)
+			m, err := table.Load([]byte(src), path)
+			if err != nil {
+				t.Fatalf("LOADER REFUSED: %v", err)
+			}
+			var tv *table.TagValue
+			for i := range m.Initial {
+				if m.Initial[i].Key == tc.key {
+					tv = &m.Initial[i]
+				}
+			}
+			if tv == nil {
+				t.Fatalf("model.Initial holds no %s", tc.key)
+			}
+			seedWire, ok := canonicalFromInitial(m.Tags[tc.key], *tv)
+			if !ok {
+				t.Fatalf("NO SEED RENDER for %#v", tv.Value)
+			}
+
+			// Route 1: the seed wire form, pushed through the same --write
+			// carrier the executor sees downstream. If the seed verb existed
+			// it would hand groupByWriter exactly this string.
+			artSeed := newFlowArtifact(t, "seed.artifact")
+			_, _, errSeed := runCmd(t, "flow", "set-state", "--model", path,
+				"--artifact", artifactBinding(flowStateRole, artSeed),
+				"--write", tc.key+"="+seedWire, "--as=json")
+
+			// Route 2: the argv string a caller types.
+			artArgv := newFlowArtifact(t, "argv.artifact")
+			_, _, errArgv := runCmd(t, "flow", "set-state", "--model", path,
+				"--artifact", artifactBinding(flowStateRole, artArgv),
+				"--write", tc.key+"="+tc.argv, "--as=json")
+
+			switch {
+			case errSeed != nil && errArgv != nil:
+				t.Fatalf("BOTH ROUTES REFUSED: seed=%v argv=%v", errSeed, errArgv)
+			case errSeed != nil:
+				t.Fatalf("SEED ROUTE REFUSED (%q) while argv accepted: %v", seedWire, errSeed)
+			case errArgv != nil:
+				t.Fatalf("ARGV ROUTE REFUSED (%q) while seed accepted: %v", tc.argv, errArgv)
+			}
+
+			bSeed, err := os.ReadFile(artSeed)
+			if err != nil {
+				t.Fatalf("read seed artifact: %v", err)
+			}
+			bArgv, err := os.ReadFile(artArgv)
+			if err != nil {
+				t.Fatalf("read argv artifact: %v", err)
+			}
+			if string(bSeed) != string(bArgv) {
+				t.Fatalf("ARTIFACT BYTES DIFFER\nseed(%q):\n%s\nargv(%q):\n%s",
+					seedWire, bSeed, tc.argv, bArgv)
+			}
+			t.Logf("BYTE-IDENTICAL artifacts (%d bytes): %s",
+				len(bSeed), strings.TrimSpace(string(bSeed)))
+		})
+	}
+}
+
+// TestSpikeA2_LoaderAdmission enumerates which [initial] authorings the
+// loader ADMITS, independent of any wire form -- the admitted-kind set the
+// verdict bar asks for.
+func TestSpikeA2_LoaderAdmission(t *testing.T) {
+	probes := []struct{ name, key, toml string }{
+		{"enum-string", "status", `"draft"`},
+		{"enum-string-out-of-domain", "status", `"nope"`},
+		{"scalar-string", "note", `"hi"`},
+		{"scalar-empty-string", "note", `""`},
+		{"bool-true", "flag", `true`},
+		{"bool-as-string", "flag", `"true"`},
+		{"int", "count", `7`},
+		{"int-negative", "count", `-3`},
+		{"float-on-scalar", "ratio", `1.5`},
+		{"float-on-int-tag", "count", `1.5`},
+		{"set-array", "labels", `["b","a"]`},
+		{"set-empty-array", "labels", `[]`},
+		{"set-bare-scalar", "labels", `"plain"`},
+		{"set-bare-bool", "labels", `true`},
+		{"scalar-array-multi", "note", `["a","b"]`},
+		{"scalar-array-single", "note", `["a"]`},
+		{"nested-array", "labels", `[["a"],"b"]`},
+		{"inline-table", "note", `{a = 1}`},
+		{"clear-sentinel", "note", `"<clear>"`},
+	}
+	for _, p := range probes {
+		t.Run(p.name, func(t *testing.T) {
+			src := spikeModel + "\n[initial]\n" + p.key + " = " + p.toml + "\n"
+			m, err := table.Load([]byte(src), "spike.toml")
+			if err != nil {
+				t.Logf("REFUSED %s = %s -> %v", p.key, p.toml, err)
+				return
+			}
+			for _, tv := range m.Initial {
+				if tv.Key == p.key {
+					t.Logf("ADMITTED %s = %s -> members %#v", p.key, p.toml, tv.Value)
+				}
+			}
+		})
+	}
+}

@@ -1,0 +1,17 @@
+--- STEP (v) diff: emptied-store read vs absent-file read ---
+$ cat read-emptied.json
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{}}]}}
+$ cat read-absent.json
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/absent.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{}}]}}
+$ diff <(sed s@/tmp/a5run/state.json@ARTIFACT@ read-emptied.json) <(sed s@/tmp/a5run/absent.json@ARTIFACT@ read-absent.json)
+diff-exit=0 (0 == identical modulo the artifact path)
+
+--- (v-b) subsequent WRITE over the emptied store behaves as over an absent one ---
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/emptied-copy.json"},"writers":["state"],"writes":{"status":"draft"},"clear":[],"owned":{"status":"draft"}}}
+$ cat emptied-copy.json
+{"status":"draft"}
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/fresh2.json"},"writers":["state"],"writes":{"status":"draft"},"clear":[],"owned":{"status":"draft"}}}
+$ cat fresh2.json
+{"status":"draft"}
+$ cmp emptied-copy.json fresh2.json
+BYTE-IDENTICAL

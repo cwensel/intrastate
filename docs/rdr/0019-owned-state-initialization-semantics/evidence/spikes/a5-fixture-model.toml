@@ -1,0 +1,71 @@
+outcomes = ["advance", "hold", "bail"]
+terminal = ["done"]
+
+[model]
+id = "mvvflow"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "final"]
+single_valued = true
+required = true
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+elements = ["a<b", "x&y", "plain"]
+
+[tags.stale]
+provenance = "owned"
+kind = "scalar"
+
+[tags.profile]
+provenance = "observed"
+kind = "enum"
+domain = ["mid", "foundational"]
+single_valued = true
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "labels", "stale"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "labels", "stale"]
+timeout = "2s"
+read_back = true
+
+[gate.approval]
+role = "state"
+path = "flow.gate"
+keys = ["status"]
+timeout = "2s"
+
+[initial]
+status = "draft"
+
+[context.done]
+[context.done.match.status]
+eq = "final"
+
+[[rule]]
+id = "advance-draft"
+gate = ["approval"]
+clear = ["stale"]
+[rule.match.status]
+eq = "draft"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+status = "final"

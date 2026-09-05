@@ -1,0 +1,14 @@
+=== RUN   TestA5EmptiedEqualsAbsent
+    zz_a5_spike_test.go:25: (i)  load(absent)            = flowbind.store{}  len=0
+    zz_a5_spike_test.go:43: (ii)   bytes="{\"stale\":\"keepme\",\"status\":\"final\"}\n" len=36  load=flowbind.store{"stale":"keepme", "status":"final"} keys=2
+    zz_a5_spike_test.go:43: (iii)  bytes="{\"status\":\"final\"}\n" len=19  load=flowbind.store{"status":"final"} keys=1
+    zz_a5_spike_test.go:43: (iv)   bytes="{}\n" len=3  load=flowbind.store{} keys=0
+    zz_a5_spike_test.go:57: (v)  absent==emptied: flowbind.store{} == flowbind.store{}  -> SAME ZERO-KEY STORE
+    zz_a5_spike_test.go:70: (iii-check) one-key store len=1 -> empty-store predicate DECLINES
+--- PASS: TestA5EmptiedEqualsAbsent (0.00s)
+=== RUN   TestA5SealedMarkerResidue
+    zz_a5_spike_test.go:91: sealed-then-cleared: bytes="{\"\\u0000flow.readback-unreachable\":\"1\"}\n" load=flowbind.store{"\x00flow.readback-unreachable":"1"} keys=1
+    zz_a5_spike_test.go:93: BOUNDARY: user cleared every OWNED key but store has 1 key(s): the sealed marker.
+--- PASS: TestA5SealedMarkerResidue (0.00s)
+PASS
+ok  	github.com/cwensel/intrastate/internal/cli/flowbind	0.275s

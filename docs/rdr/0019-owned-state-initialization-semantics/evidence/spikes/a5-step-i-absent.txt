@@ -1,0 +1,8 @@
+--- STEP (i) baseline: ABSENT artifact ---
+$ ls -la /tmp/a5run/absent.json
+ls: /tmp/a5run/absent.json: No such file or directory
+$ intrastate flow read-state --model model.toml --artifact state=/tmp/a5run/absent.json --as json
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/absent.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{}}]}}
+exit=0
+$ ls -la /tmp/a5run/absent.json  (post-read: did read-state create it?)
+ls: /tmp/a5run/absent.json: No such file or directory

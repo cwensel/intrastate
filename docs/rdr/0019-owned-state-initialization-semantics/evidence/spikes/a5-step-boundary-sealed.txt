@@ -1,0 +1,24 @@
+--- BOUNDARY PROBE (CLI): sealed artifact, all owned keys cleared ---
+a model whose write.state declares an unreachable read-back locator
+42:[write.state]
+43-role = "state"
+44-path = "flow.state-unreachable"
+45-keys = ["status", "labels", "stale"]
+46-timeout = "2s"
+$ set-state --write status=final  (unreachable read-back)
+{"code":"flow-write-readback-incomplete","message":"the post-mutation read-back for the write accessor `state` did not complete","param":"state","detail":"the write command already ran, so the mutation may have been applied and was not verified; inspect the artifact before retrying"}
+exit=3
+$ cat sealed.json
+{"\u0000flow.readback-unreachable":"1","status":"final"}
+$ set-state --clear status  (clears the LAST owned key)
+{"code":"flow-write-readback-incomplete","message":"the post-mutation read-back for the write accessor `state` did not complete","param":"state","detail":"the write command already ran, so the mutation may have been applied and was not verified; inspect the artifact before retrying"}
+exit=3
+$ cat sealed.json  -- residue?
+{"\u0000flow.readback-unreachable":"1"}
+$ xxd sealed.json
+00000000: 7b22 5c75 3030 3030 666c 6f77 2e72 6561  {"\u0000flow.rea
+00000010: 6462 6163 6b2d 756e 7265 6163 6861 626c  dback-unreachabl
+00000020: 6522 3a22 3122 7d0a                      e":"1"}.
+$ read-state over the sealed, owned-key-free artifact
+{"code":"flow-read-incomplete","message":"the read accessor `state` returned an incomplete key set: status, labels, stale","param":"state"}
+exit=3

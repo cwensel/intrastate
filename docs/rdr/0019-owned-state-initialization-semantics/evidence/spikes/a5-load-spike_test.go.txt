@@ -1,0 +1,95 @@
+package flowbind
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+
+	"github.com/cwensel/intrastate/internal/accessor"
+	"github.com/cwensel/intrastate/internal/resolve"
+)
+
+// A5 spike: is a store emptied by clearing its last key indistinguishable
+// at the content level from an absent / never-written one?
+func TestA5EmptiedEqualsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	absent := filepath.Join(dir, "absent.json")
+	art := filepath.Join(dir, "state.json")
+
+	sAbsent, err := load(absent)
+	if err != nil {
+		t.Fatalf("load(absent): %v", err)
+	}
+	t.Logf("(i)  load(absent)            = %#v  len=%d", sAbsent, len(sAbsent))
+
+	w := &Writer{Path: "flow.state"}
+	ctx := context.Background()
+	a := accessor.Artifact{Path: art}
+
+	must := func(step string, tags ...resolve.Tag) {
+		if err := w.Apply(ctx, a, tags); err != nil {
+			t.Fatalf("%s: %v", step, err)
+		}
+		buf, err := os.ReadFile(art)
+		if err != nil {
+			t.Fatalf("%s read: %v", step, err)
+		}
+		s, err := load(art)
+		if err != nil {
+			t.Fatalf("%s load: %v", step, err)
+		}
+		t.Logf("%-6s bytes=%q len=%d  load=%#v keys=%d", step, string(buf), len(buf), s, len(s))
+	}
+
+	must("(ii)", resolve.Tag{Key: "status", Value: "final"}, resolve.Tag{Key: "stale", Value: "keepme"})
+	must("(iii)", resolve.Tag{Key: "stale", Value: accessor.ClearSentinel})
+	must("(iv)", resolve.Tag{Key: "status", Value: accessor.ClearSentinel})
+
+	sEmptied, err := load(art)
+	if err != nil {
+		t.Fatalf("load(emptied): %v", err)
+	}
+	if !reflect.DeepEqual(sAbsent, sEmptied) {
+		t.Fatalf("(v) FALSIFIED: absent=%#v emptied=%#v", sAbsent, sEmptied)
+	}
+	t.Logf("(v)  absent==emptied: %#v == %#v  -> SAME ZERO-KEY STORE", sAbsent, sEmptied)
+
+	// After (iii), exactly one key remained -> observably non-empty.
+	// Re-run to record the intermediate explicitly.
+	art2 := filepath.Join(dir, "s2.json")
+	w2 := &Writer{Path: "flow.state"}
+	a2 := accessor.Artifact{Path: art2}
+	_ = w2.Apply(ctx, a2, []resolve.Tag{{Key: "status", Value: "final"}, {Key: "stale", Value: "keepme"}})
+	_ = w2.Apply(ctx, a2, []resolve.Tag{{Key: "stale", Value: accessor.ClearSentinel}})
+	s2, _ := load(art2)
+	if len(s2) != 1 {
+		t.Fatalf("expected 1 remaining key, got %d: %#v", len(s2), s2)
+	}
+	t.Logf("(iii-check) one-key store len=%d -> empty-store predicate DECLINES", len(s2))
+}
+
+// A5 boundary probe: does the sealed marker make a user-zero-key store
+// non-zero-key to load?
+func TestA5SealedMarkerResidue(t *testing.T) {
+	dir := t.TempDir()
+	art := filepath.Join(dir, "sealed.json")
+	ctx := context.Background()
+	a := accessor.Artifact{Path: art}
+
+	// A writer with an UNREACHABLE declared read-back locator.
+	w := &Writer{Path: "flow.state-unreachable"}
+	if err := w.Apply(ctx, a, []resolve.Tag{{Key: "status", Value: "final"}}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if err := w.Apply(ctx, a, []resolve.Tag{{Key: "status", Value: accessor.ClearSentinel}}); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	buf, _ := os.ReadFile(art)
+	s, _ := load(art)
+	t.Logf("sealed-then-cleared: bytes=%q load=%#v keys=%d", string(buf), s, len(s))
+	if len(s) != 0 {
+		t.Logf("BOUNDARY: user cleared every OWNED key but store has %d key(s): the sealed marker.", len(s))
+	}
+}

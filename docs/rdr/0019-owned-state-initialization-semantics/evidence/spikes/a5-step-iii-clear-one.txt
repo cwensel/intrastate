@@ -1,0 +1,13 @@
+--- STEP (iii) clear ONE key (stale); one key remains ---
+$ set-state --clear stale
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"writers":["state"],"writes":{},"clear":["stale"],"owned":{}}}
+exit=0
+$ ls -la state.json
+-rw-------  1 cwensel  wheel  19 Sep  4 17:03 /tmp/a5run/state.json
+$ cat state.json
+{"status":"final"}
+$ xxd state.json
+00000000: 7b22 7374 6174 7573 223a 2266 696e 616c  {"status":"final
+00000010: 227d 0a                                  "}.
+$ read-state
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{"status":"final"}}]}}

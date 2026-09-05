@@ -1,0 +1,14 @@
+--- STEP (ii) write two owned keys into a fresh artifact ---
+$ set-state --write status=final --write stale=keepme
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"writers":["state"],"writes":{"stale":"keepme","status":"final"},"clear":[],"owned":{"stale":"keepme","status":"final"}}}
+exit=0
+$ ls -la state.json
+-rw-------  1 cwensel  wheel  36 Sep  4 17:03 /tmp/a5run/state.json
+$ cat state.json
+{"stale":"keepme","status":"final"}
+$ xxd state.json
+00000000: 7b22 7374 616c 6522 3a22 6b65 6570 6d65  {"stale":"keepme
+00000010: 222c 2273 7461 7475 7322 3a22 6669 6e61  ","status":"fina
+00000020: 6c22 7d0a                                l"}.
+$ read-state
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{"stale":"keepme","status":"final"}}]}}

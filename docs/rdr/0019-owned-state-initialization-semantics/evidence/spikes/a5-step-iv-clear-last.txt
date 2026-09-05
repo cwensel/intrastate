@@ -1,0 +1,14 @@
+--- STEP (iv) clear the LAST remaining key (status) ---
+$ set-state --clear status
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"writers":["state"],"writes":{},"clear":["status"],"owned":{}}}
+exit=0
+$ ls -la state.json
+-rw-------  1 cwensel  wheel  3 Sep  4 17:03 /tmp/a5run/state.json
+$ cat state.json
+{}
+$ xxd state.json
+00000000: 7b7d 0a                                  {}.
+$ wc -c state.json
+       3
+$ read-state (emptied store)
+{"type":"ok","data":{"model":"/tmp/a5run/model.toml","revision":"","artifacts":{"state":"/tmp/a5run/state.json"},"readers":[{"id":"state","keys":["status","labels","stale"],"tags":{}}]}}

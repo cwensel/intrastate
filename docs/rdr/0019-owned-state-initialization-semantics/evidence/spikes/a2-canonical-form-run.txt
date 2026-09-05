@@ -1,0 +1,142 @@
+--- go test ./internal/cli/ -run TestSpikeA2 -v ---
+=== RUN   TestSpikeA2_ValueLevel
+=== RUN   TestSpikeA2_ValueLevel/scalar-string/enum
+    zz_spike_a2_test.go:169: AGREE: "draft" (members []string{"draft"})
+=== RUN   TestSpikeA2_ValueLevel/scalar-string/free
+    zz_spike_a2_test.go:169: AGREE: "hello world" (members []string{"hello world"})
+=== RUN   TestSpikeA2_ValueLevel/bool
+    zz_spike_a2_test.go:169: AGREE: "true" (members []string{"true"})
+=== RUN   TestSpikeA2_ValueLevel/int
+    zz_spike_a2_test.go:169: AGREE: "7" (members []string{"7"})
+=== RUN   TestSpikeA2_ValueLevel/float
+    zz_spike_a2_test.go:169: AGREE: "1.5" (members []string{"1.5"})
+=== RUN   TestSpikeA2_ValueLevel/set/array
+    zz_spike_a2_test.go:169: AGREE: "[\"a\",\"b\"]" (members []string{"b", "a"})
+=== RUN   TestSpikeA2_ValueLevel/set/array-dup-unsorted
+    zz_spike_a2_test.go:169: AGREE: "[\"a<b\",\"x&y\"]" (members []string{"x&y", "a<b", "a<b"})
+=== RUN   TestSpikeA2_ValueLevel/set/empty-array
+    zz_spike_a2_test.go:169: AGREE: "[]" (members []string{})
+=== RUN   TestSpikeA2_ValueLevel/set/single-member-array
+    zz_spike_a2_test.go:169: AGREE: "[\"plain\"]" (members []string{"plain"})
+=== RUN   TestSpikeA2_ValueLevel/set/bare-scalar
+    zz_spike_a2_test.go:161: loader-typed members = []string{"plain"} -> seed wire "[\"plain\"]"
+    zz_spike_a2_test.go:162: ARGV ROUTE REFUSED "plain": the tag `labels` is set-valued and takes a JSON array literal; got plain
+=== RUN   TestSpikeA2_ValueLevel/scalar/empty-string
+    zz_spike_a2_test.go:161: loader-typed members = []string{""} -> seed wire ""
+    zz_spike_a2_test.go:162: ARGV ROUTE REFUSED "": the tag `note` was given an empty value
+=== RUN   TestSpikeA2_ValueLevel/scalar/single-elem-array
+    zz_spike_a2_test.go:161: loader-typed members = []string{"a"} -> seed wire "a"
+    zz_spike_a2_test.go:162: ARGV ROUTE REFUSED "[\"a\"]": the tag `note` is not set-valued; got the array literal ["a"]
+--- FAIL: TestSpikeA2_ValueLevel (0.01s)
+    --- PASS: TestSpikeA2_ValueLevel/scalar-string/enum (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/scalar-string/free (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/bool (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/int (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/float (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/set/array (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/set/array-dup-unsorted (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/set/empty-array (0.00s)
+    --- PASS: TestSpikeA2_ValueLevel/set/single-member-array (0.00s)
+    --- FAIL: TestSpikeA2_ValueLevel/set/bare-scalar (0.00s)
+    --- FAIL: TestSpikeA2_ValueLevel/scalar/empty-string (0.00s)
+    --- FAIL: TestSpikeA2_ValueLevel/scalar/single-elem-array (0.00s)
+=== RUN   TestSpikeA2_ByteLevel
+=== RUN   TestSpikeA2_ByteLevel/scalar-string/enum
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (19 bytes): {"status":"draft"}
+=== RUN   TestSpikeA2_ByteLevel/scalar-string/free
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (23 bytes): {"note":"hello world"}
+=== RUN   TestSpikeA2_ByteLevel/bool
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (16 bytes): {"flag":"true"}
+=== RUN   TestSpikeA2_ByteLevel/int
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (14 bytes): {"count":"7"}
+=== RUN   TestSpikeA2_ByteLevel/float
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (16 bytes): {"ratio":"1.5"}
+=== RUN   TestSpikeA2_ByteLevel/set/array
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (27 bytes): {"labels":"[\"a\",\"b\"]"}
+=== RUN   TestSpikeA2_ByteLevel/set/array-dup-unsorted
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (31 bytes): {"labels":"[\"a<b\",\"x&y\"]"}
+=== RUN   TestSpikeA2_ByteLevel/set/empty-array
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (16 bytes): {"labels":"[]"}
+=== RUN   TestSpikeA2_ByteLevel/set/single-member-array
+    zz_spike_a2_test.go:235: BYTE-IDENTICAL artifacts (25 bytes): {"labels":"[\"plain\"]"}
+=== RUN   TestSpikeA2_ByteLevel/set/bare-scalar
+    zz_spike_a2_test.go:220: ARGV ROUTE REFUSED ("plain") while seed accepted: flow-write-invalid: the tag `labels` is set-valued and takes a JSON array literal; got plain
+=== RUN   TestSpikeA2_ByteLevel/scalar/empty-string
+    zz_spike_a2_test.go:216: BOTH ROUTES REFUSED: seed=flow-write-invalid: the tag `note` was given an empty value argv=flow-write-invalid: the tag `note` was given an empty value
+=== RUN   TestSpikeA2_ByteLevel/scalar/single-elem-array
+    zz_spike_a2_test.go:220: ARGV ROUTE REFUSED ("[\"a\"]") while seed accepted: flow-write-invalid: the tag `note` is not set-valued; got the array literal ["a"]
+--- FAIL: TestSpikeA2_ByteLevel (0.02s)
+    --- PASS: TestSpikeA2_ByteLevel/scalar-string/enum (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/scalar-string/free (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/bool (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/int (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/float (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/set/array (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/set/array-dup-unsorted (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/set/empty-array (0.00s)
+    --- PASS: TestSpikeA2_ByteLevel/set/single-member-array (0.00s)
+    --- FAIL: TestSpikeA2_ByteLevel/set/bare-scalar (0.00s)
+    --- FAIL: TestSpikeA2_ByteLevel/scalar/empty-string (0.00s)
+    --- FAIL: TestSpikeA2_ByteLevel/scalar/single-elem-array (0.00s)
+=== RUN   TestSpikeA2_LoaderAdmission
+=== RUN   TestSpikeA2_LoaderAdmission/enum-string
+    zz_spike_a2_test.go:276: ADMITTED status = "draft" -> members []string{"draft"}
+=== RUN   TestSpikeA2_LoaderAdmission/enum-string-out-of-domain
+    zz_spike_a2_test.go:271: REFUSED status = "nope" -> malformed_initial_declaration: [initial] status: "nope" is outside the declared domain
+=== RUN   TestSpikeA2_LoaderAdmission/scalar-string
+    zz_spike_a2_test.go:276: ADMITTED note = "hi" -> members []string{"hi"}
+=== RUN   TestSpikeA2_LoaderAdmission/scalar-empty-string
+    zz_spike_a2_test.go:276: ADMITTED note = "" -> members []string{""}
+=== RUN   TestSpikeA2_LoaderAdmission/bool-true
+    zz_spike_a2_test.go:276: ADMITTED flag = true -> members []string{"true"}
+=== RUN   TestSpikeA2_LoaderAdmission/bool-as-string
+    zz_spike_a2_test.go:276: ADMITTED flag = "true" -> members []string{"true"}
+=== RUN   TestSpikeA2_LoaderAdmission/int
+    zz_spike_a2_test.go:276: ADMITTED count = 7 -> members []string{"7"}
+=== RUN   TestSpikeA2_LoaderAdmission/int-negative
+    zz_spike_a2_test.go:276: ADMITTED count = -3 -> members []string{"-3"}
+=== RUN   TestSpikeA2_LoaderAdmission/float-on-scalar
+    zz_spike_a2_test.go:276: ADMITTED ratio = 1.5 -> members []string{"1.5"}
+=== RUN   TestSpikeA2_LoaderAdmission/float-on-int-tag
+    zz_spike_a2_test.go:271: REFUSED count = 1.5 -> malformed_initial_declaration: [initial] count: "1.5" is not an int
+=== RUN   TestSpikeA2_LoaderAdmission/set-array
+    zz_spike_a2_test.go:276: ADMITTED labels = ["b","a"] -> members []string{"b", "a"}
+=== RUN   TestSpikeA2_LoaderAdmission/set-empty-array
+    zz_spike_a2_test.go:276: ADMITTED labels = [] -> members []string{}
+=== RUN   TestSpikeA2_LoaderAdmission/set-bare-scalar
+    zz_spike_a2_test.go:276: ADMITTED labels = "plain" -> members []string{"plain"}
+=== RUN   TestSpikeA2_LoaderAdmission/set-bare-bool
+    zz_spike_a2_test.go:271: REFUSED labels = true -> malformed_initial_declaration: [initial] labels: "true" is outside the declared elements
+=== RUN   TestSpikeA2_LoaderAdmission/scalar-array-multi
+    zz_spike_a2_test.go:271: REFUSED note = ["a","b"] -> malformed_initial_declaration: [initial] note: kind scalar holds one value, not a member sequence
+=== RUN   TestSpikeA2_LoaderAdmission/scalar-array-single
+    zz_spike_a2_test.go:276: ADMITTED note = ["a"] -> members []string{"a"}
+=== RUN   TestSpikeA2_LoaderAdmission/nested-array
+    zz_spike_a2_test.go:271: REFUSED labels = [["a"],"b"] -> malformed_initial_declaration: [initial] labels: nested array literals are not a member sequence
+=== RUN   TestSpikeA2_LoaderAdmission/inline-table
+    zz_spike_a2_test.go:271: REFUSED note = {a = 1} -> malformed_initial_declaration: [initial] note: value map[a:1] is not a tag value
+=== RUN   TestSpikeA2_LoaderAdmission/clear-sentinel
+    zz_spike_a2_test.go:271: REFUSED note = "<clear>" -> reserved_tag_value: [initial] note authors the reserved value <clear>
+--- PASS: TestSpikeA2_LoaderAdmission (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/enum-string (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/enum-string-out-of-domain (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/scalar-string (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/scalar-empty-string (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/bool-true (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/bool-as-string (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/int (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/int-negative (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/float-on-scalar (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/float-on-int-tag (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/set-array (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/set-empty-array (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/set-bare-scalar (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/set-bare-bool (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/scalar-array-multi (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/scalar-array-single (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/nested-array (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/inline-table (0.00s)
+    --- PASS: TestSpikeA2_LoaderAdmission/clear-sentinel (0.00s)
+FAIL
+FAIL	github.com/cwensel/intrastate/internal/cli	0.236s
+FAIL
