@@ -68,32 +68,10 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: large — provisional: one contract (the
-  deterministic export grammar of the normalized graph), locking
-  a wire format under RDR 0005's envelope contract.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
+- **Profile**: large — one contract, the deterministic export
+  grammar of the normalized graph, stated as five clauses (C1–C5)
+  of one seam; user-facing yes; locks format (the
+  `intrastate.graph/1` wire format and its DOT projection).
 - **Priority**: Low
 - **Related Issues**: kata `intrastate#jjkh` (1602); kata `4hps`
   (terminal-reachability invariant — now RDR 0022, a potential
@@ -137,12 +115,16 @@ RDR 0002 owns only row-dump ordering.
   `Data` string verbatim on stdout in text mode, with no decoration,
   reordering, or trailing content beyond one final newline — including
   under provoked notes/warnings, which stay on stderr.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: `internal/cli/respond/respond.go::TextLiner` exists
-    and `OK` prints it via `Fprintln`; a spike must byte-compare
+    and `OK` prints it via `Fprintln`; the spike byte-compared
     `stdout == document + "\n"` for a multi-kilobyte multi-line
-    payload with advisories provoked (premortem P-5/P-15).
+    payload with advisories provoked (premortem P-5/P-15) —
+    byte-identical in both arms, notes/warnings confined to stderr
+    (`evidence/spikes/a1-textliner.md`). Normative fixture F1:
+    text-mode stdout is exactly `document + "\n"`, stderr empty
+    absent advisories.
   - **If wrong**: the bare-document text mode gains stray bytes, CI
     diffs of the export break, and C5 needs a gateway extension
     instead of a ride on the existing seam.
@@ -153,15 +135,30 @@ RDR 0002 owns only row-dump ordering.
   the edges the traversal itself took — over-approximation by merged
   re-run is the premortem's central defect (P-1), so equality, not
   plausibility, is the bar.**
-  - **Status**: Pending
+  - **Status**: Verified — with a recorded coupling: holds because
+    `indexOf` uses `subsumes`, which makes `reach()`'s in-place
+    widening arm unreachable (exhaustive lemma + zero-event audit,
+    `evidence/spikes/a2-edge-recovery.md`)
   - **Method**: Spike
   - **Evidence**: `internal/graphlint/reach.go::reach` iterates slices,
-    not maps, and `successorsOf` appends in first-seen row order; the
-    spike must (a) show repeated runs byte-identical (including under
-    map-seed variation) and (b) run a DIFFERENTIAL test — an observer
+    not maps, and `successorsOf` appends in first-seen row order. The
+    spike showed (a) repeated runs byte-identical including under
+    `GODEBUG=randmapiter=1`, and (b) a DIFFERENTIAL test — an observer
     recording edges during the traversal vs the post-hoc recovery —
-    over fixtures that force subsumption merges and a merged node that
-    enables a row no pre-merge node enabled.
+    giving EXACT multiset equality over synthetic fixtures A–I and all
+    36 authored models (`EQUAL=36, NOT-EQUAL=0`), with a negative
+    control (injected phantom/dropped edge) and a positive control (a
+    weakened `indexOf` made the arm live and diverge by 2 edges), so
+    the harness detects divergence rather than defaulting green. The
+    coupling: `subsumes` requires an identical key set plus value
+    coverage, so `joinNodes(nodes[j], next)` is always key-equal to
+    `nodes[j]` and the `merged.key() == nodes[j].key()` guard fires
+    first (`a2-edge-recovery.md:59-64`). The property is pinned in
+    CODE, not restated here — kata `yybx` ships the behaviour
+    regression test and the stale-comment fix in isolation from this
+    RDR; once landed, that test is the property's home. Graded
+    `constraint` (answer fixed by shipped code, `5e57b79`); it does
+    not gate the lock.
   - **If wrong**: the named fallback is the in-traversal edge observer
     (record edges as `reach` takes them); that arm is admissible
     because C4's neutrality oracle — lint byte-identical with and
@@ -172,38 +169,89 @@ RDR 0002 owns only row-dump ordering.
   `guard.AssignmentCount`), `[initial]`, `terminal`, normalized rows
   with blocked atoms, and `guard.Groups` — with no re-parse of the
   authored TOML.**
-  - **Status**: Pending
+  - **Status**: Verified (declarations, tags, initial, terminal, rows,
+    groups, nodes); the edge relation is derived in the export path as
+    a pure function of the model value — see A2
   - **Method**: Source Search
   - **Evidence**: `internal/table/model.go` field walk against the C2
-    field list; `internal/guard/product.go::Groups` for the partition.
+    field list (`Model.ID`/`Class`/`Tags`/`Initial`/`Terminal`/`Rows`),
+    `internal/guard/declaration.go::AssignmentCount` for finite
+    domains, `internal/guard/product.go::Groups` for the partition,
+    and `internal/graphlint/reach.go::Reach` for nodes — every one a
+    pure function of the model value with no TOML re-parse
+    (`evidence/research/a3-a4.md`). The edge relation is NOT carried by
+    the model value: `reach()` computes nodes only and `successorsOf`
+    reads `row.RuleID` but discards it, so no edge carrier exists
+    today. It is constructible with no re-parse (the rule id is on
+    `table.Row.RuleID`) and is recovered in the export path per A2.
+    This narrows the pre-edit wording ("carries everything the
+    document needs"), which overstated the model value's coverage;
+    narrowed at Resolve 2026-09-12. C2 is unchanged — it predicates
+    *carries* of the document, which still carries edges.
   - **If wrong**: the schema shrinks, or a loader extension becomes a
     prerequisite and the blast radius grows past this RDR.
 - **A4 A new root export verb requires no amendment to RDR 0005's
   envelope contract.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: `0005:C1` — "Other command groups (lint, dump,
-    parse) are outside this contract and are owned by the RDR that
-    names them"; confirm the carve-out covers a root `graph` verb.
+  - **Evidence**: `0005:C1` (0005 is Implemented, gate not stale)
+    scopes itself in its opening sentence — "The CLI MUST expose one
+    command group for skill integration with these verbs: next,
+    resolve, read-state, and set-state" — so every MUST-clause that
+    follows binds the `flow` skill-integration group and has no
+    jurisdiction over a root `graph` verb. The carve-out sentence
+    ("Other command groups (lint, dump, parse) are outside this
+    contract and are owned by the RDR that names them") is a closed
+    three-item enumeration that does not itself name `graph`; the
+    conclusion rests on the scope sentence, not on reading `graph`
+    into that list (re-anchored at Resolve 2026-09-12,
+    `evidence/research/a3-a4.md`).
   - **If wrong**: the surface must be renegotiated at the envelope
     home before Phase 2 can land.
 - **A5 Marshaling the document through the shared non-HTML-escaping
   encoder is byte-stable: struct field order is fixed, every sequence
   is pre-sorted, and no Go map reaches the wire.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: `internal/cli/clierr::WriteJSONLine` is the one
-    encoder (`0005:C1`); a spike must double-emit a fixture and
-    byte-compare.
+  - **Evidence**: `internal/cli/clierr/clierr.go:174::WriteJSONLine` is
+    the one encoder (`0005:C1`); the spike double-emitted a fixture
+    byte-identically and held one sha256 across 25 separate processes,
+    15 of them under `GODEBUG=randmapiter=1`
+    (`evidence/spikes/a5-encoder-stability.md`). Normative fixture F2
+    is the ENCODER PROPERTY only — double-emit byte identity, process
+    stability, `<`/`>`/`&` unescaped, compact with one trailing `\n`,
+    `schema` first, `[]` for empties — NOT a golden hash and NOT a
+    canonical `intrastate.graph/1` emission: the spike improvised field
+    spellings that differ from C2's normative list (and from A6's
+    spike), so pinning that sha256 would fix C2's spellings by
+    accident. The Phase 1 golden minted by the real exporter is the
+    byte fixture for Testing Strategy scenario 2. Latent risk, not a
+    falsifier: four call sites build ad hoc `SetEscapeHTML(false)`
+    encoders instead of routing through `WriteJSONLine`, so the
+    implementation must reuse the shared encoder rather than add a
+    fifth.
   - **If wrong**: C3's replay invariant fails and the document needs a
     custom marshaler with its own ordering proof.
 - **A6 The DOT rendering is derivable from the exported document value
   alone — nodes, edges, initial, and terminal-satisfaction are enough —
   with no reach or analysis internals consulted.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: a spike DOT of a fixture document must render via
-    `dot -Tsvg` with every exported node and edge present.
+  - **Evidence**: the spike renderer imports only stdlib — zero
+    `graphlint`/analysis imports — and its DOT rendered via `dot -Tsvg`
+    (graphviz 12.2.1, exit 0) for a canonical fixture and a hostile one
+    carrying quotes, newlines, and non-ASCII; the emitted node/edge
+    statements were an exact set match against the fixture's `reach`
+    block (`evidence/spikes/a6-dot-derivability.md`). Normative fixture
+    F3 is scoped to the node/edge SET and the abstraction-marker
+    placement (header comment + graph `label`), not styling: the
+    spike's label composition has a real escaping bug (the separator is
+    injected as two bytes before `dotQuote` doubles the backslash),
+    which is styling and outside the fixture, while the escaping ORDER
+    (backslash, then quote, then newline) is sound and carries into
+    implementation. The spike's field spellings are provisional
+    placeholders (`abstraction_marker`, `terminal_satisfying`); C2's
+    spellings govern.
   - **If wrong**: the renderer couples to graphlint internals and the
     two `--emit` arms stop being projections of one value.
 
@@ -236,7 +284,8 @@ declined to define, so this RDR owns the schema without touching
 One new document-assembly component (package boundary settled at
 Resolve; it sits beside the relation it exports) builds an export
 value from the loaded `*table.Model` plus the reachability fixpoint
-(`internal/graphlint/reach.go::Reach`, extended with edge recovery per
+(`internal/graphlint/reach.go`, via a new exported edge-recovery
+function beside `Reach` per
 A2). The CLI verb is a thin arm over it: selection flags → load
 (`table.LoadWithAdvisories`'s underlying load path — advisories are
 ignored here; they are lint's advisory channel, not graph data) →
@@ -468,7 +517,7 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
 | Row rendering | `internal/table/dump.go::Dump` | Text-only, set literals lossy by decision (`0002:§round-trip-inverse-invariants`) | Reuse the field list and order, not the renderer | C2 carries the dump vocabulary as structured JSON |
-| Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Extend | A2; no behavior change to lint's relation |
+| Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Add a sibling exported function (`Reach` and `reach()` both untouched) | A2; no behavior change to lint's relation |
 | Output gateway | `internal/cli/respond` | One terminal envelope under `--as=json` | Reuse (`TextLiner` + `OK`) | C5; no gateway exception, no second stream |
 | Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors them verbatim |
 
@@ -534,8 +583,9 @@ introduces, and this plan retires nothing.
 **Description**: The seed's first-named shape — `intrastate lint
 --emit=json|dot` exports from the same invocation that verdicts, since
 `newAnalysis` already computes the declarations, rows, groups and
-reachable node set the document carries (the edge relation is derived
-in the export path either way — A2, A3).
+reachable node set the document carries (the edge relation is carried
+by neither shape — it is recovered in the export path either way —
+A2, A3).
 
 **Pros**:
 
