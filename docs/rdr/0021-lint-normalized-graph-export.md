@@ -227,10 +227,9 @@ load + normalize + reachability only: it never runs the lint
 invariants, emits no findings, and exports any model that loads —
 including one lint would refuse — so emission can never alter lint's
 verdict and a failing model can still be inspected as a graph. The
-JSON document is the machine-readable follow-up RDR 0002 explicitly
-seeded — its dump "does not define a dump grammar" and names "a
-re-readable dump grammar" as follow-up work (`0002:§round-trip-inverse-invariants`)
-⇒ this RDR may own the JSON schema without touching 0002's dump text.
+JSON document is the machine-readable follow-up RDR 0002 seeded and
+declined to define, so this RDR owns the schema without touching
+0002's dump text (Key Discoveries).
 
 ### Technical Design
 
@@ -331,8 +330,9 @@ only ADD to JSON ones.
 ```normative
 NEUTRALITY. The export runs load, normalization, grouping, and the
 reachability traversal only, reaching the traversal through the same
-`graphlint` entry surface lint uses (`0006:AP`'s one-request-builder
-precedent), so verb/lint drift is structural, not disciplinary. It
+`graphlint` entry surface lint uses (`0006:§approach`'s
+same-command/request-builder precedent), so verb/lint drift is
+structural, not disciplinary. It
 MUST NOT run the lint invariants, MUST NOT emit findings, and MUST
 NOT alter any input it shares with lint: `intrastate lint`'s verdict,
 finding set, and bytes are identical with and without the export code
@@ -405,7 +405,11 @@ always-keep core).
 
 #### Illustrative Code
 
-Illustrative only — tests must not assert these literally.
+Illustrative only — tests must not assert these literally. The JSON
+below is a PARTIAL document: the row and tag objects show a few of C2's
+members, not all, and `<abstraction-marker>` stands for C2's required
+`reach` marker whose spelling is fixed at Resolve. C2 is the normative
+field list; this example never narrows it.
 
 ```sh
 # CI: diff the certified graph across two commits.
@@ -430,7 +434,8 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
                     "block":"match"}],
           "writes":[{"key":"stage","value":["final"]}]}],
  "groups":[{"context":"…","rules":["flow/lock"]}],
- "reach":{"nodes":[{"id":"stage=draft,;","values":{"stage":["draft"]}},
+ "reach":{"<abstraction-marker>":"declared over-approximation",
+          "nodes":[{"id":"stage=draft,;","values":{"stage":["draft"]}},
                    {"id":"stage=final,;","values":{"stage":["final"]}}],
           "edges":[{"from":"stage=draft,;","to":"stage=final,;",
                     "rule":"flow/lock"}]}}
@@ -452,7 +457,7 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
 | Row rendering | `internal/table/dump.go::Dump` | Text-only, set literals lossy by decision (`0002:§round-trip-inverse-invariants`) | Reuse the field list and order, not the renderer | C2 carries the dump vocabulary as structured JSON |
 | Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Extend | A2; no behavior change to lint's relation |
 | Output gateway | `internal/cli/respond` | One terminal envelope under `--as=json` | Reuse (`TextLiner` + `OK`) | C5; no gateway exception, no second stream |
-| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (0006 REQ-10) | Reuse the arm set and code spellings | C1 mirrors, verified at Resolve |
+| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors, verified at Resolve |
 
 ### Decision Rationale
 
@@ -600,7 +605,7 @@ Go module `github.com/cwensel/intrastate`. Surfaces:
 `internal/graphlint/taxonomy.go` (finding codes — the only present
 output). Governing records: RDR 0002 (normalized rows, dump
 identity/ordering), RDR 0003 (the finite product lint enumerates),
-RDR 0005 (`--as` envelope contract), RDR 0006 (A6 —
+RDR 0005 (`--as` envelope contract), RDR 0006 (`0006:A6` —
 initial/terminal give reachability a root and stop set).
 
 ## Research Findings
@@ -670,7 +675,7 @@ gateway exception.
   carries an explicit abstraction marker (wording at Resolve), and the
   docs state the over-approximation contract where the schema is
   described.
-- **Risk**: schema drift — a later field added ad hoc breaks C3's
+- **Risk**: schema drift — a later field added ad hoc breaks C2's
   additive rule.
   **Mitigation**: golden-fixture byte tests pin `/1`; a failing pin is
   the tripwire that forces the additive-or-version decision.
@@ -722,7 +727,8 @@ gateway exception.
    terminal, one escape row) and a decision-table fixture.
 2. `intrastate graph --model <fixture>` twice → the two stdouts are
    BYTE-identical, parse as JSON, and carry every C2 field (schema,
-   tags, initial, terminal, rows, groups, reach.nodes, reach.edges).
+   model identity and class, tags, initial, terminal, rows, groups,
+   reach.nodes, reach.edges, and the `reach` abstraction marker).
 3. `intrastate graph --model <fixture> --emit dot | dot -Tsvg` renders;
    the DOT node/edge id set equals step 2's `reach` block.
 4. `intrastate graph --model <fixture> --as=json | jq .data` equals
@@ -762,23 +768,48 @@ gains the verb; abstraction-marker wording lands with the schema docs.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The MVV is the acceptance floor; these scenarios are what "done" adds
+beyond it. Every oracle is byte- or set-equality — none asserts an exit
+code alone.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Scenario**: Determinism under map-seed variation — emit the same
+   fixture repeatedly across `--emit`×`--as` cells.
+   **Expected**: byte-identical stdout per cell (C3); no cell depends on
+   Go map iteration order.
+2. **Scenario**: Golden fixtures pin `intrastate.graph/1` for a
+   state-machine model and a decision-table model.
+   **Expected**: the goldens hold; a field added without a schema
+   decision fails the pin (C2's additive rule tripwire).
+3. **Scenario**: Lint neutrality — run `intrastate lint` over blocking
+   and clean fixtures with the export code present, byte-compared
+   against a pre-change capture.
+   **Expected**: identical verdict, finding set, and bytes (C4), and the
+   oracle holds whichever edge mechanism A2 settles on.
+4. **Scenario**: Model that loads but lint refuses.
+   **Expected**: `graph` succeeds with an ASSERTED document (defined
+   content, not incidental), carrying no verdict or finding field (C2,
+   C4).
+5. **Scenario**: Mode agreement — `--as=json | jq .data` against the
+   `--as=text` document, for both `--emit` values.
+   **Expected**: value-for-value equality for `json`; the `jq -r` unwrap
+   reproduces the DOT text byte-for-byte for `dot` (C5).
+6. **Scenario**: DOT arm equality and hostile content — tag values
+   carrying quotes, newlines, and non-ASCII.
+   **Expected**: DOT node/edge id set equals the JSON document's
+   `reach` block, the abstraction marker is present in the header, and
+   every fixture survives `dot -Tsvg` (A6, C2, premortem P-16).
+7. **Scenario**: Traversal incomplete under the published node ceiling.
+   **Expected**: refusal with `graph-export-too-large` (GroupUserEnv,
+   exit 2) naming the ceiling and remedy; no document on stdout (C4).
+8. **Scenario**: Selection-arm refusals — both/neither of
+   `--model`/`--flow`, `--flow` alone, unreadable file, load failure,
+   and an unknown `--emit` value.
+   **Expected**: lint's code spellings verbatim plus
+   `flag-invalid-value` naming `emit`; exit codes stay the existing 0/2
+   mapping (C1).
+9. **Scenario**: JSON round-trip — decode the exported document.
+   **Expected**: value identity on every C2 field including exact set
+   members (RT1); no `load ∘ export` inverse is exercised (RT3).
 
 ## Finalization Gate
 
