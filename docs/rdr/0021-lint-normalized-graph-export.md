@@ -257,21 +257,46 @@ RDR 0002 owns only row-dump ordering.
 
 - **A7 The `values` member of a `reach` node has one declared shape,
   and C2's field list fixes it.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: raised by the Stage-5 desk trace. C2 lists
-    `reach{nodes[{id, values}]}` without fixing the inner shape, and
-    this RDR's two non-normative exhibits disagree: the Illustrative
-    Code renders `values` as an OBJECT keyed by tag
-    (`{"stage":["draft"]}`), while the A5 encoder fixture renders it as
-    an ARRAY of assignment strings (`["env=dev","flag&x"]`)
-    (`evidence/spikes/a5-encoder-stability.md`). Verification: read the
-    node value carried by `reach.go`'s `Node` on `main` and pick the
-    shape that projects it without invention, then state it in C2 and
-    make both exhibits agree (§amendment-sweep).
+  - **Evidence**: `internal/graphlint/reach.go::Node` carries `Values
+    map[string][]string` — tag name to a sorted, deduplicated value
+    list (`canonicalValues` is
+    `slices.Compact(slices.Sorted(slices.Values(value)))`), intact at
+    the point `reach`/`Reach` return nodes to a caller. So the OBJECT
+    keyed by tag is the invention-free projection (map → object,
+    `[]string` → array) and C2 now fixes it. The ARRAY-of-assignment-
+    strings form was the wrong exhibit: joined `key=value` strings
+    exist only inside `(Node).key`'s escaped fingerprint, for internal
+    dedup identity, never as an exportable value — so the A5 fixture's
+    rendering is corrected here rather than C2 widened to admit both
+    (the spike's field spellings were already provisional per A6).
   - **If wrong**: the wire shape of every exported node is
     underdetermined at lock; two implementers read one field list two
     ways and the golden fixture pins whichever shipped first.
+
+- **A8 The exported `graphlint` surface C4 requires — the
+  edges-carrying function that also returns the traversal's
+  completeness — can be added without altering `reach()` or lint's
+  path through it.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: raised by the Stage-5 3amigo implementer persona.
+    Exported `Reach` today discards the bool (`nodes, _ := reach(m)`,
+    `internal/graphlint/reach.go::Reach`), and no other exported
+    symbol in the package surfaces it (no struct field, method,
+    sentinel error, or const), so C4's refusal names a condition no
+    caller can currently observe. Q3(c) already sanctions a NEW
+    exported function beside `Reach` for edge recovery; this assumption
+    is that the same function carries completeness, leaving `reach()`
+    and lint's `analysis.go` call site untouched (C4's neutrality).
+    Verification: confirm the new signature returns nodes, edges, and
+    completeness together, and that lint still reaches `reach()`
+    directly.
+  - **If wrong**: C4's `graph-export-too-large` arm is unimplementable
+    without widening `Reach`'s public signature — a change to a surface
+    whose only other callers are tests, which C4's neutrality rule and
+    A2's recorded coupling both bear on.
 
 ## Proposed Solution
 
@@ -325,6 +350,8 @@ export surface and its document — stated separately by concern
 SURFACE. A new root verb `graph` is registered beside `lint` — outside
 the `flow` group, under `0005:C1`'s carve-out for command groups "owned
 by the RDR that names them". Model selection mirrors `lint`'s arm set
+— mirroring is scoped to the ARM SET and its CODE SPELLINGS, not to
+lint's help/usage text, which each verb words for itself —
 and codes verbatim (`internal/cli/lint.go::runLint`): exactly one of
 `--model <path>` / `--flow <id>`; both → `flag-mutually-exclusive`;
 `--flow` alone → `flag-invalid-value` (this build resolves no ids);
@@ -354,7 +381,12 @@ literal[], block}`), next, writes, requires_owned, gate, escape, emit
 — in 0002's canonical row order with atoms in 0002's canonical atom
 order; the selection-context groups (context plus member row
 identities); and the reachability relation — merged fixpoint nodes
-(`{id, values}`, id = the canonical node key) and edges (`{from, to,
+(`{id, values}`, id = the canonical node key, `values` an OBJECT keyed
+by tag name whose every value is that tag's value ARRAY, sorted and
+deduplicated — the shape `reach.go::Node`'s `Values map[string][]string`
+projects without invention; never an array of joined `key=value`
+strings, a flattening that exists only inside `(Node).key`'s escaped
+internal fingerprint) and edges (`{from, to,
 rule}`) — with nodes sorted by node key and edges by (from, to, rule),
 so construction order is unobservable. Every declared collection
 renders as an empty JSON array `[]` (or object `{}`) when it has no
@@ -374,7 +406,8 @@ are normative as the Illustrative Code spells them: `schema`, `model`,
 `class`, `tags[{name, provenance, kind, required, single_valued,
 domain}]`, `initial`, `terminal`, `rows[…0002's field list…]`,
 `groups[{context, rules}]`, and `reach{abstraction, nodes[{id,
-values}], edges[{from, to, rule}]}`. The schema docs state the
+values}], edges[{from, to, rule}]}`, where `values` is the tag-keyed
+object of value arrays fixed above. The schema docs state the
 soundness rule in one sentence: universal claims ("no path does X")
 proved over this relation hold at runtime; existence claims ("some
 path reaches X") may be spurious. The DOT
@@ -422,10 +455,18 @@ model-loads-but-lint-refuses case is a dedicated fixture with an
 asserted, defined document — never whatever the traversal happens to
 do (premortem P-6).
 When the traversal is incomplete under the published node ceiling
-(`reach.go::reach` returns `complete == false`), the verb refuses with
-the scalar code `graph-export-too-large` (GroupUserEnv, exit 2) naming
-the ceiling and the narrow-a-domain remedy — never a partial document,
-because a partial graph diffs as a graph change.
+(`graphlint.NodeCeiling()`), the verb refuses with the scalar code
+`graph-export-too-large` (GroupUserEnv, exit 2) naming the ceiling and
+the narrow-a-domain remedy — never a partial document, because a
+partial graph diffs as a graph change. Completeness MUST reach the verb
+through an EXPORTED `graphlint` surface: today's `Reach` discards the
+private `reach`'s `complete` bool (`nodes, _ := reach(m)`), so the
+edges-carrying function Q3(c) already adds beside it returns
+completeness with the nodes and edges. This is the same
+package-internal traversal lint reaches, so the neutrality rule above
+is unaffected. The ceiling this refusal names is `reach`'s node-count
+completeness, NOT `analysis.go`'s `checkNodeCeiling`, a distinct
+guard-product bound.
 ```
 
 **C5**
@@ -449,6 +490,13 @@ payload; if a later revision adds one it MUST conform to JDR 0002 §D1
 (projection before respond.OK, echo-group-only, enforced partition,
 always-keep core).
 ```
+
+Determinacy: fired — C3 states byte-for-byte identity across
+invocations in every `--emit`×`--as` cell, and C2 fixes exact field
+spellings, sort orders, and empty/absent renderings that Scenario 2's
+goldens pin. An under-specified cell would let two implementers ship
+different bytes that both read as conforming, which is the trigger's
+subject.
 
 #### Load-Bearing Decisions
 
@@ -536,7 +584,7 @@ the node/edge SET and marker placement, not styling).
 | Reachability relation | `reach.go::reach` (private) | lint via `graphlint.Run`; export via the new sibling exporter | `analysis.go:46` (lint); the new exporter | `graphlint.Reach` (public wrapper, tests only) | `reach()` — both arms reach the one traversal (C4) |
 | Edge list | the new exported function (post-hoc recovery over final nodes) | export only | the new exporter | A2's rejected in-traversal observer | post-hoc recovery; equality to the traversal is the bar (A2) |
 | Empty collection on the wire | producer code choosing `[]T{}`, never nil | every document consumer | every C2 collection field | `null` (rejected) | `[]`/`{}`; optional member ABSENT (Q2 ruling) |
-| Selection-arm refusal codes | `lint.go::runLint` | `graph` verb mirrors them verbatim | C1's arm set | lint's own codes (`0006:C19`/`C20`) | lint — C1 mirrors, never redefines |
+| Selection-arm refusal codes | `lint.go::runLint` | `graph` verb mirrors the arm set and code spellings verbatim; help text is the verb's own (C1) | C1's arm set | lint's own codes (`0006:C19`/`C20`) | lint — C1 mirrors, never redefines |
 | Document format selection | `--emit` (this verb only) | export path | the `graph` verb | `--as` (envelope mode, `respond.go::FlagName`) | `--emit` selects DOCUMENT, `--as` selects ENVELOPE |
 
 `oracle` — each MVV row × "fails if X is wrong because Y" + the negative control
@@ -565,7 +613,7 @@ the node/edge SET and marker placement, not styling).
 | --- | --- | --- | --- | --- |
 | Model loads, lint clean | 0 | — | document on stdout | loud |
 | Model loads, lint would refuse | 0 | — | ASSERTED document (defined content) | loud — the debugging half of the outcome (C4) |
-| Traversal incomplete at node ceiling | 2 | `graph-export-too-large` (GroupUserEnv), names ceiling + narrow-a-domain remedy | **none** — never a partial document | loud (C4) |
+| Traversal incomplete at node ceiling (`graphlint.NodeCeiling()`, via the exported completeness surface C4 requires) | 2 | `graph-export-too-large` (GroupUserEnv), names ceiling + narrow-a-domain remedy | **none** — never a partial document | loud (C4) |
 | Both/neither `--model`/`--flow` | 2 | `flag-mutually-exclusive` / `flag-required` | none | loud (C1) |
 | `--flow` alone | 2 | `flag-invalid-value` (no ids resolve this build) | none | loud |
 | Unreadable file / load failure | 2 | `model-unreadable` / `model-invalid` (one findings[] entry per load category) | none | loud |
@@ -583,7 +631,7 @@ the node/edge SET and marker placement, not styling).
 | 3 — `--emit dot \| dot -Tsvg` | C2 DOT set normativity × A6 derivability × S6 hostile content | A6: exact node/edge set match, marker in header + label, exit 0 on hostile fixture |
 | 4 — `--as=json \| jq .data` | C5 mode agreement × C3 determinism | A1: text stdout is exactly `document + "\n"`; both modes derive from one export value |
 | 5 — lint neutrality | C4 MUST-NOT-alter × C1 shared arm codes | A2: 36/36 real models EQUAL; lint reaches `reach()` via `analysis.go:46` unchanged |
-| — `reach.values` shape | C2 lists `nodes[{id, values}]` without fixing the inner shape | **CONTRADICTION**: this RDR's Illustrative Code renders `values` as an OBJECT (`{"stage":["draft"]}`); the A5 encoder fixture renders it as an ARRAY (`["env=dev","flag&x"]`). Two non-normative exhibits disagree over a member C2 leaves open. Raised as A7 (Pending) for Stage 6. |
+| — `reach.values` shape | C2 now fixes `values` as a tag-keyed object of value arrays | RESOLVED (was CONTRADICTION): `reach.go::Node.Values` is `map[string][]string`, so the OBJECT exhibit projects without invention and the A5 fixture's array-of-strings rendering was the wrong exhibit — that flattening lives only in `(Node).key`'s internal fingerprint. C2 pins the shape; A7 Verified. |
 
 ### Capability Dependencies
 
@@ -601,7 +649,7 @@ the node/edge SET and marker placement, not styling).
 | Row rendering | `internal/table/dump.go::Dump` | Text-only, set literals lossy by decision (`0002:§round-trip-inverse-invariants`) | Reuse the field list and order, not the renderer | C2 carries the dump vocabulary as structured JSON |
 | Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Add a sibling exported function (`Reach` and `reach()` both untouched) | A2; no behavior change to lint's relation |
 | Output gateway | `internal/cli/respond` | One terminal envelope under `--as=json` | Reuse (`TextLiner` + `OK`) | C5; no gateway exception, no second stream |
-| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors them verbatim |
+| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors the arm set and code spellings verbatim; help text is not mirrored |
 
 ### Decision Rationale
 
@@ -789,8 +837,9 @@ gateway exception.
   format flag + raw stream shape; no opened peer wraps DOT in a JSON
   envelope (⚠ negative corpus result, recorded).
 - **Documented** — `reach()` returns nodes and a completeness bit but
-  no edge list ⇒ edges are this RDR's one extension to the traversal
-  surface (A2).
+  no edge list, and exported `Reach` discards the completeness bit
+  (`nodes, _ := reach(m)`) ⇒ edges AND an exported completeness surface
+  are this RDR's one extension to the traversal surface (A2, C4).
 - **Assumed** — TextLiner passes a multi-line document byte-exact
   (A1); post-fixpoint edge recovery equals the traversal's edges (A2);
   shared-encoder marshaling is byte-stable (A5).
@@ -921,7 +970,9 @@ beyond it. Every oracle is byte- or set-equality — none asserts an exit
 code alone.
 
 1. **Scenario**: Determinism under map-seed variation — emit the same
-   fixture repeatedly across `--emit`×`--as` cells.
+   fixture repeatedly across `--emit`×`--as` cells, with map order
+   PROVOKED under `GODEBUG=randmapiter=1` (the mechanism A2's spike
+   used; without it a small fixture can pass by luck).
    **Expected**: byte-identical stdout per cell (C3); no cell depends on
    Go map iteration order.
 2. **Scenario**: Golden fixtures pin `intrastate.graph/1` for a
@@ -939,13 +990,22 @@ code alone.
    C4).
 5. **Scenario**: Mode agreement — `--as=json | jq .data` against the
    `--as=text` document, for both `--emit` values.
-   **Expected**: value-for-value equality for `json`; the `jq -r` unwrap
-   reproduces the DOT text byte-for-byte for `dot` (C5).
+   **Expected**: value-for-value equality for `json`; for `dot`, the
+   `jq -r` unwrap reproduces the DOT text byte-for-byte AFTER
+   accounting for the one trailing newline F1 pins on text-mode stdout
+   (`document + "\n"`) — the enveloped string member carries the
+   document without that gateway newline, so the comparison is against
+   the document, not the stream (C5, A1).
 6. **Scenario**: DOT arm equality and hostile content — tag values
    carrying quotes, newlines, and non-ASCII.
    **Expected**: DOT node/edge id set equals the JSON document's
    `reach` block, the abstraction marker is present in the header, and
-   every fixture survives `dot -Tsvg` (A6, C2, premortem P-16).
+   every fixture survives `dot -Tsvg` (A6, C2, premortem P-16). Exit 0
+   is NOT sufficient: each hostile label is also asserted to DECODE
+   back to its source tag value, so a well-formed but mis-escaped label
+   fails. A6's spike hit exactly that bug (the separator injected as
+   two bytes before `dotQuote` doubles the backslash), and an
+   exit-code-only oracle would pass it.
 7. **Scenario**: Traversal incomplete under the published node ceiling.
    **Expected**: refusal with `graph-export-too-large` (GroupUserEnv,
    exit 2) naming the ceiling and remedy; no document on stdout (C4).
@@ -954,7 +1014,9 @@ code alone.
    and an unknown `--emit` value.
    **Expected**: lint's code spellings verbatim plus
    `flag-invalid-value` naming `emit`; exit codes stay the existing 0/2
-   mapping (C1).
+   mapping (C1); and stdout carries NO document on every refusing arm
+   (C4's never-a-partial-document rule, asserted here and not only in
+   the mini-check disposition table).
 9. **Scenario**: JSON round-trip — decode the exported document.
    **Expected**: value identity on every C2 field including exact set
    members (RT1); no `load ∘ export` inverse is exercised (RT3).
