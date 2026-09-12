@@ -334,48 +334,87 @@ adopt when it arrives.
 - **A5 A tier assignment can be backed by an enumeration seam in every
   package that owns a tiered vocabulary, without breaking a caller or
   crossing a package boundary the layering forbids.**
-  - **Status**: Pending
+  - **Status**: Verified as to the `flow next` row; REFUTED for the
+    CLIError `code` row, which takes C4's stated fallback —
+    `seam: none (prose-only)`, tier standing.
   - **Method**: Spike
   - **Evidence**: Added by the 3amigo lens — C4 now obliges an accessor per
     tiered vocabulary, which is a new load-bearing claim about code that
     does not yet exist. The idiom is established in four packages
     (`internal/resolve::RefusalKinds`, `internal/table::Categories`,
     `internal/accessor::Verdicts`, `internal/graphlint::Reasons`), so the
-    open question is the six that lack one, and two are not mechanical:
-    the CLIError `code` vocabulary has no single declaration site (61
-    raise sites reference package constants across `graphlint`, `guard`
-    and `accessor`; 10 are inline literals), so a `clierr`-side registry
-    either imports those packages — inverting the leaf layering `clierr`
-    exists to preserve — or requires the constants move. The `flow next`
-    unknown-`reason` union is a `const` block in `internal/cli`
-    re-spelling `resolve.Reason*` plus one local token.
-    Verify by spiking both accessors and confirming `go build ./...` with
-    no import cycle.
+    open question is the six that lack one, and two are not mechanical.
+    Both were spiked 2026-09-12, captured at
+    `evidence/spikes/a5-enumeration-seams.md`.
+    The `flow next` unknown-`reason` union takes an accessor cleanly: a
+    `cli::UnknownReasons() []string` over the const block in
+    `internal/cli/flow_next.go` builds with no new import and no cycle,
+    because `internal/cli` already sits downstream of `internal/resolve`.
+    The CLIError `code` registry does NOT: `internal/cli/clierr` importing
+    `graphlint`/`guard`/`accessor` to draw on their real `Code*` constants
+    is a hard, reproducible `go build` failure —
+    `clierr` → `graphlint` → `clierr`, since `internal/graphlint/analysis.go`,
+    `::coverage.go`, `::engine.go` and `::groups.go` already import `clierr`
+    to construct `CLIError`/`Finding` values. The only shape that compiles
+    and keeps `clierr` a leaf is a hand-copied shadow list of code literals
+    the raise sites never read — which satisfies the layering but not the
+    bar C4 sets, since the four established seams all return the backing
+    slice the emit sites actually use, and a by-value `append-only`
+    assertion over a stand-in asserts nothing. A real seam would require
+    moving ~36 `Code*`/`ValidationCode` constants into `clierr` and
+    repointing ~71 raise sites — an error-taxonomy consolidation, not the
+    additive accessor this RDR scopes.
+  - **Disposition (2026-09-12)**: this is the branch C4's seam clause
+    already authorized before the spike ran ("the tier on that row STANDS
+    and the row records `seam: none (prose-only)` with the reason"), so no
+    contract is amended and no dependent clause goes partial. C4's census
+    now records the outcome on both rows. The residual exposure is stated,
+    not hidden: the CLIError `code` vocabulary is the surface consumers
+    branch on most, and through this RDR its `append-only` tier is a prose
+    promise with no mechanical assertion behind it. A7's CI snapshot covers
+    the severity partition and the seams that exist; it cannot cover this
+    one, because there is no seam for it to read.
   - **If wrong**: C4's seam clause is unimplementable as written for those
     two rows, and the tiers on them stay prose-only — a consumer is
     promised `append-only` on the largest vocabulary this RDR tiers with
     nothing asserting it. The fallback is to tier them and record the
-    absent seam explicitly rather than oblige one.
+    absent seam explicitly rather than oblige one. This is what landed for
+    the CLIError `code` row.
 
 - **A6 The `schema_version` constant has a home both terminal records can
   read without inverting the `respond`/`clierr` layering.**
-  - **Status**: Pending
-  - **Method**: Source Search
+  - **Status**: Verified — spiked 2026-09-12: the constant lands in
+    `clierr`, both terminal records carry it, and `go build ./...` and
+    `go vet ./...` are clean with no import cycle.
+  - **Method**: Spike
   - **Evidence**: Added by the 3amigo lens — C1 now names one exported
     constant in `clierr`, read by `respond`. Grounded: the two are separate
     packages and `clierr`'s package doc states it is the leaf that exists so
     other packages can construct errors without importing `internal/cli` and
     forming a cycle; no `SchemaVersion` constant exists anywhere today; and
     `respond` ALREADY imports `internal/cli/clierr` while `clierr` imports
-    neither, so the read forms no cycle. Pending only on the edit landing
-    and `go build ./...` confirming it.
+    neither, so the read forms no cycle. A throwaway spike then landed the
+    edit and confirmed it, captured at
+    `evidence/spikes/a6-schema-version-home.md`: `clierr` imports stdlib
+    only, `internal/cli/respond/respond.go::Success` already imports
+    `internal/cli/clierr`, and a `clierr`-homed `SchemaVersion` read by
+    `respond.go::OK` and set on `clierr.go::CLIError` in `::EmitJSON`
+    builds and vets clean. The spike also fired A3's predicted byte-identity
+    break: `internal/cli/flow_mvv_0023_test.go::TestReq27And28And95And96And97And129_DefaultModeIsByteIdenticalToTheCapturedPreChangeGolden`
+    and three sibling golden/fixture assertions fail on the single added
+    key, the whole delta against
+    `docs/rdr/0023-resolve-envelope-projection/artifacts/mvv-step1-default-golden.json`
+    being `"schema_version":"0.1"`. That is the Phase 1 Step 1 re-capture
+    obligation A3 already records, not a refutation. Spike edits reverted;
+    no golden re-captured.
   - **If wrong**: the constant needs a third package both import, and C1's
     "one home" clause names the wrong one.
 - **A7 A committed snapshot of the tiered-vocabulary seams and finding
   severities can be diffed in CI, so an undisclosed promotion, an
   unassigned surface, or a reintroduced cardinality assertion fails the
   build rather than relying on a reviewer.**
-  - **Status**: Pending
+  - **Status**: Verified — spiked 2026-09-12: the check builds, and the
+    undisclosed-promotion case was demonstrated red and then green again.
   - **Method**: Spike
   - **Evidence**: Added by the critique lens — both passes independently
     found C3's disclosure obligation unbacked, and the RDR's own
@@ -384,12 +423,29 @@ adopt when it arrives.
     claim about machinery that does not exist. The inputs are established:
     C4 obliges an enumeration seam per tiered vocabulary, and
     `graphlint::AdvisoryCodes` / `BlockingCodes` already partition
-    severity. `.github/workflows/ci.yml` is the host. Unresolved: whether
-    the snapshot is generated by a hidden verb, a `go:generate` golden
-    file, or a test fixture; and whether the severity partition is
-    readable without importing `internal/graphlint` from the test.
-    Verify by spiking the generator and the failing case — move one
-    advisory code to blocking and confirm CI goes red.
+    severity. `.github/workflows/ci.yml` is the host. Both open questions
+    are now answered, captured at
+    `evidence/spikes/a7-ci-snapshot-check.md`.
+    SHAPE: a golden-file `go test`, not a hidden verb or `go:generate` —
+    the repo carries no `go:generate` directive anywhere, so either of
+    those would be the first of its kind, while `testdata/` goldens are an
+    established idiom (`internal/table/testdata/`) and
+    `.github/workflows/ci.yml`'s `docs` job already runs a structurally
+    identical render-then-diff gate (`Makefile::docs-check`). It needs no
+    new CI job — it rides the existing `test` job.
+    IMPORT BOUNDARY: readable with no awkward import. The spike hosted the
+    test in an external `graphlint_test` package beside
+    `internal/graphlint`, reading `resolve.RefusalKinds()`,
+    `table.Categories()`, `accessor.Verdicts()`, `graphlint.Reasons()` and
+    the `AdvisoryCodes()`/`BlockingCodes()`/`IsBlocking()` partition. All
+    are downward-only test imports: `internal/accessor` does not import
+    `internal/graphlint`, so no cycle arises.
+    FAILING CASE: moving `CodeVacuousAtom` from `advisoryCodes` to
+    `blockingCodes` — the undisclosed promotion C3 exists to catch — turned
+    the test red with a diff isolating exactly that line
+    (`graph-vacuous-atom  info` → `blocking`) and nothing else; reverting
+    returned it green. The build fails on the promotion without a reviewer,
+    which is what A7 claims.
   - **If wrong**: C3's mechanical backing is unbuildable at this cost, the
     clause reverts to review-only disclosure, and that limit is recorded
     in Capability Dependencies rather than papered over — the state the
@@ -653,7 +709,10 @@ period's user-visible promise and MUST NOT rest on review alone. It is
 backed by a mechanical check: the tiered-vocabulary seams C4 obliges are
 enumerable, so CI records each one's members and each finding code's
 severity in a committed snapshot, and fails when the current tree differs
-from it. A diff is then a deliberate act — the PR either updates the
+from it. The check reaches every vocabulary that HAS a seam; the CLIError
+`code` row has none buildable (A5), so its `append-only` tier stays a
+prose promise and a new code there is the one promotion-shaped event this
+mechanism cannot catch. A diff is then a deliberate act — the PR either updates the
 snapshot, which is the reviewable artifact naming the moved code, or goes
 red. This gives the three otherwise-prose obligations one mechanism: a
 severity moving `info`→`blocking` cannot merge undisclosed (this clause), a
@@ -741,8 +800,8 @@ enumerates fewer rows than its own tier lists reproduces the gap A4 found:
 | envelope `type` | `frozen` | none — `respond` sets `"ok"` as a literal and a refusal carries no `type` at all | `respond::Types() []string` over `{ok}` — the emitted set has one member; `"failed"` is a reserved name this CLI does not emit — `respond::Fail` writes the bare `*CLIError`, confirmed against the spike's captured failure envelopes — and MUST NOT enter the seam, or S6's by-value assertion would pin a member no consumer can ever observe. Three doc comments in `respond.go` and `readPlan` still describe a `{"type":"failed",…}` record; they are stale today and Step 2 retires them, so a reader checking this row against the tree finds the comments, not an emit site |
 | exit-code classes | `frozen` | none — `clierr::ExitCodeFor` is a `switch` | `clierr::ExitCodes() []int` over the five values `{0,1,2,3,130}`. The PROJECTION is the contract, not its generator: the consumer branches on the integer, so the six `ErrorGroup` constants stay untiered and free to grow behind it (S6). `0` and `1` are in the set because they are emitted — `0` from `GroupSuccess`/`GroupWarning`, `1` from the non-`CLIError` fallthrough — not because they are refusal classes. A new `ErrorGroup` mapping onto an existing integer is therefore a non-event for this tier by design |
 | stderr advisory `level` | `frozen` | none — bare literals in `respond` | `respond::Levels() []string` |
-| CLIError `code` | `append-only` | none — minted at raise sites, part constant part inline literal | a `clierr`-side registry the raise sites draw from |
-| `flow next` unknown-`reason` | `append-only` | none — a const block, no accessor over the union | an accessor over the union, matching `graphlint::Reasons` |
+| CLIError `code` | `append-only` | none — minted at raise sites, part constant part inline literal | **`seam: none (prose-only)`** — A5 spiked it and the registry is not buildable: `clierr` importing `graphlint`/`guard`/`accessor` to draw on their real `Code*` constants is a hard `go build` cycle (`clierr` → `graphlint` → `clierr`, since `graphlint/analysis.go` et al. already import `clierr`), and the only leaf-preserving shape that compiles is a hand-copied shadow list the raise sites never touch — not a seam C2 can assert by value. A real seam needs the ~36 constants moved into `clierr` and ~71 raise sites repointed: a taxonomy consolidation, not this RDR's additive accessor. The tier STANDS, unasserted and legibly so |
+| `flow next` unknown-`reason` | `append-only` | none — a const block, no accessor over the union | `cli::UnknownReasons() []string` over the union, matching `graphlint::Reasons` — A5 spiked it clean: `internal/cli` already imports `internal/resolve`, so the accessor needs no new import and builds with no cycle |
 | `findings[].block` | `append-only` | none — `internal/resolve` exports no `Blocks()` | `resolve::Blocks() []Block` |
 | severity (`blocking`/`info`) | `frozen` | `graphlint::Severities` | anchor only; the seam exists |
 | gate `verdict` | `frozen` | `accessor::Verdicts` | anchor only |
@@ -760,11 +819,11 @@ tiered entry that takes no seam: it is a single `const`, not a set
 EMIT SITES — that a blocking run returns this code and no other — not set
 membership.
 
-Two of the six owed are not mechanical, and A5 is Pending on both. If that
-spike shows either seam cannot be built at the layering this repo keeps —
-the CLIError `code` registry inverting `clierr`'s leaf position, or the
-`flow next` unknown-`reason` union resisting an accessor — the tier on that
-row STANDS and the row records `seam: none (prose-only)` with the reason.
+Two of the six owed were not mechanical, and A5 spiked both before lock.
+The outcome is recorded in the rows above: the `flow next` unknown-`reason`
+accessor builds clean, and the CLIError `code` registry cannot be built at
+the layering this repo keeps. Per this clause, that row's tier STANDS and
+the row records `seam: none (prose-only)` with the reason.
 It does not silently lose its tier, and C2's promise on it is then
 explicitly unasserted rather than assumed asserted. A tier whose seam is
 absent is a weaker promise than one whose seam exists; the difference must
@@ -862,8 +921,8 @@ terms.
 | --- | --- | --- | --- |
 | Severity partition (`blocking`/`info`) gating the exit code | Predecessor (RDR 0006) | Available | C3 rides it; no new machinery. `0006:C17`'s closure at four is opened to append-only as part of this change (A1, ruled). |
 | Terminal envelope every verb routes through | Existing (`internal/cli/respond`) | Available | C1 adds one field at the single gateway rather than per verb. |
-| Enumerable vocabularies to assign tiers to | Existing (`table.Categories()`, `graphlint.BlockingCodes()`) + this RDR | Partial | Of the sixteen vocabularies C4 tiers, nine already enumerate themselves and six are owed a seam (the sixteenth, the aggregate code, is a single const and takes none) — see C4's census. The accessor idiom is established in five packages, so this is application, not invention. |
-| Release-notes discipline naming promotions | This RDR | Introduced | C3's disclosure obligation is process, and through `0.x` it is the ONLY clause here that binds, so it carries the period's whole user-visible promise. It is therefore not left to review: C3 backs it with a committed seam/severity snapshot diffed in CI, so an undisclosed promotion fails the build (A7, Pending — the mechanism is spiked, not assumed). The release note itself stays a human act; what the check guarantees is that the promotion cannot merge silently. |
+| Enumerable vocabularies to assign tiers to | Existing (`table.Categories()`, `graphlint.BlockingCodes()`) + this RDR | Partial | Of the sixteen vocabularies C4 tiers, nine already enumerate themselves and six were owed a seam (the sixteenth, the aggregate code, is a single const and takes none) — see C4's census. The accessor idiom is established in five packages, so this is application, not invention. A5 spiked the two non-mechanical rows: five of the six are buildable, and the CLIError `code` registry is not — it cannot be built without inverting `clierr`'s leaf layering, so that row keeps its tier and records `seam: none (prose-only)`. |
+| Release-notes discipline naming promotions | This RDR | Introduced | C3's disclosure obligation is process, and through `0.x` it is the ONLY clause here that binds, so it carries the period's whole user-visible promise. It is therefore not left to review: C3 backs it with a committed seam/severity snapshot diffed in CI, so an undisclosed promotion fails the build (A7, Verified — spiked as a golden-file `go test`, demonstrated red on an advisory→blocking promotion and green on revert). The release note itself stays a human act; what the check guarantees is that the promotion cannot merge silently. |
 
 ### Existing Infrastructure Audit
 
@@ -1313,9 +1372,12 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
   seam/severity snapshot diffed in CI: a severity moving `info`→`blocking`
   fails the build until the snapshot is updated, which is the reviewable
   artifact naming the moved code. The release note stays a human act; what
-  the check removes is the silent path. Residual: A7 is Pending, and if
-  the mechanism proves unbuildable at this cost the clause reverts to
-  review-only disclosure and the limit is recorded rather than implied.
+  the check removes is the silent path. A7 is Verified: the check is a
+  golden-file `go test` riding the existing CI `test` job, demonstrated red
+  on an advisory→blocking promotion. Residual: it covers the severity
+  partition and the vocabularies that have a seam, so the CLIError `code`
+  row — which A5 found admits no buildable seam — keeps a prose-only
+  promise the snapshot cannot police.
 - **Risk**: The tier vocabulary is adopted in docs but not in the code
   comments it replaces, leaving the contradiction live.
   **Mitigation**: Phase 1 includes replacing the `closed` wording at the
@@ -1466,8 +1528,10 @@ S2 read as a regression.
 
 #### Step 3: Assert the tier rules the consumer is promised
 
-Build the enumeration seams C4's census obliges for the six vocabularies
-lacking one, then a test per tier over them: that append-only vocabularies are
+Build the enumeration seams C4's census obliges for the five vocabularies
+that admit one — every owed row except the CLIError `code` registry, which
+A5 refuted and C4 records as `seam: none (prose-only)` — then a test per
+tier over them: that append-only vocabularies are
 never asserted by cardinality or ordinal, that the frozen sets match their
 declared members, and that an `info` finding leaves the success disposition
 untouched. The seams are production accessors, not test helpers — a tier a
@@ -1629,9 +1693,14 @@ the two envelope shapes captured under
 7. **Scenario**: `append-only` vocabularies are never asserted by
    cardinality or ordinal.
    **Expected**: membership-and-uniqueness assertions only, each over that
-   vocabulary's enumeration seam — which for the CLIError `code` set and
-   the `flow next` unknown-`reason` union means the seam is built first
-   (C4). This scenario asserts a repo-wide negative, so the existing
+   vocabulary's enumeration seam — which for the `flow next`
+   unknown-`reason` union means the seam is built first (C4). The CLIError
+   `code` set is the one `append-only` vocabulary with no seam to assert
+   over (A5 refuted it; C4 records `seam: none (prose-only)`), so it is
+   out of this scenario's scope on the positive side and squarely in it on
+   the negative: with no seam, an exact-set or cardinality assertion over
+   the code vocabulary is the very anti-pattern below, and there is nothing
+   to replace it with. This scenario asserts a repo-wide negative, so the existing
    exhaustive assertions over `append-only` sets are the ANTI-pattern it
    retires, not incumbents it tolerates: `TestReq73_TheBlockingCodeSetIsExactlyTheTenNamed`
    and `TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet`
@@ -1871,7 +1940,46 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- Semantic Versioning 2.0.0 §4 (the `0.x` series permits incompatible
+  change) and §8 (a major bump is required for backward-incompatible
+  change) — the rule C1's `schema_version` promise is written against,
+  and the reason A2's window closes at 1.0.0.
+- In-repo surfaces read for the vocabulary census (C4):
+  `internal/graphlint/taxonomy.go` (`AdvisoryCodes`, `BlockingCodes`,
+  `severityFor`, `AggregateCode`), `internal/table/category.go`
+  (`Categories`), `internal/cli/clierr/clierr.go` (`CLIError`),
+  `internal/cli/respond/respond.go` (`Success`, `Note`, `Warn`),
+  `internal/resolve/resolve.go` (`RefusalKinds`),
+  `internal/resolve/guard.go` (`Block`),
+  `internal/accessor/model.go` (`Verdicts`),
+  `internal/guard/grammar.go` (`Operators`),
+  `internal/cli/flow_next.go` (`unknownFact.Reason`),
+  `internal/cli/flow_input.go` (`planEnvelope`),
+  `internal/cli/flow_resolve.go`, `internal/cli/flow_exec.go`.
+- Repo documents that carry or will carry the promise:
+  `docs/cli-output-contract.md` (the promise's home per Activation
+  Step 1), `llms.txt`, `.goreleaser.yaml`,
+  `.github/workflows/release.yml` (releases on a `v*` tag push),
+  `.github/workflows/ci.yml` (A7's host).
+- Peer RDRs: `0006` (severity partition and `C17`'s advisory tier,
+  amended to append-only by A1), `0023` (the envelope projection whose
+  byte-identity golden
+  `docs/rdr/0023-resolve-envelope-projection/artifacts/mvv-step1-default-golden.json`
+  A3 must re-capture), `0022` (C3's joint check, JC1), `0005`, `0017`,
+  `0028`, and `JDR 0001` §D10 (the reopened-closure precedent A1
+  follows) and §D12 (the `Block` set's recorded growth).
+- External prior art on machine-readable output stability, opened during
+  Investigation and recorded in
+  `docs/rdr/0029-version-promise-on-machine-readable-output/evidence/research/prior-art.md`:
+  golangci-lint, typescript-eslint, Ruff, Rust clippy (RFC 2476),
+  OpenTofu `json-format.mdx`, Cargo's external-tools reference; negative
+  results for shellcheck and `gh`; ESLint
+  `docs/src/maintain/manage-releases.md:49` (operational `semver-minor`
+  use only).
+- Evidence artifacts for this record, under
+  `docs/rdr/0029-version-promise-on-machine-readable-output/evidence/`:
+  `research/in-repo-prior-art.md`, `research/prior-art.md`,
+  `research/resolve-verification.md`, `spikes/envelope-baseline.md`,
+  and the pre-lock lens outputs (`grounding/`, `3amigo/`, `critique/`,
+  `repeatability/`).
+- Related issues: none.
