@@ -517,6 +517,23 @@ every distinctive anchor and on `graph-terminal-unreachable`. Absence
 arm: no `Final` peers exist (0001–0011 are Implemented), and this RDR
 adds a refusal rather than converting one to an acceptance.
 
+Joint-check: fired → 0029 (home: `cli/0029 §Normative Contracts` C3).
+Recorded 2026-09-11 from 0029's propose-stage check; symmetric write.
+Context: RDR 0029 (Draft, `mid`) settles what a released version promises
+an agent about machine-readable output, and its C3 rules that a new lint
+finding code enters at severity `info` and is promoted to `blocking` only
+in a later, disclosed release. This RDR's C1 introduces
+`graph-terminal-unreachable` directly as a BLOCKING code and restates
+"the advisory tier stays closed at four (`0006:C17`)" — the exact rule
+0029:C3 changes. Disposition: 0029:C3 is the single normative home; this
+record CITES it rather than restating the C17 closure, and at
+implementation either enters the code at `info` or claims C3's
+re-attribution clause (a code may enter at `blocking` when it
+re-attributes a condition some other code already refused). Which of the
+two applies is 0022's call, made against 0029:C3 — not re-decided here.
+Note both records are pre-1.0.0, where `0.x` carries no compatibility
+guarantee, so the rule binds as declared intent until 1.0.0.
+
 ## Alternatives Considered
 
 ### Alternative 1: Merged-node backward reachability (pinned miss)

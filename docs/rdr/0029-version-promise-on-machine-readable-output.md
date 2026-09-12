@@ -156,10 +156,17 @@ consumer's pipeline. Semantic versioning has no opinion on whether that is a
 minor or a major; this project must have one, and every future change to the
 envelope or the taxonomy will need to read it.
 
-Out of scope: the release *mechanism* — tag format, goreleaser, semver
-arithmetic, and starting from a `0.x` series. Those are settled by existing
-tooling and wider convention, and belong in ordinary documentation rather than
-a decision record.
+Out of scope: the release *mechanism* — tag format, goreleaser, and semver
+arithmetic. Those are settled by existing tooling and wider convention, and
+belong in ordinary documentation rather than a decision record.
+
+In scope, and load-bearing: the fact that the series starts at **0.1.0, not
+1.0.0**. The seed treated "starting from a `0.x` series" as mechanism, but
+it is not — under SemVer a `0.x` major carries no compatibility guarantee,
+so it decides what the promise can say and when it starts binding. This RDR
+therefore settles two things at once: the promise that takes effect at
+1.0.0, and what the CLI does during `0.x` so that promise costs nothing to
+adopt when it arrives.
 
 ## Critical Assumptions
 
@@ -181,21 +188,23 @@ a decision record.
     contradiction between this RDR and 0006 at Stage 7.1, or as an
     implementer unable to add an `info` code without amending a Final
     peer.
-- **A2 `schema_version` ships in the first tagged release, before any
-  consumer has a released envelope to be compatible with.**
+- **A2 `schema_version` ships before 1.0.0, while the `0.x` series still
+  permits incompatible change.**
   - **Status**: Pending
   - **Method**: Source Search
   - **Evidence**: No tag has ever been cut — `internal/version` reports a
     pseudo-version via its `debug.ReadBuildInfo` fallback, and
     `.github/workflows/release.yml` triggers on a `v*` tag that does not
-    yet exist. Resolve confirms no release exists at implementation time
-    and that C1's field lands in the same release that first publishes
-    the envelope.
-  - **If wrong**: adding `schema_version` to an already-released envelope
-    is itself a non-backward-compatible change under C1's own rule, so
-    the field that exists to prevent major bumps forces one. Surfaces as
-    a strict-parsing consumer (`DisallowUnknownFields`, JSON-schema CI)
-    failing on the release that announces the compatibility promise.
+    yet exist. The first release is 0.1.0, so the window is the whole
+    `0.x` series rather than one release. Resolve confirms the field
+    lands before any 1.0.0 tag.
+  - **If wrong**: adding `schema_version` after 1.0.0 makes the
+    compatibility field itself a breaking change under C1's own rule,
+    forcing a 2.0.0 for the field that exists to prevent major bumps.
+    Surfaces as a strict-parsing consumer failing on the release that
+    announces the compatibility promise. Note this is a *soft* deadline
+    for the whole `0.x` series, not a hard one at 0.1.0 — the risk is
+    procrastination past 1.0.0, not missing the first tag.
 - **A3 No current consumer parses the envelope strictly enough that one
   added field breaks it.**
   - **Status**: Pending
@@ -235,13 +244,28 @@ Draw the compatibility edge at **default-enablement, not at code
 existence**, and state the promise **per surface** rather than as one
 blanket claim over "the JSON output".
 
-A released version promises an agent this: *an invocation that succeeded
-at version N, over input you did not change, still succeeds at N+1 within
-the same major.* It does **not** promise the vocabularies are frozen. New
-refusal codes, new load categories, and new lint findings may appear in a
-minor release — because they already have, four times — but a new finding
-may not change a verdict that was previously clean until a release that
-discloses the promotion.
+**The series is `0.x`, and that is the governing fact.** The first release
+is 0.1.0, not 1.0.0, and under SemVer a `0.x` series carries no
+compatibility guarantee: anything may move in any release. So this RDR is
+not writing a promise that binds today. It is deciding **what the promise
+will be when 1.0.0 arrives, and what the CLI does in the meantime so that
+promise is cheap to keep** — the surfaces get their tiers and their
+`schema_version` now, while breaking them is still free, precisely so the
+1.0.0 commitment is a formality rather than a redesign.
+
+Stated at 1.0.0 and after, a released version promises an agent this: *an
+invocation that succeeded at version N, over input you did not change,
+still succeeds at N+1 within the same major.* It does **not** promise the
+vocabularies are frozen. New refusal codes, new load categories, and new
+lint findings may appear in a minor release — because they already have,
+four times — but a new finding may not change a verdict that was
+previously clean until a release that discloses the promotion.
+
+Through `0.x` the tiers are **declared and honored as intent, not
+guaranteed**: they tell a consumer which surfaces are expected to be
+stable at 1.0.0, and they tell this project which changes are cheap now
+and expensive later. A consumer pinning a `0.x` version is told plainly
+that it is pinning, not relying.
 
 Three mechanisms carry that promise, all of which reuse surfaces that ship
 today:
@@ -323,11 +347,17 @@ of the form `MAJOR.MINOR`, present on both the `ok` and `failed` records.
 It is versioned independently of the binary's release version and MUST NOT
 be derived from it.
 
-The minor component increments for backward-compatible additions: a new
-optional field, a new member of an append-only or growing vocabulary. The
-major component increments for changes that are not backward-compatible:
-a removed or renamed field, a removed or renamed member of any vocabulary,
-or a change to a Frozen surface.
+The schema version begins at `"0.1"` and tracks the wire, not the binary.
+While its major is `0` the schema is explicitly unstable and MAY change
+incompatibly in any release; the minor component still increments on every
+change so a consumer can detect movement even while it cannot rely on
+compatibility.
+
+From `"1.0"` onward: the minor component increments for backward-compatible
+additions — a new optional field, a new member of an append-only or growing
+vocabulary. The major component increments for changes that are not
+backward-compatible: a removed or renamed field, a removed or renamed member
+of any vocabulary, or a change to a Frozen surface.
 
 A consumer MUST ignore object properties with unrecognized names, and MUST
 reject an envelope reporting an unsupported major.
@@ -360,6 +390,12 @@ declared stability tier, and the tier is recorded in
 The term `closed` MUST NOT be used to describe any of these tiers, in code
 comments or documentation, because it is currently live in two
 incompatible senses.
+
+While the binary's version is `0.x`, a tier is a DECLARATION OF INTENT: it
+states what the surface is expected to promise at 1.0.0, and MUST NOT be
+read by a consumer as a guarantee already in force. The tier names and
+assignments are nonetheless authored and maintained from the first release,
+so that reaching 1.0.0 requires no reclassification.
 ```
 
 **C3**
@@ -374,6 +410,11 @@ Promotion of a finding code from `info` to `blocking` is a distinct
 release event. It MUST be disclosed in the release notes for the release
 that carries it, naming the code. A promotion MUST NOT occur in a patch
 release.
+
+The disclosure obligation binds during `0.x` as well as after. It is the
+one clause here that does not wait for 1.0.0: a consumer's pipeline going
+red is equally disruptive at 0.4.0, and disclosure costs a release note
+rather than a design constraint.
 
 A code MAY be introduced directly at `blocking` only when it reports a
 condition that was already refused by some other code — that is, when the
@@ -528,17 +569,20 @@ decoded with `DisallowUnknownFields`, or a JSON-schema check in CI) sees
 an unexpected `schema_version` key and hard-fails. The promise's first act
 is a violation of itself, and the agent audience is exactly the population
 that hand-rolls strict parsers. The recommendation survives this, for two
-reasons, but not unchanged. First, the exposure is real but bounded: no
-tag has ever been cut, so there is no released envelope to be
-backward-compatible *with* — the field lands before v1.0.0, where C1's own
-major-bump rule has nothing to bind. Second, C1 already carries the
-mitigation as a consumer obligation ("MUST ignore object properties with
-unrecognized names"), which is the clause that makes every *later*
-additive change safe. What the premortem changes is the sequencing, and
-that is now a Pending assumption (A2): `schema_version` must ship in the
-first tagged release, not added later, or the project spends its one free
-window and then owes a major bump for the field that exists to prevent
-major bumps. A second, weaker failure — that C3's disclosure obligation
+reasons, but not unchanged. First, the exposure is bounded by the release
+series itself: the first release is 0.1.0, and a `0.x` series carries no
+SemVer compatibility guarantee, so C1's major-bump rule has nothing to
+bind until 1.0.0. The whole `0.x` run is the free window, not just the
+first tag. Second, C1 already carries the mitigation as a consumer
+obligation ("MUST ignore object properties with unrecognized names"),
+which is the clause that makes every *later* additive change safe. What
+the premortem changes is the sequencing, and that is now a Pending
+assumption (A2): `schema_version` must land before 1.0.0, or the project
+spends its free window and then owes a major bump for the field that
+exists to prevent major bumps. The honest reading is that this failure is
+less acute than it first appears — the `0.x` series is a generous runway —
+but it is also the kind of deadline a project misses by never treating any
+particular release as the one. A second, weaker failure — that C3's disclosure obligation
 is process rather than a test, so a promotion ships undisclosed — is
 accepted as a known limit rather than designed around; it is recorded as
 a failure mode, and the tier assignment in C4 is what a reviewer checks
@@ -586,7 +630,18 @@ Ground-sweep: reopened → A3's evidence line (`DisallowUnknownFields` is in
 production use at `internal/table/source.go::decodeStrict`, on the INPUT
 path under `0002:C3`, not zero matches as first written); 15 of 16 anchors
 CONFIRMED, correction folded into A3 and C1's tolerance clause
-Joint-check: fired → 0022 (home: OPEN)
+Joint-check: fired → 0022 (home: `cli/0029 §Normative Contracts` C3)
+
+**Joint decision, settled.** C3 in this record is the single normative home
+for the introduce-at-`info` / disclose-on-promotion rule. RDR 0022 drops its
+restatement of the C17 closure and CITES `0029:C3` instead, then either
+enters `graph-terminal-unreachable` at `info` or claims C3's re-attribution
+clause if that code re-attributes an existing refusal. This record is `mid`
+against 0022's `large` and its whole subject is the cross-version promise,
+so the rule carries less blast radius here; cite-don't-restate also avoids
+the copy-drift that forces 7.1 demotions. The `0.x` framing above softens
+the immediate stakes — through `0.x` neither record's tier is a guarantee —
+but the rule still has to have one home before 1.0.0, and this is it.
 
 ## Alternatives Considered
 
@@ -836,10 +891,11 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
   before implementation; if it is, this RDR either amends 0006 through
   the normal route or C3 names the graph-lint tier as the exception with
   a stated reason.
-- **Risk**: `schema_version` is added after a release exists, making the
+- **Risk**: `schema_version` is added after 1.0.0, making the
   compatibility field itself a breaking change (A2).
-  **Mitigation**: sequence it into the first tagged release; the
-  Implementation Plan's Phase 1 lands the field before any `v*` tag.
+  **Mitigation**: land it during `0.x`, where incompatible change is free;
+  the Implementation Plan's Phase 1 puts it in the first tagged release so
+  the runway is never the thing being spent.
 - **Risk**: The promotion disclosure in C3 is process, not a test, so a
   promotion ships unannounced.
   **Mitigation**: C4's tier assignment is the reviewable artifact — a
@@ -881,7 +937,9 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
       new members decides whether C3 is implementable as written or needs
       an exception clause. Nothing else in this plan depends on it, but
       C3's wording does.
-- [ ] No `v*` tag cut yet (A2) — the sequencing this plan assumes.
+- [ ] Still pre-1.0.0 (A2) — the `0.x` runway this plan assumes. The
+      first release is 0.1.0; nothing here waits on 1.0.0 except the
+      schema's own promotion to `"1.0"`.
 
 ### Minimum Viable Validation
 
@@ -936,11 +994,20 @@ Write the tier table and the C1/C3 rules into
 `docs/cli-output-contract.md`, and point `llms.txt` at it — the two
 documents already in an agent's read path.
 
-#### Activation Step 2: Cut the first tagged release
+#### Activation Step 2: Cut 0.1.0 with the tiers already declared
 
-The field must ship in the first `v*` tag (A2). Before tagging, confirm
+The field ships in the first `v*` tag (A2). Before tagging, confirm
 `make docs-check` passes so the generated reference does not contradict
-the new prose.
+the new prose, and that the published text says plainly that `0.x` carries
+no guarantee — the tiers are the 1.0.0 intent, declared early so reaching
+it costs nothing.
+
+#### Activation Step 3: Promote the schema to `"1.0"` at 1.0.0
+
+The one deferred step. When the binary reaches 1.0.0, the schema version
+moves to `"1.0"` and the tiers stop being intent and start being
+guarantees. No code change is expected at that point — that is the test of
+whether this RDR worked.
 
 ### New Dependencies
 
