@@ -1,0 +1,19 @@
+0021  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=9
+  conformance prose:exactness                381-381   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                384-384   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                431-431   an exactness term of art in a normative claim: "deterministic"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance gate:inline                   1034-1154  the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived          1064-1067  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1073-1085  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1091-1093  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1104-1108  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1129-1154  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
