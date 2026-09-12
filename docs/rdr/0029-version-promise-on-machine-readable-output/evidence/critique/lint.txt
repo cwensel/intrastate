@@ -1,0 +1,15 @@
+0029  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=7
+  conformance evidence:over-budget           272-317   this Evidence field is 46 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
+  conformance gate:inline                   1576-1695  the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived          1606-1609  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1615-1627  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1633-1635  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1646-1650  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1671-1695  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
