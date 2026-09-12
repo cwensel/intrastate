@@ -1,0 +1,1195 @@
+{
+  "edges": [
+    {
+      "from": "0029",
+      "to": "0017",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 134,
+      "line_end": 134,
+      "evidence": "RDR 0017"
+    },
+    {
+      "from": "0029:A1",
+      "to": "internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 164,
+      "line_end": 179,
+      "evidence": "internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A1",
+      "to": "internal/graphlint/taxonomy.go::severityFor",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 164,
+      "line_end": 179,
+      "evidence": "internal/graphlint/taxonomy.go::severityFor",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A2",
+      "to": "internal/version/version.go::resolve",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 205,
+      "line_end": 214,
+      "evidence": "internal/version/version.go::resolve",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A2",
+      "to": "internal/version::resolve",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 205,
+      "line_end": 214,
+      "evidence": "internal/version::resolve",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A3",
+      "to": "internal/cli/flow_input.go::planEnvelope",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 226,
+      "line_end": 241,
+      "evidence": "internal/cli/flow_input.go::planEnvelope",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A3",
+      "to": "internal/table/load.go::Load",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 226,
+      "line_end": 241,
+      "evidence": "internal/table/load.go::Load",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A3",
+      "to": "internal/table/source.go::decodeStrict",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 226,
+      "line_end": 241,
+      "evidence": "internal/table/source.go::decodeStrict",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/accessor/model.go::Verdicts",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/accessor/model.go::Verdicts",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/cli/flow_exec.go::gateResult",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/cli/flow_exec.go::gateResult",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/cli/flow_next.go::unknownFact.Reason",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/cli/flow_next.go::unknownFact.Reason",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/cli/respond/respond.go::Note",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/cli/respond/respond.go::Note",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/graphlint/taxonomy.go::AggregateCode",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/graphlint/taxonomy.go::AggregateCode",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029:A4",
+      "to": "internal/resolve/resolve.go::RefusalKinds",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 251,
+      "line_end": 277,
+      "evidence": "internal/resolve/resolve.go::RefusalKinds",
+      "field": "Evidence"
+    },
+    {
+      "from": "0029",
+      "to": "table::CatUnsupportedVersion",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 536,
+      "line_end": 536,
+      "evidence": "table::CatUnsupportedVersion"
+    },
+    {
+      "from": "0029",
+      "to": "{SPIKE_DIR}",
+      "kind": "artifact",
+      "line": 562,
+      "line_end": 562,
+      "evidence": "{SPIKE_DIR}"
+    },
+    {
+      "from": "0029",
+      "to": "internal/cli/flow_input.go::planEnvelope",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 575,
+      "line_end": 575,
+      "evidence": "internal/cli/flow_input.go::planEnvelope"
+    },
+    {
+      "from": "0029",
+      "to": "0006",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 582,
+      "line_end": 582,
+      "evidence": "RDR 0006"
+    },
+    {
+      "from": "0029",
+      "to": "internal/cli/respond::Success",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 591,
+      "line_end": 591,
+      "evidence": "internal/cli/respond::Success"
+    },
+    {
+      "from": "0029",
+      "to": "internal/cli/clierr::CLIError",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 592,
+      "line_end": 592,
+      "evidence": "internal/cli/clierr::CLIError"
+    },
+    {
+      "from": "0029",
+      "to": "internal/table::Categories",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 593,
+      "line_end": 593,
+      "evidence": "internal/table::Categories"
+    },
+    {
+      "from": "0029",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 688,
+      "line_end": 688,
+      "evidence": "RDR 0022"
+    },
+    {
+      "from": "0029",
+      "to": "internal/table/source.go::decodeStrict",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 703,
+      "line_end": 703,
+      "evidence": "internal/table/source.go::decodeStrict"
+    },
+    {
+      "from": "0029:JC1",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 705,
+      "line_end": 705,
+      "evidence": "0022",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0029:JC1",
+      "to": "cli/0029:§normative-contracts",
+      "kind": "joint-decision-home",
+      "resolved": true,
+      "line": 705,
+      "line_end": 705,
+      "evidence": "`cli/0029 §Normative Contracts` C3",
+      "field": "Joint-check"
+    },
+    {
+      "from": "0029",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 708,
+      "line_end": 708,
+      "evidence": "RDR 0022"
+    },
+    {
+      "from": "0029:ALT1",
+      "to": "0028",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 741,
+      "line_end": 741,
+      "evidence": "RDR 0028"
+    },
+    {
+      "from": "0029",
+      "to": "0017",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 849,
+      "line_end": 849,
+      "evidence": "RDR 0017"
+    },
+    {
+      "from": "0029",
+      "to": "0023",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 851,
+      "line_end": 851,
+      "evidence": "RDR 0023"
+    },
+    {
+      "from": "0029",
+      "to": "graphlint::CodeCoverageClosedByEscape",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 902,
+      "line_end": 902,
+      "evidence": "graphlint::CodeCoverageClosedByEscape"
+    },
+    {
+      "from": "0029",
+      "to": "table::Categories",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 904,
+      "line_end": 904,
+      "evidence": "table::Categories"
+    },
+    {
+      "from": "0029",
+      "to": "graphlint::Report.Blocking",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 912,
+      "line_end": 912,
+      "evidence": "graphlint::Report.Blocking"
+    },
+    {
+      "from": "0029",
+      "to": "graphlint::AggregateCode",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 914,
+      "line_end": 914,
+      "evidence": "graphlint::AggregateCode"
+    },
+    {
+      "from": "0029",
+      "to": "internal/version::resolve",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 976,
+      "line_end": 976,
+      "evidence": "internal/version::resolve"
+    },
+    {
+      "from": "0029",
+      "to": "flow_input.go::planEnvelope",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 977,
+      "line_end": 977,
+      "evidence": "flow_input.go::planEnvelope"
+    },
+    {
+      "from": "0029",
+      "to": "0023",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 993,
+      "line_end": 993,
+      "evidence": "RDR 0023"
+    },
+    {
+      "from": "0029:MVV",
+      "to": "{SPIKE_DIR}",
+      "kind": "artifact",
+      "line": 1084,
+      "line_end": 1084,
+      "evidence": "{SPIKE_DIR}"
+    },
+    {
+      "from": "0029",
+      "to": "{SPIKE_DIR}",
+      "kind": "artifact",
+      "line": 1149,
+      "line_end": 1149,
+      "evidence": "{SPIKE_DIR}"
+    },
+    {
+      "from": "0029:S1",
+      "to": "internal/cli/respond/respond.go::Success",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1156,
+      "line_end": 1156,
+      "evidence": "internal/cli/respond/respond.go::Success"
+    },
+    {
+      "from": "0029:S2",
+      "to": "internal/cli/clierr/clierr.go::CLIError",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1164,
+      "line_end": 1164,
+      "evidence": "internal/cli/clierr/clierr.go::CLIError"
+    },
+    {
+      "from": "0029:S2",
+      "to": "internal/cli/respond/respond.go::Fail",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1165,
+      "line_end": 1165,
+      "evidence": "internal/cli/respond/respond.go::Fail"
+    },
+    {
+      "from": "0029:S3",
+      "to": "internal/cli/flow_input.go::planEnvelope",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1172,
+      "line_end": 1172,
+      "evidence": "internal/cli/flow_input.go::planEnvelope"
+    },
+    {
+      "from": "0029:S4",
+      "to": "internal/graphlint/taxonomy.go::severityFor",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1178,
+      "line_end": 1178,
+      "evidence": "internal/graphlint/taxonomy.go::severityFor"
+    },
+    {
+      "from": "0029:S6",
+      "to": "internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1189,
+      "line_end": 1189,
+      "evidence": "internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted"
+    },
+    {
+      "from": "0029:S7",
+      "to": "internal/table/command_carrier_0025_test.go::TestReq79_TheCategorySetIsAppendOnlyAndDuplicateFree",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1196,
+      "line_end": 1196,
+      "evidence": "internal/table/command_carrier_0025_test.go::TestReq79_TheCategorySetIsAppendOnlyAndDuplicateFree"
+    },
+    {
+      "from": "0029:S8",
+      "to": "internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1204,
+      "line_end": 1204,
+      "evidence": "internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers"
+    },
+    {
+      "from": "0029",
+      "to": "internal/cli/clierr::WriteJSONLine",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1221,
+      "line_end": 1221,
+      "evidence": "internal/cli/clierr::WriteJSONLine"
+    },
+    {
+      "from": "0029",
+      "to": "{ARTIFACT_DIR}/gate.md",
+      "kind": "artifact",
+      "line": 1235,
+      "line_end": 1235,
+      "evidence": "{ARTIFACT_DIR}/gate.md"
+    },
+    {
+      "from": "0029:G-assumptions",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 1280,
+      "line_end": 1280,
+      "evidence": "path::Symbol"
+    }
+  ],
+  "elements": [
+    {
+      "id": "0029:A1",
+      "kind": "A",
+      "key": "1",
+      "label": "The graph-lint advisory tier can accept new members, or `0006:C17` can be amended to allow it.",
+      "derived": false,
+      "hash": "4dbc9d6a",
+      "section": "0029:§critical-assumptions",
+      "line_start": 158,
+      "line_end": 200,
+      "bytes": 2849,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified — ruled 2026-09-11: `0006:C17` is opened as append-only. The code already permits it; the closure was the only blocker and it is lifted.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A1",
+          "line_start": 160,
+          "line_end": 162,
+          "status": {
+            "value": "Verified",
+            "qualifier": "ruled 2026-09-11: 0006:C17 is opened as append-only. The code already permits it; the closure was the only blocker and it is lifted.",
+            "tier": "canonical",
+            "raw": "Verified — ruled 2026-09-11: `0006:C17` is opened as append-only. The code already permits it; the closure was the only blocker and it is lifted."
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Peer RDR",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A1",
+          "line_start": 163,
+          "line_end": 163,
+          "method": {
+            "members": [
+              "Peer RDR"
+            ],
+            "raw": "Peer RDR"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`0006:C17` states \"The advisory tier is closed at `graph-coverage-closed-by-escape`, `graph-redundant-row`, `graph-unreachable-rule`, and `graph-vacuous-atom`\" — a closure at exactly four members; 0006 is Implemented. The IMPLEMENTATION, however, imposes no such limit: severity is DERIVED, not carried per-code — `internal/graphlint/taxonomy.go::severityFor` returns `SeverityInfo` for anything `IsBlocking` rejects, and `IsBlocking` is `slices.Contains(blockingCodes, code)`. So a fifth advisory code becomes `info` with no severity plumbing, no exhaustiveness switch, and no cardinality constant anywhere in `internal/graphlint/` or `internal/cli/`; the eleven `AdvisoryCodes()` consumers all iterate. Exactly one assertion blocks it: `internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers` compares `AdvisoryCodes()` to a four-element literal with `slices.Equal` — a by-value set assertion, so the fix is editing the literal, not relaxing a number.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A1",
+          "line_start": 164,
+          "line_end": 179
+        },
+        {
+          "label": "Ruling (2026-09-11)",
+          "match": "author",
+          "value": "C17's closure is incidental-as-then-stood, not load-bearing, and is opened. This follows `JDR 0001 §D10` rule 3, which reopened a closed `CLIError` field on a peer's request and recorded the result as \"a 0006 citation repair, not a reopening\" — the same shape. C17's load-bearing guarantee is its last sentence, \"Advisory findings MUST NOT change the success disposition,\" which adding a member does not touch; C3 restates that guarantee rather than amending it.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A1",
+          "line_start": 180,
+          "line_end": 186
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "C3 is unimplementable as written for graph-lint codes — a new finding could only enter at `blocking`, which is exactly the verdict-changing event the policy exists to prevent. Surfaces as a contradiction between this RDR and 0006 at Stage 7.1, or as an implementer unable to add an `info` code without amending a Final peer.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A1",
+          "line_start": 195,
+          "line_end": 200
+        }
+      ]
+    },
+    {
+      "id": "0029:A2",
+      "kind": "A",
+      "key": "2",
+      "label": "`schema_version` ships before 1.0.0, while the `0.x` series still permits incompatible change.",
+      "derived": false,
+      "hash": "8dba61da",
+      "section": "0029:§critical-assumptions",
+      "line_start": 201,
+      "line_end": 221,
+      "bytes": 1314,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A2",
+          "line_start": 203,
+          "line_end": 203,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A2",
+          "line_start": 204,
+          "line_end": 204,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "No tag has ever been cut — `git tag --list` is empty and `git describe --tags` fails. `internal/version::resolve` defaults to `Info{Version: \"dev\", Commit: \"none\", Date: \"unknown\"}` (`internal/version/version.go::resolve`), filling commit and date from VCS stamps but never moving `version` off `\"dev\"` without an `-ldflags` injection or a module version; `internal/cli/version.go`'s verb reports that value and nothing else. `.github/workflows/release.yml` triggers only on a `v*` tag push (`on.push.tags: [\"v*\"]`). The first release is therefore 0.1.0 and the window is the whole `0.x` series rather than one release.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A2",
+          "line_start": 205,
+          "line_end": 214
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "adding `schema_version` after 1.0.0 makes the compatibility field itself a breaking change under C1's own rule, forcing a 2.0.0 for the field that exists to prevent major bumps. Surfaces as a strict-parsing consumer failing on the release that announces the compatibility promise. Note this is a *soft* deadline for the whole `0.x` series, not a hard one at 0.1.0 — the risk is procrastination past 1.0.0, not missing the first tag.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A2",
+          "line_start": 215,
+          "line_end": 221
+        }
+      ]
+    },
+    {
+      "id": "0029:A3",
+      "kind": "A",
+      "key": "3",
+      "label": "No current consumer parses the envelope strictly enough that one added field breaks it.",
+      "derived": false,
+      "hash": "708bb425",
+      "section": "0029:§critical-assumptions",
+      "line_start": 222,
+      "line_end": 245,
+      "bytes": 1497,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A3",
+          "line_start": 224,
+          "line_end": 224,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A3",
+          "line_start": 225,
+          "line_end": 225,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`DisallowUnknownFields` IS used in production, but only on the INPUT path — `internal/table/source.go::decodeStrict`, which rejects unknown keys in the model TOML under `0002:C3` (\"an unknown schema field is a stable refusal, never a silent no-op\"); its four in-repo call sites are all TOML, reached via `internal/table/load.go::Load`. There is a real in-repo consumer that re-parses the OUTPUT envelope, and it is TOLERANT: `--plan` decodes a `flow resolve --as json` envelope through `internal/cli/flow_input.go::planEnvelope`, a four-field struct read by a plain `json.Unmarshal`, which ignores unrecognized top-level properties by Go's default decoder behaviour. Test-site envelope decodes are likewise plain structs. No `.claude/` skill, hook, Makefile, or CI workflow parses the envelope at all, and `schema_version`/`format_version` appear nowhere outside this record's prose. So the additive field is safe for the strictest consumer that exists — and `planEnvelope` is the one this RDR must not break.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A3",
+          "line_start": 226,
+          "line_end": 241
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the additive change is breaking for that consumer regardless of what C1 declares, and the rollout needs a deprecation window rather than a single release. Surfaces as a harness failing to parse immediately after upgrade.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A3",
+          "line_start": 242,
+          "line_end": 245
+        }
+      ]
+    },
+    {
+      "id": "0029:A4",
+      "kind": "A",
+      "key": "4",
+      "label": "The three tier names partition every machine-readable surface this CLI emits — no surface needs a fourth tier.",
+      "derived": false,
+      "hash": "fb46ecca",
+      "section": "0029:§critical-assumptions",
+      "line_start": 246,
+      "line_end": 282,
+      "bytes": 2507,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified as to the PARTITION; C4's assignment list is incomplete and is corrected below.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A4",
+          "line_start": 248,
+          "line_end": 249,
+          "status": {
+            "value": "Verified",
+            "qualifier": "as to the PARTITION; C4's assignment list is incomplete and is corrected below.",
+            "tier": "canonical",
+            "raw": "Verified as to the PARTITION; C4's assignment list is incomplete and is corrected below."
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A4",
+          "line_start": 250,
+          "line_end": 250,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "An enumeration of every string vocabulary reachable on the `--as=json` wire found **thirteen** emitted sets, against the seven C4 named. Every one of the five unassigned sets fits an existing tier, so no surface needs semantics the three tiers do not provide — the partition holds, which is what this assumption claims. The five, with the tier each takes (now assigned in C4): the stderr advisory `level` set `note`/`warning` (`internal/cli/respond/respond.go::Note`, `::Warn`) → `frozen`, a `type`-shaped discriminator on the second stream; the gate `verdict` set `allow`/`deny`/`indeterminate` (`internal/accessor/model.go::Verdicts`, emitted at `internal/cli/flow_exec.go::gateResult`) → `frozen`, since it is also the accessor-protocol INPUT alphabet and `cmdbind` rejects a stranger, so it cannot append without breaking gate authors; `data.escape_class` (`internal/resolve/resolve.go::RefusalKinds`, emitted at `internal/cli/flow_resolve.go`) → `frozen`, already enforced by `internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted`; the `flow next` unknown-`reason` set (`internal/cli/flow_next.go::unknownFact.Reason`) → `append-only`, a set DISTINCT from the `graph-unprovable-coverage` `reason` set C4 already names, on a different field with a different producer; and the `graph-lint-failed` aggregate code (`internal/graphlint/taxonomy.go::AggregateCode`) → `frozen`, the one code that envelope ever carries. Two model-authored open namespaces — `findings[].class` and `data.dispositions` — are correctly tier-less: `clierr` ascribes them no meaning, so they are author surface, not CLI vocabulary. C4 also said \"the graph-lint finding codes\" where the blocking and advisory tiers take DIFFERENT tiers; it now names each.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A4",
+          "line_start": 251,
+          "line_end": 277
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "C4 is incomplete and an unassigned surface has no stated promise — the exact gap this RDR exists to close, reappearing inside the fix. Surfaces at implementation as a vocabulary that fits no tier. This is what the enumeration above actually found, at five surfaces; the correction is C4's, not the tier vocabulary's.",
+          "section": "0029:§critical-assumptions",
+          "element": "0029:A4",
+          "line_start": 278,
+          "line_end": 282
+        }
+      ]
+    },
+    {
+      "id": "0029:C1",
+      "kind": "C",
+      "key": "1",
+      "label": "The `--as=json` terminal envelope carries a `schema_version` string field",
+      "derived": false,
+      "hash": "2f6deb77",
+      "section": "0029:§normative-contracts",
+      "line_start": 381,
+      "line_end": 430,
+      "bytes": 2574
+    },
+    {
+      "id": "0029:C2",
+      "kind": "C",
+      "key": "2",
+      "label": "Every machine-readable vocabulary this CLI emits carries exactly one",
+      "derived": false,
+      "hash": "6e7f1025",
+      "section": "0029:§normative-contracts",
+      "line_start": 432,
+      "line_end": 457,
+      "bytes": 1212
+    },
+    {
+      "id": "0029:C3",
+      "kind": "C",
+      "key": "3",
+      "label": "A lint finding code is introduced at severity `info`. Introduction of an",
+      "derived": false,
+      "hash": "7b10eb95",
+      "section": "0029:§normative-contracts",
+      "line_start": 459,
+      "line_end": 480,
+      "bytes": 979
+    },
+    {
+      "id": "0029:C4",
+      "kind": "C",
+      "key": "4",
+      "label": "The tier assignments at this RDR's implementation:",
+      "derived": false,
+      "hash": "bbf6a76e",
+      "section": "0029:§normative-contracts",
+      "line_start": 482,
+      "line_end": 512,
+      "bytes": 1463
+    },
+    {
+      "id": "0029:D-identity",
+      "kind": "D",
+      "key": "identity",
+      "label": "Identity",
+      "derived": false,
+      "hash": "6cb1f98d",
+      "section": "0029:§load-bearing-decisions",
+      "line_start": 516,
+      "line_end": 518,
+      "bytes": 185
+    },
+    {
+      "id": "0029:D-wire-byte-format",
+      "kind": "D",
+      "key": "wire-byte-format",
+      "label": "Wire / byte format",
+      "derived": false,
+      "hash": "58cc334d",
+      "section": "0029:§load-bearing-decisions",
+      "line_start": 519,
+      "line_end": 522,
+      "bytes": 217
+    },
+    {
+      "id": "0029:D-naming",
+      "kind": "D",
+      "key": "naming",
+      "label": "Naming",
+      "derived": false,
+      "hash": "a10d6cd5",
+      "section": "0029:§load-bearing-decisions",
+      "line_start": 523,
+      "line_end": 528,
+      "bytes": 371
+    },
+    {
+      "id": "0029:D-selection-predicate",
+      "kind": "D",
+      "key": "selection-predicate",
+      "label": "Selection / predicate",
+      "derived": false,
+      "hash": "f070fbcb",
+      "section": "0029:§load-bearing-decisions",
+      "line_start": 529,
+      "line_end": 531,
+      "bytes": 205
+    },
+    {
+      "id": "0029:JC1",
+      "kind": "JC",
+      "key": "1",
+      "label": "Joint-check: fired → 0022 (home: `cli/0029 §Normative Contracts` C3)",
+      "derived": false,
+      "hash": "f46c2850",
+      "section": "0029:§decision-rationale",
+      "line_start": 705,
+      "line_end": 705,
+      "bytes": 72,
+      "joint": {
+        "verdict": "fired",
+        "targets": [
+          "0022"
+        ],
+        "home": "`cli/0029 §Normative Contracts` C3",
+        "homes": [
+          "`cli/0029 §Normative Contracts` C3"
+        ],
+        "open": false
+      }
+    },
+    {
+      "id": "0029:ALT1",
+      "kind": "ALT",
+      "key": "1",
+      "label": "Alternative 1: Freeze the vocabularies within a major",
+      "derived": false,
+      "hash": "9bee473e",
+      "section": "0029:§alternative-1-freeze-the-vocabularies-within-a-major",
+      "line_start": 720,
+      "line_end": 749,
+      "bytes": 1432
+    },
+    {
+      "id": "0029:ALT2",
+      "kind": "ALT",
+      "key": "2",
+      "label": "Alternative 2: Declare all machine-readable output unstable",
+      "derived": false,
+      "hash": "aebb008d",
+      "section": "0029:§alternative-2-declare-all-machine-readable-output-unstable",
+      "line_start": 751,
+      "line_end": 780,
+      "bytes": 1422
+    },
+    {
+      "id": "0029:ALT3",
+      "kind": "ALT",
+      "key": "3",
+      "label": "Alternative 3: A strictness opt-in flag carrying a stability disclaimer",
+      "derived": false,
+      "hash": "92cb7716",
+      "section": "0029:§alternative-3-a-strictness-opt-in-flag-carrying-a-stability-disclaimer",
+      "line_start": 782,
+      "line_end": 811,
+      "bytes": 1391
+    },
+    {
+      "id": "0029:BR1",
+      "kind": "BR",
+      "key": "1",
+      "label": "Version the schema per verb rather than per envelope",
+      "derived": true,
+      "hash": "1ba4c6fb",
+      "section": "0029:§briefly-rejected",
+      "line_start": 815,
+      "line_end": 818,
+      "bytes": 280
+    },
+    {
+      "id": "0029:BR2",
+      "kind": "BR",
+      "key": "2",
+      "label": "Derive `schema_version` from the binary version",
+      "derived": true,
+      "hash": "63bb62ad",
+      "section": "0029:§briefly-rejected",
+      "line_start": 819,
+      "line_end": 821,
+      "bytes": 197
+    },
+    {
+      "id": "0029:BR3",
+      "kind": "BR",
+      "key": "3",
+      "label": "Use an integer `schema_version`",
+      "derived": true,
+      "hash": "0f48996a",
+      "section": "0029:§briefly-rejected",
+      "line_start": 822,
+      "line_end": 824,
+      "bytes": 204
+    },
+    {
+      "id": "0029:BR4",
+      "kind": "BR",
+      "key": "4",
+      "label": "Put the promise in a new `docs/compatibility.md`",
+      "derived": true,
+      "hash": "d62c46b5",
+      "section": "0029:§briefly-rejected",
+      "line_start": 825,
+      "line_end": 828,
+      "bytes": 268
+    },
+    {
+      "id": "0029:F1",
+      "kind": "F",
+      "key": "1",
+      "label": "Breaks visibly",
+      "derived": true,
+      "hash": "a43004fe",
+      "section": "0029:§failure-modes",
+      "line_start": 1028,
+      "line_end": 1030,
+      "bytes": 192
+    },
+    {
+      "id": "0029:F2",
+      "kind": "F",
+      "key": "2",
+      "label": "Fails silently",
+      "derived": true,
+      "hash": "0731d94f",
+      "section": "0029:§failure-modes",
+      "line_start": 1031,
+      "line_end": 1035,
+      "bytes": 317
+    },
+    {
+      "id": "0029:F3",
+      "kind": "F",
+      "key": "3",
+      "label": "Fails silently",
+      "derived": true,
+      "hash": "02ed6d3d",
+      "section": "0029:§failure-modes",
+      "line_start": 1036,
+      "line_end": 1039,
+      "bytes": 255
+    },
+    {
+      "id": "0029:F4",
+      "kind": "F",
+      "key": "4",
+      "label": "Recovery path",
+      "derived": true,
+      "hash": "1b88aa8b",
+      "section": "0029:§failure-modes",
+      "line_start": 1040,
+      "line_end": 1043,
+      "bytes": 287
+    },
+    {
+      "id": "0029:F5",
+      "kind": "F",
+      "key": "5",
+      "label": "Diagnosis",
+      "derived": true,
+      "hash": "f89ef52a",
+      "section": "0029:§failure-modes",
+      "line_start": 1044,
+      "line_end": 1046,
+      "bytes": 199
+    },
+    {
+      "id": "0029:MVV",
+      "kind": "MVV",
+      "label": "Minimum Viable Validation",
+      "derived": false,
+      "hash": "f9d65fd5",
+      "section": "0029:§minimum-viable-validation",
+      "line_start": 1062,
+      "line_end": 1090,
+      "bytes": 1763,
+      "fields": [
+        {
+          "label": "Expected end state",
+          "match": "author",
+          "value": "the exit code is unchanged (0), the envelope's `type` is still `ok`, and the new finding appears in `data.findings` carrying `\"severity\":\"info\"`. The schema version's MAJOR is unchanged — a growing-vocabulary member is an additive change, so C1 moves the minor (`\"0.1\"` → `\"0.2\"`) and never the major. That is the observable the promise rests on: a consumer branching on `type` and the exit code observes no difference, a consumer reading findings sees one more entry, and a consumer gating on the major keeps parsing.",
+          "section": "0029:§minimum-viable-validation",
+          "element": "0029:MVV",
+          "line_start": 1072,
+          "line_end": 1079
+        }
+      ]
+    },
+    {
+      "id": "0029:S1",
+      "kind": "S",
+      "key": "1",
+      "label": "The `ok` envelope carries `schema_version`, non-`omitempty`.",
+      "derived": false,
+      "hash": "7cebde76",
+      "section": "0029:§testing-strategy",
+      "line_start": 1151,
+      "line_end": 1156,
+      "bytes": 392
+    },
+    {
+      "id": "0029:S2",
+      "kind": "S",
+      "key": "2",
+      "label": "The refusal record carries `schema_version` too, and keeps",
+      "derived": false,
+      "hash": "0006d276",
+      "section": "0029:§testing-strategy",
+      "line_start": 1158,
+      "line_end": 1165,
+      "bytes": 473
+    },
+    {
+      "id": "0029:S3",
+      "kind": "S",
+      "key": "3",
+      "label": "The existing in-repo envelope consumer survives the added",
+      "derived": false,
+      "hash": "2fce183a",
+      "section": "0029:§testing-strategy",
+      "line_start": 1167,
+      "line_end": 1172,
+      "bytes": 349
+    },
+    {
+      "id": "0029:S4",
+      "kind": "S",
+      "key": "4",
+      "label": "An `info` finding leaves the success disposition untouched",
+      "derived": false,
+      "hash": "b7748075",
+      "section": "0029:§testing-strategy",
+      "line_start": 1174,
+      "line_end": 1179,
+      "bytes": 387
+    },
+    {
+      "id": "0029:S5",
+      "kind": "S",
+      "key": "5",
+      "label": "Promotion to `blocking` IS the verdict-changing event.",
+      "derived": false,
+      "hash": "6d2c3b68",
+      "section": "0029:§testing-strategy",
+      "line_start": 1181,
+      "line_end": 1183,
+      "bytes": 224
+    },
+    {
+      "id": "0029:S6",
+      "kind": "S",
+      "key": "6",
+      "label": "`frozen` sets match their declared members exactly.",
+      "derived": false,
+      "hash": "fb886230",
+      "section": "0029:§testing-strategy",
+      "line_start": 1185,
+      "line_end": 1190,
+      "bytes": 355
+    },
+    {
+      "id": "0029:S7",
+      "kind": "S",
+      "key": "7",
+      "label": "`append-only` vocabularies are never asserted by",
+      "derived": false,
+      "hash": "1fd62c3d",
+      "section": "0029:§testing-strategy",
+      "line_start": 1192,
+      "line_end": 1200,
+      "bytes": 586
+    },
+    {
+      "id": "0029:S8",
+      "kind": "S",
+      "key": "8",
+      "label": "`0006:C17`'s amendment lands with the fifth advisory code",
+      "derived": false,
+      "hash": "d60ffd35",
+      "section": "0029:§testing-strategy",
+      "line_start": 1202,
+      "line_end": 1207,
+      "bytes": 383
+    },
+    {
+      "id": "0029:S9",
+      "kind": "S",
+      "key": "9",
+      "label": "The retired `closed` wording does not survive (C2's last",
+      "derived": false,
+      "hash": "7a3317a7",
+      "section": "0029:§testing-strategy",
+      "line_start": 1209,
+      "line_end": 1214,
+      "bytes": 331
+    },
+    {
+      "id": "0029:G-contradiction",
+      "kind": "G",
+      "key": "contradiction",
+      "label": "Contradiction Check",
+      "derived": false,
+      "hash": "581cb5da",
+      "section": "0029:§contradiction-check",
+      "line_start": 1257,
+      "line_end": 1265,
+      "bytes": 358
+    },
+    {
+      "id": "0029:G-assumptions",
+      "kind": "G",
+      "key": "assumptions",
+      "label": "Assumption Verification",
+      "derived": false,
+      "hash": "e69b5cf1",
+      "section": "0029:§assumption-verification",
+      "line_start": 1268,
+      "line_end": 1283,
+      "bytes": 653
+    },
+    {
+      "id": "0029:G-scope",
+      "kind": "G",
+      "key": "scope",
+      "label": "Scope Verification",
+      "derived": false,
+      "hash": "8185d52b",
+      "section": "0029:§scope-verification",
+      "line_start": 1286,
+      "line_end": 1291,
+      "bytes": 164
+    },
+    {
+      "id": "0029:G-cross-cutting",
+      "kind": "G",
+      "key": "cross-cutting",
+      "label": "Cross-Cutting Concerns",
+      "derived": false,
+      "hash": "f26a8f53",
+      "section": "0029:§cross-cutting-concerns",
+      "line_start": 1294,
+      "line_end": 1321,
+      "bytes": 1096
+    },
+    {
+      "id": "0029:G-proportionality",
+      "kind": "G",
+      "key": "proportionality",
+      "label": "Proportionality",
+      "derived": false,
+      "hash": "7646c38f",
+      "section": "0029:§proportionality",
+      "line_start": 1324,
+      "line_end": 1351,
+      "bytes": 1231
+    }
+  ],
+  "path": "/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0029-version-promise-on-machine-readable-output.md",
+  "record": "0029",
+  "schema": "2"
+}
