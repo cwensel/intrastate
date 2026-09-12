@@ -289,8 +289,12 @@ order; the selection-context groups (context plus member row
 identities); and the reachability relation — merged fixpoint nodes
 (`{id, values}`, id = the canonical node key) and edges (`{from, to,
 rule}`) — with nodes sorted by node key and edges by (from, to, rule),
-so construction order is unobservable. The `reach` block carries a
-REQUIRED abstraction marker (spelling at Resolve) stating the relation
+so construction order is unobservable. Every declared collection
+renders as an empty JSON array `[]` (or object `{}`) when it has no
+members — never `null`; an optional member that does not apply is
+ABSENT, its key omitted, never `null`. The `reach` block carries a
+REQUIRED abstraction marker, spelled `abstraction` with the token
+value `declared-over-approximation`, stating the relation
 is the DECLARED over-approximation, not the runtime — merged nodes,
 guard/observed atoms unpruned (`reach.go::Reach` doc) — so a formal
 consumer can tell which property classes are sound over it. The
@@ -299,7 +303,14 @@ lint pass, and the schema docs say so. Set-valued members are JSON
 arrays, closing `0002:§round-trip-inverse-invariants`'s lossy
 set-literal rendering for this document; the document is NOT a model
 source and no export→load inverse is claimed. Exact field spellings
-are fixed at Resolve; the field LIST above is normative now. The DOT
+are normative as the Illustrative Code spells them: `schema`, `model`,
+`class`, `tags[{name, provenance, kind, required, single_valued,
+domain}]`, `initial`, `terminal`, `rows[…0002's field list…]`,
+`groups[{context, rules}]`, and `reach{abstraction, nodes[{id,
+values}], edges[{from, to, rule}]}`. The schema docs state the
+soundness rule in one sentence: universal claims ("no path does X")
+proved over this relation hold at runtime; existence claims ("some
+path reaches X") may be spurious. The DOT
 document renders the same value: one node per reachability node, one
 edge per reachability edge labeled with its rule id, the initial node
 and terminal-satisfying nodes marked, and the abstraction marker
@@ -379,8 +390,9 @@ always-keep core).
   nodes never collide); a row is RDR 0002's row identity; an edge is
   the `(from, to, rule)` triple.
 - **Wire / byte format** — C2's schema-versioned JSON document; exact
-  field spellings fixed at Resolve; DOT styling explicitly
-  non-normative.
+  field spellings normative per C2's list; empty declared collections
+  render `[]`/`{}` and an inapplicable optional member is absent, never
+  `null`; DOT styling explicitly non-normative.
 - **Naming** — verb `graph`, flag `--emit`. Rejected: `dump` (0002's
   dump is a distinct, rows-only review rendering — reusing the name
   would merge two contracts), `export` (names the act, not the
@@ -407,9 +419,9 @@ always-keep core).
 
 Illustrative only — tests must not assert these literally. The JSON
 below is a PARTIAL document: the row and tag objects show a few of C2's
-members, not all, and `<abstraction-marker>` stands for C2's required
-`reach` marker whose spelling is fixed at Resolve. C2 is the normative
-field list; this example never narrows it.
+members, not all. C2 is the normative field list; this example never
+narrows it, and the field spellings below are the normative ones C2
+cites.
 
 ```sh
 # CI: diff the certified graph across two commits.
@@ -425,7 +437,8 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
 ```json
 {"schema":"intrastate.graph/1","model":"flow","class":"state-machine",
  "tags":[{"name":"stage","provenance":"owned","kind":"enum",
-          "domain":["draft","final"],"required":true}],
+          "required":true,"single_valued":true,
+          "domain":["draft","final"]}],
  "initial":[{"key":"stage","value":["draft"]}],
  "terminal":[[{"key":"stage","operator":"eq","literal":["final"],
                "block":"match"}]],
@@ -434,7 +447,7 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
                     "block":"match"}],
           "writes":[{"key":"stage","value":["final"]}]}],
  "groups":[{"context":"…","rules":["flow/lock"]}],
- "reach":{"<abstraction-marker>":"declared over-approximation",
+ "reach":{"abstraction":"declared-over-approximation",
           "nodes":[{"id":"stage=draft,;","values":{"stage":["draft"]}},
                    {"id":"stage=final,;","values":{"stage":["final"]}}],
           "edges":[{"from":"stage=draft,;","to":"stage=final,;",
@@ -457,7 +470,7 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
 | Row rendering | `internal/table/dump.go::Dump` | Text-only, set literals lossy by decision (`0002:§round-trip-inverse-invariants`) | Reuse the field list and order, not the renderer | C2 carries the dump vocabulary as structured JSON |
 | Reachability | `internal/graphlint/reach.go::Reach` | Returns nodes only, no edges | Extend | A2; no behavior change to lint's relation |
 | Output gateway | `internal/cli/respond` | One terminal envelope under `--as=json` | Reuse (`TextLiner` + `OK`) | C5; no gateway exception, no second stream |
-| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors, verified at Resolve |
+| Selection arms | `internal/cli/lint.go::runLint` | Codes are lint's own by contract (`0006:C19`, `0006:C20`) | Reuse the arm set and code spellings | C1 mirrors them verbatim |
 
 ### Decision Rationale
 
@@ -520,7 +533,9 @@ introduces, and this plan retires nothing.
 
 **Description**: The seed's first-named shape — `intrastate lint
 --emit=json|dot` exports from the same invocation that verdicts, since
-`newAnalysis` already computes everything the document carries.
+`newAnalysis` already computes the declarations, rows, groups and
+reachable node set the document carries (the edge relation is derived
+in the export path either way — A2, A3).
 
 **Pros**:
 
@@ -672,9 +687,9 @@ gateway exception.
 - **Risk**: consumers mistake the merged, over-approximate relation
   for runtime behavior and "verify" properties the runtime lacks.
   **Mitigation**: the document self-describes — the `reach` block
-  carries an explicit abstraction marker (wording at Resolve), and the
-  docs state the over-approximation contract where the schema is
-  described.
+  carries an explicit `abstraction` marker (C2's spelling), and the
+  docs state the over-approximation contract, and the sound/unsound
+  property classes, where the schema is described.
 - **Risk**: schema drift — a later field added ad hoc breaks C2's
   additive rule.
   **Mitigation**: golden-fixture byte tests pin `/1`; a failing pin is
@@ -762,7 +777,8 @@ arm's node/edge set.
 ### Phase 4: Contract surfaces
 
 `docs/cli-output-contract.md` gains the document section; `--help-all`
-gains the verb; abstraction-marker wording lands with the schema docs.
+gains the verb; the schema docs carry C2's `abstraction` marker and its
+soundness sentence.
 
 ## Validation
 
