@@ -34,4 +34,37 @@ Three read-only precedent sweeps spawned over the RDR corpus and Go source
 before putting the round to the author — one-seam-vs-split practice (Q1),
 empty-collection wire shape (Q2), conditional-assumption and
 unreachable-branch precedent (Q3). Advisory only; they inform the author's
-ruling and do not answer it.
+ruling and do not answer it. Not rulings: `rulings.md` carries the author's
+words alone.
+
+### Q2 — precedent found, and it diverges from Stage 4's recommendation
+
+An empty-collection convention already exists and is unanimous. Verified
+against source, not relayed: 16 declared collection fields across the CLI
+render `[]` on empty, each with an explicit nil→empty normalization at its
+producer; 0 are left nil-renderable. Fixed normatively by `0006:C14` ("the
+empty list is the proof's receipt — so the `findings` field MUST NOT be
+`omitempty`"), `0010` (nil-to-`[]string{}` normalization, "never `null`"),
+`0023:C1`, `0024:C4`. Pinned by raw-bytes tests: `lint_0006_test.go:578-580`
+(literal `[]`; "a `null` means the field carried a nil slice"),
+`flow_partition_0023_test.go:871` (no `:null` on the line),
+`flow_plan_c3xz_test.go:970-983`.
+
+`omitempty` appears on exactly 4 output fields, every one an optional surface
+(failure-envelope `findings` per `0005` REQ-8/16; `Notes`/`Warnings`;
+`candidate.Gates` under a flag) — never on a declared collection.
+`clierr.go:47-48` states the rule: "keep them `omitempty` so the envelope
+stays append-only".
+
+DIVERGENCE: Stage 4 recommended "`[]` for every declared collection,
+reserving `null` for genuinely absent optional objects". The first half
+matches precedent exactly. The second half has none — this codebase spells
+an absent optional as key ABSENCE (`0023:C1`: "Absent means absent — never
+`null`, `{}`, or `""` stand-ins"), never as `null`. No writer emits `null`
+on any envelope. Adopting Stage 4's wording verbatim would make 0021 the
+first record in the corpus to emit one.
+
+Precedent-consistent wording, for the author's Q2 ruling: *declared
+collections render `[]`/`{}`; optional members are absent, never `null`.*
+C2 currently states neither (`0021.md:278` fixes only strict additivity) —
+confirmed gap, so this is an addition to C2 and triggers §amendment-sweep.
