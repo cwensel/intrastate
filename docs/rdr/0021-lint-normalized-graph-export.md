@@ -255,6 +255,24 @@ RDR 0002 owns only row-dump ordering.
   - **If wrong**: the renderer couples to graphlint internals and the
     two `--emit` arms stop being projections of one value.
 
+- **A7 The `values` member of a `reach` node has one declared shape,
+  and C2's field list fixes it.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: raised by the Stage-5 desk trace. C2 lists
+    `reach{nodes[{id, values}]}` without fixing the inner shape, and
+    this RDR's two non-normative exhibits disagree: the Illustrative
+    Code renders `values` as an OBJECT keyed by tag
+    (`{"stage":["draft"]}`), while the A5 encoder fixture renders it as
+    an ARRAY of assignment strings (`["env=dev","flag&x"]`)
+    (`evidence/spikes/a5-encoder-stability.md`). Verification: read the
+    node value carried by `reach.go`'s `Node` on `main` and pick the
+    shape that projects it without invention, then state it in C2 and
+    make both exhibits agree (§amendment-sweep).
+  - **If wrong**: the wire shape of every exported node is
+    underdetermined at lock; two implementers read one field list two
+    ways and the golden fixture pins whichever shipped first.
+
 ## Proposed Solution
 
 ### Approach
@@ -502,6 +520,70 @@ intrastate graph --model flow.toml --as=json | jq .data.schema
           "edges":[{"from":"stage=draft,;","to":"stage=final,;",
                     "rule":"flow/lock"}]}}
 ```
+
+#### Pre-Lock Mini-Checks
+
+Cue-fired tables (Stage 5). Witnesses are spike output, not exporter
+output — the exporter is unbuilt — and are cited by spike, never
+promoted to goldens (`F2`: the A5 sha256 is the encoder property, not
+the canonical `intrastate.graph/1` hash; `F3`: the A6 arm is scoped to
+the node/edge SET and marker placement, not styling).
+
+`authority` — input/decision × writer · readers · call sites · sibling arms · canonical
+
+| Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
+| --- | --- | --- | --- | --- | --- |
+| Reachability relation | `reach.go::reach` (private) | lint via `graphlint.Run`; export via the new sibling exporter | `analysis.go:46` (lint); the new exporter | `graphlint.Reach` (public wrapper, tests only) | `reach()` — both arms reach the one traversal (C4) |
+| Edge list | the new exported function (post-hoc recovery over final nodes) | export only | the new exporter | A2's rejected in-traversal observer | post-hoc recovery; equality to the traversal is the bar (A2) |
+| Empty collection on the wire | producer code choosing `[]T{}`, never nil | every document consumer | every C2 collection field | `null` (rejected) | `[]`/`{}`; optional member ABSENT (Q2 ruling) |
+| Selection-arm refusal codes | `lint.go::runLint` | `graph` verb mirrors them verbatim | C1's arm set | lint's own codes (`0006:C19`/`C20`) | lint — C1 mirrors, never redefines |
+| Document format selection | `--emit` (this verb only) | export path | the `graph` verb | `--as` (envelope mode, `respond.go::FlagName`) | `--emit` selects DOCUMENT, `--as` selects ENVELOPE |
+
+`oracle` — each MVV row × "fails if X is wrong because Y" + the negative control
+
+| MVV step | Fails if… because | Negative control |
+| --- | --- | --- |
+| 2 — double emit byte-identical | map iteration or field order reaches the wire; byte compare diverges | A5 §5a: a map probe emitted under `randmapiter=1`, 25 processes — sorted, stable; A2 positive control: weakened `indexOf` diverged by 2 edges |
+| 2 — carries every C2 field | a field is dropped or renamed; the field-presence assertion fails | A5 fixture exercises every C2 member incl. `empty_probe: []` |
+| 3 — DOT set equals `reach` block | the DOT arm derives from analysis internals rather than the document; id sets diverge | A6 hostile fixture: quotes/backslash/newline/non-ASCII survive to `dot -Tsvg` exit 0 with exact set match |
+| 4 — `jq .data` equals the text document | the two modes derive from different values | A1: text-mode stdout is exactly `document + "\n"`, one `Fprintln` |
+| 5 — lint refuses identically | export code perturbs lint's verdict/finding set/bytes | byte-compare against a pre-change capture; oracle is mechanism-independent (C4) |
+
+`fidelity` — operation × invariant + lossy exemptions
+
+| Operation | Invariant | Witness / exemption |
+| --- | --- | --- |
+| `export ∘ export` | byte identity on any loadable model (RT2, C3) | A5: double-emit sha256 match; 25 fresh processes identical; A2: 2000 repeats → 1 digest |
+| `json-decode ∘ export` | value identity on every C2 field incl. exact set members (RT1) | set-valued atoms are JSON arrays — closes `0002`'s lossy set-literal rendering |
+| `load ∘ export` | **no inverse claimed** (RT3) | derived output, never a model source — declared exemption |
+| DOT ← document | node/edge SET + marker equality; styling NON-normative | A6: exact set match, marker in header comment + graph `label`; escaping order backslash→quote→newline |
+| across builds | JSON additive-only; DOT carries no cross-build promise | C3's stated narrowing to (model, build); cross-build golden makes the moment visible |
+
+`disposition` — input class × exit · error · artifact · silent-vs-loud
+
+| Input class | Exit | Error / code | Artifact | Silent or loud |
+| --- | --- | --- | --- | --- |
+| Model loads, lint clean | 0 | — | document on stdout | loud |
+| Model loads, lint would refuse | 0 | — | ASSERTED document (defined content) | loud — the debugging half of the outcome (C4) |
+| Traversal incomplete at node ceiling | 2 | `graph-export-too-large` (GroupUserEnv), names ceiling + narrow-a-domain remedy | **none** — never a partial document | loud (C4) |
+| Both/neither `--model`/`--flow` | 2 | `flag-mutually-exclusive` / `flag-required` | none | loud (C1) |
+| `--flow` alone | 2 | `flag-invalid-value` (no ids resolve this build) | none | loud |
+| Unreadable file / load failure | 2 | `model-unreadable` / `model-invalid` (one findings[] entry per load category) | none | loud |
+| Unknown `--emit` value | 2 | `flag-invalid-value` naming `emit` | none | loud |
+| Declared collection with no members | 0 | — | `[]`/`{}` — never `null` | loud (Q2) |
+| Inapplicable optional member | 0 | — | key ABSENT | silent by contract (Q2) |
+
+`trace` — MVV walked stepwise × assertions in force × witness
+
+| Step | Assertions in force | Witness |
+| --- | --- | --- |
+| 1 — author fixtures | C2 (field list) | spike fixtures exercise every C2 member |
+| 2 — emit twice, compare | C3 byte identity × C2 field list × C5 text-mode bare document | A5 sha256 `dcb0259a…` both emits; 25 processes identical; `schema` first; compact + one trailing `\n` |
+| 2 — parse as JSON | C2 `[]`-not-`null` × Q2 ABSENT rule | A5: `empty_slice_literal: []` vs `nil_slice_literal: null` — distinguishable on the wire |
+| 3 — `--emit dot \| dot -Tsvg` | C2 DOT set normativity × A6 derivability × S6 hostile content | A6: exact node/edge set match, marker in header + label, exit 0 on hostile fixture |
+| 4 — `--as=json \| jq .data` | C5 mode agreement × C3 determinism | A1: text stdout is exactly `document + "\n"`; both modes derive from one export value |
+| 5 — lint neutrality | C4 MUST-NOT-alter × C1 shared arm codes | A2: 36/36 real models EQUAL; lint reaches `reach()` via `analysis.go:46` unchanged |
+| — `reach.values` shape | C2 lists `nodes[{id, values}]` without fixing the inner shape | **CONTRADICTION**: this RDR's Illustrative Code renders `values` as an OBJECT (`{"stage":["draft"]}`); the A5 encoder fixture renders it as an ARRAY (`["env=dev","flag&x"]`). Two non-normative exhibits disagree over a member C2 leaves open. Raised as A7 (Pending) for Stage 6. |
 
 ### Capability Dependencies
 
