@@ -68,3 +68,40 @@ Precedent-consistent wording, for the author's Q2 ruling: *declared
 collections render `[]`/`{}`; optional members are absent, never `null`.*
 C2 currently states neither (`0021.md:278` fixes only strict additivity) —
 confirmed gap, so this is an addition to C2 and triggers §amendment-sweep.
+
+### Q1 — corpus practice, and an inbound citation the sweep missed
+
+Corpus practice on multiple `**Cn**` fences is unanimous and settles the
+framing: multi-C records are facets of ONE seam, never a split. Zero records
+have ever been split on contract count. Final/Implemented records carrying
+2+ labelled C-blocks include 0002 (24 blocks), 0003 (26), 0004 (17), 0006
+(20), 0007 (11), 0008 (6), 0009 (8), 0010 (5), 0011 (3), 0023 (2), 0024 (4),
+0025 (7) — every one judged one seam at its gate. 0010's Profile literally
+reads "five contracts … facets of one seam"; 0007's gate overruled a
+critique that argued for five independent contracts. 0021's preamble wording
+is copied from 0024's, which passed its gate with that exact framing.
+
+So `stopped:split-signal` is not a claim that 0021 should be split. The row
+counts labels; the split test is seams (`stages/README.md:234-236`,
+`TEMPLATE.md:223-231`). Two post-rule records satisfied it differently:
+0028 COLLAPSED (commit dcfe056, C1–C6 → clauses C1.1–C1.6); 0029 OVERRODE by
+written ruling, keeping its labels.
+
+CORRECTION to the precedent sweep, verified against primary sources: the
+sweep concluded 0021 has no inbound label citation and that collapse is
+therefore lower-friction. That is wrong. `0029` (Final) cites `0021:C2` and
+`0021:C5` BY LABEL in both its body (`0029.md:1052-1056`, `:1106-1110`) and
+its gate, and `0029/artifacts/gate.md:172` records 0021 as a "genuine joint
+decision, settled here" — C2 mints the `schema` marker, C5 embeds the
+document in the envelope's `data`. 0029's own Profile ruling
+(`0029/evidence/rulings.md:5`) blocked ITS collapse for exactly this reason:
+"collapsing to one `**C1**` is blocked because `0022:JC2` homes a joint
+decision at this section's **C3** specifically, and relabelling would break
+that inbound `joint-decision-home` edge."
+
+Consequence for the author's Q1 ruling: collapsing C1–C5 into one `**C1**`
+would break live inbound citations from a Final record, and would need those
+0029 references re-anchored in the same change. The 0029 override model —
+keep the labels, write the ruling, hand-write the Profile — is the path with
+a matching constraint and a matching precedent. Still the author's call;
+recorded here because the cost asymmetry was not visible in the round.
