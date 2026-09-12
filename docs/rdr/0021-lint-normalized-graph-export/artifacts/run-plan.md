@@ -105,3 +105,58 @@ would break live inbound citations from a Final record, and would need those
 keep the labels, write the ruling, hand-write the Profile — is the path with
 a matching constraint and a matching precedent. Still the author's call;
 recorded here because the cost asymmetry was not visible in the round.
+
+### Q3 — `subsumes` is pinned by nothing; (b) stands rather than dissolving
+
+The hoped-for shortcut (an existing record or test already guaranteeing the
+`subsumes` property, making A2's condition pre-discharged) DOES NOT EXIST.
+Verified directly, not relayed:
+
+- The widening arm is genuinely dead. `indexOf` (`reach.go:249-256`) returns
+  a node only where `subsumes` holds; `subsumes` (`:258-278`) requires an
+  IDENTICAL key set plus value coverage. So `joinNodes(nodes[j], next)` is
+  always key-equal to `nodes[j]`, the `merged.key() == nodes[j].key()` guard
+  (`:153-155`) always trips, and `nodes[j] = merged; worklist = append(…)`
+  (`:156-157`) cannot fire. The spike's structural claim reproduces at read.
+- NO test pins it. `rg indexOf|subsumes` across `internal/` returns zero
+  test references to node subsumption — every hit is an unrelated comment
+  (row subsumption) or a different symbol (`indexOfStep`). `indexOf`/
+  `subsumes` landed in one commit (`5e57b79`, 0006 Stage 8) and were never
+  touched again.
+- NO Final record states it. 0006 (Implemented) fixes only the intra-call
+  join and a fixpoint (`0006:1082-1090`, REQ-108); its D11 pins successor
+  identity by presence footprint, not the in-place widening arm.
+
+So A2's "Verified" is genuinely conditional and ruling (b) stands.
+
+COUPLING — a joint decision, not a declare-in-both. The ONLY record leaning
+on the property normatively is **0022** (Draft): its C2 anchors on
+"`reach.go::indexOf` precedent" (`0022:331-334`) and its A1 is **Pending**,
+Method Spike, assuming `subsumes` finds a host node (`0022:142-152`). Draft +
+Pending is not a guarantee 0021 may lean on. A pin test for the widening arm
+would discharge a dependency shared by `0021:A2` and `0022:A1`/`C2` — which
+makes it a joint-decision candidate to home in ONE record and cite from the
+other, never to state in both. 0022 and 0021 currently declare mutual
+independence (`0022:99-100`, `:510-511`); this shared dependency is the one
+real seam between them and is not yet recorded as such.
+
+PRECEDENT for the three shapes ruling (b) needs, all verified in-corpus:
+- Qualified Verified is sanctioned and has a house format — 0007
+  (Implemented) uses `Verified (<scope>); <what rides where>` and
+  `Verified — with a recorded coupling: …` (`0007:450`, `:642`). The closed
+  vocabulary is `Verified | Pending | Unverified` (`TEMPLATE.md:178`); there
+  is no `Falsified`, so A3's write-up needs the narrowing form, not a new
+  status word. A2 gates Phase 1, so it cannot simply stay Pending
+  (`04-resolve.prompt.md:114-118`).
+- Unreachable-branch pinning has no exhaustive-lemma precedent; the closest
+  is 0015's **widening tripwire** — `TestAdvDeadEndExistentialOnMergedNode`
+  (`adversarial_0006_test.go:489-506`), a behaviour test whose failure
+  message names the re-run obligation. That is the shape to model.
+- Narrowing at Stage 4 carries a recorded sweep under an
+  `## Amendment sweep (§amendment-sweep)` heading with a per-site table and
+  a closing grep statement (`0027/evidence/reconcile/reconcile.md:34-52`,
+  `0010/evidence/critique/resolve.md:118-150`).
+
+No contradiction with any Final record. One stale code comment:
+`reach.go:124-126` / `:138-144` describe the in-place arm as live, which it
+is not — commentary drift, not a record conflict.
