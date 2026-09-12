@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-09-11
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -785,6 +785,24 @@ a `findings[]` element — not only at the envelope's top level and under
 as part of the change that adds it; an unassigned machine-readable surface
 is a defect.
 
+`cli/0021:C2`'s graph export document is exactly such a later surface, and
+it is named here because it is in flight against this record. Two rules
+divide the ground. First, the document VERSIONS ITSELF: its required
+leading `schema` field (`intrastate.graph/1`, additive within `/1`)
+versions the document, while `schema_version` versions the envelope
+carrying it — consistent with C1's rule that `schema_version` is never
+projected into `data`, so the two markers coexist at different levels and
+neither substitutes for the other. A consumer reads the envelope's major
+to decide whether it can parse at all, and the document's `schema` to
+decide what the payload means. Second, the vocabularies `cli/0021` emits
+under `data` — its `--emit` format set, its `graph-export-too-large`
+refusal code, and the field names its C2 fixes at Resolve — are
+machine-readable surfaces this census does not enumerate, because they do
+not exist on `main` yet. They take their tier assignments in `cli/0021`
+itself, in the change that adds them, per the rule above. The census below
+is therefore complete as of this record's implementation, not complete for
+all time; that is what "a surface added later" means.
+
 A tier assignment obliges an ENUMERATION SEAM: an exported accessor
 returning the vocabulary's members, in the package that owns them. Without
 one the tier is unassertable — a `frozen` set has nothing to compare
@@ -1024,15 +1042,41 @@ nothing here leans on it.
 
 **Joint-decision check (three arms, all run).** Arm 1 (modify-anchors,
 `rdr index --anchor-intersect`): no overlaps. Arm 2 (contract literals,
-`rdr index --literal-intersect`): four overlaps against open peers, one of
-them a genuine joint decision — RDR 0022 (Draft, `large`) proposes
-`graph-terminal-unreachable` as a NEW BLOCKING finding code and states
-"the advisory tier stays closed at four (`0006:C17`)", which is precisely
-the rule C3 here would change. The other three are incidental vocabulary
-sharing on one token each and are not joint decisions: 0021 shares
-`--as=json` but adds no envelope field (its export rides `data`), 0014
-shares `code` as a CI-oracle diagnosis surface, and 0017 shares `code`
-with an existing cross-citation. Arm 3 (absence, manual): C3 converts no
+`rdr index --literal-intersect`): four overlaps against open peers, TWO of
+them genuine joint decisions. The first is RDR 0022 (Draft, `large`),
+which proposes `graph-terminal-unreachable` as a NEW BLOCKING finding code
+and states "the advisory tier stays closed at four (`0006:C17`)", which is
+precisely the rule C3 here would change. The second is RDR 0021 (Draft,
+`large`), re-examined at the lock fence: the propose-time reading —
+"shares `--as=json` but adds no envelope field (its export rides `data`)"
+— was right about the envelope and wrong about the consequence. `0021:C2`
+mints its own required `schema` marker versioning the exported document,
+and `0021:C5` embeds that document in this envelope's `data`, so two
+version markers ride one wire; and `0021` emits vocabularies (its `--emit`
+set, `graph-export-too-large`) that C4's census does not enumerate while
+C4 declares an unassigned machine-readable surface a defect. C4 now
+carries the boundary explicitly (document-versions-itself; later surfaces
+tier in the record that adds them), which is what makes the census's
+completeness claim true as written. The remaining two are incidental
+vocabulary sharing and are not joint decisions. `cli/0014` shares two
+anchors and two literals with this record, all acknowledged and none
+jointly decided: `internal/graphlint/taxonomy.go::AggregateCode` and the
+literal `graph-lint-failed` are a USE in `0014:C3` (the gate carrier's test
+asserts the exit is non-zero and names that code as the discriminator of a
+lint refusal) against a STABILITY ASSIGNMENT here (C4 tiers it `frozen`,
+whose testable claim is closure of the emit sites) — complementary, and
+C4's `frozen` tier is what guarantees the literal `0014:C3` asserts on will
+not move; the literal `code` is likewise `0014:C1`'s diagnosis field versus
+C4's `append-only` tier on the CLIError `code` vocabulary, two decisions
+about one field at different levels; and `Makefile::docs` is cited
+non-normatively in both — in `0014:§investigation` as prior art for
+regenerate-then-diff, and in A7 here as the precedent that a render-then-
+diff gate already exists so the snapshot check needs no new CI job. And
+0017
+shares `code` with an existing cross-citation. RDR 0012 shares
+`internal/resolve` and `internal/table` as package paths only: its
+contracts add no refusal kind, no `Block` member and no table category, so
+none of the vocabularies C4 tiers is touched. Arm 3 (absence, manual): C3 converts no
 refusal into an acceptance and removes no guard, so no Final peer relies
 on a token this proposal stops saying; the C17 closure it does depend on
 belongs to 0006, which is Implemented and therefore not edited — that
@@ -1042,18 +1086,34 @@ Premortem: survived (paragraph)
 Ground-sweep: reopened → A3's evidence line (`DisallowUnknownFields` is in
 production use at `internal/table/source.go::decodeStrict`, on the INPUT
 path under `0002:C3`); 15 of 16 anchors CONFIRMED
-Joint-check: fired → 0022 (home: `cli/0029 §Normative Contracts` C3)
+Joint-check: fired → 0022 (home: `cli/0029 §Normative Contracts` C3);
+fired at the lock fence → 0021 (home: `cli/0029 §Normative Contracts` C4)
 
 **Joint decision, settled.** C3 in this record is the single normative home
 for the introduce-at-`info` / disclose-on-promotion rule. RDR 0022 drops its
 restatement of the C17 closure and CITES `0029:C3` instead, then either
 enters `graph-terminal-unreachable` at `info` or claims C3's re-attribution
-clause if that code re-attributes an existing refusal. This record is `mid`
-against 0022's `large` and its whole subject is the cross-version promise,
-so the rule carries less blast radius here; cite-don't-restate also avoids
-the copy-drift that forces 7.1 demotions. The `0.x` framing above softens
-the immediate stakes — through `0.x` neither record's tier is a guarantee —
-but the rule still has to have one home before 1.0.0, and this is it.
+clause if that code re-attributes an existing refusal. This record's whole
+subject is the cross-version promise, so the rule belongs where the rest of
+the promise is stated; cite-don't-restate also avoids the copy-drift that
+forces 7.1 demotions. The `0.x` framing above softens the immediate stakes
+— through `0.x` neither record's tier is a guarantee — but the rule still
+has to have one home before 1.0.0, and this is it.
+
+**Second joint decision, settled.** C4 in this record is the single
+normative home for the envelope-versus-document versioning boundary and for
+the rule that a machine-readable surface takes its tier in the record that
+adds it. RDR 0021 keeps `0021:C2`'s `schema` marker — it versions that
+document and this record does not contest it — and carries one citation
+noting that the envelope around it is versioned separately by `0029:C1`.
+0021 then assigns tiers to the surfaces it introduces (`--emit`,
+`graph-export-too-large`, and C2's field spellings once Resolve fixes them)
+in its own Normative Contracts, per `0029:C4`. Homing it here rather than
+in 0021 follows the same rule as the first: this record owns the version
+promise, 0021 owns its wire format, and the boundary between them is a
+clause of the promise. 0021 is an early Draft with every assumption still
+Pending, so it takes the citation in its own flow; nothing is edited in a
+peer's locked text.
 
 ## Alternatives Considered
 
@@ -1791,152 +1851,56 @@ encoder (`JDR 0001 §D13`) — is upstream of this RDR and untouched by it.
 
 ## Finalization Gate
 
-> Complete each item with a written response in
-> `{ARTIFACT_DIR}/gate.md` before marking this RDR as
-> **Final**. Written responses prevent rubber-stamping
-> and produce a review record.
->
-> First run the mechanical pre-sweep
-> (`prompts/gate/tooling-pass.md`): TEMPLATE section
-> coverage, Method-label vocabulary, `Source Search`
-> self-reference, `Docs Only` on load-bearing claims. It
-> catches what the review rounds disturbed; resolve any
-> BLOCK before the written responses.
->
-> At lock, replace Contradiction Check, Assumption
-> Verification, Scope Verification and Proportionality
-> with the one-line pointer to gate.md — those four
-> judge THIS record at THIS lock and no peer cites
-> them. **Cross-Cutting Concerns stays here**, below
-> the pointer: it names the project-wide policy other
-> RDRs conform to, so it must stay projected and
-> citable as `cli/NNNN:G-cross-cutting`. Cite it that
-> way, not by section name.
-
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0029-version-promise-on-machine-readable-output/artifacts/gate.md (Gate PASS 2026-09-12)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+- **Versioning** — this RDR IS the project's versioning policy for
+  machine-readable output, so it owns rather than conforms. C1 fixes the
+  envelope's `schema_version` (`MAJOR.MINOR`, one home in `clierr`,
+  versioned independently of the binary), C2 fixes the three-tier
+  stability vocabulary, C4 assigns a tier to every surface emitted today.
+  Two boundaries a peer must not cross: the schema version is NOT the
+  binary version (`internal/version::Info`'s `version`/`commit`/`date`
+  remain build identity, `frozen` as field names and untiered as values),
+  and a document embedded in `data` versions itself — `cli/0021:C2`'s
+  graph export carries its own `schema` marker, which this contract does
+  not govern and which does not substitute for `schema_version`.
+- **Incremental adoption** — the tiers are declarations of INTENT while
+  the binary is `0.x` and become guarantees at `schema_version` `"1.0"`
+  (C2). The qualifier rides the emitted major rather than prose, so a
+  consumer that never reads this record still reads the right promise off
+  the envelope it already parses. Phase 2 sequences the adoption:
+  publish the register, cut `0.1.0` with tiers declared, promote to `1.0`
+  at `1.0.0`.
+- **Build tool compatibility** — C3's disclosure obligation is backed by
+  a golden-file snapshot check riding the existing CI `test` job (A7),
+  not a new job or tool; `Makefile::docs-check` is the in-repo precedent
+  for regenerate-then-diff. No new dependency (New Dependencies: none).
+- **Character encoding** — no new policy. `schema_version` is an ASCII
+  `MAJOR.MINOR` string on records already encoded by the single JSON
+  encoder `0005:C1` mandates (`clierr::WriteJSONLine`); this RDR adds a
+  field to that encoder's output and does not touch encoding.
+- **Canonical-form / determinism** — this RDR claims no hash, no
+  content-addressed identity and no replay-stable digest, so the
+  determinism rider does not bind it. It does inherit one byte-identity
+  obligation from a peer: `cli/0023` owns the envelope projection's
+  byte-identity golden, and adding a top-level key changes those bytes,
+  so A3 re-captures
+  `docs/rdr/0023-resolve-envelope-projection/artifacts/mvv-step1-default-golden.json`
+  as part of Phase 1 rather than treating the diff as a regression. Field
+  ORDER is not asserted here — the assertions are by named key (S1), so a
+  consumer MUST NOT read key order as contract.
+- **Secret/credential lifecycle** — no secret reaches these surfaces, but
+  the census in C4 is the mechanism that keeps it that way: a new
+  machine-readable surface owes a tier assignment in the same change that
+  adds it, which is the review point where a leaked value would surface.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+Not applicable, and omitted: licensing, deployment model, IDE
+compatibility, memory management, concurrency model.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Gate key: proportionality]
-
-**Right-sized, one seam, Profile `large` confirmed.** The four labelled
-contracts are clauses of ONE durable seam — the `--as=json` terminal
-envelope — not four independent ones. Grounded on the emit surfaces: every
-clause binds the same two terminal records, `internal/cli/respond::Success`
-and `internal/cli/clierr::EmitJSON`, and no third. C1 is the load-bearing
-contract (the field, its home, its increment rule); C2 is the tier
-vocabulary C1's increment rule ranges over; C4 is that vocabulary's census;
-C3 is the release policy governing the single growth event C2's `growing`
-tier admits. C3 mints no mechanism of its own — Decision Rationale factor
-one records that it rides `0006:C17`'s existing severity partition and that
-the separate-`--preview`-flag alternative was rejected *because* the
-mechanism already ships. A contract that adds no seam and no machinery is
-not an independent load-bearing contract.
-
-`rdr-write --outcome profile` emits `stopped:split-signal` on this record:
-it counts four labelled `**Cn**` blocks, reads `contracts_durable=2+`, and
-flags the split mechanically. The count is right and the inference does not
-hold here — the tool counts labels, and the split test is seams. Recorded
-rather than silently overridden; the remedy its `surface` names (fold the
-clauses under one `**C1**`) is a presentation change that would satisfy the
-counter without changing a single normative word, and is charted to Stage 6
-rather than taken inside a lens pass.
-
-Profile `large` re-validated: `--outcome floor` returns `floor: none`
-(`floor-below-two` — fewer than two prior point-fixes at the locus), and
-the lens row that actually ran (grounding, 3amigo, critique) is `large`'s
-row, so the lenses and the field agree.
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field: re-run
-rdr-write's `--outcome profile` with the clause's own
-dispositions and confirm the value Resolve wrote is
-what it emits (a stop is not a match).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. (The row already
-excludes `Transient`-marked contracts.) Also confirm form:
-value + one clause naming the contract(s) and its two
-dispositions; strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
 
 ## References
 
