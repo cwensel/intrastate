@@ -465,8 +465,13 @@ edges-carrying function Q3(c) already adds beside it returns
 completeness with the nodes and edges. This is the same
 package-internal traversal lint reaches, so the neutrality rule above
 is unaffected. The ceiling this refusal names is `reach`'s node-count
-completeness, NOT `analysis.go`'s `checkNodeCeiling`, a distinct
-guard-product bound.
+completeness — the SAME bound `analysis.go`'s `checkNodeCeiling`
+already fires on (both read one `reach()` and one `nodeCeiling`
+constant, published as `graphlint.NodeCeiling()`), observed at two call
+sites, which is the neutrality rule above rather than an exception to
+it. The distinct bound this refusal does NOT involve is the
+guard-product one, `graphlint.ProductBound()` (`guard.Bound()`); no
+guard-product input reaches the export's refusal path.
 ```
 
 **C5**
@@ -593,7 +598,7 @@ the node/edge SET and marker placement, not styling).
 | --- | --- | --- |
 | 2 — double emit byte-identical | map iteration or field order reaches the wire; byte compare diverges | A5 §5a: a map probe emitted under `randmapiter=1`, 25 processes — sorted, stable; A2 positive control: weakened `indexOf` diverged by 2 edges |
 | 2 — carries every C2 field | a field is dropped or renamed; the field-presence assertion fails | A5 fixture exercises every C2 member incl. `empty_probe: []` |
-| 3 — DOT set equals `reach` block | the DOT arm derives from analysis internals rather than the document; id sets diverge | A6 hostile fixture: quotes/backslash/newline/non-ASCII survive to `dot -Tsvg` exit 0 with exact set match |
+| 3 — DOT set equals `reach` block | the DOT arm derives from analysis internals rather than the document; id sets diverge, or an identifier is mis-escaped into different bytes that still parse | A6 hostile fixture: quotes/backslash/newline/non-ASCII survive to `dot -Tsvg` exit 0 with exact set match; exit 0 alone is NOT the bar — each identifier is unescaped by inverting A6's escaping order and compared to its source (S6) |
 | 4 — `jq .data` equals the text document | the two modes derive from different values | A1: text-mode stdout is exactly `document + "\n"`, one `Fprintln` |
 | 5 — lint refuses identically | export code perturbs lint's verdict/finding set/bytes | byte-compare against a pre-change capture; oracle is mechanism-independent (C4) |
 
@@ -628,7 +633,7 @@ the node/edge SET and marker placement, not styling).
 | 1 — author fixtures | C2 (field list) | spike fixtures exercise every C2 member |
 | 2 — emit twice, compare | C3 byte identity × C2 field list × C5 text-mode bare document | A5 sha256 `dcb0259a…` both emits; 25 processes identical; `schema` first; compact + one trailing `\n` |
 | 2 — parse as JSON | C2 `[]`-not-`null` × Q2 ABSENT rule | A5: `empty_slice_literal: []` vs `nil_slice_literal: null` — distinguishable on the wire |
-| 3 — `--emit dot \| dot -Tsvg` | C2 DOT set normativity × A6 derivability × S6 hostile content | A6: exact node/edge set match, marker in header + label, exit 0 on hostile fixture |
+| 3 — `--emit dot \| dot -Tsvg` | C2 DOT set normativity × A6 derivability × S6 hostile content | A6: exact node/edge set match, marker in header + label, exit 0 on hostile fixture, and each identifier unescapes (A6 order inverted) back to its source — exit 0 alone would pass a mis-escaped identifier |
 | 4 — `--as=json \| jq .data` | C5 mode agreement × C3 determinism | A1: text stdout is exactly `document + "\n"`; both modes derive from one export value |
 | 5 — lint neutrality | C4 MUST-NOT-alter × C1 shared arm codes | A2: 36/36 real models EQUAL; lint reaches `reach()` via `analysis.go:46` unchanged |
 | — `reach.values` shape | C2 now fixes `values` as a tag-keyed object of value arrays | RESOLVED (was CONTRADICTION): `reach.go::Node.Values` is `map[string][]string`, so the OBJECT exhibit projects without invention and the A5 fixture's array-of-strings rendering was the wrong exhibit — that flattening lives only in `(Node).key`'s internal fingerprint. C2 pins the shape; A7 Verified. |
@@ -1001,11 +1006,16 @@ code alone.
    **Expected**: DOT node/edge id set equals the JSON document's
    `reach` block, the abstraction marker is present in the header, and
    every fixture survives `dot -Tsvg` (A6, C2, premortem P-16). Exit 0
-   is NOT sufficient: each hostile label is also asserted to DECODE
-   back to its source tag value, so a well-formed but mis-escaped label
-   fails. A6's spike hit exactly that bug (the separator injected as
-   two bytes before `dotQuote` doubles the backslash), and an
-   exit-code-only oracle would pass it.
+   is NOT sufficient: for each hostile NODE AND EDGE IDENTIFIER — the
+   set F3 makes normative — the emitted quoted string is unescaped by
+   inverting A6's recorded escaping ORDER (undo the `\n` line-break
+   escape, then `\"`, then `\\`) and asserted EQUAL to its source id,
+   so a well-formed but mis-escaped identifier fails. A6's spike hit
+   exactly that class of bug (the separator injected as two bytes
+   before `dotQuote` doubles the backslash), and an exit-code-only
+   oracle would pass it. The inverse is asserted over identifiers only:
+   DOT label STYLING stays non-normative (F3), so a styling-side
+   escaping defect is out of this oracle's scope by the same rule.
 7. **Scenario**: Traversal incomplete under the published node ceiling.
    **Expected**: refusal with `graph-export-too-large` (GroupUserEnv,
    exit 2) naming the ceiling and remedy; no document on stdout (C4).
