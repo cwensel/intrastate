@@ -160,3 +160,122 @@ PRECEDENT for the three shapes ruling (b) needs, all verified in-corpus:
 No contradiction with any Final record. One stale code comment:
 `reach.go:124-126` / `:138-144` describe the in-place arm as live, which it
 is not — commentary drift, not a record conflict.
+
+## Second grounding round (deeper pass)
+
+Three further analyses. Two CORRECT this file's own earlier entries; both
+corrections are recorded here rather than silently overwritten.
+
+### Q1 is forced — but by a different edge than first reported
+
+CORRECTION to the Q1 entry above. That entry leaned on 0029's rulings.md
+reasoning (relabelling breaks an inbound `joint-decision-home` edge). That
+mechanical premise is WEAKER than 0029's prose claims: `0022:520` spells its
+home `cli/0029 §Normative Contracts` C3 — a SECTION anchor with "C3" as
+trailing prose — so relabelling 0029's C3 would stale prose, not break a
+resolved edge.
+
+The conclusion survives on stronger ground, verified directly in the edge
+set: `0029 → cli/0021:C2`, kind `cross-cutting-owner`, `resolved: true`,
+`0029.md:1868`. This is ELEMENT-resolved (contrast the bare `mentions` edges
+at `:1049`, `:1106`) and originates in a Final, no-amend record.
+`cross-cutting-owner` is a real kind (`rdr/tools/rdr/internal/edge/edge.go:74`).
+Renaming `0021:C2` would break a resolved inbound edge from a Final record.
+
+So Q1 → override-not-collapse is DETERMINED, not a free choice. The author
+still rules, but the two dispositions are not equal-cost.
+
+### The `subsumes` coupling: a CONSTRAINT, not a joint decision
+
+CORRECTION to the Q3 coupling entry above, which called it "a joint
+decision, not a declare-in-both". The disposition (one home, cite from the
+other, never both) was right; the GRADE was wrong.
+
+The doctrinal test is whether two records need one shared ANSWER either
+could give differently (`rdr/prompts/gate/pairwise.md:69-71`; the JDR
+README's "does not join merely for touching a listed member … only if it
+joins the same question", `docs/jdr/README.md:88-90`). Neither record
+CHANGES `indexOf`/`subsumes`; the answer was fixed by shipped code
+(`5e57b79`). Their dependencies even differ in direction — 0021 needs "no
+in-place widening after insertion"; 0022 needs re-anchoring determinism and
+already has a total fallback. Weakening `subsumes` breaks 0021 and would
+make 0022's A1 EASIER. There is no fork where they could answer differently.
+
+The JDR lifecycle names this grade verbatim (`docs/jdr/README.md:152`):
+`constraint` — "The answer is already determined by shipped code … Nothing
+to negotiate; record it so nobody implements against it. **Does not
+block**." So it is a homeless unpinned constraint, not an open decision, and
+it does NOT gate the lock.
+
+It is also INDEPENDENT of Q1: a joint edge leaves the citing JC and lands on
+the home, so homing elsewhere gives 0021 an OUTBOUND edge touching no
+C-label. Last turn's thesis — that the coupling might determine Q1 — is
+withdrawn. The two questions are unrelated.
+
+Why the mechanical joint-check missed it: `0021:502-506` grepped peers for
+this record's modify-anchors (`reach.go::Reach`, the `graph` verb) and
+contract literals (`--emit`, `intrastate.graph/1`, …). The shared anchor is
+`subsumes`/`indexOf`, which neither record names as an anchor — so
+`joint_check_home=clear` is a true answer to a question that did not cover
+this. Recording the fire needs a hand edit to both Draft records.
+
+Homing candidates, ranked (author's fork; doctrine does not settle it):
+(a) JDR 0001 `constraint` entry — JD-23 already sits on this `reach.go`
+seam with siblings 0015/0022; caveat, the merge relation is an adjacent
+question to the quantifier, so this is a same-seam join, arguable.
+(b) 0021 as RDR home — it touches `Reach`, produced the lemma and the test
+design, and locks first (no `home-ahead-of-lock` flag).
+(c) 0022 — weakest; farther from lock, and it needs only the definition it
+already cites.
+
+### F3: the caveat is a real spike bug; the fixture is still approvable
+
+Verified at source, not relayed. `dotQuote` (spike `:95-100`) is correct and
+its own comment states the required order. But `render` (`:132`) injects the
+separator as Go `"\\n"` — two bytes, backslash+n — BEFORE calling
+`dotQuote`, whose first step doubles that backslash. The hostile-input line
+(`:270`) shows both on one line: injected separator `\\n` (renders as
+literal text) beside a genuine newline `\n` (renders as a break). Rule text
+right, bytes wrong, cause is the exact ordering fault the spike warns
+against. Node ids and edge triples are unaffected — `dotQuote` is applied to
+them directly (`:141`, `:155`).
+
+Scope: label composition is a `label=` attribute, and C2 makes the node/edge
+SET and marker normative while excluding styling (`0021:302-308`). The bug
+falls OUTSIDE F3 as proposed. Caveat 2 is likewise a non-issue: `render`
+reads Go fields, so the set/marker claim is rename-invariant. Precedent for
+approving a fixture with an explicit scope limit: `0002:2275` ("the expected
+row set and row identities — not the expected bytes. This SHA MUST NOT be
+asserted as a golden hash").
+
+The escaping ORDER is sound (walked against a hostile input and checked live
+on graphviz 12.2.1); reversing it corrupts by closing the string early. One
+spike prose error: its claim that a raw newline in a DOT quoted string is
+"invalid/ambiguous" (`:298-300`) is false for 12.2.1 — it parses. Escaping
+is still correct; the stated rationale is not.
+
+### Q3(a): house form for the A3 narrowing
+
+Precedent is narrow-in-place, not split: the Status head stays on-vocabulary
+(`Verified | Pending | Unverified`, `fields.go:196-202`) with the narrowing
+in a free-text qualifier, and the Evidence line quotes the pre-edit reading.
+Verbatim precedents: `Verified (labels only — see A12 for the reachability
+half)` (`0003:219`), `Verified (kernel half); …` (`0007:530`), `Verified as
+narrowed — …` (tooling form). Evidence-line disclosure: "(the claim's
+wording was narrowed to match at Resolve)" (`0023:438`).
+
+SPLIT is precedented only where the failed half needs its own Method or
+owner (`0003` A6→A12). Here the failed half (edges) is ALREADY the subject
+of A2 (`0021:150-156`), so splitting would duplicate it — narrow plus a
+cross-cite to A2 matches the corpus.
+
+C2 needs NO field-list change: its "carries, at minimum … edges" predicates
+*carries* of the JSON DOCUMENT, not the model value, and the document still
+carries edges. The sweep's real target is `0021:521-522` ("since
+`newAnalysis` already computes everything the document carries" — now false
+for edges), plus a C4 consumer re-read.
+
+Existing vocabulary to reuse rather than mint: 0002 C19's carried-vs-derived
+pair (`0002:1298-1302`) and 0023's "pure function of" (`0023:441-449`).
+Stage 4's proposed "which the model value fully determines" mints new
+wording where "derived from / a pure function of the model value" is house.
