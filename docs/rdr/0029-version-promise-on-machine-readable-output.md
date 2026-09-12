@@ -94,25 +94,10 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Architecture
-- **Profile**: mid — provisional; locks the stability class of the
-  `--as=json` envelope, the refusal-code vocabulary, and the lint
-  finding taxonomy; user-facing yes; locks contract.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: resolved by rdr-write.toml's `profile`
-  rows (the rule's one home) from the durable contract
-  count and two dispositions written in the clause:
-  `user-facing <yes|no>; locks <none|contract|format|cross-rdr>`.
-  (2) accretion axis (a one-tier raise): resolved from `Seam
-  Lineage` below by the routing model (rdr-status.toml's
-  `floor` group — the rule's one home), never re-read here.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
+- **Profile**: large — the version promise over every machine-readable
+  vocabulary this CLI emits: the `--as=json` envelope's `schema_version`,
+  the three-tier stability vocabulary, and the tier assigned to each of
+  the thirteen emitted surfaces; user-facing yes; locks format.
 - **Priority**: High
 - **Related Issues**: none
 - **Seam Lineage**: no prior accretion
@@ -172,16 +157,41 @@ adopt when it arrives.
 
 - **A1 The graph-lint advisory tier can accept new members, or `0006:C17`
   can be amended to allow it.**
-  - **Status**: Pending
+  - **Status**: Verified — ruled 2026-09-11: `0006:C17` is opened as
+    append-only. The code already permits it; the closure was the only
+    blocker and it is lifted.
   - **Method**: Peer RDR
   - **Evidence**: `0006:C17` states "The advisory tier is closed at
     `graph-coverage-closed-by-escape`, `graph-redundant-row`,
     `graph-unreachable-rule`, and `graph-vacuous-atom`" — a closure at
-    exactly four members. C3 requires a new finding code to enter at
-    `info`, which is the advisory tier. Resolve must determine whether
-    that closure is load-bearing (0006 depends on the count) or
-    incidental (it recorded the set as it then stood), and if
-    load-bearing, whether C3 routes around it.
+    exactly four members; 0006 is Implemented. The IMPLEMENTATION,
+    however, imposes no such limit: severity is DERIVED, not carried
+    per-code — `internal/graphlint/taxonomy.go::severityFor` returns
+    `SeverityInfo` for anything `IsBlocking` rejects, and `IsBlocking` is
+    `slices.Contains(blockingCodes, code)`. So a fifth advisory code
+    becomes `info` with no severity plumbing, no exhaustiveness switch,
+    and no cardinality constant anywhere in `internal/graphlint/` or
+    `internal/cli/`; the eleven `AdvisoryCodes()` consumers all iterate.
+    Exactly one assertion blocks it:
+    `internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers`
+    compares `AdvisoryCodes()` to a four-element literal with
+    `slices.Equal` — a by-value set assertion, so the fix is editing the
+    literal, not relaxing a number.
+  - **Ruling (2026-09-11)**: C17's closure is incidental-as-then-stood, not
+    load-bearing, and is opened. This follows `JDR 0001 §D10` rule 3, which
+    reopened a closed `CLIError` field on a peer's request and recorded the
+    result as "a 0006 citation repair, not a reopening" — the same shape.
+    C17's load-bearing guarantee is its last sentence, "Advisory findings
+    MUST NOT change the success disposition," which adding a member does
+    not touch; C3 restates that guarantee rather than amending it.
+  - **Consequent obligations** (both land in the implementation of this
+    RDR, not in a separate change): 0006 restates C17 as append-only — the
+    `growing` tier C2 defines — and the four-element `want` literal at
+    `internal/graphlint/findings_0006_test.go:288-293` is edited in the
+    same change that adds any fifth advisory code. Until 0006 is amended,
+    this RDR and 0006 disagree on the tier's openness; the amendment is a
+    prerequisite of implementation, and 7.1 cluster reconcile over
+    {0006, 0029} is where the two records are re-read against each other.
   - **If wrong**: C3 is unimplementable as written for graph-lint codes —
     a new finding could only enter at `blocking`, which is exactly the
     verdict-changing event the policy exists to prevent. Surfaces as a
@@ -190,14 +200,18 @@ adopt when it arrives.
     peer.
 - **A2 `schema_version` ships before 1.0.0, while the `0.x` series still
   permits incompatible change.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: No tag has ever been cut — `internal/version` reports a
-    pseudo-version via its `debug.ReadBuildInfo` fallback, and
-    `.github/workflows/release.yml` triggers on a `v*` tag that does not
-    yet exist. The first release is 0.1.0, so the window is the whole
-    `0.x` series rather than one release. Resolve confirms the field
-    lands before any 1.0.0 tag.
+  - **Evidence**: No tag has ever been cut — `git tag --list` is empty and
+    `git describe --tags` fails. `internal/version::resolve` defaults to
+    `Info{Version: "dev", Commit: "none", Date: "unknown"}`
+    (`internal/version/version.go::resolve`), filling commit and date from
+    VCS stamps but never moving `version` off `"dev"` without an
+    `-ldflags` injection or a module version;
+    `internal/cli/version.go`'s verb reports that value and nothing else.
+    `.github/workflows/release.yml` triggers only on a `v*` tag push
+    (`on.push.tags: ["v*"]`). The first release is therefore 0.1.0 and the
+    window is the whole `0.x` series rather than one release.
   - **If wrong**: adding `schema_version` after 1.0.0 makes the
     compatibility field itself a breaking change under C1's own rule,
     forcing a 2.0.0 for the field that exists to prevent major bumps.
@@ -207,34 +221,65 @@ adopt when it arrives.
     procrastination past 1.0.0, not missing the first tag.
 - **A3 No current consumer parses the envelope strictly enough that one
   added field breaks it.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `DisallowUnknownFields` IS used in production, but only
     on the INPUT path — `internal/table/source.go::decodeStrict`, which
     rejects unknown keys in the model TOML under `0002:C3` ("an unknown
-    schema field is a stable refusal, never a silent no-op"). No in-repo
-    code strict-decodes the OUTPUT envelope, and `grep -rn
-    "format_version\|schema_version"` over the Go sources returns no
-    matches. Resolve extends this to the skills and harnesses that call
-    the binary, which are the actual agent consumers and the population
-    this assumption is really about.
+    schema field is a stable refusal, never a silent no-op"); its four
+    in-repo call sites are all TOML, reached via
+    `internal/table/load.go::Load`. There is a real in-repo consumer that
+    re-parses the OUTPUT envelope, and it is TOLERANT: `--plan` decodes a
+    `flow resolve --as json` envelope through
+    `internal/cli/flow_input.go::planEnvelope`, a four-field struct read by
+    a plain `json.Unmarshal`, which ignores unrecognized top-level
+    properties by Go's default decoder behaviour. Test-site envelope
+    decodes are likewise plain structs. No `.claude/` skill, hook,
+    Makefile, or CI workflow parses the envelope at all, and
+    `schema_version`/`format_version` appear nowhere outside this record's
+    prose. So the additive field is safe for the strictest consumer that
+    exists — and `planEnvelope` is the one this RDR must not break.
   - **If wrong**: the additive change is breaking for that consumer
     regardless of what C1 declares, and the rollout needs a deprecation
     window rather than a single release. Surfaces as a harness failing to
     parse immediately after upgrade.
 - **A4 The three tier names partition every machine-readable surface this
   CLI emits — no surface needs a fourth tier.**
-  - **Status**: Pending
+  - **Status**: Verified as to the PARTITION; C4's assignment list is
+    incomplete and is corrected below.
   - **Method**: Source Search
-  - **Evidence**: C4 assigns tiers to the envelope `type`, the severity
-    vocabulary, the exit-code classes, `table.Categories()`, the CLIError
-    `code` vocabulary, the `graph-unprovable-coverage` `reason` set, and
-    the graph-lint finding codes. Resolve enumerates the emitted
-    vocabularies and confirms the assignment is total, with no surface
-    needing a semantics none of the three provide.
+  - **Evidence**: An enumeration of every string vocabulary reachable on
+    the `--as=json` wire found **thirteen** emitted sets, against the
+    seven C4 named. Every one of the five unassigned sets fits an existing
+    tier, so no surface needs semantics the three tiers do not provide —
+    the partition holds, which is what this assumption claims. The five,
+    with the tier each takes (now assigned in C4): the stderr advisory
+    `level` set `note`/`warning` (`internal/cli/respond/respond.go::Note`,
+    `::Warn`) → `frozen`, a `type`-shaped discriminator on the second
+    stream; the gate `verdict` set `allow`/`deny`/`indeterminate`
+    (`internal/accessor/model.go::Verdicts`, emitted at
+    `internal/cli/flow_exec.go::gateResult`) → `frozen`, since it is also
+    the accessor-protocol INPUT alphabet and `cmdbind` rejects a stranger,
+    so it cannot append without breaking gate authors; `data.escape_class`
+    (`internal/resolve/resolve.go::RefusalKinds`, emitted at
+    `internal/cli/flow_resolve.go`) → `frozen`, already enforced by
+    `internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted`;
+    the `flow next` unknown-`reason` set
+    (`internal/cli/flow_next.go::unknownFact.Reason`) → `append-only`,
+    a set DISTINCT from the `graph-unprovable-coverage` `reason` set C4
+    already names, on a different field with a different producer; and the
+    `graph-lint-failed` aggregate code
+    (`internal/graphlint/taxonomy.go::AggregateCode`) → `frozen`, the one
+    code that envelope ever carries. Two model-authored open namespaces —
+    `findings[].class` and `data.dispositions` — are correctly tier-less:
+    `clierr` ascribes them no meaning, so they are author surface, not CLI
+    vocabulary. C4 also said "the graph-lint finding codes" where the
+    blocking and advisory tiers take DIFFERENT tiers; it now names each.
   - **If wrong**: C4 is incomplete and an unassigned surface has no stated
     promise — the exact gap this RDR exists to close, reappearing inside
     the fix. Surfaces at implementation as a vocabulary that fits no tier.
+    This is what the enumeration above actually found, at five surfaces;
+    the correction is C4's, not the tier vocabulary's.
 
 ## Proposed Solution
 
@@ -337,9 +382,28 @@ place.
 
 ```normative
 The `--as=json` terminal envelope carries a `schema_version` string field
-of the form `MAJOR.MINOR`, present on both the `ok` and `failed` records.
+of the form `MAJOR.MINOR`, present on both terminal records: the `ok`
+envelope (`internal/cli/respond::Success`) and the refusal record
+(`internal/cli/clierr::CLIError`). Those two records are structurally
+asymmetric and this contract does not change that: `ok` carries a `type`
+discriminator, a refusal carries no `type` and no wrapper — it is the bare
+`CLIError`, per `0005:C1`. `schema_version` is the one field they share.
+
 It is versioned independently of the binary's release version and MUST NOT
 be derived from it.
+
+`schema_version` is NOT `omitempty` on either record, which is what makes
+it a version a consumer can rely on rather than one it must handle the
+absence of.
+
+This does not breach `0005:C1`'s "exactly one omitempty structured field,
+`findings`". That restriction descends from `JDR 0001 §D10` rule 3, whose
+subject is a STRUCTURED carrier — a record field on which inner
+discriminators ride so that codes do not proliferate (rule 2: "One CLI code
+per caller-branchable failure; inner discriminators ride one structured
+field"). `schema_version` is a scalar version marker carrying no
+discriminator and no payload, so it does not consume that budget. The
+refusal envelope still has exactly one structured field, `findings`.
 
 The schema version begins at `"0.1"` and tracks the wire, not the binary.
 While its major is `0` the schema is explicitly unstable and MAY change
@@ -422,10 +486,25 @@ The tier assignments at this RDR's implementation:
 
 - `frozen`: the envelope `type` discriminator; the severity vocabulary
   (`blocking`, `info`); the exit-code classes emitted by
-  `internal/cli/clierr::ExitCodeFor`.
+  `internal/cli/clierr::ExitCodeFor`; the stderr advisory `level` set
+  (`note`, `warning`); the gate `verdict` set (`allow`, `deny`,
+  `indeterminate`), which is frozen because it is simultaneously the
+  accessor-protocol input alphabet; `data.escape_class`
+  (`internal/resolve::RefusalKinds`); the `graph-lint-failed` aggregate
+  code.
 - `append-only`: `internal/table::Categories()`; the CLIError `code`
-  vocabulary; the `graph-unprovable-coverage` `reason` set.
-- `growing`: the graph-lint finding codes.
+  vocabulary; the `graph-unprovable-coverage` `reason` set; the
+  `flow next` unknown-`reason` set (a distinct vocabulary on a distinct
+  field from the preceding entry); the graph-lint BLOCKING finding codes.
+- `growing`: the graph-lint ADVISORY finding codes. `0006:C17` is amended
+  from "closed at" its four members to append-only as part of this RDR's
+  implementation (A1) — the tier assignment here is what that amendment
+  records.
+
+Two emitted namespaces take NO tier, deliberately: `findings[].class` and
+`data.dispositions` carry model-authored tokens to which `clierr` ascribes
+no meaning. They are author surface, not CLI vocabulary, and a consumer
+MUST NOT read them as either.
 
 A surface added later takes a tier assignment in the same document as part
 of the change that adds it; an unassigned machine-readable surface is a
@@ -476,20 +555,31 @@ onward):
  "data":{"findings":[]}}
 ```
 
-A refusal, showing the schema version on the failure record too:
+A refusal, showing the schema version on the failure record too. Note the
+shape: the failure record is the BARE `CLIError`, with no wrapper and **no
+`type` key at all** — not `"type":"failed"`. That is `0005:C1`'s decision
+("Failures MUST use the existing CLIError JSON/text envelope"), confirmed
+against a live run under {SPIKE_DIR}`envelope-baseline.md`, whose observed
+failure key set is `code,detail,findings,message,param`:
 
 ```json
-{"type":"failed","schema_version":"0.1",
+{"schema_version":"0.1",
  "code":"graph-lint-failed",
  "message":"the model carries blocking graph-lint findings",
  "findings":[{"code":"graph-overlap","severity":"blocking","rule":"r3"}]}
 ```
 
+`schema_version` is therefore what a consumer branches on to know which
+record shape it holds, since the two records share no discriminator: `ok`
+carries `type`, a refusal carries `code`. A consumer distinguishes them by
+`code`'s presence, exactly as `internal/cli/flow_input.go::planEnvelope`
+already does.
+
 ### Capability Dependencies
 
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| Severity partition (`blocking`/`info`) gating the exit code | Predecessor (RDR 0006) | Available | C3 rides it; no new machinery. Constrained by `0006:C17` closing the advisory tier at four — see A1. |
+| Severity partition (`blocking`/`info`) gating the exit code | Predecessor (RDR 0006) | Available | C3 rides it; no new machinery. `0006:C17`'s closure at four is opened to append-only as part of this change (A1, ruled). |
 | Terminal envelope every verb routes through | Existing (`internal/cli/respond`) | Available | C1 adds one field at the single gateway rather than per verb. |
 | Enumerable vocabularies to assign tiers to | Existing (`table.Categories()`, `graphlint.BlockingCodes()`) | Available | C4 assigns tiers to surfaces that already enumerate themselves. |
 | Release-notes discipline naming promotions | This RDR | Introduced | C3's disclosure obligation is process, asserted by review not by a test. |
@@ -501,7 +591,7 @@ A refusal, showing the schema version on the failure record too:
 | Envelope field carrier | `internal/cli/respond::Success` | `Data`/`Notes`/`Warnings` are `omitempty`; `schema_version` must not be | Extend | One non-omitempty field added at the gateway; C1 fixes its form. |
 | Failure envelope carrier | `internal/cli/clierr::CLIError` | Marshals itself; no wrapper to nest under | Extend | Same field, added symmetrically so one consumer struct parses both. |
 | Load-category vocabulary | `internal/table::Categories()` | Comment already says "the list's size is not a contract" | Reuse | C4 assigns `append-only`; the existing consumer rule is already correct and gets hoisted, not changed. |
-| Lint finding taxonomy | `internal/graphlint/taxonomy.go` | Advisory tier declared CLOSED at four (`0006:C17`) | Extend | C3 needs `info` to be open for new codes; this closure is the one real blocker — A1. |
+| Lint finding taxonomy | `internal/graphlint/taxonomy.go` | Advisory tier declared CLOSED at four (`0006:C17`); severity is DERIVED (`severityFor`), so the code imposes no limit | Extend | C3 needs `info` open for new codes. Ruled: C17 becomes append-only; the only code-side blocker is one by-value test assertion (A1). |
 | Stability prose | `docs/cli-output-contract.md` | Contains no release/upgrade/breaking language today | Extend | Becomes the promise's home. |
 
 ### Decision Rationale
@@ -831,11 +921,47 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
   ("New rules should always be added in preview mode"), golangci-lint
   puts it in the release-tier definition ("Minor release (might break
   your lint build because of newly found issues)").
-- **Documented** — Two unrelated tools version their machine-readable
-  schema independently of the product version: OpenTofu's `format_version`
-  ("increment the minor version… for backward-compatible changes or
-  additions") and Cargo's `cargo metadata --format-version` ("The format
-  is stable and versioned").
+- **Documented** — OpenTofu is direct precedent for C1, down to the
+  consumer rule. `opentofu/website/docs/internals/json-format.mdx:15-26`
+  states both halves verbatim: "**Ignore any object properties with
+  unrecognized names** to remain forward-compatible with future minor
+  versions" and "**Reject any input which reports an unsupported major
+  version**." The field sits on the response envelope beside the binary
+  version, not derived from it — `jsonplan/plan.go:31-58` carries
+  `format_version` and `terraform_version` as siblings — and is
+  **per-surface**: `jsonplan` is at `"1.2"` while `jsonstate` and
+  `jsonprovider` are at `"1.0"`, three independently incremented output
+  schemas in one binary. Cargo's `cargo metadata --format-version` is the
+  second instance.
+- **Documented** — The pattern is established but **minority**, which is
+  the honest framing of how much precedent C1 carries. Present in tools
+  whose JSON is contractually consumed by other programs (OpenTofu;
+  kubebuilder's plugin protocol, `pkg/plugin/external/types.go:26`;
+  roborev and beads, both integer-valued `schema_version`). Absent from
+  gh, goreleaser, golangci-lint, hugo, consul, prometheus, etcd and
+  semgrep — tools whose `--json` is treated as a convenience for humans
+  and scripts. This CLI's output is agent-consumed, which is what puts it
+  in the first group.
+- **Documented** — The 0.x instability claim A2 rests on has a normative
+  Go-toolchain statement, which is a stronger citation here than SemVer's
+  own §4: the Go Modules Reference (`go-modules-reference.pdf`, p.4) —
+  "A version is considered **unstable** if its major version is 0… Unstable
+  versions are **not subject to compatibility requirements**. For example,
+  v0.2.0 may not be compatible with v0.1.0." SemVer 2.0.0's own wording is
+  not in the local corpora and is deliberately not quoted from memory.
+- **Documented** — C1's tolerant-reader rule is textbook, and its
+  asymmetry with `0002:C3`'s strict input is only PARTLY grounded.
+  Daigneau, *Service Design Patterns* (p.244) names the Robustness
+  Principle / Postel's Law and the Tolerant Reader; DDIA (p.121) gives the
+  mechanism ("it can simply ignore that field… This maintains forward
+  compatibility"). Both justify tolerant-on-receive / validated-on-send.
+  Neither states the specific inversion this RDR asserts — strict
+  reject-unknown-keys on *author-written config* so a human learns of the
+  typo. That leg is a defensible extension of "senders should use schema
+  validation before sending" with the CLI validating on the author's
+  behalf, but it is an inference, not a citation, and C1's asymmetry
+  paragraph should be read as this project's own decision rather than as
+  received practice.
 - **Documented** — The authoritative wire-contract document says nothing
   about versions: `docs/cli-output-contract.md` contains zero occurrences
   of "release", "upgrade" or "breaking", while `llms.txt` tells agents
@@ -844,9 +970,13 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 - **Documented** — No strictness opt-in exists to hang a clippy-style
   disclaimer on: `internal/cli/lint.go` registers only `--model` and
   `--flow`.
-- **Assumed** — That the `0006:C17` closure is amendable (A1), that no
-  release exists yet to be compatible with (A2), that no consumer parses
-  strictly (A3), and that three tiers are total (A4).
+- **Verified at Stage 4** — All four assumptions now rest on source, a
+  ruling, or a live run, not on assumption: `0006:C17`'s closure is opened
+  by ruling (A1); no release exists yet (A2, `git tag --list` empty and
+  `internal/version::resolve` pinned to `"dev"`); the strictest envelope
+  consumer that exists is tolerant (A3, `flow_input.go::planEnvelope`); and
+  the three tiers partition all thirteen emitted vocabularies (A4), five of
+  which C4 had not assigned and now does.
 
 ## Trade-offs
 
@@ -868,12 +998,16 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 
 ### Risks and Mitigations
 
-- **Risk**: The `0006:C17` closure at four advisory members blocks C3's
-  `info`-first rule for graph-lint codes (A1).
-  **Mitigation**: Resolve verifies whether the closure is load-bearing
-  before implementation; if it is, this RDR either amends 0006 through
-  the normal route or C3 names the graph-lint tier as the exception with
-  a stated reason.
+- **Risk**: 0006 is not amended before a fifth advisory code is added, so
+  `0006:C17` still reads "closed at" four while this RDR's C4 calls the set
+  `growing` — two Final-or-Implemented records disagreeing on one
+  vocabulary's openness (A1, ruled but not yet executed).
+  **Mitigation**: the amendment and the `want`-literal edit at
+  `findings_0006_test.go:288-293` are prerequisites of this RDR's
+  implementation, not follow-ups; 7.1 cluster reconcile over {0006, 0029}
+  re-reads the two records against each other before either locks further.
+  The failure is visible — `TestReq74` goes red on the fifth code — so it
+  cannot ship silently.
 - **Risk**: `schema_version` is added after 1.0.0, making the
   compatibility field itself a breaking change (A2).
   **Mitigation**: land it during `0.x`, where incompatible change is free;
@@ -916,10 +1050,10 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] A1 settled first: whether `0006:C17`'s advisory-tier closure admits
-      new members decides whether C3 is implementable as written or needs
-      an exception clause. Nothing else in this plan depends on it, but
-      C3's wording does.
+- [ ] `0006:C17` amended from "closed at" its four members to append-only,
+      with the `want` literal at `findings_0006_test.go:288-293` edited in
+      the same change (A1, ruled 2026-09-11). C3's wording depends on it;
+      nothing else in this plan does.
 - [ ] Still pre-1.0.0 (A2) — the `0.x` runway this plan assumes. The
       first release is 0.1.0; nothing here waits on 1.0.0 except the
       schema's own promotion to `"1.0"`.
@@ -944,9 +1078,13 @@ exactly the event the seed named — a new lint finding code appearing.
    observes no difference, a consumer reading findings sees one more
    entry, and a consumer gating on the major keeps parsing.
 5. Promote that code to `blocking` and re-run: now the exit code changes
-   and `type` becomes `failed`, demonstrating that promotion is the
-   verdict-changing event C3 requires be disclosed, and introduction is
-   not.
+   from 0 to 2 and the record shape changes — the `ok` envelope is replaced
+   by the bare `CLIError` refusal, which carries `code` and no `type` key
+   (the observed failure key set is `code,detail,findings,message,param`;
+   see {SPIKE_DIR}`envelope-baseline.md`). That is a more disruptive
+   change for a consumer than a `type` value flipping to `"failed"`, which
+   is what makes promotion the verdict-changing event C3 requires be
+   disclosed, and introduction not.
 
 This walks the whole promise end to end: C1's field, C2's tolerance rule,
 and C3's introduce-at-`info` / disclose-on-promotion split.
@@ -957,7 +1095,9 @@ and C3's introduce-at-`info` / disclose-on-promotion split.
 
 Add the field at the single output gateway — `respond.Success` and
 `clierr.CLIError` — so every verb inherits it without per-verb work, and
-both the `ok` and `failed` records carry it symmetrically.
+both terminal records carry it. Neither is `omitempty`. The records stay
+structurally asymmetric (a refusal has no `type`); `schema_version` is the
+field they share, not a step toward unifying them.
 
 #### Step 2: Retire the ambiguous `closed` wording
 
@@ -1003,23 +1143,91 @@ enumerable vocabularies, the output gateway — already ships.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The matrix the verified assumptions imply. Each row names the code path
+Stage 4 read or the spike output that backs it; the normative fixtures are
+the two envelope shapes captured under
+{SPIKE_DIR}`envelope-baseline.md`.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: The `ok` envelope carries `schema_version`, non-`omitempty`.
+   **Expected**: `intrastate lint --model <clean-model> --as=json` emits
+   top-level keys `data,schema_version,type` with `"schema_version":"0.1"`.
+   The pre-change baseline is `data,type` (captured), so this row is the
+   one added key and nothing else. Backed by
+   `internal/cli/respond/respond.go::Success`.
+
+2. **Scenario**: The refusal record carries `schema_version` too, and keeps
+   its shape.
+   **Expected**: a provoked failure emits `code,detail,message,param,
+   schema_version` (or with `findings` where the failure aggregates) — the
+   captured baseline `code,detail,message,param` plus the one field. No
+   `type` key appears; the record stays the bare `CLIError`. Backed by
+   `internal/cli/clierr/clierr.go::CLIError` and
+   `internal/cli/respond/respond.go::Fail`.
+
+3. **Scenario**: The existing in-repo envelope consumer survives the added
+   field.
+   **Expected**: `--plan` still decodes a `flow resolve --as json` envelope
+   that now carries `schema_version`, unchanged. This is the A3 regression
+   guard and the only strictness risk the repo actually holds —
+   `internal/cli/flow_input.go::planEnvelope`.
+
+4. **Scenario**: An `info` finding leaves the success disposition untouched
+   (C3, riding `0006:C17`'s guarantee).
+   **Expected**: exit 0, `type` still `"ok"`, the finding present in
+   `data.findings` with `"severity":"info"`. Backed by
+   `internal/graphlint/taxonomy.go::severityFor` — severity is derived from
+   `!IsBlocking`, so a new advisory code needs no severity plumbing.
+
+5. **Scenario**: Promotion to `blocking` IS the verdict-changing event.
+   **Expected**: exit 2 and the record shape changes from the `ok` envelope
+   to the bare `CLIError`. This is the observable C3 requires be disclosed.
+
+6. **Scenario**: `frozen` sets match their declared members exactly.
+   **Expected**: a by-value assertion per frozen vocabulary in C4 —
+   including the five this RDR newly assigned. `data.escape_class` already
+   has one
+   (`internal/resolve/guard_atoms_test.go::TestReq79_NoSixthRefusalKindIsMinted`);
+   that test is the pattern the others follow.
+
+7. **Scenario**: `append-only` vocabularies are never asserted by
+   cardinality or ordinal.
+   **Expected**: membership-and-uniqueness assertions only. The existing
+   pattern to extend is
+   `internal/table/command_carrier_0025_test.go::TestReq79_TheCategorySetIsAppendOnlyAndDuplicateFree`,
+   which deliberately avoids count and index goldens — not a golden file.
+   No golden/snapshot test of the JSON envelope exists in the repo today,
+   and this RDR does not add one: a byte-golden over the envelope would
+   itself assert the cardinality C2 forbids consumers from asserting.
+
+8. **Scenario**: `0006:C17`'s amendment lands with the fifth advisory code
+   (A1).
+   **Expected**: `internal/graphlint/findings_0006_test.go::TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers`
+   is updated in the same change, and 0006's C17 text reads append-only.
+   Left unamended, `TestReq74` goes red — which is the intended visible
+   failure, not a flake to suppress.
+
+9. **Scenario**: The retired `closed` wording does not survive (C2's last
+   clause).
+   **Expected**: no occurrence of `closed` describing a tier in
+   `internal/graphlint/taxonomy.go` or `internal/table/category.go`. A grep
+   assertion is sufficient and is the cheapest guard against the ambiguity
+   this RDR exists to remove.
 
 ### Performance Expectations
 
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+Omitted deliberately: no alternative in this RDR was weighed on empirical
+performance grounds. The change adds one short string field to two structs
+already marshalled once per invocation, through the single encoder
+`internal/cli/clierr::WriteJSONLine`; there is no measurement that would
+discriminate between the alternatives considered.
+
+Byte-stability is NOT claimed for the envelope, so the determinism
+checklist does not apply to it. That is deliberate and worth stating,
+because C2 forbids exactly the assertion a byte-stable envelope would
+invite: a consumer MUST NOT assert on a vocabulary's cardinality or a
+member's ordinal position. The one place this project does make a
+byte-equality claim — set-value read-back, via the non-HTML-escaping
+encoder (`JDR 0001 §D13`) — is upstream of this RDR and untouched by it.
 
 ## Finalization Gate
 
