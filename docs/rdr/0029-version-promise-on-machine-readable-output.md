@@ -97,7 +97,7 @@ N/A-bulleted). -->
 - **Profile**: large — the version promise over every machine-readable
   vocabulary this CLI emits: the `--as=json` envelope's `schema_version`,
   the three-tier stability vocabulary, and the tier assigned to each of
-  the thirteen emitted surfaces; user-facing yes; locks format.
+  the fourteen tiered surfaces; user-facing yes; locks format.
 - **Priority**: High
 - **Related Issues**: none
 - **Seam Lineage**: no prior accretion
@@ -209,9 +209,10 @@ adopt when it arrives.
     VCS stamps but never moving `version` off `"dev"` without an
     `-ldflags` injection or a module version;
     `internal/cli/version.go`'s verb reports that value and nothing else.
-    `.github/workflows/release.yml` triggers only on a `v*` tag push
-    (`on.push.tags: ["v*"]`). The first release is therefore 0.1.0 and the
-    window is the whole `0.x` series rather than one release.
+    `.github/workflows/release.yml` releases on a `v*` tag push
+    (`on.push.tags: ["v*"]`, alongside a `workflow_dispatch`). No such tag
+    exists, so the first release is 0.1.0 and the window is the whole
+    `0.x` series rather than one release.
   - **If wrong**: adding `schema_version` after 1.0.0 makes the
     compatibility field itself a breaking change under C1's own rule,
     forcing a 2.0.0 for the field that exists to prevent major bumps.
@@ -226,19 +227,29 @@ adopt when it arrives.
   - **Evidence**: `DisallowUnknownFields` IS used in production, but only
     on the INPUT path — `internal/table/source.go::decodeStrict`, which
     rejects unknown keys in the model TOML under `0002:C3` ("an unknown
-    schema field is a stable refusal, never a silent no-op"); its four
-    in-repo call sites are all TOML, reached via
-    `internal/table/load.go::Load`. There is a real in-repo consumer that
+    schema field is a stable refusal, never a silent no-op"); its one
+    in-repo call site is TOML, at `internal/table/load.go::Load`. There is a real in-repo consumer that
     re-parses the OUTPUT envelope, and it is TOLERANT: `--plan` decodes a
     `flow resolve --as json` envelope through
     `internal/cli/flow_input.go::planEnvelope`, a four-field struct read by
     a plain `json.Unmarshal`, which ignores unrecognized top-level
     properties by Go's default decoder behaviour. Test-site envelope
-    decodes are likewise plain structs. No `.claude/` skill, hook,
-    Makefile, or CI workflow parses the envelope at all, and
+    decodes are likewise plain structs; no test anywhere sets
+    `DisallowUnknownFields`. No `.claude/` skill, hook, Makefile, or CI
+    workflow parses the envelope at all, and
     `schema_version`/`format_version` appear nowhere outside this record's
-    prose. So the additive field is safe for the strictest consumer that
-    exists — and `planEnvelope` is the one this RDR must not break.
+    prose. So the additive field is safe for every DECODER that exists.
+
+    The binding constraint is not a decoder. `internal/cli/flow_mvv_0023_test.go`
+    asserts BYTE-IDENTITY over a whole terminal envelope, comparing a
+    `flow resolve --as=json` line by string equality against the checked-in
+    golden `docs/rdr/0023-resolve-envelope-projection/artifacts/mvv-step1-default-golden.json`
+    (`{"type":"ok","data":{…}}`, no `schema_version`). A non-`omitempty`
+    field fails it on the commit that adds it. That is a pinned baseline
+    rather than a consumer — 0023 captured it to prove ITS change was
+    additive — so the correct response is to re-capture it, not to weaken
+    C1. It is an implementation obligation (Phase 1 Step 1), not a
+    refutation.
   - **If wrong**: the additive change is breaking for that consumer
     regardless of what C1 declares, and the rollout needs a deprecation
     window rather than a single release. Surfaces as a harness failing to
@@ -249,11 +260,14 @@ adopt when it arrives.
     incomplete and is corrected below.
   - **Method**: Source Search
   - **Evidence**: An enumeration of every string vocabulary reachable on
-    the `--as=json` wire found **thirteen** emitted sets, against the
-    seven C4 named. Every one of the five unassigned sets fits an existing
-    tier, so no surface needs semantics the three tiers do not provide —
-    the partition holds, which is what this assumption claims. The five,
-    with the tier each takes (now assigned in C4): the stderr advisory
+    the `--as=json` wire found **sixteen** emitted sets: fourteen that
+    take a tier, plus the two model-authored namespaces that deliberately
+    take none. C4 originally named seven of the fourteen. Every one of the
+    seven it had not named fits an existing tier, so no surface needs
+    semantics the three tiers do not provide — the partition holds, which
+    is what this assumption claims. Five sit at the envelope's top level
+    or under `data`, with the tier each takes (now assigned in C4): the
+    stderr advisory
     `level` set `note`/`warning` (`internal/cli/respond/respond.go::Note`,
     `::Warn`) → `frozen`, a `type`-shaped discriminator on the second
     stream; the gate `verdict` set `allow`/`deny`/`indeterminate`
@@ -270,16 +284,35 @@ adopt when it arrives.
     already names, on a different field with a different producer; and the
     `graph-lint-failed` aggregate code
     (`internal/graphlint/taxonomy.go::AggregateCode`) → `frozen`, the one
-    code that envelope ever carries. Two model-authored open namespaces —
-    `findings[].class` and `data.dispositions` — are correctly tier-less:
-    `clierr` ascribes them no meaning, so they are author surface, not CLI
-    vocabulary. C4 also said "the graph-lint finding codes" where the
-    blocking and advisory tiers take DIFFERENT tiers; it now names each.
+    code that envelope ever carries. The remaining two ride the fields of
+    a `findings[]` element, which the first pass of this census missed by
+    enumerating only the top level and `data`: `findings[].operator`
+    (`internal/guard/grammar.go::Operators`) → `frozen` on `0003:C7`'s
+    "the initial operator vocabulary MUST be closed and typed", enforced
+    by an exhaustive `slices.Equal` test; and `findings[].block`
+    (`internal/resolve/guard.go::Block`) → `append-only`, NOT frozen:
+    `JDR 0001 §D12` already grew it from two members to three, ruling that
+    "0007's 'exactly two' is the fence that gives", and `isGuardBlock`
+    tolerates further tokens by construction. The two took different
+    tiers for the same reason the tier vocabulary exists — one set is
+    closed at its boundary, the other has grown under record. Both are
+    emitted at `internal/graphlint/analysis.go`,
+    `::coverage.go`, `::groups.go` and `internal/cli/flow_exec.go`. Two
+    model-authored open namespaces — `findings[].class` and
+    `data.dispositions` — are correctly tier-less: `clierr` ascribes them
+    no meaning, so they are author surface, not CLI vocabulary; the same
+    holds for `findings[]`'s free-text `key`, `literal` and `dimension`,
+    which are drawn from the model under lint and are not vocabularies.
+    C4 also said "the graph-lint finding codes" where the blocking and
+    advisory tiers take DIFFERENT tiers; it now names each.
   - **If wrong**: C4 is incomplete and an unassigned surface has no stated
     promise — the exact gap this RDR exists to close, reappearing inside
     the fix. Surfaces at implementation as a vocabulary that fits no tier.
-    This is what the enumeration above actually found, at five surfaces;
-    the correction is C4's, not the tier vocabulary's.
+    This is what the enumeration above actually found, at seven surfaces —
+    five on the first pass and two more the grounding lens caught inside
+    `findings[]`; the correction is C4's, not the tier vocabulary's. That
+    the gap recurred once inside the fix is why C4 now states where a
+    vocabulary must be looked for, not only which ones were found.
 
 ## Proposed Solution
 
@@ -491,11 +524,22 @@ The tier assignments at this RDR's implementation:
   `indeterminate`), which is frozen because it is simultaneously the
   accessor-protocol input alphabet; `data.escape_class`
   (`internal/resolve::RefusalKinds`); the `graph-lint-failed` aggregate
-  code.
+  code; `findings[].operator` (`internal/guard::Operators`), frozen on
+  `0003:C7`'s authority — "The initial operator vocabulary MUST be closed
+  and typed… Unknown operators MUST be rejected" — enforced by the
+  exhaustive `slices.Equal` assertion in
+  `internal/guard/guard_grammar_0003_test.go::TestReq2_OperatorVocabularyIsClosedAndTyped`.
 - `append-only`: `internal/table::Categories()`; the CLIError `code`
   vocabulary; the `graph-unprovable-coverage` `reason` set; the
   `flow next` unknown-`reason` set (a distinct vocabulary on a distinct
-  field from the preceding entry); the graph-lint BLOCKING finding codes.
+  field from the preceding entry); the graph-lint BLOCKING finding codes;
+  `findings[].block` (`internal/resolve::Block`). That last is
+  append-only rather than frozen on the authority of `JDR 0001 §D12`,
+  which already grew the set from two members to three — "`resolve.Block`
+  gains `BlockMatch` in 0007 Phase 1; 0007's 'exactly two' is the fence
+  that gives." `internal/resolve/guard.go::isGuardBlock` is written to
+  tolerate further tokens, treating every block outside `all`/`unless` as
+  a non-operand of `0007:C6`'s verdict formula.
 - `growing`: the graph-lint ADVISORY finding codes. `0006:C17` is amended
   from "closed at" its four members to append-only as part of this RDR's
   implementation (A1) — the tier assignment here is what that amendment
@@ -504,11 +548,15 @@ The tier assignments at this RDR's implementation:
 Two emitted namespaces take NO tier, deliberately: `findings[].class` and
 `data.dispositions` carry model-authored tokens to which `clierr` ascribes
 no meaning. They are author surface, not CLI vocabulary, and a consumer
-MUST NOT read them as either.
+MUST NOT read them as either. The remaining author-supplied `Finding`
+fields — `key`, `literal`, `dimension` — are free text drawn from the
+model under lint, not vocabularies, and take no tier for that reason.
 
-A surface added later takes a tier assignment in the same document as part
-of the change that adds it; an unassigned machine-readable surface is a
-defect.
+A vocabulary is tiered wherever it is EMITTED, including on the fields of
+a `findings[]` element — not only at the envelope's top level and under
+`data`. A surface added later takes a tier assignment in the same document
+as part of the change that adds it; an unassigned machine-readable surface
+is a defect.
 ```
 
 #### Load-Bearing Decisions
@@ -973,10 +1021,11 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 - **Verified at Stage 4** — All four assumptions now rest on source, a
   ruling, or a live run, not on assumption: `0006:C17`'s closure is opened
   by ruling (A1); no release exists yet (A2, `git tag --list` empty and
-  `internal/version::resolve` pinned to `"dev"`); the strictest envelope
-  consumer that exists is tolerant (A3, `flow_input.go::planEnvelope`); and
-  the three tiers partition all thirteen emitted vocabularies (A4), five of
-  which C4 had not assigned and now does.
+  `internal/version::resolve` pinned to `"dev"`); every envelope DECODER
+  that exists is tolerant (A3, `flow_input.go::planEnvelope`), the binding
+  constraint being `0023`'s byte-identity golden, which this RDR re-captures;
+  and the three tiers partition all fourteen tiered vocabularies (A4), seven
+  of which C4 had not assigned and now does.
 
 ## Trade-offs
 
@@ -1089,6 +1138,47 @@ exactly the event the seed named — a new lint finding code appearing.
 This walks the whole promise end to end: C1's field, C2's tolerance rule,
 and C3's introduce-at-`info` / disclose-on-promotion split.
 
+**`oracle`** — what each MVV step fails on, and its negative control. Step 4
+is the promise's load-bearing observation, so it may not pass by absence of
+error:
+
+| MVV step | Fails if X is wrong, because Y | Negative / failing control |
+| --- | --- | --- |
+| 1 emit baseline | `schema_version` absent or not `"0.1"` — the key set is compared exactly, so a missing or misspelled field is a diff, not a silent pass | pre-change baseline `data,type` has no such key; the run before the change MUST fail this row |
+| 4 additive event | exit code ≠ 0, `type` ≠ `ok`, the new finding missing from `data.findings`, or its `severity` ≠ `info` — each asserted by value, not by absence of error | step 5, the same code at `blocking`, MUST flip exit to 2 and replace the envelope; if step 5 does not differ, step 4 proved nothing |
+| 4 version movement | major moved, or minor did not — read off the emitted string, not inferred from the change class | a breaking change in the same position MUST move the major; a no-op release MUST move neither |
+| 5 promotion | exit stays 0 or the record keeps a `type` key — the shape change IS the disclosed event C3 governs | step 4's `info` run is the control: same input, same code, different severity, different verdict |
+
+**`disposition`** — the input classes this RDR assigns outcomes to. The
+promise is exactly that the first row never becomes the second without the
+release-note disclosure C3 requires:
+
+| Input class | Exit code | Event / error | Artifact minted | Silent vs loud |
+| --- | --- | --- | --- | --- |
+| clean model | 0 | none | `ok` envelope, `data.findings` empty | silent |
+| model firing an `info` code | 0 (unchanged) | none — advisory rides the success payload | `ok` envelope, one more `findings[]` entry | loud in payload, silent in verdict — C3's guarantee |
+| model firing a `blocking` code | 2 | `graph-lint-failed` aggregate | bare `CLIError`, no `type` key | loud |
+| an `info` code promoted to `blocking` | 0 → 2 for input that previously passed | `graph-lint-failed` | envelope shape changes | loud, AND MUST be disclosed in release notes naming the code (C3) |
+| envelope carrying an unrecognized key | n/a — consumer side | none | — | silent by C1's tolerant-reader rule |
+| envelope reporting an unsupported major | n/a — consumer side | consumer MUST reject | — | loud, by C1 |
+
+**`trace`** — the assertions in force at each step of the MVV's end state,
+walked for joint satisfiability. Witness values are the emitted envelope's
+own bytes:
+
+| Step | Assertions in force | Witness |
+| --- | --- | --- |
+| emit `ok` at 0.x | C1 (field present, non-`omitempty`, `MAJOR.MINOR`); C1's 0.x clause (major `0` ⇒ unstable) | `{"type":"ok","schema_version":"0.1","data":{…}}` |
+| add `info` code | C3 (introduce at `info`); `0006:C17` via C3 (advisory MUST NOT change success disposition); C4 `growing` on advisory codes | exit 0, `type` still `ok`, `"severity":"info"` |
+| version moves | C1 (minor increments on additive change); C2 `growing` (new member MAY fire on input that previously produced no finding) | `"0.1"` → `"0.2"`, major unchanged |
+| refusal path | `0005:C1` (bare `CLIError`, no wrapper, no `type`); C1 (field on BOTH terminal records) | `{"schema_version":"0.1","code":"graph-lint-failed",…}` |
+| consumer reads either record | C1 (tolerate unknown keys; reject unsupported major); the two records share only `schema_version`, so `code`'s presence discriminates | `planEnvelope` branches on `code`, unchanged by the added field |
+
+No CONTRADICTION row: the 0.x clause and the minor-increment rule coexist
+because C1 states the minor still moves while the major is `0`, and the
+`growing` tier is what licenses the step-4 finding to appear on unchanged
+input without that being a breaking change.
+
 ### Phase 1: Code Implementation
 
 #### Step 1: Carry `schema_version` on both terminal records
@@ -1098,6 +1188,13 @@ Add the field at the single output gateway — `respond.Success` and
 both terminal records carry it. Neither is `omitempty`. The records stay
 structurally asymmetric (a refusal has no `type`); `schema_version` is the
 field they share, not a step toward unifying them.
+
+Re-capture `0023`'s envelope golden in this same commit:
+`docs/rdr/0023-resolve-envelope-projection/artifacts/mvv-step1-default-golden.json`
+is asserted by byte-identity at `internal/cli/flow_mvv_0023_test.go`, so a
+non-`omitempty` field fails it until the baseline is retaken. The
+re-captured golden must differ from its predecessor by exactly the one
+`schema_version` key (`0029:S3`).
 
 #### Step 2: Retire the ambiguous `closed` wording
 
@@ -1168,8 +1265,16 @@ the two envelope shapes captured under
    field.
    **Expected**: `--plan` still decodes a `flow resolve --as json` envelope
    that now carries `schema_version`, unchanged. This is the A3 regression
-   guard and the only strictness risk the repo actually holds —
+   guard for the strictest DECODER the repo holds —
    `internal/cli/flow_input.go::planEnvelope`.
+
+   The repo's other envelope coupling is tighter and is not a decoder:
+   `internal/cli/flow_mvv_0023_test.go` asserts byte-identity against
+   `0023`'s checked-in golden. **Expected**: that golden is re-captured in
+   the same commit that adds the field, and the re-captured file differs
+   from its predecessor by exactly the one `schema_version` key. A diff
+   showing any other key changed means this RDR altered an envelope it
+   promised not to touch.
 
 4. **Scenario**: An `info` finding leaves the success disposition untouched
    (C3, riding `0006:C17`'s guarantee).
