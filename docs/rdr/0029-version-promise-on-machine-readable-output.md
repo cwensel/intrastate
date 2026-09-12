@@ -783,6 +783,8 @@ by-value assertion pins both, because a mirror only one test pins is a
 mirror free to drift.
 ```
 
+Determinacy: fired — C1 (`schema_version` field ownership: one home, which package declares it and which reads it), C4 (per-package enumeration-seam ownership across fifteen tiered vocabularies)
+
 #### Load-Bearing Decisions
 
 - **Identity** — two envelopes are "the same shape" iff they share a
