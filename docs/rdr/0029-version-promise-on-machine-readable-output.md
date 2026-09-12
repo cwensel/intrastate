@@ -161,10 +161,10 @@ arithmetic. Those are settled by existing tooling and wider convention, and
 belong in ordinary documentation rather than a decision record.
 
 In scope, and load-bearing: the fact that the series starts at **0.1.0, not
-1.0.0**. The seed treated "starting from a `0.x` series" as mechanism, but
-it is not — under SemVer a `0.x` major carries no compatibility guarantee,
-so it decides what the promise can say and when it starts binding. This RDR
-therefore settles two things at once: the promise that takes effect at
+1.0.0**. This is not release mechanism despite sitting next to it — under
+SemVer a `0.x` major carries no compatibility guarantee, so the starting
+number decides what the promise can say and when it starts binding. This
+RDR therefore settles two things at once: the promise that takes effect at
 1.0.0, and what the CLI does during `0.x` so that promise costs nothing to
 adopt when it arrives.
 
@@ -279,11 +279,9 @@ today:
    have never had the same answer.
 2. **A declared stability tier per vocabulary**, replacing the four
    divergent code-comment policies with one vocabulary used the same way
-   everywhere. The word "closed" is retired from this role: it is
-   currently used in two incompatible senses on adjacent surfaces
-   (`internal/graphlint/taxonomy.go:37` "CLOSED at these four" meaning
-   *will never grow*, versus `internal/table/category.go:89` "the closed
-   load-category set" meaning *fully enumerable but append-only*).
+   everywhere. The word "closed" is retired from this role, because it is
+   already live in two incompatible senses on adjacent surfaces (Key
+   Discoveries).
 3. **A severity-promotion rule** governing `info` → `blocking`. This is
    the only genuinely new policy. Introduction of a new code at `info` is
    a minor-release event needing no disclosure beyond release notes;
@@ -300,24 +298,20 @@ whether the new diagnostic *fires by default*, not whether it exists.
 The three vocabularies get one declared tier each, and the tier is a
 property stated in the RDR and asserted by a test, not a comment.
 
-**Stability tiers** (the replacement vocabulary for "closed"):
+**Stability tiers** (the replacement vocabulary for "closed"). Three
+tiers, defined normatively in C2 and assigned to surfaces in C4:
+`frozen` (a consumer may exhaustively switch), `append-only` (it must
+tolerate an unknown member), and `growing` (a new member may also newly
+fire on input that previously passed, subject to the promotion rule
+below).
 
-- **Frozen** — no member may be added or removed within a major. A
-  consumer may exhaustively switch on it and treat an unknown member as
-  a bug. Today: the envelope `type` discriminator (`ok` | `failed`), the
-  severity vocabulary (`blocking` | `info`), and the exit-code classes.
-- **Append-only** — members may be added in a minor; none removed or
-  renamed within a major. A consumer must tolerate an unknown member and
-  must not assert on the set's size, its tail position, or a count.
-  Today: the load categories, the refusal-code vocabulary, the
-  `graph-unprovable-coverage` `reason` set.
-- **Growing** — members may be added in a minor and may newly fire on
-  input that previously passed, subject to the promotion rule below.
-  Today: the lint finding codes.
-
-The tiers are ordered by what a consumer may assume, and each surface is
-assigned exactly one. That assignment is the contract; the tier names
-are just the shorthand.
+Three is the count because the tiers are ordered by **what a consumer may
+assume**, and each step down removes exactly one assumption: `frozen` →
+`append-only` drops exhaustiveness, `append-only` → `growing` drops
+verdict-stability. A surface needing a fourth tier would have to remove
+some other assumption, which is what A4 tests. Each surface is assigned
+exactly one tier; that assignment is the contract, and the tier names are
+just the shorthand.
 
 **The promotion rule.** A finding code enters at `info`. `0006:C17`
 already guarantees `info` cannot change the outcome — "Advisory findings
@@ -473,17 +467,19 @@ over the Go sources): none exists.
 
 #### Illustrative Code
 
-A terminal success envelope under the new contract:
+A terminal success envelope as it ships during `0.x` (C1: the schema
+version begins at `"0.1"`; it reads `"1.0"` only from the 1.0.0 release
+onward):
 
 ```json
-{"type":"ok","schema_version":"1.0",
+{"type":"ok","schema_version":"0.1",
  "data":{"findings":[]}}
 ```
 
 A refusal, showing the schema version on the failure record too:
 
 ```json
-{"type":"failed","schema_version":"1.0",
+{"type":"failed","schema_version":"0.1",
  "code":"graph-lint-failed",
  "message":"the model carries blocking graph-lint findings",
  "findings":[{"code":"graph-overlap","severity":"blocking","rule":"r3"}]}
@@ -540,12 +536,9 @@ four times, inconsistently, in code comments**. `table.Categories()` grew
 under RDRs 0002, 0024, 0025 and 0028 ⇒ "a new code appears" is this
 project's normal release event, so a policy classifying it as breaking
 would make nearly every release a major bump. Meanwhile the word `closed`
-is live in two incompatible senses on adjacent surfaces —
-`internal/graphlint/taxonomy.go:37` "The tier is CLOSED at these four"
-meaning *will never grow*, against `internal/table/category.go:89` "the
-closed load-category set" meaning *fully enumerable but append-only* ⇒ a
-consumer reading either comment and generalizing gets the other wrong,
-which is why C2 retires the term rather than defining it.
+is live in two incompatible senses on adjacent surfaces (Key Discoveries)
+⇒ a consumer reading either comment and generalizing gets the other
+wrong, which is why C2 retires the term rather than defining it.
 
 The third factor is that binary version and wire-schema version answer
 different questions and have never had the same answer. OpenTofu, carrying
@@ -588,26 +581,16 @@ accepted as a known limit rather than designed around; it is recorded as
 a failure mode, and the tier assignment in C4 is what a reviewer checks
 against.
 
-Alternative 1 (freeze the vocabularies) was rejected because it contradicts
-four shipped growth events and would price ordinary work as a major bump.
-Alternative 2 (declare all machine output unstable) was rejected because
-`llms.txt` already tells agents "the binary is authoritative and
-self-describing. Prefer asking it over reading any file here" ⇒ the project
-has already invited the coupling it would then disclaim. Alternative 3 (a
-strictness opt-in flag, clippy's disclaimer shape) was rejected as
-premature: clippy can say "we do not guarantee stability under
-`#[deny(lintname)]`" because `deny` exists, whereas intrastate has no
-strictness flag today — `internal/cli/lint.go` registers only `--model`
-and `--flow` ⇒ the disclaimer would attach to a surface that does not
-exist. It stays available if a `--fail-on-advisory` flag is ever added.
+All three rejected alternatives (see Alternatives Considered) fail against
+facts already on the ground rather than against preference: ALT1 against
+four shipped growth events, ALT2 against what `llms.txt` already tells
+agents, ALT3 against a strictness flag that does not exist yet. That is
+why none of them is held open as a live option.
 
-One cite is deliberately not load-bearing. ESLint's own patch/minor/major
-classification for new rules could not be opened and quoted — two
-candidate URLs 404'd, and only the operational usage is confirmable in the
-local checkout (`docs/src/maintain/manage-releases.md:49`, gating when
-"semver-minor changes" may merge). The argument above rests on
-typescript-eslint, Ruff, golangci-lint and OpenTofu, all fetched verbatim;
-ESLint is corroboration only.
+The argument above rests only on typescript-eslint, Ruff, golangci-lint
+and OpenTofu, all fetched verbatim. ESLint is corroboration only — its
+own new-rule classification could not be opened (Investigation), so
+nothing here leans on it.
 
 **Joint-decision check (three arms, all run).** Arm 1 (modify-anchors,
 `rdr index --anchor-intersect`): no overlaps. Arm 2 (contract literals,
@@ -628,8 +611,7 @@ coupling rides to 7.1.
 Premortem: survived (paragraph)
 Ground-sweep: reopened → A3's evidence line (`DisallowUnknownFields` is in
 production use at `internal/table/source.go::decodeStrict`, on the INPUT
-path under `0002:C3`, not zero matches as first written); 15 of 16 anchors
-CONFIRMED, correction folded into A3 and C1's tolerance clause
+path under `0002:C3`); 15 of 16 anchors CONFIRMED
 Joint-check: fired → 0022 (home: `cli/0029 §Normative Contracts` C3)
 
 **Joint decision, settled.** C3 in this record is the single normative home
@@ -826,20 +808,21 @@ of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 ### Key Discoveries
 
 - **Documented** — The project already decides this per-vocabulary, in
-  code comments, and the decisions disagree.
-  `internal/graphlint/taxonomy.go:37` declares the advisory tier "CLOSED
-  at these four"; `internal/table/category.go:89` calls its set "the
-  closed load-category set" while a sibling comment says "The list's size
-  is not a contract". Two incompatible senses of `closed` on adjacent
-  machine surfaces.
+  code comments, and the decisions disagree. The comment heading
+  `graphlint::CodeCoverageClosedByEscape`'s const block declares the
+  advisory tier "CLOSED at these four"; the doc comment on
+  `table::Categories()` calls its set "the closed load-category set"
+  while a sibling comment says "The list's size is not a contract". Two
+  incompatible senses of `closed` on adjacent machine surfaces.
 - **Documented** — A new code appearing is this project's *normal*
   release event, not a hypothetical: `table.Categories()` grew under RDRs
   0002 (25 members), 0024 (+3), 0025 (+6) and 0028 (+6), all before any
   tag was cut.
 - **Documented** — The mechanism for verdict-safe introduction already
-  ships. `graphlint.Report.Blocking()`/`Advisory()` partition on a
-  two-valued severity, and only the blocking half reaches the refusal
-  path in `internal/cli/lint.go:213-228`. `0006:C17` already binds it:
+  ships. `graphlint::Report.Blocking()`/`Advisory()` partition on a
+  two-valued severity, and only the blocking half reaches
+  `respond.Fail` under `graphlint::AggregateCode`; the advisory half
+  rides the SUCCESS payload. `0006:C17` already binds it:
   "Advisory findings MUST NOT change the success disposition."
 - **Documented** — Five peer tools split this fork at default-enablement,
   not at code existence. The cleanest statement is typescript-eslint's:
@@ -948,16 +931,18 @@ exactly the event the seed named — a new lint finding code appearing.
 
 1. Build at the current HEAD with `schema_version` implemented; run
    `intrastate lint --model <clean-model> --as=json` and record the full
-   envelope. It reports `"schema_version":"1.0"` and no findings.
+   envelope. It reports `"schema_version":"0.1"` and no findings.
 2. Add a new graph-lint finding code at severity `info` that fires on the
    model from step 1.
 3. Re-run the same command against the same unmodified model.
 4. **Expected end state**: the exit code is unchanged (0), the envelope's
-   `type` is still `ok`, `schema_version` is still `"1.0"` — the addition
-   was additive, not a schema change — and the new finding appears in
-   `data.findings` carrying `"severity":"info"`. A consumer branching on
-   `type` and the exit code observes no difference; a consumer reading
-   findings sees one more entry.
+   `type` is still `ok`, and the new finding appears in `data.findings`
+   carrying `"severity":"info"`. The schema version's MAJOR is unchanged —
+   a growing-vocabulary member is an additive change, so C1 moves the
+   minor (`"0.1"` → `"0.2"`) and never the major. That is the observable
+   the promise rests on: a consumer branching on `type` and the exit code
+   observes no difference, a consumer reading findings sees one more
+   entry, and a consumer gating on the major keeps parsing.
 5. Promote that code to `blocking` and re-run: now the exit code changes
    and `type` becomes `failed`, demonstrating that promotion is the
    verdict-changing event C3 requires be disclosed, and introduction is
