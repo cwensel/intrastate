@@ -1,0 +1,1217 @@
+{
+  "edges": [
+    {
+      "from": "0021",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 76,
+      "line_end": 78,
+      "evidence": "RDR 0022",
+      "field": "Related Issues"
+    },
+    {
+      "from": "0021",
+      "to": "issue/4hps",
+      "kind": "issue",
+      "line": 76,
+      "line_end": 78,
+      "evidence": "kata `4hps",
+      "field": "Related Issues"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 79,
+      "line_end": 81,
+      "evidence": "0002-transition-table-as-reviewable-data",
+      "field": "Predecessors",
+      "slug": "0002-transition-table-as-reviewable-data"
+    },
+    {
+      "from": "0021",
+      "to": "0005",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 79,
+      "line_end": 81,
+      "evidence": "0005-skill-integration-cli-contract",
+      "field": "Predecessors",
+      "slug": "0005-skill-integration-cli-contract"
+    },
+    {
+      "from": "0021",
+      "to": "0006",
+      "kind": "predecessor",
+      "resolved": true,
+      "line": 79,
+      "line_end": 81,
+      "evidence": "0006-graph-lint-authority-and-guarantees",
+      "field": "Predecessors",
+      "slug": "0006-graph-lint-authority-and-guarantees"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 99,
+      "line_end": 99,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 101,
+      "line_end": 101,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0021",
+      "to": "0006",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 108,
+      "line_end": 108,
+      "evidence": "RDR 0006"
+    },
+    {
+      "from": "0021",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 109,
+      "line_end": 109,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 110,
+      "line_end": 110,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021:A1",
+      "to": "internal/cli/respond/respond.go::TextLiner",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 120,
+      "line_end": 127,
+      "evidence": "internal/cli/respond/respond.go::TextLiner",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A2",
+      "to": "internal/graphlint/reach.go::reach",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 143,
+      "line_end": 161,
+      "evidence": "internal/graphlint/reach.go::reach",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A2",
+      "to": "issue/yybx",
+      "kind": "issue",
+      "line": 143,
+      "line_end": 161,
+      "evidence": "kata `yybx",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A3",
+      "to": "internal/graphlint/reach.go::Reach",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 176,
+      "line_end": 190,
+      "evidence": "internal/graphlint/reach.go::Reach",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A3",
+      "to": "internal/guard/declaration.go::AssignmentCount",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 176,
+      "line_end": 190,
+      "evidence": "internal/guard/declaration.go::AssignmentCount",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A3",
+      "to": "internal/guard/product.go::Groups",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 176,
+      "line_end": 190,
+      "evidence": "internal/guard/product.go::Groups",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021:A4",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 193,
+      "line_end": 193,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0021:A5",
+      "to": "internal/cli/clierr/clierr.go::WriteJSONLine",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 216,
+      "line_end": 232,
+      "evidence": "internal/cli/clierr/clierr.go:174::WriteJSONLine",
+      "field": "Evidence"
+    },
+    {
+      "from": "0021",
+      "to": "respond.go::TextLiner",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 270,
+      "line_end": 270,
+      "evidence": "respond.go::TextLiner"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 278,
+      "line_end": 278,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021:D-identity",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 439,
+      "line_end": 439,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021",
+      "to": "respond.go::TextLiner",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 511,
+      "line_end": 511,
+      "evidence": "respond.go::TextLiner"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 512,
+      "line_end": 512,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021",
+      "to": "internal/table/dump.go::Dump",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 519,
+      "line_end": 519,
+      "evidence": "internal/table/dump.go::Dump"
+    },
+    {
+      "from": "0021",
+      "to": "internal/graphlint/reach.go::Reach",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 520,
+      "line_end": 520,
+      "evidence": "internal/graphlint/reach.go::Reach"
+    },
+    {
+      "from": "0021",
+      "to": "internal/cli/lint.go::runLint",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 522,
+      "line_end": 522,
+      "evidence": "internal/cli/lint.go::runLint"
+    },
+    {
+      "from": "0021",
+      "to": "respond.go::FlagName",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 546,
+      "line_end": 546,
+      "evidence": "respond.go::FlagName"
+    },
+    {
+      "from": "0021",
+      "to": "reach.go::Reach",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 565,
+      "line_end": 565,
+      "evidence": "reach.go::Reach"
+    },
+    {
+      "from": "0021",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 660,
+      "line_end": 660,
+      "evidence": "RDR 0022"
+    },
+    {
+      "from": "0021",
+      "to": "0002",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 671,
+      "line_end": 671,
+      "evidence": "RDR 0002"
+    },
+    {
+      "from": "0021",
+      "to": "0003",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 672,
+      "line_end": 672,
+      "evidence": "RDR 0003"
+    },
+    {
+      "from": "0021",
+      "to": "0005",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 673,
+      "line_end": 673,
+      "evidence": "RDR 0005"
+    },
+    {
+      "from": "0021",
+      "to": "0006",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 673,
+      "line_end": 673,
+      "evidence": "RDR 0006"
+    },
+    {
+      "from": "0021",
+      "to": "reach.go::Reach",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 732,
+      "line_end": 732,
+      "evidence": "reach.go::Reach"
+    },
+    {
+      "from": "0021",
+      "to": "{ARTIFACT_DIR}/gate.md",
+      "kind": "artifact",
+      "line": 883,
+      "line_end": 883,
+      "evidence": "{ARTIFACT_DIR}/gate.md"
+    },
+    {
+      "from": "0021:G-assumptions",
+      "to": "path::Symbol",
+      "kind": "source-anchor",
+      "resolved": true,
+      "line": 928,
+      "line_end": 928,
+      "evidence": "path::Symbol"
+    },
+    {
+      "from": "0021",
+      "to": "0022",
+      "kind": "mentions",
+      "resolved": true,
+      "line": 1015,
+      "line_end": 1015,
+      "evidence": "RDR 0022"
+    }
+  ],
+  "elements": [
+    {
+      "id": "0021:A1",
+      "kind": "A",
+      "key": "1",
+      "label": "The respond gateway's `TextLiner` seam prints a multi-line `Data` string verbatim on stdout in text mode, with no decoration, reordering, or trailing content beyond one final newline — including under provoked notes/warnings, which stay on stderr.",
+      "derived": false,
+      "hash": "d360b761",
+      "section": "0021:§critical-assumptions",
+      "line_start": 114,
+      "line_end": 130,
+      "bytes": 964,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A1",
+          "line_start": 118,
+          "line_end": 118,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A1",
+          "line_start": 119,
+          "line_end": 119,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`internal/cli/respond/respond.go::TextLiner` exists and `OK` prints it via `Fprintln`; the spike byte-compared `stdout == document + \"\\n\"` for a multi-kilobyte multi-line payload with advisories provoked (premortem P-5/P-15) — byte-identical in both arms, notes/warnings confined to stderr (`evidence/spikes/a1-textliner.md`). Normative fixture F1: text-mode stdout is exactly `document + \"\\n\"`, stderr empty absent advisories.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A1",
+          "line_start": 120,
+          "line_end": 127
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the bare-document text mode gains stray bytes, CI diffs of the export break, and C5 needs a gateway extension instead of a ride on the existing seam.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A1",
+          "line_start": 128,
+          "line_end": 130
+        }
+      ]
+    },
+    {
+      "id": "0021:A2",
+      "kind": "A",
+      "key": "2",
+      "label": "The reachable node set and its successor edges are a deterministic function of the model value, and the edge list is recoverable after the fixpoint by re-running `successorsOf` over the final nodes with subsumption mapping (`indexOf`), yielding EXACTLY the edges the traversal itself took — over-approximation by merged re-run is the premortem's central defect (P-1), so equality, not plausibility, is the bar.",
+      "derived": false,
+      "hash": "30b7bcc9",
+      "section": "0021:§critical-assumptions",
+      "line_start": 131,
+      "line_end": 166,
+      "bytes": 2269,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified — with a recorded coupling: holds because `indexOf` uses `subsumes`, which makes `reach()`'s in-place widening arm unreachable (exhaustive lemma + zero-event audit, `evidence/spikes/a2-edge-recovery.md`)",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A2",
+          "line_start": 138,
+          "line_end": 141,
+          "status": {
+            "value": "Verified",
+            "qualifier": "with a recorded coupling: holds because indexOf uses subsumes, which makes reach()'s in-place widening arm unreachable (exhaustive lemma + zero-event audit, evidence/spikes/a2-edge-recovery.md)",
+            "tier": "canonical",
+            "raw": "Verified — with a recorded coupling: holds because `indexOf` uses `subsumes`, which makes `reach()`'s in-place widening arm unreachable (exhaustive lemma + zero-event audit, `evidence/spikes/a2-edge-recovery.md`)"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A2",
+          "line_start": 142,
+          "line_end": 142,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`internal/graphlint/reach.go::reach` iterates slices, not maps, and `successorsOf` appends in first-seen row order. The spike showed (a) repeated runs byte-identical including under `GODEBUG=randmapiter=1`, and (b) a DIFFERENTIAL test — an observer recording edges during the traversal vs the post-hoc recovery — giving EXACT multiset equality over synthetic fixtures A–I and all 36 authored models (`EQUAL=36, NOT-EQUAL=0`), with a negative control (injected phantom/dropped edge) and a positive control (a weakened `indexOf` made the arm live and diverge by 2 edges), so the harness detects divergence rather than defaulting green. The coupling: `subsumes` requires an identical key set plus value coverage, so `joinNodes(nodes[j], next)` is always key-equal to `nodes[j]` and the `merged.key() == nodes[j].key()` guard fires first (`a2-edge-recovery.md:59-64`). The property is pinned in CODE, not restated here — kata `yybx` ships the behaviour regression test and the stale-comment fix in isolation from this RDR; once landed, that test is the property's home. Graded `constraint` (answer fixed by shipped code, `5e57b79`); it does not gate the lock.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A2",
+          "line_start": 143,
+          "line_end": 161
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the named fallback is the in-traversal edge observer (record edges as `reach` takes them); that arm is admissible because C4's neutrality oracle — lint byte-identical with and without the export code — is stated mechanism-independently and the MVV asserts it either way (P-14).",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A2",
+          "line_start": 162,
+          "line_end": 166
+        }
+      ]
+    },
+    {
+      "id": "0021:A3",
+      "kind": "A",
+      "key": "3",
+      "label": "The normalized model value carries everything the document needs — declarations with finite domains (via `guard.AssignmentCount`), `[initial]`, `terminal`, normalized rows with blocked atoms, and `guard.Groups` — with no re-parse of the authored TOML.",
+      "derived": false,
+      "hash": "00f01b6a",
+      "section": "0021:§critical-assumptions",
+      "line_start": 167,
+      "line_end": 192,
+      "bytes": 1629,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified (declarations, tags, initial, terminal, rows, groups, nodes); the edge relation is derived in the export path as a pure function of the model value — see A2",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A3",
+          "line_start": 172,
+          "line_end": 174,
+          "status": {
+            "value": "Verified",
+            "qualifier": "(declarations, tags, initial, terminal, rows, groups, nodes); the edge relation is derived in the export path as a pure function of the model value — see A2",
+            "tier": "canonical",
+            "raw": "Verified (declarations, tags, initial, terminal, rows, groups, nodes); the edge relation is derived in the export path as a pure function of the model value — see A2"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Source Search",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A3",
+          "line_start": 175,
+          "line_end": 175,
+          "method": {
+            "members": [
+              "Source Search"
+            ],
+            "raw": "Source Search"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`internal/table/model.go` field walk against the C2 field list (`Model.ID`/`Class`/`Tags`/`Initial`/`Terminal`/`Rows`), `internal/guard/declaration.go::AssignmentCount` for finite domains, `internal/guard/product.go::Groups` for the partition, and `internal/graphlint/reach.go::Reach` for nodes — every one a pure function of the model value with no TOML re-parse (`evidence/research/a3-a4.md`). The edge relation is NOT carried by the model value: `reach()` computes nodes only and `successorsOf` reads `row.RuleID` but discards it, so no edge carrier exists today. It is constructible with no re-parse (the rule id is on `table.Row.RuleID`) and is recovered in the export path per A2. This narrows the pre-edit wording (\"carries everything the document needs\"), which overstated the model value's coverage; narrowed at Resolve 2026-09-12. C2 is unchanged — it predicates *carries* of the document, which still carries edges.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A3",
+          "line_start": 176,
+          "line_end": 190
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the schema shrinks, or a loader extension becomes a prerequisite and the blast radius grows past this RDR.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A3",
+          "line_start": 191,
+          "line_end": 192
+        }
+      ]
+    },
+    {
+      "id": "0021:A4",
+      "kind": "A",
+      "key": "4",
+      "label": "A new root export verb requires no amendment to RDR 0005's envelope contract.",
+      "derived": false,
+      "hash": "1ade365c",
+      "section": "0021:§critical-assumptions",
+      "line_start": 193,
+      "line_end": 210,
+      "bytes": 996,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A4",
+          "line_start": 195,
+          "line_end": 195,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Peer RDR",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A4",
+          "line_start": 196,
+          "line_end": 196,
+          "method": {
+            "members": [
+              "Peer RDR"
+            ],
+            "raw": "Peer RDR"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`0005:C1` (0005 is Implemented, gate not stale) scopes itself in its opening sentence — \"The CLI MUST expose one command group for skill integration with these verbs: next, resolve, read-state, and set-state\" — so every MUST-clause that follows binds the `flow` skill-integration group and has no jurisdiction over a root `graph` verb. The carve-out sentence (\"Other command groups (lint, dump, parse) are outside this contract and are owned by the RDR that names them\") is a closed three-item enumeration that does not itself name `graph`; the conclusion rests on the scope sentence, not on reading `graph` into that list (re-anchored at Resolve 2026-09-12, `evidence/research/a3-a4.md`).",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A4",
+          "line_start": 197,
+          "line_end": 208
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the surface must be renegotiated at the envelope home before Phase 2 can land.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A4",
+          "line_start": 209,
+          "line_end": 210
+        }
+      ]
+    },
+    {
+      "id": "0021:A5",
+      "kind": "A",
+      "key": "5",
+      "label": "Marshaling the document through the shared non-HTML-escaping encoder is byte-stable: struct field order is fixed, every sequence is pre-sorted, and no Go map reaches the wire.",
+      "derived": false,
+      "hash": "13f2a2d5",
+      "section": "0021:§critical-assumptions",
+      "line_start": 211,
+      "line_end": 234,
+      "bytes": 1441,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A5",
+          "line_start": 214,
+          "line_end": 214,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A5",
+          "line_start": 215,
+          "line_end": 215,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "`internal/cli/clierr/clierr.go:174::WriteJSONLine` is the one encoder (`0005:C1`); the spike double-emitted a fixture byte-identically and held one sha256 across 25 separate processes, 15 of them under `GODEBUG=randmapiter=1` (`evidence/spikes/a5-encoder-stability.md`). Normative fixture F2 is the ENCODER PROPERTY only — double-emit byte identity, process stability, `\u003c`/`\u003e`/`\u0026` unescaped, compact with one trailing `\\n`, `schema` first, `[]` for empties — NOT a golden hash and NOT a canonical `intrastate.graph/1` emission: the spike improvised field spellings that differ from C2's normative list (and from A6's spike), so pinning that sha256 would fix C2's spellings by accident. The Phase 1 golden minted by the real exporter is the byte fixture for Testing Strategy scenario 2. Latent risk, not a falsifier: four call sites build ad hoc `SetEscapeHTML(false)` encoders instead of routing through `WriteJSONLine`, so the implementation must reuse the shared encoder rather than add a fifth.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A5",
+          "line_start": 216,
+          "line_end": 232
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "C3's replay invariant fails and the document needs a custom marshaler with its own ordering proof.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A5",
+          "line_start": 233,
+          "line_end": 234
+        }
+      ]
+    },
+    {
+      "id": "0021:A6",
+      "kind": "A",
+      "key": "6",
+      "label": "The DOT rendering is derivable from the exported document value alone — nodes, edges, initial, and terminal-satisfaction are enough — with no reach or analysis internals consulted.",
+      "derived": false,
+      "hash": "f97957dc",
+      "section": "0021:§critical-assumptions",
+      "line_start": 235,
+      "line_end": 256,
+      "bytes": 1359,
+      "fields": [
+        {
+          "label": "Status",
+          "canonical": "Status",
+          "match": "exact",
+          "value": "Verified",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A6",
+          "line_start": 238,
+          "line_end": 238,
+          "status": {
+            "value": "Verified",
+            "tier": "canonical",
+            "raw": "Verified"
+          }
+        },
+        {
+          "label": "Method",
+          "canonical": "Method",
+          "match": "exact",
+          "value": "Spike",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A6",
+          "line_start": 239,
+          "line_end": 239,
+          "method": {
+            "members": [
+              "Spike"
+            ],
+            "raw": "Spike"
+          }
+        },
+        {
+          "label": "Evidence",
+          "canonical": "Evidence",
+          "match": "exact",
+          "value": "the spike renderer imports only stdlib — zero `graphlint`/analysis imports — and its DOT rendered via `dot -Tsvg` (graphviz 12.2.1, exit 0) for a canonical fixture and a hostile one carrying quotes, newlines, and non-ASCII; the emitted node/edge statements were an exact set match against the fixture's `reach` block (`evidence/spikes/a6-dot-derivability.md`). Normative fixture F3 is scoped to the node/edge SET and the abstraction-marker placement (header comment + graph `label`), not styling: the spike's label composition has a real escaping bug (the separator is injected as two bytes before `dotQuote` doubles the backslash), which is styling and outside the fixture, while the escaping ORDER (backslash, then quote, then newline) is sound and carries into implementation. The spike's field spellings are provisional placeholders (`abstraction_marker`, `terminal_satisfying`); C2's spellings govern.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A6",
+          "line_start": 240,
+          "line_end": 254
+        },
+        {
+          "label": "If wrong",
+          "canonical": "If wrong",
+          "match": "exact",
+          "value": "the renderer couples to graphlint internals and the two `--emit` arms stop being projections of one value.",
+          "section": "0021:§critical-assumptions",
+          "element": "0021:A6",
+          "line_start": 255,
+          "line_end": 256
+        }
+      ]
+    },
+    {
+      "id": "0021:C1",
+      "kind": "C",
+      "key": "1",
+      "label": "SURFACE. A new root verb `graph` is registered beside `lint` — outside",
+      "derived": false,
+      "hash": "0baaae6c",
+      "section": "0021:§normative-contracts",
+      "line_start": 304,
+      "line_end": 320,
+      "bytes": 892
+    },
+    {
+      "id": "0021:C2",
+      "kind": "C",
+      "key": "2",
+      "label": "DOCUMENT. The JSON document is this RDR's wire format, versioned by a",
+      "derived": false,
+      "hash": "5bf4a481",
+      "section": "0021:§normative-contracts",
+      "line_start": 322,
+      "line_end": 369,
+      "bytes": 2906
+    },
+    {
+      "id": "0021:C3",
+      "kind": "C",
+      "key": "3",
+      "label": "DETERMINISM. For one model input and one build, emission is",
+      "derived": false,
+      "hash": "cf11f12f",
+      "section": "0021:§normative-contracts",
+      "line_start": 371,
+      "line_end": 386,
+      "bytes": 784
+    },
+    {
+      "id": "0021:C4",
+      "kind": "C",
+      "key": "4",
+      "label": "NEUTRALITY. The export runs load, normalization, grouping, and the",
+      "derived": false,
+      "hash": "8d8183f8",
+      "section": "0021:§normative-contracts",
+      "line_start": 388,
+      "line_end": 411,
+      "bytes": 1247
+    },
+    {
+      "id": "0021:C5",
+      "kind": "C",
+      "key": "5",
+      "label": "MODE COEXISTENCE. Under `--as=text` (the default) stdout carries the",
+      "derived": false,
+      "hash": "931518dc",
+      "section": "0021:§normative-contracts",
+      "line_start": 413,
+      "line_end": 433,
+      "bytes": 1116
+    },
+    {
+      "id": "0021:D-identity",
+      "kind": "D",
+      "key": "identity",
+      "label": "Identity",
+      "derived": false,
+      "hash": "6c105634",
+      "section": "0021:§load-bearing-decisions",
+      "line_start": 437,
+      "line_end": 440,
+      "bytes": 224
+    },
+    {
+      "id": "0021:D-wire-byte-format",
+      "kind": "D",
+      "key": "wire-byte-format",
+      "label": "Wire / byte format",
+      "derived": false,
+      "hash": "070010ed",
+      "section": "0021:§load-bearing-decisions",
+      "line_start": 441,
+      "line_end": 444,
+      "bytes": 262
+    },
+    {
+      "id": "0021:D-naming",
+      "kind": "D",
+      "key": "naming",
+      "label": "Naming",
+      "derived": false,
+      "hash": "11d791c6",
+      "section": "0021:§load-bearing-decisions",
+      "line_start": 445,
+      "line_end": 450,
+      "bytes": 347
+    },
+    {
+      "id": "0021:D-selection-predicate",
+      "kind": "D",
+      "key": "selection-predicate",
+      "label": "Selection / predicate",
+      "derived": false,
+      "hash": "685137fb",
+      "section": "0021:§load-bearing-decisions",
+      "line_start": 451,
+      "line_end": 453,
+      "bytes": 209
+    },
+    {
+      "id": "0021:RT1",
+      "kind": "RT",
+      "key": "1",
+      "label": "`json-decode ∘ export = value identity on the exported projection`:",
+      "derived": true,
+      "hash": "7b056407",
+      "section": "0021:§round-trip-inverse-invariants",
+      "line_start": 457,
+      "line_end": 461,
+      "bytes": 292
+    },
+    {
+      "id": "0021:RT2",
+      "kind": "RT",
+      "key": "2",
+      "label": "`export ∘ export = byte identity on any loadable model` (C3's replay",
+      "derived": true,
+      "hash": "7fb8dc58",
+      "section": "0021:§round-trip-inverse-invariants",
+      "line_start": 462,
+      "line_end": 463,
+      "bytes": 140
+    },
+    {
+      "id": "0021:RT3",
+      "kind": "RT",
+      "key": "3",
+      "label": "No `load ∘ export` inverse is claimed: the document is derived",
+      "derived": true,
+      "hash": "bfd29aee",
+      "section": "0021:§round-trip-inverse-invariants",
+      "line_start": 464,
+      "line_end": 465,
+      "bytes": 99
+    },
+    {
+      "id": "0021:JC1",
+      "kind": "JC",
+      "key": "1",
+      "label": "Joint-check: clear (12 peers) — open peers 0012–0020, 0022–0024",
+      "derived": false,
+      "hash": "1f0a9ecc",
+      "section": "0021:§decision-rationale",
+      "line_start": 564,
+      "line_end": 564,
+      "bytes": 70,
+      "joint": {
+        "verdict": "clear",
+        "open": false
+      }
+    },
+    {
+      "id": "0021:ALT1",
+      "kind": "ALT",
+      "key": "1",
+      "label": "Alternative 1: `--emit` on the `lint` verb (O2)",
+      "derived": false,
+      "hash": "27315774",
+      "section": "0021:§alternative-1-emit-on-the-lint-verb-o2",
+      "line_start": 581,
+      "line_end": 616,
+      "bytes": 1619
+    },
+    {
+      "id": "0021:ALT2",
+      "kind": "ALT",
+      "key": "2",
+      "label": "Alternative 2: file-target export (O3)",
+      "derived": false,
+      "hash": "65d62b79",
+      "section": "0021:§alternative-2-file-target-export-o3",
+      "line_start": 618,
+      "line_end": 633,
+      "bytes": 625
+    },
+    {
+      "id": "0021:BR1",
+      "kind": "BR",
+      "key": "1",
+      "label": "JSON-only, DOT via an external converter",
+      "derived": true,
+      "hash": "b25b9b74",
+      "section": "0021:§briefly-rejected",
+      "line_start": 637,
+      "line_end": 640,
+      "bytes": 255
+    },
+    {
+      "id": "0021:BR2",
+      "kind": "BR",
+      "key": "2",
+      "label": "External generator over `table.Dump` text (O4)",
+      "derived": true,
+      "hash": "369bdf45",
+      "section": "0021:§briefly-rejected",
+      "line_start": 641,
+      "line_end": 643,
+      "bytes": 182
+    },
+    {
+      "id": "0021:BR3",
+      "kind": "BR",
+      "key": "3",
+      "label": "Overloading `--as` (text→DOT, json→document)",
+      "derived": true,
+      "hash": "27910fd5",
+      "section": "0021:§briefly-rejected",
+      "line_start": 644,
+      "line_end": 646,
+      "bytes": 162
+    },
+    {
+      "id": "0021:BR4",
+      "kind": "BR",
+      "key": "4",
+      "label": "Emitting the graph inside lint's success payload always",
+      "derived": true,
+      "hash": "afc71e84",
+      "section": "0021:§briefly-rejected",
+      "line_start": 647,
+      "line_end": 649,
+      "bytes": 187
+    },
+    {
+      "id": "0021:F1",
+      "kind": "F",
+      "key": "1",
+      "label": "Visible: refusals reuse lint's arm codes (C1) and the new",
+      "derived": true,
+      "hash": "ebb06d94",
+      "section": "0021:§failure-modes",
+      "line_start": 762,
+      "line_end": 767,
+      "bytes": 356
+    },
+    {
+      "id": "0021:F2",
+      "kind": "F",
+      "key": "2",
+      "label": "Visible: an envelope-sniffing wrapper pointed at text-mode output",
+      "derived": true,
+      "hash": "23da41e0",
+      "section": "0021:§failure-modes",
+      "line_start": 768,
+      "line_end": 770,
+      "bytes": 196
+    },
+    {
+      "id": "0021:F3",
+      "kind": "F",
+      "key": "3",
+      "label": "Silent (accepted, marked): a build bump re-baselines DOT diffs and",
+      "derived": true,
+      "hash": "03983561",
+      "section": "0021:§failure-modes",
+      "line_start": 771,
+      "line_end": 773,
+      "bytes": 167
+    },
+    {
+      "id": "0021:F4",
+      "kind": "F",
+      "key": "4",
+      "label": "Silent (guarded): nondeterministic bytes across runs — caught by the",
+      "derived": true,
+      "hash": "796c5ac4",
+      "section": "0021:§failure-modes",
+      "line_start": 774,
+      "line_end": 777,
+      "bytes": 230
+    },
+    {
+      "id": "0021:F5",
+      "kind": "F",
+      "key": "5",
+      "label": "Diagnosis: byte-diff two runs (determinism), `jq .data` vs text",
+      "derived": true,
+      "hash": "3b9dd50d",
+      "section": "0021:§failure-modes",
+      "line_start": 778,
+      "line_end": 780,
+      "bytes": 147
+    },
+    {
+      "id": "0021:MVV",
+      "kind": "MVV",
+      "label": "Minimum Viable Validation",
+      "derived": false,
+      "hash": "aedf688e",
+      "section": "0021:§minimum-viable-validation",
+      "line_start": 790,
+      "line_end": 808,
+      "bytes": 1070
+    },
+    {
+      "id": "0021:S1",
+      "kind": "S",
+      "key": "1",
+      "label": "Determinism under map-seed variation — emit the same",
+      "derived": false,
+      "hash": "0b2d622b",
+      "section": "0021:§testing-strategy",
+      "line_start": 841,
+      "line_end": 844,
+      "bytes": 225
+    },
+    {
+      "id": "0021:S2",
+      "kind": "S",
+      "key": "2",
+      "label": "Golden fixtures pin `intrastate.graph/1` for a",
+      "derived": false,
+      "hash": "1b28778f",
+      "section": "0021:§testing-strategy",
+      "line_start": 845,
+      "line_end": 848,
+      "bytes": 238
+    },
+    {
+      "id": "0021:S3",
+      "kind": "S",
+      "key": "3",
+      "label": "Lint neutrality — run `intrastate lint` over blocking",
+      "derived": false,
+      "hash": "29719748",
+      "section": "0021:§testing-strategy",
+      "line_start": 849,
+      "line_end": 853,
+      "bytes": 301
+    },
+    {
+      "id": "0021:S4",
+      "kind": "S",
+      "key": "4",
+      "label": "Model that loads but lint refuses.",
+      "derived": false,
+      "hash": "617510da",
+      "section": "0021:§testing-strategy",
+      "line_start": 854,
+      "line_end": 857,
+      "bytes": 200
+    },
+    {
+      "id": "0021:S5",
+      "kind": "S",
+      "key": "5",
+      "label": "Mode agreement — `--as=json | jq .data` against the",
+      "derived": false,
+      "hash": "7da38655",
+      "section": "0021:§testing-strategy",
+      "line_start": 858,
+      "line_end": 861,
+      "bytes": 252
+    },
+    {
+      "id": "0021:S6",
+      "kind": "S",
+      "key": "6",
+      "label": "DOT arm equality and hostile content — tag values",
+      "derived": false,
+      "hash": "94f8c0aa",
+      "section": "0021:§testing-strategy",
+      "line_start": 862,
+      "line_end": 866,
+      "bytes": 314
+    },
+    {
+      "id": "0021:S7",
+      "kind": "S",
+      "key": "7",
+      "label": "Traversal incomplete under the published node ceiling.",
+      "derived": false,
+      "hash": "c855ffb1",
+      "section": "0021:§testing-strategy",
+      "line_start": 867,
+      "line_end": 869,
+      "bytes": 212
+    },
+    {
+      "id": "0021:S8",
+      "kind": "S",
+      "key": "8",
+      "label": "Selection-arm refusals — both/neither of",
+      "derived": false,
+      "hash": "417338d7",
+      "section": "0021:§testing-strategy",
+      "line_start": 870,
+      "line_end": 875,
+      "bytes": 306
+    },
+    {
+      "id": "0021:S9",
+      "kind": "S",
+      "key": "9",
+      "label": "JSON round-trip — decode the exported document.",
+      "derived": false,
+      "hash": "69c69bc5",
+      "section": "0021:§testing-strategy",
+      "line_start": 876,
+      "line_end": 878,
+      "bytes": 204
+    },
+    {
+      "id": "0021:G-contradiction",
+      "kind": "G",
+      "key": "contradiction",
+      "label": "Contradiction Check",
+      "derived": false,
+      "hash": "581cb5da",
+      "section": "0021:§contradiction-check",
+      "line_start": 905,
+      "line_end": 913,
+      "bytes": 358
+    },
+    {
+      "id": "0021:G-assumptions",
+      "kind": "G",
+      "key": "assumptions",
+      "label": "Assumption Verification",
+      "derived": false,
+      "hash": "e69b5cf1",
+      "section": "0021:§assumption-verification",
+      "line_start": 916,
+      "line_end": 931,
+      "bytes": 653
+    },
+    {
+      "id": "0021:G-scope",
+      "kind": "G",
+      "key": "scope",
+      "label": "Scope Verification",
+      "derived": false,
+      "hash": "8185d52b",
+      "section": "0021:§scope-verification",
+      "line_start": 934,
+      "line_end": 939,
+      "bytes": 164
+    },
+    {
+      "id": "0021:G-cross-cutting",
+      "kind": "G",
+      "key": "cross-cutting",
+      "label": "Cross-Cutting Concerns",
+      "derived": false,
+      "hash": "f26a8f53",
+      "section": "0021:§cross-cutting-concerns",
+      "line_start": 942,
+      "line_end": 969,
+      "bytes": 1096
+    },
+    {
+      "id": "0021:G-proportionality",
+      "kind": "G",
+      "key": "proportionality",
+      "label": "Proportionality",
+      "derived": false,
+      "hash": "68d6ac07",
+      "section": "0021:§proportionality",
+      "line_start": 972,
+      "line_end": 1000,
+      "bytes": 1344
+    }
+  ],
+  "path": "/Users/cwensel/sandbox/newcoinc/intrastate/docs/rdr/0021-lint-normalized-graph-export.md",
+  "record": "0021",
+  "schema": "2"
+}
