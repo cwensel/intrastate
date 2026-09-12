@@ -163,241 +163,542 @@ a decision record.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
-
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `rdr inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 The graph-lint advisory tier can accept new members, or `0006:C17`
+  can be amended to allow it.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: `0006:C17` states "The advisory tier is closed at
+    `graph-coverage-closed-by-escape`, `graph-redundant-row`,
+    `graph-unreachable-rule`, and `graph-vacuous-atom`" — a closure at
+    exactly four members. C3 requires a new finding code to enter at
+    `info`, which is the advisory tier. Resolve must determine whether
+    that closure is load-bearing (0006 depends on the count) or
+    incidental (it recorded the set as it then stood), and if
+    load-bearing, whether C3 routes around it.
+  - **If wrong**: C3 is unimplementable as written for graph-lint codes —
+    a new finding could only enter at `blocking`, which is exactly the
+    verdict-changing event the policy exists to prevent. Surfaces as a
+    contradiction between this RDR and 0006 at Stage 7.1, or as an
+    implementer unable to add an `info` code without amending a Final
+    peer.
+- **A2 `schema_version` ships in the first tagged release, before any
+  consumer has a released envelope to be compatible with.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: No tag has ever been cut — `internal/version` reports a
+    pseudo-version via its `debug.ReadBuildInfo` fallback, and
+    `.github/workflows/release.yml` triggers on a `v*` tag that does not
+    yet exist. Resolve confirms no release exists at implementation time
+    and that C1's field lands in the same release that first publishes
+    the envelope.
+  - **If wrong**: adding `schema_version` to an already-released envelope
+    is itself a non-backward-compatible change under C1's own rule, so
+    the field that exists to prevent major bumps forces one. Surfaces as
+    a strict-parsing consumer (`DisallowUnknownFields`, JSON-schema CI)
+    failing on the release that announces the compatibility promise.
+- **A3 No current consumer parses the envelope strictly enough that one
+  added field breaks it.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `DisallowUnknownFields` IS used in production, but only
+    on the INPUT path — `internal/table/source.go::decodeStrict`, which
+    rejects unknown keys in the model TOML under `0002:C3` ("an unknown
+    schema field is a stable refusal, never a silent no-op"). No in-repo
+    code strict-decodes the OUTPUT envelope, and `grep -rn
+    "format_version\|schema_version"` over the Go sources returns no
+    matches. Resolve extends this to the skills and harnesses that call
+    the binary, which are the actual agent consumers and the population
+    this assumption is really about.
+  - **If wrong**: the additive change is breaking for that consumer
+    regardless of what C1 declares, and the rollout needs a deprecation
+    window rather than a single release. Surfaces as a harness failing to
+    parse immediately after upgrade.
+- **A4 The three tier names partition every machine-readable surface this
+  CLI emits — no surface needs a fourth tier.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: C4 assigns tiers to the envelope `type`, the severity
+    vocabulary, the exit-code classes, `table.Categories()`, the CLIError
+    `code` vocabulary, the `graph-unprovable-coverage` `reason` set, and
+    the graph-lint finding codes. Resolve enumerates the emitted
+    vocabularies and confirms the assignment is total, with no surface
+    needing a semantics none of the three provide.
+  - **If wrong**: C4 is incomplete and an unassigned surface has no stated
+    promise — the exact gap this RDR exists to close, reappearing inside
+    the fix. Surfaces at implementation as a vocabulary that fits no tier.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Draw the compatibility edge at **default-enablement, not at code
+existence**, and state the promise **per surface** rather than as one
+blanket claim over "the JSON output".
+
+A released version promises an agent this: *an invocation that succeeded
+at version N, over input you did not change, still succeeds at N+1 within
+the same major.* It does **not** promise the vocabularies are frozen. New
+refusal codes, new load categories, and new lint findings may appear in a
+minor release — because they already have, four times — but a new finding
+may not change a verdict that was previously clean until a release that
+discloses the promotion.
+
+Three mechanisms carry that promise, all of which reuse surfaces that ship
+today:
+
+1. **A `schema_version` on the `--as=json` envelope**, versioned
+   independently of the binary's release version, following the
+   Terraform/OpenTofu rule: minor for additive, major for
+   non-backward-compatible, consumers instructed to ignore unrecognized
+   keys. The binary version answers "what build is this"; the schema
+   version answers "can my parser read this", and those two questions
+   have never had the same answer.
+2. **A declared stability tier per vocabulary**, replacing the four
+   divergent code-comment policies with one vocabulary used the same way
+   everywhere. The word "closed" is retired from this role: it is
+   currently used in two incompatible senses on adjacent surfaces
+   (`internal/graphlint/taxonomy.go:37` "CLOSED at these four" meaning
+   *will never grow*, versus `internal/table/category.go:89` "the closed
+   load-category set" meaning *fully enumerable but append-only*).
+3. **A severity-promotion rule** governing `info` → `blocking`. This is
+   the only genuinely new policy. Introduction of a new code at `info` is
+   a minor-release event needing no disclosure beyond release notes;
+   *promotion* to `blocking` is the disclosed event, because that is the
+   one that turns a consumer's passing pipeline red.
+
+The insight the prior art forces: intrastate does not need to choose
+between "new codes are breaking" and "new codes are free". Five peer
+tools independently split this at the same place — the boundary is
+whether the new diagnostic *fires by default*, not whether it exists.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The three vocabularies get one declared tier each, and the tier is a
+property stated in the RDR and asserted by a test, not a comment.
+
+**Stability tiers** (the replacement vocabulary for "closed"):
+
+- **Frozen** — no member may be added or removed within a major. A
+  consumer may exhaustively switch on it and treat an unknown member as
+  a bug. Today: the envelope `type` discriminator (`ok` | `failed`), the
+  severity vocabulary (`blocking` | `info`), and the exit-code classes.
+- **Append-only** — members may be added in a minor; none removed or
+  renamed within a major. A consumer must tolerate an unknown member and
+  must not assert on the set's size, its tail position, or a count.
+  Today: the load categories, the refusal-code vocabulary, the
+  `graph-unprovable-coverage` `reason` set.
+- **Growing** — members may be added in a minor and may newly fire on
+  input that previously passed, subject to the promotion rule below.
+  Today: the lint finding codes.
+
+The tiers are ordered by what a consumer may assume, and each surface is
+assigned exactly one. That assignment is the contract; the tier names
+are just the shorthand.
+
+**The promotion rule.** A finding code enters at `info`. `0006:C17`
+already guarantees `info` cannot change the outcome — "Advisory findings
+MUST NOT change the success disposition" — so introduction is verdict-safe
+by construction, with no new machinery. Promotion from `info` to
+`blocking` is a separate, later, disclosed release event. This is the
+Ruff preview→stable ladder built out of parts intrastate already has: the
+severity field *is* the preview gate.
+
+**Where the promise lives.** `docs/cli-output-contract.md` — the document
+`.rdr/resources.md` already names authoritative for verb I/O, the error
+envelope, and exit-code mapping, and which today contains zero occurrences
+of "release", "upgrade", or "breaking". The promise goes beside the wire
+format it constrains, matching the in-repo precedent at
+`.goreleaser.yaml:55`, which names the archive template "a compatibility
+surface, not cosmetics" in the file that produces it. `llms.txt` gets a
+pointer, since it is what tells agents to bind to the binary in the first
+place.
 
 #### Normative Contracts
-
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2). Stage 5 closes this section with one line,
-outside the fences: either `Determinacy: fired — <contracts>`
-or else `Determinacy: n/a — <reason>` (prompts/pre-lock/
-3-repeatability.md §Determinacy trigger).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap). A clause labelled
-at column zero inside the fence (`L-3  …`) is cited as
-`NNNN:L-3`; keep clause labels unique across the record.
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+The `--as=json` terminal envelope carries a `schema_version` string field
+of the form `MAJOR.MINOR`, present on both the `ok` and `failed` records.
+It is versioned independently of the binary's release version and MUST NOT
+be derived from it.
+
+The minor component increments for backward-compatible additions: a new
+optional field, a new member of an append-only or growing vocabulary. The
+major component increments for changes that are not backward-compatible:
+a removed or renamed field, a removed or renamed member of any vocabulary,
+or a change to a Frozen surface.
+
+A consumer MUST ignore object properties with unrecognized names, and MUST
+reject an envelope reporting an unsupported major.
+
+This tolerance rule is deliberately the INVERSE of the rule this CLI
+applies to its own input: `0002:C3` makes an unknown key in a model TOML a
+stable refusal. The asymmetry is intended and follows the audience —
+an authored input document is refused so its author learns of the typo,
+whereas an emitted envelope is tolerated so a consumer survives the
+addition. A surface MUST NOT be given the input rule and the output rule
+at once.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+Every machine-readable vocabulary this CLI emits carries exactly one
+declared stability tier, and the tier is recorded in
+`docs/cli-output-contract.md` beside that vocabulary:
+
+- `frozen` — no member added or removed within a major. A consumer MAY
+  treat an unrecognized member as a defect.
+- `append-only` — members MAY be added in a minor; none removed or renamed
+  within a major. A consumer MUST tolerate an unrecognized member, and
+  MUST NOT assert on the set's cardinality, a member's ordinal position,
+  or a tail position.
+- `growing` — as `append-only`, and additionally a new member MAY fire on
+  input that previously produced no such finding, subject to C3.
+
+The term `closed` MUST NOT be used to describe any of these tiers, in code
+comments or documentation, because it is currently live in two
+incompatible senses.
+```
+
+**C3**
+
+```normative
+A lint finding code is introduced at severity `info`. Introduction of an
+`info` code is a minor-release change and MUST NOT alter the success
+disposition of any input (this restates no new rule; it is `0006:C17`'s
+existing guarantee, cited not amended).
+
+Promotion of a finding code from `info` to `blocking` is a distinct
+release event. It MUST be disclosed in the release notes for the release
+that carries it, naming the code. A promotion MUST NOT occur in a patch
+release.
+
+A code MAY be introduced directly at `blocking` only when it reports a
+condition that was already refused by some other code — that is, when the
+promotion re-attributes an existing refusal rather than creating a new one.
+```
+
+**C4**
+
+```normative
+The tier assignments at this RDR's implementation:
+
+- `frozen`: the envelope `type` discriminator; the severity vocabulary
+  (`blocking`, `info`); the exit-code classes emitted by
+  `internal/cli/clierr::ExitCodeFor`.
+- `append-only`: `internal/table::Categories()`; the CLIError `code`
+  vocabulary; the `graph-unprovable-coverage` `reason` set.
+- `growing`: the graph-lint finding codes.
+
+A surface added later takes a tier assignment in the same document as part
+of the change that adds it; an unassigned machine-readable surface is a
+defect.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
+- **Identity** — two envelopes are "the same shape" iff they share a
+  `schema_version` major. Minor differences are additive by C1 and a
+  conforming parser cannot distinguish them.
+- **Wire / byte format** — `schema_version` is a string
+  (`"1.0"`), not a pair of integers and not a number: it follows
+  OpenTofu's `format_version` form exactly, and a float would make `1.10`
+  sort below `1.9`.
+- **Naming** — `schema_version`, rejecting `format_version` (OpenTofu's
+  own name) because this envelope carries a schema across every verb
+  rather than one command's output format, and rejecting `version`
+  outright — the `version` verb's payload already means build identity,
+  and a key meaning two things on one wire is the defect this RDR exists
+  to prevent.
+- **Selection / predicate** — when a new finding could be introduced at
+  either severity, `info` is chosen unless C3's re-attribution clause
+  applies. The tie goes to the non-breaking tier by default.
 
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+**Sibling-path check.** One adjacent version discriminator already exists:
+the model TOML's `[model] version`, an integer pinned at `1`, enforced by
+`internal/table/load.go` — "`version %d; this RDR accepts version 1 only`",
+refusing under `table::CatUnsupportedVersion`. It is deliberately NOT
+reused or matched here. It versions the *input* document an author writes,
+where an integer suffices because there is one accepted value and no
+additive-vs-breaking distinction to express. C1 versions the *output*
+schema a consumer parses, where that distinction is the entire point —
+hence `MAJOR.MINOR`. The two are different surfaces with different
+audiences, so the divergence in form is intended; what they share is the
+rule that an unsupported major is rejected outright. Searched for an
+existing output-schema version (`grep -rn "format_version\|schema_version"`
+over the Go sources): none exists.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+A terminal success envelope under the new contract:
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```json
+{"type":"ok","schema_version":"1.0",
+ "data":{"findings":[]}}
+```
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+A refusal, showing the schema version on the failure record too:
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+```json
+{"type":"failed","schema_version":"1.0",
+ "code":"graph-lint-failed",
+ "message":"the model carries blocking graph-lint findings",
+ "findings":[{"code":"graph-overlap","severity":"blocking","rule":"r3"}]}
+```
 
 ### Capability Dependencies
 
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
 | Needed Capability | Source | Status | Spec Impact |
 | --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+| Severity partition (`blocking`/`info`) gating the exit code | Predecessor (RDR 0006) | Available | C3 rides it; no new machinery. Constrained by `0006:C17` closing the advisory tier at four — see A1. |
+| Terminal envelope every verb routes through | Existing (`internal/cli/respond`) | Available | C1 adds one field at the single gateway rather than per verb. |
+| Enumerable vocabularies to assign tiers to | Existing (`table.Categories()`, `graphlint.BlockingCodes()`) | Available | C4 assigns tiers to surfaces that already enumerate themselves. |
+| Release-notes discipline naming promotions | This RDR | Introduced | C3's disclosure obligation is process, asserted by review not by a test. |
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Envelope field carrier | `internal/cli/respond::Success` | `Data`/`Notes`/`Warnings` are `omitempty`; `schema_version` must not be | Extend | One non-omitempty field added at the gateway; C1 fixes its form. |
+| Failure envelope carrier | `internal/cli/clierr::CLIError` | Marshals itself; no wrapper to nest under | Extend | Same field, added symmetrically so one consumer struct parses both. |
+| Load-category vocabulary | `internal/table::Categories()` | Comment already says "the list's size is not a contract" | Reuse | C4 assigns `append-only`; the existing consumer rule is already correct and gets hoisted, not changed. |
+| Lint finding taxonomy | `internal/graphlint/taxonomy.go` | Advisory tier declared CLOSED at four (`0006:C17`) | Extend | C3 needs `info` to be open for new codes; this closure is the one real blocker — A1. |
+| Stability prose | `docs/cli-output-contract.md` | Contains no release/upgrade/breaking language today | Extend | Becomes the promise's home. |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+The decisive factor is that **the fork as the seed framed it is not the
+fork the prior art actually splits on**. The seed asks whether a new lint
+finding code is a minor or a major change. Five independent peer tools
+answer a different question: not *does the code exist* but *does it fire
+by default*. typescript-eslint states the test directly — "A change to the
+plugins shall be considered breaking if it will require the user to change
+their config" (typescript-eslint.io/users/versioning) ⇒ the breaking edge
+is the consumer's opted-in configuration, not the tool's vocabulary. Ruff
+makes the same split structural: "New rules should always be added in
+preview mode. New rules will remain in preview mode for at least one minor
+release before being promoted to stable" (docs.astral.sh/ruff/versioning)
+⇒ introduction is verdict-safe by construction, and promotion is the
+disclosed event. golangci-lint draws it in the release-tier definition
+itself — a minor release "might break your lint build because of newly
+found issues" (golangci-lint.run/docs/product/roadmap) ⇒ new-finding
+breakage is a named, expected minor-release risk, not a major bump.
+
+That convergence is what makes C3 cheap rather than novel. intrastate
+already has the two-valued severity partition, and `0006:C17` already
+says "Advisory findings MUST NOT change the success disposition" ⇒ the
+`info` tier is already a preview gate; C3 only states the policy that
+governs leaving it. The alternative of building a separate `--preview`
+flag was rejected precisely because that mechanism is already shipping
+under another name.
+
+The second factor is that this project has **already made this decision
+four times, inconsistently, in code comments**. `table.Categories()` grew
+under RDRs 0002, 0024, 0025 and 0028 ⇒ "a new code appears" is this
+project's normal release event, so a policy classifying it as breaking
+would make nearly every release a major bump. Meanwhile the word `closed`
+is live in two incompatible senses on adjacent surfaces —
+`internal/graphlint/taxonomy.go:37` "The tier is CLOSED at these four"
+meaning *will never grow*, against `internal/table/category.go:89` "the
+closed load-category set" meaning *fully enumerable but append-only* ⇒ a
+consumer reading either comment and generalizing gets the other wrong,
+which is why C2 retires the term rather than defining it.
+
+The third factor is that binary version and wire-schema version answer
+different questions and have never had the same answer. OpenTofu, carrying
+Terraform's original language, versions the JSON format independently:
+"We will increment the minor version, e.g. `1.1`, for backward-compatible
+changes or additions… We will increment the major version, e.g. `2.0`, for
+changes that are not backward-compatible" (opentofu
+`website/docs/internals/json-format.mdx`) ⇒ C1 takes that rule verbatim in
+form. Cargo independently corroborates the pattern — "The format is stable
+and versioned. When calling `cargo metadata`, you should pass
+`--format-version` flag explicitly to avoid forward incompatibility
+hazard" (doc.rust-lang.org/cargo/reference/external-tools.html) ⇒ two
+unrelated tools reached the same decoupling, which is why C1 is stated as
+a schema version rather than a promise about the release number.
+
+**Premortem.** Assume this shipped and failed. The most plausible
+narrative: `intrastate` cuts v0.2.0 carrying C1, and the very release that
+announces "your parse keeps working" is the one that breaks it — a
+consumer validating the envelope against a strict schema (a Go struct
+decoded with `DisallowUnknownFields`, or a JSON-schema check in CI) sees
+an unexpected `schema_version` key and hard-fails. The promise's first act
+is a violation of itself, and the agent audience is exactly the population
+that hand-rolls strict parsers. The recommendation survives this, for two
+reasons, but not unchanged. First, the exposure is real but bounded: no
+tag has ever been cut, so there is no released envelope to be
+backward-compatible *with* — the field lands before v1.0.0, where C1's own
+major-bump rule has nothing to bind. Second, C1 already carries the
+mitigation as a consumer obligation ("MUST ignore object properties with
+unrecognized names"), which is the clause that makes every *later*
+additive change safe. What the premortem changes is the sequencing, and
+that is now a Pending assumption (A2): `schema_version` must ship in the
+first tagged release, not added later, or the project spends its one free
+window and then owes a major bump for the field that exists to prevent
+major bumps. A second, weaker failure — that C3's disclosure obligation
+is process rather than a test, so a promotion ships undisclosed — is
+accepted as a known limit rather than designed around; it is recorded as
+a failure mode, and the tier assignment in C4 is what a reviewer checks
+against.
+
+Alternative 1 (freeze the vocabularies) was rejected because it contradicts
+four shipped growth events and would price ordinary work as a major bump.
+Alternative 2 (declare all machine output unstable) was rejected because
+`llms.txt` already tells agents "the binary is authoritative and
+self-describing. Prefer asking it over reading any file here" ⇒ the project
+has already invited the coupling it would then disclaim. Alternative 3 (a
+strictness opt-in flag, clippy's disclaimer shape) was rejected as
+premature: clippy can say "we do not guarantee stability under
+`#[deny(lintname)]`" because `deny` exists, whereas intrastate has no
+strictness flag today — `internal/cli/lint.go` registers only `--model`
+and `--flow` ⇒ the disclaimer would attach to a surface that does not
+exist. It stays available if a `--fail-on-advisory` flag is ever added.
+
+One cite is deliberately not load-bearing. ESLint's own patch/minor/major
+classification for new rules could not be opened and quoted — two
+candidate URLs 404'd, and only the operational usage is confirmable in the
+local checkout (`docs/src/maintain/manage-releases.md:49`, gating when
+"semver-minor changes" may merge). The argument above rests on
+typescript-eslint, Ruff, golangci-lint and OpenTofu, all fetched verbatim;
+ESLint is corroboration only.
+
+**Joint-decision check (three arms, all run).** Arm 1 (modify-anchors,
+`rdr index --anchor-intersect`): no overlaps. Arm 2 (contract literals,
+`rdr index --literal-intersect`): four overlaps against open peers, one of
+them a genuine joint decision — RDR 0022 (Draft, `large`) proposes
+`graph-terminal-unreachable` as a NEW BLOCKING finding code and states
+"the advisory tier stays closed at four (`0006:C17`)", which is precisely
+the rule C3 here would change. The other three are incidental vocabulary
+sharing on one token each and are not joint decisions: 0021 shares
+`--as=json` but adds no envelope field (its export rides `data`), 0014
+shares `code` as a CI-oracle diagnosis surface, and 0017 shares `code`
+with an existing cross-citation. Arm 3 (absence, manual): C3 converts no
+refusal into an acceptance and removes no guard, so no Final peer relies
+on a token this proposal stops saying; the C17 closure it does depend on
+belongs to 0006, which is Implemented and therefore not edited — that
+coupling rides to 7.1.
+
+Premortem: survived (paragraph)
+Ground-sweep: reopened → A3's evidence line (`DisallowUnknownFields` is in
+production use at `internal/table/source.go::decodeStrict`, on the INPUT
+path under `0002:C3`, not zero matches as first written); 15 of 16 anchors
+CONFIRMED, correction folded into A3 and C1's tolerance clause
+Joint-check: fired → 0022 (home: OPEN)
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Freeze the vocabularies within a major
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
-
-### Alternative 1: [Name]
-
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
-
-**Description**: [Brief description]
+**Description**: Treat every machine-readable vocabulary as fixed for the
+life of a major version. Any new refusal code, load category, or lint
+finding waits for the next major bump. The promise to an agent becomes
+maximally simple: exhaustively switch on anything, and an unknown member
+is always a bug.
 
 **Pros**:
 
-- [Advantage 1]
+- The strongest possible guarantee, and the easiest one to state in a
+  sentence an agent author can act on without reading further.
+- A consumer's exhaustive `switch` is correct by construction, with no
+  tolerance clause to get wrong.
+- No promotion policy needed — C3 disappears entirely.
 
 **Cons**:
 
-- [Disadvantage 1]
+- Contradicts four shipped growth events. `table.Categories()` grew under
+  RDRs 0002, 0024, 0025 and 0028, all pre-1.0.
+- Prices ordinary work as a major bump: under this rule, adding one
+  `edit`-carrier category (RDR 0028's six) would have forced v2.0.0.
+- Majors would be cut so often that the major number stops carrying the
+  signal it exists to carry, and consumers learn to ignore it.
 
-**Reason for rejection**: [Why this wasn't chosen]
+**Reason for rejection**: It is refuted by this repo's own history rather
+than by preference. The project's normal release event is exactly the
+event this alternative classifies as breaking, and no peer tool surveyed
+adopts it — golangci-lint explicitly places new-linter additions in minor
+releases and even classifies *linter removal* as non-breaking.
+
+### Alternative 2: Declare all machine-readable output unstable
+
+**Description**: State that `--as=json` carries no cross-version
+guarantee at all. Consumers pin an exact version or accept the risk.
+This is `gh`'s de facto position — no documented stability guarantee was
+found for its `--json` output — and shellcheck's, where the community
+answer is "pin a specific version to avoid surprise build breaks".
+
+**Pros**:
+
+- Zero ongoing obligation; no policy to maintain, no promotion discipline,
+  no tier assignments to keep current.
+- Honest about a pre-1.0 project whose envelope RDRs 0023 and 0028 moved
+  recently.
+- Matches at least two prominent peers, so it is not an eccentric position.
+
+**Cons**:
+
+- Directly contradicts `llms.txt`, which tells agents "The binary is
+  authoritative and self-describing. Prefer asking it over reading any
+  file here" — the project has already invited the coupling.
+- Pushes the cost onto every consumer, who must each independently
+  discover which surfaces move.
+- Wastes mechanism already built: the severity partition and the
+  enumerable vocabularies exist and already behave well.
+
+**Reason for rejection**: The project cannot simultaneously tell agents to
+bind tightly to the binary's output and decline to say what that output
+promises. The seed's own framing — that an agent hard-fails or mis-parses
+where a human adapts — is the argument against this option.
+
+### Alternative 3: A strictness opt-in flag carrying a stability disclaimer
+
+**Description**: Adopt clippy's shape — add a `--fail-on-advisory` (or
+equivalent) flag, and disclaim stability for consumers who opt into it,
+exactly as clippy states "we do not guarantee stability under
+`#[deny(lintname)]`". Default-path consumers get a strong promise;
+strict-mode consumers accept new-finding risk.
+
+**Pros**:
+
+- Clean separation: the consumers who want maximum signal are the ones
+  who accept the churn, and they opted in explicitly.
+- Precedent in a widely-used tool, with published wording to borrow.
+- Would let advisory findings become actionable in CI without forcing
+  every consumer to care.
+
+**Cons**:
+
+- The flag does not exist. `internal/cli/lint.go` registers `--model` and
+  `--flow` and nothing else, so the disclaimer would attach to a surface
+  with no implementation.
+- Adds a user-visible flag to settle a documentation question, widening
+  the change well past what the problem needs.
+- Orthogonal rather than competing: once the flag exists, this disclaimer
+  is an addition to C3, not a replacement for it.
+
+**Reason for rejection**: Premature, not wrong. It solves a problem the
+CLI does not yet have, and the clause it would add remains available the
+day a strictness flag is introduced. Recorded here so that change inherits
+the reasoning rather than re-deriving it.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Version the schema per verb rather than per envelope**: each verb's
+  payload would carry its own version, but the envelope is the thing
+  consumers parse generically, and per-verb versions multiply the state an
+  agent must track without answering "can my parser read this".
+- **Derive `schema_version` from the binary version**: collapses the two
+  questions C1 exists to separate, and would force a schema major on every
+  product major even when the wire did not move.
+- **Use an integer `schema_version`**: loses the additive/breaking
+  distinction that makes the minor component useful; OpenTofu's
+  `MAJOR.MINOR` string is the shape with the field experience behind it.
+- **Put the promise in a new `docs/compatibility.md`**: a third document
+  competing with `docs/cli-output-contract.md` and `llms.txt` for the same
+  reader, when the contract doc is already named authoritative for the
+  envelope and already in the agent's read path.
 
 ## Context
 
@@ -451,100 +752,200 @@ RDR settles, but it does not decide the promise.
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Two passes, both recorded under
+`docs/rdr/0029-version-promise-on-machine-readable-output/evidence/research/`.
+The in-repo pass (`in-repo-prior-art.md`) read the four machine-readable
+vocabularies at HEAD — `internal/graphlint/taxonomy.go`,
+`internal/table/category.go`, `internal/cli/clierr/clierr.go` and
+`internal/cli/lint.go` — plus `docs/cli-output-contract.md`, `llms.txt`
+and `.goreleaser.yaml`, looking for how growth and closure are declared
+today. The external pass (`prior-art.md`) asked what established CLIs
+publish about machine-readable output stability, and specifically how each
+handles a new lint rule making previously-clean input newly fail: peers
+opened were golangci-lint, typescript-eslint, Ruff, clippy (RFC 2476),
+OpenTofu's `json-format.mdx`, Cargo's external-tools reference, and
+negative results for shellcheck and `gh`. ESLint's own classification page
+could not be opened; the local checkout confirms only the operational use
+of `semver-minor` at `docs/src/maintain/manage-releases.md:49`.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Documented** — The project already decides this per-vocabulary, in
+  code comments, and the decisions disagree.
+  `internal/graphlint/taxonomy.go:37` declares the advisory tier "CLOSED
+  at these four"; `internal/table/category.go:89` calls its set "the
+  closed load-category set" while a sibling comment says "The list's size
+  is not a contract". Two incompatible senses of `closed` on adjacent
+  machine surfaces.
+- **Documented** — A new code appearing is this project's *normal*
+  release event, not a hypothetical: `table.Categories()` grew under RDRs
+  0002 (25 members), 0024 (+3), 0025 (+6) and 0028 (+6), all before any
+  tag was cut.
+- **Documented** — The mechanism for verdict-safe introduction already
+  ships. `graphlint.Report.Blocking()`/`Advisory()` partition on a
+  two-valued severity, and only the blocking half reaches the refusal
+  path in `internal/cli/lint.go:213-228`. `0006:C17` already binds it:
+  "Advisory findings MUST NOT change the success disposition."
+- **Documented** — Five peer tools split this fork at default-enablement,
+  not at code existence. The cleanest statement is typescript-eslint's:
+  "A change to the plugins shall be considered breaking if it will
+  require the user to change their config." Ruff makes it structural
+  ("New rules should always be added in preview mode"), golangci-lint
+  puts it in the release-tier definition ("Minor release (might break
+  your lint build because of newly found issues)").
+- **Documented** — Two unrelated tools version their machine-readable
+  schema independently of the product version: OpenTofu's `format_version`
+  ("increment the minor version… for backward-compatible changes or
+  additions") and Cargo's `cargo metadata --format-version` ("The format
+  is stable and versioned").
+- **Documented** — The authoritative wire-contract document says nothing
+  about versions: `docs/cli-output-contract.md` contains zero occurrences
+  of "release", "upgrade" or "breaking", while `llms.txt` tells agents
+  "The binary is authoritative and self-describing. Prefer asking it over
+  reading any file here."
+- **Documented** — No strictness opt-in exists to hang a clippy-style
+  disclaimer on: `internal/cli/lint.go` registers only `--model` and
+  `--flow`.
+- **Assumed** — That the `0006:C17` closure is amendable (A1), that no
+  release exists yet to be compatible with (A2), that no consumer parses
+  strictly (A3), and that three tiers are total (A4).
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- Agents get a stated, per-surface promise where none existed, in the
+  document they are already directed to read.
+- Four divergent code-comment policies collapse into one vocabulary, and
+  the ambiguous word `closed` is retired from this role.
+- The project gains an obligation it did not have: every new
+  machine-readable surface now owes a tier assignment, and every
+  `info` → `blocking` promotion owes a release note.
+- `schema_version` is one added field on every envelope — a small,
+  permanent output cost on a CLI that RDR 0023 established is measured in
+  output bytes.
+- Consumers must be told to ignore unknown keys, which is a promise only
+  as strong as their compliance; a strict parser is outside this RDR's
+  reach.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **Risk**: The `0006:C17` closure at four advisory members blocks C3's
+  `info`-first rule for graph-lint codes (A1).
+  **Mitigation**: Resolve verifies whether the closure is load-bearing
+  before implementation; if it is, this RDR either amends 0006 through
+  the normal route or C3 names the graph-lint tier as the exception with
+  a stated reason.
+- **Risk**: `schema_version` is added after a release exists, making the
+  compatibility field itself a breaking change (A2).
+  **Mitigation**: sequence it into the first tagged release; the
+  Implementation Plan's Phase 1 lands the field before any `v*` tag.
+- **Risk**: The promotion disclosure in C3 is process, not a test, so a
+  promotion ships unannounced.
+  **Mitigation**: C4's tier assignment is the reviewable artifact — a
+  severity change shows up as a diff against a declared tier rather than
+  as an invisible constant edit. Accepted as a known limit.
+- **Risk**: The tier vocabulary is adopted in docs but not in the code
+  comments it replaces, leaving the contradiction live.
+  **Mitigation**: Phase 1 includes replacing the `closed` wording at the
+  two named sites; the term's absence is checkable by grep.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- **Breaks visibly**: a consumer with a strict parser fails on the
+  release that adds `schema_version` (A3) — immediate, loud, diagnosable
+  from the parse error naming the unexpected key.
+- **Fails silently**: an `info` code is promoted to `blocking` without a
+  release note. A consumer's CI goes red on a model nobody edited, and the
+  only way to diagnose it is to diff the severity constants between two
+  builds. This is the residual risk C3's disclosure obligation reduces but
+  does not eliminate.
+- **Fails silently**: a new machine-readable surface ships without a tier
+  assignment, so it has no stated promise and nobody notices until a
+  consumer depends on the wrong assumption. Diagnosed by auditing C4's
+  list against the emitted vocabularies.
+- **Recovery path**: for a wrongly-promoted code, demote it to `info` in a
+  patch release — the demotion cannot break anyone, since `0006:C17`
+  guarantees `info` does not change dispositions. For a missing tier
+  assignment, assign it; the assignment is documentation, not behavior.
+- **Diagnosis**: `intrastate lint --as=json` reports each finding's
+  `severity` on the wire, so a consumer can compare severities across two
+  builds directly rather than inferring from exit codes.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] A1 settled first: whether `0006:C17`'s advisory-tier closure admits
+      new members decides whether C3 is implementable as written or needs
+      an exception clause. Nothing else in this plan depends on it, but
+      C3's wording does.
+- [ ] No `v*` tag cut yet (A2) — the sequencing this plan assumes.
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+An agent pins version N, parses the envelope, and survives N+1 across
+exactly the event the seed named — a new lint finding code appearing.
+
+1. Build at the current HEAD with `schema_version` implemented; run
+   `intrastate lint --model <clean-model> --as=json` and record the full
+   envelope. It reports `"schema_version":"1.0"` and no findings.
+2. Add a new graph-lint finding code at severity `info` that fires on the
+   model from step 1.
+3. Re-run the same command against the same unmodified model.
+4. **Expected end state**: the exit code is unchanged (0), the envelope's
+   `type` is still `ok`, `schema_version` is still `"1.0"` — the addition
+   was additive, not a schema change — and the new finding appears in
+   `data.findings` carrying `"severity":"info"`. A consumer branching on
+   `type` and the exit code observes no difference; a consumer reading
+   findings sees one more entry.
+5. Promote that code to `blocking` and re-run: now the exit code changes
+   and `type` becomes `failed`, demonstrating that promotion is the
+   verdict-changing event C3 requires be disclosed, and introduction is
+   not.
+
+This walks the whole promise end to end: C1's field, C2's tolerance rule,
+and C3's introduce-at-`info` / disclose-on-promotion split.
 
 ### Phase 1: Code Implementation
 
-#### Step 1: [Title]
+#### Step 1: Carry `schema_version` on both terminal records
 
-[Conditional scaffold]
+Add the field at the single output gateway — `respond.Success` and
+`clierr.CLIError` — so every verb inherits it without per-verb work, and
+both the `ok` and `failed` records carry it symmetrically.
 
-[Instructions]
+#### Step 2: Retire the ambiguous `closed` wording
 
-#### Step 2: [Title]
+Replace the two conflicting uses with the declared tier names at
+`internal/graphlint/taxonomy.go` and `internal/table/category.go`, so the
+code comments and the contract doc say the same thing.
 
-[Conditional scaffold]
+#### Step 3: Assert the tier rules the consumer is promised
 
-[Instructions]
+A test per tier: that append-only vocabularies are never asserted by
+cardinality or ordinal, that the frozen sets match their declared members,
+and that an `info` finding leaves the success disposition untouched.
 
 ### Phase 2: Operational Activation
 
-[Conditional scaffold]
+#### Activation Step 1: Publish the promise where agents already read
 
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
+Write the tier table and the C1/C3 rules into
+`docs/cli-output-contract.md`, and point `llms.txt` at it — the two
+documents already in an agent's read path.
 
-#### Activation Step 1: [Title]
+#### Activation Step 2: Cut the first tagged release
 
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
+The field must ship in the first `v*` tag (A2). Before tagging, confirm
+`make docs-check` passes so the generated reference does not contradict
+the new prose.
 
 ### New Dependencies
 
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+None. Every mechanism this RDR relies on — the severity partition, the
+enumerable vocabularies, the output gateway — already ships.
 
 ## Validation
 
