@@ -100,6 +100,13 @@ no-participating-dimension
 row-can-refuse
 tag-not-single-valued
 
+[graphlint.Severities]
+blocking
+info
+
+[table.AdvisoryRules]
+reserved-tag-key/near-miss
+
 [graphlint.FindingSeverities]
 graph-always-present-owned	blocking
 graph-coverage-closed-by-escape	info
@@ -116,3 +123,4 @@ graph-terminal-escape	blocking
 graph-unprovable-coverage	blocking
 graph-unreachable-rule	info
 graph-vacuous-atom	info
+reserved-tag-key/near-miss	info

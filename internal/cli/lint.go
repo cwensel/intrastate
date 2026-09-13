@@ -246,7 +246,7 @@ func nearMissFindings(advisories []table.Advisory) []clierr.Finding {
 			Code: a.Rule,
 			Message: "the tag key `" + a.Authored + "` nearly matches the " +
 				"reserved key `" + a.Reserved + "`",
-			Severity: graphlint.SeverityInfo,
+			Severity: table.AdvisorySeverity,
 			Param:    a.Authored,
 			Rule:     a.Rule,
 			Hint: "`" + a.Authored + "` is legal, but a reader may mistake " +

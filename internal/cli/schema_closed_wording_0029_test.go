@@ -73,6 +73,32 @@ func exemptLine(line string) bool {
 	return false
 }
 
+// describesUntieredVocabulary reports whether a line describes a vocabulary
+// C4 does NOT tier, which S9's census pairs each site with a SUBJECT to
+// exclude.
+//
+// The census pairs each path with the one tiered vocabulary that put it in
+// scope, so a file-scoped sweep over-reaches: `internal/accessor/model.go`
+// is in scope for the verdict set alone, while the same file's capability
+// set and validation-code set are untiered by C4 and keep the word by
+// REQ-63 — "Sites describing an untiered vocabulary … are out of scope and
+// stay". REQ-57 says the same from the other side: "an unscoped grep for
+// the word is not" the assertion.
+func describesUntieredVocabulary(line string) bool {
+	for _, untiered := range []string{
+		// Untiered by C4; required VERBATIM by
+		// TestReq17And63_UntieredVocabulariesAndNonTierSensesKeepTheWord.
+		"closed three-member capability vocabulary",
+		"closed eight-member validation-code set",
+		"closed column vocabulary",
+	} {
+		if strings.Contains(line, untiered) {
+			return true
+		}
+	}
+	return false
+}
+
 // REQ-54: "no occurrence of `closed` describing a vocabulary C4 TIERS"
 // REQ-55: the enumerated in-scope site census.
 // REQ-57: "A grep over that enumerated site list is the assertion; an
@@ -95,6 +121,9 @@ func TestReq15And54And55And57_TheClosedWordingIsRetiredAcrossTheEnumeratedCensus
 					continue
 				}
 				if exemptLine(line) {
+					continue
+				}
+				if describesUntieredVocabulary(line) {
 					continue
 				}
 				t.Errorf("%s:%d describes %s with the retired word:\n  %s\n"+

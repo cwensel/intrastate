@@ -173,3 +173,61 @@ Evidence:
 - `internal/cli/flow_mvv_0023_test.go:441-457` (the 40% bar, measured on
   `foldCheckoutRoot(emittedLine(...))` — the full line, envelope included)
 - observed: `release-grammar/begin` 453 B → 279 B, 38.4% saved
+
+## D5 — the emitted advisory-rule vocabulary cannot satisfy both C4's seam rule and 0006's code namespace
+
+Type: SPEC-UNDER
+Status: needs author decision
+
+`table.AdvisoryNearMiss` (`reserved-tag-key/near-miss`) is emitted on
+`data.findings[].code` of the SUCCESS envelope. `0029:C4` tiers a vocabulary
+"wherever it is EMITTED, including on the fields of a `findings[]` element",
+and it is neither of the two namespaces C4 leaves deliberately untiered
+(`findings[].class`, `data.dispositions`), so it owes a tier and — REQ-30 —
+an enumeration seam. Phase 3b's ADV-1/ADV-2 are that finding.
+
+Two readings satisfy C4, and they are not jointly satisfiable:
+
+1. The seam lives in the package that owns the identifier. REQ-30 says
+   exactly this: "an exported accessor returning the vocabulary's members,
+   IN THE PACKAGE THAT OWNS THEM." Implemented: `internal/table::AdvisoryRules()`,
+   with the severity derived from `table.AdvisorySeverity` rather than
+   stamped at the emit site, and both rendered into the committed snapshot
+   as `[table.AdvisoryRules]` and a `reserved-tag-key/near-miss info` row.
+   A promotion now moves a byte of `testdata/vocabularies.txt`, which is
+   what C3's mechanism exists to force.
+
+2. The code joins `graphlint.AdvisoryCodes()`, the seam Phase 3b's two tests
+   hardcode as the covered range. This was implemented and REVERTED: it
+   turns `internal/graphlint/authority_0006_test.go::TestReq9_CanonicalSubsystemNameIsLint`
+   red — "finding code \"reserved-tag-key/near-miss\" is outside the
+   graph-lint namespace" — because 0006's Naming decision fixes the
+   canonical subsystem name as `lint` and that test asserts a `graph-`
+   prefix over every member of the tier (`:266-269`). `internal/guard`
+   carries the same prefix assertion independently
+   (`guard_scope_0003_test.go:486`).
+
+Reading 1 is implemented because it is REQ-30's literal instruction and
+breaks no peer. Under it the two Phase 3b tests stay red on their PREDICATE
+rather than on the defect they name: both range over
+`BlockingCodes() + AdvisoryCodes()` only, so a seam anywhere else is
+invisible to them. Amending an adversarial test's predicate to accept the
+implementation under review is the one move that would make the check
+vacuous, so this phase does not make it.
+
+The author decides one of:
+
+- the ADV predicate ranges over the owning package's seam as well (reading 1
+  stands, the two tests are corrected downstream); or
+- C4 names a single registry for emitted `findings[].code` identifiers and
+  0006's namespace rule is amended to admit non-`graph-` members (reading 2,
+  which reopens a Final peer).
+
+Evidence:
+- `0029:C4` — tiered "wherever it is EMITTED"; REQ-29, REQ-30
+- 0006 Naming — "the canonical command and subsystem name is \"lint\"";
+  `internal/graphlint/authority_0006_test.go:266-269`
+- `internal/table/advisory.go` (the seam as implemented),
+  `internal/graphlint/testdata/vocabularies.txt` (`[table.AdvisoryRules]`)
+- `internal/cli/schema_adversarial_0029_test.go:117-118`, `:173-174` (the
+  hardcoded range)

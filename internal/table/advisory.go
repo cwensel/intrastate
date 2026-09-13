@@ -1,6 +1,7 @@
 package table
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -12,6 +13,35 @@ import (
 // AdvisoryNearMiss is the stable rule identifier a near-miss advisory carries.
 // It is a comparable token asserted byte-for-byte, never prose.
 const AdvisoryNearMiss = "reserved-tag-key/near-miss"
+
+// advisoryRules is the load-time advisory-rule vocabulary. It is DISJOINT
+// from the graph-lint advisory finding codes (`graphlint::AdvisoryCodes()`),
+// whose members must carry the `graph-` prefix under 0006's Naming decision
+// ("the canonical command and subsystem name is `lint`"): these identifiers
+// are minted here, at load time, and ride `data.findings[].code` on the
+// SUCCESS envelope.
+var advisoryRules = []string{AdvisoryNearMiss}
+
+// AdvisoryRules returns the load-time advisory-rule vocabulary.
+//
+// `0029:C4` obliges an enumeration seam for every vocabulary that is tiered,
+// and tiers a vocabulary "wherever it is EMITTED, including on the fields of
+// a `findings[]` element". This one is emitted on `findings[].code` and is
+// neither of the two namespaces C4 leaves deliberately untiered
+// (`findings[].class`, `data.dispositions`), so it owes a seam — REQ-30
+// places it "in the package that owns them", which is this package.
+//
+// The tier is `growing`, matching the graph-lint advisory codes it rides
+// beside: a new advisory rule MAY fire on input that previously produced no
+// such finding, because an advisory never alters the success disposition.
+func AdvisoryRules() []string { return slices.Clone(advisoryRules) }
+
+// AdvisorySeverity is the severity every load-time advisory carries on the
+// wire. Advisories are REPORTED and never refuse a model, so the value is
+// derived here rather than stamped at each emit site: a promotion is then a
+// move of this one declaration, which the committed vocabulary snapshot
+// records and diffs (`0029:C3`).
+const AdvisorySeverity = "info"
 
 // Advisory is one non-blocking load-time advisory. It travels a channel
 // distinct from the validation-failure list: it carries NO category

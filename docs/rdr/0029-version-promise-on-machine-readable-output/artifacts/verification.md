@@ -91,3 +91,35 @@ Representative probes and observed behaviour:
 No input produced a REQ violation attributable to this pass.
 
 ## Verdict — clean
+
+## Phase 3c — Outcomes
+
+ADV-1 — **held:contract** (`0029:C4`/REQ-30 against 0006's Naming decision).
+The substance is closed: the emit site no longer stamps a severity literal
+(`internal/cli/lint.go:249` now reads `table.AdvisorySeverity`), the
+vocabulary carries an enumeration seam in the package that owns it
+(`internal/table::AdvisoryRules`), and both the members and the
+code→severity row are recorded in `internal/graphlint/testdata/vocabularies.txt`
+(`[table.AdvisoryRules]`, plus `reserved-tag-key/near-miss info`). Promoting
+the rule now moves the committed snapshot, which is what the failure mode
+asked for.
+
+The TEST stays red because its predicate is hardcoded to
+`graphlint.BlockingCodes() + AdvisoryCodes()`. Satisfying it literally
+requires `reserved-tag-key/near-miss` to join the graph-lint advisory tier,
+which 0006's Naming decision forbids — "the canonical command and subsystem
+name is `lint`", enforced over every member of that tier by
+`internal/graphlint/authority_0006_test.go::TestReq9_CanonicalSubsystemNameIsLint`
+(`:266-269`, a `graph-` prefix assertion). That was tried and observed red.
+Which rule governs — C4's "a seam in the package that owns them" or 0006's
+namespace closure — is a normative choice this record did not make, so the
+run does not make it. See deviations.md D5.
+
+ADV-2 — **held:contract**, same cite and same seam. REQ-30's obligation is
+discharged in `internal/table`; the test's three-vocabulary membership check
+does not range over that seam.
+
+ADV-3 — **fixed**. `renderVocabularySnapshot` now emits a
+`[graphlint.Severities]` section over `graphlint.Severities()`, so the frozen
+severity vocabulary's MEMBERS are diffed and a third member added to
+`severities` goes red without waiting for a code to move onto it.

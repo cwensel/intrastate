@@ -95,6 +95,18 @@ func renderVocabularySnapshot() string {
 
 	section("graphlint.Reasons", graphlint.Reasons())
 
+	// The frozen severity vocabulary's own MEMBERS. The
+	// [graphlint.FindingSeverities] section below is a different subject —
+	// the code→severity mapping — so without this section a third member
+	// added to `severities`, a frozen set gaining a member, would leave the
+	// snapshot byte-identical until some code was also moved onto it.
+	section("graphlint.Severities", graphlint.Severities())
+
+	// The load-time advisory-rule vocabulary, emitted on
+	// `data.findings[].code` of the SUCCESS envelope. It is disjoint from
+	// the graph-lint advisory codes and owes its own seam (`0029:C4`).
+	section("table.AdvisoryRules", table.AdvisoryRules())
+
 	// The severities are the half a member list alone cannot carry: a
 	// promotion moves no member, only the tier a code sits in, so the
 	// snapshot records the code→severity mapping explicitly.
@@ -109,6 +121,13 @@ func renderVocabularySnapshot() string {
 			severity = graphlint.SeverityBlocking
 		}
 		fmt.Fprintf(&b, "%s\t%s\n", c, severity)
+	}
+
+	// The load-time advisories carry a severity on the same wire field, so a
+	// promotion there is the same promotion-shaped event and is recorded the
+	// same way.
+	for _, r := range table.AdvisoryRules() {
+		fmt.Fprintf(&b, "%s\t%s\n", r, table.AdvisorySeverity)
 	}
 
 	return b.String()

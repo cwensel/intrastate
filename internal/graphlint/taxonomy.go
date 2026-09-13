@@ -96,6 +96,14 @@ var blockingCodes = []string{
 }
 
 // advisoryCodes is the `growing` advisory tier.
+//
+// Membership is the GRAPH-LINT advisory findings only: 0006's Naming
+// decision — "the canonical command and subsystem name is `lint`" — requires
+// every member to carry the `graph-` prefix, asserted at
+// `internal/graphlint/authority_0006_test.go::TestReq9_CanonicalSubsystemNameIsLint`.
+// The load-time advisory rules are a DISJOINT vocabulary on the same wire
+// field and take their seam in the package that owns them
+// (`table.AdvisoryRules`), per `0029:REQ-30`.
 var advisoryCodes = []string{
 	CodeCoverageClosedByEscape,
 	CodeRedundantRow,
