@@ -74,6 +74,49 @@ A6's escaping order. REQ-83 stdout carries zero document bytes on all five
 refusing arms. REQ-108 field names are lowercase snake_case matching
 `dumpColumns`. REQ-110 `lint` gained no `--emit` flag.
 
+Outcome: held:contract (`0021:C2`, the `tags[].domain` clause).
+
+The GATE half is a real divergence and is confirmed: `domain`'s presence
+must follow `guard.AssignmentCount` alone, and the extra
+`&& len(decl.Domain) > 0` conjunct at `internal/cli/graph_document.go:185`
+is not in REQ-20 nor in the function's own doc comment (`:51-54`).
+
+The fix is held because clearing the gate cannot be done without deciding
+what the array CARRIES for the finite kinds that populate no `decl.Domain`,
+and the record decided only presence, never members:
+
+- The loader admits `domain` on `enum` ALONE (`internal/table/load.go:875`;
+  `elements` on `set` alone, `:881`), and `guard.agrees`
+  (`internal/guard/declaration.go:206-231`) requires `!hasDomain` for
+  `bool`, `int`, `set` and `scalar`. So `decl.Domain` is non-empty exactly
+  when the kind is `enum`, and on that arm the conjunct is REDUNDANT — the
+  gate change alone moves no byte.
+- The kinds the defect names are finite with no declared member list:
+  `bool` is "finite by construction" and `int` declares a `{min..max}`
+  bound (`0003:C3`, `0003:C6`), while a `set` declares an element universe
+  whose assignment space is the POWERSET, which `0003:C24` explicitly
+  forbids reading as `|universe|`. `0003` fixes per-kind COUNTS and
+  structure; it spells no wire member list, and `guard` exports no member
+  enumerator (`spreadValues`/`subsets` are private; `IntDomain` returns
+  `[]int`).
+- `0021:C2` spells `domain` only as "present exactly when
+  `guard.AssignmentCount` reports it finite" and never says what the array
+  holds; the Illustrative Code's `["draft","final"]` is an `enum` and
+  disclaims literal assertion (REQ-18).
+
+So emitting `["false","true"]` for a `bool`, `Elements` or its powerset for
+a `set`, or an enumerated bound for an `int`, would each ADD a normative
+wire vocabulary carrying no REQ-N — the ADDITIVE-IS-NOT-EXEMPT case, which
+this leg records rather than invents. The committed golden
+`internal/cli/testdata/graph_0021_state_machine.json` pins a finite `bool`
+tag (`flag`) with `domain` ABSENT, and `assertGolden`'s own message fixes
+the remedy for a pin break as "a deliberate schema decision, not a
+regenerated golden" — so the decision is the author's, not this leg's.
+
+Remedy for the author: decide what `domain` carries for `bool`, `int` and
+`set` (or narrow REQ-20's presence rule to the `enum` arm the members
+exist on), then the gate and the golden move together.
+
 ## Verdict — one violation (FAIL-20)
 ## Phase 3b — Adversarial
 
@@ -148,3 +191,20 @@ nothing):
 Baseline: the only other reds in `internal/cli` are the three known
 TEST-FIXTURE items (D2/REQ-109, D3/REQ-67, D4/REQ-85);
 `internal/graphlint` is green. `gofmt` and `go vet` are clean.
+
+Outcome (ADV-1): fixed:fc1cbbb.
+Outcome (ADV-2): fixed:fc1cbbb.
+
+`edgesFrom` (`internal/graphlint/export.go`) now skips every escape row
+BEFORE asking satisfiability, which is `successorsOf`'s own admission order
+(`reach.go:207-209`), so the exported relation is exactly the one the
+fixpoint took (A2's equality bar, `0021:C4`'s structural no-drift rule).
+`reach.go` is untouched, keeping REQ-53/REQ-56 additive, and `ReachGraph`
+is `edgesFrom`'s only caller, so no other surface changes.
+
+Both probes were RED at f61a33f and are GREEN at fc1cbbb: ADV-1 on both
+fixtures (the catch-all arm minted 3 phantoms over 3 nodes), ADV-2 on the
+scaling fixture. Neither golden moved — `legalModel` declares no escape row
+and `decisionTableFixture`'s edges carry no escape rule — so the DOT arm,
+which renders straight from `doc.Reach.Edges`, inherits the fix with no
+re-baseline.
