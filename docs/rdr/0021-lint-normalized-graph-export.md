@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -1084,103 +1084,68 @@ code alone.
 > citable as `cli/NNNN:G-cross-cutting`. Cite it that
 > way, not by section name.
 
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0021-lint-normalized-graph-export/artifacts/gate.md (Gate PASS 2026-09-12)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+**Versioning.** The document carries a required leading `schema` field,
+initial value `intrastate.graph/1` (C2). Evolution within `/1` is
+additive — a consumer ignoring unknown fields keeps working — and an
+incompatible change bumps the marker under the `0.x` promise RDR 0029
+governs. The exported field spellings are normative as spelled in C2;
+the Illustrative Code disclaims literal assertion and binds nothing.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+**Canonical form / determinism.** Claimed, and confirmed field by
+field:
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+- *Hash function + library* — none. This record claims no
+  content-addressed identity and no replay-stable hash; the promise is
+  byte identity of the emitted stream (C3, RT2), not a digest.
+- *Pre-image byte layout / primitive encodings* — JSON is emitted
+  through the one shared non-HTML-escaping encoder,
+  `clierr.WriteJSONLine`, per `0005:C1`'s one-encoder rule (C3).
+- *Map iteration order* — no Go map iteration reaches the wire. Every
+  sequence is pre-sorted by C2's declared orders before marshaling:
+  `rows` in RDR 0002's canonical row order, atoms in 0002's canonical
+  atom order, `reach.nodes` by node key, `reach.edges` by
+  (from, to, rule), and each tag's `values` array sorted and
+  deduplicated — so construction order is unobservable.
+- *Whitespace policy / case folding* — field names are lowercase
+  snake_case against `internal/table/dump.go::dumpColumns`, a closed
+  11-member list with `emit` appended last per `0010:C3`; the
+  one-encoder rule fixes the remaining byte layout, and no case
+  folding is applied to values.
+- *Empty / null / absent distinguishability* — every declared
+  collection renders as an empty array `[]` (or object `{}`) when it
+  has no members, never `null`; an optional member that does not
+  apply is ABSENT, its key omitted, never `null` (C2).
+- *Scope* — the promise is (model, build), not across builds
+  (premortem P-3). A build bump may change the JSON only by C2's
+  additive rule, and may re-baseline DOT diffs freely since DOT
+  styling is non-normative.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+Oracles: MVV step 2 (two invocations byte-identical), S1 (determinism
+under map-seed variation), S2 (golden fixtures pinning
+`intrastate.graph/1`), S9 (JSON round-trip), RT2 (`export ∘ export`
+byte identity).
 
-### Proportionality
+**Character encoding.** The shared encoder is non-HTML-escaping, so
+tag values and rule ids reach the wire unescaped; S6 exercises hostile
+tag content against the DOT arm, where quoting — not escaping-by-
+default — is the containment.
 
-[Gate key: proportionality]
+**Incremental adoption.** The export is a new root verb beside `lint`,
+adding no flag to `lint` and altering no existing output. C4 makes
+neutrality a normative obligation with a mechanism-independent oracle:
+`intrastate lint`'s verdict, finding set, and bytes are identical with
+and without the export code present. Consumers adopt `graph` when they
+want it; nothing is required to migrate.
 
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Omitted as not applicable: build tool compatibility, licensing,
+deployment model, IDE compatibility, secret/credential lifecycle,
+memory management, concurrency model.
 
 ## References
 
