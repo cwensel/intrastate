@@ -126,7 +126,7 @@ Evidence:
 ## D4 — the added field costs `0023`'s 40% projection-saving bar its margin
 
 Type: DEPENDENCY-LIMIT
-Status: needs author decision
+Status: needs author decision → RESOLVED (0023:C1 is normative and fixes the measurand as the FULL EMITTED LINE, "not on the `.data` payload alone", calling it the stricter reading because a constant wrapper makes any payload-level saving a smaller proportion of the line. Reading 1 is therefore foreclosed without amending C1; Reading 2 stands — 0023 re-measures its fixtures against the post-0024/post-0029 envelope and records the new floor. Cause correction: of the 41 B per-side growth, only 23 B is `schema_version`; 18 B is pre-existing drift from 0024:C4's non-omitempty `dispositions` (commit e2624d1), landed after A1's 2026-08-29 spike. Main already measured 40.5% — a 0.5-point margin, not 2.2 — so the bar was near-red independent of 0029. Sibling fixtures now sit at 41.7% and 41.3%: any further non-omitempty envelope or plan-group field pushes them red too.)
 
 `internal/cli/flow_mvv_0023_test.go::TestMVV0023_ResolveEnvelopeProjectionEndToEnd`
 step 6 requires each checked-in fixture's `--plan-only` projection to save
