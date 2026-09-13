@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Draft [routed back from reconcile 2026-09-12; re-verify A9 @refine — C2's sentinel clause is refuted (authored `<opaque>` is unforgeable only once `0002:C11` reserves it) and C2's merged-node terminal quantifier restates a decision JDR 0001 §JD-23 homes; both are cite-don't-restate edits]
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -279,20 +279,31 @@ RDR 0002 owns only row-dump ordering.
   edges-carrying function that also returns the traversal's
   completeness — can be added without altering `reach()` or lint's
   path through it.**
-  - **Status**: Pending
+  - **Status**: Verified — the addition is additive; the rationale is
+    narrowed (the condition IS observable today, the raw bool is not)
   - **Method**: Source Search
-  - **Evidence**: raised by the Stage-5 3amigo implementer persona.
-    Exported `Reach` today discards the bool (`nodes, _ := reach(m)`,
-    `internal/graphlint/reach.go::Reach`), and no other exported
-    symbol in the package surfaces it (no struct field, method,
-    sentinel error, or const), so C4's refusal names a condition no
-    caller can currently observe. Q3(c) already sanctions a NEW
-    exported function beside `Reach` for edge recovery; this assumption
-    is that the same function carries completeness, leaving `reach()`
-    and lint's `analysis.go` call site untouched (C4's neutrality).
-    Verification: confirm the new signature returns nodes, edges, and
-    completeness together, and that lint still reaches `reach()`
-    directly.
+  - **Evidence**: raised by the Stage-5 3amigo implementer persona;
+    verified at Stage 6 (`evidence/spikes/a8-graphlint-surface.md`).
+    Unexported `reach()` returns `(nodes []Node, complete bool)`
+    (`internal/graphlint/reach.go::reach`) and exported `Reach`
+    discards the bool (`nodes, _ := reach(m)`,
+    `internal/graphlint/reach.go::Reach`). Lint never calls `Reach`:
+    it reaches `reach()` through `Run`→`newAnalysis`
+    (`internal/graphlint/analysis.go::newAnalysis`,
+    `internal/graphlint/engine.go::Run`), and `successorsOf` already
+    computes the edges transiently and discards them — so a NEW
+    exported function beside `Reach` carrying nodes, edges, and
+    completeness leaves `reach()`, `Reach`, and lint's call site
+    untouched (C4's neutrality). Q3(c) already sanctions that function
+    for edge recovery. **Narrowed:** the pre-edit wording claimed C4's
+    refusal "names a condition no caller can currently observe." That
+    is false — `internal/graphlint/taxonomy.go::CodeProductTooLarge`
+    fires on exactly `complete == false`
+    (`internal/graphlint/analysis.go::newAnalysis`) and rides exported
+    `Report.Findings` (`internal/graphlint/engine.go::Run`), a faithful
+    1:1 proxy with no divergent case found. Only the raw typed bool is
+    unobservable; the CONDITION is observable today. C4's refusal arm
+    is unaffected either way, so the narrowing costs no clause.
   - **If wrong**: C4's `graph-export-too-large` arm is unimplementable
     without widening `Reach`'s public signature — a change to a surface
     whose only other callers are tests, which C4's neutrality rule and
@@ -301,23 +312,55 @@ RDR 0002 owns only row-dump ordering.
   of a `values` array, no authored tag value can collide with that
   spelling, and treating it as admitting every atom on its key is
   sound for C2's terminal marking.**
-  - **Status**: Pending
+  - **Status**: Pending — limb (a) REFUTED at Stage 6; BLOCKER routed
+    to `/rdr-refine` (class `contract`). Limb (b) verified.
   - **Method**: Source Search
   - **Evidence**: raised by the Stage-5 critique lens; widened by the
-    repeatability lens (C2 now fixes the DOT terminal predicate).
+    repeatability lens (C2 now fixes the DOT terminal predicate);
+    refuted at Stage 6 (`evidence/spikes/a9-opaque-sentinel.md`,
+    `evidence/reconcile/reconcile.md`).
     `internal/graphlint/reach.go::OpaqueValue` is the const `"<opaque>"`,
     and `reach.go:438` returns `[]string{OpaqueValue}` for a tag with no
     finite declared domain, so it lands in `Node.Values` and projects
     into C2's `values` array like any other string. C2 now names it.
-    Verification, two parts: (a) confirm no authored-value path can
-    produce the literal `<opaque>` (declaration/atom validation), so a
-    consumer reading the sentinel is never reading an authored value;
-    and (b) confirm the opaque-admits-every-atom reading C2 fixes is
-    the one `reach.go::ownedAtomSatisfiable` already implements
-    (`slices.Contains(held, OpaqueValue)` ⇒ satisfiable), so the
-    exporter reuses that predicate rather than restating it — and
-    that `analysis.go::nodeMeetsAll`'s contrary universal/no-opaque
-    reading stays confined to split nodes, where the two agree.
+    **(a) REFUTED.** Only `internal/table/model.go::ClearSentinel` is a
+    reserved, load-refused tag value (`0002:C11`); the authored-value
+    sites (`internal/table/normalize.go`,
+    `internal/table/load.go::conformKind` /`::conformDomain`) have no
+    `scalar` arm and nothing refuses an authored `<opaque>`. A `scalar`
+    tag — or an enum declaring `<opaque>` in its domain — loads clean
+    and yields a node byte-identical to the synthesized one, so C2's
+    "is NOT an authored value … a consumer distinguishes it by that
+    exact spelling" is false as written, and under C2's opaque-admits
+    rule a forged value marks a node terminal that lint reports as a
+    dead end. Lint's own analysis path is NOT corrupted:
+    `analysis.go::nodeMeetsAll` has no opaque branch, so forged and
+    synthesized fixtures emit identical findings.
+    **(b) VERIFIED.** `reach.go::ownedAtomSatisfiable` implements the
+    existential, opaque-admits reading
+    (`slices.Contains(held, OpaqueValue)` ⇒ satisfiable), and
+    `analysis.go::nodeMeetsAll`'s contrary universal/no-opaque reading
+    is confined to nodes `analysis.go::splitNode` has already
+    singleton-split on the keys it reads, where the two agree.
+    **Disposition (author-decided 2026-09-12).** Reserve `<opaque>` in
+    `0002:C11` beside `<clear>`, refused wherever a tag value is
+    authored — the resolution JDR 0001 §D5 already reached for
+    `<clear>`, whose prior art is sound "exactly when the marker is
+    reserved". `0002` is `Implemented`, so the amendment and its loader
+    tests are 0002's to carry; `0029` holds the schema incompatibly
+    changeable through `0.x`, which is what makes the reservation
+    affordable now. This RDR does NOT restate the rule: C2 keeps its
+    wording and CITES `0002:C11` once the reservation lands. Until it
+    does, this assumption stays Pending and the RDR does not lock.
+  - **Second blocker on this clause (see `evidence/reconcile/`).** C2's
+    terminal-satisfaction quantifier restates a decision JDR 0001
+    §JD-23 homes ("neither record widens or narrows the split
+    unilaterally. Both records cite this entry and neither restates the
+    other's contract"), and picks the opposite reading from the
+    doctrine `0015:C1` adopts. Author-decided: hoist to §JD-23 as a new
+    entry widening its siblings to include this record, homing the
+    export-side (published merged relation) quantifier beside the
+    lint-side split rule; C2 then cites rather than restates.
   - **If wrong**: (a) C2's sentinel is ambiguous on the wire — a
     consumer cannot tell an abstracted tag from one authored as
     `<opaque>`, and the marker's soundness claim needs a
