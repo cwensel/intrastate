@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft [routed back from finalize 2026-09-12; re-verify none @refine — C1–C5 share code anchors and contract literals with open peers 0013, 0014, 0015 with no cross-citation; fire the joint check]
+- **Status**: Draft
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -68,10 +68,11 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: large — one contract, the deterministic export
-  grammar of the normalized graph, stated as five clauses (C1–C5)
-  of one seam; user-facing yes; locks format (the
-  `intrastate.graph/1` wire format and its DOT projection).
+- **Profile**: large — one contract, the export of the normalized
+  graph, stated as five clauses (C1–C5) of one seam; user-facing yes;
+  locks the `intrastate.graph/1` document's field list and marker
+  (its DOT projection is a documentation rendering, styling
+  non-normative).
 - **Priority**: Low
 - **Related Issues**: kata `intrastate#jjkh` (1602); kata `4hps`
   (terminal-reachability invariant — now RDR 0022, a potential
@@ -179,15 +180,14 @@ RDR 0002 owns only row-dump ordering.
     domains, `internal/guard/product.go::Groups` for the partition,
     and `internal/graphlint/reach.go::Reach` for nodes — every one a
     pure function of the model value with no TOML re-parse
-    (`evidence/research/a3-a4.md`). The edge relation is NOT carried by
-    the model value: `reach()` computes nodes only and `successorsOf`
-    reads `row.RuleID` but discards it, so no edge carrier exists
-    today. It is constructible with no re-parse (the rule id is on
-    `table.Row.RuleID`) and is recovered in the export path per A2.
-    This narrows the pre-edit wording ("carries everything the
-    document needs"), which overstated the model value's coverage;
-    narrowed at Resolve 2026-09-12. C2 is unchanged — it predicates
-    *carries* of the document, which still carries edges.
+    (`evidence/research/a3-a4.md`). The two `guard` functions are read
+    as-is: this record changes nothing in that package, whose
+    observation surface is RDR 0013's to evolve. The edge relation is
+    NOT carried by the model value: `reach()` computes nodes only and
+    `successorsOf` reads `row.RuleID` but discards it, so it is
+    recovered in the export path per A2 (the rule id is on
+    `table.Row.RuleID`, no re-parse). C2 predicates *carries* of the
+    document, which does carry edges.
   - **If wrong**: the schema shrinks, or a loader extension becomes a
     prerequisite and the blast radius grows past this RDR.
 - **A4 A new root export verb requires no amendment to RDR 0005's
@@ -204,8 +204,7 @@ RDR 0002 owns only row-dump ordering.
     contract and are owned by the RDR that names them") is a closed
     three-item enumeration that does not itself name `graph`; the
     conclusion rests on the scope sentence, not on reading `graph`
-    into that list (re-anchored at Resolve 2026-09-12,
-    `evidence/research/a3-a4.md`).
+    into that list (`evidence/research/a3-a4.md`).
   - **If wrong**: the surface must be renegotiated at the envelope
     home before Phase 2 can land.
 - **A5 Marshaling the document through the shared non-HTML-escaping
@@ -233,8 +232,8 @@ RDR 0002 owns only row-dump ordering.
   - **If wrong**: C3's replay invariant fails and the document needs a
     custom marshaler with its own ordering proof.
 - **A6 The DOT rendering is derivable from the exported document value
-  alone — nodes, edges, initial, and terminal-satisfaction are enough —
-  with no reach or analysis internals consulted.**
+  alone — nodes, edges, and initial are enough — with no reach or
+  analysis internals consulted.**
   - **Status**: Verified
   - **Method**: Spike
   - **Evidence**: the spike renderer imports only stdlib — zero
@@ -265,12 +264,9 @@ RDR 0002 owns only row-dump ordering.
     `slices.Compact(slices.Sorted(slices.Values(value)))`), intact at
     the point `reach`/`Reach` return nodes to a caller. So the OBJECT
     keyed by tag is the invention-free projection (map → object,
-    `[]string` → array) and C2 now fixes it. The ARRAY-of-assignment-
-    strings form was the wrong exhibit: joined `key=value` strings
+    `[]string` → array), which C2 fixes; joined `key=value` strings
     exist only inside `(Node).key`'s escaped fingerprint, for internal
-    dedup identity, never as an exportable value — so the A5 fixture's
-    rendering is corrected here rather than C2 widened to admit both
-    (the spike's field spellings were already provisional per A6).
+    dedup identity, never as an exportable value.
   - **If wrong**: the wire shape of every exported node is
     underdetermined at lock; two implementers read one field list two
     ways and the golden fixture pins whichever shipped first.
@@ -279,11 +275,9 @@ RDR 0002 owns only row-dump ordering.
   edges-carrying function that also returns the traversal's
   completeness — can be added without altering `reach()` or lint's
   path through it.**
-  - **Status**: Verified — the addition is additive; the rationale is
-    narrowed (the condition IS observable today, the raw bool is not)
+  - **Status**: Verified — the addition is additive
   - **Method**: Source Search
-  - **Evidence**: raised by the Stage-5 3amigo implementer persona;
-    verified at Stage 6 (`evidence/spikes/a8-graphlint-surface.md`).
+  - **Evidence**: `evidence/spikes/a8-graphlint-surface.md`.
     Unexported `reach()` returns `(nodes []Node, complete bool)`
     (`internal/graphlint/reach.go::reach`) and exported `Reach`
     discards the bool (`nodes, _ := reach(m)`,
@@ -295,120 +289,17 @@ RDR 0002 owns only row-dump ordering.
     exported function beside `Reach` carrying nodes, edges, and
     completeness leaves `reach()`, `Reach`, and lint's call site
     untouched (C4's neutrality). Q3(c) already sanctions that function
-    for edge recovery. **Narrowed:** the pre-edit wording claimed C4's
-    refusal "names a condition no caller can currently observe." That
-    is false — `internal/graphlint/taxonomy.go::CodeProductTooLarge`
-    fires on exactly `complete == false`
+    for edge recovery. The CONDITION is already observable —
+    `internal/graphlint/taxonomy.go::CodeProductTooLarge` fires on
+    exactly `complete == false`
     (`internal/graphlint/analysis.go::newAnalysis`) and rides exported
     `Report.Findings` (`internal/graphlint/engine.go::Run`), a faithful
-    1:1 proxy with no divergent case found. Only the raw typed bool is
-    unobservable; the CONDITION is observable today. C4's refusal arm
-    is unaffected either way, so the narrowing costs no clause.
+    1:1 proxy with no divergent case found; only the raw typed bool is
+    unexported, which is what the new function carries.
   - **If wrong**: C4's `graph-export-too-large` arm is unimplementable
     without widening `Reach`'s public signature — a change to a surface
     whose only other callers are tests, which C4's neutrality rule and
     A2's recorded coupling both bear on.
-- **A9 The `<opaque>` sentinel reaches the wire as an ordinary member
-  of a `values` array, no authored tag value can collide with that
-  spelling, and treating it as admitting every atom on its key is
-  sound for C2's terminal marking.**
-  - **Status**: Pending — DOWNGRADED at Stage 6 iteration 2, survivable:
-    limb (a) stays REFUTED on `main` and limb (b) is verified, but no
-    clause now depends on the refuted limb. The iteration-1 BLOCKER is
-    discharged: `/rdr-refine` applied C2's half of both dispositions, so
-    C2 demotes the spelling to "a hint and not a discriminator" until the
-    reservation lands and CITES JDR 0001 §JD-23 rather than restating the
-    split. Named plan that WILL run: the `<opaque>` reservation in
-    `0002:C11` (owner 0002, `Implemented` — loader arm + tests), and
-    Testing Strategy S10, which asserts the marked-terminal node SET by
-    membership with a negative control requiring the export-side and
-    lint-side readings to disagree. Not MVV-critical: MVV steps 2–3
-    assert the `reach` block's field presence and the node/edge id SET,
-    never marked-terminal membership or the discriminator — S10 exists
-    precisely because S6/S3/the MVV do not catch the marking.
-  - **Method**: Source Search
-  - **Evidence**: raised by the Stage-5 critique lens; widened by the
-    repeatability lens (C2 now fixes the DOT terminal predicate);
-    refuted at Stage 6 (`evidence/spikes/a9-opaque-sentinel.md`,
-    `evidence/reconcile/reconcile.md`).
-    `internal/graphlint/reach.go::OpaqueValue` is the const `"<opaque>"`,
-    and `reach.go:438` returns `[]string{OpaqueValue}` for a tag with no
-    finite declared domain, so it lands in `Node.Values` and projects
-    into C2's `values` array like any other string. C2 now names it.
-    **(a) REFUTED.** Only `internal/table/model.go::ClearSentinel` is a
-    reserved, load-refused tag value (`0002:C11`); the authored-value
-    sites (`internal/table/normalize.go`,
-    `internal/table/load.go::conformKind` /`::conformDomain`) have no
-    `scalar` arm and nothing refuses an authored `<opaque>`. A `scalar`
-    tag — or an enum declaring `<opaque>` in its domain — loads clean
-    and yields a node byte-identical to the synthesized one, so C2's
-    "is NOT an authored value … a consumer distinguishes it by that
-    exact spelling" is false as written, and under C2's opaque-admits
-    rule a forged value marks a node terminal that lint reports as a
-    dead end. Lint's own analysis path is NOT corrupted:
-    `analysis.go::nodeMeetsAll` has no opaque branch, so forged and
-    synthesized fixtures emit identical findings.
-    **(b) VERIFIED.** `reach.go::ownedAtomSatisfiable` implements the
-    existential, opaque-admits reading
-    (`slices.Contains(held, OpaqueValue)` ⇒ satisfiable), and
-    `analysis.go::nodeMeetsAll`'s contrary universal/no-opaque reading
-    is confined to nodes `analysis.go::splitNode` has already
-    singleton-split on the keys it reads, where the two agree.
-    **Disposition (author-decided 2026-09-12).** Reserve `<opaque>` in
-    `0002:C11` beside `<clear>`, refused wherever a tag value is
-    authored — the resolution JDR 0001 §D5 already reached for
-    `<clear>`, whose prior art is sound "exactly when the marker is
-    reserved". `0002` is `Implemented`, so the amendment and its loader
-    tests are 0002's to carry; `0029` holds the schema incompatibly
-    changeable through `0.x`, which is what makes the reservation
-    affordable now. This RDR does NOT restate the rule: C2 (refine
-    2026-09-12) now CONDITIONS the discriminator on that reservation and
-    cites `0002:C11` as owed, rather than asserting unforgeability
-    outright. The reservation remains unlanded — verified at Stage 6
-    iteration 2: `0002:C11` reserves `<clear>` only, with no `<opaque>`
-    arm. This assumption therefore stays Pending, but DOWNGRADED rather
-    than blocking: because C2 no longer asserts the discriminator, the
-    unlanded reservation costs the wire a hint, not a contract, and the
-    lock does not wait on another record's amendment.
-  - **Second item on this clause — DISCHARGED as a blocker at Stage 6
-    iteration 2, the hoist still OWED in JDR 0001 (see
-    `evidence/reconcile/`).** C2's
-    terminal-satisfaction quantifier restates a decision JDR 0001
-    §JD-23 homes ("neither record widens or narrows the split
-    unilaterally. Both records cite this entry and neither restates the
-    other's contract"), and picked the opposite reading from the
-    doctrine `0015:C1` adopts. Author-decided: hoist to §JD-23 as a new
-    entry widening its siblings to include this record, homing the
-    export-side (published merged relation) quantifier beside the
-    lint-side split rule. C2's half is APPLIED (refine 2026-09-12): it
-    cites §JD-23 for the split and declares only the export-side
-    marking rule over the published merged relation. The §JD-23 entry
-    and its `Siblings:` widening are OWED in JDR 0001 — verified at
-    Stage 6 iteration 2 against `docs/jdr/0001-resolve-kernel-seam.md`:
-    §JD-23 is at line 941, its `Siblings:` line reads `0015, 0022`, and
-    the file mentions 0021 nowhere. Not a blocker on this record: the
-    registry's own rule is that siblings CITE the anchor and never
-    restate its mechanism prose, and a sibling not previously listed is
-    added by widening the `cluster` frontmatter "and say so" (`docs/jdr/
-    README.md:126`, `:76`) — a write in JDR 0001, which is that
-    record's to make and not this one's. §JD-23 homes the LINT-side
-    split (the check ranges over split nodes; terminal satisfaction is
-    universal per split node) and is `decided`, with the residual class
-    ranked under 0015's charter; C2 takes no position on that split and
-    declares only the export-side marking over the published MERGED
-    relation — an object the split-node check never emits. So C2 is a
-    cite, not a unilateral widening, and Testing Strategy S10 is the
-    named verification, its negative control requiring the two readings
-    to disagree on a merged fixture.
-  - **If wrong**: (a) C2's sentinel is ambiguous on the wire — a
-    consumer cannot tell an abstracted tag from one authored as
-    `<opaque>`, and the marker's soundness claim needs a
-    distinguishable encoding; (b) if the export-side marking rule C2
-    declares is not genuinely separable from the lint-side split rule
-    §JD-23 homes, then the two are one contract and C2's clause is a
-    unilateral widening that belongs wholly in §JD-23 — a DOT diagram
-    and lint would call different nodes terminal over the same relation
-    with no doctrine sanctioning the difference.
 
 ## Proposed Solution
 
@@ -490,99 +381,57 @@ and an unreadable model file is a wrong request, so it stays exit 2).
 **C2**
 
 ```normative
-DOCUMENT. The JSON document is this RDR's wire format, versioned by a
-required leading `schema` field, initial value `intrastate.graph/1`;
-evolution within `/1` is strictly additive (a consumer ignoring
-unknown fields keeps working). It carries, at minimum: model identity
-and class — `model` is `table.Model.ID`, the AUTHORED `[model] id`
-declaration, never the `--model <path>` argument or any path-derived
-string; the tag declarations (name, provenance, kind, required,
-single-valued, and the declared domain exactly when
-`guard.AssignmentCount` reports it finite); the declared `[initial]`
-assignments; the declared `terminal` predicate sets; the normalized
-rows carrying RDR 0002's dump field list as structured values —
-identity, source, kind, outcome, atoms (each `{key, operator,
-literal[], block}`), next, writes, requires_owned, gate, escape, emit
-— in 0002's canonical row order with atoms in 0002's canonical atom
-order; the selection-context groups (context plus member row
-identities); and the reachability relation — merged fixpoint nodes
-(`{id, values}`, id = the canonical node key, `values` an OBJECT keyed
-by tag name whose every value is that tag's value ARRAY, sorted and
-deduplicated — the shape `reach.go::Node`'s `Values map[string][]string`
-projects without invention; never an array of joined `key=value`
-strings, a flattening that exists only inside `(Node).key`'s escaped
-internal fingerprint. A tag with no finite declared domain carries the
-single abstract value `<opaque>` (`reach.go::OpaqueValue`) in that
-array — it reaches the wire verbatim, and a consumer distinguishes an
-abstracted tag by that exact spelling EXACTLY WHEN `<opaque>` is a
-reserved tag value, refused wherever a tag value is authored. That
-reservation is `0002:C11`'s to carry, beside `<clear>`, and is OWED —
-until it lands, an authored `<opaque>` loads clean and yields a node
-byte-identical to the synthesized one (A9), so the spelling is a hint
-and not a discriminator; this clause does not restate the reservation,
-it depends on it. The abstraction
-marker states why it is sound) and edges (`{from, to,
-rule}`) — with nodes sorted by node key and edges by (from, to, rule),
-so construction order is unobservable. Every declared collection
-renders as an empty JSON array `[]` (or object `{}`) when it has no
-members — never `null`; an optional member that does not apply is
-ABSENT, its key omitted, never `null`. The `reach` block carries a
-REQUIRED abstraction marker, spelled `abstraction` with the token
-value `declared-over-approximation`, stating the relation
-is the DECLARED over-approximation, not the runtime — merged nodes,
-guard/observed atoms unpruned (`reach.go::Reach` doc) — so a formal
-consumer can tell which property classes are sound over it. The
-document carries NO verdict or finding field: an export is never a
-lint pass, and the schema docs say so. Set-valued members are JSON
-arrays, closing `0002:§round-trip-inverse-invariants`'s lossy
-set-literal rendering for this document; the document is NOT a model
-source and no export→load inverse is claimed. Exact field spellings
-are normative AS SPELLED HERE — the Illustrative Code is an exhibit
-that disclaims literal assertion and shows only some members, so it
-binds nothing: `schema`, `model`, `class`, `tags[{name, provenance,
-kind, required, single_valued, domain}]`, `initial`, `terminal`,
-`rows[{identity, source, kind, outcome, atoms, next, writes,
-requires_owned, gate, escape, emit}]` — RDR 0002's dump field list,
-written out here in its canonical order and lowercase snake_case
-spelling (`internal/table/dump.go::dumpColumns`, a closed 11-member
-list with `emit` appended last per `0010:C3`) so an implementer is
-bound by this record and not by an exhibit or by code — plus
-`groups[{context, rules}]`, and `reach{abstraction, nodes[{id,
-values}], edges[{from, to, rule}]}`, where `values` is the tag-keyed
-object of value arrays fixed above. The schema docs state the
-soundness rule in one sentence: universal claims ("no path does X")
-proved over this relation hold at runtime; existence claims ("some
-path reaches X") may be spurious. The DOT
-document renders the same value: one node per reachability node, one
-edge per reachability edge labeled with its rule id, the initial node
-and terminal-satisfying nodes marked, and the abstraction marker
-rendered in the graph header comment/label so the diagram carries it
-too (premortem P-7); its node/edge SET, the MARKED-TERMINAL NODE SET,
-and the marker are normative, its styling/attributes are not.
-Terminal-satisfaction over the published merged relation is governed by
-the merged-node liveness doctrine homed at **JDR 0001 §JD-23**, which
-this clause CITES and does not restate: the lint-side check quantifies
-over split nodes (`0015:C1`, `0022`), and neither record widens nor
-narrows that split unilaterally. What is this record's to declare is
-the EXPORT-side delta the doctrine leaves to it — this document
-publishes the MERGED relation, an object the split-node check never
-emits, so the marked-terminal set carried on the wire needs its own
-stated evaluator. It is the over-approximating reading: a node is
-marked terminal when SOME declared `terminal` predicate set is
-satisfiable over it, and a predicate set is satisfiable when EVERY
-atom in it admits SOME member of that tag's published value array; a
-tag holding the `<opaque>` sentinel admits every atom on that key
-(`reach.go::ownedAtomSatisfiable`). This is the published relation's
-own soundness rule applied to marking — a merged node whose
-concretizations include a terminal one is marked, an existence claim
-that "may be spurious", never a universal claim silently dropped — and
-it is why the export's marks and lint's findings may legitimately
-differ on one merged node without either being wrong. The export takes
-no position on the lint-side quantifier; §JD-23 is the home for any
-change to the split itself, and widening its `Siblings:` to include
-this record is OWED there. An empty predicate set is
-not satisfied, and a terminal key with non-owned provenance marks
-nothing (it is the dangling-key finding lint already reports).
+DOCUMENT. The JSON document is a documentation artifact, versioned by
+a required leading `schema` field, initial value `intrastate.graph/1`;
+evolution within `/1` is additive (a consumer ignoring unknown fields
+keeps working), and an incompatible change bumps the marker under the
+`0.x` promise RDR 0029 governs. Exact field spellings are normative AS
+SPELLED HERE — the Illustrative Code is an exhibit that disclaims
+literal assertion and shows only some members, so it binds nothing:
+`schema`; `model` (`table.Model.ID`, the AUTHORED `[model] id`, never
+the `--model <path>` argument or any path-derived string); `class`;
+`tags[{name, provenance, kind, required, single_valued, domain}]`
+(`domain` present exactly when `guard.AssignmentCount` reports it
+finite); `initial`; `terminal` (the declared predicate sets, carried
+as declared); `rows[{identity, source, kind, outcome, atoms, next,
+writes, requires_owned, gate, escape, emit}]` — RDR 0002's dump field
+list in its canonical row order, atoms (each `{key, operator,
+literal[], block}`) in 0002's canonical atom order, lowercase
+snake_case (`internal/table/dump.go::dumpColumns`, a closed 11-member
+list with `emit` appended last per `0010:C3`); `groups[{context,
+rules}]`; and `reach{abstraction, nodes[{id, values}], edges[{from,
+to, rule}]}` — the merged fixpoint relation, `id` the canonical node
+key, `values` an OBJECT keyed by tag name whose every value is that
+tag's sorted, deduplicated value ARRAY (the shape `reach.go::Node`'s
+`Values map[string][]string` projects without invention), nodes sorted
+by node key and edges by (from, to, rule) so construction order is
+unobservable. A tag with no finite declared domain carries the single
+value `<opaque>` (`reach.go::OpaqueValue`) in its array, passed
+through verbatim; this record attaches no meaning to that spelling.
+Every declared collection renders as an empty JSON array `[]` (or
+object `{}`) when it has no members — never `null`; an optional member
+that does not apply is ABSENT, its key omitted, never `null`. The
+`reach` block carries a REQUIRED marker, `abstraction` with the token
+value `declared-over-approximation`, stating the relation is the
+DECLARED over-approximation, not the runtime — merged nodes,
+guard/observed atoms unpruned (`reach.go::Reach` doc); the schema docs
+state the soundness rule in one sentence: universal claims ("no path
+does X") proved over this relation hold at runtime; existence claims
+("some path reaches X") may be spurious. The document carries NO
+verdict or finding field — an export is never a lint pass — and NO
+per-node terminal marking: which merged nodes satisfy a `terminal`
+predicate set is the dead-end quantifier RDR 0015 owns (JDR 0001
+§JD-23), and this record declares no evaluator of its own; the
+declared sets travel in the document for a consumer to evaluate.
+Set-valued members are JSON arrays, closing
+`0002:§round-trip-inverse-invariants`'s lossy set-literal rendering
+for this document; the document is NOT a model source and no
+export→load inverse is claimed. The DOT document renders the same
+value: one node per reachability node, one edge per reachability edge
+labeled with its rule id, the initial node marked, and the abstraction
+marker rendered in the graph header comment/label so the diagram
+carries it too (premortem P-7); its node/edge SET and the marker are
+normative, its styling/attributes are not.
 ```
 
 **C3**
@@ -590,16 +439,13 @@ nothing (it is the dangling-key finding lint already reports).
 ```normative
 DETERMINISM. For one model input and one build, emission is
 byte-for-byte identical across invocations, in every `--emit` and
-`--as` combination. Every sequence on the wire is pre-sorted by C2's
-orders before marshaling; no Go map iteration reaches the wire; JSON
-is emitted through the one shared non-HTML-escaping encoder
-(`clierr.WriteJSONLine`, per `0005:C1`'s one-encoder rule). This is a
-DELIBERATE NARROWING of the seed's "deterministic for the same model"
-to (model, build) — stated, not silent (premortem P-3): across builds
-the JSON document changes only by C2's additive schema rule (a
-cross-build golden pins it), and DOT styling carries no cross-build
-stability promise, so a build bump may re-baseline DOT diffs and may
-only ADD to JSON ones.
+`--as` combination: every sequence on the wire is pre-sorted by C2's
+orders before marshaling, no Go map iteration reaches the wire, and
+JSON is emitted through the one shared non-HTML-escaping encoder
+(`clierr.WriteJSONLine`, per `0005:C1`'s one-encoder rule). The
+promise is scoped to (model, build), not across builds (premortem
+P-3): a build bump may change the JSON only by C2's additive rule and
+may re-baseline DOT diffs freely, since DOT styling is non-normative.
 ```
 
 **C4**
@@ -613,7 +459,9 @@ structural, not disciplinary. It
 MUST NOT run the lint invariants, MUST NOT emit findings, and MUST
 NOT alter any input it shares with lint: `intrastate lint`'s verdict,
 finding set, and bytes are identical with and without the export code
-present (the MVV asserts this), and the oracle is
+present (the MVV asserts this; what `intrastate lint` promises as a
+repository gate is RDR 0014's contract, which this record only leaves
+unchanged), and the oracle is
 MECHANISM-INDEPENDENT — it binds equally if Resolve picks A2's
 in-traversal edge observer (premortem P-14). The verb succeeds for
 ANY model that loads, including a model lint refuses; the
@@ -873,22 +721,24 @@ via `lint.go`'s comment), JDR 0002 §D1, and both `../state-machines`
 passages CONFIRMED on `main`.
 
 Joint-check: clear (12 peers) — open peers 0012–0020, 0022–0024
-grepped for this RDR's modify-anchors (`reach.go::Reach` extension,
+checked on both arms: modify-anchors (`reach.go::Reach` extension,
 new `graph` verb/root registration) and contract literals (`--emit`,
 `intrastate.graph/1`, `graph-export-too-large`, the mirrored C1
-codes): no whole-token hit shares an undecided contract. Context
-beside the clear: 0015 names "the 0021 export" only inside its
-REJECTED alternative's cons, under the merged-node doctrine settled
-at JDR 0001 §JD-23 — this export emits the merged fixpoint relation
-as-is and takes no side of the lint-side split quantifier, while C2
-declares the export-side marking rule that doctrine leaves to it and
-cites §JD-23 for the split (a §JD-23 sibling-widening is owed there);
-0023/0024
-couple with this RDR only through JDR 0002 §D1, cited by C5; 0024's
-load-refusal appends reach this verb by construction (C1 consumes the
-one load pipeline, `0002:C24`'s owners). Bridge sub-check: n/a — no
-sibling plan schedules deletion/replacement of any surface this plan
-introduces, and this plan retires nothing.
+codes) share no undecided contract. The three peers whose anchors or
+literals this record also touches are cited where they touch, each a
+read-only use with the decision left to its owner: RDR 0013 owns the
+`guard` observation surface A3 reads; RDR 0014 owns what `intrastate
+lint` promises as a repository gate, which C4 only holds unchanged;
+RDR 0015 owns terminal satisfaction over merged nodes (JDR 0001
+§JD-23), on which C2 declares nothing — the export publishes the
+merged relation and the declared `terminal` sets, marks no node
+terminal, and takes no side of the split quantifier. RDR 0022 cites
+this record as a prospective consumer; 0023/0024 couple only through
+JDR 0002 §D1,
+cited by C5; 0024's load-refusal appends reach this verb by
+construction (C1 consumes the one load pipeline, `0002:C24`'s owners).
+Bridge sub-check: n/a — no sibling plan schedules deletion/replacement
+of any surface this plan introduces, and this plan retires nothing.
 
 ## Alternatives Considered
 
@@ -1039,9 +889,9 @@ gateway exception.
 - Positive: one row contract — the document reuses 0002's dump
   vocabulary, so a column added there (the `emit` precedent) has one
   obvious landing in the schema.
-- Negative: `intrastate.graph/1` is a locked wire format; every later
-  producer (declared-emit metadata, new invariant surfaces) must land
-  additively or version the schema.
+- Negative: `intrastate.graph/1` has a fixed field list; a later
+  producer (declared-emit metadata, new invariant surfaces) lands
+  additively or bumps the marker under RDR 0029's `0.x` promise.
 - Negative: the exported reachability relation exposes the
   OVER-APPROXIMATION lint reasons over (merged nodes, unpruned
   guard/observed edges — `reach.go::Reach` doc); a consumer reading it
@@ -1189,16 +1039,12 @@ code alone.
    **Expected**: DOT node/edge id set equals the JSON document's
    `reach` block, the abstraction marker is present in the header, and
    every fixture survives `dot -Tsvg` (A6, C2, premortem P-16). Exit 0
-   is NOT sufficient: for each hostile NODE AND EDGE IDENTIFIER — the
-   set F3 makes normative — the emitted quoted string is unescaped by
-   inverting A6's recorded escaping ORDER (undo the `\n` line-break
-   escape, then `\"`, then `\\`) and asserted EQUAL to its source id,
-   so a well-formed but mis-escaped identifier fails. A6's spike hit
-   exactly that class of bug (the separator injected as two bytes
-   before `dotQuote` doubles the backslash), and an exit-code-only
-   oracle would pass it. The inverse is asserted over identifiers only:
-   DOT label STYLING stays non-normative (F3), so a styling-side
-   escaping defect is out of this oracle's scope by the same rule.
+   is NOT sufficient: each hostile node and edge identifier's emitted
+   quoted string is unescaped by inverting A6's recorded escaping ORDER
+   (undo the `\n` line-break escape, then `\"`, then `\\`) and asserted
+   EQUAL to its source id, so a well-formed but mis-escaped identifier
+   fails — the bug class A6's spike hit. Identifiers only; DOT label
+   STYLING stays non-normative (F3).
 7. **Scenario**: Traversal incomplete under the published node ceiling.
    **Expected**: refusal with `graph-export-too-large` (GroupUserEnv,
    exit 2) naming the ceiling and remedy; no document on stdout (C4).
@@ -1213,22 +1059,6 @@ code alone.
 9. **Scenario**: JSON round-trip — decode the exported document.
    **Expected**: value identity on every C2 field including exact set
    members (RT1); no `load ∘ export` inverse is exercised (RT3).
-10. **Scenario**: Terminal marking over a MERGED node — a fixture
-   whose fixpoint produces a node carrying a multi-member value array
-   on a terminal key (e.g. `stage: ["draft","final"]` against
-   `stage eq final`) and a second node carrying `<opaque>` on one.
-   **Expected**: the marked-terminal node SET is asserted by
-   membership, not merely by the marker's presence — both nodes are
-   marked, per C2's export-side marking rule, and a node no predicate
-   set admits is NOT marked. This scenario exists because
-   S6's oracle is scoped to the node/edge IDENTIFIER set and the
-   header marker, so an implementation that marks the wrong nodes —
-   or marks none at all on a merged fixture — passes S6, S3 and the
-   MVV unchanged. Negative control: evaluate the same fixture under
-   the lint-side split-node reading (`analysis.go::nodeMeetsAll`),
-   which marks neither node; the two readings must be shown to
-   disagree here, or the fixture is not exercising the merge — the
-   disagreement is expected and legitimate per C2, not a defect.
 
 ## Finalization Gate
 
