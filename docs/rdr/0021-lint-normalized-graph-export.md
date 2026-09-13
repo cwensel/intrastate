@@ -177,7 +177,19 @@ RDR 0002 owns only row-dump ordering.
   - **Evidence**: `internal/table/model.go` field walk against the C2
     field list (`Model.ID`/`Class`/`Tags`/`Initial`/`Terminal`/`Rows`),
     `internal/guard/declaration.go::AssignmentCount` for finite
-    domains, `internal/guard/product.go::Groups` for the partition,
+    domains — read to its per-kind arms in `domainSize`, which is
+    where finiteness and authored membership come apart: `bool`
+    (`spread(2, …), true`, "declared nowhere"), a bounded `int`
+    (`Min`/`Max` width, saturating at `cardinalityCeiling`) and `set`
+    (`spread(len(d.Elements), false)`, universe in `Elements`) all
+    report FINITE while populating no `decl.Domain`; only an `enum`
+    with a non-empty domain authors members, and a member-less `enum`,
+    an unbounded `int` and `scalar` report non-finite. C2's `domain`
+    presence rule is therefore stated over authored members, and
+    `reach`'s `<opaque>` abstraction over finiteness
+    (`reach.go::heldValues`) — two different predicates over the same
+    declaration, each correct for its own member —
+    `internal/guard/product.go::Groups` for the partition,
     and `internal/graphlint/reach.go::Reach` for nodes — every one a
     pure function of the model value with no TOML re-parse
     (`evidence/research/a3-a4.md`). The two `guard` functions are read
@@ -413,8 +425,20 @@ literal assertion and shows only some members, so it binds nothing:
 `schema`; `model` (`table.Model.ID`, the AUTHORED `[model] id`, never
 the `--model <path>` argument or any path-derived string); `class`;
 `tags[{name, provenance, kind, required, single_valued, domain}]`
-(`domain` present exactly when `guard.AssignmentCount` reports it
-finite); `initial`; `terminal` (the declared predicate sets, carried
+(`domain` carries the declaration's AUTHORED members and is present
+exactly when there are any — an `enum` with a non-empty `domain` —
+and ABSENT, its key omitted, otherwise; `kind` already carries the
+type, so `bool`, `int`, `set`, `scalar` and a member-less `enum` all
+omit it. Presence is NOT `guard.AssignmentCount` finiteness: that
+predicate reports finite for `bool`, for a bounded `int`, and for
+`set` — three kinds that author no `decl.Domain` — so no `domain`
+array is owed where no authority spells what it would carry. No
+derived value vocabulary is minted here: neither `bool`'s two
+literals, nor a `set`'s `Elements` or its powerset, nor an `int`'s
+`{min..max}` bound is projected into this member. A compact bound
+form for `int` was considered and rejected — adding it later is
+additive under this clause's own `/1` rule, removing it is not);
+`initial`; `terminal` (the declared predicate sets, carried
 as declared); `rows[{identity, source, kind, outcome, atoms, next,
 writes, requires_owned, gate, escape, emit}]` — RDR 0002's dump field
 list in the row order `internal/table/dump.go::dumpColumns` fixes,
