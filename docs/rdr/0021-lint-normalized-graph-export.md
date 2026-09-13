@@ -201,6 +201,22 @@ RDR 0002 owns only row-dump ordering.
     recovered in the export path per A2 (the rule id is on
     `table.Row.RuleID`, no re-parse). C2 predicates *carries* of the
     document, which does carry edges.
+    Re-verified 2026-09-13 at reconcile against the narrowed C2: the
+    exporter gates `domain` on `finite && len(decl.Domain) > 0`
+    (`internal/cli/graph_document.go:185`), the authored-members
+    reading C2 now states, and `domainSize`'s per-kind arms confirm
+    `bool` (`spread(2, …), true`), a bounded `int` and `set`
+    (`spread(len(d.Elements), false), true`) report finite while
+    populating no `decl.Domain`, so record and code agree
+    (`evidence/reconcile/iter-4/a3-domain-presence.md`). Two
+    implementation-side defects remain open on the unmerged branch and
+    are the implementation's to fix, not this record's: the doc comment
+    at `internal/cli/graph_document.go:51-54` still asserts the refuted
+    finite-only claim ("the finite arm always carries at least one
+    member"), contradicting the gate it documents, and
+    `TestReq20And28` asserts only the enum-with-members and `scalar`
+    arms, leaving `bool`, bounded `int` and member-less `enum`
+    unasserted — the coverage S2 requires on both sides of the rule.
   - **If wrong**: the schema shrinks, or a loader extension becomes a
     prerequisite and the blast radius grows past this RDR.
 - **A4 A new root export verb requires no amendment to RDR 0005's
