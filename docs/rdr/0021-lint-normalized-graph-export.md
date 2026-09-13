@@ -298,21 +298,33 @@ RDR 0002 owns only row-dump ordering.
     whose only other callers are tests, which C4's neutrality rule and
     A2's recorded coupling both bear on.
 - **A9 The `<opaque>` sentinel reaches the wire as an ordinary member
-  of a `values` array, and no authored tag value can collide with that
-  spelling.**
+  of a `values` array, no authored tag value can collide with that
+  spelling, and treating it as admitting every atom on its key is
+  sound for C2's terminal marking.**
   - **Status**: Pending
   - **Method**: Source Search
-  - **Evidence**: raised by the Stage-5 critique lens.
+  - **Evidence**: raised by the Stage-5 critique lens; widened by the
+    repeatability lens (C2 now fixes the DOT terminal predicate).
     `internal/graphlint/reach.go::OpaqueValue` is the const `"<opaque>"`,
     and `reach.go:438` returns `[]string{OpaqueValue}` for a tag with no
     finite declared domain, so it lands in `Node.Values` and projects
     into C2's `values` array like any other string. C2 now names it.
-    Verification: confirm no authored-value path can produce the literal
-    `<opaque>` (declaration/atom validation), so a consumer reading the
-    sentinel is never reading an authored value.
-  - **If wrong**: C2's sentinel is ambiguous on the wire — a consumer
-    cannot tell an abstracted tag from one authored as `<opaque>`, and
-    the marker's soundness claim needs a distinguishable encoding.
+    Verification, two parts: (a) confirm no authored-value path can
+    produce the literal `<opaque>` (declaration/atom validation), so a
+    consumer reading the sentinel is never reading an authored value;
+    and (b) confirm the opaque-admits-every-atom reading C2 fixes is
+    the one `reach.go::ownedAtomSatisfiable` already implements
+    (`slices.Contains(held, OpaqueValue)` ⇒ satisfiable), so the
+    exporter reuses that predicate rather than restating it — and
+    that `analysis.go::nodeMeetsAll`'s contrary universal/no-opaque
+    reading stays confined to split nodes, where the two agree.
+  - **If wrong**: (a) C2's sentinel is ambiguous on the wire — a
+    consumer cannot tell an abstracted tag from one authored as
+    `<opaque>`, and the marker's soundness claim needs a
+    distinguishable encoding; (b) if the two predicates disagree on a
+    merged node, C2's marking must name ONE of them as the normative
+    evaluator (or define its own), since a DOT diagram and lint would
+    otherwise call different nodes terminal over the same relation.
 
 ## Proposed Solution
 
@@ -374,10 +386,21 @@ and codes verbatim (`internal/cli/lint.go::runLint`): exactly one of
 neither → `flag-required`; unreadable file → `model-unreadable`; load
 failure → `model-invalid` with one findings[] entry per load category.
 `--emit <format>` selects the document: `json` (default) or `dot`; any
-other value → `flag-invalid-value` naming `emit`. RunE starts with
+other value → `flag-invalid-value` naming `emit`. `--emit` is NEW to
+this verb — `lint` has no such flag, so mirroring supplies no position
+for it and the order is fixed here: `--emit` validity is checked with
+the argument-shaped arms, AFTER the `--model`/`--flow` selection arms
+and BEFORE any file I/O. So `graph --model <unreadable> --emit=xml`
+refuses `flag-invalid-value` naming `emit`, never `model-unreadable`;
+the request is wrong independent of the environment. This is the one
+value-checked flag on the verb: `runLint` performs no enum-value check
+at all (its `--flow`-alone arm emits `flag-invalid-value` but is a
+presence arm, and the only load-time enum — `class` — is inside the
+loader, i.e. inside the `model-invalid` arm). RunE starts with
 `respond.ValidateMode`, success routes through `respond.OK`, failure
 through `respond.Fail`; exit codes are the existing 0/2 mapping — no
-new exit group.
+new exit group (`0005:C1`: exit 3 is environment-not-consulted only,
+and an unreadable model file is a wrong request, so it stays exit 2).
 ```
 
 **C2**
@@ -422,9 +445,16 @@ lint pass, and the schema docs say so. Set-valued members are JSON
 arrays, closing `0002:§round-trip-inverse-invariants`'s lossy
 set-literal rendering for this document; the document is NOT a model
 source and no export→load inverse is claimed. Exact field spellings
-are normative as the Illustrative Code spells them: `schema`, `model`,
-`class`, `tags[{name, provenance, kind, required, single_valued,
-domain}]`, `initial`, `terminal`, `rows[…0002's field list…]`,
+are normative AS SPELLED HERE — the Illustrative Code is an exhibit
+that disclaims literal assertion and shows only some members, so it
+binds nothing: `schema`, `model`, `class`, `tags[{name, provenance,
+kind, required, single_valued, domain}]`, `initial`, `terminal`,
+`rows[{identity, source, kind, outcome, atoms, next, writes,
+requires_owned, gate, escape, emit}]` — RDR 0002's dump field list,
+written out here in its canonical order and lowercase snake_case
+spelling (`internal/table/dump.go::dumpColumns`, a closed 11-member
+list with `emit` appended last per `0010:C3`) so an implementer is
+bound by this record and not by an exhibit or by code — plus
 `groups[{context, rules}]`, and `reach{abstraction, nodes[{id,
 values}], edges[{from, to, rule}]}`, where `values` is the tag-keyed
 object of value arrays fixed above. The schema docs state the
@@ -435,8 +465,24 @@ document renders the same value: one node per reachability node, one
 edge per reachability edge labeled with its rule id, the initial node
 and terminal-satisfying nodes marked, and the abstraction marker
 rendered in the graph header comment/label so the diagram carries it
-too (premortem P-7); its node/edge SET and the marker are normative,
-its styling/attributes are not.
+too (premortem P-7); its node/edge SET, the MARKED-TERMINAL NODE SET,
+and the marker are normative, its styling/attributes are not.
+Terminal-satisfaction is evaluated over the MERGED node as published
+in the `reach` block, by the OVER-APPROXIMATING reading: a node is
+marked terminal when SOME declared `terminal` predicate set is
+satisfiable over it, and a predicate set is satisfiable when EVERY
+atom in it admits SOME member of that tag's published value array; a
+tag holding the `<opaque>` sentinel admits every atom on that key.
+This is `reach.go::ownedAtomSatisfiable`'s existential, opaque-admits
+semantics — NOT `analysis.go::nodeMeetsAll`'s universal, no-opaque
+reading, which is the analysis-side checker and runs over SPLIT nodes
+(one value per key) where the two agree. The choice follows from the
+block's own soundness rule: the relation is a declared
+over-approximation, so a merged node whose concretizations include a
+terminal one is marked — an existence claim that "may be spurious",
+never a universal claim silently dropped. An empty predicate set is
+not satisfied, and a terminal key with non-owned provenance marks
+nothing (it is the dangling-key finding lint already reports).
 ```
 
 **C3**
@@ -529,7 +575,14 @@ subject.
 - **Identity** — a node is its canonical node key
   (`reach.go::(Node).key` — injective by escaping, ⇒ two exported
   nodes never collide); a row is RDR 0002's row identity; an edge is
-  the `(from, to, rule)` triple.
+  the `(from, to, rule)` triple; and the document's `model` member is
+  `table.Model.ID` — the AUTHORED `[model] id` declaration
+  (`internal/table/load.go` assigns it from the decoded `[model]`
+  table; an absent id refuses the load), never the `--model <path>`
+  argument or any path-derived string. Identity is therefore
+  invocation-independent: the same model exported from two checkouts
+  is byte-identical, which is what C3's (model, build) narrowing
+  assumes and what the CI-diffability outcome rests on.
 - **Wire / byte format** — C2's schema-versioned JSON document; exact
   field spellings normative per C2's list; empty declared collections
   render `[]`/`{}` and an inapplicable optional member is absent, never
@@ -1057,6 +1110,22 @@ code alone.
 9. **Scenario**: JSON round-trip — decode the exported document.
    **Expected**: value identity on every C2 field including exact set
    members (RT1); no `load ∘ export` inverse is exercised (RT3).
+10. **Scenario**: Terminal marking over a MERGED node — a fixture
+   whose fixpoint produces a node carrying a multi-member value array
+   on a terminal key (e.g. `stage: ["draft","final"]` against
+   `stage eq final`) and a second node carrying `<opaque>` on one.
+   **Expected**: the marked-terminal node SET is asserted by
+   membership, not merely by the marker's presence — both nodes are
+   marked, per C2's over-approximating predicate (SOME satisfiable
+   set; `<opaque>` admits every atom on its key), and a node no
+   predicate set admits is NOT marked. This scenario exists because
+   S6's oracle is scoped to the node/edge IDENTIFIER set and the
+   header marker, so an implementation that marks the wrong nodes —
+   or marks none at all on a merged fixture — passes S6, S3 and the
+   MVV unchanged. Negative control: evaluate the same fixture under
+   `analysis.go::nodeMeetsAll`'s universal/no-opaque reading, which
+   marks neither node; the two readings must be shown to disagree
+   here, or the fixture is not exercising the merge.
 
 ## Finalization Gate
 
