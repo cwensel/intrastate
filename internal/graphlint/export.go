@@ -88,24 +88,26 @@ type producedEdge struct {
 // edgesFrom enumerates the edges leaving one node, each labelled with the
 // rule id that traverses it.
 //
-// It mirrors `successorsOf`'s admission rules exactly — escape rows are
-// self-loops carrying neither write nor clear, and a row whose match
+// It mirrors `successorsOf`'s admission rules exactly — an ESCAPE row is
+// skipped before satisfiability is asked, and a non-escape row whose match
 // pattern over owned tags is unsatisfiable in the source is not an edge —
 // but keeps the rule id `successorsOf` drops when it joins successors by
 // presence footprint. Two rules reaching one successor are two EDGES even
 // though they are one node, which is what lets a reader see which rule
 // traverses which transition.
+//
+// The escape skip is what makes the exported relation EQUAL to the one the
+// fixpoint took, not merely a plausible superset: `Reach`'s contract fixes
+// an edge as a normalized NON-ESCAPE row, so admitting an escape row as a
+// self-loop here would publish a transition the traversal never took (A2's
+// equality bar, and the verb/lint drift `0021:C4` makes structural).
 func edgesFrom(m *table.Model, src Node) []producedEdge {
 	var out []producedEdge
 	for _, row := range m.Rows {
-		if !matchSatisfiable(m, src, row) {
+		if row.Kind() == table.KindEscape {
 			continue
 		}
-		if row.Kind() == table.KindEscape {
-			// An escape row is a SELF-LOOP: it carries neither a write block
-			// nor a clear list, so its successor equals its source. The edge
-			// exists even though it adds no node.
-			out = append(out, producedEdge{to: src, rule: row.RuleID})
+		if !matchSatisfiable(m, src, row) {
 			continue
 		}
 		out = append(out, producedEdge{to: successor(m, src, row), rule: row.RuleID})
