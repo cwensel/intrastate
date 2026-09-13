@@ -24,10 +24,8 @@ change broke that clause. An EMPTY column 2 is the orphan mark.
 | REQ-17 | `TestReq17And63_UntieredVocabulariesAndNonTierSensesKeepTheWord` |
 | REQ-18 | `TestReq18And59_ACodeOutsideTheBlockingTierTakesInfoSeverity` |
 | REQ-19 | `TestReq19And46_AdvisoryFindingsLeaveTheSuccessDispositionUntouched` |
-| REQ-20 |  |
 | REQ-21 | `TestReq21_ACommittedSnapshotOfTheSeamMembersAndSeveritiesIsDiffed`, `TestReq21_TheSnapshotIsComparedAgainstTheCurrentTree` |
 | REQ-22 | `TestReq9And22_TheIntroductionAndMovementRulesArePublished` |
-| REQ-23 |  |
 | REQ-24 | `TestReq24And31And48_TheEnvelopeTypeSeamIsExactlyOk`, `TestReq24And32And48_TheExitCodeSeamIsExactlyTheFiveEmittedIntegers`, `TestReq24And33And48_TheAdvisoryLevelSeamIsExactlyNoteAndWarning`, `TestReq24And48_TheFrozenAnchorVocabulariesMatchTheirDeclaredMembers` |
 | REQ-25 | `TestReq25And34And50_TheUnknownReasonSeamIsAppendOnlyAndDuplicateFree`, `TestReq25And35And50_TheBlockSeamIsAppendOnlyAndDuplicateFree`, `TestReq25And50_TheBlockingTierCarriesItsNamedMembersAndNoDuplicate`, `TestReq25And50_TheReasonSetCarriesItsNamedMembersAndNoDuplicate`, `TestReq13And25And50_TheCategorySetIsAssertedByMembershipNotCardinality` |
 | REQ-26 | `TestReq26_The0006AdvisoryTierTextIsAmendedOffItsClosure` |
@@ -43,9 +41,6 @@ change broke that clause. An EMPTY column 2 is the orphan mark.
 | REQ-36 | `TestReq36_TheCLIErrorCodeVocabularyGainsNoSeam` |
 | REQ-37 | `TestReq37And62_TheStaleFailedRecordDocCommentsAreRetired` |
 | REQ-38 | `TestReq38And48_BothOperatorEnumerationsArePinnedByValue` |
-| REQ-39 |  |
-| REQ-40 |  |
-| REQ-41 |  |
 | REQ-42 | `TestReq1And8And42_TheOkEnvelopeCarriesSchemaVersion` |
 | REQ-43 | `TestReq1And43_TheRefusalRecordCarriesSchemaVersionAndStaysBare`, `TestReq43_SchemaVersionRidesEveryProvokedFailureShape` |
 | REQ-44 | `TestReq10And44_ThePlanDecoderToleratesTheAddedField` |
