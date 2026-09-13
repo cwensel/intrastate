@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft [routed back from reconcile 2026-09-12; re-verify A9 @refine — C2's sentinel clause is refuted (authored `<opaque>` is unforgeable only once `0002:C11` reserves it) and C2's merged-node terminal quantifier restates a decision JDR 0001 §JD-23 homes; both are cite-don't-restate edits]
+- **Status**: Draft
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -349,25 +349,33 @@ RDR 0002 owns only row-dump ordering.
     reserved". `0002` is `Implemented`, so the amendment and its loader
     tests are 0002's to carry; `0029` holds the schema incompatibly
     changeable through `0.x`, which is what makes the reservation
-    affordable now. This RDR does NOT restate the rule: C2 keeps its
-    wording and CITES `0002:C11` once the reservation lands. Until it
-    does, this assumption stays Pending and the RDR does not lock.
+    affordable now. This RDR does NOT restate the rule: C2 (refine
+    2026-09-12) now CONDITIONS the discriminator on that reservation and
+    cites `0002:C11` as owed, rather than asserting unforgeability
+    outright. Until the reservation lands, this assumption stays Pending
+    and the RDR does not lock.
   - **Second blocker on this clause (see `evidence/reconcile/`).** C2's
     terminal-satisfaction quantifier restates a decision JDR 0001
     §JD-23 homes ("neither record widens or narrows the split
     unilaterally. Both records cite this entry and neither restates the
-    other's contract"), and picks the opposite reading from the
+    other's contract"), and picked the opposite reading from the
     doctrine `0015:C1` adopts. Author-decided: hoist to §JD-23 as a new
     entry widening its siblings to include this record, homing the
     export-side (published merged relation) quantifier beside the
-    lint-side split rule; C2 then cites rather than restates.
+    lint-side split rule. C2's half is APPLIED (refine 2026-09-12): it
+    cites §JD-23 for the split and declares only the export-side
+    marking rule over the published merged relation. The §JD-23 entry
+    and its `Siblings:` widening are OWED in JDR 0001 — 0021 is not yet
+    in that cluster frontmatter.
   - **If wrong**: (a) C2's sentinel is ambiguous on the wire — a
     consumer cannot tell an abstracted tag from one authored as
     `<opaque>`, and the marker's soundness claim needs a
-    distinguishable encoding; (b) if the two predicates disagree on a
-    merged node, C2's marking must name ONE of them as the normative
-    evaluator (or define its own), since a DOT diagram and lint would
-    otherwise call different nodes terminal over the same relation.
+    distinguishable encoding; (b) if the export-side marking rule C2
+    declares is not genuinely separable from the lint-side split rule
+    §JD-23 homes, then the two are one contract and C2's clause is a
+    unilateral widening that belongs wholly in §JD-23 — a DOT diagram
+    and lint would call different nodes terminal over the same relation
+    with no doctrine sanctioning the difference.
 
 ## Proposed Solution
 
@@ -453,7 +461,9 @@ DOCUMENT. The JSON document is this RDR's wire format, versioned by a
 required leading `schema` field, initial value `intrastate.graph/1`;
 evolution within `/1` is strictly additive (a consumer ignoring
 unknown fields keeps working). It carries, at minimum: model identity
-and class; the tag declarations (name, provenance, kind, required,
+and class — `model` is `table.Model.ID`, the AUTHORED `[model] id`
+declaration, never the `--model <path>` argument or any path-derived
+string; the tag declarations (name, provenance, kind, required,
 single-valued, and the declared domain exactly when
 `guard.AssignmentCount` reports it finite); the declared `[initial]`
 assignments; the declared `terminal` predicate sets; the normalized
@@ -470,8 +480,14 @@ projects without invention; never an array of joined `key=value`
 strings, a flattening that exists only inside `(Node).key`'s escaped
 internal fingerprint. A tag with no finite declared domain carries the
 single abstract value `<opaque>` (`reach.go::OpaqueValue`) in that
-array — it reaches the wire verbatim, is NOT an authored value, and a
-consumer distinguishes it by that exact spelling; the abstraction
+array — it reaches the wire verbatim, and a consumer distinguishes an
+abstracted tag by that exact spelling EXACTLY WHEN `<opaque>` is a
+reserved tag value, refused wherever a tag value is authored. That
+reservation is `0002:C11`'s to carry, beside `<clear>`, and is OWED —
+until it lands, an authored `<opaque>` loads clean and yields a node
+byte-identical to the synthesized one (A9), so the spelling is a hint
+and not a discriminator; this clause does not restate the reservation,
+it depends on it. The abstraction
 marker states why it is sound) and edges (`{from, to,
 rule}`) — with nodes sorted by node key and edges by (from, to, rule),
 so construction order is unobservable. Every declared collection
@@ -510,20 +526,28 @@ and terminal-satisfying nodes marked, and the abstraction marker
 rendered in the graph header comment/label so the diagram carries it
 too (premortem P-7); its node/edge SET, the MARKED-TERMINAL NODE SET,
 and the marker are normative, its styling/attributes are not.
-Terminal-satisfaction is evaluated over the MERGED node as published
-in the `reach` block, by the OVER-APPROXIMATING reading: a node is
+Terminal-satisfaction over the published merged relation is governed by
+the merged-node liveness doctrine homed at **JDR 0001 §JD-23**, which
+this clause CITES and does not restate: the lint-side check quantifies
+over split nodes (`0015:C1`, `0022`), and neither record widens nor
+narrows that split unilaterally. What is this record's to declare is
+the EXPORT-side delta the doctrine leaves to it — this document
+publishes the MERGED relation, an object the split-node check never
+emits, so the marked-terminal set carried on the wire needs its own
+stated evaluator. It is the over-approximating reading: a node is
 marked terminal when SOME declared `terminal` predicate set is
 satisfiable over it, and a predicate set is satisfiable when EVERY
 atom in it admits SOME member of that tag's published value array; a
-tag holding the `<opaque>` sentinel admits every atom on that key.
-This is `reach.go::ownedAtomSatisfiable`'s existential, opaque-admits
-semantics — NOT `analysis.go::nodeMeetsAll`'s universal, no-opaque
-reading, which is the analysis-side checker and runs over SPLIT nodes
-(one value per key) where the two agree. The choice follows from the
-block's own soundness rule: the relation is a declared
-over-approximation, so a merged node whose concretizations include a
-terminal one is marked — an existence claim that "may be spurious",
-never a universal claim silently dropped. An empty predicate set is
+tag holding the `<opaque>` sentinel admits every atom on that key
+(`reach.go::ownedAtomSatisfiable`). This is the published relation's
+own soundness rule applied to marking — a merged node whose
+concretizations include a terminal one is marked, an existence claim
+that "may be spurious", never a universal claim silently dropped — and
+it is why the export's marks and lint's findings may legitimately
+differ on one merged node without either being wrong. The export takes
+no position on the lint-side quantifier; §JD-23 is the home for any
+change to the split itself, and widening its `Siblings:` to include
+this record is OWED there. An empty predicate set is
 not satisfied, and a terminal key with non-owned provenance marks
 nothing (it is the dangling-key finding lint already reports).
 ```
@@ -822,8 +846,11 @@ new `graph` verb/root registration) and contract literals (`--emit`,
 codes): no whole-token hit shares an undecided contract. Context
 beside the clear: 0015 names "the 0021 export" only inside its
 REJECTED alternative's cons, under the merged-node doctrine settled
-at JDR 0001 §JD-23 (0022/0015's home) — this export emits the merged
-fixpoint relation as-is and takes no side of that doctrine; 0023/0024
+at JDR 0001 §JD-23 — this export emits the merged fixpoint relation
+as-is and takes no side of the lint-side split quantifier, while C2
+declares the export-side marking rule that doctrine leaves to it and
+cites §JD-23 for the split (a §JD-23 sibling-widening is owed there);
+0023/0024
 couple with this RDR only through JDR 0002 §D1, cited by C5; 0024's
 load-refusal appends reach this verb by construction (C1 consumes the
 one load pipeline, `0002:C24`'s owners). Bridge sub-check: n/a — no
@@ -1159,16 +1186,16 @@ code alone.
    `stage eq final`) and a second node carrying `<opaque>` on one.
    **Expected**: the marked-terminal node SET is asserted by
    membership, not merely by the marker's presence — both nodes are
-   marked, per C2's over-approximating predicate (SOME satisfiable
-   set; `<opaque>` admits every atom on its key), and a node no
-   predicate set admits is NOT marked. This scenario exists because
+   marked, per C2's export-side marking rule, and a node no predicate
+   set admits is NOT marked. This scenario exists because
    S6's oracle is scoped to the node/edge IDENTIFIER set and the
    header marker, so an implementation that marks the wrong nodes —
    or marks none at all on a merged fixture — passes S6, S3 and the
    MVV unchanged. Negative control: evaluate the same fixture under
-   `analysis.go::nodeMeetsAll`'s universal/no-opaque reading, which
-   marks neither node; the two readings must be shown to disagree
-   here, or the fixture is not exercising the merge.
+   the lint-side split-node reading (`analysis.go::nodeMeetsAll`),
+   which marks neither node; the two readings must be shown to
+   disagree here, or the fixture is not exercising the merge — the
+   disagreement is expected and legitimate per C2, not a defect.
 
 ## Finalization Gate
 
