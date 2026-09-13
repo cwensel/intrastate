@@ -160,6 +160,28 @@ func TestReq21_ACommittedSnapshotOfTheSeamMembersAndSeveritiesIsDiffed(t *testin
 	}
 }
 
+// snapshotProbeSelfFile is the file holding the reader probe below. The
+// probe must never count it: this file necessarily names the artifact and
+// the read call it searches for, so without the exclusion it satisfies its
+// own predicate and stays green with every genuine reader deleted. Any
+// helper or test for the probe belongs in THIS file for the same reason —
+// a new file naming these literals would become a fresh self-satisfier the
+// exclusion does not cover.
+const snapshotProbeSelfFile = "schema_register_0029_test.go"
+
+// evidencesSnapshotRead reports whether a test body is evidence that some
+// test actually READS the vocabulary snapshot, rather than merely
+// mentioning the vocabulary or walking some unrelated testdata dir.
+//
+// The predicate this replaced was `testdata` AND (`vocabular` OR `seams`),
+// which prose in a comment satisfies. Naming the artifact's basename AND a
+// read call is the weakest evidence that survives the deletion of every
+// genuine reader — the failure this probe exists to catch.
+func evidencesSnapshotRead(body string) bool {
+	return strings.Contains(body, "vocabularies.txt") &&
+		strings.Contains(body, "os.ReadFile")
+}
+
 // REQ-21 (the diff half): the snapshot is only a check if something
 // compares the tree against it.
 // ADVERSARIAL — a committed file nothing reads is a decoration, and the
@@ -204,13 +226,17 @@ func TestReq21_TheSnapshotIsComparedAgainstTheCurrentTree(t *testing.T) {
 			if !strings.HasSuffix(e.Name(), "_test.go") {
 				continue
 			}
+			// This file names the artifact and the read call in its own
+			// probe, so counting itself would let the check pass with
+			// every genuine reader deleted.
+			if e.Name() == snapshotProbeSelfFile {
+				continue
+			}
 			body, rerr := os.ReadFile(filepath.Join(root, dir, e.Name()))
 			if rerr != nil {
 				continue
 			}
-			if strings.Contains(string(body), "testdata") &&
-				(strings.Contains(string(body), "vocabular") ||
-					strings.Contains(string(body), "seams")) {
+			if evidencesSnapshotRead(string(body)) {
 				reader = true
 			}
 		}
@@ -272,5 +298,67 @@ func TestReq9And22_TheIntroductionAndMovementRulesArePublished(t *testing.T) {
 			"different code — and the exception is discharged by evidence, " +
 			"not by judgement, which keeps it from widening into \"we " +
 			"thought it was serious enough\"")
+	}
+}
+
+// The reader probe above is only a check if it can go red. This pins the
+// predicate directly against synthetic bodies so the red/green pair is
+// falsifiable without deleting files from the tree: against the old loose
+// predicate (`testdata` AND (`vocabular` OR `seams`)) the first two cases
+// below both report true, and this test fails.
+//
+// It lives in this file deliberately — see snapshotProbeSelfFile.
+func TestReq21_TheReaderProbeRefusesBodiesThatOnlyMentionTheVocabulary(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			// The probe's own file: prose naming the artifact plus the
+			// candidate-path list. Counting this is the bug.
+			name: "the probe's own body is not evidence of a read",
+			body: `candidates := []string{filepath.Join("internal", "graphlint",
+				"testdata", "vocabularies.txt")}
+				// some test must READ the snapshot; seams and vocabular...`,
+			want: false,
+		},
+		{
+			// schema_tiers_0029_test.go's shape: reads an unrelated
+			// internal/cli/testdata dir, never the snapshot.
+			name: "reading an unrelated testdata dir is not evidence",
+			body: `entries, err := os.ReadDir(root + "/internal/cli/testdata")
+				// the frozen vocabulary's enumeration seams`,
+			want: false,
+		},
+		{
+			// vocabulary_snapshot_0029_test.go's shape.
+			name: "naming the artifact and reading it is evidence",
+			body: `const snapshotPath0029 = "testdata/vocabularies.txt"
+				want, err := os.ReadFile(filepath.FromSlash(snapshotPath0029))`,
+			want: true,
+		},
+		{
+			// schema_adversarial_0029_test.go's shape.
+			name: "a relative-path read of the artifact is evidence",
+			body: `path := filepath.Join("..", "graphlint", "testdata", "vocabularies.txt")
+				b, err := os.ReadFile(path)`,
+			want: true,
+		},
+		{
+			name: "naming the artifact without reading it is not evidence",
+			body: `// the snapshot lives at testdata/vocabularies.txt`,
+			want: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := evidencesSnapshotRead(tc.body); got != tc.want {
+				t.Errorf("evidencesSnapshotRead = %v, want %v. The probe "+
+					"must count only a body that both names the artifact "+
+					"and reads it; anything looser lets the probe satisfy "+
+					"itself and REQ-21's diff half silently stops being "+
+					"checked", got, tc.want)
+			}
+		})
 	}
 }
