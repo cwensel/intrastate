@@ -312,8 +312,20 @@ RDR 0002 owns only row-dump ordering.
   of a `values` array, no authored tag value can collide with that
   spelling, and treating it as admitting every atom on its key is
   sound for C2's terminal marking.**
-  - **Status**: Pending — limb (a) REFUTED at Stage 6; BLOCKER routed
-    to `/rdr-refine` (class `contract`). Limb (b) verified.
+  - **Status**: Pending — DOWNGRADED at Stage 6 iteration 2, survivable:
+    limb (a) stays REFUTED on `main` and limb (b) is verified, but no
+    clause now depends on the refuted limb. The iteration-1 BLOCKER is
+    discharged: `/rdr-refine` applied C2's half of both dispositions, so
+    C2 demotes the spelling to "a hint and not a discriminator" until the
+    reservation lands and CITES JDR 0001 §JD-23 rather than restating the
+    split. Named plan that WILL run: the `<opaque>` reservation in
+    `0002:C11` (owner 0002, `Implemented` — loader arm + tests), and
+    Testing Strategy S10, which asserts the marked-terminal node SET by
+    membership with a negative control requiring the export-side and
+    lint-side readings to disagree. Not MVV-critical: MVV steps 2–3
+    assert the `reach` block's field presence and the node/edge id SET,
+    never marked-terminal membership or the discriminator — S10 exists
+    precisely because S6/S3/the MVV do not catch the marking.
   - **Method**: Source Search
   - **Evidence**: raised by the Stage-5 critique lens; widened by the
     repeatability lens (C2 now fixes the DOT terminal predicate);
@@ -352,9 +364,15 @@ RDR 0002 owns only row-dump ordering.
     affordable now. This RDR does NOT restate the rule: C2 (refine
     2026-09-12) now CONDITIONS the discriminator on that reservation and
     cites `0002:C11` as owed, rather than asserting unforgeability
-    outright. Until the reservation lands, this assumption stays Pending
-    and the RDR does not lock.
-  - **Second blocker on this clause (see `evidence/reconcile/`).** C2's
+    outright. The reservation remains unlanded — verified at Stage 6
+    iteration 2: `0002:C11` reserves `<clear>` only, with no `<opaque>`
+    arm. This assumption therefore stays Pending, but DOWNGRADED rather
+    than blocking: because C2 no longer asserts the discriminator, the
+    unlanded reservation costs the wire a hint, not a contract, and the
+    lock does not wait on another record's amendment.
+  - **Second item on this clause — DISCHARGED as a blocker at Stage 6
+    iteration 2, the hoist still OWED in JDR 0001 (see
+    `evidence/reconcile/`).** C2's
     terminal-satisfaction quantifier restates a decision JDR 0001
     §JD-23 homes ("neither record widens or narrows the split
     unilaterally. Both records cite this entry and neither restates the
@@ -365,8 +383,23 @@ RDR 0002 owns only row-dump ordering.
     lint-side split rule. C2's half is APPLIED (refine 2026-09-12): it
     cites §JD-23 for the split and declares only the export-side
     marking rule over the published merged relation. The §JD-23 entry
-    and its `Siblings:` widening are OWED in JDR 0001 — 0021 is not yet
-    in that cluster frontmatter.
+    and its `Siblings:` widening are OWED in JDR 0001 — verified at
+    Stage 6 iteration 2 against `docs/jdr/0001-resolve-kernel-seam.md`:
+    §JD-23 is at line 941, its `Siblings:` line reads `0015, 0022`, and
+    the file mentions 0021 nowhere. Not a blocker on this record: the
+    registry's own rule is that siblings CITE the anchor and never
+    restate its mechanism prose, and a sibling not previously listed is
+    added by widening the `cluster` frontmatter "and say so" (`docs/jdr/
+    README.md:126`, `:76`) — a write in JDR 0001, which is that
+    record's to make and not this one's. §JD-23 homes the LINT-side
+    split (the check ranges over split nodes; terminal satisfaction is
+    universal per split node) and is `decided`, with the residual class
+    ranked under 0015's charter; C2 takes no position on that split and
+    declares only the export-side marking over the published MERGED
+    relation — an object the split-node check never emits. So C2 is a
+    cite, not a unilateral widening, and Testing Strategy S10 is the
+    named verification, its negative control requiring the two readings
+    to disagree on a merged fixture.
   - **If wrong**: (a) C2's sentinel is ambiguous on the wire — a
     consumer cannot tell an abstracted tag from one authored as
     `<opaque>`, and the marker's soundness claim needs a
