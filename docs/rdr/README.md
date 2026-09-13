@@ -29,7 +29,7 @@ engine README — this file is only the per-project index.
 | [0018](0018-dual-breach-precedence-and-error-carrier.md) | Dual-breach precondition precedence and error carrier | Draft | Medium |
 | [0019](0019-owned-state-initialization-semantics.md) | Owned-state initialization semantics | Implemented | Low |
 | [0020](0020-undeclared-tag-key-admission.md) | Undeclared --tag key admission — what the zero TagDecl means | Implemented | Medium |
-| [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Final | Low |
+| [0021](0021-lint-normalized-graph-export.md) | Lint's normalized-graph export | Draft | Low |
 | [0022](0022-terminal-reachability-liveness-invariant.md) | Terminal-reachability liveness invariant | Draft | Low |
 | [0023](0023-resolve-envelope-projection.md) | Resolve-envelope projection opt-out | Implemented | High |
 | [0024](0024-declared-emit-vocabulary.md) | Declared emit vocabulary | Implemented | High |
@@ -37,7 +37,7 @@ engine README — this file is only the per-project index.
 | [0026](0026-bounded-output-drain-on-command-timeout.md) | Deliver the command timeout even when a detached grandchild holds the output pipes | Implemented | High |
 | [0027](0027-inline-shell-detection-scope.md) | What the inline-shell check on command bindings actually promises (wrappers, env flags, stdin scripts) | Implemented | Medium |
 | [0028](0028-declared-line-edit-writer.md) | Write a planned value into a line of a text file without a wrapper script | Implemented | High |
-| [0029](0029-version-promise-on-machine-readable-output.md) | What a released version number promises an agent about the machine-readable output | Final | High |
+| [0029](0029-version-promise-on-machine-readable-output.md) | What a released version number promises an agent about the machine-readable output | Draft | High |
 
 ## Implementing
 
