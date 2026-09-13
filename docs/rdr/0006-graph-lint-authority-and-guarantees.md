@@ -657,7 +657,7 @@ available, source span when available, the atom (`Key`, `Operator`, `Literal`,
 `Block`) when the finding is attributed to one guard atom, the failure class
 when the finding is scoped to an escape population, and a concise human
 message. Blocking findings make the command fail. Non-blocking findings are
-informational: the advisory tier is closed at four members — redundant rows,
+informational: the advisory tier is append-only over redundant rows,
 unreachable rules, the bare-escape coverage closure above, and vacuous `exists`
 atoms; it never changes the success disposition and must not absorb a withheld
 claim. The two advisory
@@ -1012,8 +1012,10 @@ shared class.
 
 **C17**
 ```normative
-The advisory tier is closed at `graph-coverage-closed-by-escape`,
-`graph-redundant-row`, `graph-unreachable-rule`, and `graph-vacuous-atom`. A
+The advisory tier is append-only over `graph-coverage-closed-by-escape`,
+`graph-redundant-row`, `graph-unreachable-rule`, and `graph-vacuous-atom`:
+members MAY be added in a minor release and none is removed or renamed
+within a major (`0029:C2`, `0029:A1`). A
 redundant row is one whose accepted assignments are a proper subset of a
 sibling's in the same group; an unreachable rule is one no reachable owned-state
 node satisfies, including RDR 0002's dead-rule case; a vacuous atom is an

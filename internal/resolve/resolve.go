@@ -42,7 +42,7 @@ const (
 )
 
 // RefusalKind is the kernel-owned refusal discriminator. The set is
-// closed: RDR 0001's Normative Contracts say the kind set "is exactly"
+// frozen: RDR 0001's Normative Contracts say the kind set "is exactly"
 // the five constants below, and RDR 0005 maps each to a CLI error code
 // without inspecting error strings.
 type RefusalKind string
@@ -63,7 +63,8 @@ const (
 	KindUnmodeledOutcome RefusalKind = "unmodeled_outcome"
 )
 
-// RefusalKinds returns the closed kernel-owned refusal kind set.
+// RefusalKinds returns the frozen kernel-owned refusal kind set
+// (`0029:C4`).
 func RefusalKinds() []RefusalKind {
 	return []RefusalKind{
 		KindNoMatch,

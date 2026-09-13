@@ -49,7 +49,7 @@ const (
 
 	// The six RDR 0025 command-carrier categories (`0025:C5`), in clause
 	// order. The wire STRINGS here are the contract; these identifiers are
-	// not. A constant is not in the closed set until it is appended to
+	// not. A constant is not in the registered set until it is appended to
 	// Categories() below — an unregistered constant refuses correctly at
 	// the call site while staying invisible to every consumer that
 	// enumerates the set, which is why the registration is asserted
@@ -86,7 +86,10 @@ const (
 	CatEditTagArgv0        Category = "edit_tag_argv0"
 )
 
-// Categories returns the closed load-category set in declaration order.
+// Categories returns the append-only load-category set in declaration
+// order (`0029:C4`). Members MAY be added in a minor; none is removed or
+// renamed within a major, so a consumer tolerates an unrecognized member
+// and does not assert on the set's cardinality.
 func Categories() []Category {
 	return []Category{
 		CatMalformedTOML,
@@ -155,7 +158,7 @@ func Categories() []Category {
 // deliberately not a barrier, that means naming what it does NOT cover:
 // the promise is the predicate line plus the forms admitted by name, and a
 // description that claimed more than the predicate delivers would be worse
-// than none — a reviewer who believes the class is closed stops reading
+// than none — a reviewer who believes the class is exhaustive stops reading
 // argv (`0027:C1` promise:).
 var categoryDescriptions = map[Category]string{
 	CatCommandShellInterpreter: `Refused: a listed interpreter word followed, at ANY later argv

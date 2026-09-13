@@ -20,7 +20,8 @@ import (
 
 // --- the finding taxonomy ------------------------------------------------
 
-// The ten blocking finding codes (Technical Design, finding-code table).
+// The blocking finding codes (Technical Design, finding-code table). The
+// tier is `append-only` (`0029:C4`).
 const (
 	CodeDanglingEdge       = "graph-dangling-edge"
 	CodeDeadEnd            = "graph-dead-end"
@@ -34,13 +35,24 @@ const (
 	CodeProductTooLarge    = "graph-product-too-large"
 )
 
-// The four advisory finding codes. The tier is CLOSED at these four
-// (`0006:C17`).
+// The advisory finding codes. The tier is `growing` (`0029:C4`): members
+// MAY be added in a minor, none is removed or renamed within a major, and
+// a new member MAY fire on input that previously produced no such finding.
+// `0006:C17` is amended off its original four-member closure by `0029:A1`;
+// C17's load-bearing guarantee — advisory findings MUST NOT change the
+// success disposition — is untouched by an addition.
 const (
 	CodeCoverageClosedByEscape = "graph-coverage-closed-by-escape"
 	CodeRedundantRow           = "graph-redundant-row"
 	CodeUnreachableRule        = "graph-unreachable-rule"
 	CodeVacuousAtom            = "graph-vacuous-atom"
+	// CodeIdempotentWrite reports a row that writes a key back to the very
+	// value its own match pattern pinned. The write is well-formed and the
+	// transition is legal; it simply moves nothing on that key. Like the
+	// vacuous atom, it is REPORTED rather than rejected, so it enters at
+	// `info` (`0029:C3`) and the tier's `growing` licence is what lets it
+	// fire on input that previously produced no such finding.
+	CodeIdempotentWrite = "graph-idempotent-write"
 )
 
 // AggregateCode is the one aggregate CLIError code a blocking run returns
@@ -48,14 +60,14 @@ const (
 const AggregateCode = "graph-lint-failed"
 
 // The two severities. There is no third tier (`0006:C8`, `0006:C17`).
+// The vocabulary is frozen (`0029:C4`).
 const (
 	SeverityBlocking = "blocking"
 	SeverityInfo     = "info"
 )
 
-// The closed, append-only `reason` set `graph-unprovable-coverage`
-// carries (Technical Design, reason table). It is carried on that code
-// alone.
+// The append-only `reason` set `graph-unprovable-coverage` carries
+// (Technical Design, reason table). It is carried on that code alone.
 const (
 	ReasonDimensionNotFinite = "dimension-not-finite"
 	ReasonTagNotSingleValued = "tag-not-single-valued"
@@ -65,7 +77,7 @@ const (
 	// dimensions. It is its own member because the three above are
 	// DIMENSION-scoped and each names a remedy for a dimension that, here,
 	// does not exist — the remedy is to author the discriminators as guard
-	// atoms. The set is closed and APPEND-ONLY, and this is the append.
+	// atoms. The set is APPEND-ONLY, and this is the append.
 	ReasonNoParticipatingDimension = "no-participating-dimension"
 )
 
@@ -83,15 +95,16 @@ var blockingCodes = []string{
 	CodeProductTooLarge,
 }
 
-// advisoryCodes is the closed four-member advisory tier.
+// advisoryCodes is the `growing` advisory tier.
 var advisoryCodes = []string{
 	CodeCoverageClosedByEscape,
 	CodeRedundantRow,
 	CodeUnreachableRule,
 	CodeVacuousAtom,
+	CodeIdempotentWrite,
 }
 
-// reasons is the closed `reason` discriminator set.
+// reasons is the append-only `reason` discriminator set.
 var reasons = []string{
 	ReasonDimensionNotFinite,
 	ReasonTagNotSingleValued,
@@ -105,10 +118,11 @@ var severities = []string{SeverityBlocking, SeverityInfo}
 // BlockingCodes returns the blocking code set, in taxonomy order.
 func BlockingCodes() []string { return slices.Clone(blockingCodes) }
 
-// AdvisoryCodes returns the closed four-member advisory tier.
+// AdvisoryCodes returns the `growing` advisory tier (`0029:C4`).
 func AdvisoryCodes() []string { return slices.Clone(advisoryCodes) }
 
-// Reasons returns the closed `reason` discriminator set.
+// Reasons returns the append-only `reason` discriminator set
+// (`0029:C4`).
 func Reasons() []string { return slices.Clone(reasons) }
 
 // Severities returns the two-valued severity vocabulary.

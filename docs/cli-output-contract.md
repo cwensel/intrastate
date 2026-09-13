@@ -16,6 +16,95 @@ intrastate --help-all      # vocabulary, output modes, exit codes
 intrastate lint --help-all # the live finding taxonomy
 ```
 
+## Vocabulary stability tiers
+
+Every machine-readable vocabulary this CLI emits carries exactly one
+declared stability tier, recorded here beside that vocabulary.
+
+- **`frozen`** — no member added or removed within a major. A consumer MAY
+  treat an unrecognized member as a defect.
+- **`append-only`** — members MAY be added in a minor; none removed or
+  renamed within a major. A consumer MUST tolerate an unrecognized member,
+  and MUST NOT assert on the set's cardinality, a member's ordinal
+  position, or a tail position.
+- **`growing`** — as `append-only`, and additionally a new member MAY fire
+  on input that previously produced no such finding. A consumer that counts
+  findings, gates on an empty findings list, or diffs output across releases
+  MUST expect movement on identical input. The verdict still cannot change;
+  the payload can.
+
+**While the binary's version is `0.x`, a tier is a DECLARATION OF INTENT.**
+It states what the surface is expected to promise at 1.0.0 and MUST NOT be
+read as a guarantee already in force. That qualification is carried by the
+schema major, not by this prose: while `schema_version` reads `0.x` the
+tiers are intent, and from `"1.0"` they are guarantees. The tier names and
+assignments are authored and maintained from the first release, so reaching
+1.0.0 requires no reclassification.
+
+| vocabulary | tier | seam |
+| --- | --- | --- |
+| envelope `type` discriminator | frozen | `respond::Types()` |
+| `schema_version` | frozen (the field; its VALUE moves per the rules below) | `clierr.SchemaVersion` |
+| severity (`blocking`, `info`) | frozen | `graphlint::Severities()` |
+| exit-code classes | frozen | `clierr::ExitCodes()` |
+| stderr advisory `level` (`note`, `warning`) | frozen | `respond::Levels()` |
+| gate `verdict` (`allow`, `deny`, `indeterminate`) | frozen | `accessor::Verdicts()` |
+| `data.escape_class` | frozen | `resolve::RefusalKinds()` |
+| `findings[].operator` | frozen | `guard::Operators()`, `table::Operators()` |
+| the `graph-lint-failed` aggregate code | frozen | single `const` |
+| the `version` payload field names (`version`, `commit`, `date`) | frozen | `version::Info` |
+| model load categories | append-only | `table::Categories()` |
+| the CLIError `code` vocabulary | append-only | none (prose-only) |
+| the `graph-unprovable-coverage` `reason` set | append-only | `graphlint::Reasons()` |
+| the `flow next` unknown-`reason` set | append-only | `cli::UnknownReasons()` |
+| graph-lint BLOCKING finding codes | append-only | `graphlint::BlockingCodes()` |
+| `findings[].block` | append-only | `resolve::Blocks()` |
+| graph-lint ADVISORY finding codes | growing | `graphlint::AdvisoryCodes()` |
+
+Two emitted namespaces take NO tier, deliberately: `findings[].class` and
+`data.dispositions`. Both carry model-authored tokens to which this CLI
+ascribes no meaning — author surface, not CLI vocabulary.
+
+### `schema_version` and how the wire moves
+
+Both terminal records — the `ok` envelope and the bare `CLIError` refusal —
+carry a top-level `schema_version` string of the form `MAJOR.MINOR`. It is
+never `omitempty`, is versioned independently of the binary's release
+version, and is never projected into `data`.
+
+It begins at `"0.1"` and tracks the wire, not the binary. While its major is
+`0` the schema is explicitly unstable and MAY change incompatibly in any
+release; **the minor component still increments on every change**, so a
+consumer can detect movement even while it cannot rely on compatibility.
+
+From `"1.0"` onward the minor increments for backward-compatible additions —
+a new optional field, a new member of an append-only or growing vocabulary —
+and the major increments for changes that are not backward-compatible: a
+removed or renamed field, a removed or renamed member of any vocabulary, or
+a change to a frozen surface.
+
+A consumer MUST ignore object properties with unrecognized names, and MUST
+reject an envelope reporting an unsupported major.
+
+### Introducing and promoting finding codes
+
+A lint finding code is **introduced at severity `info`**. Introduction is a
+minor-release change and MUST NOT alter the success disposition of any
+input.
+
+**Promotion** of a finding code from `info` to `blocking` is a distinct
+release event. It MUST be disclosed in the release notes for the release
+that carries it, naming the code, and MUST NOT occur in a patch release.
+The disclosure obligation binds during `0.x` as well as after.
+
+A code MAY be introduced directly at `blocking` only when it reports a
+condition that was **already refused** by some other code — that is, when it
+re-attributes an existing refusal rather than creating a new one. The
+exception is discharged by evidence, not by judgement: the change must name
+the pre-existing code it re-attributes from and show that the input refused
+by the new code was already refused — same input, same verdict, different
+code.
+
 ## Structured findings
 
 `findings` is a top-level array on the `CLIError` envelope — a **sibling**

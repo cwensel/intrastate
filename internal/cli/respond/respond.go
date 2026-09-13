@@ -7,10 +7,15 @@
 // # The contract
 //
 // Under --as=json, stdout carries the terminal disposition as one
-// NDJSON object discriminated by a "type" field:
+// NDJSON object. The two terminal records are structurally asymmetric
+// (`0005:C1`):
 //
 //	{"type": "ok",     ...}   # success
-//	{"type": "failed", ...}   # graceful failure
+//	{"code": "…",      ...}   # graceful failure: the bare CLIError,
+//	                          # carrying no "type" and no wrapper
+//
+// Both carry a top-level "schema_version" — the one field they share
+// (`0029:C1`).
 //
 // Exactly one terminal record is emitted on every graceful exit; its
 // absence means the process was killed. Stderr under --as=json carries
@@ -21,7 +26,8 @@
 //
 // As the CLI grows, add an intermediate-record emitter (Stream) for
 // verbs that produce zero-or-more records before the terminal line. The
-// terminal "ok"/"failed" type names are reserved.
+// terminal type name "ok" is reserved, as is the name this CLI does not
+// emit for the refusal record.
 package respond
 
 import (
@@ -46,14 +52,35 @@ const (
 const FlagName = "as"
 
 // Success is the terminal-success envelope under --as=json. Type is
-// always "ok" (Fail emits "failed"). Data carries the verb-specific
-// payload; Notes and Warnings are advisory channels.
+// always "ok"; a refusal is the bare *CLIError Fail emits, which carries
+// no type. Data carries the verb-specific payload; Notes and Warnings are
+// advisory channels.
 type Success struct {
-	Type     string     `json:"type"`
+	Type string `json:"type"`
+
+	// SchemaVersion is the wire schema version this terminal record
+	// carries (`0029:C1`), read from its ONE home in `clierr` rather than
+	// declared here: a literal duplicated across the two terminal records
+	// could drift. It rides the TOP LEVEL only, never projected into Data
+	// where it would collide with a verb's own payload — `version
+	// --as=json` already emits `data.version` meaning build identity.
+	//
+	// It is deliberately NOT `omitempty`, which is what makes it a version
+	// a consumer can rely on rather than one it must handle the absence of.
+	SchemaVersion string `json:"schema_version"`
+
 	Notes    []Advisory `json:"notes,omitempty"`
 	Warnings []Warning  `json:"warnings,omitempty"`
 	Data     any        `json:"data,omitempty"`
 }
+
+// Types returns the envelope `type` discriminator vocabulary
+// (`0029:C4`). The set is frozen: no member is added or removed within a
+// major.
+//
+// It has ONE member. Fail writes the bare *CLIError, so the refusal record
+// carries no discriminator at all and no second name is emitted here.
+func Types() []string { return []string{"ok"} }
 
 // TextLiner is the interface a verb's Data payload satisfies when its
 // whole content is one canonical line — a build identity, say — rather
@@ -134,6 +161,10 @@ func ValidateMode(cmd *cobra.Command) *clierr.CLIError {
 // the natural last act of a verb's RunE on the success path.
 func OK(cmd *cobra.Command, s Success) error {
 	s.Type = "ok"
+	// Stamped at the single output gateway, so every verb inherits the
+	// field without per-verb work (`0029:C1`). The value is read from its
+	// ONE home in `clierr`; this record never declares its own.
+	s.SchemaVersion = clierr.SchemaVersion
 	switch ModeOf(cmd) {
 	case ModeJSON:
 		return writeJSONLine(cmd.OutOrStdout(), s)
@@ -177,7 +208,7 @@ func OK(cmd *cobra.Command, s Success) error {
 // Fail emits the terminal-error envelope and returns ce so a verb's
 // RunE can `return respond.Fail(cmd, ce)`. In text mode the envelope
 // goes to stderr; in json mode it goes to stdout so a single stream
-// carries both ok and failed dispositions.
+// carries both the success and the refusal disposition.
 func Fail(cmd *cobra.Command, ce *clierr.CLIError) *clierr.CLIError {
 	if ce == nil {
 		return nil

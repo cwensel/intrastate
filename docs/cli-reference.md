@@ -1001,6 +1001,7 @@ payload's data.findings:
   graph-redundant-row
   graph-unreachable-rule
   graph-vacuous-atom
+  graph-idempotent-write
 
 Both tiers are CLOSED: this build emits no finding code outside these two
 lists. An empty data.findings on a successful run is the receipt that

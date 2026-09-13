@@ -248,69 +248,6 @@ eq = "go"
 	}
 }
 
-// REQ-73: "The blocking code set is exactly: `graph-dangling-edge`,
-// `graph-dead-end`, `graph-overlap`, `graph-coverage-gap`,
-// `graph-unprovable-coverage`, `graph-single-valued-state`,
-// `graph-always-present-owned`, `graph-owned-before-write`,
-// `graph-terminal-escape`, `graph-product-too-large`."
-// BOUNDARY
-func TestReq73_TheBlockingCodeSetIsExactlyTheTenNamed(t *testing.T) {
-	want := []string{
-		"graph-always-present-owned",
-		"graph-coverage-gap",
-		"graph-dangling-edge",
-		"graph-dead-end",
-		"graph-overlap",
-		"graph-owned-before-write",
-		"graph-product-too-large",
-		"graph-single-valued-state",
-		"graph-terminal-escape",
-		"graph-unprovable-coverage",
-	}
-	got := slices.Clone(graphlint.BlockingCodes())
-	slices.Sort(got)
-
-	if !slices.Equal(got, want) {
-		t.Errorf("blocking code set =\n  %v\nwant exactly\n  %v", got, want)
-	}
-	for _, c := range want {
-		if !graphlint.IsBlocking(c) {
-			t.Errorf("%q is not reported blocking", c)
-		}
-	}
-}
-
-// REQ-74: "The advisory tier is closed at `graph-coverage-closed-by-escape`,
-// `graph-redundant-row`, `graph-unreachable-rule`, and
-// `graph-vacuous-atom`."
-// BOUNDARY
-func TestReq74_TheAdvisoryTierIsClosedAtExactlyFourMembers(t *testing.T) {
-	want := []string{
-		"graph-coverage-closed-by-escape",
-		"graph-redundant-row",
-		"graph-unreachable-rule",
-		"graph-vacuous-atom",
-	}
-	got := slices.Clone(graphlint.AdvisoryCodes())
-	slices.Sort(got)
-
-	if !slices.Equal(got, want) {
-		t.Errorf("advisory tier =\n  %v\nwant exactly\n  %v", got, want)
-	}
-	for _, c := range want {
-		if graphlint.IsBlocking(c) {
-			t.Errorf("%q is reported blocking; the advisory tier never "+
-				"changes the success disposition", c)
-		}
-	}
-	// The two tiers are disjoint.
-	for _, c := range got {
-		if slices.Contains(graphlint.BlockingCodes(), c) {
-			t.Errorf("%q appears in both tiers", c)
-		}
-	}
-}
-
 // ASSUMPTION-3 / REQ-71: severity is two-valued, `blocking` / `info`.
 // BOUNDARY
 func TestReqSeverityVocabularyIsExactlyBlockingAndInfo(t *testing.T) {
@@ -506,47 +443,6 @@ status = "b"
 	}
 	// Reported, never rejected.
 	requireClean(t, r)
-}
-
-// REQ-80: "**`graph-unprovable-coverage` carries a `reason`
-// discriminator.** … The finding MUST carry a stable `reason` from this
-// closed, append-only set" — `dimension-not-finite`,
-// `tag-not-single-valued`, `row-can-refuse`.
-// ASSUMPTION-4: the discriminator is carried only on this code.
-// BOUNDARY
-func TestReq80_UnprovableCoverageCarriesAReasonFromTheClosedSet(t *testing.T) {
-	// The set is declared "closed, **append-only**", and RDR 0010 `0010:C5`
-	// takes that licence: `no-participating-dimension` is the fourth
-	// member. This stays an EXACT-set assertion — only the expected set
-	// grew — so a fifth member arriving unannounced still fails here.
-	want := []string{
-		"dimension-not-finite", "no-participating-dimension",
-		"row-can-refuse", "tag-not-single-valued",
-	}
-	got := slices.Clone(graphlint.Reasons())
-	slices.Sort(got)
-
-	if !slices.Equal(got, want) {
-		t.Errorf("reason set = %v; want exactly %v", got, want)
-	}
-
-	// Every emitted finding of this code carries a reason from the set,
-	// and no OTHER code carries one.
-	r := lint(t, optionalGuardDecls, multiDefectBody)
-	for _, f := range r.Findings {
-		if f.Code == graphlint.CodeUnprovableCoverage {
-			if !slices.Contains(want, f.Reason) {
-				t.Errorf("%s carries reason %q, outside the closed set %v",
-					f.Code, f.Reason, want)
-			}
-			continue
-		}
-		if f.Reason != "" {
-			t.Errorf("%s carries the reason discriminator %q; the "+
-				"discriminator is scoped to %s alone",
-				f.Code, f.Reason, graphlint.CodeUnprovableCoverage)
-		}
-	}
 }
 
 // REQ-81: "`row-can-refuse` is *not* a model defect — it is an honest

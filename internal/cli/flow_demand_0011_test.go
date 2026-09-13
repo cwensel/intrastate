@@ -633,17 +633,17 @@ func normalizeModelPath(stdout, path string) string {
 // The run-specific model path is the one value normalized out; everything
 // else is the wire form verbatim.
 var resolveGolden = map[string]string{
-	"advance": `{"type":"ok","data":{"model":"<model>","revision":"",` +
+	"advance": `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"advance",` +
 		`"rule":"prelock","gates":[],"emit":{},"dispositions":{},"next":{"stage":"prelocked"},` +
 		`"writes":{"stage":"prelocked"},"clear":[],"escaped":false}}`,
-	"revise": `{"type":"ok","data":{"model":"<model>","revision":"",` +
+	"revise": `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"revise",` +
 		`"rule":"resolve-route-back","gates":[],"emit":{},"dispositions":{},"next":{"stage":"refined"},` +
 		`"writes":{"stage":"refined"},"clear":[],"escaped":false}}`,
-	"abandon": `{"type":"ok","data":{"model":"<model>","revision":"",` +
+	"abandon": `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 		`"observed":{},"owned":{"gate_passed":"false","stage":"resolved",` +
 		`"status":"draft"},"readers":["rdr-status"],"outcome":"abandon",` +
 		`"rule":"resolve-abandon","gates":[],"emit":{},"dispositions":{},` +
@@ -702,7 +702,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		name: "flowMVVModel", model: flowMVVModel, outcome: "hold",
 		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		bindOnly: []string{flowOrphanRole},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
@@ -712,7 +712,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		name: "flowEscapeModel", model: flowEscapeModel, outcome: "hold",
 		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		bindOnly: []string{flowOrphanRole},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
@@ -725,7 +725,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		name: "flowEscapeModel", model: flowEscapeModel, outcome: "bail",
 		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		bindOnly: []string{flowOrphanRole},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{},"readers":[],"outcome":"bail",` +
 			`"rule":"bail-escape","gates":[],"emit":{},"dispositions":{},"next":{},` +
 			`"writes":{},"clear":[],"escaped":true,` +
@@ -736,7 +736,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome:  "hold",
 		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		bindOnly: []string{flowOrphanRole, "sidecar"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
@@ -745,7 +745,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowDomainModel", model: flowDomainModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -756,7 +756,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		// other entry carries.
 		name: "flowGatedNextModel", model: flowGatedNextModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft", "flag=true"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance",` +
 			`"rule":"gated-reported","gates":[{"id":"reported",` +
@@ -766,7 +766,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowSetObservedModel", model: flowSetObservedModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -783,7 +783,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "alpha",
 		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		tags:    []string{"phase=alpha"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{"phase":"alpha"},"owned":{"status":"draft"},` +
 			`"readers":["state"],"outcome":"alpha","rule":"match-alpha",` +
 			`"gates":[{"id":"approval","result":"allow"}],"emit":{},"dispositions":{},` +
@@ -800,7 +800,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome:  "hold",
 		seeds:    []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		bindOnly: []string{flowOrphanRole},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"hold-draft","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"draft"},"writes":{"status":"draft"},` +
@@ -809,7 +809,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowMatchClassesModel", model: flowMatchClassesModel, outcome: "gamma",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"gamma","rule":"no-match-atoms","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -818,7 +818,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowSetKindedMatchModel", model: flowSetKindedMatchModel, outcome: "hold",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"scalar-control","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -827,7 +827,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowAbsentMatchKeyModel", model: flowAbsentMatchKeyModel, outcome: "hold",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"hold","rule":"recognized-only","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -836,7 +836,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowFullyResolvedModel", model: flowFullyResolvedModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft", "flag=true"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"flag":"true","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"resolved-row",` +
 			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
@@ -852,7 +852,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		name: "flowSetPlanModel", model: flowSetPlanModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", `labels=["plain"]`}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"labels":"[\"plain\"]","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"advance",` +
 			`"gates":[],"emit":{},"dispositions":{},` +
@@ -870,7 +870,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		// byte-identity assertion S8 owes it.
 		name: "flowSideWriterModel", model: flowSideWriterModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowSideRole, []string{"mode=fast"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"mode":"fast"},"readers":["side"],` +
 			`"outcome":"advance","rule":"side-advance","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"mode":"slow"},"writes":{"mode":"slow"},` +
@@ -886,7 +886,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "opt=p"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"opt":"p","status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"guarded-advance",` +
 			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
@@ -902,7 +902,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "advance",
 		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		tags:    []string{"hint=x"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{"hint":"x"},"owned":{"status":"draft"},` +
 			`"readers":["state"],"outcome":"advance","rule":"hint-row",` +
 			`"gates":[],"emit":{},"dispositions":{},"next":{"status":"final"},` +
@@ -915,7 +915,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "advance",
 		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
 		tags:    []string{"holds=yes", "fails=yes", "missing=yes"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{"fails":"yes","holds":"yes","missing":"yes"},` +
 			`"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"mixed-row","gates":[],"emit":{},"dispositions":{},` +
@@ -932,7 +932,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "mid=m"}}},
 		tags: []string{"zebra=z", "alpha=a"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{"alpha":"a","zebra":"z"},` +
 			`"owned":{"mid":"m","status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"sort-row",` +
@@ -953,7 +953,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "size=9"}}},
 		tags: []string{"beta=b", "alpha=a"},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{"alpha":"a","beta":"b"},` +
 			`"owned":{"size":"9","status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"pair-row",` +
@@ -972,7 +972,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "size=9", "gone=ready"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"gone":"ready","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
 			`"rule":"uncomparable-row","gates":[],"emit":{},"dispositions":{},` +
@@ -986,7 +986,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "hold",
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "size=9", "gone=ready"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"gone":"ready","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"hold",` +
 			`"rule":"absent-guard-row","gates":[],"emit":{},"dispositions":{},` +
@@ -1002,7 +1002,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{
 			"status=draft", "size=9", "missingowned=q"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"missingowned":"q","size":"9",` +
 			`"status":"draft"},"readers":["state"],"outcome":"advance",` +
 			`"rule":"unavail-row","gates":[],"emit":{},"dispositions":{},` +
@@ -1013,7 +1013,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 	{
 		name: "flowLooseWriterModel", model: flowLooseWriterModel, outcome: "advance",
 		seeds: []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +
@@ -1028,7 +1028,7 @@ var shippedResolveGoldens = []shippedFixtureGolden{
 		name: "flowUnknownPairWriterModel", model: flowUnknownPairWriterModel,
 		outcome: "advance",
 		seeds:   []fixtureSeed{{flowStateRole, []string{"status=draft"}}},
-		golden: `{"type":"ok","data":{"model":"<model>","revision":"",` +
+		golden: `{"type":"ok","schema_version":"0.1","data":{"model":"<model>","revision":"",` +
 			`"observed":{},"owned":{"status":"draft"},"readers":["state"],` +
 			`"outcome":"advance","rule":"seed-row","gates":[],"emit":{},"dispositions":{},` +
 			`"next":{"status":"final"},"writes":{"status":"final"},` +

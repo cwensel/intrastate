@@ -30,6 +30,7 @@ func (a *analysis) checkGroups() {
 		// group's context is reachable.
 		a.checkOwnedBeforeMatch(g)
 		a.checkVacuousAtoms(g)
+		a.checkIdempotentWrites(g)
 
 		if !a.reachable[g.Context.String()] {
 			// Reachability is a filter over contexts: an unreachable group
@@ -323,6 +324,55 @@ func (a *analysis) checkRedundantRows(g guard.Group) {
 					rows[i].RuleID, rows[j].RuleID),
 			})
 			break
+		}
+	}
+}
+
+// --- the idempotent-write advisory ---------------------------------------
+
+// checkIdempotentWrites reports a row whose write block sets a key back to
+// the value its own match pattern already pinned by equality. The row is
+// well-formed and the transition is legal — it simply cannot move that key,
+// because every state the row matches already holds the value it writes.
+//
+// It is ADVISORY for the same reason the vacuous atom is: the authored
+// intent is legible and a model may hold such a row deliberately (a
+// self-loop that advances nothing on this key while another key moves), so
+// lint reports it rather than refusing the model.
+func (a *analysis) checkIdempotentWrites(g guard.Group) {
+	rows := slices.Clone(g.Rows)
+	slices.SortFunc(rows, func(x, y table.Row) int { return strings.Compare(x.RuleID, y.RuleID) })
+
+	for _, row := range rows {
+		for _, write := range row.Writes {
+			if len(write.Value) != 1 {
+				continue
+			}
+			for _, atom := range row.Atoms {
+				if atom.Block != table.BlockMatch || atom.Operator != "eq" {
+					continue
+				}
+				if atom.Key != write.Key || len(atom.Literal) != 1 {
+					continue
+				}
+				if atom.Literal[0] != write.Value[0] {
+					continue
+				}
+				a.emit(clierr.Finding{
+					Code:        CodeIdempotentWrite,
+					Rule:        row.RuleID,
+					Span:        row.SourceLocator,
+					Key:         write.Key,
+					Operator:    atom.Operator,
+					Literal:     write.Value[0],
+					Block:       string(atom.Block),
+					Dimension:   write.Key,
+					Fingerprint: Fingerprint(row),
+					Message: fmt.Sprintf("row %q matches %q on %q and writes the "+
+						"same value back, so the write moves nothing on that key",
+						row.RuleID, write.Value[0], write.Key),
+				})
+			}
 		}
 	}
 }

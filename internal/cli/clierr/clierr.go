@@ -43,6 +43,34 @@ const (
 	GroupSignalCancel
 )
 
+// SchemaVersion is the wire schema version both terminal records carry
+// (`0029:C1`). It has ONE home: this constant. `respond.Success` reads it
+// from here rather than declaring a literal of its own, because a value
+// duplicated across the two records could drift — the "one key meaning two
+// things on one wire" defect the contract exists to prevent. `clierr` is
+// the leaf both terminal records can reach without an import cycle.
+//
+// It is versioned independently of the binary's release version and is NOT
+// derived from it: this package imports `internal/version` nowhere. The
+// value tracks the WIRE.
+//
+// It begins at "0.1". While the major is `0` the schema is explicitly
+// unstable and MAY change incompatibly in any release; the minor still
+// increments on every change, so a consumer can detect movement even while
+// it cannot rely on compatibility.
+const SchemaVersion = "0.1"
+
+// ExitCodes returns the exit-code classes emitted by ExitCodeFor
+// (`0029:C4`). The vocabulary is frozen: no member is added or removed
+// within a major.
+//
+// The PROJECTION is the contract, not its generator: the ErrorGroup
+// constants stay untiered and free to grow behind it. `0` comes from
+// GroupSuccess/GroupWarning and `1` from the non-CLIError fallthrough —
+// they are members because they are EMITTED, not because they are refusal
+// classes.
+func ExitCodes() []int { return []int{0, 1, 2, 3, 130} }
+
 // CLIError is the single CLI-side structured error type. The JSON form
 // is the on-the-wire envelope; Group drives the exit code and is not
 // serialized. Extend with new optional fields as needed — keep them
@@ -50,6 +78,20 @@ const (
 type CLIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+
+	// SchemaVersion is the wire schema version this terminal record
+	// carries (`0029:C1`). It rides the TOP LEVEL only and is never
+	// projected into a payload, where it would collide with a verb's own
+	// fields. It is deliberately NOT `omitempty`: always being on the wire
+	// is what makes it a version a consumer can rely on rather than one it
+	// must handle the absence of.
+	//
+	// This does not breach `0005:C1`'s "exactly one omitempty structured
+	// field, `findings`": that budget's subject is a STRUCTURED carrier on
+	// which inner discriminators ride. This is a scalar version marker
+	// carrying no discriminator and no payload, so the refusal envelope
+	// still has exactly one structured field.
+	SchemaVersion string `json:"schema_version"`
 	// Param names the offending flag/argument, when the failure is
 	// attributable to one.
 	Param string `json:"param,omitempty"`
@@ -147,11 +189,17 @@ func ExitCodeFor(err error) int {
 }
 
 // EmitJSON writes the structured CLIError envelope as one NDJSON line.
+//
+// The wire schema version is stamped here, at the single emit site, so
+// every refusal carries it without per-verb work and no raise site has to
+// remember to set it (`0029:C1`).
 func EmitJSON(out io.Writer, e *CLIError) {
 	if e == nil {
 		return
 	}
-	_ = WriteJSONLine(out, e)
+	stamped := *e
+	stamped.SchemaVersion = SchemaVersion
+	_ = WriteJSONLine(out, &stamped)
 }
 
 // WriteJSONLine is THE JSON emit helper every CLI wire site routes through

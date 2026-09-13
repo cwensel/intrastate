@@ -94,6 +94,18 @@ const (
 	reasonNotEvaluated = "not-evaluated"
 )
 
+// UnknownReasons returns the `flow next` unknown-`reason` vocabulary
+// (`0029:C4`). The set is append-only: a consumer tolerates an
+// unrecognized member and does not assert on the set's cardinality or a
+// member's ordinal position.
+//
+// The union is the two kernel-owned reasons plus RDR 0011's one added
+// token, spelled here as the members they are: `absent`, `uncomparable`,
+// `not-evaluated`.
+func UnknownReasons() []string {
+	return []string{"absent", "uncomparable", "not-evaluated"}
+}
+
 func newFlowNextCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "next",

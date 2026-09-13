@@ -403,7 +403,15 @@ func TestReq92_TheFlagRidesResolveAloneAndHandsRespondOKTheProjectedResult(t *te
 			"`respond.OK` the PROJECTED verb result\n%s", def)
 	}
 	for _, out := range []string{def, proj} {
-		if !strings.HasPrefix(strings.TrimSpace(out), `{"type":"ok","data":{`) {
+		// The gateway's own shape is asserted by NAMED KEY, not by key
+		// order: the envelope carries `type` at "ok" and a `data` object,
+		// and `0029:G-cross-cutting` fixes that "a consumer MUST NOT read
+		// key order as contract" — `respond.Success` gained a
+		// `schema_version` member between the two, which is exactly the
+		// additive movement that rule licenses.
+		trimmed := strings.TrimSpace(out)
+		if !strings.HasPrefix(trimmed, `{"type":"ok",`) ||
+			!strings.Contains(trimmed, `"data":{`) {
 			t.Errorf("the emitted record does not carry the shipped success "+
 				"envelope; the projection lands on the verb result BEFORE "+
 				"`respond.OK`, so the gateway's own shape is untouched:\n%s",

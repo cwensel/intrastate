@@ -346,7 +346,7 @@ type planEnvelope struct {
 // clears it carries.
 //
 // Every refusal here is `flow-write-invalid` on param `plan`. That reuses a
-// PUBLISHED code deliberately: RDR 0005's refusal table is closed (see
+// PUBLISHED code deliberately: RDR 0005's refusal table is append-only (see
 // `writerFor`'s doc comment), and a malformed carried plan is a malformed
 // write request — the same class as `--write status=<clear>` — reaching the
 // CLI through a different carrier. Minting a `flow-plan-*` code would widen
@@ -355,7 +355,8 @@ type planEnvelope struct {
 //
 // A REFUSAL envelope on stdin refuses. `flow resolve` writes its refusal to
 // the same stream its success goes to under `--as=json`, so a pipe that lost
-// its plan carries `{"type":"failed",…}` instead — and applying an empty
+// its plan carries the bare `CLIError` — `{"code":…,"message":…}` with no
+// `type` key at all (`0005:C1`) — instead, and applying an empty
 // write set from it would report success for a transition the model refused.
 // That is the one failure mode a carried plan makes newly reachable, so it
 // is refused by name rather than by falling through to "no writes".

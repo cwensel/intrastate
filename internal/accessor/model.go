@@ -25,7 +25,7 @@ import (
 // --- capability ----------------------------------------------------------
 
 // Capability is the declared authority class of one accessor. The set is
-// closed at three: read, gate, and write (`0004:C1`).
+// fixed at three: read, gate, and write (`0004:C1`).
 //
 // The canonical names are "read accessor", "gate accessor", and "write
 // accessor". "hook" and "action" are rejected names because they imply
@@ -49,7 +49,7 @@ func Capabilities() []Capability { return slices.Clone(capabilities) }
 // --- refusal classes -----------------------------------------------------
 
 // RefusalClass is the accessor-owned refusal discriminator. This set is
-// DISJOINT from the kernel's closed five-kind
+// DISJOINT from the kernel's frozen five-kind
 // `resolve.RefusalKinds` set, which this RDR does not extend (`0004:FM`).
 type RefusalClass string
 
@@ -86,7 +86,7 @@ var refusalClasses = []RefusalClass{
 	ClassReadBackIncomplete,
 }
 
-// RefusalClasses returns the closed accessor refusal-class set.
+// RefusalClasses returns the fixed accessor refusal-class set.
 func RefusalClasses() []RefusalClass { return slices.Clone(refusalClasses) }
 
 // --- validation codes ----------------------------------------------------
@@ -305,7 +305,8 @@ const (
 
 var verdicts = []Verdict{VerdictAllow, VerdictDeny, VerdictIndeterminate}
 
-// Verdicts returns the closed three-member gate verdict vocabulary.
+// Verdicts returns the frozen three-member gate verdict vocabulary
+// (`0029:C4`).
 func Verdicts() []Verdict { return slices.Clone(verdicts) }
 
 // --- refusals ------------------------------------------------------------

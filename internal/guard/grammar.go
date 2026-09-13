@@ -44,7 +44,7 @@ var matrix = map[string]operatorRow{
 	"contains": {kinds: []string{"set"}, shape: ShapeElementSet},
 }
 
-// operators is the closed typed vocabulary in matrix order: equality,
+// operators is the frozen typed vocabulary in matrix order: equality,
 // membership, the four bounded integer comparisons, existence, and set
 // containment.
 var operators = []string{"eq", "in", "lt", "lte", "gt", "gte", "exists", "contains"}
@@ -53,18 +53,19 @@ var operators = []string{"eq", "in", "lt", "lte", "gt", "gte", "exists", "contai
 // spelled wherever it is named.
 var kinds = []string{"enum", "bool", "int", "set", "scalar"}
 
-// Operators returns this RDR's closed operator vocabulary.
+// Operators returns this RDR's frozen operator vocabulary (`0029:C4`).
 func Operators() []string { return slices.Clone(operators) }
 
-// KnownOperator reports whether token is in the closed vocabulary. The set
-// is closed, so a free-form expression string is simply not an operator.
+// KnownOperator reports whether token is in the frozen vocabulary. The set
+// admits no member beyond those below, so a free-form expression string is
+// simply not an operator.
 func KnownOperator(token string) bool { return slices.Contains(operators, token) }
 
 // Kinds returns the five value-kind tokens.
 func Kinds() []string { return slices.Clone(kinds) }
 
 // Accepts reports whether the operator/kind matrix admits the pair. An
-// operator outside the closed vocabulary is accepted by no kind.
+// operator outside the frozen vocabulary is accepted by no kind.
 func Accepts(operator, kind string) bool {
 	return slices.Contains(matrix[operator].kinds, kind)
 }
@@ -142,7 +143,7 @@ func (Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardRes
 	// `exists` is the kernel's: it is decided from presence alone and never
 	// reaches this seam, so being handed one means answering from a view
 	// this evaluator does not have. Every unknown operator lands here too —
-	// the vocabulary is closed, so a free-form expression string is not an
+	// the vocabulary is frozen, so a free-form expression string is not an
 	// operator and has no reading.
 	return resolve.GuardUnevaluable
 }

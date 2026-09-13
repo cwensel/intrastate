@@ -1,4 +1,4 @@
-// Package guard owns RDR 0003's guard predicate model: the closed typed
+// Package guard owns RDR 0003's guard predicate model: the frozen typed
 // operator vocabulary, the tag declaration model every guard atom is
 // written against, the value-comparison evaluator that satisfies the
 // kernel's `resolve.GuardEvaluator` seam, and the finite-domain lint that

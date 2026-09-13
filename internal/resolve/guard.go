@@ -24,6 +24,12 @@ const (
 	BlockMatch Block = "match"
 )
 
+// Blocks returns the declared block vocabulary `findings[].block` carries
+// (`0029:C4`). The set is append-only: JDR 0001 §D12 already grew it from
+// two members to three, so a consumer tolerates an unrecognized member and
+// does not assert on the set's cardinality or a member's ordinal position.
+func Blocks() []Block { return []Block{BlockAll, BlockUnless, BlockMatch} }
+
 // isGuardBlock reports whether the verdict formula `0007:C6` names the
 // block as an operand. It names `all` and `unless` and nothing else, so
 // every other block — BlockMatch (JDR 0001 §D12), the zero value, and any

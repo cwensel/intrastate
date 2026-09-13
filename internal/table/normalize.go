@@ -67,7 +67,7 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	}
 
 	// The admitted operator set, guard blocks included, is RDR 0003's
-	// closed eight. This RDR mints none and widens it nowhere (`0002:C16`).
+	// frozen eight. This RDR mints none and widens it nowhere (`0002:C16`).
 	if !slices.Contains(operators, operator) {
 		return badAtom("unknown operator")
 	}

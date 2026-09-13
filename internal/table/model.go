@@ -78,7 +78,7 @@ const (
 	ProvenanceRecognized Provenance = "recognized"
 )
 
-// declaredKinds is RDR 0003's closed five-token type-model vocabulary. It
+// declaredKinds is RDR 0003's frozen five-token type-model vocabulary. It
 // is 0003's to fix and this RDR's to enforce; `string` is not one of them
 // (deviations.md D1).
 var declaredKinds = []string{"enum", "bool", "int", "set", "scalar"}
@@ -88,11 +88,11 @@ func IsDeclaredKind(kind string) bool {
 	return slices.Contains(declaredKinds, kind)
 }
 
-// operators is RDR 0003's closed operator set. This RDR does not mint
+// operators is RDR 0003's frozen operator set. This RDR does not mint
 // operators and does not widen the set (`0002:C16`).
 var operators = []string{"eq", "in", "lt", "lte", "gt", "gte", "exists", "contains"}
 
-// Operators returns the closed admitted operator set.
+// Operators returns the frozen admitted operator set (`0029:C4`).
 func Operators() []string {
 	return slices.Clone(operators)
 }
@@ -119,7 +119,7 @@ var operatorKinds = map[string][]string{
 }
 
 // operatorAcceptsKind reports whether the operator/kind matrix admits the
-// pair. An operator outside the closed set accepts no kind.
+// pair. An operator outside the frozen set accepts no kind.
 func operatorAcceptsKind(operator, kind string) bool {
 	return slices.Contains(operatorKinds[operator], kind)
 }
@@ -199,7 +199,7 @@ type EditRule struct {
 	Anchor string
 	// Replace is the WHOLE replacement line, terminator excluded.
 	Replace string
-	// Clear is the disposition of a planned `<clear>`, from the closed set
+	// Clear is the disposition of a planned `<clear>`, from the fixed set
 	// {"line"}. Empty means undeclared, which refuses a planned `<clear>`
 	// before mutation (`0028:C1.5`).
 	Clear string

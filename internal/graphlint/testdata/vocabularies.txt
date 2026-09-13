@@ -1,0 +1,118 @@
+# Vocabulary and severity snapshot (RDR 0029 C3/A7).
+# Regenerate deliberately; a diff names the moved member.
+
+[respond.Types]
+ok
+
+[respond.Levels]
+note
+warning
+
+[clierr.ExitCodes]
+0
+1
+130
+2
+3
+
+[accessor.Verdicts]
+allow
+deny
+indeterminate
+
+[resolve.RefusalKinds]
+ambiguous_match
+guard_unevaluable
+no_match
+owned_state_unavailable
+unmodeled_outcome
+
+[resolve.Blocks]
+all
+match
+unless
+
+[guard.Operators]
+contains
+eq
+exists
+gt
+gte
+in
+lt
+lte
+
+[table.Operators]
+contains
+eq
+exists
+gt
+gte
+in
+lt
+lte
+
+[table.Categories]
+command_and_path_conflict
+command_empty
+command_env_conflict
+command_output_shape
+command_shell_interpreter
+command_unknown_placeholder
+cyclic_context_inheritance
+duplicate_model_id
+duplicate_rule_id
+edit_anchor_invalid
+edit_carrier_conflict
+edit_clear_invalid
+edit_key_mismatch
+edit_tag_argv0
+edit_template_invalid
+emit_value_out_of_domain
+malformed_accessor_binding
+malformed_accessor_declaration
+malformed_dump_declaration
+malformed_emit_declaration
+malformed_escape_declaration
+malformed_initial_declaration
+malformed_model_declaration
+malformed_outcome_binding
+malformed_predicate_atom
+malformed_recognized_outcome_alphabet
+malformed_rule_id
+malformed_rule_shape
+malformed_tag_declaration
+malformed_toml
+missing_recognized_outcome_alphabet
+reserved_tag_key
+reserved_tag_value
+unknown_accessor
+unknown_context
+unknown_emit_key
+unknown_schema_field
+unknown_tag
+unsupported_version
+write_to_non_owned_tag
+
+[graphlint.Reasons]
+dimension-not-finite
+no-participating-dimension
+row-can-refuse
+tag-not-single-valued
+
+[graphlint.FindingSeverities]
+graph-always-present-owned	blocking
+graph-coverage-closed-by-escape	info
+graph-coverage-gap	blocking
+graph-dangling-edge	blocking
+graph-dead-end	blocking
+graph-idempotent-write	info
+graph-overlap	blocking
+graph-owned-before-write	blocking
+graph-product-too-large	blocking
+graph-redundant-row	info
+graph-single-valued-state	blocking
+graph-terminal-escape	blocking
+graph-unprovable-coverage	blocking
+graph-unreachable-rule	info
+graph-vacuous-atom	info
