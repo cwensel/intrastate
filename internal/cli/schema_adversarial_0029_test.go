@@ -24,12 +24,36 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/graphlint"
 	"github.com/cwensel/intrastate/internal/table"
 )
+
+// declaredEnumerationSeams is the set of enumeration seams REQ-30 obliges for
+// the code vocabularies that cross the wire on `data.findings[].code`.
+//
+// REQ-30 places a seam "in the package that owns them", so this is a table of
+// seams across packages, NOT one package's accessors: `graph-` codes are
+// minted in `internal/graphlint`, and `table.AdvisoryNearMiss` is minted in
+// `internal/table`, whose members 0006's Naming decision bars from the
+// graph-lint tier. A predicate that ranged over `graphlint` alone would be
+// blind to every seam the owning-package rule requires, which is the
+// over-narrow assertion this table replaces.
+//
+// Adding an emitted code vocabulary without adding its seam here is the
+// defect ADV-2 names; the test below is what makes that omission visible.
+func declaredEnumerationSeams() map[string][]string {
+	return map[string][]string{
+		"graphlint.BlockingCodes": graphlint.BlockingCodes(),
+		"graphlint.AdvisoryCodes": graphlint.AdvisoryCodes(),
+		"table.AdvisoryRules":     table.AdvisoryRules(),
+	}
+}
 
 // nearMissModel builds the fixture that lints CLEAN and still raises the
 // near-miss advisory: `Recognized` is a legal, unreserved name that becomes
@@ -110,38 +134,58 @@ func TestAdv0029_EveryWireSeverityIsCarriedByTheSnapshotRange(t *testing.T) {
 			"wire; this test's premise is that it does", code)
 	}
 
-	// The snapshot (internal/graphlint/testdata/vocabularies.txt, rendered
-	// by vocabulary_snapshot_0029_test.go) records severities for exactly
-	// the union of these two seams.
-	covered := false
-	for _, c := range append(graphlint.BlockingCodes(),
-		graphlint.AdvisoryCodes()...) {
-		if c == code {
-			covered = true
-			break
-		}
-	}
+	// The subject is the committed snapshot itself
+	// (internal/graphlint/testdata/vocabularies.txt, rendered by
+	// vocabulary_snapshot_0029_test.go), not any one package's accessors:
+	// C3 rests its disclosure obligation on that artifact, so the honest
+	// question is whether the artifact carries a severity row for this code.
+	// Asserting on the file keeps the check falsifiable — dropping the row
+	// turns this red even while every Go seam still enumerates the code.
+	snapshot := readVocabularySnapshot(t)
 
-	if !covered {
+	if !snapshotRecordsSeverity(snapshot, code, severity) {
 		t.Errorf("the finding code %q is emitted with \"severity\":%q on the "+
-			"success wire, but it is a member of neither "+
-			"graphlint.BlockingCodes() nor graphlint.AdvisoryCodes() — the "+
-			"two seams the C3/A7 committed snapshot ranges over.\n\n"+
+			"success wire, but the C3/A7 committed snapshot records no "+
+			"`%s\\t%s` severity row for it.\n\n"+
 			"C3 backs its disclosure obligation with that snapshot and "+
 			"concedes exactly ONE uncovered row: \"the CLIError `code` row "+
 			"has none buildable (A5), so its `append-only` tier stays a "+
 			"prose promise and a new code there is the one promotion-shaped "+
-			"event this mechanism cannot catch.\" This is a SECOND "+
-			"uncovered promotion-shaped surface, and it is not conceded.\n\n"+
-			"Concretely: `internal/cli/lint.go::nearMissFindings` hardcodes "+
-			"`Severity: graphlint.SeverityInfo` at the emit site rather than "+
-			"deriving it from a taxonomy the snapshot diffs. Editing that "+
-			"literal to SeverityBlocking changes what a consumer's CI sees "+
-			"while leaving testdata/vocabularies.txt byte-identical — the "+
-			"Failure Modes bullet's \"consumer's CI goes red on a model "+
-			"nobody edited\", with no artifact naming the moved code.",
-			code, severity)
+			"event this mechanism cannot catch.\" An emitted severity the "+
+			"snapshot does not carry is a SECOND uncovered promotion-shaped "+
+			"surface, and it is not conceded.\n\n"+
+			"Concretely: if the emit site hardcodes a severity literal "+
+			"rather than deriving it from a declaration the snapshot "+
+			"renders, editing that literal changes what a consumer's CI "+
+			"sees while leaving testdata/vocabularies.txt byte-identical — "+
+			"the Failure Modes bullet's \"consumer's CI goes red on a model "+
+			"nobody edited\", with no artifact naming the moved code.\n\n"+
+			"snapshot:\n%s",
+			code, severity, code, severity, snapshot)
 	}
+}
+
+// readVocabularySnapshot returns the committed vocabulary snapshot's bytes.
+func readVocabularySnapshot(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join("..", "graphlint", "testdata", "vocabularies.txt")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the C3/A7 committed snapshot is unreadable at %s: %v", path, err)
+	}
+	return string(b)
+}
+
+// snapshotRecordsSeverity reports whether the snapshot carries the
+// `<code>\t<severity>` mapping row the promotion check diffs.
+func snapshotRecordsSeverity(snapshot, code, severity string) bool {
+	for line := range strings.SplitSeq(snapshot, "\n") {
+		if strings.TrimSpace(line) == code+"\t"+severity {
+			return true
+		}
+	}
+	return false
 }
 
 // ADV-2 — FAILURE MODE: "a new machine-readable surface ships without a
@@ -167,13 +211,16 @@ func TestAdv0029_TheEmittedAdvisoryCodeVocabularyHasATierSeam(t *testing.T) {
 	finding := emittedNearMissFinding(t)
 	code, _ := finding["code"].(string)
 
-	// The three enumerable code vocabularies C4's census names. If the
-	// emitted code belongs to none of them, no seam in any package covers
-	// it and its tier is unstated.
-	for _, c := range append(graphlint.BlockingCodes(),
-		graphlint.AdvisoryCodes()...) {
-		if c == code {
-			return // covered by a censused seam
+	// Every DECLARED enumeration seam, across packages — REQ-30 homes a seam
+	// in the package that OWNS the identifier, so a per-package seam must be
+	// visible here. If the emitted code belongs to no seam in the table, its
+	// tier is unstated and the vocabulary is unenumerable.
+	for name, members := range declaredEnumerationSeams() {
+		for _, c := range members {
+			if c == code {
+				t.Logf("code %q is enumerated by the %s seam", code, name)
+				return
+			}
 		}
 	}
 
@@ -184,13 +231,22 @@ func TestAdv0029_TheEmittedAdvisoryCodeVocabularyHasATierSeam(t *testing.T) {
 		"unassigned machine-readable surface is a defect.\" REQ-30 obliges "+
 		"the seam: \"an exported accessor returning the vocabulary's "+
 		"members, in the package that owns them.\"\n\n"+
-		"`internal/table` owns this identifier (table.AdvisoryNearMiss, a "+
-		"single exported const) and exports no accessor enumerating the "+
-		"advisory-rule vocabulary it belongs to, so a second near-miss-class "+
-		"rule can be minted with no tier, no seam and no snapshot row. C4's "+
-		"census covers the graph-lint blocking and advisory code sets and "+
-		"the CLIError `code` registry; this code is in none of them, and C4 "+
-		"does not list it among the surfaces deliberately left untiered "+
-		"(those are `findings[].class` and `data.dispositions`).",
-		code)
+		"No seam in declaredEnumerationSeams() enumerates it, so the "+
+		"identifier's owning package exports no accessor over the "+
+		"vocabulary it belongs to and a second rule of its class can be "+
+		"minted with no tier, no seam and no snapshot row. C4 does not list "+
+		"this surface among the ones deliberately left untiered (those are "+
+		"`findings[].class` and `data.dispositions`).\n\n"+
+		"seams consulted: %v",
+		code, seamNames())
+}
+
+// seamNames lists the declared seams, for the failure message.
+func seamNames() []string {
+	var names []string
+	for name := range declaredEnumerationSeams() {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
