@@ -1,0 +1,3 @@
+0021  Final  live  PASS  blocking=0 resolution=0 placeholder=0 advisory=1
+  conformance evidence:over-budget           177-219   this Evidence field is 43 lines; TEMPLATE.md specifies one sentence naming a stable anchor (soft cap 30)
+                                                      fix: at the Gate, answer whether the load-bearing anchor is still findable here, and whether the balance belongs in {ARTIFACT_DIR} with this field keeping the anchor and a pointer — do NOT truncate: the mass is usually verification content the grounding sweep reads
