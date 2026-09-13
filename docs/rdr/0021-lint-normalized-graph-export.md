@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft [revised from Final 2026-09-13; re-verify A3 @refine — REQ-20's `domain` presence rule is unsatisfiable: "finite" and "has authored members" are different predicates]
+- **Status**: Draft
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -180,7 +180,8 @@ RDR 0002 owns only row-dump ordering.
     domains — read to its per-kind arms in `domainSize`, which is
     where finiteness and authored membership come apart: `bool`
     (`spread(2, …), true`, "declared nowhere"), a bounded `int`
-    (`Min`/`Max` width, saturating at `cardinalityCeiling`) and `set`
+    (`Min`/`Max` width via `intWidth`, with `cardinalityCeiling` the
+    overflow fallback, not the normal report) and `set`
     (`spread(len(d.Elements), false)`, universe in `Elements`) all
     report FINITE while populating no `decl.Domain`; only an `enum`
     with a non-empty domain authors members, and a member-less `enum`,
@@ -1109,7 +1110,13 @@ code alone.
    enters the pinned bytes.
    **Expected**: the goldens hold; a field added without a schema
    decision fails the pin (C2's additive rule tripwire), and an
-   envelope version bump does not.
+   envelope version bump does not. The `domain` presence arms are
+   asserted on BOTH sides of C2's authored-members rule: present for
+   an `enum` with members, and ABSENT for `bool`, for a bounded `int`,
+   and for a member-less `enum` — the three kinds
+   `guard.AssignmentCount` reports finite while authoring no
+   `decl.Domain`, so a test asserting only the enum arm would pass
+   against the pre-narrowing finiteness rule too.
 3. **Scenario**: Lint neutrality — run `intrastate lint` over blocking
    and clean fixtures with the export code present, byte-compared
    against a pre-change capture.
