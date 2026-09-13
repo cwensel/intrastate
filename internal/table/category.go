@@ -257,8 +257,7 @@ func (f *Failure) Error() string {
 
 // CategoryOf reports the stable category a refusal carries.
 func CategoryOf(err error) (Category, bool) {
-	var f *Failure
-	if errors.As(err, &f) {
+	if f, ok := errors.AsType[*Failure](err); ok {
 		return f.Category, true
 	}
 	return "", false

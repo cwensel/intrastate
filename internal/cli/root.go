@@ -237,8 +237,7 @@ func ExecuteAndEmit(cmd *cobra.Command, args []string) error {
 	if err == nil {
 		return nil
 	}
-	var ce *clierr.CLIError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*clierr.CLIError](err); ok {
 		return ce
 	}
 	return respond.Fail(cmd, cobraErrorToCLIError(err))

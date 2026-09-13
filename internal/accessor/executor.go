@@ -82,8 +82,7 @@ func refusalOf(def Definition, timeout time.Duration, class RefusalClass, err er
 		Role:       def.Accessor.Role,
 		Timeout:    timeout,
 	}
-	var ee *ExecError
-	if errors.As(err, &ee) {
+	if ee, ok := errors.AsType[*ExecError](err); ok {
 		r.Detail = execDetail(ee)
 	}
 	// The one bit RDR 0028's exit-group clause needs, carried on the
@@ -514,8 +513,7 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		// those to "may have been applied" makes an agent skip a retry that
 		// was safe, the exact inverse of the gain.
 		r := refusalOf(def, timeout, ClassExecutionFailure, err)
-		var hp *HeldPipeError
-		if errors.As(err, &hp) {
+		if _, ok := errors.AsType[*HeldPipeError](err); ok {
 			r.applied = true
 			r.Expected = planned
 		}

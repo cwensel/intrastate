@@ -112,8 +112,7 @@ func ErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
-	var ce *CLIError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*CLIError](err); ok {
 		return ce.Code
 	}
 	return ""
@@ -132,8 +131,7 @@ func ExitCodeFor(err error) int {
 	if err == nil {
 		return 0
 	}
-	var ce *CLIError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*CLIError](err); ok {
 		switch ce.Group {
 		case GroupSuccess, GroupWarning:
 			return 0
