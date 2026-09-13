@@ -361,7 +361,19 @@ and codes verbatim (`internal/cli/lint.go::runLint`): exactly one of
 neither → `flag-required`; unreadable file → `model-unreadable`; load
 failure → `model-invalid` with one findings[] entry per load category.
 `--emit <format>` selects the document: `json` (default) or `dot`; any
-other value → `flag-invalid-value` naming `emit`. `--emit` is NEW to
+other value → `flag-invalid-value` naming `emit`. That format set is
+an `append-only` vocabulary (`0029:C2`): a third format MAY be added
+in a minor, none removed or renamed within a major, so a consumer MUST
+NOT assert its cardinality or a member's position. Its enumeration
+seam, which `0029:C4` obliges of every tier assignment, is a new
+exported `internal/cli` accessor over the two members — the package
+owns the set and nothing it imports imports it back, so the accessor
+builds with no new import and no cycle. The new
+`graph-export-too-large` refusal code below mints no vocabulary of its
+own: it is a member of the CLIError `code` vocabulary `0029:C4`
+already tiers `append-only`, and it inherits that row's
+`seam: none (prose-only)` disposition — the tier stands, unasserted
+and legibly so, for the reason recorded there. `--emit` is NEW to
 this verb — `lint` has no such flag, so mirroring supplies no position
 for it and the order is fixed here: `--emit` validity is checked with
 the argument-shaped arms, AFTER the `--model`/`--flow` selection arms
@@ -395,13 +407,15 @@ the `--model <path>` argument or any path-derived string); `class`;
 finite); `initial`; `terminal` (the declared predicate sets, carried
 as declared); `rows[{identity, source, kind, outcome, atoms, next,
 writes, requires_owned, gate, escape, emit}]` — RDR 0002's dump field
-list in its canonical row order, atoms (each `{key, operator,
-literal[], block}`) in 0002's canonical atom order, lowercase
-snake_case (`internal/table/dump.go::dumpColumns`, a closed 11-member
-list with `emit` appended last per `0010:C3`); `groups[{context,
-rules}]`; and `reach{abstraction, nodes[{id, values}], edges[{from,
-to, rule}]}` — the merged fixpoint relation, `id` the canonical node
-key, `values` an OBJECT keyed by tag name whose every value is that
+list in the row order `internal/table/dump.go::dumpColumns` fixes,
+atoms (each `{key, operator, literal[], block}`) in the atom order
+0002 fixes, lowercase snake_case; the `emit` member is the one
+`0010:C3` adds, and this document carries the dump's field vocabulary
+rather than restating a cardinality (see the tier declaration below);
+`groups[{context, rules}]`; and
+`reach{abstraction, nodes[{id, values}], edges[{from, to, rule}]}` —
+the merged fixpoint relation, `id` the node key `reach.go::(Node).key`
+fixes, `values` an OBJECT keyed by tag name whose every value is that
 tag's sorted, deduplicated value ARRAY (the shape `reach.go::Node`'s
 `Values map[string][]string` projects without invention), nodes sorted
 by node key and edges by (from, to, rule) so construction order is
@@ -426,7 +440,23 @@ declared sets travel in the document for a consumer to evaluate.
 Set-valued members are JSON arrays, closing
 `0002:§round-trip-inverse-invariants`'s lossy set-literal rendering
 for this document; the document is NOT a model source and no
-export→load inverse is claimed. The DOT document renders the same
+export→load inverse is claimed.
+STABILITY. The field spellings above are an `append-only` vocabulary
+in `0029:C2`'s sense — a member MAY be added in a minor, none removed
+or renamed within a major — which is the same promise this clause's
+additive-within-`/1` rule already makes, now stated in the tier
+vocabulary `0029:C4` requires of a surface added after its census. A
+consumer MUST therefore tolerate an unrecognized field and MUST NOT
+assert on the field set's cardinality, a member's ordinal position, or
+a tail position; the `emit` member's arrival last in `dumpColumns` is
+0002's row order, not a position this document promises. The
+enumeration seam `0029:C4` obliges is the Go struct's json tags, as it
+is for the `version` payload field names — the compiler is the seam,
+so the document's own decode is the by-value assertion. Two markers
+coexist at different levels and neither substitutes for the other:
+this `schema` field versions the DOCUMENT, while `0029:C1`'s
+`schema_version` versions the ENVELOPE carrying it and is never
+projected into `data`. The DOT document renders the same
 value: one node per reachability node, one edge per reachability edge
 labeled with its rule id, the initial node marked, and the abstraction
 marker rendered in the graph header comment/label so the diagram
@@ -720,11 +750,21 @@ passage (0005:C1, `0002:§round-trip-inverse-invariants`, `0006:C19`
 via `lint.go`'s comment), JDR 0002 §D1, and both `../state-machines`
 passages CONFIRMED on `main`.
 
-Joint-check: clear (12 peers) — open peers 0012–0020, 0022–0024
-checked on both arms: modify-anchors (`reach.go::Reach` extension,
-new `graph` verb/root registration) and contract literals (`--emit`,
-`intrastate.graph/1`, `graph-export-too-large`, the mirrored C1
-codes) share no undecided contract. The three peers whose anchors or
+Joint-check: fired → 0029 (home: `cli/0029 §Normative Contracts` C4),
+re-run 2026-09-12 on the post-0029 peer set. Open peers 0012–0020,
+0022–0024 and 0029 checked on both arms: modify-anchors
+(`reach.go::Reach` extension, new `graph` verb/root registration) and
+contract literals (`--emit`, `intrastate.graph/1`,
+`graph-export-too-large`, the mirrored C1 codes). 0029 is the one peer
+sharing undecided ground: it governs the envelope's version marker
+while C2 governs the document's, and neither record sequences the two
+for a consumer. That question — which marker a consumer reads first,
+and what it does when one is supported and the other is not — is
+hoisted to C4, already the home for the envelope-versus-document
+boundary; this record answers it nowhere and cites the home once C4
+states it. C4's tier obligation is discharged in C1 and C2 above, so
+the surfaces this record adds no longer ship untiered. The remaining
+eleven peers share no undecided contract. The three peers whose anchors or
 literals this record also touches are cited where they touch, each a
 read-only use with the decision left to its owner: RDR 0013 owns the
 `guard` observation surface A3 reads; RDR 0014 owns what `intrastate
@@ -889,9 +929,11 @@ gateway exception.
 - Positive: one row contract — the document reuses 0002's dump
   vocabulary, so a column added there (the `emit` precedent) has one
   obvious landing in the schema.
-- Negative: `intrastate.graph/1` has a fixed field list; a later
-  producer (declared-emit metadata, new invariant surfaces) lands
-  additively or bumps the marker under RDR 0029's `0.x` promise.
+- Negative: `intrastate.graph/1`'s field vocabulary is `append-only`
+  (C2's stability clause); a later producer (declared-emit metadata,
+  new invariant surfaces) lands additively or bumps the marker under
+  RDR 0029's `0.x` promise, and consumers may not assert on the field
+  set's size or member order.
 - Negative: the exported reachability relation exposes the
   OVER-APPROXIMATION lint reasons over (merged nodes, unpruned
   guard/observed edges — `reach.go::Reach` doc); a consumer reading it
@@ -907,8 +949,10 @@ gateway exception.
   property classes, where the schema is described.
 - **Risk**: schema drift — a later field added ad hoc breaks C2's
   additive rule.
-  **Mitigation**: golden-fixture byte tests pin `/1`; a failing pin is
-  the tripwire that forces the additive-or-version decision.
+  **Mitigation**: golden-fixture byte tests pin `/1` over the DOCUMENT
+  alone (S2), so the tripwire fires on a document change and not on an
+  envelope version bump; a failing pin is what forces the
+  additive-or-version decision.
 - **Risk**: the DOT arm quietly diverges from the JSON arm's graph,
   or breaks on hostile content (quotes/newlines/non-ASCII in tag
   values — DOT quoting is its own escaping surface, premortem P-16).
@@ -1014,9 +1058,14 @@ code alone.
    **Expected**: byte-identical stdout per cell (C3); no cell depends on
    Go map iteration order.
 2. **Scenario**: Golden fixtures pin `intrastate.graph/1` for a
-   state-machine model and a decision-table model.
+   state-machine model and a decision-table model. The goldens capture
+   the DOCUMENT, not the envelope — `--as=text`, or `jq .data` off
+   `--as=json` — so `0029:C1`'s `schema_version`, which moves on its
+   own minor schedule for reasons unrelated to this document, never
+   enters the pinned bytes.
    **Expected**: the goldens hold; a field added without a schema
-   decision fails the pin (C2's additive rule tripwire).
+   decision fails the pin (C2's additive rule tripwire), and an
+   envelope version bump does not.
 3. **Scenario**: Lint neutrality — run `intrastate lint` over blocking
    and clean fixtures with the export code present, byte-compared
    against a pre-change capture.
@@ -1113,10 +1162,11 @@ field:
   (from, to, rule), and each tag's `values` array sorted and
   deduplicated — so construction order is unobservable.
 - *Whitespace policy / case folding* — field names are lowercase
-  snake_case against `internal/table/dump.go::dumpColumns`, a closed
-  11-member list with `emit` appended last per `0010:C3`; the
-  one-encoder rule fixes the remaining byte layout, and no case
-  folding is applied to values.
+  snake_case against `internal/table/dump.go::dumpColumns`, whose
+  `emit` member `0010:C3` adds; the one-encoder rule fixes the
+  remaining byte layout, and no case folding is applied to values.
+  The field vocabulary is `append-only` per C2's stability clause, so
+  neither its cardinality nor a member's position is asserted here.
 - *Empty / null / absent distinguishability* — every declared
   collection renders as an empty array `[]` (or object `{}`) when it
   has no members, never `null`; an optional member that does not
