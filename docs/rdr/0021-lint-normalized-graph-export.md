@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Final
+- **Status**: Draft [revised from Final 2026-09-13; re-verify A3 @refine — REQ-20's `domain` presence rule is unsatisfiable: "finite" and "has authored members" are different predicates]
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -1232,3 +1232,63 @@ memory management, concurrency model.
   `0021-lint-normalized-graph-export/evidence/research/prior-art.md`.
 - Related: kata `intrastate#jjkh`; RDR 0022 (prospective consumer of
   the reachability relation).
+
+## Refinement Context (re-entry — delete on re-lock)
+
+2026-09-13. Routed back from Stage 8 (Implement) by the author. TARGET
+RE-ENTRY STAGE: 3 (STAGE-SCOPED). Re-verify: A3.
+
+**The defect.** `C2` (REQ-20) binds the tag object's optional member as:
+
+> `tags[{name, provenance, kind, required, single_valued, domain}]`
+> (`domain` present exactly when `guard.AssignmentCount` reports it
+> finite)
+
+That is unsatisfiable as written. "Finite" and "has authored members" are
+different predicates. `internal/guard/declaration.go::domainSize` reports
+finite for three kinds that populate no `decl.Domain`:
+
+- `bool` — "its domain is the two literals, declared nowhere and never
+  absent" (`declaration.go:119-122`); returns `spread(2, …), true`.
+- `int` — finite via `Min`/`Max`, saturating at `cardinalityCeiling`
+  (`:123-137`); the bound is numeric, never a member list.
+- `set` — `spread(len(d.Elements), false), true`, the 2^n powerset
+  (`:138-144`); the universe lives in `Elements`, not `Domain`.
+
+Only `enum` with a non-empty domain populates `decl.Domain`; an `enum`
+with no members returns `(0, false)`, and `scalar` "carries no finite
+domain" (`:145-148`). So REQ-20 demands a `domain` array for
+`bool`/`int`/`set` while no authority spells what that array carries.
+
+The shipped exporter gates on authored members instead —
+`if _, finite := guard.AssignmentCount(decl); finite && len(decl.Domain) > 0`
+(`internal/cli/graph_document.go:185`) — which is the correct behavior
+and contradicts both REQ-20 and its own doc comment at `:51-54`: "the
+finite arm always carries at least one member", false for all three
+kinds above.
+
+**Resolution direction.** Narrow REQ-20 to the authored-members arm:
+`domain` is present exactly when the declaration AUTHORS members —
+`enum` with a non-empty domain — and ABSENT otherwise; `kind` already
+carries the type. `int` omits `domain` too (a compact `{min..max}` form
+was considered and rejected: adding it later is additive, removing it is
+not). Correct the `:51-54` doc comment in the same pass. Scope is
+REQ-20 / C2's `domain` clause only — C1, C3, C4, C5 and the
+edge-relation work are not reopened, and no new wire vocabulary
+(`["false","true"]`, `Elements`, a powerset, an enumerated bound) is
+minted, none being backed by a REQ-N.
+
+**Already pinned to the target behavior.** The committed golden
+`internal/cli/testdata/graph_0021_state_machine.json` carries no
+`domain` for `bool flag` or for member-less `enum recognized`, and
+`["a","b"]` for `enum status`. `TestReq20And28_TagDomainIsPresentExactlyWhenFinite`
+asserts only the enum-with-members and `scalar` arms, so no green
+assertion contradicts the narrowing; `bool`, `int` and member-less
+`enum` are unasserted — a coverage gap this re-entry should close.
+
+**Pointer.** Implementation branch `worktree-rdr-0021` @ `143d919`
+(5 commits, tree clean, UNMERGED); artifacts under
+`0021-lint-normalized-graph-export/artifacts/` (`req-list.md`,
+`coverage.md`, `verification.md`, `deviations.md`). The three
+TEST-FIXTURE defects D2/D3/D4 in `deviations.md` are test-source bugs,
+not record defects, and are fixed in the implementation pass.
