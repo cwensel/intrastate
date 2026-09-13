@@ -177,7 +177,7 @@ Evidence:
 ## D5 — the emitted advisory-rule vocabulary cannot satisfy both C4's seam rule and 0006's code namespace
 
 Type: SPEC-UNDER
-Status: needs author decision
+Status: needs author decision → RESOLVED (Reading 1 governs. The near-miss EMIT SITE predates 0029 — `table.AdvisoryNearMiss`/`nearMissFindings` are on main from RDR 0008 (9006378, bb79182) — so C4's "a surface added later takes a tier in the document that adds it" does not apply: the vocabulary was already crossing the wire when C4's census was written and the census missed it, which is A4's documented failure mode that C4 itself says "recurred once inside the fix". This phase authored only the seam and the snapshot section (3c68705), so the circularity objection covers the snapshot, not the emit site, and emit-site provenance governs. REQ-30's "in the package that owns them" homes the seam in internal/table, where the identifier is minted. Reading 2 is foreclosed: it would place a non-`graph-` code into graphlint's tier, breaking 0006's Naming bullet (:1141) — A1 opened C17's cardinality only, never the namespace rule. The census third-path is unavailable: its fifteen rows do not include table.AdvisoryRules, so asserting against it needs the same record amendment. The two ADV predicates are an over-narrow assertion that any per-package seam would have falsified; correct them to the owning-package seam. Phase 3c applies it.)
 
 `table.AdvisoryNearMiss` (`reserved-tag-key/near-miss`) is emitted on
 `data.findings[].code` of the SUCCESS envelope. `0029:C4` tiers a vocabulary
