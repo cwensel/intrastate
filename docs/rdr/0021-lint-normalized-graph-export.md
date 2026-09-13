@@ -297,6 +297,22 @@ RDR 0002 owns only row-dump ordering.
     without widening `Reach`'s public signature — a change to a surface
     whose only other callers are tests, which C4's neutrality rule and
     A2's recorded coupling both bear on.
+- **A9 The `<opaque>` sentinel reaches the wire as an ordinary member
+  of a `values` array, and no authored tag value can collide with that
+  spelling.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: raised by the Stage-5 critique lens.
+    `internal/graphlint/reach.go::OpaqueValue` is the const `"<opaque>"`,
+    and `reach.go:438` returns `[]string{OpaqueValue}` for a tag with no
+    finite declared domain, so it lands in `Node.Values` and projects
+    into C2's `values` array like any other string. C2 now names it.
+    Verification: confirm no authored-value path can produce the literal
+    `<opaque>` (declaration/atom validation), so a consumer reading the
+    sentinel is never reading an authored value.
+  - **If wrong**: C2's sentinel is ambiguous on the wire — a consumer
+    cannot tell an abstracted tag from one authored as `<opaque>`, and
+    the marker's soundness claim needs a distinguishable encoding.
 
 ## Proposed Solution
 
@@ -386,7 +402,11 @@ by tag name whose every value is that tag's value ARRAY, sorted and
 deduplicated — the shape `reach.go::Node`'s `Values map[string][]string`
 projects without invention; never an array of joined `key=value`
 strings, a flattening that exists only inside `(Node).key`'s escaped
-internal fingerprint) and edges (`{from, to,
+internal fingerprint. A tag with no finite declared domain carries the
+single abstract value `<opaque>` (`reach.go::OpaqueValue`) in that
+array — it reaches the wire verbatim, is NOT an authored value, and a
+consumer distinguishes it by that exact spelling; the abstraction
+marker states why it is sound) and edges (`{from, to,
 rule}`) — with nodes sorted by node key and edges by (from, to, rule),
 so construction order is unobservable. Every declared collection
 renders as an empty JSON array `[]` (or object `{}`) when it has no
@@ -483,8 +503,9 @@ the gateway's `TextLiner` seam, so the DOT stream pipes to `dot` and
 the JSON document diffs raw in CI; advisories stay on stderr. Under
 `--as=json` stdout carries exactly one terminal `ok` envelope whose
 `data` embeds the same document: the document object for `--emit
-json`, a single string field carrying the DOT text for `--emit dot`
-(the documented unwrap is one `jq -r` step). Both modes derive from
+json`, and for `--emit dot` an object carrying the DOT text as the
+single REQUIRED string member `dot` — spelled normatively here, so the
+documented unwrap is exactly `jq -r .data.dot`. Both modes derive from
 one export value (0005's two-modes agreement). All four `--as`×
 `--emit` cells are defined — none refused, none dead — and a consumer
 that parses stdout as an envelope MUST use `--as=json`: the text-mode
@@ -525,11 +546,13 @@ subject.
 
 #### Round-Trip / Inverse Invariants
 
-- `json-decode ∘ export = value identity on the exported projection`:
-  decoding the JSON document reconstructs, value-for-value, every
-  field C2 lists — including exact set members, the recoverability
+- `json-decode ∘ export = value identity on every field C2 lists`:
+  decoding the JSON document reconstructs, value-for-value, each of
+  those fields — including exact set members, the recoverability
   0002's text dump deliberately declined
-  (`0002:§round-trip-inverse-invariants`).
+  (`0002:§round-trip-inverse-invariants`). The quantifier is C2's field
+  list, not "whatever was exported", so the invariant constrains the
+  emitter rather than restating itself.
 - `export ∘ export = byte identity on any loadable model` (C3's replay
   form; the MVV asserts it as byte equality, not exit-code green).
 - No `load ∘ export` inverse is claimed: the document is derived
@@ -921,6 +944,10 @@ gateway exception.
 
 - [ ] All Critical Assumptions verified (A1/A2/A5/A6 are spikes; A2 —
   edge recovery equals the traversal's edges — gates Phase 1)
+- [ ] A8 verified — the exported completeness-carrying surface exists.
+  It gates Phase 2: C4's `graph-export-too-large` MUST, S7, and the
+  `disposition` table's ceiling row all depend on it, so Phase 2 cannot
+  ship while it is Pending.
 
 ### Minimum Viable Validation
 
@@ -996,9 +1023,9 @@ code alone.
 5. **Scenario**: Mode agreement — `--as=json | jq .data` against the
    `--as=text` document, for both `--emit` values.
    **Expected**: value-for-value equality for `json`; for `dot`, the
-   `jq -r` unwrap reproduces the DOT text byte-for-byte AFTER
+   `jq -r .data.dot` unwrap reproduces the DOT text byte-for-byte AFTER
    accounting for the one trailing newline F1 pins on text-mode stdout
-   (`document + "\n"`) — the enveloped string member carries the
+   (`document + "\n"`) — the `dot` string member carries the
    document without that gateway newline, so the comparison is against
    the document, not the stream (C5, A1).
 6. **Scenario**: DOT arm equality and hostile content — tag values
