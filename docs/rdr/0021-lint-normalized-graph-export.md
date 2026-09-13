@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Draft [routed back from finalize 2026-09-12; re-verify none @refine — C1–C5 share code anchors and contract literals with open peers 0013, 0014, 0015 with no cross-citation; fire the joint check]
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
