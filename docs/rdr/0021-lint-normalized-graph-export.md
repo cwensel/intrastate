@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -782,7 +782,17 @@ lint` promises as a repository gate, which C4 only holds unchanged;
 RDR 0015 owns terminal satisfaction over merged nodes (JDR 0001
 §JD-23), on which C2 declares nothing — the export publishes the
 merged relation and the declared `terminal` sets, marks no node
-terminal, and takes no side of the split quantifier. RDR 0022 cites
+terminal, and takes no side of the split quantifier. RDR 0017 owns
+what `findings[i].code` names for a multi-subject producer, and this
+record decides nothing there: C4 forbids the verb to emit findings at
+all, its one new code `graph-export-too-large` is a scalar ENVELOPE
+code (GroupUserEnv, exit 2), and the `model-invalid` arm C1 mirrors
+reaches the shared `internal/cli/flow_input.go::loadFindings` — which
+already populates each entry's `code` with the REQ-24 load-category
+slug (`Code: string(category)`), never the envelope code, and is the
+one loader `lint.go`'s arm and this verb both call. `0017:C1`'s rule
+is thus satisfied by the shipped loader this record reuses, not by
+anything it declares. RDR 0022 cites
 this record as a prospective consumer; 0023/0024 couple only through
 JDR 0002 §D1,
 cited by C5; 0024's load-refusal appends reach this verb by
@@ -1222,106 +1232,3 @@ memory management, concurrency model.
   `0021-lint-normalized-graph-export/evidence/research/prior-art.md`.
 - Related: kata `intrastate#jjkh`; RDR 0022 (prospective consumer of
   the reachability relation).
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-Cluster `0021-0029`, reconciled 2026-09-12 (Stage 7.1, iteration 1).
-Peer pair: 0021 ↔ 0029. Report:
-`docs/rdr/cluster-reconcile/0021-0029/reconcile-report.md`.
-
-**TARGET RE-ENTRY STAGE**: 3 (refine).
-**RE-ENTRY SCOPE**: STAGE-SCOPED — the export approach, the document
-shape and every byte-determinism proof stand; what is missing is a
-stability declaration over surfaces this record already defines, plus
-two peer citations. No alternative is reopened.
-
-### Defect 1 — the tiered-surface obligation is never discharged (PW-1, C-1, C-2, C-3)
-
-`0029:C4` is the normative home for "a machine-readable surface takes
-its tier in the record that adds it", and it names this record's three
-surfaces explicitly:
-
-> the vocabularies `cli/0021` emits under `data` — its `--emit` format
-> set, its `graph-export-too-large` refusal code, and the field names
-> its C2 fixes at Resolve — are machine-readable surfaces this census
-> does not enumerate, because they do not exist on `main` yet. They
-> take their tier assignments in `cli/0021` itself, in the change that
-> adds them, per the rule above.
-
-This record assigns none. The tier words `frozen`, `append-only` and
-`growing` appear nowhere in its text, and `0029:C1`/`0029:C4` are
-cited nowhere. By `0029:C4`'s own words — "an unassigned
-machine-readable surface is a defect" — the surfaces ship untiered.
-
-**Resolution direction**: in C1 and C2, assign exactly one tier to each
-of the three surfaces (the `--emit` value set, `graph-export-too-large`,
-and C2's field spellings), and carry one citation noting the envelope
-around the document is versioned separately by `0029:C1`. Per `0029:C4`
-a tier assignment also obliges an ENUMERATION SEAM — an exported
-accessor returning the vocabulary's members — so name the seam for the
-`--emit` set, or record `seam: none (prose-only)` with the reason, as
-`0029:C4` does for the CLIError `code` row.
-
-### Defect 2 — C2 states a cardinality its peer forbids consumers to assert (C-14)
-
-`0021:C2` fixes `rows[]` as:
-
-> a closed 11-member list with `emit` appended last per `0010:C3`
-
-`0029:C2` forbids a consumer asserting "the set's cardinality, a
-member's ordinal position, or a tail position" on an `append-only`
-vocabulary. Whether this wording is a legitimate `frozen` declaration
-or the exact anti-pattern `0029:C2` retires cannot be decided until
-Defect 1 assigns the tier. Settle it in the same pass.
-
-(The descriptive word "closed" itself is NOT in scope: `0029:S9`
-exempts sites describing something C4 does not tier, naming
-`DumpColumns` — this record's usage — explicitly.)
-
-### Defect 3 — the joint-check never saw 0029 (PW-3, C-9)
-
-Decision Rationale records:
-
-> Joint-check: clear (12 peers) — open peers 0012–0020, 0022–0024
-
-0029 is in neither range, yet `0029` fired a joint decision AT this
-record at its lock fence (home `cli/0029 §Normative Contracts` C4).
-This record locked 2026-08-28; 0029 is dated 2026-09-11, so the check
-could not have seen it and was never re-run.
-
-**Resolution direction**: re-run the propose-time joint-decision check
-against 0029 and record the result. Defects 1 and 2 are what a
-correctly scoped check would have surfaced.
-
-### Re-verify on re-entry — A4 (C-11)
-
-`0021:A4` ("a new root export verb requires no amendment to RDR 0005's
-envelope contract") is Verified against the envelope as it stood.
-`0029:C1` adds a non-`omitempty` `schema_version` to every terminal
-record at the gateway, including this verb's. A4's conclusion is
-expected to survive — it reasons from `0005:C1`'s scope sentence, not
-from envelope immutability — but it must be re-verified against the
-post-0029 envelope, and any assertion over an exact envelope key set
-re-examined.
-
-### Carried forward — scope 0021:S2's goldens to the document (C-8)
-
-`0021:S2` pins golden fixtures for `intrastate.graph/1`. Captured under
-`--as=json` they contain the envelope and therefore `schema_version`,
-which moves on 0029's minor-increment schedule for reasons unrelated to
-this document — training the additive tripwire to be re-baselined.
-Scope those goldens to the DOCUMENT (`--as=text`, or `jq .data`).
-No golden exists on disk yet, so this is a wording fix, not a
-re-capture.
-
-### Standing joint decision — two-marker read order (C-7)
-
-Neither record sequences the two version markers: `0029:C1` governs the
-envelope's `schema_version`, `0021:C2` the document's `schema`, and
-neither states which an agent reads first, nor the behaviour when the
-envelope major is supported and the document marker is not (or the
-inverse). Hoisted to `cli/0029 §Normative Contracts` C4 (already the
-home for the envelope-versus-document boundary). Open question: **which
-marker does a consumer check first, and what does it do when one is
-supported and the other is not?** This record does not answer it; it
-cites the home once C4 does.
