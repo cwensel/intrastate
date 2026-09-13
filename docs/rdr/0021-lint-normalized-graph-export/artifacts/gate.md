@@ -1,16 +1,16 @@
 # Finalization Gate — RDR 0021, lint's normalized-graph export
 
 - **Record**: `cli/0021` (`0021-lint-normalized-graph-export`)
-- **Date**: 2026-09-12
-- **Verdict**: READY — Gate PASS, locked to Final (re-lock after the
-  `0021-0029` cluster reconcile).
+- **Date**: 2026-09-13
+- **Verdict**: READY — Gate PASS, locked to Final (re-lock after the Stage 8
+  route-back over REQ-20's `domain` presence rule).
 
-Mechanical pre-sweep: `evidence/tooling-pass/iter-3/tooling-pass.md` — PASS
-(`rdr lint --locking` exit 0, `blocking=0 resolution=0 placeholder=0`). The
-7.1 re-entry note's six items all verify closed in live text (that report
-carries the item-by-item table); the note is deleted at this lock. Item 4,
-Cross-Cutting Concerns, is authored in the record at `0021:G-cross-cutting`
-and is deliberately not copied here.
+Mechanical pre-sweep: `evidence/tooling-pass/iter-4/tooling-pass.md` — PASS
+(`rdr lint --locking` exit 0, `blocking=0 resolution=0 placeholder=0`, one
+advisory answered under item 2). The Stage-8 re-entry note's defect verifies
+closed in live text (that report carries the item-by-item table); the note is
+deleted at this lock. Item 4, Cross-Cutting Concerns, is authored in the record
+at `0021:G-cross-cutting` and is deliberately not copied here.
 
 ## 1. Contradiction Check
 
@@ -20,8 +20,8 @@ none between planned features and stated principles.
 - Findings read `0005:C1` as carving `lint`/`dump`/`parse`-class command
   groups out of the flow contract, "owned by the RDR that names them". C1
   claims a root `graph` verb under exactly that carve-out, and A4 (Method:
-  Peer RDR) independently verifies no 0005 envelope amendment is needed —
-  now re-verified against the post-0029 envelope.
+  Peer RDR) independently verifies no 0005 envelope amendment is needed,
+  re-verified against the post-0029 envelope.
 - Findings read 0002 as fixing the dump's field list and row order while
   declining to define a dump grammar. C2 owns the JSON schema on that seeded
   ground and reuses 0002's field vocabulary and row order rather than minting
@@ -41,10 +41,17 @@ and without the export present. C2's "no verdict or finding field, and no
 per-node terminal marking" applies the same principle to the document
 surface, leaving the dead-end quantifier to RDR 0015 (JDR 0001 §JD-23).
 
-Post-reconcile check: the tier declarations added to C1 and C2 agree with the
-additive-within-`/1` rule C2 already stated — the STABILITY paragraph names
-that as the same promise in `0029:C4`'s tier vocabulary, not a second rule.
-No clause contradicts another.
+**This round's narrowing introduces no contradiction.** C2's `domain` rule now
+reads over AUTHORED members and states the carve-out explicitly — "Presence is
+NOT `guard.AssignmentCount` finiteness" — which is the opposite of what the
+pre-route-back text said. Checked against every sibling that could disagree:
+A3's Evidence now derives the same two-predicate split from `domainSize`'s
+per-kind arms; `kind` continues to carry the type for the omitting kinds, so
+no information is lost; the "no derived value vocabulary is minted here" clause
+forecloses the `bool`-literals / `Elements` / powerset / `{min..max}` readings
+the old rule would have demanded. C1, C3, C4 and C5 are byte-unchanged and
+none of them predicates anything on `domain` presence. The tier declarations
+from the prior round still agree with the additive-within-`/1` rule.
 
 ## 2. Assumption Verification
 
@@ -58,17 +65,40 @@ All eight Critical Assumptions are internally consistent and terminal.
   rather than waived.
 - **Evidence**: Status, Method and Evidence agree on every row; each
   "If wrong" is non-empty.
-- **A4, the reconcile's `re-verify` target**: discharged in place. Its premise
-  is `0005:C1`'s scope sentence, not envelope immutability, so `0029:C1`'s
-  non-`omitempty` `schema_version` leaves the conclusion standing; C-11's
-  second ask is answered with a negative — this record asserts no exact
-  envelope key set, C2 predicating its field list of the DOCUMENT.
+- **A3, this route-back's `re-verify` target**: discharged in place. Its
+  Evidence now reads `domainSize`'s arms to the point where the two predicates
+  come apart — `bool` (`spread(2, …), true`, "declared nowhere"), a bounded
+  `int` (`Min`/`Max` width, `cardinalityCeiling` the overflow fallback) and
+  `set` (`spread(len(d.Elements), false)`) all report FINITE while populating
+  no `decl.Domain`; only an `enum` with a non-empty domain authors members.
+  That is exactly the rule C2 now states, and exactly what the shipped
+  exporter does (`finite && len(decl.Domain) > 0`,
+  `internal/cli/graph_document.go:185`). Record and code agree.
 - **Self-reference**: none. The three `Source Search` rows resolve into the
-  product tree, never to this record or its artifact directory.
-- **Symbol resolution**: every `source-anchor` edge reports `resolved: true`
-  — none false, none absent, so the lookups genuinely ran. A5's Evidence is
-  written `clierr.go:174::WriteJSONLine`; the symbol resolves and the stale
-  line component is a documented non-finding.
+  product tree, never to this record or its artifact directory. A3's
+  reconcile-artifact citation sits beside resolving source anchors, which is
+  where a reconcile artifact belongs.
+- **Symbol resolution**: 31 `source-anchor` edges, every one `resolved: true`
+  under a bound `RDR_SOURCE_REPO` — none false, none absent, so the lookups
+  genuinely ran. A5's Evidence is written `clierr.go:174::WriteJSONLine`; the
+  symbol resolves and the stale line component is a documented non-finding.
+- **Evidence-field budget (the one advisory)**: A3's field is 43 lines against
+  a soft cap of 30. The author's question, answered: the load-bearing anchors
+  remain findable — four `path::Symbol` anchors (`reach.go::Reach`,
+  `declaration.go::AssignmentCount`, `product.go::Groups`,
+  `reach.go::heldValues`), each resolving — and the balance is not padding but
+  the per-kind `domainSize` derivation that IS the re-verification this
+  route-back demanded, the content a later grounding sweep reads. Kept in
+  place, not truncated and not relocated; Profile is `large`, not
+  `foundational`, so the check is advisory here.
+- **Two residuals are the implementation's, not this record's.** The doc
+  comment at `graph_document.go:51-54` still asserts the refuted finite-only
+  claim, and `TestReq20And28` leaves `bool`, bounded `int` and member-less
+  `enum` unasserted. Both were verified still open on the unmerged branch
+  `worktree-rdr-0021`. Neither is a record defect: the RDR's rule is now
+  correct and the shipped code already implements it. A3 names both as owed by
+  the implementation pass, and S2's coverage requirement is what will close the
+  test gap.
 
 ## 3. Scope Verification
 
@@ -95,20 +125,26 @@ pairing rests on reciprocal `cross-cutting-owner` edges, not a declared
 
 Joint-decision fence: `op = none` (`fence-clear`) after one real blocker was
 fired and cleared in this pass. `index --literal-intersect` reported
-`0017 0021 UNCITED 1 shared: code`. Grounded per §ground-before-ask
-(`--outcome ground` → `apply`, settled in source), the check fires CLEAR:
-`0017:C1` decides what `findings[i].code` names for a multi-subject producer;
-`0021:C4` forbids this verb to emit findings at all, its one new code
-`graph-export-too-large` is a scalar ENVELOPE code, and the `model-invalid`
-arm C1 mirrors reaches the shared
-`internal/cli/flow_input.go::loadFindings`, which already populates each
-entry's `code` with the REQ-24 load-category slug (`Code: string(category)`)
-rather than the envelope code. 0017's rule is satisfied by the shipped loader
-this record reuses; 0021 decides nothing in 0017's domain. Recorded as a
-citation on the Joint-check line, not as a synced copy. JC1's own fire
-(→ 0029, home `cli/0029 §Normative Contracts` C4) is `homed`, and C-7's
-two-marker read-order question stays at that home, cited here rather than
-restated. `rulings_open=0` — all nine author rulings are marked absorbed.
+`0012 0021 UNCITED 5 shared: bool enum int scalar set` — a NEW pair created by
+this round's own narrowing, which pulled the five kind tokens into C2's
+presence rule. Grounded per §ground-before-ask (`--outcome ground` → `code`),
+the check fires CLEAR: `0003:C2` (Implemented, terminal) OWNS the vocabulary —
+"the value kinds are exactly five, spelled with these tokens wherever a kind is
+named" — and `0012:C1` inherits it by explicit citation as "RDR 0003's
+spelling". The two records then read it at disjoint seams: 0012 carries the
+declared kind to the VALUE-COMPARISON seam (`grammar.go::Evaluator`'s
+`Evaluate(atom, value)`, constructed at `flow_resolve.go::guardSeam`,
+`product.go::valueSatisfies`, `reach.go::atomAdmitsValue`), deciding what
+`eq`/`in` answer per kind; `0021:C2` decides when a DOCUMENT field is emitted.
+Confirmed in source: the exporter constructs no evaluator, and 0012 anchors
+neither `AssignmentCount` nor `decl.Domain` —
+`AssignmentCount`'s non-test callers are cardinality consumers (`coverage.go`,
+`product.go`, `lint.go`, `reach.go`), never the comparison seam. Recorded as a
+citation on the Joint-check line naming 0012 and the four shared symbols, not
+as a synced copy; both intersect arms now read `cited`, 0 uncited. JC1's own
+fire (→ 0029, home `cli/0029 §Normative Contracts` C4) is `homed`, and C-7's
+two-marker read-order question stays at that home. `rulings_open=0` — all nine
+author rulings are marked absorbed.
 
 ## 5. Proportionality
 
@@ -130,17 +166,18 @@ the count.
 **Profile re-validated.** The Metadata field reads `large`, and that still
 matches the contracts just counted: one contract, user-facing yes (a new root
 verb and a documented output document), locking the `intrastate.graph/1`
-field list and marker, which `0029` consumes by a resolved edge. The form is
-correct — value plus one clause naming the contract, no matrix or provenance
-prose left from the template. The lens battery `large` demands did run:
+field list and marker, which `0029` consumes by a resolved edge into
+`0021:C2`. `--outcome floor` returns `none` (`floor-below-two`), so no
+accretion floor raises it. The lens battery `large` demands did run:
 grounding, 3amigo, critique (two models, differing stamps, diff written) and
-repeatability-lite (`--outcome repeatability` → `none`, `rule =
-repeatability-lite-complete`). `lens_stale=none` — the qualifier is cleared
+repeatability-lite (`--outcome repeatability` → `none`, rule
+`repeatability-lite-complete`). `lens_stale=none` — the qualifier is cleared
 and no lens folder predates it.
 
-**Growth from the reconcile.** The re-entry added two tier declarations and
-two peer citations to text this record already carried, and this lock removes
-a 102-line re-entry note. The density sits in C2, where each field spelling is
-normative and therefore load-bearing at implementation; the Pre-Lock
-Mini-Checks and Decision Rationale carry the reasoning that keeps those
-spellings from being re-litigated in Phase 1. Proportionate.
+**Growth from this round is negative.** The narrowing rewrote C2's `domain`
+clause in place and extended A3's Evidence with the per-kind derivation that
+justifies it; this lock then removes a 46-line re-entry note, so the record
+comes out shorter than it went in. The density sits in C2, where each field
+spelling is normative and therefore load-bearing at implementation, and the
+one over-budget Evidence field is the verification content answering the very
+defect that caused the route-back. Proportionate.
