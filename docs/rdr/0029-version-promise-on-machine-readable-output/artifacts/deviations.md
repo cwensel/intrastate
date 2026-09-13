@@ -79,7 +79,7 @@ Evidence:
 ## D3 — two Phase 1 tests bind the same bytes in `internal/accessor/model.go`
 
 Type: TEST-FIXTURE
-Status: needs author decision
+Status: needs author decision → RESOLVED (0029:C2 scopes the prohibition to a tiered vocabulary; 0029:S9 pairs internal/accessor/model.go with one site, :308, the verdict set, and names the accessor capability set among sites where `closed` stays; 0029:C4 tiers neither the capability nor the validation-code set. Source is correct; the defect is the file-scoped census sweep at internal/cli/schema_closed_wording_0029_test.go:93-106, which must honour the per-site vocabulary subject the census table carries — per REQ-57, "an unscoped grep for the word is not" the assertion. Fix in that assertion, not model.go.)
 
 Two of this RDR's own Phase 1 tests make incompatible demands of
 `internal/accessor/model.go`:
