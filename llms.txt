@@ -26,6 +26,7 @@ intrastate <cmd> --as=json # one terminal JSON envelope per run
 - `intrastate flow read-state`: Report what the declared read accessors see
 - `intrastate flow resolve`: Map one recognized outcome to exactly one plan
 - `intrastate flow set-state`: Apply planned owned-tag writes, verified by read-back
+- `intrastate graph`: Export a model's normalized graph as a document
 - `intrastate lint`: Check a transition model against the graph invariants
 - `intrastate version`: Print build version, commit, and date
 

@@ -62,6 +62,7 @@ Usage:
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
   flow        Drive a transition model from a skill
+  graph       Export a model's normalized graph as a document
   help        Help about any command
   lint        Check a transition model against the graph invariants
   version     Print build version, commit, and date
@@ -942,6 +943,88 @@ Worked call
   intrastate flow set-state --model flow.toml \
       --artifact state=state.json \
       --write status=approved --clear draft_note --as json
+```
+
+## intrastate graph
+
+Export a model's normalized graph as a document
+
+```
+Export a transition model's normalized graph as a versioned document.
+
+The document is a documentation artifact, not a verdict: this command
+runs load, normalization, grouping, and the reachability traversal only.
+It never runs the graph invariants and emits no findings, so a model
+`lint` refuses still exports — which is what makes a failing model
+inspectable as a graph. Run `intrastate lint` for acceptance.
+
+  --emit json   the intrastate.graph/1 JSON document (default)
+  --emit dot    a DOT digraph of the same relation
+
+Under --as=text stdout carries the selected document verbatim, so the
+DOT stream pipes to `dot` and the JSON document diffs raw in CI.
+```
+
+```
+Usage:
+  intrastate graph [flags]
+
+Flags:
+      --emit string    document format: json | dot (default "json")
+      --flow string    flow id to export (reserved; this build resolves none — use --model)
+      --help-all       show extended help (vocabulary, wire shapes, exit codes)
+      --model string   path to the transition model to export
+
+Global Flags:
+      --as string   output mode: text | json (default "text")
+```
+
+```
+This command exports the model's normalized graph as a document.
+
+The JSON document is versioned by its leading `schema` field, initial
+value intrastate.graph/1. Evolution within /1 is ADDITIVE: a member may be
+added in a minor, none removed or renamed within a major, so a consumer
+must tolerate an unrecognized field and must not assert on the field
+set's size or on any member's position.
+
+Two version markers coexist and neither substitutes for the other. The
+document's own `schema` versions the DOCUMENT; the envelope's
+`schema_version` versions the ENVELOPE carrying it and is never
+projected into `data`.
+
+Document formats (`--emit`, an append-only vocabulary):
+
+  json
+  dot
+
+`--emit` selects the DOCUMENT and `--as` selects the ENVELOPE; all four
+combinations are defined. Under --as=text stdout is the bare document
+plus one newline. Under --as=json stdout is one terminal ok envelope
+whose `data` embeds the same document — the object itself for
+--emit json, and for --emit dot an object whose single required
+string member `dot` carries the DOT text, so the unwrap is
+`jq -r .data.dot`.
+
+The `reach` block carries a required `abstraction` marker with the token
+value declared-over-approximation. THE SOUNDNESS RULE: the relation is the
+DECLARED over-approximation, not the runtime one — nodes are merged and
+guard/observed atoms are unpruned — so universal claims ("no path does
+X") proved over it hold at runtime, while existence claims ("some path
+reaches X") may be spurious.
+
+This command is NOT an acceptance gate. The document carries no verdict
+and no finding field; a model that loads exports, whatever lint would
+say about it. Run `intrastate lint` to accept or refuse a model.
+
+When the traversal does not complete under this build's node ceiling of
+4096, the command refuses with graph-export-too-large rather than
+emitting a partial document: a partial graph diffs as a graph change.
+Narrow a tag's declared domain and re-run.
+
+For one model and one build, emission is byte-for-byte identical across
+invocations in every --emit and --as combination. The promise is scoped
+to (model, build) and not across builds.
 ```
 
 ## intrastate lint

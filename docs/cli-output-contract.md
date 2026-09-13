@@ -455,6 +455,87 @@ the field renders through the generic payload renderer as
 `flow next` carries no `dispositions`, for the same reason it carries no
 `emit`.
 
+## The `graph` document and what it does not claim
+
+`intrastate graph` exports a model's normalized graph as a document. It is
+a DOCUMENTATION artifact, never a verdict: the command runs load,
+normalization, grouping, and the reachability traversal only. It never runs
+the graph invariants, emits no findings, and exports any model that loads —
+including one `intrastate lint` refuses, which is what keeps a failing
+model inspectable as a graph. `lint` remains the acceptance surface.
+
+The JSON document is versioned by its required LEADING `schema` field,
+initial value `intrastate.graph/1`. That marker versions the DOCUMENT.
+The envelope's own `schema_version` versions the ENVELOPE carrying it and
+is never projected into `data`, where it would collide with this field:
+two markers at different levels, neither substituting for the other.
+
+`--emit` selects the DOCUMENT and `--as` selects the ENVELOPE, and all
+four combinations are defined:
+
+```sh
+# The bare JSON document on stdout, plus one trailing newline.
+intrastate graph --model flow.toml
+
+# The same relation as a DOT digraph, ready to pipe.
+intrastate graph --model flow.toml --emit dot | dot -Tsvg > graph.svg
+
+# One terminal ok envelope whose `data` embeds the same document.
+intrastate graph --model flow.toml --as=json | jq .data
+
+# Under --emit dot the `data` object carries the DOT text as its single
+# required string member, so the unwrap is exactly:
+intrastate graph --model flow.toml --emit dot --as=json | jq -r .data.dot
+```
+
+Under `--as=text` stdout carries the selected document verbatim and
+nothing else, so the DOT stream pipes to `dot` and the JSON document diffs
+raw in CI. A consumer that parses stdout as an envelope MUST use
+`--as=json`: the text-mode stream is the bare document by contract.
+
+Evolution within `/1` is ADDITIVE. A member MAY be added in a minor; none
+is removed or renamed within a major. A consumer MUST therefore tolerate
+an unrecognized field and MUST NOT assert on the field set's cardinality,
+on a member's ordinal position, or on a tail position.
+
+For one model and one build, emission is byte-for-byte identical across
+invocations in every `--emit` and `--as` combination. The promise is scoped
+to (model, build) and NOT across builds: a build bump may change the JSON
+only by the additive rule above, and may re-baseline DOT diffs freely,
+since DOT styling is explicitly non-normative. Identity is
+invocation-independent — `model` carries the authored `[model] id`, never
+the `--model <path>` argument or any path-derived string — so the same
+model exported from two checkouts is byte-identical.
+
+### The `abstraction` marker and the soundness rule
+
+The `reach` block carries a REQUIRED `abstraction` marker with the token
+value `declared-over-approximation`. It states what the relation IS: the
+DECLARED over-approximation of the runtime, with nodes merged and
+guard/observed atoms left unpruned.
+
+**The soundness rule: universal claims ("no path does X") proved over this
+relation hold at runtime; existence claims ("some path reaches X") may be
+spurious.** A reader who takes the merged relation for the runtime one
+over-counts edges and will "verify" a property the runtime lacks. The
+marker is required precisely so that no consumer reads the diagram as a
+certificate.
+
+The document carries NO verdict field and NO finding field — an export is
+never a lint pass — and no per-node terminal marking: which merged nodes
+satisfy a `terminal` predicate set is a quantifier this document does not
+decide. The declared `initial` and `terminal` sets travel in the document
+for a consumer to evaluate for itself.
+
+This record claims no content-addressed identity and no replay-stable
+hash. The promise is byte identity of the emitted stream, not a digest, so
+the document carries no hash, digest, or checksum member.
+
+When the traversal does not complete under the published node ceiling the
+command refuses with `graph-export-too-large` (exit 2), naming the ceiling
+and the narrow-a-domain remedy. It never emits a partial document: a
+partial graph diffs as a graph change.
+
 ## `flow resolve --plan-only` and the two halves of the payload
 
 Every field of the `flow resolve` success payload belongs to exactly one of

@@ -1,0 +1,17 @@
+=== lint --as=json ===
+exit: 2
+--- stdout ---
+{"code":"graph-lint-failed","message":"the model carries blocking graph-lint findings","schema_version":"0.1","findings":[{"code":"graph-coverage-gap","message":"group lintfix/stop status.eq=a over rows [only-on] leaves 1 of 2 assignments in its scoped product uncovered for the no_match arm; the coverage union must equal the scoped product","model":"lintfix","severity":"blocking","rule":"only-on","element":"lintfix/stop status.eq=a","dimension":"flag","class":"no_match"},{"code":"graph-coverage-gap","message":"group lintfix/go status.eq=a over rows [over-one over-two] leaves 1 of 1 assignments in its scoped product uncovered for the ambiguous_match arm; the coverage union must equal the scoped product","model":"lintfix","severity":"blocking","element":"lintfix/go status.eq=a","class":"ambiguous_match"},{"code":"graph-overlap","message":"rows \"over-one\" and \"over-two\" are enabled together by some assignment in lintfix/go status.eq=a; lint rejects the ambiguity rather than selecting by source order","model":"lintfix","severity":"blocking","rule":"over-one","span":"lintfix:over-one","element":"over-two","fingerprint":"status|match|eq|a,;#status=b,;|status|match|eq|a,;#status=b,;"}]}
+
+--- stderr ---
+
+=== lint --as=text ===
+exit: 2
+--- stdout ---
+
+--- stderr ---
+error: graph-lint-failed: the model carries blocking graph-lint findings
+  graph-coverage-gap: group lintfix/stop status.eq=a over rows [only-on] leaves 1 of 2 assignments in its scoped product uncovered for the no_match arm; the coverage union must equal the scoped product (rule="only-on" element="lintfix/stop status.eq=a" dimension="flag" class="no_match")
+  graph-coverage-gap: group lintfix/go status.eq=a over rows [over-one over-two] leaves 1 of 1 assignments in its scoped product uncovered for the ambiguous_match arm; the coverage union must equal the scoped product (element="lintfix/go status.eq=a" class="ambiguous_match")
+  graph-overlap: rows "over-one" and "over-two" are enabled together by some assignment in lintfix/go status.eq=a; lint rejects the ambiguity rather than selecting by source order (rule="over-one" span="lintfix:over-one" element="over-two")
+

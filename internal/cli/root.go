@@ -193,6 +193,12 @@ func NewRootCmd() *cobra.Command {
 	// Root `lint` is the authoritative graph-acceptance surface
 	// (`0006:C19`), deliberately not under RDR 0005's `flow` group.
 	cmd.AddCommand(newLintCmd())
+	// Root `graph` exports a model's normalized graph as a document
+	// (`0021:C1`). It sits beside `lint` and outside the `flow` group,
+	// under `0005:C1`'s carve-out for command groups owned by the RDR
+	// that names them. It is not an acceptance gate: `lint` stays the
+	// authoritative one and this verb runs no invariant.
+	cmd.AddCommand(newGraphCmd())
 	// The `flow` group is RDR 0005's skill-integration surface. `lint`
 	// stays at ROOT and is deliberately NOT absorbed into it (`0005:C1`).
 	cmd.AddCommand(newFlowCmd())

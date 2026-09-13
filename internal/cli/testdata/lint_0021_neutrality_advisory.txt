@@ -1,0 +1,14 @@
+=== lint --as=json ===
+exit: 0
+--- stdout ---
+{"type":"ok","schema_version":"0.1","data":{"findings":[{"code":"graph-coverage-closed-by-escape","message":"the coverage of group lintfix/stop status.eq=a is closed by the bare escape row \"bare-rescue\" rather than proved over its declared domains","model":"lintfix","severity":"info","rule":"bare-rescue","element":"lintfix/stop status.eq=a"}]}}
+
+--- stderr ---
+
+=== lint --as=text ===
+exit: 0
+--- stdout ---
+  graph-coverage-closed-by-escape: the coverage of group lintfix/stop status.eq=a is closed by the bare escape row "bare-rescue" rather than proved over its declared domains (rule="bare-rescue" element="lintfix/stop status.eq=a")
+
+--- stderr ---
+

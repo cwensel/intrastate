@@ -1,0 +1,13 @@
+=== lint --as=json ===
+exit: 0
+--- stdout ---
+{"type":"ok","schema_version":"0.1","data":{"findings":[]}}
+
+--- stderr ---
+
+=== lint --as=text ===
+exit: 0
+--- stdout ---
+
+--- stderr ---
+
