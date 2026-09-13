@@ -27,7 +27,7 @@ the severity is DERIVED (`severityFor` returns `info` for anything
 ## D2 — the MVV's minor-version movement cannot be observed in one build
 
 Type: SPEC-UNDER
-Status: needs author decision
+Status: needs author decision → RESOLVED (0029:S7, the record's own Testing Strategy matrix — "the matrix the verified assumptions imply" — contains NO minor-movement row and NO empty-findings row: row 1 asserts `"schema_version":"0.1"` by value and is explicitly additive; row 4 asserts exit 0, `type == "ok"` and `"severity":"info"`. Those are the single-build-witnessable assertions. The MVV oracle at :1546 assigns release-classification to a human and routes the mechanical half to REQ-21/A7's committed CI snapshot (:956); the oracle's step-1 control at :1542-1545 makes the empty-findings baseline a property of the PRE-change build. req-list.md:130 already carries the release-classification clause as EXCLUDED on the same warrant. Re-scope the in-process runner to those assertions — faithful implementation, not a scope change. Phase 3c applies it.)
 
 `internal/cli/schema_mvv_0029_test.go::TestMVV0029_AnAgentPinsAVersionAndSurvivesANewFindingCode`
 asserts, in ONE process against ONE build, both:
