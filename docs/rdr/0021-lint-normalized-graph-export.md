@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft [revised from Final 2026-09-12; re-verify A4 @refine — 0029:C4 obliges tier assignments for `--emit`, `graph-export-too-large` and C2's field spellings that this record never makes]
+- **Status**: Draft
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -70,9 +70,9 @@ N/A-bulleted). -->
 - **Type**: Feature
 - **Profile**: large — one contract, the export of the normalized
   graph, stated as five clauses (C1–C5) of one seam; user-facing yes;
-  locks the `intrastate.graph/1` document's field list and marker
-  (its DOT projection is a documentation rendering, styling
-  non-normative).
+  locks cross-rdr — the `intrastate.graph/1` document's field list and
+  marker, which `0029` consumes by a resolved edge into `0021:C2` (its
+  DOT projection is a documentation rendering, styling non-normative).
 - **Priority**: Low
 - **Related Issues**: kata `intrastate#jjkh` (1602); kata `4hps`
   (terminal-reachability invariant — now RDR 0022, a potential
@@ -205,6 +205,16 @@ RDR 0002 owns only row-dump ordering.
     three-item enumeration that does not itself name `graph`; the
     conclusion rests on the scope sentence, not on reading `graph`
     into that list (`evidence/research/a3-a4.md`).
+    Re-verified 2026-09-12 against the post-0029 envelope (C-11):
+    `0029:C1` adds a non-`omitempty` `schema_version` to both terminal
+    records, and reconciles itself with `0005:C1`'s omitempty budget in
+    its own text — "a scalar version marker carrying no discriminator
+    and no payload, so it does not consume that budget." A4's premise is
+    `0005:C1`'s scope sentence, not envelope immutability, so a field
+    added to the envelope leaves the conclusion standing. C-11's second
+    ask is discharged with a negative: this record asserts no exact
+    envelope key set — C2 predicates its field list of the DOCUMENT, and
+    `schema_version` is named only to hold the two markers apart.
   - **If wrong**: the surface must be renegotiated at the envelope
     home before Phase 2 can land.
 - **A5 Marshaling the document through the shared non-HTML-escaping
