@@ -100,3 +100,37 @@ bytes: each red is a runtime assertion failure, never a compile break.
 Eight tests initially passed against the absent surface and were rewritten
 before commit — each now fails first on a precondition asserting the subject
 exists, so none can pass tautologically.
+
+## REQ-MVV output
+
+Run end to end against the post-change build, on the MVV's named clean
+model (`models/rdr.toml`). Steps 1-3 are the record's two-build procedure
+collapsed onto this one build: the fifth advisory code ships in this same
+change, so the step-3 re-run is the binary below.
+
+Step 1/3 — `intrastate lint --model models/rdr.toml --as=json`, exit 0:
+
+```json
+{"type":"ok","schema_version":"0.1","data":{"findings":[{"code":"graph-idempotent-write","message":"row \"seed-revise\" matches \"seeded\" on \"stage\" and writes the same value back, so the write moves nothing on that key","model":"rdr","severity":"info","rule":"seed-revise","span":"rdr:seed-revise","dimension":"stage","key":"stage","operator":"eq","literal":"seeded","block":"match","fingerprint":"stage|match|eq|seeded,;#stage=seeded,;"}]}}
+```
+
+Step 4, the expected end state, read off those bytes:
+
+| assertion | observed |
+| --- | --- |
+| exit code unchanged (0) | `exit=0` |
+| envelope `type` still `ok` | `type: ok` |
+| the new finding in `data.findings` | `graph-idempotent-write` |
+| its `severity` is `info` | `severity: info` |
+| MAJOR unchanged | `schema_version: 0.1`, major `0` |
+
+Step 2's subject — the advisory tier grew to five members
+(`graphlint::AdvisoryCodes()`), which `0006:C17` as amended by `0029:A1`
+licenses, and the new member fires on input that previously produced no
+such finding: the `growing` tier's defining licence.
+
+NOT observed on this build, and referred: the minor's `"0.1"` → `"0.2"`
+movement. One build emits one constant, so the pre-change baseline and the
+post-change re-run cannot both be witnessed in one process. See
+`deviations.md` D2 — the record's own oracle assigns the
+release-classification half to a human.
