@@ -1,12 +1,27 @@
 # Finalization Gate — cli/0029 version-promise-on-machine-readable-output
 
 Date: 2026-09-12 · Profile: `large` · Verdict: **READY — Gate PASS**
+Re-lock after the 0021-0029 cluster reconcile (Stage 7.1, iteration 1).
 
-Mechanical pre-sweep: `evidence/tooling-pass/tooling-pass.md` — PASS
-(one hollow section fixed in-pass, re-run clean). `rdr lint --locking`
-exit 0, `blocking=0 resolution=0`. Item 4, Cross-Cutting Concerns, is
-authored in the record and cited as `cli/0029:G-cross-cutting`; it is not
-copied here.
+Mechanical pre-sweep: `evidence/tooling-pass/iter-2/tooling-pass.md` — PASS
+(the surviving cluster re-entry note deleted after both its obligations were
+discharged in live text; re-run clean). `rdr lint --locking` exit 0,
+`blocking=0 resolution=0 placeholder=0 advisory=1`. Item 4, Cross-Cutting
+Concerns, is authored in the record and cited as `cli/0029:G-cross-cutting`;
+it is not copied here.
+
+**What changed since the previous lock.** Two items, both from the cluster
+gate's re-entry note, both now closed:
+
+- Decision Rationale described peer 0021 as "an early Draft with every
+  assumption still Pending" and justified a prose delegation with "nothing
+  is edited in a peer's locked text". 0021 was Final from 2026-08-28 —
+  two weeks before this record's date — so the premise was false and the
+  justification inverted: because 0021's text WAS locked, the delegation
+  could not be discharged in its own flow, and nothing happened. Both
+  sites now state 0021's real status and cite the tracked obligation
+  (0021 demoted at the cluster gate with `re-verify A4 @refine`) instead.
+- The standing joint decision on two-marker read order is answered in C4.
 
 ## 1. Contradiction Check
 
@@ -26,8 +41,7 @@ Each contract traces to a discovery rather than to preference:
   not against taste.
 - The research found the verdict-safe introduction mechanism already ships
   (`graphlint::Report.Blocking()`/`Advisory()`, `0006:C17`). C3 cites that
-  guarantee rather than restating it, and mints no new mechanism —
-  consistent with Proportionality's finding that C3 rides `0006:C17`.
+  guarantee rather than restating it, and mints no new mechanism.
 - OpenTofu's `json-format.mdx` supplies both halves of C1's consumer rule
   verbatim and the sibling-field placement; C1 adopts both.
 
@@ -39,15 +53,20 @@ typo; a consumer survives an addition), and Key Discoveries is explicit
 that the literature (Daigneau p.244, DDIA p.121) justifies
 tolerant-on-receive/validated-on-send but does NOT state this specific
 inversion — so C1's asymmetry paragraph is labelled this project's own
-decision rather than received practice. A principle is claimed at the
-strength the evidence supports, which is the opposite of a contradiction.
+decision rather than received practice.
 
 Second tension, also resolved in text: C1 adds a non-`omitempty` field to
 the refusal record while `0005:C1` restricts it to "exactly one omitempty
 structured field, `findings`". C1 argues `schema_version` is a scalar
 version marker carrying no discriminator, so it does not consume the
-`JDR 0001 §D10` rule-3 budget whose subject is a structured carrier. The
-refusal envelope still has exactly one structured field.
+`JDR 0001 §D10` rule-3 budget whose subject is a structured carrier.
+
+**Re-checked at this lock.** The C4 addition introduces no contradiction:
+its two mixed-case rules are compositions of clauses already on the record
+(C1's unsupported-major rejection and its never-projected-into-`data`
+rule) with `0021:C2`'s additive-within-`/1` promise, and it contradicts
+neither. The corrected Decision Rationale paragraphs now agree with the
+corpus about 0021's status, which is what the previous lock got wrong.
 
 ## 2. Assumption Verification
 
@@ -70,17 +89,22 @@ cannot arise. No `Source Search` evidence is self-referential: A2/A3/A4
 resolve to `internal/version/`, `internal/cli/`, `internal/table/`,
 `internal/accessor/`, `internal/graphlint/`, `internal/guard/` and
 `internal/resolve/` symbols, none into this record or its artifact dir.
-All 58 `source-anchor` edges resolve `true` against `main`; no bare
-`file:line` anchor. No `Pending`/`Unverified` property is relied on as
-settled fact anywhere in the body, because none remains.
+All 78 edges resolve `true`; zero `resolved: false`; no bare `file:line`
+anchor. No `Pending`/`Unverified` property is relied on as settled fact.
 
 Two assumptions are worth naming as honest negatives rather than clean
 passes, and both are recorded that way in the record: A4 verified the
 PARTITION but refuted C4's original assignment list as incomplete (seven of
 fourteen named), which C4 now corrects; A5 refuted the CLIError `code`
 enumeration seam as unbuildable at this layering, so that row carries
-`seam: none (prose-only)` and its tier stands explicitly unasserted. A
-tier whose seam is absent is a weaker promise, and the table says so.
+`seam: none (prose-only)` and its tier stands explicitly unasserted.
+
+**Re-entry scope honoured.** The qualifier read `re-verify none` — no
+assumption was disturbed by the cluster finding, which was a prose defect
+about a peer's status, not about anything an assumption claims. A4's
+Verified status still rests on the same census against `main`; the note's
+own C-4 item records that it re-verifies for free once 0021 assigns its
+tiers, and no separate repair is owed here.
 
 ## 3. Scope Verification
 
@@ -109,15 +133,25 @@ a version bump was the right SIZE stays a review judgement, with A7's
 snapshot diff supplying the mechanical trigger.
 
 Blast radius: `clustered=false`, `impact_families=none` — this record
-declares no Cluster siblings, so no `impact.md` is owed and the fence does
-not ask for one. Two cross-record obligations are nonetheless named as
-prerequisites of this RDR's own Phase 1, not as follow-ups: the `0006:C17`
-amendment with the `want`-literal edit at `findings_0006_test.go:288-293`
-(A1), and re-capture of `0023`'s byte-identity golden
-`mvv-step1-default-golden.json` (A3), which a new top-level key necessarily
-changes. Neither re-cuts a peer's shipped REQ — 0006's amendment is the
-ruling A1 already carries, and 0023's golden is a re-capture of the same
-assertion, not a change to what it asserts.
+declares no Cluster siblings in its Metadata, so no `impact.md` is owed and
+the fence does not ask for one. (The 0021-0029 cluster reconcile was a
+pairwise 7.1 run over two records that each declare no Cluster field; it
+demoted both, and its report lives under `cluster-reconcile/0021-0029/`.)
+
+Three cross-record obligations are named as prerequisites of this RDR's own
+Phase 1, not as follow-ups: the `0006:C17` amendment with the `want`-literal
+edit at `findings_0006_test.go:288-293` (A1); re-capture of `0023`'s
+byte-identity golden `mvv-step1-default-golden.json` (A3), which a new
+top-level key necessarily changes; and — surfaced by the cluster gate and
+now tracked rather than delegated in prose — 0021's assignment of tiers to
+`--emit`, `graph-export-too-large` and C2's field spellings, per `0029:C4`.
+
+**No predicted re-cut of a peer's shipped REQ.** 0006's amendment is the
+ruling A1 already carries; 0023's golden is a re-capture of the same
+assertion, not a change to what it asserts; and 0021 is Draft, not shipped —
+its obligation is discharged in its own open refine pass, which is exactly
+what the correction to Decision Rationale now records. No Overrides entry
+is owed.
 
 ## 5. Proportionality
 
@@ -131,72 +165,57 @@ grounding is mechanical: every clause binds the same two terminal records,
 `internal/cli/respond::Success` and `internal/cli/clierr::EmitJSON`, and no
 third. C1 is the load-bearing contract, C2 the vocabulary its increment
 rule ranges over, C4 that vocabulary's census, C3 the release policy over
-the one growth event C2's `growing` tier admits. C3 mints no mechanism of
-its own — it cites `0006:C17`'s existing partition — and a contract adding
-no seam and no machinery is not an independent load-bearing contract.
+the one growth event C2's `growing` tier admits.
 
 `rdr-write --outcome profile` emits `stopped:split-signal` here: it counts
 four `**Cn**` labels against `contracts_durable=2+`. The count is right and
 the inference does not transfer — the tool counts labels, the split test is
-seams. The record states this rather than silently overriding it, and notes
-that the remedy the stop's `surface` names (fold the clauses under one
-`**C1**`) is presentation only, changing no normative word. Accepted as
-recorded; not a lock blocker.
+seams. The record states this rather than silently overriding it.
 
 Profile `large` re-validated at this gate: `--outcome floor` returns
-`floor: none` (`rule: floor-below-two` — fewer than two prior point-fixes
-at the locus), and the lens row that actually ran (grounding → 3amigo →
-critique, plus repeatability-lite) is `large`'s row, so the field and the
-lenses agree. `--outcome repeatability` returns `emit.next: none`
-(`rule: repeatability-lite-complete`); `--outcome critique` returns `none`
-(`critique-large-diffed`, two passes on differing models).
+`floor: none` (`rule: floor-below-two`), and the lens row that ran
+(grounding → 3amigo → critique, plus repeatability-lite) is `large`'s row.
+`--outcome repeatability` returns `emit.next: none`
+(`rule: repeatability-lite-complete`).
 
 One advisory accepted rather than acted on: `evidence:over-budget` at A4
 (46 lines, soft cap 30). Profile is `large`, not `foundational`, so it does
 not block. The judgement the check asks for: the load-bearing anchors
 (`graphlint::AggregateCode`, `resolve::RefusalKinds`, `accessor::Verdicts`
 and six more) are still findable in the field itself, and the balance is
-the per-surface reasoning that justifies each of fourteen tier assignments
-— the content the grounding sweep reads. Relocating it to `{ARTIFACT_DIR}`
-would put the justification one hop from the assignment it justifies. Kept
-in place; not truncated.
+the per-surface reasoning that justifies each of fourteen tier assignments.
+Relocating it would put the justification one hop from the assignment it
+justifies. Kept in place; not truncated.
+
+**The C4 addition is proportionate.** One paragraph, no new contract label,
+no new mechanism, no new seam — it states the composition of two rules the
+record and its peer already carry. The alternative (a fifth contract for
+marker precedence) would have split one seam's clause into its own contract
+against the same split test applied above.
 
 ## Joint-decision fence
 
-Ran `--outcome fence` over `overlap_uncited,rulings_open,clustered,
-impact_families`. First run: `stopped:overlap-uncited` — three in-flight
-peers (0012, 0014, 0021) shared an anchor or contract literal with no
-cross-citation. Each was FIRED as a joint-decision question against the
-peer's own contracts, not synced:
-
-- **0021 — genuine joint decision, settled here.** `0021:C2` mints a
-  required `schema` marker (`intrastate.graph/1`) versioning its exported
-  document, and `0021:C5` embeds that document in this envelope's `data` —
-  two version markers on one wire; and 0021 emits vocabularies (`--emit`,
-  `graph-export-too-large`) that C4's census does not enumerate while C4
-  declares an unassigned machine-readable surface a defect. The
-  propose-time `clear` ("shares `--as=json` but adds no envelope field")
-  was right about the envelope and wrong about the consequence — a stale
-  clear, corrected in Decision Rationale. Home: `0029:C4`, which now states
-  the boundary (the document versions itself, `schema_version` versions the
-  envelope, later surfaces tier in the record that adds them). 0021 is an
-  early Draft with every assumption Pending; it takes the reciprocal
-  citation in its own flow. No peer's locked text was edited.
-- **0014 — coincidental co-mention.** `0014:C1/C3` decide gate-oracle
-  mechanics (the carrier reports JSON `code`; the test asserts
-  `graph-lint-failed` discriminates a lint refusal); C4 here decides
-  stability tiers for the same tokens. Complementary — C4's `frozen` tier
-  is what guarantees the literal `0014:C3` asserts on will not move.
-  `Makefile::docs` is non-normative prior art in both. Acknowledged.
-- **0012 — coincidental co-mention.** `internal/resolve` and
-  `internal/table` appear as package paths only; 0012's contracts add no
-  refusal kind, no `Block` member, no table category, so no vocabulary C4
-  tiers is touched.
-
-Re-run after the citations: 0 uncited pairs on both intersects, fence
-resolves `op = none` (`rule: fence-clear`). `rulings_open=0`.
-`joint_check_home=homed` — JC1's home edge
+`--outcome fence` over `overlap_uncited,rulings_open,clustered,impact_families`
+resolves `op = none` (`rule: fence-clear`), re-run after this pass's edits.
+`rulings_open=0`. `joint_check_home=homed` — JC1's home edge
 `0029:JC1 → cli/0029:§normative-contracts` resolves.
+
+The two fired joint decisions stand where the previous lock homed them,
+with one correction:
+
+- **0022** — C3 here is the single normative home for the
+  introduce-at-`info` / disclose-on-promotion rule; 0022 drops its
+  restatement of the C17 closure and cites `0029:C3`. Unchanged.
+- **0021** — C4 here is the single normative home for the
+  envelope-versus-document boundary, now including the read order and its
+  two mixed cases. What changed is the REMEDY, not the home: the previous
+  lock recorded that 0021 "takes the reciprocal citation in its own flow"
+  on the false premise that it was an early Draft. 0021 was Final, so it
+  had no open pass in which to do that, and the delegation went untracked.
+  It is now a tracked obligation on 0021's re-entry
+  (`re-verify A4 @refine`), recorded as such in Decision Rationale.
+
+`unhomed` does not apply: both fires resolve to elements in this record.
 
 ## Verdict
 
@@ -205,8 +224,11 @@ resolves `op = none` (`rule: fence-clear`). `rulings_open=0`.
 oracle table and negative controls), and what to do when a step fails
 (Failure Modes names the recovery path per class). Every assumption is
 terminal, including the two that came back refuted and are recorded as
-such rather than smoothed over — A4's incomplete census, now corrected,
-and A5's unbuildable seam, now legible as `seam: none (prose-only)`. The
-two cross-record obligations (0006's C17 amendment, 0023's golden
-re-capture) are prerequisites inside Phase 1 with visible failure modes,
-not deferred coordination.
+such rather than smoothed over.
+
+The defect that demoted this record is closed at its root, not papered
+over: the delegation to 0021 now rests on 0021's actual status and on a
+tracked re-entry obligation, so the thing the previous lock assumed would
+happen by itself is now something a stage owes. Implementation of THIS
+record does not wait on 0021 — C4's census is complete as of this record's
+implementation by construction, and 0021's surfaces tier in 0021.

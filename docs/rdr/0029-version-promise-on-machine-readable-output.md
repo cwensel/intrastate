@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-09-11
-- **Status**: Draft [revised from Final 2026-09-12; re-verify none @finalize — Decision Rationale delegates to 0021 on the false premise that it is "an early Draft with every assumption still Pending"; 0021 was Final two weeks prior]
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -794,7 +794,20 @@ carrying it — consistent with C1's rule that `schema_version` is never
 projected into `data`, so the two markers coexist at different levels and
 neither substitutes for the other. A consumer reads the envelope's major
 to decide whether it can parse at all, and the document's `schema` to
-decide what the payload means. Second, the vocabularies `cli/0021` emits
+decide what the payload means. That ordering is normative, and it settles
+the two mixed cases: the envelope is the FRAME, so an unsupported envelope
+major is rejected under C1 before `data` is read at all — the document's
+marker is not consulted and cannot rescue it, because a consumer that
+cannot parse the frame has no warranted reading of what it contains. In
+the inverse case — envelope major supported, document `schema` marker
+unrecognized — the envelope parses, its non-`data` members (including
+`schema_version`, `type` and any advisory fields) are trustworthy, and
+`data` alone is opaque: the consumer MUST NOT infer the document's shape
+from the envelope's version, since C1's rule is that `schema_version` is
+never projected into `data` and therefore says nothing about the payload's
+own evolution. A consumer pinning the document marker refuses `data` and
+keeps the envelope; one that does not pin it MAY pass `data` through
+untouched. Second, the vocabularies `cli/0021` emits
 under `data` — its `--emit` format set, its `graph-export-too-large`
 refusal code, and the field names its C2 fixes at Resolve — are
 machine-readable surfaces this census does not enumerate, because they do
@@ -1046,8 +1059,10 @@ nothing here leans on it.
 them genuine joint decisions. The first is RDR 0022 (Draft, `large`),
 which proposes `graph-terminal-unreachable` as a NEW BLOCKING finding code
 and states "the advisory tier stays closed at four (`0006:C17`)", which is
-precisely the rule C3 here would change. The second is RDR 0021 (Draft,
-`large`), re-examined at the lock fence: the propose-time reading —
+precisely the rule C3 here would change. The second is RDR 0021 (Final at
+this record's authoring, `large`; demoted to Draft at the 0021-0029 cluster
+gate to discharge the obligation below), re-examined at the lock fence:
+the propose-time reading —
 "shares `--as=json` but adds no envelope field (its export rides `data`)"
 — was right about the envelope and wrong about the consequence. `0021:C2`
 mints its own required `schema` marker versioning the exported document,
@@ -1111,9 +1126,14 @@ noting that the envelope around it is versioned separately by `0029:C1`.
 in its own Normative Contracts, per `0029:C4`. Homing it here rather than
 in 0021 follows the same rule as the first: this record owns the version
 promise, 0021 owns its wire format, and the boundary between them is a
-clause of the promise. 0021 is an early Draft with every assumption still
-Pending, so it takes the citation in its own flow; nothing is edited in a
-peer's locked text.
+clause of the promise. 0021 was Final when this delegation was written, so
+it could not discharge it "in its own flow" — a locked record has no open
+pass in which to assign the tiers `C4` obliges, and the delegation was
+therefore untracked and nothing happened. The 0021-0029 cluster gate
+demoted 0021 to Draft with `re-verify A4 @refine` precisely so the
+obligation has a stage that owes it. The delegation rule in C4 is unchanged
+and sound; what this paragraph now records is the tracked obligation rather
+than a peer's own initiative.
 
 ## Alternatives Considered
 
@@ -1947,75 +1967,3 @@ compatibility, memory management, concurrency model.
   and the pre-lock lens outputs (`grounding/`, `3amigo/`, `critique/`,
   `repeatability/`).
 - Related issues: none.
-
-## Refinement Context (cluster re-entry — delete on re-lock)
-
-Cluster `0021-0029`, reconciled 2026-09-12 (Stage 7.1, iteration 1).
-Peer pair: 0021 ↔ 0029. Report:
-`docs/rdr/cluster-reconcile/0021-0029/reconcile-report.md`.
-
-**TARGET RE-ENTRY STAGE**: fix + `/rdr-finalize` (re-lock).
-**RE-ENTRY SCOPE**: RE-LOCK-ONLY — `re-verify none`. No assumption is
-disturbed, no contract clause changes meaning, and the census, the tier
-vocabulary and the enforcement design all stand. This is a factual
-correction to Decision Rationale prose.
-
-### Defect — the delegation to 0021 rests on a false premise (C-10)
-
-Decision Rationale states, in the "Second joint decision, settled"
-paragraph:
-
-> 0021 is an early Draft with every assumption still Pending, so it
-> takes the citation in its own flow; nothing is edited in a peer's
-> locked text.
-
-and earlier, in the joint-decision check:
-
-> The second is RDR 0021 (Draft, `large`), re-examined at the lock
-> fence
-
-0021 was **Final** as of 2026-08-28 — locked at a Gate PASS, with
-A1–A8 all Verified — two weeks before this record's date of
-2026-09-11. The premise is false in both places.
-
-It is load-bearing rather than cosmetic. The final clause — "nothing is
-edited in a peer's locked text" — is the *justification* for choosing a
-prose delegation over a tracked obligation, and it is exactly
-inverted: 0021's text was locked, so the chosen remedy could not be
-discharged by 0021 "in its own flow". The delegation was therefore
-invisible and untracked, and nothing happened; 0021 has now been
-demoted at this gate so it can discharge it.
-
-**Resolution direction**: correct both statements to describe 0021 as
-Final (and now Draft-by-cluster-re-entry), and replace the "in its own
-flow" justification with the tracked obligation that actually applies —
-0021 re-enters at refine to assign the tiers `C4` delegates. The
-delegation rule in C4 itself is sound and does not change; only the
-premise about the delegee's status and the remedy it implies do.
-
-### Not defects — disclosed limits, recorded so the next iteration does not re-raise them
-
-- **C-5 / C-6** — `A7`'s snapshot reads enumeration seams, so it cannot
-  detect a surface that was never assigned a tier (and the CLIError
-  `code` vocabulary has no seam at all). Both limits are already
-  disclosed in this record: `C4` records that row `seam: none
-  (prose-only)` with its reason, and `A4`'s "If wrong" names the
-  residual directly. A disclosed limit is not a cross-RDR defect.
-- **C-12** — `§Activation Step 3` gates 1.0.0 on re-running the census
-  and records "take the 1.0.0 slip" as the remedy. That is the
-  designed behaviour, not drift.
-- **C-4** — `A4`'s Verified status was earned against `main`, which
-  does not contain 0021's surfaces. It re-verifies for free once 0021
-  assigns its tiers; no separate repair is owed here.
-
-### Standing joint decision — two-marker read order (C-7)
-
-Neither record sequences the two version markers: `C1` here governs the
-envelope's `schema_version`, `0021:C2` the document's `schema`, and
-neither states which an agent reads first, nor the behaviour when the
-envelope major is supported and the document marker is not (or the
-inverse). Hoisted to **this record's `§Normative Contracts` C4**, which
-already owns the envelope-versus-document boundary. Open question:
-**which marker does a consumer check first, and what does it do when
-one is supported and the other is not?** Answer it in C4 as one
-paragraph at the re-lock; 0021 cites it rather than restating it.
