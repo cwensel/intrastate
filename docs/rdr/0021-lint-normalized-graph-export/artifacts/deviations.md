@@ -38,7 +38,7 @@ statement about testability, not about the clause's content.
 
 Type: TEST-FIXTURE
 
-Status: needs author decision
+Status: needs author decision → RESOLVED (loop 1's needles become the escape sequences `\u003c`/`\u003e`/`\u0026`; loop 2 unchanged)
 
 `TestReq109_AngleBracketsAndAmpersandsReachTheWireUnescaped`
 (`internal/cli/graph_document_0021_test.go:1040`) cannot pass against any
@@ -78,7 +78,7 @@ Remedy for the author: loop 1's needles become `<`, `>`, `&`.
 
 Type: TEST-FIXTURE
 
-Status: needs author decision
+Status: needs author decision → RESOLVED (the scanning file is excluded from its own sweep)
 
 `TestReq67_NoLoadAfterExportInverseIsClaimed`
 (`internal/cli/graph_stability_0021_test.go:154`) scans every
@@ -106,7 +106,7 @@ split the needles so they do not appear as contiguous literals.
 
 Type: TEST-FIXTURE
 
-Status: needs author decision
+Status: needs author decision → RESOLVED (a test whose REQ IS the exit mapping is exempt; TestReq14 named, with the reason)
 
 `TestReq85_NoTestInThisRecordAssertsAnExitCodeAlone`
 (`internal/cli/graph_stability_0021_test.go:195`) requires every test
@@ -157,7 +157,7 @@ author decision: the record was right and the code diverged from it.
 
 Type: SPEC-UNDER
 
-Status: needs author decision
+Status: needs author decision → RESOLVED (no author ruling owed: the record already narrowed REQ-20 to the authored-members arm; this entry was written against the pre-narrowing text)
 
 REQ-20 binds `domain` to be "present exactly when `guard.AssignmentCount`
 reports it finite", and `internal/cli/graph_document.go:185` gates instead

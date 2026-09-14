@@ -39,7 +39,7 @@ Test files (all committed RED — see *Red confirmation* below):
 | REQ-17 | TestReq17And34And35_AConsumerToleratesUnrecognizedFields |
 | REQ-18 |  |
 | REQ-19 | TestReq16_TheDocumentCarriesALeadingSchemaField; TestReq19And46_ModelIsTheAuthoredIDNeverThePathArgument; TestReq19_ClassCarriesTheDeclaredModelClass |
-| REQ-20 | TestReq20And28_TagDomainIsPresentExactlyWhenFinite |
+| REQ-20 | TestReq20And28_TagDomainIsPresentExactlyWhenAuthored |
 | REQ-21 | TestReq21And32_InitialAndTerminalTravelAsDeclared |
 | REQ-22 | TestReq22And23And108_RowsCarryTheDumpFieldVocabulary; TestReq22_AtomsCarryTheirFieldsInTheCanonicalAtomOrder; TestReq22_RowsAreInTheCanonicalRowOrder |
 | REQ-23 | TestReq22And23And108_RowsCarryTheDumpFieldVocabulary |
@@ -47,7 +47,7 @@ Test files (all committed RED — see *Red confirmation* below):
 | REQ-25 | TestReq25And107_ReachNodeValuesIsATagKeyedObjectOfSortedArrays; TestReq25_ReachEdgesCarryFromToAndRule |
 | REQ-26 | TestReq26And107_ReachNodesAndEdgesAreSorted |
 | REQ-27 | TestReq27_ANonFiniteOwnedTagCarriesTheOpaqueValueVerbatim |
-| REQ-28 | TestReq20And28_TagDomainIsPresentExactlyWhenFinite; TestReq28And94_NoDeclaredCollectionEverRendersAsNull |
+| REQ-28 | TestReq20And28_TagDomainIsPresentExactlyWhenAuthored; TestReq28And94_NoDeclaredCollectionEverRendersAsNull |
 | REQ-29 | TestReq29_ReachCarriesTheRequiredAbstractionMarker |
 | REQ-30 | TestReq30_TheSchemaDocsStateTheSoundnessRule |
 | REQ-31 | TestReq31_TheDocumentCarriesNoVerdictFindingOrTerminalMarking |

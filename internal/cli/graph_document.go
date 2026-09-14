@@ -48,10 +48,13 @@ type graphDoc struct {
 	Reach    graphReachDoc    `json:"reach"`
 }
 
-// graphTagDoc is one declared tag. `domain` is present exactly when
-// `guard.AssignmentCount` reports the declaration's domain finite, and
-// ABSENT — key omitted — otherwise (REQ-20); `omitempty` is what delivers
-// the absence, and the finite arm always carries at least one member.
+// graphTagDoc is one declared tag. `domain` carries the declaration's
+// AUTHORED members and is present exactly when there are any — an `enum`
+// with a non-empty domain — and ABSENT, key omitted, otherwise (REQ-20);
+// `omitempty` is what delivers the absence. Presence is NOT
+// `guard.AssignmentCount` finiteness on its own: that predicate reports
+// finite for `bool`, for a bounded `int`, and for `set`, three kinds that
+// author no `decl.Domain`, and `kind` already carries the type for them.
 type graphTagDoc struct {
 	Name         string   `json:"name"`
 	Provenance   string   `json:"provenance"`

@@ -132,16 +132,21 @@ func TestReq19_ClassCarriesTheDeclaredModelClass(t *testing.T) {
 }
 
 // REQ-20: "`tags[{name, provenance, kind, required, single_valued,
-// domain}]` (`domain` present exactly when `guard.AssignmentCount` reports
-// it finite)"
+// domain}]` (`domain` carries the declaration's AUTHORED members and is
+// present exactly when there are any — an `enum` with a non-empty `domain`
+// — and ABSENT, its key omitted, otherwise)"
 // REQ-28 (the ABSENT half of the empty/absent rule).
-// BOUNDARY — both arms are asserted: a finite domain is PRESENT, a
-// non-finite one is ABSENT (its key omitted), never `null`.
-func TestReq20And28_TagDomainIsPresentExactlyWhenFinite(t *testing.T) {
+// BOUNDARY — every arm is asserted: an `enum` WITH members is PRESENT; the
+// finite-but-member-less kinds (`bool`, bounded `int`, member-less `enum`)
+// and the non-finite `scalar` are each ABSENT, key omitted, never `null`.
+// Presence is NOT `guard.AssignmentCount` finiteness — that predicate
+// reports finite for three kinds that author no `decl.Domain`.
+func TestReq20And28_TagDomainIsPresentExactlyWhenAuthored(t *testing.T) {
 	requireGraphVerb(t)
 
-	// `status` declares a finite enum domain; `free` is a `scalar`, which
-	// carries no finite domain at all.
+	// `status` authors enum members; `free` is a `scalar` carrying no finite
+	// domain; `flag`, `count` and `recognized` are FINITE (or, for the
+	// member-less enum, member-less) while authoring no members at all.
 	const mixed = `
 outcomes = ["go", "stop"]
 terminal = ["done"]
@@ -166,6 +171,20 @@ required = true
 [tags.free]
 provenance = "observed"
 kind = "scalar"
+required = true
+
+[tags.flag]
+provenance = "observed"
+kind = "bool"
+single_valued = true
+required = true
+
+[tags.count]
+provenance = "observed"
+kind = "int"
+min = 0
+max = 3
+single_valued = true
 required = true
 
 [read.own]
@@ -231,9 +250,9 @@ eq = "go"
 		t.Fatalf("no `status` tag in the document: %s", body)
 	}
 	if _, has := finite["domain"]; !has {
-		t.Errorf("the finite-domain tag `status` carries no `domain` member; " +
-			"C2 requires it PRESENT exactly when `guard.AssignmentCount` " +
-			"reports the domain finite")
+		t.Errorf("the member-authoring tag `status` carries no `domain` " +
+			"member; C2 requires it PRESENT exactly when the declaration " +
+			"AUTHORS members — an `enum` with a non-empty domain")
 	}
 
 	opaque, ok := seen["free"]
@@ -242,9 +261,30 @@ eq = "go"
 	}
 	if raw, has := opaque["domain"]; has {
 		t.Errorf("the non-finite tag `free` carries `domain`: %s. C2 makes "+
-			"`domain` present EXACTLY when the domain is finite; an "+
-			"inapplicable optional member is ABSENT, its key omitted, "+
+			"`domain` present EXACTLY when the declaration AUTHORS members; "+
+			"an inapplicable optional member is ABSENT, its key omitted, "+
 			"never null", raw)
+	}
+
+	// The FINITE-but-member-less kinds are the discriminating arms: C2's
+	// presence rule is over AUTHORED members, not over
+	// `guard.AssignmentCount` finiteness, which reports finite for `bool`,
+	// for a bounded `int`, and for `set` — none of which populates
+	// `decl.Domain`. A member-less `enum` is the third case. Each omits
+	// `domain`; `kind` already carries the type.
+	for _, name := range []string{"flag", "count", "recognized"} {
+		tag, ok := seen[name]
+		if !ok {
+			t.Fatalf("no %q tag in the document: %s", name, body)
+		}
+		if raw, has := tag["domain"]; has {
+			t.Errorf("the finite-but-member-less tag %q carries `domain`: "+
+				"%s. C2 predicates presence on AUTHORED members — an `enum` "+
+				"with a non-empty domain — and explicitly NOT on "+
+				"`guard.AssignmentCount` finiteness, so no `domain` array is "+
+				"owed where no authority spells what it would carry",
+				name, raw)
+		}
 	}
 
 	// The five always-present members are named individually; this is not
@@ -1098,7 +1138,12 @@ eq = "go"
 `
 	body := exportDocument(t, htmlish)
 
-	for _, escaped := range []string{`<`, `>`, `&`} {
+	// The needles are the ESCAPE SEQUENCES, not the raw characters: the
+	// fixture authors `a<b` and `x&y`, so a correct document necessarily
+	// carries `<` and `&` as literal bytes (the loop below requires exactly
+	// that). What REQ-109 forbids is the encoder rewriting them as
+	// `\u003c`/`\u003e`/`\u0026`.
+	for _, escaped := range []string{"\\u003c", "\\u003e", "\\u0026"} {
 		if strings.Contains(body, escaped) {
 			t.Errorf("the document carries the HTML escape %s; the shared "+
 				"encoder `clierr.WriteJSONLine` disables HTML escaping, so "+

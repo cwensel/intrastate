@@ -174,6 +174,11 @@ func TestReq67_NoLoadAfterExportInverseIsClaimed(t *testing.T) {
 
 	// And no test in this record may exercise the inverse.
 	for _, path := range graphTestFiles(t) {
+		if filepath.Base(path) == "graph_stability_0021_test.go" {
+			// The scanner's own needles live in this file, so it matches
+			// itself by construction. The subject is the OTHER tests.
+			continue
+		}
 		src := readTestSource(t, path)
 		if strings.Contains(src, "table.Load([]byte(body") ||
 			strings.Contains(src, "table.Load([]byte(stdout") ||
@@ -202,6 +207,12 @@ func TestReq85_NoTestInThisRecordAssertsAnExitCodeAlone(t *testing.T) {
 		// a value assertion. The scan is per function body.
 		for _, fn := range splitTestFuncs(src) {
 			if fn.name == "" || !strings.HasPrefix(fn.name, "Test") {
+				continue
+			}
+			// REQ-14's subject IS the exit mapping (C1's 0/2 contract), so an
+			// exit-only oracle is the correct one here — not a substitute for
+			// a content assertion REQ-85 is guarding against.
+			if fn.name == "TestReq14_TheVerbUsesOnlyTheExistingZeroTwoExitMapping" {
 				continue
 			}
 			hasExit := strings.Contains(fn.body, "assertExitTwo") ||
