@@ -39,6 +39,8 @@ intrastate <cmd> --as=json # one terminal JSON envelope per run
   cells, and the escape row. Not derivable from the CLI surface.
 - [Output contract](docs/cli-output-contract.md): worked JSON
   payloads and the rationale behind the envelope shape.
+- [Examples](docs/examples.md): the models, drawn — state machines
+  and decision tables from this repo and from a real consumer.
 - [README](README.md): what it is, install, and a first invocation.
 
 ## Optional

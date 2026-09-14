@@ -32,6 +32,10 @@ These carry what the CLI surface cannot state about itself:
   payloads and the rationale behind the envelope shape: why an
   aggregate failure reports in `findings[]` while a scalar one names
   `param`, and why closing coverage by escape is only an advisory.
+- [examples.md](examples.md) — the models, drawn. Diagrams of the
+  bundled state machines and decision tables and of the five models a
+  real consumer built on intrastate, with what lint proves about each.
+  Start here to see the shapes before reading the grammar.
 
 ## Decision records
 

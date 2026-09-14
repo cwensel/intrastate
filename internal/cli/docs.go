@@ -258,6 +258,8 @@ func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
 	line(w, "  cells, and the escape row. Not derivable from the CLI surface.")
 	line(w, "- [Output contract](docs/cli-output-contract.md): worked JSON")
 	line(w, "  payloads and the rationale behind the envelope shape.")
+	line(w, "- [Examples](docs/examples.md): the models, drawn — state machines")
+	line(w, "  and decision tables from this repo and from a real consumer.")
 	line(w, "- [README](README.md): what it is, install, and a first invocation.")
 	line(w)
 
