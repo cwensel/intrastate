@@ -57,8 +57,17 @@ func ReachGraph(m *table.Model) (nodes []Node, edges []Edge, complete bool) {
 	edges = []Edge{}
 	for _, src := range nodes {
 		from := src.key()
-		for _, e := range edgesFrom(m, src) {
-			at := indexOf(nodes, e.to)
+		// The per-row successors are JOINED by presence footprint first,
+		// exactly as `successorsOf` joins them, because that join is what
+		// produced the settled node. Resolving a row's raw successor
+		// individually names whichever settled node subsumes it — and the
+		// narrow singleton is appended before the widened join, so a cycle
+		// re-entering an already-widened node would target the singleton and
+		// leave the merged node with no incoming edge (A2's equality bar).
+		// The rules are retained per joined successor: two rules reaching one
+		// node are two edges.
+		for _, j := range joinedEdgesFrom(m, src) {
+			at := indexOf(nodes, j.to)
 			if at < 0 {
 				// The successor settled into no node in the fixpoint's final
 				// set. It cannot be published as an endpoint without naming a
@@ -66,11 +75,13 @@ func ReachGraph(m *table.Model) (nodes []Node, edges []Edge, complete bool) {
 				// rather than dangled.
 				continue
 			}
-			edges = append(edges, Edge{
-				From: from,
-				To:   nodes[at].key(),
-				Rule: e.rule,
-			})
+			for _, rule := range j.rules {
+				edges = append(edges, Edge{
+					From: from,
+					To:   nodes[at].key(),
+					Rule: rule,
+				})
+			}
 		}
 	}
 
@@ -111,6 +122,42 @@ func edgesFrom(m *table.Model, src Node) []producedEdge {
 			continue
 		}
 		out = append(out, producedEdge{to: successor(m, src, row), rule: row.RuleID})
+	}
+	return out
+}
+
+// joinedEdge is one settled successor of a node, with every rule id that
+// reaches it.
+type joinedEdge struct {
+	to    Node
+	rules []string
+}
+
+// joinedEdgesFrom groups one node's produced edges by presence footprint,
+// mirroring `successorsOf`'s join exactly, and keeps each joined successor's
+// rule ids.
+//
+// It exists because `edgesFrom` deliberately does NOT join — it keeps the raw
+// per-row successor so the rule id survives — and the fixpoint settled on the
+// JOINED node. Publishing a row's raw successor makes the exported relation
+// name whichever settled node subsumes it, which for a cycle re-entering an
+// already-widened node is the narrower singleton, not the node the traversal
+// reached. A2 fixes the bar at "EXACTLY the edges the traversal itself took —
+// equality, not plausibility", so the join runs on this side too.
+func joinedEdgesFrom(m *table.Model, src Node) []joinedEdge {
+	index := map[string]int{}
+	var out []joinedEdge
+	for _, e := range edgesFrom(m, src) {
+		id := presenceKey(e.to)
+		if at, seen := index[id]; seen {
+			out[at].to = joinNodes(out[at].to, e.to)
+			if !slices.Contains(out[at].rules, e.rule) {
+				out[at].rules = append(out[at].rules, e.rule)
+			}
+			continue
+		}
+		index[id] = len(out)
+		out = append(out, joinedEdge{to: e.to, rules: []string{e.rule}})
 	}
 	return out
 }

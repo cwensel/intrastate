@@ -33,6 +33,31 @@ func exportDocument(t *testing.T, modelSrc string) string {
 	return stdout
 }
 
+// exportDocumentAsJSON runs the verb under `--as=json` and returns the
+// document `data` carries. C5 nests the SAME document inside `0029:C1`'s
+// envelope, so an arm that renders correctly in text mode and wrongly here
+// (or the reverse) is a real divergence.
+func exportDocumentAsJSON(t *testing.T, modelSrc string) string {
+	t.Helper()
+
+	requireGraphVerb(t)
+	path := writeModel(t, modelSrc)
+	stdout, _, err := runGraph(t, "--model", path, "--as=json")
+	if err != nil {
+		t.Fatalf("export --as=json refused: %v", err)
+	}
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &env); err != nil {
+		t.Fatalf("stdout is not one JSON object: %v\n%s", err, stdout)
+	}
+	if len(env.Data) == 0 {
+		t.Fatalf("the envelope carries no `data` document\n%s", stdout)
+	}
+	return string(env.Data)
+}
+
 // REQ-16: "The JSON document is a documentation artifact, versioned by a
 // required leading `schema` field, initial value `intrastate.graph/1`"
 // REQ-19 (`schema` member), ASSUMPTION A-2 (leading = first key on the wire).
@@ -719,6 +744,128 @@ func TestReq28And94_NoDeclaredCollectionEverRendersAsNull(t *testing.T) {
 	}
 }
 
+// emptySetModel declares a FINITE owned `set` and holds it empty, in both
+// `[initial]` and a rule's write. A set with a non-empty `elements` universe
+// is finite (`guard.AssignmentCount`), so the held value is a present key
+// with a zero-length member list — the arm where a nil slice reaches the
+// wire as `null`.
+const emptySetModel = `
+outcomes = ["go", "stop"]
+terminal = ["done"]
+
+[model]
+id = "emptyset"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b"]
+single_valued = true
+required = true
+
+[tags.labels]
+provenance = "owned"
+kind = "set"
+elements = ["bug", "chore"]
+required = true
+
+[read.own]
+role = "t"
+path = "t.own"
+keys = ["status", "labels"]
+timeout = "2s"
+
+[write.own]
+role = "t"
+path = "t.own"
+keys = ["status", "labels"]
+timeout = "2s"
+read_back = true
+
+[initial]
+status = "a"
+labels = []
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "advance"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+status = "b"
+labels = []
+`
+
+// REQ-28 / REQ-94 — the reach node `values` arm specifically.
+// ADVERSARIAL — the fixtures above declare no `set`, so their owned tags are
+// never empty and the null check passes vacuously over `reach`. REQ-94 binds
+// the PRODUCER ("constructs empty slices, never nil, so `null` cannot reach
+// the wire"), and `graphReachDocOf` is that producer.
+func TestReq28And94_AnEmptyOwnedSetRendersAsAnArrayInReachValues(t *testing.T) {
+	requireGraphVerb(t)
+
+	// Both JSON output modes: the document on stdout, and the same document
+	// nested under `data` in the enveloped arm.
+	for _, tc := range []struct {
+		name string
+		body func(t *testing.T) string
+	}{
+		{"text mode", func(t *testing.T) string {
+			return exportDocument(t, emptySetModel)
+		}},
+		{"as json", func(t *testing.T) string {
+			return exportDocumentAsJSON(t, emptySetModel)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := tc.body(t)
+
+			// The blanket rule, over the whole document.
+			assertNoNullsAnywhere(t, body)
+
+			// And the specific member, so the case cannot go vacuous again:
+			// the empty set must be PRESENT and an empty ARRAY.
+			doc := decodeDocument(t, body)
+			if doc.Reach == nil || len(doc.Reach.Nodes) == 0 {
+				t.Fatal("the document carries no reach nodes")
+			}
+			var saw bool
+			for _, n := range doc.Reach.Nodes {
+				held, ok := n.Values["labels"]
+				if !ok {
+					continue
+				}
+				saw = true
+				if held == nil {
+					t.Errorf("node %q renders the empty owned set `labels` as "+
+						"`null`; C2 renders every declared collection as `[]` "+
+						"when it has no members, never `null`", n.ID)
+				}
+				if len(held) != 0 {
+					t.Errorf("node %q carries `labels` = %v; the fixture holds "+
+						"it EMPTY", n.ID, held)
+				}
+			}
+			if !saw {
+				t.Fatal("no exported node holds the `labels` key; the empty-set " +
+					"arm is unexercised")
+			}
+		})
+	}
+}
+
 // assertNoNullsAnywhere walks the decoded document and fails on any null,
 // at any depth. C2 admits exactly two renderings for a member with no
 // content — `[]`/`{}` for a declared collection, and ABSENCE for an
@@ -909,23 +1056,31 @@ eq = "go"
 `
 	body := exportDocument(t, setModel)
 
-	// The round trip is VALUE identity, not "it decoded without error": a
-	// green decode with a dropped member is exactly the fidelity loss RT1
-	// exists to catch, so the re-encoded value is compared to the original.
-	var first, second any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &first); err != nil {
-		t.Fatalf("the exported document does not decode: %v\n%s", err, body)
+	// The round trip is VALUE identity against the AUTHORED values, not
+	// self-consistency: RT1's quantifier is "every field C2 lists", "not
+	// 'whatever was exported'", so the invariant constrains the EMITTER.
+	// Comparing a decode of the export to a re-encode of that same decode is
+	// f(x) vs f(x), which no exporter — including one that drops set members
+	// — can falsify. The fixture's own literals are the oracle.
+	decoded := decodeDocument(t, body)
+
+	assertSameSet(t, "the initial `flavors` members",
+		[]string{"x", "y"}, tagValueMembers(t, "initial", decoded.Initial, "flavors"))
+
+	// A row's `identity` is `<model>.<rule>[.suffix]` (`table.Row.Identity`),
+	// so the rule is matched as that component rather than as the whole
+	// string.
+	var sawAdvance bool
+	for _, row := range decoded.Rows {
+		if rowRuleID(row.Identity) != "advance" {
+			continue
+		}
+		sawAdvance = true
+		assertSameSet(t, "the `advance` row's `flavors` write",
+			[]string{"y", "z"}, tagValueMembers(t, "advance writes", row.Writes, "flavors"))
 	}
-	reencoded, err := json.Marshal(first)
-	if err != nil {
-		t.Fatalf("re-encoding the decoded document: %v", err)
-	}
-	if err := json.Unmarshal(reencoded, &second); err != nil {
-		t.Fatalf("the re-encoded document does not decode: %v", err)
-	}
-	if !jsonDeepEqual(first, second) {
-		t.Errorf("decode ∘ export is not value-preserving:\n--- first ---\n"+
-			"%v\n--- second ---\n%v", first, second)
+	if !sawAdvance {
+		t.Fatal("no `advance` row decoded; the set-write clause is unexercised")
 	}
 
 	// Every set-valued member on the wire is a JSON ARRAY, never a rendered
@@ -946,6 +1101,31 @@ eq = "go"
 	if !sawSetWrite {
 		t.Fatal("no rows decoded; the clause under test is unexercised")
 	}
+}
+
+// rowRuleID returns the rule component of a row identity, which
+// `table.Row.Identity` renders as `<model>.<rule>[.suffix]`.
+func rowRuleID(identity string) string {
+	parts := strings.Split(identity, ".")
+	if len(parts) < 2 {
+		return identity
+	}
+	return parts[1]
+}
+
+// tagValueMembers returns the members the named key carries in a `{key,
+// value}` list, failing when the key is absent — an absent key would make a
+// member comparison vacuously pass.
+func tagValueMembers(t *testing.T, what string, pairs []graphTagValue, key string) []string {
+	t.Helper()
+
+	for _, p := range pairs {
+		if p.Key == key {
+			return p.Value
+		}
+	}
+	t.Fatalf("%s carries no %q key; decoded pairs = %+v", what, key, pairs)
+	return nil
 }
 
 // jsonDeepEqual compares two decoded JSON values structurally.

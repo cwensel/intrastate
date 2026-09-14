@@ -4,6 +4,12 @@ Phase 1 artifact: every REQ-N from `req-list.md` against the test that would
 fail if a future change broke that clause. An uncovered REQ keeps its row
 with column 2 EMPTY.
 
+REQ-18 carries no row: it was DEMOTED to `req-list.md`'s `## EXCLUDED`
+section, because the clause has no observable of its own — its positive half
+is REQ-19…REQ-25 and its negative half is discharged by no test asserting the
+Illustrative Code exhibit, so a test covering it directly would assert the
+ABSENCE of an assertion. Deviation D1 carries the rationale.
+
 Test files (all committed RED — see *Red confirmation* below):
 
 - `internal/cli/graph_probe_0021_test.go` — the shared probe layer
@@ -37,7 +43,6 @@ Test files (all committed RED — see *Red confirmation* below):
 | REQ-15 | TestReq1And15_GraphIsRegisteredAtRootBesideLint; TestReq15_TheRejectedVerbSpellingsAreNotRegistered |
 | REQ-16 | TestReq16_TheDocumentCarriesALeadingSchemaField |
 | REQ-17 | TestReq17And34And35_AConsumerToleratesUnrecognizedFields |
-| REQ-18 |  |
 | REQ-19 | TestReq16_TheDocumentCarriesALeadingSchemaField; TestReq19And46_ModelIsTheAuthoredIDNeverThePathArgument; TestReq19_ClassCarriesTheDeclaredModelClass |
 | REQ-20 | TestReq20And28_TagDomainIsPresentExactlyWhenAuthored |
 | REQ-21 | TestReq21And32_InitialAndTerminalTravelAsDeclared |
@@ -143,7 +148,34 @@ declares Round-Trip / Inverse Invariants, so step 2 asserts `export ∘
 export` as BYTE identity and step 4 asserts `jq .data` equals the text
 document value-for-value — never a green exit code.
 
-The `## REQ-MVV output` heading is Phase 2's to write, on `return-green`.
+## REQ-MVV output
+
+Run in the launch worktree on the fixup tree (the four triage fixes applied):
+
+```
+=== RUN   TestMVV_LintNormalizedGraphExport
+=== RUN   TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load
+=== RUN   TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load/state_machine
+=== RUN   TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load/decision_table
+=== RUN   TestMVV_LintNormalizedGraphExport/step_2_—_double_emit_is_byte-identical
+=== RUN   TestMVV_LintNormalizedGraphExport/step_3_—_DOT_renders_and_matches
+=== RUN   TestMVV_LintNormalizedGraphExport/step_4_—_jq_.data_equals_the_document
+=== RUN   TestMVV_LintNormalizedGraphExport/step_5_—_lint_neutrality
+--- PASS: TestMVV_LintNormalizedGraphExport (0.12s)
+    --- PASS: TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load (0.00s)
+        --- PASS: TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load/state_machine (0.00s)
+        --- PASS: TestMVV_LintNormalizedGraphExport/step_1_—_fixtures_load/decision_table (0.00s)
+    --- PASS: TestMVV_LintNormalizedGraphExport/step_2_—_double_emit_is_byte-identical (0.00s)
+    --- PASS: TestMVV_LintNormalizedGraphExport/step_3_—_DOT_renders_and_matches (0.12s)
+    --- PASS: TestMVV_LintNormalizedGraphExport/step_4_—_jq_.data_equals_the_document (0.00s)
+    --- PASS: TestMVV_LintNormalizedGraphExport/step_5_—_lint_neutrality (0.00s)
+PASS
+ok  	github.com/cwensel/intrastate/internal/cli	0.368s
+```
+
+All five MVV steps pass end to end. Step 2 asserts `export ∘ export` as BYTE
+identity and step 4 asserts `jq .data` equals the text document
+value-for-value, so neither step rests on a green exit code.
 
 ## Red confirmation
 

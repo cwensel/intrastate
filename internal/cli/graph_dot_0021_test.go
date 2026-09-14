@@ -107,6 +107,159 @@ func TestReq39_TheDOTDocumentMarksTheInitialNode(t *testing.T) {
 	}
 }
 
+// clearedInitialKeyModel declares two owned tags and a rule that CLEARS the
+// last-sorting one. The successor's node key (`flag=false,;`) is then a
+// strict PREFIX of the root's (`flag=false,;status=a,;`), and node ids sort
+// lexically, so the successor sorts FIRST — the arrangement under which a
+// marker keyed on anything weaker than "holds every declared initial key"
+// lands on the wrong node.
+const clearedInitialKeyModel = `
+outcomes = ["go", "stop"]
+terminal = ["done"]
+
+[model]
+id = "prefixbug"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.flag]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b"]
+single_valued = true
+required = true
+
+[read.own]
+role = "t"
+path = "t.own"
+keys = ["flag", "status"]
+timeout = "2s"
+
+[write.own]
+role = "t"
+path = "t.own"
+keys = ["flag", "status"]
+timeout = "2s"
+read_back = true
+
+[initial]
+flag = "false"
+status = "a"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "drop-status"
+clear = ["status"]
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+flag = "false"
+`
+
+// REQ-39 (the initial node is marked) — WHICH node carries the marking.
+// ADVERSARIAL — a substring probe for "initial" passes against a render that
+// marks the wrong node, so the oracle here is the marked node's IDENTITY. C2
+// requires "the initial node marked"; REQ-40 frees the MECHANISM (styling,
+// attributes) but not which node is distinguished.
+func TestReq39_TheMarkedInitialNodeIsTheRootNotASuccessor(t *testing.T) {
+	requireGraphVerb(t)
+
+	doc := decodeDocument(t, exportDocument(t, clearedInitialKeyModel))
+	if doc.Reach == nil || len(doc.Reach.Nodes) < 2 {
+		t.Fatalf("the fixture must export a root and a successor; reach = %+v",
+			doc.Reach)
+	}
+
+	// The root is the node holding EXACTLY the declared initial assignment.
+	// It is found from the document, not assumed, so the oracle survives a
+	// change in node-key rendering.
+	var wantRoot string
+	for _, n := range doc.Reach.Nodes {
+		if len(n.Values) != len(doc.Initial) {
+			continue
+		}
+		matched := true
+		for _, tv := range doc.Initial {
+			held, ok := n.Values[tv.Key]
+			if !ok || !slices.Equal(held, tv.Value) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			wantRoot = n.ID
+			break
+		}
+	}
+	if wantRoot == "" {
+		t.Fatalf("no exported node holds the declared initial assignment %+v; "+
+			"nodes = %+v", doc.Initial, doc.Reach.Nodes)
+	}
+
+	dot := exportDOT(t, clearedInitialKeyModel)
+	got := dotMarkedNodeIDs(t, dot)
+
+	if !slices.Contains(got, wantRoot) {
+		t.Errorf("the DOT marks %v as initial, but the initial node is %q — "+
+			"the node holding exactly the declared `[initial]` assignment. A "+
+			"successor that CLEARS a declared initial key is not the root, and "+
+			"its key is a strict prefix of the root's, so it sorts first\n%s",
+			got, wantRoot, dot)
+	}
+	for _, id := range got {
+		if id != wantRoot {
+			t.Errorf("the DOT also marks %q as initial; exactly one node is "+
+				"the initial node\n%s", id, dot)
+		}
+	}
+}
+
+// dotMarkedNodeIDs returns the ids of the node statements carrying a marking
+// attribute. The MECHANISM is non-normative (REQ-40), so this accepts any
+// attribute list naming the marker rather than pinning one styling.
+func dotMarkedNodeIDs(t *testing.T, dot string) []string {
+	t.Helper()
+
+	var out []string
+	for _, line := range strings.Split(dot, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.Contains(trimmed, "->") {
+			continue
+		}
+		open := strings.Index(trimmed, "[")
+		if !strings.HasPrefix(trimmed, `"`) || open < 0 {
+			continue
+		}
+		attrs := trimmed[open:]
+		if !strings.Contains(strings.ToLower(attrs), "initial") &&
+			!strings.Contains(attrs, "doublecircle") {
+			continue
+		}
+		// A node statement opens with its identifier, so the first quoted
+		// string is the id — the same recovery `dotNodeIDs` performs.
+		quoted := dotQuotedStrings(trimmed[:open])
+		if len(quoted) == 0 {
+			t.Fatalf("a marked node statement carries no quoted id: %q", trimmed)
+		}
+		out = append(out, dotUnescape(quoted[0]))
+	}
+	return out
+}
+
 // REQ-41: "A pure renderer over the export value; equality test against the
 // JSON arm's node/edge set."
 // REQ-79: "DOT arm equality and hostile content — tag values carrying

@@ -209,15 +209,21 @@ func requireGraphVerb(t *testing.T) {
 // member's ordinal position, or a tail position, so the fields below are
 // the ones individual REQs name and nothing more.
 type graphDocument struct {
-	Schema string          `json:"schema"`
-	Model  string          `json:"model"`
-	Class  string          `json:"class"`
-	Tags   []graphTag      `json:"tags"`
-	Rows   []graphRow      `json:"rows"`
-	Groups []graphGroup    `json:"groups"`
-	Reach  *graphReach     `json:"reach"`
-	Raw    json.RawMessage `json:"-"`
+	Schema  string          `json:"schema"`
+	Model   string          `json:"model"`
+	Class   string          `json:"class"`
+	Tags    []graphTag      `json:"tags"`
+	Initial []graphTagValue `json:"initial"`
+	Rows    []graphRow      `json:"rows"`
+	Groups  []graphGroup    `json:"groups"`
+	Reach   *graphReach     `json:"reach"`
+	Raw     json.RawMessage `json:"-"`
 }
+
+// `initial` and a row's `writes` both decode into the producer's own
+// `graphTagValue` ({key, value}), so a test can compare the exported members
+// to the fixture's AUTHORED values (RT1: the quantifier is C2's field list,
+// "not whatever was exported").
 
 type graphTag struct {
 	Name         string   `json:"name"`
@@ -229,10 +235,11 @@ type graphTag struct {
 }
 
 type graphRow struct {
-	Identity string      `json:"identity"`
-	Kind     string      `json:"kind"`
-	Outcome  string      `json:"outcome"`
-	Atoms    []graphAtom `json:"atoms"`
+	Identity string          `json:"identity"`
+	Kind     string          `json:"kind"`
+	Outcome  string          `json:"outcome"`
+	Atoms    []graphAtom     `json:"atoms"`
+	Writes   []graphTagValue `json:"writes"`
 }
 
 type graphAtom struct {

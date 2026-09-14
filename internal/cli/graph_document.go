@@ -294,7 +294,8 @@ func graphReachDocOf(nodes []graphlint.Node, edges []graphlint.Edge) graphReachD
 			// canonicalizes, and repeating it here costs nothing and makes
 			// the wire order a property of this document rather than an
 			// inherited one.
-			values[key] = slices.Compact(slices.Sorted(slices.Values(held)))
+			values[key] = stringsOrEmpty(
+				slices.Compact(slices.Sorted(slices.Values(held))))
 		}
 		outNodes = append(outNodes, graphNodeDoc{
 			ID:     graphlint.NodeKey(n),

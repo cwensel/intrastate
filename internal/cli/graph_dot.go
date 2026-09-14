@@ -75,22 +75,23 @@ func initialNodeID(doc graphDoc) string {
 // value the declaration did not name, both disqualify it — the root node
 // is the one the traversal seeded, not merely one reachable from it.
 func nodeMatchesInitial(n graphNodeDoc, initial []graphTagValue) bool {
-	declared := 0
 	for _, tv := range initial {
 		held, ok := n.Values[tv.Key]
 		if !ok {
-			// The key names no node dimension (a non-owned provenance), so
-			// it constrains nothing here.
-			continue
+			// A node that does not HOLD a declared initial key has cleared
+			// it, which makes it a successor rather than the root. Every
+			// `[initial]` key is a declared owned tag (`internal/table/
+			// load.go` refuses a non-owned one at load), so a missing key is
+			// never "constrains nothing here" — it is a dropped dimension.
+			return false
 		}
-		declared++
 		if !sameMembers(held, tv.Value) {
 			return false
 		}
 	}
 	// A node holding dimensions beyond the declared ones is a successor,
-	// not the root.
-	return declared == len(n.Values)
+	// not the root. A decision table declares none and holds none (0 == 0).
+	return len(initial) == len(n.Values)
 }
 
 // sameMembers compares two member sequences for equality. The traversal

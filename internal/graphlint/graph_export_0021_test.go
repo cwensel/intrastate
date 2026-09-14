@@ -244,6 +244,167 @@ func TestReq54And55_TheTwoPublishedBoundsAreDistinct(t *testing.T) {
 
 // graphExportFixture is a minimal loadable state machine with a declared
 // root, so `Reach` has something to traverse.
+// graphExportCycleFixture re-enters an already-widened node: `ab` widens
+// {a} into {a,b}, and `ca`/`cb` send c back to a and b, so the traversal
+// JOINS those successors by presence footprint into merged nodes. It is the
+// arrangement under which an exporter that resolves each ROW's successor
+// individually targets the narrower singleton the fixpoint appended first.
+const graphExportCycleFixture = `
+outcomes = ["go", "stop"]
+
+[model]
+id = "cycle"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.s]
+provenance = "owned"
+kind = "enum"
+domain = ["a", "b", "c"]
+single_valued = true
+required = true
+
+[read.own]
+role = "t"
+path = "t.own"
+keys = ["s"]
+timeout = "2s"
+
+[write.own]
+role = "t"
+path = "t.own"
+keys = ["s"]
+timeout = "2s"
+read_back = true
+
+[initial]
+s = "a"
+
+[[rule]]
+id = "ab"
+[rule.match.s]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+s = "b"
+
+[[rule]]
+id = "bc"
+[rule.match.s]
+eq = "b"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+s = "c"
+
+[[rule]]
+id = "ca"
+[rule.match.s]
+eq = "c"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+s = "a"
+
+[[rule]]
+id = "cb"
+[rule.match.s]
+eq = "c"
+[rule.match.recognized]
+eq = "go"
+[rule.write]
+s = "b"
+`
+
+// A2: the recovered edge list yields "EXACTLY the edges the traversal itself
+// took — over-approximation by merged re-run is the premortem's central
+// defect (P-1), so equality, not plausibility, is the bar." REQ-25: `reach`
+// is "the merged fixpoint relation".
+// ADVERSARIAL — a node set carrying nodes no edge reaches is not the merged
+// relation. The oracle compares endpoints by EXACT NODE KEY, never through
+// the exporter's own subsumption lookup: a comparator that resolves both
+// sides the way the code under test does is self-confirming and cannot see a
+// mis-targeted edge.
+func TestReq25_EveryReachableNodeIsAnEdgeTargetUnderAWidenedCycle(t *testing.T) {
+	m, err := table.Load([]byte(graphExportCycleFixture), "cycle.toml")
+	if err != nil {
+		t.Fatalf("fixture must load clean: %v", err)
+	}
+
+	nodes, edges, complete := graphlint.ReachGraph(m)
+	if !complete {
+		t.Fatal("the fixture must settle under the node ceiling")
+	}
+	if len(nodes) < 4 {
+		t.Fatalf("the fixture must widen into merged nodes; got %d nodes",
+			len(nodes))
+	}
+
+	// The root is the node the traversal starts from, and is the only node
+	// entitled to carry no inbound edge.
+	root := graphlint.NodeKey(nodes[0])
+	for _, n := range nodes {
+		if key := graphlint.NodeKey(n); key < root {
+			root = key
+		}
+	}
+
+	incoming := map[string]int{}
+	for _, e := range edges {
+		incoming[e.To]++
+	}
+
+	var orphans []string
+	for _, n := range nodes {
+		key := graphlint.NodeKey(n)
+		if key == root {
+			continue
+		}
+		if incoming[key] == 0 {
+			orphans = append(orphans, key)
+		}
+	}
+	if len(orphans) > 0 {
+		t.Errorf("the published relation leaves %d of %d nodes unreachable: "+
+			"%v. The traversal JOINS successors by presence footprint, so an "+
+			"edge list that names each row's raw successor targets the "+
+			"narrower node the fixpoint appended first and the merged node "+
+			"gets no incoming edge — the exported relation is then not the "+
+			"one the traversal took (A2)\nnodes: %v\nedges: %v",
+			len(orphans), len(nodes), orphans, graphExportNodeKeys(nodes), edges)
+	}
+
+	// Every endpoint must also NAME a published node, by exact key.
+	published := map[string]bool{}
+	for _, n := range nodes {
+		published[graphlint.NodeKey(n)] = true
+	}
+	for _, e := range edges {
+		if !published[e.From] {
+			t.Errorf("edge %+v leaves %q, which is not a published node", e, e.From)
+		}
+		if !published[e.To] {
+			t.Errorf("edge %+v arrives at %q, which is not a published node", e, e.To)
+		}
+	}
+}
+
+// graphExportNodeKeys renders a node set as its published keys, for failure
+// messages.
+func graphExportNodeKeys(nodes []graphlint.Node) []string {
+	out := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, graphlint.NodeKey(n))
+	}
+	return out
+}
+
 const graphExportFixture = `
 outcomes = ["go"]
 terminal = ["done"]

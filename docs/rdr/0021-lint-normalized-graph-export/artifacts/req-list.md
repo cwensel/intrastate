@@ -298,6 +298,8 @@ negative with no observable of its own.
 
 - EXCLUDED: "The new `graph-export-too-large` refusal code below mints no vocabulary of its own: it is a member of the CLIError `code` vocabulary `0029:C4` already tiers `append-only`, and it inherits that row's `seam: none (prose-only)` disposition — the tier stands, unasserted and legibly so, for the reason recorded there." — (NC, `0021:C1`) — the record states in terms that the tier is UNASSERTED and the seam is prose-only; there is no by-value assertion to write. The code's behaviour is REQ-52/REQ-81/REQ-88.
 
+- EXCLUDED: "Exact field spellings are normative AS SPELLED HERE — the Illustrative Code is an exhibit that disclaims literal assertion and shows only some members, so it binds nothing" — (NC, `0021:C2`) — a negative with no observable of its own. The POSITIVE half (the spellings are normative) is REQ-19…REQ-25, which name every member individually and are asserted against the shipped document; the NEGATIVE half (the exhibit binds nothing) forbids asserting the exhibit, and no test in this record asserts it, which is what discharges it. A test written to cover this clause directly would assert the ABSENCE of an assertion, which is vacuous. Rationale recorded as deviation D1.
+
 - EXCLUDED: "which merged nodes satisfy a `terminal` predicate set is the dead-end quantifier RDR 0015 owns (JDR 0001 §JD-23), and this record declares no evaluator of its own" — (NC, `0021:C2`) — peer-owned (RDR 0015). The testable residue is REQ-31 (no per-node terminal marking) and REQ-32 (declared sets travel).
 
 - EXCLUDED: "the document is NOT a model source and no export→load inverse is claimed." — (NC, `0021:C2`) — restates RT3, already carried as REQ-67; not a second obligation.
