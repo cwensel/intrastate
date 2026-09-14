@@ -78,8 +78,6 @@ Source sections are abbreviated:
 
 - [REQ-17] "evolution within `/1` is additive (a consumer ignoring unknown fields keeps working), and an incompatible change bumps the marker under the `0.x` promise RDR 0029 governs." — (NC, `0021:C2`).
 
-- [REQ-18] "Exact field spellings are normative AS SPELLED HERE — the Illustrative Code is an exhibit that disclaims literal assertion and shows only some members, so it binds nothing" — (NC, `0021:C2`) — the field list in REQ-19…REQ-25 is the normative surface; the `Illustrative Code` JSON block is explicitly NOT assertable.
-
 - [REQ-19] "`schema`; `model` (`table.Model.ID`, the AUTHORED `[model] id`, never the `--model <path>` argument or any path-derived string); `class`;" — (NC, `0021:C2`) — `internal/table/model.go:497` carries `ID`, `:506` carries `Class`.
 
 - [REQ-20] "`tags[{name, provenance, kind, required, single_valued, domain}]` (`domain` present exactly when `guard.AssignmentCount` reports it finite)" — (NC, `0021:C2`) — `domain`'s presence is conditional and exactly determined, so both arms (finite → present, non-finite → absent) are assertable.

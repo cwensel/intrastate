@@ -214,13 +214,17 @@ Pre-existing tests are unaffected: with these files removed the suite is
 
 ## Notes
 
-- **REQ-18 is the one uncovered row.** "Exact field spellings are normative
-  AS SPELLED HERE — the Illustrative Code is an exhibit that disclaims
-  literal assertion and shows only some members, so it binds nothing" has
-  no observable of its own: its positive half (the field spellings) is
-  REQ-19…REQ-25, and its negative half forbids asserting the exhibit, which
-  is discharged by no test asserting it. A vacuous test here would assert
-  the absence of an assertion.
+- **REQ-18 was DEMOTED; it carries no row.** "Exact field spellings are
+  normative AS SPELLED HERE — the Illustrative Code is an exhibit that
+  disclaims literal assertion and shows only some members, so it binds
+  nothing" has no observable of its own, so it moved to `req-list.md`'s
+  `## EXCLUDED` section and is no longer a REQ of this record. Its positive
+  half (the field spellings are normative) is REQ-19…REQ-25, which name
+  every member individually and are asserted against the shipped document;
+  its negative half (the exhibit binds nothing) forbids asserting the
+  exhibit, and no test in this record asserts it, which is what discharges
+  it. A test written to cover the clause directly would assert the ABSENCE
+  of an assertion, which is vacuous. Deviation D1 carries the rationale.
 - **C2's STABILITY clause binds this suite.** No test asserts the document's
   field-set cardinality, a member's ordinal position, or a tail position;
   every field assertion is by NAME. `TestReq17And34And35` pins the
