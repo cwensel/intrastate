@@ -30,10 +30,10 @@ scratch worktree, never in the launch worktree.
 |---|---|---|---|---|---|---|
 | 1 | 7792 | `graph_document_0021_test.go:1101` — escape loops mutually unsatisfiable | DROP superseded-at-HEAD | n/a-not-a-defect | design-conformance | `drop:superseded-at-HEAD` — `b409d65` (D2) repointed loop 1's needles at `<`/`>`/`&` |
 | 2 | 7792 | `graph_stability_0021_test.go:176` — inverse-load scanner matches its own source | DROP superseded-at-HEAD | n/a-not-a-defect | design-conformance | `drop:superseded-at-HEAD` — `b409d65` (D3) excludes the scanning file from its own sweep |
-| 3 | 7792 + 7797 | `graph_document_0021_test.go:915` (was `:875`) — RT1 round-trip oracle is a self-consistency tautology | IN-SCOPE (`0021:RT1`) | test-oracle | design-conformance | `open` |
-| 4 | 7793 + 7797 | `graph_dot.go:81` — `nodeMatchesInitial` skips a cleared initial key, marking a successor as the root | IN-SCOPE (`0021:C2` DOT / REQ-39) | algorithm | rare-situation | `open` |
-| 5 | 7793 + 7797 | `graph_document.go:297` — empty owned `set` exports `"values":{"key":null}` | IN-SCOPE (`0021:C2` / REQ-28, REQ-94) | assignment | boundary | `open` |
-| 6 | 7797 | `internal/graphlint/export.go:60` — edge recovery resolves successors before `successorsOf`'s presence-footprint join, orphaning merged nodes | IN-SCOPE (`0021:A2`, `0021:C2` / REQ-25) | algorithm | rare-situation | `open` |
+| 3 | 7792 + 7797 | `graph_document_0021_test.go:915` (was `:875`) — RT1 round-trip oracle is a self-consistency tautology | IN-SCOPE (`0021:RT1`) | test-oracle | design-conformance | `fixed:3a1b722` — the oracle now asserts the decoded document against the fixture's AUTHORED values (initial `flavors == ["x","y"]`, the `advance` row's write `flavors == ["y","z"]`); `Initial` and `Writes` added to the decode view |
+| 4 | 7793 + 7797 | `graph_dot.go:81` — `nodeMatchesInitial` skips a cleared initial key, marking a successor as the root | IN-SCOPE (`0021:C2` DOT / REQ-39) | algorithm | rare-situation | `fixed:3a1b722` — a missing declared initial key now returns false and the arity test is `len(initial) == len(n.Values)`; regression asserts WHICH node carries the marker |
+| 5 | 7793 + 7797 | `graph_document.go:297` — empty owned `set` exports `"values":{"key":null}` | IN-SCOPE (`0021:C2` / REQ-28, REQ-94) | assignment | boundary | `fixed:3a1b722` — routed through the existing `stringsOrEmpty` helper; regression covers an empty finite `set` in BOTH JSON output modes |
+| 6 | 7797 | `internal/graphlint/export.go:60` — edge recovery resolves successors before `successorsOf`'s presence-footprint join, orphaning merged nodes | IN-SCOPE (`0021:A2`, `0021:C2` / REQ-25) | algorithm | rare-situation | `fixed:3a1b722` — new `joinedEdgesFrom` joins each source's produced edges by presence footprint (mirroring `successorsOf`) retaining rule ids, then resolves the JOINED target; regression compares endpoints by EXACT KEY, never through `indexOf` |
 
 No finding routed OUT-OF-SCOPE, so no kata was filed and no `## Open question`
 survives. Nothing was undecided: every verdict rests on positive evidence.
@@ -106,6 +106,31 @@ what this cycle breaks, so the entry is not an adjudication of this finding.
 A2's spike is likewise not a witness: its differential mapped both sides
 through `indexOf`, which is self-confirming. Any regression added here must
 compare targets by exact key, never through `indexOf`.
+
+## Fixup outcome (`3a1b722`)
+
+All four IN-SCOPE rows are `fixed:3a1b722`; the two DROP rows were terminal
+already and are untouched. Each fix was proven non-vacuous by reverting the
+three production files with the new tests kept: every regression FAILED
+against the pre-fix code with the diagnosed symptom — the DOT marked
+`flag=false,;` (the successor) rather than the root, the empty owned `set`
+rendered `"labels":null`, and the widened cycle left 3 of 6 nodes with zero
+incoming edges. The production files were then restored and the full suite
+run green.
+
+Two record-keeping consequences:
+
+- `verification.md`'s Phase 3b entry listing the export join asymmetry under
+  "Hypotheses probed and REFUTED" is superseded for this defect. That probe's
+  lemma — the `indexOf < 0` branch is dead — still holds (the fix does not
+  touch it), but its oracle "every node retained an inbound edge" is exactly
+  what the cited cycle breaks, so it never adjudicated this failure mode.
+  The new regression therefore compares endpoints by exact node key rather
+  than through `indexOf`, which is self-confirming.
+- REQ-18 was demoted to `req-list.md`'s `## EXCLUDED` section and its empty
+  `coverage.md` row removed, on deviation D1's existing rationale: the clause
+  has no observable of its own and a direct test would assert the ABSENCE of
+  an assertion. No vacuous test was written.
 
 ## Why two spine findings were dropped
 
