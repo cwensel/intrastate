@@ -18,17 +18,23 @@ intrastate <cmd> --help-all
 intrastate <cmd> --as=json # one terminal JSON envelope per run
 ```
 
+If `intrastate` is not on PATH:
+
+```sh
+go install github.com/cwensel/intrastate/cmd/intrastate@latest
+```
+
 ## Commands
 
-- `intrastate flow`: Drive a transition model from a skill
-- `intrastate flow init-state`: Seed owned state from the model's [initial] root
-- `intrastate flow next`: Report the candidate rules the supplied state can take
-- `intrastate flow read-state`: Report what the declared read accessors see
-- `intrastate flow resolve`: Map one recognized outcome to exactly one plan
-- `intrastate flow set-state`: Apply planned owned-tag writes, verified by read-back
-- `intrastate graph`: Export a model's normalized graph as a document
-- `intrastate lint`: Check a transition model against the graph invariants
-- `intrastate version`: Print build version, commit, and date
+- [`intrastate flow`](docs/cli-reference.md#intrastate-flow): Drive a transition model from a skill
+- [`intrastate flow init-state`](docs/cli-reference.md#intrastate-flow-init-state): Seed owned state from the model's [initial] root
+- [`intrastate flow next`](docs/cli-reference.md#intrastate-flow-next): Report the candidate rules the supplied state can take
+- [`intrastate flow read-state`](docs/cli-reference.md#intrastate-flow-read-state): Report what the declared read accessors see
+- [`intrastate flow resolve`](docs/cli-reference.md#intrastate-flow-resolve): Map one recognized outcome to exactly one plan
+- [`intrastate flow set-state`](docs/cli-reference.md#intrastate-flow-set-state): Apply planned owned-tag writes, verified by read-back
+- [`intrastate graph`](docs/cli-reference.md#intrastate-graph): Export a model's normalized graph as a document
+- [`intrastate lint`](docs/cli-reference.md#intrastate-lint): Check a transition model against the graph invariants
+- [`intrastate version`](docs/cli-reference.md#intrastate-version): Print build version, commit, and date
 
 ## Docs
 
@@ -43,10 +49,31 @@ intrastate <cmd> --as=json # one terminal JSON envelope per run
   and decision tables from this repo and from a real consumer.
 - [README](README.md): what it is, install, and a first invocation.
 
+## Examples
+
+- [pricing-decision-table.toml](models/examples/pricing-decision-table.toml):
+  a stateless decision table, a proved 2x2 of tier x region with no
+  gap, overlap, or escape row.
+- [release-grammar.toml](models/examples/release-grammar.toml): the
+  full grammar surface in one model — every tag kind, guard operator,
+  and accessor construct the docs snippets are copied from.
+- [review-state-machine.toml](models/examples/review-state-machine.toml):
+  a stateful review flow, draft to approved or rejected, with escape
+  rows closing the uncovered cases.
+- [routing-decision-table.toml](models/examples/routing-decision-table.toml):
+  a decision table with a partitioned emit domain, routing severity x
+  owner into named dispositions.
+- [rdr.toml](models/rdr.toml): the model this repo's own
+  decision-record workflow runs on — the RDR lifecycle, Stage 1
+  through Stage 8.
+
 ## Optional
 
-- [Decision records](docs/rdr/): the locked design decisions behind
-  the contracts above. History and rationale; the code is the source
-  of truth.
+- [Decision records](docs/rdr/README.md): the locked design decisions
+  behind the contracts above. History and rationale; the code is the
+  source of truth.
+- [Joint decision records](docs/jdr/README.md): decisions two or more
+  sibling RDRs jointly own, hoisted to one normative home instead of
+  restated in each.
 - [CONTRIBUTING](CONTRIBUTING.md): layout, the contract every verb
   follows, and the build targets.

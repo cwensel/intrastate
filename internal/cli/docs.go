@@ -238,6 +238,12 @@ func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
 	line(w, "intrastate <cmd> --as=json # one terminal JSON envelope per run")
 	line(w, "```")
 	line(w)
+	line(w, "If `intrastate` is not on PATH:")
+	line(w)
+	line(w, "```sh")
+	line(w, "go install github.com/cwensel/intrastate/cmd/intrastate@latest")
+	line(w, "```")
+	line(w)
 
 	line(w, "## Commands")
 	line(w)
@@ -245,7 +251,8 @@ func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
 		if c.Hidden || c.Parent() == nil {
 			return
 		}
-		line(w, "- `"+c.CommandPath()+"`: "+c.Short)
+		path := c.CommandPath()
+		line(w, "- [`"+path+"`](docs/cli-reference.md#"+anchorFor(path)+"): "+c.Short)
 	})
 	line(w)
 
@@ -263,13 +270,44 @@ func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
 	line(w, "- [README](README.md): what it is, install, and a first invocation.")
 	line(w)
 
+	line(w, "## Examples")
+	line(w)
+	line(w, "- [pricing-decision-table.toml](models/examples/pricing-decision-table.toml):")
+	line(w, "  a stateless decision table, a proved 2x2 of tier x region with no")
+	line(w, "  gap, overlap, or escape row.")
+	line(w, "- [release-grammar.toml](models/examples/release-grammar.toml): the")
+	line(w, "  full grammar surface in one model — every tag kind, guard operator,")
+	line(w, "  and accessor construct the docs snippets are copied from.")
+	line(w, "- [review-state-machine.toml](models/examples/review-state-machine.toml):")
+	line(w, "  a stateful review flow, draft to approved or rejected, with escape")
+	line(w, "  rows closing the uncovered cases.")
+	line(w, "- [routing-decision-table.toml](models/examples/routing-decision-table.toml):")
+	line(w, "  a decision table with a partitioned emit domain, routing severity x")
+	line(w, "  owner into named dispositions.")
+	line(w, "- [rdr.toml](models/rdr.toml): the model this repo's own")
+	line(w, "  decision-record workflow runs on — the RDR lifecycle, Stage 1")
+	line(w, "  through Stage 8.")
+	line(w)
+
 	line(w, "## Optional")
 	line(w)
-	line(w, "- [Decision records](docs/rdr/): the locked design decisions behind")
-	line(w, "  the contracts above. History and rationale; the code is the source")
-	line(w, "  of truth.")
+	line(w, "- [Decision records](docs/rdr/README.md): the locked design decisions")
+	line(w, "  behind the contracts above. History and rationale; the code is the")
+	line(w, "  source of truth.")
+	line(w, "- [Joint decision records](docs/jdr/README.md): decisions two or more")
+	line(w, "  sibling RDRs jointly own, hoisted to one normative home instead of")
+	line(w, "  restated in each.")
 	line(w, "- [CONTRIBUTING](CONTRIBUTING.md): layout, the contract every verb")
 	line(w, "  follows, and the build targets.")
+}
+
+// anchorFor derives a GitHub-style markdown anchor from a command path
+// (e.g. "intrastate flow next"): lowercased, with spaces replaced by
+// hyphens. It exists so the Commands section can link into
+// docs/cli-reference.md's "## <path>" headings without hand-computing
+// the anchor at each call site.
+func anchorFor(path string) string {
+	return strings.ReplaceAll(strings.ToLower(path), " ", "-")
 }
 
 // usageWithoutVersion is cmd.UsageString with the ldflags-stamped

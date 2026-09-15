@@ -148,6 +148,28 @@ func TestDocs_WritesBothFilesUnderDir(t *testing.T) {
 	}
 }
 
+// TestDocs_LLMsTxtListItemsUnderH2AreLinks pins the llmstxt.org rule that
+// file-list items appearing under an H2 must be hyperlinks, not bare
+// text or backticked names. Once a "## " heading has been seen, every
+// "- " list item's content must open with a markdown link.
+func TestDocs_LLMsTxtListItemsUnderH2AreLinks(t *testing.T) {
+	_, llms := renderBoth(t)
+	seenH2 := false
+	for _, ln := range strings.Split(llms, "\n") {
+		if strings.HasPrefix(ln, "## ") {
+			seenH2 = true
+			continue
+		}
+		if !seenH2 || !strings.HasPrefix(ln, "- ") {
+			continue
+		}
+		item := strings.TrimPrefix(ln, "- ")
+		if !strings.HasPrefix(item, "[") || !strings.Contains(item, "](") {
+			t.Errorf("list item under an H2 is not a markdown link: %q", ln)
+		}
+	}
+}
+
 // TestDocs_IsHiddenFromTheCommandList pins that the generator does not
 // clutter the surface a user reads to learn the tool.
 func TestDocs_IsHiddenFromTheCommandList(t *testing.T) {
