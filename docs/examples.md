@@ -1,86 +1,104 @@
-# Examples, drawn
+# Examples
 
-This document is the picture book. [model-authoring.md](model-authoring.md)
-explains the grammar and the two model classes; this one draws the models
-that ship with intrastate and the models a real consumer built on it, so a
-reader can see the shape of a state machine and a decision table before
-reading a line of TOML, and see what the tool proves about each.
+intrastate gives large prompts a deterministic way to resolve decisions
+and state transitions. The prompt orchestrates the work; intrastate
+evaluates declared rules and returns a result the prompt can act on.
 
-Every model here lints today. The four under
-[`models/examples/`](../models/examples/) are gated by `make graph-lint`;
-the five from the [rdr](https://github.com/cwensel/rdr) repository lint at
-exit 0 with an empty findings list. The row and cell counts quoted below
-are computed from `intrastate graph --emit json`, not copied from comments.
+This is a main motivation for the project, described in
+[Determinism Injection](https://chris.wensel.net/post/determinism-injection/):
+externalize lookups, decisions, and writes so the prompt can focus on
+the reasoning its task requires.
 
-Two things to keep in mind while reading the diagrams:
+The examples below introduce the capabilities through five
+[bundled models](../models/examples/), then show how five models support
+the [rdr](https://github.com/cwensel/rdr) workflow. For the TOML grammar,
+see [Model authoring](model-authoring.md).
 
-- **A decision table has no order.** Where a table is drawn as a tree
-  below, the branch order is the picture's, chosen for legibility. The
-  model itself is a flat set of rows, each guard a conjunction, and lint
-  proves that every assignment of the guarded dimensions lands on exactly
-  one row. Any tree that reproduces the same leaves is an equally valid
-  drawing.
-- **The tool's own export is coarser than these drawings.** `intrastate
-  graph --emit dot` exports the reachability relation as a *declared
-  over-approximation*: states that no guard tells apart are merged into
-  one node. It is the right artifact for diffing in CI and for proving
-  "no path does X"; it is not the per-state picture a human wants. The
-  diagrams here are drawn from the rules by hand. The `json` export does
-  carry every row, guard, and write, and a short jq program over it
-  (given in full at the end) derives a plainer but faithful diagram; the
-  two bundled state machines are shown both ways so the drawings can be
-  checked against the export.
+## Layering intrastate into a prompt
 
-## Why the tool exists
+A large prompt may need to choose a review stage, check completion
+conditions, enforce a retry limit, and update a status field. Each of
+these decisions can have explicit inputs and a finite set of answers.
+Moving one into a model gives it a coverage check and a callable interface.
 
-A workflow's routing logic tends to live as prose inside the thing that
-runs it: a skill, a script, an agent prompt. "If the profile is mid and
-grounding has not run, run grounding; if grounding has run but 3amigo has
-not, run 3amigo; otherwise…" Every run re-reads that ladder and re-walks
-it. Nothing checks that the ladder has a rung for every case, and a
-missing rung is not an error at authoring time: it is a wrong answer,
-handed to someone months later, that looks exactly like a right one.
+The integration has four steps:
+
+1. **Collect facts.** Supply observed values with `--tag`, or bind
+   artifacts that the model reads through accessors.
+2. **Resolve a decision.** Call `flow resolve` with the model and outcome.
+   It returns a selected rule, emitted values, and any planned writes.
+3. **Act on the result.** The prompt runs the selected task, resolves
+   another outcome, or reports a stop. A script can handle this dispatch.
+4. **Apply planned state changes.** Pass the plan to `flow set-state`
+   when the workflow calls for a write.
 
 ```mermaid
 flowchart LR
-    subgraph prose["routing as prose"]
-        direction LR
-        P1["a ladder of if/otherwise<br/>inside the skill text"]
-        P2["re-read and re-walked<br/>on every run"]
-        P3["a missing rung is a wrong answer,<br/>found months later"]
-        P1 --> P2 --> P3
-    end
-    subgraph model["routing as a model"]
-        direction LR
-        T1["rows over declared,<br/>finite domains"]
-        T2["intrastate lint:<br/>every cell claimed by exactly one row"]
-        T3["intrastate flow resolve:<br/>one row, or a typed refusal"]
-        T1 --> T2 --> T3
-    end
+    P["Prompt or skill"] --> F["Collect facts<br/>from tools and artifacts"]
+    F --> I["intrastate flow resolve<br/>model + outcome + facts"]
+    I --> R["Selected rule<br/>emitted values + planned writes"]
+    R --> P
+    P --> W["intrastate flow set-state<br/>apply a plan"]
+    W --> A["Workflow artifacts"]
+    A --> F
 ```
 
-intrastate moves the ladder into data with finite, declared domains, so
-that a linter can enumerate the product of those domains and prove that
-every cell is claimed by exactly one row. At runtime the resolver refuses
-rather than guesses: two rows enabled at once is `flow-ambiguous-match`,
-a fact it cannot decide is `flow-guard-unevaluable`, and no matching row
-is `flow-no-match`. The consumer described in the second half of this
-document put it plainly in one of its model headers: a missing branch is
-"a lint failure here, not a wrong answer to a human three months from
-now."
+intrastate has no backing datastore. State remains in the artifacts the
+workflow already uses. A prompt can adopt a single decision table and
+add further models as needed.
 
-Two model classes ship, and they answer two different questions:
+### Capabilities used by prompts
 
-```mermaid
-flowchart TB
-    Q["what question does the model answer?"]
-    Q -->|"where does this go next,<br/>and what changes?"| SM["state-machine<br/>owned tags, an initial root, terminals, accessors<br/>rows carry writes"]
-    Q -->|"given this situation,<br/>what is the answer?"| DT["decision-table<br/>zero owned tags, no root, no accessors<br/>rows carry emit"]
-    SM --> A["the same analysis for both:<br/>coverage proved per outcome<br/>exactly one row or a refusal<br/>the escape row is the only default"]
-    DT --> A
+| Capability | Use in a prompt |
+| --- | --- |
+| [Coverage and overlap checks](#model-types-and-diagrams) | Validate routing branches before running the workflow |
+| [Decision tables with declared outputs](#minimal-decision-table) | Select a stage, operation, or stop reason from current facts |
+| [Output dispositions](#grouping-outputs-with-dispositions) | Dispatch on categories such as `route`, `chain`, or `stop` |
+| [State readers and writers](#reading-and-writing-a-markdown-document) | Read and update fields in existing workflow artifacts |
+| [Separate resolution and application](#minimal-state-machine) | Inspect a transition plan before applying its writes |
+| [Gates](#state-machine-with-gates-and-compound-guards) and [read-back](#applying-record-changes-rdr-writetoml) | Check a selected transition and verify an applied write |
+| [Structured refusals](#results-and-refusals) | Identify missing facts, ambiguous matches, or denied transitions |
+
+For example, a stage prompt can delegate its routing with an instruction
+of this form:
+
+```text
+At each phase boundary, collect the current facts and resolve the next
+action with the workflow model. Dispatch on the returned disposition.
+For a stop, report the returned reason. If resolution refuses, use its
+code and details to identify the input or model problem before continuing.
 ```
 
-## A state machine, minimal
+The model defines the decision policy. The surrounding prompt still
+performs the selected work and handles situations that require judgment.
+
+## Model types and diagrams
+
+| Model class | Purpose | Row output |
+| --- | --- | --- |
+| `state-machine` | Read owned state and determine a transition or decision | Planned writes and/or emitted values |
+| `decision-table` | Map supplied facts to a decision without owning state | Emitted values |
+
+Both classes use the same coverage analysis. For finite, declared domains,
+`intrastate lint` checks that each outcome covers every combination of
+guarded values without overlap. An escape row can provide a fallback for
+uncovered combinations; lint reports this separately from proved coverage.
+
+The bundled models are checked by `make graph-lint`. Row and cell counts
+in this document were computed from `intrastate graph --emit json`; a
+**cell** is one combination of values across a group's guarded dimensions.
+
+Two conventions apply to the diagrams below:
+
+- **Decision-table rows are unordered.** Tree diagrams group conditions
+  for readability; branch order does not determine which row wins.
+- **DOT exports show an approximation of reachability.** The export is
+  labelled `declared-over-approximation` and may combine states or include
+  paths that cannot occur at runtime. The diagrams below illustrate
+  individual rules. The [JSON-to-Mermaid example](#deriving-a-diagram-from-the-export)
+  provides a way to derive diagrams from exported rows, guards, and writes.
+
+## Minimal state machine
 
 [`review-state-machine.toml`](../models/examples/review-state-machine.toml)
 owns one tag, `status`, over a four-value domain, and advances it through
@@ -101,8 +119,7 @@ stateDiagram-v2
     end note
 ```
 
-The three ordinary rows, as the transition table the diagram was drawn
-from:
+The three transition rows are:
 
 | rule | outcome | guard | write |
 | --- | --- | --- | --- |
@@ -110,14 +127,14 @@ from:
 | `approve` | `approve` | `status = submitted` | `status = approved` |
 | `reject` | `reject` | `status = submitted` | `status = rejected` |
 
-Three more rows carry no guard and no write: `submit-otherwise`,
-`approve-otherwise`, `reject-otherwise`, each declared `escape =
-["no_match"]`. They exist because coverage is proved **per outcome, over
-the guarded dimensions**, for a state machine exactly as for a table.
-`submit` is guarded on one of `status`'s four values; without the escape
-row, the other three assignments are `graph-coverage-gap` and the model
-does not lint. With it, the model lints at exit 0 and reports the
-advisory that says how coverage was closed:
+Each outcome also has an escape row: `submit-otherwise`,
+`approve-otherwise`, and `reject-otherwise`. These rows declare
+`escape = ["no_match"]` with no guard or write.
+
+Coverage is checked per outcome. For example, `submit` handles only one
+of the four `status` values. Without its escape row, the other three
+produce `graph-coverage-gap`. With the escape rows, lint exits 0 and
+reports one coverage advisory per outcome:
 
 ```console
 $ intrastate lint --model models/examples/review-state-machine.toml
@@ -126,9 +143,8 @@ $ intrastate lint --model models/examples/review-state-machine.toml
   graph-coverage-closed-by-escape: the coverage of group review/submit is closed by the bare escape row "submit-otherwise" rather than proved over its declared domains (rule="submit-otherwise" element="review/submit")
 ```
 
-Driving it from an empty store. The model's `[read.review-state]` and
-`[write.review-state]` bind role `review`, so the caller supplies
-`--artifact review=<path>`:
+To initialize an empty store, bind a path to the `review` artifact role
+used by `[read.review-state]` and `[write.review-state]`:
 
 ```console
 $ intrastate flow init-state --model review-state-machine.toml --artifact review=state.json
@@ -150,9 +166,8 @@ owned.status: draft
 readers[0]: review-state
 ```
 
-`next` reports one candidate from `draft`: only `submit` has a guard the
-state satisfies. Asking for `approve` anyway does not refuse; it selects
-the escape row and says so:
+From `draft`, `next` reports `submit` as the only candidate. Resolving
+`approve` selects its escape row:
 
 ```console
 $ intrastate flow resolve --model review-state-machine.toml --artifact review=state.json --outcome approve
@@ -163,9 +178,8 @@ rule: approve-otherwise
 writes: (none)
 ```
 
-Resolving `submit` returns a plan, and the plan is data. Nothing is
-written until `set-state` applies it, and `set-state` reports success
-only after reading the value back:
+Resolving `submit` returns a plan. Pass it to `set-state` to apply the
+write and verify the result by reading it back:
 
 ```console
 $ intrastate flow resolve --model review-state-machine.toml --artifact review=state.json --outcome submit --as json \
@@ -182,10 +196,8 @@ candidates[1].rule: reject
 owned.status: submitted
 ```
 
-For comparison, this is what the tool's own export draws. Because no
-guard distinguishes `submitted` from `approved` or `rejected`, the export
-merges them into one node, and the escape rows make every outcome an edge
-out of every node:
+The DOT export combines `submitted`, `approved`, and `rejected` into one
+node. With the escape rows, every outcome has an edge from every node:
 
 ```console
 $ intrastate graph --model models/examples/review-state-machine.toml --emit dot
@@ -203,15 +215,12 @@ digraph "review" {
 }
 ```
 
-That is sound for what it is for. A universal claim proved over it holds
-at runtime; an existence claim may be spurious. It is not the diagram
-above, and it is not meant to be.
+This approximation supports claims such as "no path reaches this state,"
+but a path in the export may not be possible at runtime.
 
-The `json` document carries what the DOT relation drops: every row with
-its guard atoms, writes, and outcome, and every tag with its domain. The
-jq program in [Reproducing the pictures](#reproducing-the-pictures) reads
-that and renders a state diagram whose states are the values of the
-owned keys the rows guard on:
+The JSON export includes each row's guards, writes, and outcome, plus tag
+domains. The jq program in [Reproducing the diagrams](#reproducing-the-diagrams)
+uses these fields to render the individual state transitions:
 
 ```console
 $ intrastate graph --model models/examples/review-state-machine.toml --emit json \
@@ -225,17 +234,93 @@ stateDiagram-v2
     rejected --> [*]
 ```
 
-That is the hand-drawn diagram at the top of this section, minus the
-note. Escape rows carry no guard on the owned key, so they contribute no
-edge, which is the right reading: an escape row is not a transition.
+This reproduces the first diagram's transitions. Escape rows contribute
+no edges because they do not change state.
 
-## A decision table, minimal
+## Reading and writing a Markdown document
+
+[`markdown-review.toml`](../models/examples/markdown-review.toml) reads and
+updates the `Status:` line in an existing document. It demonstrates a
+command reader, an in-process line-edit writer, and read-back verification.
+The model covers both `draft` and `approved` without an escape row.
+
+The reader uses `sed` to return the status as a single raw value. The
+writer replaces exactly one matching line:
+
+```toml
+[read.document]
+role = "document"
+command = ["sed", "-n", "s/^Status: //p", "{artifact}"]
+output = "raw"
+keys = ["status"]
+timeout = "5s"
+
+[write.document]
+role = "document"
+keys = ["status"]
+timeout = "5s"
+read_back = true
+
+[write.document.edit.status]
+anchor = '^Status: .+$'
+replace = 'Status: {status}'
+```
+
+`{artifact}` is the path bound to the `document` role; `{status}` is the
+planned value. The reader expects exactly one line beginning `Status: `.
+This example targets that document format, rather than general Markdown
+parsing.
+
+Run the following from a checkout with `sed` on `PATH`. Copy the
+[sample document](../models/examples/markdown-review.md) to a temporary
+directory before editing it:
+
+```sh
+make build
+markdown_dir=$(mktemp -d)
+cp models/examples/markdown-review.md "$markdown_dir/review.md"
+./bin/intrastate lint --model models/examples/markdown-review.toml
+
+./bin/intrastate flow resolve \
+    --model models/examples/markdown-review.toml \
+    --artifact "document=$markdown_dir/review.md" \
+    --outcome approve --allow-commands --as=json > "$markdown_dir/plan.json"
+```
+
+Resolution reads `status = draft` and selects `approve-draft`, planning
+`status = approved`. The document is still unchanged. Apply the plan:
+
+```sh
+./bin/intrastate flow set-state \
+    --model models/examples/markdown-review.toml \
+    --artifact "document=$markdown_dir/review.md" \
+    --plan "$markdown_dir/plan.json" --allow-commands
+
+diff -u models/examples/markdown-review.md "$markdown_dir/review.md"
+```
+
+The response confirms `owned.status: approved` and `writes.status: approved`.
+The diff shows only `Status: draft` changing to `Status: approved`; `diff`
+exits 1 because it found the expected change. All other document bytes are
+preserved.
+
+Both commands need `--allow-commands`: resolution invokes the `sed`
+reader, and application invokes it again to verify the write. The edit
+writer itself runs in-process. Start with an existing document containing
+the status line; `init-state` does not create an edit-backed artifact.
+
+Resolving `approve` again selects `already-approved`, emits that result,
+and plans no writes. If the status line disappears or becomes duplicated
+between resolution and application, the writer refuses before mutation
+with `edit_anchor_unmatched` or `edit_anchor_ambiguous` in the refusal
+details.
+
+## Minimal decision table
 
 [`pricing-decision-table.toml`](../models/examples/pricing-decision-table.toml)
-owns nothing. It maps a situation, `tier × region`, to an answer. Both
-dimensions are two-valued, so the product is four cells, and four rows
-claim them. The model lints with an **empty** findings list: nothing is
-closed by escape, everything is proved.
+maps `tier × region` to emitted values without owning state. Each
+dimension has two values, giving four cells covered by four rows. The
+model lints with an empty findings list and needs no escape rows.
 
 ```mermaid
 flowchart LR
@@ -246,9 +331,8 @@ flowchart LR
     O --> PU["paid-us<br/>tier = paid<br/>region = us"] --> E4["plan = pro<br/>dpa = none"]
 ```
 
-The same table in its classical form, a truth table rotated ninety
-degrees, where the condition rows on top span every combination and the
-action rows below say what each combination yields:
+Each column below represents one rule, with inputs above and outputs
+below:
 
 | | free-eu | free-us | paid-eu | paid-us |
 | --- | --- | --- | --- | --- |
@@ -257,8 +341,7 @@ action rows below say what each combination yields:
 | **plan** | basic | basic | pro | pro |
 | **dpa** | required | none | required | none |
 
-Asking it. No artifact is bound, because there is no owned state to read;
-the dimensions arrive as `--tag`:
+Supply the inputs with `--tag`. No artifact is needed:
 
 ```console
 $ intrastate flow resolve --model pricing-decision-table.toml --outcome decide --tag tier=paid --tag region=eu
@@ -272,8 +355,8 @@ rule: paid-eu
 writes: (none)
 ```
 
-Leave a dimension out and the resolver does not pick a default. It says
-which atoms it could not decide, and over which rows:
+If an input is missing, the resolver reports the affected guard atoms
+and rows:
 
 ```console
 $ intrastate flow resolve --model pricing-decision-table.toml --outcome decide --tag tier=paid
@@ -282,17 +365,16 @@ error: flow-guard-unevaluable: a guard predicate could not be decided over the a
   flow-guard-unevaluable: rule `paid-us`: the atom on `region` could not be decided (absent) (locator="pricing:paid-us" rule="paid-us" key="region" operator="eq" literal="us" block="all")
 ```
 
-The `emit` vocabulary in this model is declared: `plan` is `basic | pro`,
-`dpa` is `required | none`. A row emitting a key no `[emit.*]` table
-names, or a value outside its domain, refuses at load. The answer block
-is a checked fact, not free text.
+The model declares output domains: `plan` is `basic | pro`, and `dpa` is
+`required | none`. Undeclared emit keys or values outside these domains
+cause a load failure.
 
-### An emit domain partitioned into dispositions
+### Grouping outputs with dispositions
 
 [`routing-decision-table.toml`](../models/examples/routing-decision-table.toml)
-is the same 2×2 shape with one difference: its `next` key's domain is
-declared in two named parts, and the resolver reports which part the
-selected row's value fell in.
+also has four cells. Its `next` output domain is divided into two named
+dispositions, `route` and `stop`. The resolver returns both the emitted
+value and its disposition:
 
 ```mermaid
 flowchart LR
@@ -323,22 +405,18 @@ emit.next: notify
 rule: high-unassigned
 ```
 
-intrastate fixes no disposition vocabulary. `route` and `stop` mean what
-the model's author says they mean; the tool guarantees only that a member
-is listed under exactly one disposition and that the token arrives
-verbatim. A caller branches on `dispositions.next` instead of on a string
-prefix of `emit.next`. The consumer below leans on exactly this to chain
-one table into another.
+Disposition names are defined by the model. Each domain member belongs
+to exactly one disposition, which the resolver returns verbatim. Callers
+can branch on `dispositions.next`; the RDR examples below use this to
+chain decision groups.
 
-## The grammar surface
+## State machine with gates and compound guards
 
 [`release-grammar.toml`](../models/examples/release-grammar.toml) is the
-model every snippet in the authoring guide is copied from. It is a state
-machine, `idle → building → shipped | held`, chosen to carry every
-construct the grammar admits: all five tag kinds, the guard operators past
-`eq`, block-level negation with `guard.unless`, a rule-level `clear`, a
-`[gate.<id>]` accessor, and contexts reused by `use` and chained by
-`inherits`.
+source for the authoring guide's grammar examples. It models
+`idle → building → shipped | held` and demonstrates all five tag kinds,
+guard operators, `guard.unless`, rule-level `clear`, a gate accessor,
+and contexts shared through `use` and `inherits`.
 
 ```mermaid
 stateDiagram-v2
@@ -353,30 +431,23 @@ stateDiagram-v2
     held --> [*]
 ```
 
-What the diagram is showing that the minimal machine did not:
+This model adds three features to the minimal state machine:
 
-- **Output hangs off the transition, not the state.** `ship-clean` writes
-  `phase = shipped` *and* clears `build-id`; the two `hold-urgent` rows
-  write the same `held` from two different states. This is the Mealy
-  shape the authoring guide names.
+- **Transitions can write and clear values.** `ship-clean` writes
+  `phase = shipped` and clears `build-id`. The `hold-urgent` rows can
+  write `phase = held` from either `idle` or `building`.
 - **Three `ship` rows partition `checks × risk` over `phase = building`.**
   `contains` on the set, its negation under `unless`, and `lt`/`gte` on
-  the int together cover every assignment with no overlap, so that arm is
-  proved rather than closed by escape.
+  the integer cover every combination in that state without overlap.
 - **The gate runs after selection.** `change-window` is consulted once
-  `begin` has been chosen; a deny is `flow-gate-denied`, a refusal, never
-  a second candidate.
+  `begin` has been chosen. A denial returns `flow-gate-denied`.
 
-Like the review machine, it carries one bare escape row per outcome and
-so lints with three `graph-coverage-closed-by-escape` advisories. The
-assignments the ordinary rows do not claim, a `build` asked of anything
-but `idle` for instance, are what the escape rows absorb.
+One escape row per outcome handles uncovered combinations, such as
+`build` when `phase` is not `idle`. Lint reports three
+`graph-coverage-closed-by-escape` advisories.
 
-The same machine derived from the JSON export, one edge per row. The
-hand drawing above merged the two `hold-urgent` rows, which split `risk`
-at zero only so the model exercises `gt` and `lte`; the derivation keeps
-them apart, and puts the non-state write `build-id = pending` and the
-`clear` on the edge label where the Mealy shape says they belong:
+The JSON-derived diagram expands the `hold-urgent` rows by their `gt`
+and `lte` guards. Edge labels include additional writes and clears:
 
 ```mermaid
 stateDiagram-v2
@@ -393,21 +464,17 @@ stateDiagram-v2
     held --> [*]
 ```
 
-## In the wild: the rdr flow
+## Integrating models into a large prompt workflow: RDR
 
-[rdr](https://github.com/cwensel/rdr) is a design-record process for
-agentic coding: a set of skills that take a record from a seed through
-proposal, refinement, verification, a pre-lock lens row, a finalization
-gate, and implementation. Which stage a record is at, which lens it owes
-next, whether a return packet advances or parks, whether a Stage 8 leg
-should return: every one of those used to be a prose ladder inside a
-skill, re-walked by a model on every run.
+[rdr](https://github.com/cwensel/rdr) uses large prompts, packaged as
+skills, to develop design records through proposal, review, finalization,
+and implementation. intrastate supplies decisions within those prompts:
+which stage runs next, whether a review repeats, when implementation
+returns, and which status changes are allowed.
 
-The flow now splits that work between two binaries that never call each
-other. `rdr` is a read-only projector: it reads record markdown and
-renders **facts** as a `--tag k=v` argv. `intrastate` resolves those facts
-against a model and returns the **transition**. The composition is one
-shell line, and the only coupling is the fact names.
+The `rdr` CLI reads record markdown and produces facts as `--tag key=value`
+arguments. The skill passes those facts to intrastate and uses the
+returned decision to continue its work:
 
 ```mermaid
 sequenceDiagram
@@ -421,11 +488,9 @@ sequenceDiagram
     Note over S: acts on the value: runs the named command,<br/>chains to a second outcome, or prints the stop verbatim
 ```
 
-The doctrine the flow states for itself is that exact state lives in a
-tool call, never in prose. The *state* (counts, ids, edges, which folders
-exist) comes from `rdr`; the *transition* comes from `intrastate`; a
-result is consumed as a value, never re-derived. Five models carry the
-transitions:
+Five models separate navigation, review control, implementation checks,
+and record updates. Counts below describe the versions used for these
+examples:
 
 | model | class | outcomes | rows | cells proved | escape rows |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -436,29 +501,20 @@ transitions:
 | `rdr-loop.toml` | decision-table | 2 | 12 | 40 | 0 |
 | **total** | | **25** | **223** | **7,927** | **0** |
 
-Two things stand out in that table. The first is the ratio: a few hundred
-rows claim several thousand cells, because a row's guard may use `in`
-over several members and `unless` over the complement, so one row claims
-many cells. The second is the last column. None of these models closes
-any group by escape; every cell is claimed by an ordinary row, and where a
-situation has no honest answer the row emits a `stopped:` token naming
-what is missing. One header says why an escape row was tried and removed:
-"every cell it claimed was already claimed, so it was unreachable as well
-as unproved."
+Guards using `in` and `unless` allow one row to cover many cells. These
+models cover every cell with ordinary rows and use no escape rows.
+Cases requiring the workflow to stop have explicit rows that emit a
+`stopped:` value.
 
-### The navigator: `rdr-status.toml`
+### Stage selection and chaining: `rdr-status.toml`
 
-The flagship table answers "I lost my place; what do I run next?" Its
-header records the incident that motivated it: a proof-of-concept over a
-partial table found 208 of 512 cells unclaimed, a hole prose had carried
-silently.
+This table selects the next stage from the record's current facts.
+Eight outcome groups keep each decision's input space separate:
+`locate` determines the overall stage, while `lens` selects a pre-lock
+review. Coverage is checked per group, so unrelated dimensions do not
+multiply the number of cells to check.
 
-It is eight outcome groups, not one, because the analysis bounds the
-product **per group**. Splitting the question splits the product: `locate`
-ranges over the coarse position, `lens` over the lens row, and neither
-pays for the other's dimensions. The groups chain through the `chain`
-disposition of the `next` emit key, which is exactly the partitioned
-domain the routing example above introduced:
+The `next` output uses a `chain` disposition to request another decision:
 
 ```mermaid
 flowchart LR
@@ -477,17 +533,13 @@ flowchart LR
     L -->|stop| STOP["stopped:… naming<br/>the fact that is missing"]
 ```
 
-The wrapper script that lists every in-flight record's next step is a
-loop over exactly those dispositions: resolve `locate`; while the
-disposition is `chain`, resolve the outcome the value names; then print
-`route` with the record number appended, `none` with the parked reason,
-or the `stop` token verbatim. The other groups (`critique`,
-`repeatability`, `floor`, `after-lock`) are asked directly by the stage
-skills that own them; `repeatability` chains to `determinacy` when the
-trigger for its lite variant is a judgement written on the record.
+The wrapper resolves `locate`, follows `chain` results, and then returns
+a command (`route`), an inactive result (`none`), or a stop reason
+(`stop`). Stage skills call the other groups as needed; for example,
+`repeatability` can chain to `determinacy`.
 
-The `lens` group is the one that reads most like a state machine, and it
-is worth seeing why it is not one:
+The `lens` group selects a review based on the record's profile and
+completed review evidence:
 
 ```mermaid
 flowchart LR
@@ -499,36 +551,24 @@ flowchart LR
     P -->|foundational| F1["/rdr-prelock cove"] --> F2["/rdr-prelock 3amigo"] --> F3["/rdr-prelock critique"] --> F4["/rdr-prelock repeatability"] --> RC
 ```
 
-Each box is a row. The arrows are not transitions the model performs;
-they are the order in which the lens flags flip from `false` to `true` as
-evidence folders appear on disk, and the row selected is always "the
-first flag on this profile's row that is still false." The state lives in
-the artifacts, `rdr` reads it, and the table is stateless by doctrine: a
-position computed from the artifacts cannot drift from them. A seventh
-dimension, `lens_stale`, re-opens a lens whose evidence predates a
-re-entry's demote date, which is how the same rows serve a record on its
-second pass through the flow.
+The arrows show the review sequence. The table selects the next review
+from flags derived from evidence on disk. It owns no state. The
+`lens_stale` dimension allows a review to reopen when its evidence
+predates the record's re-entry into the workflow.
 
-Two rules from the header that every row here obeys:
+Two authoring choices make this routing checkable:
 
-- **Dimensions are guard atoms, never match atoms.** A match atom scopes
-  the group and contributes nothing to the product. A table discriminated
-  by match atoms ranges over an empty product that any one row closes,
-  and lints green whether or not it is complete.
-- **Every dimension is `required` and `single_valued`.** Where the
-  underlying field is genuinely sometimes absent, the fact table declares
-  a sentinel member (`profile = none`, `reentry_target = none`) and the
-  renderer always emits the key. The sentinel's cell is then an ordinary
-  cell an ordinary row claims, usually with a `stopped:` answer. Absent is
-  never silently read as false.
+- **Put decision dimensions in guards.** Match atoms scope a group;
+  they do not contribute dimensions to its coverage analysis.
+- **Declare dimensions as `required` and `single_valued`.** Represent
+  known absence with a domain member such as `profile = none`. It then
+  has explicit coverage, usually through a row that emits a stop reason.
 
-### The cascade: `rdr-cascade.toml`
+### Handling stage results: `rdr-cascade.toml`
 
-The draft-to-lock orchestrator receives a return packet from each stage
-and must decide: advance, re-run, park, or relay a stop. That was a prose
-ladder over `verdict × blocking × retry × action`. The table's `packet`
-group is 96 cells, eight rows, drawn here as one of the trees that
-reproduces its leaves:
+After each stage, the orchestrating prompt receives a result packet.
+The `packet` group maps `verdict × blocking × retry × action` to
+advance, rerun, park, or stop: eight rows cover 96 cells.
 
 ```mermaid
 flowchart TD
@@ -549,22 +589,20 @@ flowchart TD
     R -->|1, 2| IC["incomplete-capped<br/>next = park"]
 ```
 
-Absence is a declared member: a packet with no `next_action` is `action =
-none`, and a first return is `retry = 0`. The route-back is a *member of
-the `action` dimension*, not a second dimension, because a stage stop and
-a named return stage share the packet's one imperative slot. And `retry`
-saturates at 2: there is no cell in which a third silent re-run happens.
+Missing `next_action` is represented as `action = none`. The first
+return uses `retry = 0`, and the retry count saturates at 2. A named
+return stage is represented by `action = stage`.
 
-The sibling `posture` group (90 cells, seven rows) decides how much to
-confirm with the human from `profile × status × ask_each`, and it is a
-small example of a rule that can only raise the answer: `--ask-each` maps
-every cell to "confirm everything," and no row reads lower than the
-record's own field would earn.
+The `posture` group uses `profile × status × ask_each` to determine
+which actions need human confirmation. Seven rows cover 90 cells.
+`--ask-each` requires confirmation for every action; other rows preserve
+the confirmation level required by the record.
 
-### The two caps: `rdr-loop.toml`
+### Enforcing retry limits: `rdr-loop.toml`
 
-Two re-run caps were prose that counted passes by hand. The `lens-loop`
-group is `iter × found × net_new × fix`, 32 cells, eight rows:
+This model gives review prompts an explicit rerun decision. The
+`lens-loop` group covers 32 cells across `iter × found × net_new × fix`
+with eight rows:
 
 | rule | iter | found | net_new | fix | next |
 | --- | --- | --- | --- | --- | --- |
@@ -577,25 +615,21 @@ group is `iter × found × net_new × fix`, 32 cells, eight rows:
 | `loop-flapping-substantial` | over | some | none | substantial | `stopped:verdict-flapping` |
 | `loop-over-small` | over | some | none | small | `converged` |
 
-Two cells are impossible on a consistent diff, net-new anchors with
-nothing found and anchors found with no pass on disk, and the table says
-so rather than leaving them to fall through. `over` is one past the cap,
-so a re-run at `over` *is* the forbidden fourth pass, and the two rows
-there that would need one stop instead. The `cluster-cap` group is the
-same idea over `iter × open`, eight cells, four rows.
+Rows explicitly reject inconsistent inputs: new findings with nothing
+found, or findings reported when no review pass exists on disk.
+`iter = over` prevents a fourth pass; rows that would require one emit
+`stopped:verdict-flapping`. The `cluster-cap` group applies a similar
+limit across `iter × open`, with four rows covering eight cells.
 
-### The Stage 8 gates: `rdr-launch.toml`
+### Implementation checks and delegation: `rdr-launch.toml`
 
-The implementation launch prompt routed by AND-gates in prose: a SIZE
-gate deciding inline versus delegated from five caps, a COMPLETION gate
-from four conditions, a predecessor PRECHECK, a SHARD route, and a leg
-BUDGET. Five outcome groups, 36 rows, 1,365 cells.
+The implementation prompt delegates five decisions to this model:
+inline versus delegated execution, completion, predecessor checks,
+shard routing, and execution budget. Its 36 rows cover 1,365 cells.
 
-The size gate is the clearest example of how a ladder becomes rows
-without a hit policy. The prose said "the first failing signal wins." The
-table encodes that order by conjoining every earlier cap's *passing* value
-into each later row's guard, so the rows are disjoint by construction and
-no tie-break is ever needed:
+The size decision selects the first failing condition. Each later row
+requires all earlier conditions to pass, making the guards mutually
+exclusive. The policy is encoded in the guards:
 
 ```mermaid
 flowchart TD
@@ -616,40 +650,28 @@ flowchart TD
     Q2 -->|none| I2["inline<br/>size-inline-uncounted"]
 ```
 
-Three of the six dimensions (`files`, `suite`, `pressure`) are not facts
-`rdr` renders. They are caller-supplied `--tag` values the orchestrator
-binds from what the world shows it, never estimated and never remembered.
-The same row is re-asked at every phase boundary, and a `delegated`
-answer mid-run *is* the fallback; there is no second table for it. At
-the precheck, before anything has happened, those tags sit at their floor
-values and `req_count` is `none`, and the row for that cell is what makes
-the inline path honest rather than a guess.
+The caller supplies `files`, `suite`, and `pressure` from current
+execution evidence; `rdr` supplies the other dimensions. The prompt
+resolves the decision at each phase boundary, allowing it to switch to
+delegated execution during a run. The precheck uses the initial values
+and `req_count = none`, which has its own row.
 
-The `complete` group (288 cells, ten rows) is the same construction over
-the six completion signals, and it is where the "a skipped check must
-never read as a passed one" rule is most visible: an unread coverage
-ledger is `impl_orphans = none`, a declared member, and its row emits
-`stopped:coverage-unread` rather than falling into the `COMPLETE` cell.
+The `complete` group covers 288 cells with ten rows. Missing verification
+has an explicit result: an unread coverage ledger is represented by
+`impl_orphans = none` and emits `stopped:coverage-unread`.
 
-The `budget` group (24 cells, six rows) decides when a Phase 2 leg
-returns, from `suite_green × elapsed × ask × commits`. Its dimensions are
-the last suite exit, the clock, `git rev-list --count`, and what the leg
-just did. The header explains the cap with a measurement: context grew
-about ten thousand tokens a minute over recorded legs, so a thirty-minute
-cut returns a fresh leg from the capsule instead of letting the harness
-compact a long one.
+The `budget` group covers 24 cells with six rows across
+`suite_green × elapsed × ask × commits`. It determines when a Phase 2
+implementation session returns, using the latest test result, elapsed
+time, recent action, and commit count. This lets the prompt enforce an
+execution budget at defined checkpoints.
 
-### The write side: `rdr-write.toml`
+### Applying record changes: `rdr-write.toml`
 
-One of the five is a state machine, and it is the one that changes the
-record. `rdr` is read-only by doctrine ("it never writes to a record"),
-and adding write verbs to it was rejected: every such verb is Go that has
-to be kept correct, and the win being chased was not a binary that writes
-but smaller prompts and higher determinism. So the structural edits the
-flow performs (claim a number, add or flip the index row, lock, demote,
-size the profile, name the stage a blocker returns to, walk the search
-ladder before asking the author) became rows, and the two owned tags they
-advance are read and written through accessors that are `rdr` itself.
+This state machine models record operations, including finalization,
+re-entry, and index updates. It owns two status tags. Command accessors
+read them through `rdr`, and edit accessors apply supported writes
+directly to the markdown artifacts.
 
 ```mermaid
 stateDiagram-v2
@@ -671,11 +693,10 @@ stateDiagram-v2
     end note
 ```
 
-The `lock` edge is taken only when the gate is written and current and no
-joint decision is open; every other `lock` cell decides without moving.
-Each `demote` edge also writes a qualifier onto the Status line naming
-the stage the record re-enters at, and `return` writes the same kind of
-qualifier without leaving `Draft`:
+`lock` advances a record only when the finalization gate is written and
+current and no joint decision is open. `demote` specifies a Status-line
+qualifier naming the re-entry stage; `return` specifies a qualifier while
+keeping the record in `Draft`:
 
 | blocker class | re-enters at | `demote` writes | `return` writes |
 | --- | --- | --- | --- |
@@ -687,20 +708,16 @@ qualifier without leaving `Draft`:
 | wording | finalize, re-lock only | `Final → Draft` | nothing: the lock pass fixes it in place |
 | none | | `stopped:no-blocker-class` | `stopped:no-blocker-class` |
 
-The `lock` group is the largest product in any of the five models: 1,620
-cells over `status × status_form × gate_written × gate_stale ×
-joint_check_home`, claimed by seven rows. Two rows advance `Draft` to
-`Final`; the other five decide without advancing and emit the reason:
+The `lock` group covers 1,620 cells across
+`status × status_form × gate_written × gate_stale × joint_check_home`
+with seven rows. Two advance `Draft` to `Final`; the others emit
 `stopped:no-gate-written`, `stopped:gate-stale`,
 `stopped:joint-decision-open`, `stopped:not-lockable`, or `none` for a
-record that is already `Final`, because the lock is idempotent.
+record that is already `Final`. Locking is idempotent.
 
-A state-machine row that decides without advancing is declared
-`advance = false`, and this model is mostly such rows: 62 of its 72. It is
-a state machine because two groups genuinely move owned state, and
-because the owned state must be *read through the model's accessors*, not
-supplied as argv. The composition therefore has one more step than the
-navigator's:
+A state-machine row can declare `advance = false` to decide without
+changing owned state; 62 of this model's 72 rows use it. The following
+sequence shows resolution, application, and read-back for `lock`:
 
 ```mermaid
 sequenceDiagram
@@ -721,18 +738,16 @@ sequenceDiagram
     I-->>S: writes status = Final, confirmed
 ```
 
-The two owned tags are excluded from the rendered argv because the
-resolver refuses an owned key supplied as `--tag` (`flow-tag-owned`);
-they arrive through `[read.record]` and `[read.readme]`, which are
-`command` accessors whose argv is fixed in the model and visible to lint.
-The writers are `edit` accessors: an `anchor` pattern that must select
-exactly one line and a `replace` that rewrites it, applied in-process with
-no shell. `read_back = true` on both means the same tool that rendered
-the fact confirms the write, so a read-back cannot disagree with the
-vector the row guarded on.
+Owned tags must come from the model's readers. Supplying one with
+`--tag` returns `flow-tag-owned`. Here, `[read.record]` and `[read.readme]`
+use commands declared in the model.
 
-The `readme` group keeps the index row in step with the record over
-`readme_status × status`, 99 cells, twenty rows:
+The writers use an `anchor` that must match exactly one line and a
+`replace` expression applied in-process. Both declare `read_back = true`
+so the readers verify the written values.
+
+The `readme` group synchronizes the index with the record. Twenty rows
+cover 99 cells across `readme_status × status`:
 
 ```mermaid
 flowchart LR
@@ -743,54 +758,37 @@ flowchart LR
     RS -->|differs from status| F["readme-flip-*<br/>write readme_status = status"]
 ```
 
-Only `lock` and `readme-flip` are applied by `set-state`. The other
-operations emit an edit the caller applies, and the header says this is
-permanent, not a stop-gap: an `edit` carrier substitutes a *planned
-value*, and `profile`, `demote`, and `readme-add` interpolate author prose
-that no fact supplies. Turning them into carriers would make the caller
-type the prose as a tag for the table to interpolate, which is the
-transcription this seam exists to remove, relocated rather than removed.
+`set-state` applies `lock` and `readme-flip`. Other operations emit edit
+instructions for the caller, including changes that incorporate author
+prose. The prompt can therefore use the model to select an operation
+while retaining responsibility for composing its text.
 
-The `return` group carries a lesson the header calls out. It used to be
-decide-only: the packet named the stage and nothing reached the record,
-so a Draft routed back from Stage 4 looked, to the very next skill,
-exactly like a Draft that had reached Stage 4 on its own. Two skills
-deadlocked on it, each correct, neither able to move. The fix was to make
-the row write a qualifier onto the record's own Status line, so that the
-route-back became a fact `rdr` renders and the navigator routes on.
+Re-entry instructions must be persisted: the `return` operation adds a
+qualifier to the record's Status line. `rdr` then exposes it as a fact
+for the navigator's next decision.
 
-## What the pictures cannot show
+## Results and refusals
 
-The diagrams show shape. The guarantees are in what lint and the resolver
-refuse, and those are the reason the consumer above rebuilt its routing
-as models:
+A prompt integrating intrastate needs to distinguish a valid workflow
+stop from a failure to resolve:
 
-- **Coverage is enumerated, not assumed.** 223 rows claim 7,927 cells,
-  and `intrastate lint` fails on the first unclaimed one. The 208-cell
-  hole that motivated the navigator would have been a lint failure.
-- **There is no hit policy.** Where two rows would both be enabled, the
-  model does not lint. Order, priority, and authoring position never
-  break a tie, because a tie-break the model did not author is a decision
-  no reviewer approved. DMN's `First` and `Priority` policies are exactly
-  what is refused here.
-- **Absent is not false.** A fact that could not be established is
-  rendered as a declared sentinel member, and its cell is claimed by a row
-  that usually answers with a `stopped:` token. A refused read never lands
-  in the resolver's argv; the wrapper scripts test the read before
-  substituting it.
-- **A stop is a value, not an exit code.** `stopped:no-profile` is an
-  `emit.next` member under the `stop` disposition, returned at exit 0
-  like any other answer. The caller branches on the disposition. What
-  exits non-zero is a *refusal*: an unmodeled outcome, an undecidable
-  guard, an ambiguous match, a denied gate.
-- **The emit vocabulary is checked.** Every stage command, stop token,
-  and edit operation these models can answer with is a declared member of
-  an `[emit.*]` domain. A misspelt stop token is a load failure, not a
-  string a skill reads as a stage.
+| Result | Meaning | Caller action |
+| --- | --- | --- |
+| Selected row with emitted values | The model resolved the inputs | Dispatch on the output or disposition |
+| `stop` disposition, such as `stopped:no-profile` | The model explicitly requires the workflow to stop; resolution succeeds at exit 0 | Report the reason and follow the workflow's stop handling |
+| `flow-no-match` | No row matches and no applicable escape handles it | Inspect inputs and model coverage |
+| `flow-guard-unevaluable` | A guard cannot be evaluated | Establish the missing or invalid fact |
+| `flow-ambiguous-match` | Multiple rows are enabled | Resolve the conflicting rules |
+| `flow-gate-denied` | A gate denied the selected transition | Follow the gate's refusal details |
 
-## Reproducing the pictures
+Output keys and values are checked against declared emit domains at load
+time. Known absence can be represented by an explicit domain member such
+as `none`; the caller must supply that value intentionally. An omitted
+fact is not automatically converted to a sentinel or `false`.
 
-Every model above lints and exports with the shipped binary:
+## Reproducing the diagrams
+
+Use these commands to lint the models and inspect their exports:
 
 ```sh
 # the bundled examples
@@ -807,21 +805,17 @@ intrastate lint --model models/rdr-status.toml
 intrastate graph --model models/rdr-write.toml --emit json | jq '.groups'
 ```
 
-The per-group cell counts quoted in this document are the product of the
-declared domain sizes of the keys each group's rows guard on, which is the
-product `intrastate lint` proves coverage over. They were computed from
-the `tags` and `rows` members of the JSON export; recomputing them after
-a domain changes is the way to keep this document honest.
+To update the cell counts, multiply the declared domain sizes of the
+keys used in each group's guards. The JSON export's `tags` and `rows`
+fields provide those domains and keys.
 
 ### Deriving a diagram from the export
 
-The two derived state diagrams above came from this jq program. It is not
-part of the tool and it is deliberately plain: one edge per transition
-row, states named by the values of the owned keys the rows guard on, and
-for a decision table one flowchart per outcome group with the guard atoms
-on the row and the emit block beside it. It skips the prose emit keys
-(`why`, `surface`, `sections`, `edit`) so the boxes stay readable. Save it
-as `graph-to-mermaid.jq`:
+This standalone jq example generates the derived state diagrams above.
+It uses guarded owned values as state names and labels transitions with
+their remaining guards and writes. For decision tables, it emits one
+flowchart per outcome group, omitting the prose fields `why`, `surface`,
+`sections`, and `edit` for readability. Save it as `graph-to-mermaid.jq`:
 
 ```jq
 def lit: if type=="array" then join(",") else tostring end;
@@ -880,10 +874,8 @@ intrastate graph --model models/examples/pricing-decision-table.toml --emit json
     | jq -r -f graph-to-mermaid.jq
 ```
 
-Over the pricing table that prints the four-row flowchart drawn by hand
-in [A decision table, minimal](#a-decision-table-minimal), with the
-guard spelled as atoms (`tier eq free`, `region eq eu`) rather than as
-prose. Over the rdr navigator it prints eight flowcharts, one per group,
-that are complete and unreadable at once, which is why the drawings in
-this document are by hand: the export is the source of truth for
-*what the rows are*, and a drawing is a choice about *what to show*.
+For the pricing model, this produces the four-row flowchart in
+[Minimal decision table](#minimal-decision-table), using guard atoms
+such as `tier eq free`. Larger models produce denser diagrams; use the
+JSON export to inspect individual rows and simplify diagrams for the
+decision being documented.

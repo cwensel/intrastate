@@ -72,10 +72,11 @@ MODEL ?= models/rdr.toml
 # docs/cli-output-contract.md documents `dispositions` against (RDR 0024
 # `0024:PH4`). They are linted here for the same reason the subject above
 # is: a documented model that the loader or the analysis has since stopped
-# accepting is worse than no example, and prose cannot catch that. All four
+# accepting is worse than no example, and prose cannot catch that. All examples
 # are expected to lint at exit 0 — the state machine carries
 # `graph-coverage-closed-by-escape` advisories, which do not fail.
 EXAMPLE_MODELS = \
+	models/examples/markdown-review.toml \
 	models/examples/pricing-decision-table.toml \
 	models/examples/routing-decision-table.toml \
 	models/examples/review-state-machine.toml \

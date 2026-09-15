@@ -1,0 +1,74 @@
+# Review an existing Markdown document. Requires sed on PATH and
+# --allow-commands for the reader and the writer's read-back.
+# See docs/examples.md for the resolve -> apply walkthrough.
+
+outcomes = ["approve"]
+terminal = ["approved"]
+
+[model]
+id = "markdown-review"
+version = 1
+class = "state-machine"
+
+[initial]
+status = "draft"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["draft", "approved"]
+single_valued = true
+required = true
+
+[emit.result]
+kind = "enum"
+domain = ["approved", "already-approved"]
+
+[read.document]
+role = "document"
+command = ["sed", "-n", "s/^Status: //p", "{artifact}"]
+output = "raw"
+keys = ["status"]
+timeout = "5s"
+
+[write.document]
+role = "document"
+keys = ["status"]
+timeout = "5s"
+read_back = true
+
+[write.document.edit.status]
+anchor = '^Status: .+$'
+replace = 'Status: {status}'
+
+[context.approved]
+[context.approved.match.status]
+eq = "approved"
+
+[[rule]]
+id = "approve-draft"
+[rule.match.recognized]
+eq = "approve"
+[rule.guard.all.status]
+eq = "draft"
+[rule.write]
+status = "approved"
+[rule.emit]
+result = "approved"
+
+# Repeated approval is an explicit no-op; both domain values are covered.
+[[rule]]
+id = "already-approved"
+advance = false
+[rule.match.recognized]
+eq = "approve"
+[rule.guard.all.status]
+eq = "approved"
+[rule.emit]
+result = "already-approved"

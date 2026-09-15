@@ -272,6 +272,8 @@ func writeLLMsTxt(w *strings.Builder, root *cobra.Command) {
 
 	line(w, "## Examples")
 	line(w)
+	line(w, "- [markdown-review.toml](models/examples/markdown-review.toml): reads a")
+	line(w, "  Markdown status with sed, updates one line, and verifies it by read-back.")
 	line(w, "- [pricing-decision-table.toml](models/examples/pricing-decision-table.toml):")
 	line(w, "  a stateless decision table, a proved 2x2 of tier x region with no")
 	line(w, "  gap, overlap, or escape row.")

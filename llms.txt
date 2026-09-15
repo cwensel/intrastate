@@ -51,6 +51,8 @@ go install github.com/cwensel/intrastate/cmd/intrastate@latest
 
 ## Examples
 
+- [markdown-review.toml](models/examples/markdown-review.toml): reads a
+  Markdown status with sed, updates one line, and verifies it by read-back.
 - [pricing-decision-table.toml](models/examples/pricing-decision-table.toml):
   a stateless decision table, a proved 2x2 of tier x region with no
   gap, overlap, or escape row.
