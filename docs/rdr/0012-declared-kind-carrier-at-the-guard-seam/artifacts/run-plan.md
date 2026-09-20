@@ -31,13 +31,20 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
 | prelock critique | PASS | no | Dual-model (opus-5 + fable-5, third-model barrier diff), 2 iterations, 23 findings. **REVERSED a Verified Key Discovery**: canonicalization does NOT close the divergence — graphlint reaches held values via `heldValues`->`canonicalValues` with no int round-trip, fed by `[initial]`/`[rule.write]` cells `conformKind` admits as `"007"`. Reopens the `matchlit` shape. C4 gained a consumption obligation (two-valued collapse at consumers would have made lint green on this RDR's own defects). Commits ab4aefa, 6198deb. |
 | prelock repeatability | PASS | no | Full x3 (three distinct models) + diff + one delta re-run; 18 findings. Grounding INVERTED three findings that would have contradicted shipped code (GuardResult iota order, False/Unevaluable precedence, exists-panic). Delta re-run caught a real compile error in C3's own migration line (Go func types are return-invariant). New Pending A7. Commits 2003b0c, 0355143. |
 | **CASCADE STOPPED** | — | — | Lens row complete (`lens-foundational-row-complete`); router names `/rdr-reconcile`. Stopped BEFORE reconcile by orchestrator decision: A4 carries an open design choice critique declined to collapse, and it is downstream of the user's Q1 ruling. Reconcile would have to pick (i) or (ii). Not this skill's call. |
+| (A4 re-ruled) | — | — | User ruled A4 as (ii): match arm byte-compares, typing confined to the guard path. Commit e08d588. Cascade resumed. |
+| reconcile | RECONCILED | no | Both owed verifications discharged, NEITHER assumed: MVV coherent under (ii) (step 3's parsed-comparison leg still fires on the guard path via the owned door); A7 genuinely RETIRED, not re-scoped (verified by tracing BOTH callers of `atomAdmitsValue` as match-only — incl. `nodeMeetsAll`, which the ruling did not name). A6 censused EMPTY. ca=all-terminal (7/7). Kata intrastate#ch99 filed for the held-ingress residual. §References filled (avoided a Stage 7 BLOCK). Commits fb8cef3, 96a4d4a. |
 | resolve | NEEDS_DECISION | yes | A1/A2/A3/A5 Verified against source; A4 REFUTED on its literal side (authored `n eq "00"` flips lint blocking→clean) and on its malformed leg (`--tag` conforms upstream, so the seam is never reached). Profile latched `foundational` (1 durable C1; C2/C3/C4 marked `Surface — of C1`). Evidence-body authored; Performance Expectations omitted per template. 3 questions + 3 fixtures put to the author in `evidence/author-round.md`; delegated run, so the round is not self-approved. Commits 60a3954, ca709d9. |
 
 Re-ask after resolve (2026-09-20): profile `foundational` unchanged; lens row
 `cove,3amigo,critique,repeatability` unchanged (rule `lens-foundational-cove`);
 posture unchanged. Plan line above still current — no rewrite owed.
 
-## Three Pending assumptions carried to reconcile
+## RESOLVED at reconcile — all three assumptions terminal
+
+A4 VERIFIED (ruled (ii), applied), A6 VERIFIED (census empty), A7 VERIFIED-as-retired
+(Design Decision; `Retired` is off the CA vocabulary). Superseded detail below.
+
+## Three Pending assumptions carried to reconcile (superseded)
 
 - **A4** — held-side int canonicality via the second graphlint path. Carries the
   open design choice below.
