@@ -74,11 +74,18 @@ go install github.com/cwensel/intrastate/cmd/intrastate@latest
 
 Or download a prebuilt binary for your platform from the
 [latest release](https://github.com/cwensel/intrastate/releases/latest) —
-each release carries a tarball per platform plus `checksums.txt`:
+each release carries an archive per platform (`.tar.gz`, or `.zip` on
+Windows) plus `checksums.txt`:
 
 ```sh
 tar xzf intrastate_<version>_<os>_<arch>.tar.gz
 install -m755 intrastate ~/.local/bin/
+```
+
+On Windows:
+
+```sh
+unzip intrastate_<version>_windows_amd64.zip
 ```
 
 Verify a download before installing it:
