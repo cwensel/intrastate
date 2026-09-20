@@ -101,6 +101,10 @@ N/A-bulleted). -->
 - **Overrides**: 0002-transition-table-as-reviewable-data:C4 — extends the
   write-value grammar admitted at load; the replace-not-accumulate
   application semantics C4 states are left untouched.
+  0002-transition-table-as-reviewable-data:C13 — narrows the suffix-iff
+  ("a suffix is non-empty exactly when the rule produced more than one row")
+  to the `in` expansion it was written about; the identity tuple's totality
+  over the product C13 states is left untouched.
 - **Seam Lineage**: no prior accretion.
 
 ## Problem Statement
