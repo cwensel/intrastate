@@ -38,7 +38,7 @@ engine README — this file is only the per-project index.
 | [0027](0027-inline-shell-detection-scope.md) | What the inline-shell check on command bindings actually promises (wrappers, env flags, stdin scripts) | Implemented | Medium |
 | [0028](0028-declared-line-edit-writer.md) | Write a planned value into a line of a text file without a wrapper script | Implemented | High |
 | [0029](0029-version-promise-on-machine-readable-output.md) | What a released version number promises an agent about the machine-readable output | Implemented | High |
-| [0030](0030-computed-write-value-grammar.md) | Counting and stepping a tag without writing out every value by hand | Draft | Medium |
+| [0030](0030-computed-write-value-grammar.md) | Counting and stepping a tag without writing out every value by hand | Final | Medium |
 
 ## Implementing
 

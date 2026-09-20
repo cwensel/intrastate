@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-09-19
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -429,37 +429,17 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   from the loader without a cycle.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/guard/grammar.go` imports only `encoding/json`,
-    `slices`, `strconv` and `internal/resolve`, and names no `table` type,
-    so it carries no dependency `resolve` lacks. `internal/guard/declaration.go`'s
-    `::intWidth(minV, maxV int) (int, bool)` moves in the same relocation
-    (C1) — it takes no `table` type either — so the width rule the loader
-    needs is single-sourced rather than copied into `table`. It is
-    unexported today and both post-move callers are outside `resolve`, so
-    it lands as the exported `resolve.IntWidth`; verify the two callers
-    compile against that spelling. `::IntDomain`
-    does NOT move: its parameter is a `table.TagDecl` and `resolve` cannot
-    import `table`, so it stays in `guard` as the decl-unpacking wrapper it
-    already is. Verify the move by compiling, and verify the wrapper by
-    checking `::domainSize` and `assignment.go::valueAssignments` both
-    reach the moved core rather than keeping the in-package re-inline of
-    the counted loop that exists today. `resolve` declares
-    `::GuardEvaluator` (the interface `Evaluator` implements, `0012:C2`)
-    and hosts `guardcontract.go`'s conformance harness, so the move
-    co-locates the interface, its sole implementation (A4) and its
-    contract test. Verified at Stage 6 against `main`
-    (`evidence/reconcile/source-verify.md` §A12): `grammar.go` imports
-    exactly `encoding/json`, `slices`, `strconv` and `internal/resolve` and
-    names no `table` identifier; `::intWidth`'s signature is `int`-only and
-    its three callers are `::domainSize`, `::IntDomain` and
-    `assignment.go::valueAssignments`, all in `guard` and so all outside
-    `resolve`, which is why the move exports it; `::IntDomain(d
-    table.TagDecl)` and `::domainSize(d table.TagDecl)` carry the `table`
-    type and stay; `internal/resolve/resolve.go::GuardEvaluator` and
-    `guardcontract.go::TestGuardEvaluatorContract` are both already there.
-    `go list -deps ./internal/table` names `internal/resolve` and neither
-    `internal/guard` nor `internal/graphlint`, so the cycle direction is
-    `table → resolve` as the clause requires. The remaining obligation is
+  - **Evidence**: verified at Stage 6 against `main` — `internal/guard/grammar.go`
+    imports only `encoding/json`, `slices`, `strconv` and `internal/resolve`
+    and names no `table` identifier, so it moves unchanged;
+    `internal/guard/declaration.go::intWidth` moves with it (exported as
+    `resolve.IntWidth`) while `::IntDomain` stays behind as the
+    `table.TagDecl` wrapper, and
+    `internal/resolve/resolve.go::GuardEvaluator` plus
+    `guardcontract.go::TestGuardEvaluatorContract` are already there.
+    Full census and the `go list -deps` cycle-direction check:
+    `artifacts/evidence-a12-a15.md` §A12, from
+    `evidence/reconcile/source-verify.md` §A12. The remaining obligation is
     the compile itself, which Phase 2 discharges.
   - **If wrong**: the loader cannot call the runtime comparison, and C1's
     "evaluated per member as the runtime evaluator would" becomes a
@@ -528,54 +508,22 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   that reads those slots back.**
   - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: every per-row site sets `Rule: row.RuleID`
-    (`internal/graphlint/groups.go`, `analysis.go`, `coverage.go`); the
-    package calls `Row.Identity()` nowhere outside tests. Verify that
-    those per-row sites all hold the `Row` (not just its id) at the point
-    of construction, so the suffixed form is reachable without threading
-    new state, and that the group-level sites using `firstRuleID` are
-    disjoint from them. **And enumerate every READ-BACK of those slots**,
-    not only the writes: `coverage.go::groupHasOverlap` joins an emitted
-    finding's `Rule` and `Element` against `ruleIDsOf(g)`'s bare ids to
-    gate the `ambiguous_match` coverage arm, so it must move to a key the
-    suffix does not carry — C3 fixes that key as the authored id RECOVERED
-    from the suffixed form (truncate at the first `#`), because the join is
-    two-slot and `Element`'s row carries no span to join on. Verify both
-    slots recover, and that `ruleIDsOf` needs no change. The search is for
-    consumers of the field, not
-    just producers — the producer census is the half that misses this.
-    Verified at Stage 6 against `main`
-    (`evidence/reconcile/source-verify-a15.md`). EIGHT per-row producer
-    sites, not the three files' worth this text first implied — five in
-    `groups.go` (`::checkOwnedBeforeMatch`, `::emitOverlaps`,
-    `::checkRedundantRows`, `::checkIdempotentWrites`,
-    `::checkVacuousAtoms`), two in `analysis.go`
-    (`::checkSingleValuedState`, `::checkUnreachableRules`), one in
-    `coverage.go` (`::emitWithholdings`) — and every one holds the `Row`
-    as a loop variable, so the suffixed form is reachable without new
-    state. The four group-level sites read `::firstRuleID` or
-    `::bareEscapeFor` over a `guard.Group` with no `Row` in scope, and are
-    disjoint from the eight. `::ruleIDsOf` reads `row.RuleID` directly and
-    needs no change; no production caller of `Row.Identity()` exists in
-    the package. Recovery is exact: `normalize.go::normalizeRules` refuses
-    a `#` in a rule id and `load.go` refuses one in a candidate member, so
-    truncating at the FIRST `#` recovers the authored id for any number of
-    suffix elements.
-    The read-back census ran to TWO, not one — the second is the reason
-    this assumption insists on consumers over producers, since its own
-    first pass named only `::groupHasOverlap`.
-    `internal/graphlint/engine.go::identityKey`, the sort key
-    `::sortFindings` orders on, also reads both slots. It is verified SAFE
-    and needs no change: it branches on `Rule` being NON-EMPTY to pick a
-    namespace and then uses the raw string only as a within-namespace
-    tie-break, so a suffixed value stays in the same bucket and the
-    rule-before-element ordering holds; no test pins the literal string,
-    only that the key forms a stable total order. It never resolves the
-    field against authored `[[rules]]` ids by equality, which is what C3's
-    fence forbids — so the fence is total over both readers and only
-    `::groupHasOverlap` moves. `export.go::compareEdges` reads an
-    `Edge.Rule`, a different struct in the graph-edge vocabulary C3 holds
-    fixed, and is not a finding read-back at all.
+  - **Evidence**: verified at Stage 6 against `main` — eight per-row
+    producer sites across `internal/graphlint/groups.go`, `analysis.go`
+    and `coverage.go` each hold the `Row` as a loop variable, so the
+    suffixed form is reachable without new state, and the four
+    group-level sites are disjoint from them. The read-back census ran to
+    TWO, not one: `coverage.go::groupHasOverlap` must move to the
+    authored id recovered by truncating at the first `#` (C3), and
+    `internal/graphlint/engine.go::identityKey` is verified SAFE and
+    needs no change; `export.go::compareEdges` reads a different struct
+    and is not a finding read-back at all. Recovery is exact because
+    `normalize.go::normalizeRules` and `load.go` both refuse a `#`.
+    Full producer and consumer censuses:
+    `artifacts/evidence-a12-a15.md` §A15, from
+    `evidence/reconcile/source-verify-a15.md`. The search is for consumers
+    of the field, not just producers — the producer census is the half
+    that misses this.
   - **If wrong**: C3's lint paragraph cannot be satisfied by a payload
     change alone, and the attribution gap is either carried as a disclosed
     consequence or routed to a successor record.
@@ -2115,102 +2063,70 @@ wanted it would be memory-motivated and first bite near 1,000,000 rows
 > citable as `cli/NNNN:G-cross-cutting`. Cite it that
 > way, not by section name.
 
-### Contradiction Check
-
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
-
-### Assumption Verification
-
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
-
-### Scope Verification
-
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0030-computed-write-value-grammar/artifacts/gate.md (Gate PASS 2026-09-20)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+- **Canonical form / determinism.** This record's expansion must be a
+  function of the authored model alone, because two consumers read the
+  minted rows by identity. It is: step points order by KEY alone
+  (`D-identity`), which is total because C1's subsumption leaves at most
+  one suffix-emitting step point per key; the domain is enumerated in
+  authored order for `enum` (`TagDecl.Domain`) and in `min..max` order for
+  `int`; and the set literal the loader renders takes the CANONICALIZING
+  form (`graphlint/reach.go::renderSetLiteral`'s
+  `slices.Compact(slices.Sorted(...))`, `[]` for nil) rather than
+  `guard/assignment.go::renderSet`'s as-authored marshal, so a set
+  literal's two spellings are one literal. No map iteration order reaches
+  the row order. This record claims **no** byte-identical output,
+  content-addressed identity or replay-stable hash of its own: it mints
+  rows into the existing `Fingerprint` and `intrastate.graph/1` pre-images,
+  whose canonicalization those records own — `engine.go::Fingerprint` and
+  `graph_document.go::graphRows` are Reuse, unchanged, and C3 fixes the
+  export vocabulary, adding no member. So the hash-function/pre-image
+  checklist is answered by the owning records, not re-decided here; what
+  this record owes, and discharges in C1 and `D-identity`, is that the row
+  set and its identities are deterministic before those consumers see them.
+- **Versioning.** The wire vocabulary `intrastate.graph/1` is held
+  invariant by C3 — no new member, no changed member meaning, with one
+  declared exception: the per-row finding `rule` slot's meaning narrows
+  from "the authored rule id" to "the row's identity". That narrowing is
+  this record's to make (it is the gap 0030 closes rather than inherits),
+  it is fenced to the in-package read-back
+  (`coverage.go::groupHasOverlap`, which recovers the authored id by
+  truncating at the first `#`), and S11 pins the invariance on the export
+  and the CLI previews. `0021` owns the export's own versioning policy.
+- **Incremental adoption.** The form is purely additive at the authoring
+  surface: a model with no `{ step = <n> }` write value loads, lints,
+  resolves and exports exactly as today, because the new arm is
+  intercepted before `load.go::valueMembers` on the write path only. An
+  author converts one ladder at a time, and MVV item 7 is the legibility
+  proof that conversion is worth doing. The one honest gap, recorded in
+  §consequences and not closed here, is that an author converting a
+  hand-unrolled ladder has no supported way to confirm the conversion was
+  faithful — the MVV's identical-findings comparison is a test oracle, not
+  a product surface.
+- **Memory management / row growth.** Expansion multiplies rows, so the
+  ceiling question is real and was asked: A7's spike measured load linear
+  and cheap, and `internal/guard/declaration.go::AssignmentCount`'s
+  ceiling is a lint analysis scope (`0013:C1`) unreachable from load. No
+  load-time ceiling is owed. The one unbounded case is fenced instead of
+  capped: C1 refuses a full-width `int` domain explicitly rather than
+  letting an unenumerable span fall through the zero-cell rule.
+- **Character encoding.** In scope only through the identity suffix, and
+  settled by an existing refusal rather than a new rule: `#` is banned in
+  rule ids by `normalize.go::normalizeRules` and in candidate members by
+  `load.go`, so `retry#3` can never collide with an authored id and
+  truncation at the first `#` recovers the authored id exactly, for any
+  number of suffix elements.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
-
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
-
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
-
-### Proportionality
-
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field: re-run
-rdr-write's `--outcome profile` with the clause's own
-dispositions and confirm the value Resolve wrote is
-what it emits (a stop is not a match).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. (The row already
-excludes `Transient`-marked contracts.) Also confirm form:
-value + one clause naming the contract(s) and its two
-dispositions; strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Not applicable, and deliberately not N/A-bulleted above: build tool
+compatibility, licensing, deployment model, IDE compatibility,
+secret/credential lifecycle, concurrency model — this record adds a
+declarative form to a file the loader already reads, on a single-threaded
+load path, with no new dependency, artifact or credential.
 
 ## References
 
