@@ -28,3 +28,6 @@ Lens row complete (`emit.row: none`). Nine CAs Pending with declared Methods —
 | reconcile | RECONCILED | no | 9 open CAs -> 9 terminal. 4 Verified by source search (A12/A14/A15/A16), 5 Downgraded to named MVV scenarios (A5/A6/A10/A11/A13). identityKey BLOCK judged not-a-refutation, ratified by author. Commits dfddd97, ccff86f. |
 
 Pre-finalize confirm PUT AND GRANTED (author: "go"), 2026-09-20.
+| finalize | PASS | no | Gate READY on all 5. Cross-Cutting authored (was template guidance); responses 1/2/3/5 -> artifacts/gate.md; A12/A15 evidence relocated verbatim -> artifacts/evidence-a12-a15.md. Status Draft -> Final, README flipped. Final lint blocking=0 resolution=0 placeholder=0 advisory=0. Commits 8672d70, 1230908. |
+
+**Run complete.** cli/0030 locked Final 2026-09-20. `after-lock` answers `/rdr-implement` (clustered=false, no Final-unimplemented peers).
