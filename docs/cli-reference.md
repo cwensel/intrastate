@@ -487,7 +487,9 @@ Reading the output
                that can be asked of it, not only those with a surviving
                candidate row.
   candidates[] one entry per row the supplied state does not exclude,
-               each naming its rule id, its outcome, and its verdict.
+               each naming its rule id, its outcome, the owned keys its
+               transition requires, and — under --evaluate-gates — its
+               gate results.
   unknown[]    per candidate, the keys that left the row undecided and
                the reason each is unsettled. This is the actionable
                field: it names exactly what to supply.
