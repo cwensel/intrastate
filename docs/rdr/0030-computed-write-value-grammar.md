@@ -366,12 +366,11 @@ atoms are not consulted. The authored atoms are retained; the expansion
 adds its own atom beside them. Each expanded row carries a `guard.all`
 atom `eq = <cell>` on the tag, the literal write `cell + n` (`int`) or the
 domain member `n` positions from the cell (`enum`), and the cell appended
-to its expansion suffix. A rule admitting zero cells — including a step
-whose magnitude reaches the domain's width, so that no cell has a
-successor — is refused at load; the stepped value is computed without
-overflow, and a step too large to compute admits no cell. A step write
-over a domain containing a member with the suffix separator `#` is
-refused at load.
+to its expansion suffix. The stepped value is computed without overflow
+at every admitted cell, whatever the step's magnitude; whether it lands
+inside the domain is C2's bound, not an admission question. A rule
+admitting zero cells is refused at load. A step write over a domain
+containing a member with the suffix separator `#` is refused at load.
 
 After normalization no surface distinguishes an expanded row from an
 authored literal row: `Row.Writes` holds literals only, and `0002:C4`'s
@@ -528,12 +527,7 @@ cost Approach 1 pays is row 6's second half: the normalized dump and
 `flow next` show `retry#0 … retry#4`, not `retry` — the same view an `in`
 expansion already gives, accepted on that precedent.
 
-Profile note: the seed sized `large` on a cross-RDR lock against 0002:C4,
-0004, 0006:A10 and 0021. Under the chosen approach C4 is extended, not
-reopened, and 0004/0006/0021 read literals unchanged; Resolve recounts the
-Profile from the verified contract count.
-
-Premortem: hardened (hardened) — the draft-free critic returned PASS with
+Premortem: hardened — the draft-free critic returned PASS with
 fourteen rules the brief omitted (conjunction of atoms per key, `in`+step
 composition, lower-bound and oversize steps, float/zero steps, the
 write-block-only interception on every path, the untiered-surface class);
@@ -651,8 +645,7 @@ rows, one deterministic row per (tier, attempt) cell, and exhausted rows. The
 reporter's estimate was roughly a 24-row table collapsing to 8 with both
 forms, or 10 with the integer form alone.
 
-Current behavior was confirmed against this repo rather than taken from the
-report: `attempt = 1` is accepted; `attempt = { add = 1 }` and
+In this repo today, `attempt = 1` is accepted; `attempt = { add = 1 }` and
 `tier = { next = true }` are both refused `malformed_tag_declaration: … is
 not a tag value`. The refusal comes from `internal/table/load.go`'s value
 admission, which has no arm for a TOML inline table, and
@@ -660,19 +653,9 @@ admission, which has no arm for a TOML inline table, and
 refusal is conformant with RDR 0002:C4 as written, so nothing here is a bug
 report — the proposal is to add a normative choice the records have not made.
 
-Scope review recorded two constraints worth carrying into design. First,
-timing: sub-clause (c), what the graph export enumerates for a symbolic
-successor, is live because RDR 0022 (terminal reachability) and RDR 0015
-(dead-end quantifier) are both `Draft` and would otherwise be authored
-against an assumption that changed underneath them. Second, verification: the
-originating report's proof bullets targeted a model file outside this repo and
-described the bound check as the existing per-literal `conformDomain` check,
-which it is not — `conformDomain` enforces `max` on a literal at load, and a
-guard-conditioned reachable-interval analysis over a computed write is a
-different check. The proof is recoverable in-repo:
-`internal/table/testdata/rdr-fixture.toml` already carries a ladder-shaped
-`int` tag with `lt` guards and enum domains. Verify is to be written against
-in-repo fixtures from the start.
+The proof is grounded in-repo: `internal/table/testdata/rdr-fixture.toml`
+already carries a ladder-shaped `int` tag with `lt` guards and enum
+domains, which is the fixture base the MVV builds on.
 
 ### Technical Environment
 
@@ -777,9 +760,10 @@ order.
   refusal, `malformed_tag_declaration`, detail names the admitted kinds.
 - A stepped value past `max` or past the last member at an admitted cell —
   load refusal (C2), detail names rule, tag, cell, value.
-- A step rule admitting no cell, a step whose magnitude reaches the
-  domain width, a zero or float step — load refusal, the `0003:C6`
-  disposition for the first, C1's grammar arm for the rest.
+- A step rule admitting no cell — load refusal, the `0003:C6`
+  disposition. A zero or float step — load refusal, C1's grammar arm. A
+  step whose magnitude exceeds the domain width refuses at every admitted
+  cell under C2, naming the first.
 - A cap cell excluded by the step rule and claimed by no other row —
   `graph-coverage-gap` at lint, the existing finding.
 - A stepped tag never initialised — `graph-owned-before-write` at lint.
