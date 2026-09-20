@@ -22,3 +22,6 @@ stages: refine -> resolve -> [lenses] -> reconcile -> finalize   stop-after: fin
 | prelock cove (delta) | PASS | no | Author ruling: C13 narrowing upheld, no JDR (0002 is Implemented). Unrecorded override was the defect -- Overrides now names 0002:C13 beside C4; typed edge resolves. Commits 40daf9e, 7c74b71. |
 | prelock 3amigo | PASS | no | 3 isolated personas + loop-ordered delta re-run; converged iter-2. Retracted 2 self-contradictory/invented claims in C1/C2; D-identity ordering corrected; S8-S10 added. A13/A14 booked Pending. Commits b037316, 75cbdc4. |
 | prelock critique | PASS | no | Dual-model (Opus 5 / Sonnet 5) + 3rd-model barrier diff; converged iter-2. New C3 obligation: graph-lint findings publish the cell. Delta re-run caught that the iter-1 fix would silently false-green groupHasOverlap. 3 items charted. A15 booked. Commits 84af232, 67ff621. |
+| prelock repeatability | PASS | no | FULL variant: 3 cross-model runs (opus/fable/sonnet) + barrier diff; converged iter-2, 7/7 pins clean. C1 site-split pinned (renderWrites owns cell walk; expand stays total). C3 join key single-sourced. Determinacy written: fired. A16 booked. Commits 4d9b7e0, 1d8f72f. |
+
+Lens row complete (`emit.row: none`). Nine CAs Pending with declared Methods — Stage 6 closes them.
