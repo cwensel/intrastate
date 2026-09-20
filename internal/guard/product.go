@@ -703,6 +703,41 @@ func CoverageUnionFor(m *table.Model, g Group, class string) AssignmentSet {
 	return coverageUnion(m, g, class)
 }
 
+// EscapeUnionFor unions the accepted assignments of the escape rows
+// declaring class, and NOTHING else.
+//
+// It is the closing population of the `ambiguous_match` arm: that refusal
+// arises where the group's ORDINARY rows overlap, so the rows that caused
+// the ambiguity cannot also rescue it — the kernel reaches the escape arm
+// precisely because none of them was the exact-one match. Counting ordinary
+// rows here would let the very overlap that mints the refusal certify it
+// rescued.
+func EscapeUnionFor(m *table.Model, g Group, class string) AssignmentSet {
+	product := Product(m, g)
+	if !product.Projectable() {
+		return AssignmentSet{}
+	}
+
+	out := newSet(productDims(m, g))
+	for _, row := range g.Rows {
+		if row.Kind() != table.KindEscape || !slices.Contains(row.Escape, class) {
+			continue
+		}
+		if len(Dimensions(m, g)) == 0 {
+			// Over the empty product membership alone decides: a row in the
+			// closing population denotes the single empty assignment.
+			return product
+		}
+		accepted := acceptedIn(m, g, row)
+		if !accepted.Projectable() {
+			// A can-refuse or unprojectable row contributes NO assignments.
+			continue
+		}
+		out = out.Union(accepted)
+	}
+	return out
+}
+
 // coverageUnion unions the accepted assignments of the group's rows. An
 // empty class unions every row; a named class unions the ordinary rows plus
 // only the escape rows declaring that class.

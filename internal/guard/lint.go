@@ -497,10 +497,18 @@ func pairwiseOverlaps(m *table.Model, g Group, rows []table.Row, class string) [
 //
 // Coverage is `union(row_i accepted assignments) == scoped product`. The
 // union is computed per (group × declared rescuable class), since an escape
-// row closes coverage only for the classes it can actually rescue. A gap
-// has no contributing predicate — it is an ABSENCE — so it is attributed by
-// the selection context, EVERY source rule id in the group, and at least
-// one concrete uncovered assignment from the product.
+// row closes coverage only for the classes it can actually rescue. WHICH
+// rows enter that union differs by class as well, because the two refusals
+// arise from opposite conditions: `no_match` arises exactly where NO row
+// accepts the assignment, so the ordinary population closes it alongside
+// the escape rows declaring the class, while `ambiguous_match` arises where
+// the ordinary rows OVERLAP, so only escape rows declaring it close that
+// arm. Counting ordinary rows there would let the very overlap that mints
+// the refusal certify it rescued.
+//
+// A gap has no contributing predicate — it is an ABSENCE — so it is
+// attributed by the selection context, EVERY source rule id in the group,
+// and at least one concrete uncovered assignment from the product.
 // The `ambiguous_match` arm is checked only where it is REACHABLE — for a
 // group whose ordinary population carries an overlap — and is treated as
 // vacuously closed otherwise. RDR 0006 states the arm mechanics
@@ -517,10 +525,14 @@ func coverageFindings(m *table.Model, g Group, ordinaryOverlap bool) ([]Finding,
 	var closedBy string
 
 	for _, class := range RescuableClasses() {
-		if class == string(resolve.KindAmbiguousMatch) && !ordinaryOverlap {
+		ambiguous := class == string(resolve.KindAmbiguousMatch)
+		if ambiguous && !ordinaryOverlap {
 			continue
 		}
 		union := CoverageUnionFor(m, g, class)
+		if ambiguous {
+			union = EscapeUnionFor(m, g, class)
+		}
 		if union.Equal(product) {
 			if row := bareEscapeFor(g, class); row != "" && !ordinaryClosesAlone(m, g, product) {
 				closedBy = row

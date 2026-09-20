@@ -760,3 +760,69 @@ func TestReq94AndC16_OverBoundStructuralWithholdingFindsNoOverlapWhenNoRowIsDeci
 			"to intersect. findings=%v", n, allFindings(reports))
 	}
 }
+
+// REQ-77 / RDR 0006: the `ambiguous_match` coverage union is drawn from the
+// ESCAPE rows declaring the class, and nothing else. That refusal arises
+// where the group's ordinary rows overlap, so the rows that caused the
+// ambiguity cannot also rescue it — the kernel reaches the escape arm
+// precisely because none of them was the exact-one match. A union counting
+// ordinary rows would let a fully covering overlap suppress the gap.
+// ADVERSARIAL
+func TestReq77_AmbiguousMatchCoverageIsDrawnFromEscapeRowsAlone(t *testing.T) {
+	// Overlapping ordinary rows that jointly cover the whole product, with
+	// NO row declaring `ambiguous_match`: the arm is reachable and unrescued.
+	m := mustLoadSource(t, overlappingOrdinaryCoversProductSource())
+	g := groupOf(t, m, "ov-a")
+
+	if !guard.CoverageUnion(m, g).Equal(guard.Product(m, g)) {
+		t.Fatal("the fixture's ordinary population no longer covers the " +
+			"whole product; it cannot witness the suppression")
+	}
+	if union := guard.EscapeUnionFor(m, g, string(resolve.KindAmbiguousMatch)); union.Len() != 0 {
+		t.Errorf("the escape-only union over a group with no "+
+			"`ambiguous_match` row holds %d assignments; nothing declares "+
+			"the class", union.Len())
+	}
+
+	reports := guard.Lint(m)
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeOverlap
+	}) {
+		t.Fatalf("the fixture drew no overlap finding, so the "+
+			"`ambiguous_match` arm is not reachable; findings=%v",
+			allFindings(reports))
+	}
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeCoverageGap && f.Class == string(resolve.KindAmbiguousMatch)
+	}) {
+		t.Errorf("a fully covering OVERLAP suppressed the `ambiguous_match` "+
+			"gap; the rows that mint the ambiguity cannot certify it "+
+			"rescued. findings=%v", allFindings(reports))
+	}
+
+	// A real `ambiguous_match`-declaring escape row DOES rescue the arm: the
+	// same overlapping population draws no gap once one is present.
+	rescued := guard.Lint(mustLoadSource(t, overlappingOrdinaryAmbiguousEscapeSource()))
+	if anyFinding(rescued, func(f guard.Finding) bool {
+		return f.Code == guard.CodeCoverageGap && f.Class == string(resolve.KindAmbiguousMatch)
+	}) {
+		t.Errorf("a bare escape row declaring `ambiguous_match` failed to "+
+			"close the arm it declares; findings=%v", allFindings(rescued))
+	}
+
+	// And where that escape row is the SOLE closer — the ordinary rows
+	// overlap AND leave a gap — the closure is reported, not taken silently.
+	closed := guard.Lint(mustLoadSource(t, overlappingOrdinaryGapAmbiguousEscapeSource()))
+	if anyFinding(closed, func(f guard.Finding) bool {
+		return f.Code == guard.CodeCoverageGap
+	}) {
+		t.Errorf("the escape row declaring both rescuable classes left an "+
+			"arm open; findings=%v", allFindings(closed))
+	}
+	if !anyFinding(closed, func(f guard.Finding) bool {
+		return f.Code == guard.CodeCoverageClosedByEscape
+	}) {
+		t.Errorf("the escape row closed coverage silently; the closure is an "+
+			"OBSERVABLE result. findings=%v", allFindings(closed))
+	}
+}

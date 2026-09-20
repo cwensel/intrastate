@@ -1313,6 +1313,98 @@ eq = "go"
 `
 }
 
+// overlappingOrdinaryCoversProductSource is the union-source witness: its
+// ordinary population OVERLAPS on `small` — so the `ambiguous_match` arm is
+// reachable — and jointly COVERS the whole product {small, large}, while no
+// row declares `ambiguous_match` at all. Nothing rescues the ambiguity, so
+// the arm must draw its gap; a union that counted the overlapping ordinary
+// rows would let the very overlap that mints the refusal certify it
+// rescued.
+func overlappingOrdinaryCoversProductSource() string {
+	return declBlock(`
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large"]
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "ov-a"
+source = "t:oa"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "ov-b"
+source = "t:ob"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+in = ["small", "large"]
+[rule.write]
+`
+}
+
+// overlappingOrdinaryAmbiguousEscapeSource is the same overlapping,
+// fully-covering ordinary population plus a BARE escape row declaring
+// `ambiguous_match`. That row denotes the whole scoped product, so the arm
+// really is rescued and draws no gap.
+func overlappingOrdinaryAmbiguousEscapeSource() string {
+	return overlappingOrdinaryCoversProductSource() + `
+[[rule]]
+id = "ambig-escape"
+source = "t:ambig"
+escape = ["ambiguous_match"]
+[rule.match.recognized]
+eq = "go"
+`
+}
+
+// overlappingOrdinaryGapAmbiguousEscapeSource overlaps on `small` — making
+// the `ambiguous_match` arm reachable — while leaving `large` uncovered, so
+// the ordinary population does NOT close alone. Its bare escape row
+// declares BOTH rescuable classes and is therefore what closes each arm,
+// which is reported rather than taken silently.
+func overlappingOrdinaryGapAmbiguousEscapeSource() string {
+	return declBlock(`
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large"]
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "ov-a"
+source = "t:oa"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "ov-b"
+source = "t:ob"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "ambig-escape"
+source = "t:ambig"
+escape = ["no_match", "ambiguous_match"]
+[rule.match.recognized]
+eq = "go"
+`
+}
+
 // guardedEscapePartialSource carries a GUARDED escape row, whose accepted
 // assignments are its own rather than the whole product.
 func guardedEscapePartialSource() string {
