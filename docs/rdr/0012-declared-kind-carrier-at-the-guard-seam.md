@@ -181,40 +181,46 @@ Resolve's refusal taxonomy).
     `escapeClassOf`, which resolves a probe derived from the same
     model's `KernelTable()`), while the third —
     `internal/cli/flow_next.go::probeRow` — takes only a `table.Row`,
-    with the model one frame up at its caller. So the guard package and
-    graphlint need one added local parameter each; the CLI additionally
-    widens `probeRow`'s signature or passes the constructed evaluator
-    down. All are intra-package — no cross-package signature surgery.
+    with the model one frame up at its caller. Of the three measured
+    sites C4 migrates TWO: the guard package needs one added local
+    parameter, and the CLI additionally widens `probeRow`'s signature
+    or passes the constructed evaluator down. Both are intra-package —
+    no cross-package signature surgery. The graphlint site is measured
+    here but deliberately NOT migrated (C4, match path): both its
+    callers are reached only through `BlockMatch` atoms, where the
+    kernel byte-compares, so typing it would create the divergence this
+    record closes. This assumption measures the site population; which
+    of them C4 obliges is C4's call.
   - **If wrong**: a consumer without a model needs a declaration-free
     degraded evaluator, re-introducing the raw-string arms the RDR
     exists to remove — the constructor design must change (e.g. thread
     the model through the caller).
 - **A4 With `int` spellings canonicalized at the PREDICATE ingress (C5)
-  and parsed
-  comparison at the seam (C2), lint and the runtime agree on every
-  `eq`/`in` over an `int` dimension: lint's product renders held values
+  and parsed comparison confined to the GUARD path (C2, C4),
+  lint and the runtime agree on every
+  `eq`/`in` GUARD atom over an `int` dimension: lint's product renders
+  held values
   from the declared domain with `strconv.Itoa`, the authored literal is
   admitted only in that same canonical spelling, and a model spelling an
   int non-canonically refuses at load naming the canonical form rather
-  than silently changing a verdict.**
-  - **Status**: Pending — C5 was narrowed at pre-lock (3amigo) from the
-    shared `conformKind` int arm to the atom-building site, so the
-    agreement claim must be re-verified at the new home: the check now
-    runs in `normalize.go::(*loader).atom`, and `[emit]`/`[initial]`/
-    `[rule.write]`/CLI values keep their permissive `0024:REQ-7`
-    spelling. Re-verify on the HELD side, not the literal side: pre-lock
-    critique established that literals were never the open leg — the
-    narrowed C5 already covers every predicate literal — while
-    graphlint reaches held values by a SECOND path this assumption's
-    spike never measured. `internal/graphlint/reach.go::heldValues`
-    sources `[initial]`/`[rule.write]` cells and passes them through
-    `reach.go::canonicalValues`, which sorts and dedupes and performs no
-    integer round-trip; those cells are conformed only by
-    `conformKind`'s permissive int arm, which admits `"007"`. So a
-    re-verification scoped to literals PASSES while the real divergence
-    ships. Scope the re-run to: can an `[initial]`/`[rule.write]` int
-    cell reach an `eq`/`in` comparison in a spelling the kernel and
-    lint read differently?
+  than silently changing a verdict. MATCH atoms are outside this claim:
+  both deciders byte-compare them, so they agree without typing.**
+  - **Status**: Verified — under the 2026-09-20 author ruling (option
+    (ii)) the claim is scoped to the guard path, which is the only
+    path on which lint and the kernel share a decision. The held-side
+    leak this assumption was re-opened for lives entirely on the MATCH
+    path (`reach.go::heldValues` → `canonicalValues`, no integer
+    round-trip), and that path is no longer typed by this record — C4
+    excludes `reach.go::atomAdmitsValue`, which keeps byte-comparing
+    exactly as the kernel's `TagSet.matches` does. A non-canonical
+    `[initial]`/`[rule.write]` int cell therefore reaches lint and the
+    kernel in the SAME spelling and is read the same way by both; it
+    is not a divergence this record introduces or leaves. It remains a
+    canonicalization gap at that ingress, recorded as the Residual in
+    §Load-Bearing Decisions and carried by kata `intrastate#ch99`
+    (the wider
+    rule contradicts RDR 0024's locked REQ-7/REQ-9, so it is not
+    resolvable here).
   - **Method**: Source Search + Spike
   - **Evidence**: HELD side —
     `internal/guard/assignment.go::valueAssignments` (called from
@@ -223,11 +229,17 @@ Resolve's refusal taxonomy).
     zero, `+`, or whitespace, so only canonical spellings reach the lint
     side by THAT path (spike
     `evidence/spikes/a4-render-path.md`). That spike measured the
-    product path only; `internal/graphlint/reach.go::heldValues` is a
-    second held-side path it did not reach, and it applies no numeric
-    round-trip (`reach.go::canonicalValues` sorts and dedupes) — which
-    is why this assumption is Pending rather than Verified, and what
-    the re-run above must settle. LITERAL side — today the
+    product path, which under the narrowed scope is the whole held
+    side of this claim: `product.go::valueSatisfies` is reached from
+    `Denotation`, and `product.go::selectionOf` routes `BlockMatch`
+    atoms away from it. The other held-side path —
+    `internal/graphlint/reach.go::heldValues` → `canonicalValues` (no
+    integer round-trip) — feeds `reach.go::atomAdmitsValue` ONLY,
+    which C4 excludes from typing, so lint and the kernel read those
+    cells identically and this claim does not quantify over them.
+    Reconcile verified that exclusion is structural, not incidental
+    (both callers are `BlockMatch`-only; derivation in
+    `evidence/reconcile/report.md` §A4). LITERAL side — today the
     literal is joined from authored bytes (`valueSatisfies`) and the
     loader's kind check is `strconv.Atoi`
     (`internal/table/load.go::conformKind`), which ACCEPTS `"00"`,
@@ -273,51 +285,81 @@ Resolve's refusal taxonomy).
   value that is non-canonical but parseable (`"07"` against
   `n eq 7`), which today prunes as a raw-string mismatch and after C2
   matches as a parsed equality.**
-  - **Status**: Pending
+  - **Status**: Verified — census run at reconcile, over the population
+    the 2026-09-20 ruling narrows this to: GUARD atoms only, since the
+    match path is no longer typed (C4) and so changes no verdict at
+    all.
   - **Method**: Spike (corpus scan)
-  - **Evidence**: none yet. S6 measured the AUTHORED side (123 models,
+    S6 measured the AUTHORED side (123 models,
     zero `eq`/`in` atoms over an `int` tag). The held side is a
-    different population and is unmeasured: every persisted owned
-    value and every hand edit to the artifact enters through the owned
-    door (§Problem Statement), and the flip there runs BOTH ways —
+    different population, and the flip there runs BOTH ways —
     malformed → `GuardUnevaluable` is the loud fix this RDR wants, but
     non-canonical-yet-parseable → `GuardFalse` becoming `GuardTrue` is
     a silent verdict change, precisely the harm the RDR exists to
     remove. C5 does not reach reader values (`trace` step 3), so
-    nothing upstream prevents it. Scan the persisted artifacts for
-    owned values on `int`/`bool` dimensions and classify each as
-    unchanged / newly-refusing / newly-matching.
+    nothing upstream prevents it.
+  - **Evidence**: the census is bounded because an owned value can only
+    reach a typed comparison through a tag that is BOTH
+    `provenance = "owned"` AND declared `int` or `bool`. Across the
+    committed models exactly one such dimension exists:
+    `models/rdr.toml::[tags.gate_passed]` (`owned`, `bool`). The other
+    two `int`/`bool` declarations in the corpus —
+    `models/examples/release-grammar.toml::[tags.risk]` (`int`) and
+    `::[tags.urgent]` (`bool`) — are `provenance = "observed"`, which
+    carries no persisted owned value. Every authored `gate_passed`
+    value is the canonical token: `[initial] gate_passed = "false"`,
+    the two partitioning guards `[rule.guard.all.gate_passed] eq =
+    "true"` and `eq = "false"`, and one `[rule.write] gate_passed =
+    "false"`. Canonical `bool` tokens compare identically under
+    raw-string and token equality, so no committed model's guard
+    verdict changes — silently or loudly. The population of
+    non-canonical-yet-parseable held values on a typed dimension is
+    EMPTY on `main`, which is the claim.
   - **If wrong**: the change needs a release note and possibly a scan
     or `--fix` affordance before rollout, rather than shipping as a
     behavior fix — and the silent-match cases must be enumerated, since
     an RDR premised on removing silent verdict changes cannot introduce
-    an unbounded set of them.
-- **A7 Widening graphlint's atom check from `bool` to
-  `resolve.GuardResult` (C4) changes no lint verdict for atoms that
-  are already decided — every GuardTrue/GuardFalse pair reaches the
-  same finding it does on `main`, and only the previously-collapsed
-  GuardUnevaluable case is newly distinguishable at both callers.**
-  - **Status**: Pending
-  - **Method**: Source Search + Spike
-  - **Evidence**: none yet. The two callers read the current `bool`
-    with OPPOSITE polarity —
-    `internal/graphlint/reach.go::ownedAtomSatisfiable` existentially
-    (any admitting value wins) and
-    `internal/graphlint/analysis.go::nodeMeetsAll` exclusionarily
-    (a non-admitting value fails the node) — so the widening is
-    exactly the shape where a sign error is invisible: a mis-mapped
-    decided verdict at the negated caller suppresses a finding rather
-    than producing a wrong one, which no corpus diff over FIRING
-    findings detects. Verify by re-expressing today's
-    `verdict != resolve.GuardFalse` at each caller and diffing lint
-    output over the committed corpus in BOTH directions (findings
-    gained and findings lost), not by reading the rewrite.
-  - **If wrong**: the rename and widening land with a suppressed
-    finding class, and C4's own premise — that three-valued
-    consumption makes lint agree with the runtime — is the thing that
-    broke it. The fix is to widen one caller at a time with the
-    corpus diff between, rather than both in the phase that also
-    introduces the new verdict.
+    an unbounded set of them. Residual risk is a deployment whose
+    persisted artifact holds an out-of-corpus owned value on a typed
+    dimension; S9's owned-reader fixture is the standing regression
+    case for that direction.
+- **A7 RETIRED — its subject no longer exists in this design.** The
+  assumption quantified over a widening of graphlint's atom check from
+  `bool` to `resolve.GuardResult`. Under the 2026-09-20 author ruling
+  (option (ii)) C4 excludes `reach.go::atomAdmitsValue` from the typed
+  construction sites, so that widening is not proposed, and neither is
+  the `atomVerdictForValue` rename it was attached to.
+  - **Status**: Verified — as a retirement: the claim's subject is
+    absent from the design, which is a checkable fact about this
+    record rather than a deferral. The rejected alternative is the
+    widening itself (option (i)'s three-valued `atomAdmitsValue`),
+    declined in C4 with its reason.
+  - **Method**: Design Decision
+  - **Evidence**: retirement is verified, not asserted. The claim's
+    subject was a change to `atomAdmitsValue`'s return type; the
+    narrowed C4 leaves that function at its `main` shape (`bool`,
+    `guard.Evaluator{}`, byte comparison), and no other clause in this
+    record proposes touching it — `atomVerdictForValue` appears
+    nowhere in the record after the narrowing. The assumption is
+    therefore RETIRED rather than re-scoped: there is no residual
+    claim to re-verify at a narrower home, because the population it
+    quantified over (lint verdicts changed by the widening) is empty
+    by construction. Reconcile also confirmed WHY the exclusion is
+    safe, which is the reason the retirement is not a loss of
+    coverage: both callers of `atomAdmitsValue`
+    (`reach.go::ownedAtomSatisfiable` via `matchSatisfiable`, and
+    `analysis.go::nodeMeetsAll` via `satisfiesSomeTerminal` over
+    `model.Terminal`) are reached only through `BlockMatch` atoms, so
+    lint's match admission stays byte-equal to the kernel's
+    `resolve.go::TagSet.matches` with no widening at all.
+  - **If wrong**: if a later change does widen that check, the
+    opposite-polarity hazard this assumption named is real and must be
+    re-opened — the two callers read the result with OPPOSITE polarity
+    (existential at `reach.go`, exclusionary at `analysis.go`), so a
+    sign error SUPPRESSES a finding rather than producing a wrong one,
+    which no corpus diff over firing findings detects. C4 records that
+    hazard as the stated reason the widening is declined, so the
+    knowledge survives the retirement.
 
 ## Proposed Solution
 
@@ -374,16 +416,16 @@ is EXPORTED and singular:
 
 func DeclaredKinds(m *table.Model) map[string]string
 
-exported because the three C4 construction sites span three packages
-(`internal/cli`, `internal/guard`, `internal/graphlint`), so an
-unexported helper cannot serve them and three hand-rolled loops would
-be three chances to disagree. It is TOTAL over `m.Tags`: every declared
+exported because the two C4 construction sites span two packages
+(`internal/cli`, `internal/guard`), so an
+unexported helper cannot serve them and two hand-rolled loops would
+be two chances to disagree. It is TOTAL over `m.Tags`: every declared
 key gets an entry, and a key whose `Kind` is the empty string is
 OMITTED rather than mapped to `""` — an empty-string entry would be
 indistinguishable at C2's arms from an absent key, collapsing two
 diagnostics into one. It takes the model rather than a
 `map[string]TagDecl` (the shape `product.go::CanRefuse` uses) because
-all three construction sites hold a `*table.Model` at an ancestor
+both construction sites hold a `*table.Model` at an ancestor
 frame (A3) and none holds a bare decls map; the decls-map form is not
 the pattern here. The evaluator
 holds this mapping and NOTHING else: no `resolve.TagSet`, no runtime
@@ -407,7 +449,7 @@ does not restate as new: `Key`, `Operator` and `Literal` are bare
 `string`, `Block` is the named string type `resolve.Block`
 (`BlockAll | BlockUnless | BlockMatch`) that `internal/table` aliases.
 `DeclaredKinds` is homed in `internal/guard` — the package that owns
-the evaluator it feeds, and the one all three C4 sites already import;
+the evaluator it feeds, and the one both C4 sites already import;
 `internal/table` is import-legal but would put a guard-shaped producer
 in the loader's package. Handed a nil model it returns an empty
 non-nil map rather than panicking: that is the same LOUD-not-crash
@@ -420,8 +462,22 @@ GuardUnevaluable — instead of one refusing and one crashing.
 
 ```normative
 Surface — of C1; states how the carried kind is applied at the comparison.
-TYPED COMPARISON. `eq` and `in` resolve the atom's key against the
-constructed kind mapping and compare under the declared kind:
+TYPED COMPARISON APPLIES ON THE GUARD PATH. `eq` and `in` GUARD atoms
+resolve the atom's key against the
+constructed kind mapping and compare under the declared kind. MATCH
+atoms do NOT: the kernel byte-compares them at
+`internal/resolve/resolve.go::TagSet.matches`, and lint's match
+admission (`internal/graphlint/reach.go::atomAdmitsValue`) keeps doing
+the same, so the two agree without typing (C4 excludes that site).
+
+This split is deliberate and is named here so it is discoverable
+rather than surprising: ONE declared kind, TWO comparison rules,
+divided by whether lint and the kernel share a decision path. They
+share it for guards and not for matches, which is a structural fact
+about the code rather than a convention. The reasoning, the rejected
+alternative, and the residual it leaves are in §Load-Bearing
+Decisions ("The guard/match split"). Everything below governs the
+guard path:
 
 - kind `int`: held value AND literal (each member, for `in`) must parse
   as integers; comparison is over the PARSED values. A present held
@@ -659,10 +715,11 @@ Surface — of C1; the construction-site obligation keeping the carrier's mappin
 PRODUCER OBLIGATION. EVERY non-test evaluator construction site —
 present or later added — constructs over the declarations of the SAME
 loaded model whose rows it evaluates: one model, one evaluator, no
-mixed-model evaluation. On `main` that set is exactly three:
+mixed-model evaluation. The obligation is scoped to the GUARD path —
+the decision path lint and the kernel genuinely share. On `main` that
+set is exactly two:
 `internal/cli/flow_resolve.go::guardSeam`,
-`internal/guard/product.go::valueSatisfies`,
-`internal/graphlint/reach.go::atomAdmitsValue` (A3). At the CLI the
+`internal/guard/product.go::valueSatisfies` (A3). At the CLI the
 constructed evaluator is THREADED DOWN, not re-derived: `guardSeam`
 takes the model and is called once per request, and
 `internal/cli/flow_next.go::probeRow` receives the constructed
@@ -670,64 +727,69 @@ takes the model and is called once per request, and
 `probeRow` runs in a loop, so widening it would rebuild the kinds map
 per row and give one request several evaluators — the opposite of
 this clause's "one model, one evaluator". (A3 left this as an
-either/or; the universal above decides it.) Graphlint takes the same
-shape for the same reason: `atomAdmitsValue` sits two frames below
-`matchSatisfiable(m *table.Model, …)` (A3), and it is called per atom,
-so the evaluator is constructed once where the model is in scope and
-THREADED DOWN through those frames — not rebuilt at the leaf. Building
-it inside `atomAdmitsValue` would rebuild the mapping once per atom
-evaluated, which is both the "one model, one evaluator" violation and
-the only version of this change with a performance cost worth naming. The enumeration is
+either/or; the universal above decides it.) The enumeration is
 documentation of today's set, not the guarantee — the guarantee is the
 universal quantifier, with Validation scenario 4 as its mechanical
 backstop ("no zero-value construction of `guard.Evaluator` outside
-`NewEvaluator` survives in non-test code").
+`NewEvaluator` survives in non-test code"), whose scope narrows with
+this clause's: the graphlint match site below is the one admitted
+`Evaluator{}` construction, and scenario 4 names it as such rather
+than failing on it.
+
+THE MATCH PATH IS EXCLUDED, DELIBERATELY.
+`internal/graphlint/reach.go::atomAdmitsValue` is NOT a construction
+site under this clause and keeps its `main` shape: it constructs
+`guard.Evaluator{}` with no mapping and compares raw bytes. That is
+required, not tolerated. Its two callers are both reached only through
+MATCH atoms — `reach.go::matchSatisfiable` filters
+`a.Block != table.BlockMatch`, and `analysis.go::nodeMeetsAll` reads
+`model.Terminal`, whose atoms are built by
+`internal/table/load.go::loadContexts` with `BlockMatch` — so typing
+them would make lint's match admission diverge from the kernel's, which
+byte-compares at `internal/resolve/resolve.go::TagSet.matches`. C1
+requires the kernel to keep byte-comparing there; a typed match arm in
+lint would be the very lint/runtime divergence this record exists to
+close, inverted. Typed comparison therefore applies exactly where lint
+and the kernel share a decision path — the guard path, via
+`product.go::valueSatisfies` under `Denotation` — which is a
+structural fact about the code, stated here and pinned by C3's
+conformance suite rather than left to a reader's inference.
+
+That split is the record's one asymmetry and it is named on purpose
+(C2 states it on the comparison side, and the user-facing docs carry
+it): one declared kind, two comparison rules, divided by whether the
+two deciders meet. Alternative (i) — canonicalizing the held ingress
+so one rule could serve both — is refused because the wider rule
+contradicts RDR 0024's locked REQ-7/REQ-9, and this project does not
+re-open locked records; see the Residual note in §Load-Bearing
+Decisions for the kata that carries it.
 
 CONSTRUCTION IS NOT ENOUGH — the verdict must also be CONSUMED
-three-valued. Constructing over the right model makes a consumer's
-verdict correct; it does not make that consumer's READING of the verdict
-correct, and the two are separately falsifiable. On `main`
-`internal/graphlint/reach.go::atomAdmitsValue` returns
-`verdict != resolve.GuardFalse`, collapsing three verdicts into two, and
-its two callers read the result with OPPOSITE polarity — positively at
-`reach.go` and negated at
-`internal/graphlint/analysis.go::nodeMeetsAll`. Under that reading every
-GuardUnevaluable this RDR newly produces is admitted as satisfiable at
-the first caller and read as "terminal met" at the second, so one
-declaration defect reads as clean at one site while SUPPRESSING a
-previously-firing finding at the other. Therefore every consumer of a
+three-valued, on the guard path. Constructing over the right model
+makes a consumer's verdict correct; it does not make that consumer's
+READING of the verdict correct, and the two are separately falsifiable.
+`internal/guard/product.go::valueSatisfies` already returns the
+three-valued `resolve.GuardResult` on `main`, and its caller switches
+on it — so the guard path needs no widening and this clause requires
+none. Every consumer of a
 seam verdict handles GuardUnevaluable as its OWN case, distinct from
 both GuardTrue and GuardFalse; a `!= GuardFalse` / `== GuardTrue`
 two-valued collapse at any consumer is a defect this clause forbids.
 Lint's stated property — "the same decision the runtime evaluator
 makes" (`valueSatisfies` doc) — is a claim about the verdict AND its
-reading, and holds only once both callers are three-valued. WHAT lint
-then does with an unevaluable atom (report it, or over-approximate it
-as admissible and stay silent) is a lint-policy question this RDR does
-not decide; it requires only that the reading be explicit and the two
-callers agree.
+reading; on the guard path both already hold on `main`, and this
+clause keeps them holding as the seam becomes typed.
 
-The three-valued answer is carried as `resolve.GuardResult` itself —
-`atomAdmitsValue`'s `bool` return widens to the verdict type rather
-than to a lint-local enum or a `(bool, bool)` pair. The verdict is the
-kernel's vocabulary and both callers are deciding the kernel's
-question; a lint-side enum would be a second three-valued type to keep
-in agreement with the first, which is the drift this clause exists to
-close. `atomAdmitsValue` then names a predicate it no longer answers,
-so it becomes `atomVerdictForValue` in the same change — a `bool`-shaped
-name over a three-valued return is how the collapse gets
-re-introduced by the next reader. Its PARAMETERS are unchanged apart
-from the threaded evaluator C4 already requires; only the name and the
-return type move:
-
-func atomVerdictForValue(ev resolve.GuardEvaluator, a table.Atom,
-        held string) resolve.GuardResult
-
-Every use of the old name elsewhere
-in this record describes the site as it stands on `main`, and stays.
-Because the policy above is deliberately open, the RETURN TYPE and the
-name are what this clause fixes and the callers' handling is what it
-constrains — neither is choosing the policy.
+Lint's MATCH admission is outside that property by construction, and
+`atomAdmitsValue` keeps its `bool` return and its name. Widening it to
+`resolve.GuardResult` was considered and is REJECTED: it would type a
+comparison the kernel byte-compares, and its failure mode is the worst
+shape available — the two callers read the current `bool` with
+OPPOSITE polarity (`reach.go::ownedAtomSatisfiable` existentially,
+`analysis.go::nodeMeetsAll` exclusionarily), so a sign error at the
+negated caller SUPPRESSES a finding rather than producing a wrong one,
+which no corpus diff over firing findings detects. Declining the
+widening removes that failure mode rather than testing for it.
 
 This clause reaches the CONSTRUCTION and the CONSUMPTION of a verdict,
 never its AGGREGATION: how a row's several atoms combine is already
@@ -744,7 +806,7 @@ Dependency: `JDR 0004 §JD-3` obliges the loader-side admitted-cell shim
 RDR 0030's Phase 2 extracts to construct through `NewEvaluator` with the
 loader's own `l.model.Tags`. That shim does NOT exist on `main` — no
 `internal/table/normalize.go::renderWrites` is present (verified by
-source search at pre-lock critique) — so it is not in today's three-site
+source search at pre-lock critique) — so it is not in today's two-site
 set and this clause names no present site for it. It becomes a
 construction site when 0030's Phase 2 lands, at which point the
 universal above already governs it, whatever the extracted function is
@@ -852,12 +914,12 @@ is three arms deciding value/kind questions over the same models.
 
 | Input / decision | Writer (canonical) | Readers | Call sites | Sibling arms | Canonical? |
 | --- | --- | --- | --- | --- | --- |
-| Declared kind of a key | `internal/table/load.go` tag declarations (`m.Tags`) | `declaration.go::DeclarationOf`, `NewEvaluator`'s mapping | 3 construction sites (C4) | `Conforms` (presence only, no kind, uncalled) | YES — the loaded model is the sole kind authority |
+| Declared kind of a key | `internal/table/load.go` tag declarations (`m.Tags`) | `declaration.go::DeclarationOf`, `NewEvaluator`'s mapping | 2 construction sites (C4) | `Conforms` (presence only, no kind, uncalled) | YES — the loaded model is the sole kind authority |
 | Whether an authored value is well-spelled (KIND) | `load.go::conformKind` | every authoring ingress | `normalize.go::(*loader).atom`, `[initial]`, `[rule.write]`, `[emit]`, `flow_input.go::canonicalValue` | none | YES — the only kind authority, shared by all five ingresses, and UNCHANGED by this RDR. It validates KIND only, and only for `int`/`bool`: its switch has no `default`, so an empty-`Kind` tag's members pass unvalidated |
 | Whether a PREDICATE literal is canonically spelled | `normalize.go::(*loader).atom` (C5's round-trip) | the guard/match atom builder | `normalize.go::(*loader).atom` only | `conformKind`'s permissive int arm still serves `[emit]`/`[initial]`/`[rule.write]`/CLI, per `0024:REQ-7` | YES for predicate atoms — deliberately NOT total over the other ingresses (S5 measured only this one) |
 | Whether an owned READER value is well-formed | nobody today; C1/C2's seam after this change | the seam | `accessor::OwnedSnapshot` → `resolve::assemble` | none | The seam — the gap this RDR closes |
 | Guard-atom verdict | `guard.Evaluator` (typed after C2) | `flow resolve`, `flow next`, lint product | `product.go::valueSatisfies`, `flow_resolve.go::guardSeam` | — | YES |
-| Match-atom verdict | `resolve.go::TagSet.matches` (byte compare) | kernel resolution | `resolve.go` | `graphlint reach.go::atomAdmitsValue` runs match atoms through the GUARD seam | Kernel is canonical; lint's arm over-approximates. C5 keeps the two in agreement on LITERALS only — held cells reach lint via `reach.go::heldValues`/`canonicalValues`, which apply no round-trip, so the agreement is NOT total (A4) |
+| Match-atom verdict | `resolve.go::TagSet.matches` (byte compare) | kernel resolution | `resolve.go` | `graphlint reach.go::atomAdmitsValue` byte-compares too (C4 excludes it from typing) | YES — both sides byte-compare, so they agree without typing. The held-cell canonicalization gap (`heldValues`/`canonicalValues`, no round-trip) is read the SAME way by both and is therefore not a divergence; it is the Residual carried by a kata (A4) |
 
 **`disposition` — input class → outcome at the seam.** The cue is C2's
 per-class verdicts and the load refusals.
@@ -928,12 +990,12 @@ surface reading is "refuses" or "is green".
   lint exit 0 while the runtime is `flow-no-match` at the root); (b)
   validate-then-byte-compare — it reintroduces the silent prune this
   record exists to remove, and splits `int` semantics against
-  `lt/gte`, which already parse both sides; (c) excluding
-  `atomAdmitsValue` from typed comparison — it institutionalizes two
-  comparison semantics for one declared kind and leaves lint more
-  permissive than the kernel, the worst orientation for the split
-  (Meyer, OOSC §11.7 Non-Redundancy pp.354-355; Raymond, AoUP SPOT
-  p.124). Establishing the invariant now is cheapest with zero
+  `lt/gte`, which already parse both sides. A third rejection —
+  excluding `atomAdmitsValue` from typed comparison, on the ground
+  that it institutionalizes two comparison semantics for one declared
+  kind (Meyer, OOSC §11.7 Non-Redundancy pp.354-355; Raymond, AoUP
+  SPOT p.124) — was REVERSED at pre-lock; see the next decision, which
+  owns that call and its reasoning. Establishing the invariant now is cheapest with zero
   violators (SWE-at-Google pp.161-162, gofmt vs buildifier;
   Refactoring Databases p.186) — but "zero violators" holds only at
   the PREDICATE ingress, which is what scopes C5 there. The shared
@@ -942,22 +1004,60 @@ surface reading is "refuses" or "is green".
   `[emit]`, so the cheap-invariant argument does not reach that arm
   and C5 does not either.
 
-  Rejection (c)'s own principle turns back on the chosen design, and
-  the record states the bill rather than paying it quietly. C1 leaves
-  the kernel's MATCH atoms byte-compared
+- **The guard/match split, and why typing stops at the guard path** —
+  the Non-Redundancy objection above is real and is answered, not
+  dismissed. C1 leaves the kernel's MATCH atoms byte-compared
   (`internal/resolve/resolve.go::TagSet.matches`) while C2 makes GUARD
-  atoms parsed — two comparison semantics for one declared kind, the
-  thing (c) was rejected for. The defence was that C5 makes the
-  difference unobservable, and that defence holds for LITERALS only:
-  graphlint's held values arrive via
+  atoms parsed. That IS two comparison rules for one declared kind, and
+  the original defence — that C5 makes the difference unobservable —
+  holds for LITERALS only: graphlint's held values arrive via
   `internal/graphlint/reach.go::heldValues` from `[initial]`/
   `[rule.write]` cells that `conformKind` admits non-canonically and
-  `canonicalValues` does not round-trip. So the split IS observable on
-  the held leg, and rejection (c)'s reasoning applies to the design as
-  it stands. A4 carries the open choice — extend canonicalization to
-  the held ingress, or make the seam's match arm byte-compare so the
-  kernel and lint share one reading — and it must be settled before
-  implementation, not deferred, because both options change C2 or C5.
+  `canonicalValues` does not round-trip.
+
+  Two repairs were available. (i) Extend canonicalization to the held
+  ingress, giving one rule everywhere. (ii) Make lint's match arm
+  byte-compare, so the kernel and lint share one reading on the match
+  path and typing applies only where they share a decision.
+  **(ii) is chosen.** (i) is not available to this record: the wider
+  rule is refuted by two BOUNDARY-marked tests enforcing RDR 0024's
+  locked REQ-7/REQ-9, and this project does not re-open locked
+  records — so (i) would make this record depend on a successor
+  landing first while leaving the divergence live in the interim.
+
+  (ii) is also the cheaper repair in both directions. For the USER it
+  costs nothing: match atoms compare exactly as they do on `main`, so
+  there is no new refusal, no model edit, no migration — and guards
+  get the fix this record exists to deliver. For the implementation it
+  is a narrowing rather than new surface, and it DELETES work the lens
+  row found defective: the three-valued widening of graphlint's atom
+  check (former A7), whose failure mode was a SUPPRESSED finding
+  invisible to a diff over firing findings, along with C4's
+  consumption obligation on that path and the `atomVerdictForValue`
+  signature.
+
+  The boundary (ii) draws is principled rather than arbitrary: typing
+  applies exactly where lint and the kernel share a decision path.
+  That is a structural fact about the code, not a convention — both
+  callers of `reach.go::atomAdmitsValue` are reached only through
+  `BlockMatch` atoms (`matchSatisfiable` filters on it;
+  `analysis.go::nodeMeetsAll` walks `model.Terminal`, built with
+  `BlockMatch` by `load.go::loadContexts`), while the guard path runs
+  through `product.go::valueSatisfies` under `Denotation`. C2 and C4
+  state the split, and the user-facing docs carry it, so it is
+  discoverable rather than surprising.
+
+  **Residual, stated not hidden.** A non-canonical int in an
+  `[initial]`/`[rule.write]` cell still reaches `heldValues` →
+  `canonicalValues` with no integer round-trip. Under (ii) this is no
+  longer a lint/runtime DIVERGENCE — both sides byte-compare those
+  cells and read them identically — but it remains a
+  canonicalization gap at that ingress. It is out of scope here
+  because closing it is exactly repair (i), which RDR 0024's locked
+  REQ-7/REQ-9 forbid this record from making. Kata
+  `intrastate#ch99` carries it with
+  the pre-lock critique evidence and that conflict recorded as the
+  reason.
 - **C5 is not Alternative 3** — ALT3 was rejected as a *runtime*
   producer obligation over caller-supplied values, which leaves every
   non-CLI `resolve.Resolve` caller unprotected and pre-empts JDR 0001
@@ -1001,7 +1101,7 @@ case "eq":
 
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| Declared-kind lookup | `internal/guard/declaration.go::DeclarationOf` | Takes `*table.Model`; seam constructor needs a plain map (A5) | Reuse, behind the exported `guard.DeclaredKinds(m)` (C1) — exported because the three C4 sites span three packages | No parallel kind model invented |
+| Declared-kind lookup | `internal/guard/declaration.go::DeclarationOf` | Takes `*table.Model`; seam constructor needs a plain map (A5) | Reuse, behind the exported `guard.DeclaredKinds(m)` (C1) — exported because the two C4 sites span two packages | No parallel kind model invented |
 | Value seam | `internal/guard/grammar.go::Evaluator` | Zero-value `struct{}`; raw-string `eq`/`in` arms | Extend (constructor + typed arms, C1/C2) | The RDR's core change |
 | View-freedom proof | `internal/guard/guard_evaluator_0003_test.go::TestReq34_EvaluatorDecidesPresentValuesOnlyAndNeverReadsTheView` | Zero-field check is stricter than REQ-34's text (A2) | Amend (field check narrows to "no view-typed/runtime state") | Recorded deviation against 0003's implemented proxy |
 | Cross-implementer contract | `internal/resolve/guardcontract.go::TestGuardEvaluatorContract` | No kind carrier, so no kind-aware cases exist | Extend (C3) | Suite grows fixture + cases |
@@ -1253,8 +1353,10 @@ later answer lands on it rather than minting a third path.
   proves the disposition for the declaration-free arms; `eq`/`in`
   cannot reach it without a kind (Background).
 - **Verified** — grep over non-test sources: exactly three
-  `Evaluator{}` construction sites (C4's list); no other consumer
-  exists to inherit the constructor change.
+  `Evaluator{}` construction sites (A3's measurement); C4 migrates the
+  two on the guard path and leaves the graphlint match site
+  byte-comparing. No other consumer exists to inherit the constructor
+  change.
 - **Verified** — typed numeric equality agrees with lint's rendered
   product ONLY once the PREDICATE literal side is canonicalized at
   load: the
@@ -1490,6 +1592,12 @@ later answer lands on it rather than minting a third path.
    path load cannot reach. With the reader returning `4`: the guarded
    row prunes (GuardFalse) and the fallback plans, which is the control
    proving step 3 is not blanket-true.
+
+   This leg sits on the GUARD path and is therefore unaffected by C4's
+   exclusion of the match site: `iter eq 7` is a row GUARD, so the
+   owned value reaches `evaluateAtom` and the typed seam, never
+   `reach.go::atomAdmitsValue`. The narrowing removes no MVV step —
+   every step above is a guard-path or load-path assertion.
 4. `TestGuardEvaluatorContract`, extended per C3 and driven against
    `guard.NewEvaluator` constructed over the published fixture kinds,
    is green — including the int/bool want-Unevaluable legs that fail
@@ -1566,11 +1674,12 @@ kind-discriminating cases (C3), keeping the suite free of
 
 ### Phase 3: Producer alignment
 
-Intent: the three C4 sites construct over their own loaded model's
+Intent: the two C4 sites construct over their own loaded model's
 declarations via `DeclaredKinds`; at the CLI the evaluator is threaded
 into `probeRow` rather than widening it to take a model (C4);
-`internal/cli` and `internal/graphlint` test fixtures migrate to the
-constructor.
+`internal/cli` test fixtures migrate to the constructor.
+`internal/graphlint::atomAdmitsValue` is deliberately NOT migrated — it
+is the match path, which keeps byte-comparing (C4).
 
 ### Phase 4: Canonical int spelling at the predicate ingress
 
@@ -1603,7 +1712,7 @@ zero-value construction survives, so a site constructing over the
 WRONG model's kinds still compiles and types comparisons silently
 (F4). There is no observable — no panic, no refusal code — because
 both models are well-formed; it is guarded by the A3 site audit and by
-there being exactly three sites, each with one model in scope.
+there being exactly two migrated sites, each with one model in scope.
 Second, the `enum`-vs-`scalar` distinction: they share one arm by
 construction (C2), so no input discriminates them, and the suite's
 per-kind-token cases separate each from `int`/`bool` only. What the
@@ -1630,16 +1739,23 @@ GuardUnevaluable, which is the regression that would matter.
    `resolve.TagSet` or runtime value is added. A2 verified this is a
    test-body proxy, not a 0003 fence, so the narrowing is a recorded
    deviation against an implemented test rather than a contract change.
-4. **Scenario**: Construction-site migration (C4) — the three sites A3
-   verified on `main`, each constructing over the same model whose rows
-   it evaluates.
+4. **Scenario**: Construction-site migration (C4) — the two guard-path
+   sites A3 verified on `main`, each constructing over the same model
+   whose rows it evaluates.
    **Expected**: no zero-value construction of `guard.Evaluator` outside
-   `NewEvaluator` survives in non-test code — the assertion matches the
+   `NewEvaluator` survives in non-test code, with ONE allow-listed
+   exception: `internal/graphlint/reach.go::atomAdmitsValue`, which C4
+   deliberately leaves on the match path byte-comparing. The assertion
+   matches the
    composite-literal form (`Evaluator{}`) *and* the `var` / `new` /
    embedded-field zero values Go equally admits, since each yields the
    same nil-mapping evaluator. It is C4's mechanical backstop, so a site
    added later (the shim `JDR 0004 §JD-3` obliges, once 0030 Phase 2
-   lands) is caught without re-enumerating. Implement it as a typed
+   lands) is caught without re-enumerating. The allow-list is ONE named
+   function, asserted by name rather than by pattern, so a second
+   untyped site cannot slip in under it and moving or renaming that
+   function fails the check — which is the point: the exception is as
+   auditable as the rule. Implement it as a typed
    check, not a text grep: a `go/ast` or `golang.org/x/tools/go/packages`
    pass over non-test files in the module, failing on any composite
    literal, `var` declaration, `new`, or struct field of type
@@ -1653,15 +1769,17 @@ GuardUnevaluable, which is the regression that would matter.
    would be a second build artifact and a second thing to remember to
    wire.
    **Why the backstop matters more than C1's LOUD disposition reads.**
-   C1 fixes a nil-mapping evaluator's disposition as LOUD, but C4
-   establishes that loudness is a property of the CONSUMER, not the
-   verdict: at `internal/graphlint/reach.go::atomAdmitsValue` a
+   C1 fixes a nil-mapping evaluator's disposition as LOUD, but loudness
+   is a property of the CONSUMER, not the verdict: at
+   `internal/graphlint/reach.go::atomAdmitsValue` a
    GuardUnevaluable is folded into "admissible" by
-   `verdict != resolve.GuardFalse`. So a missed construction site in
-   graphlint is exactly the case where the LOUD fallback does NOT
-   surface — lint stays green. Until C4's three-valued consumption
-   obligation is implemented, this scenario is the only backstop for
-   that site, which is why it must be mechanical and must run.
+   `verdict != resolve.GuardFalse`. On the match path that folding is
+   harmless — the site is allow-listed and never types a comparison —
+   but it is exactly why a GUARD-path site accidentally left
+   zero-valued would not surface: the LOUD fallback would be swallowed
+   somewhere that looks like lint staying green. This scenario is the
+   mechanical backstop for that, which is why it must run rather than
+   sit as prose.
 5. **Scenario**: Nil-mapping disposition (C1) — the guarantee S4's
    typed construction check explicitly defers to, asserted directly.
    Construct a bare
@@ -1855,7 +1973,75 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+Peer records and joint decisions
+- RDR 0003 — guard predicate exhaustiveness: `C8` (a literal
+  unparseable for its declared kind is rejected before resolution),
+  `C9`/REQ-34 (the seam never reads the tag view), the operator/kind
+  matrix, and the frozen eight-operator set.
+- RDR 0007 — guard predicate totality: `C1`/REQ-10 (the seam
+  signature), `A7` (every guard-referenced key is declared), `A17`
+  (the evaluator reads no declaration at evaluation time), REQ-71.
+- RDR 0011 — the refusal reason vocabulary reused by the
+  `flow-guard-unevaluable` payload (`uncomparable`).
+- RDR 0024 — `REQ-7`/`REQ-9`, the locked permissive int spelling at
+  the `[emit]`/`[initial]`/`[rule.write]` ingress; the reason the
+  held-ingress canonicalization residual is out of scope here.
+- RDR 0030 — Phase 2 extracts the loader-side admitted-cell shim that
+  becomes a construction site under C4.
+- JDR 0001 — `§D1` (atom shape), `§D12` (the match block), `§D13`
+  (set member encoding), `§JD-18`.
+- JDR 0004 — `§JD-1` (the resolution path reads no declarations),
+  `§JD-2` (the widening's reach), `§JD-3` (the shim's construction
+  obligation).
+
+Source paths reviewed (this repo, at `main`)
+- `internal/resolve/resolve.go` — `TagSet.matches` (match-atom byte
+  comparison), `GuardResult` constants.
+- `internal/resolve/guard.go` — `GuardAtom`, `Block` vocabulary,
+  `evaluateAtoms`, `kleeneAnd`/`kleeneNot`.
+- `internal/resolve/guardcontract.go` — the shared conformance suite.
+- `internal/guard/product.go` — `valueSatisfies`, `Denotation`,
+  `selectionOf`, `CanRefuse`.
+- `internal/guard/assignment.go` — `valueAssignments`, `renderSet`.
+- `internal/guard/declaration.go` — `DeclarationOf`, `Conforms`.
+- `internal/graphlint/reach.go` — `matchSatisfiable`,
+  `ownedAtomSatisfiable`, `atomAdmitsValue`, `heldValues`,
+  `canonicalValues`, `renderSetLiteral`.
+- `internal/graphlint/analysis.go` — `nodeMeetsAll`,
+  `satisfiesSomeTerminal`.
+- `internal/table/load.go` — `conformKind`, `valueMembers`,
+  `loadContexts`, `loadTerminal`, `contextAtoms`, `loadInitial`.
+- `internal/table/normalize.go` — `(*loader).atom`, `renderWrites`.
+- `internal/cli/flow_resolve.go` — `guardSeam`, `escapeClassOf`.
+- `internal/cli/flow_next.go` — `probeRow`, the reason vocabulary.
+- `internal/cli/flow_input.go` — `canonicalValue`, `codeInvalidFor`.
+- `internal/accessor/model.go` — `OwnedSnapshot`.
+- `models/rdr.toml`, `models/examples/release-grammar.toml` — the
+  owned/observed `int`/`bool` declarations A6's census scanned.
+
+Spike artifacts
+- `evidence/spikes/a4-render-path.md` — the lint product's `int` render
+  path.
+- `evidence/spikes/a4-lint-diff.md` — the authored `n eq "00"` lint
+  flip and the 123-model corpus diff.
+- `evidence/spikes/a4-typed-compare.md` — `--tag iter=07` under typed
+  comparison.
+- `evidence/spikes/c3-newseam-invariance.md` — Go function-type
+  invariance on the `newSeam` parameter.
+
+Prior art
+- Meyer, *Object-Oriented Software Construction*, §11.7
+  Non-Redundancy, pp. 354-355.
+- Raymond, *The Art of Unix Programming*, SPOT, p. 124.
+- Winters/Manshreck/Wright, *Software Engineering at Google*,
+  pp. 161-162 (gofmt vs buildifier).
+- Ambler/Sadalage, *Refactoring Databases*, p. 186.
+- `evidence/research/prior-art.md` — the literature pass behind the
+  canonical-spelling decision.
+
+Related issues
+- kata `intrastate#cq5p` (1528) — the seed defect.
+- kata `intrastate#ch99` — the held-ingress canonicalization
+  residual (`[initial]`/`[rule.write]` → `heldValues` →
+  `canonicalValues`, no int round-trip), blocked on RDR 0024
+  `REQ-7`/`REQ-9`; filed at reconcile.
