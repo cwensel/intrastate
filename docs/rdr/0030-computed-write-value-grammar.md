@@ -95,22 +95,6 @@ N/A-bulleted). -->
   -->
 - **Type**: Feature
 - **Profile**: foundational — C1, the step write and its expansion into literal rows; user-facing yes; locks cross-rdr
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: resolved by rdr-write.toml's `profile`
-  rows (the rule's one home) from the durable contract
-  count and two dispositions written in the clause:
-  `user-facing <yes|no>; locks <none|contract|format|cross-rdr>`.
-  (2) accretion axis (a one-tier raise): resolved from `Seam
-  Lineage` below by the routing model (rdr-status.toml's
-  `floor` group — the rule's one home), never re-read here.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
 - **Priority**: Medium
 - **Related Issues**: intrastate#jwgr
 - **Predecessors**: 0002-transition-table-as-reviewable-data, 0012-declared-kind-carrier-at-the-guard-seam
@@ -232,8 +216,18 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     as carrying no state so that "never reads the tag view" is a property of
     the type — so each comparison is a pure function of (operator, atom
     literal, candidate value) and replays at load over a declared finite
-    domain. Open at C-clause level, not a refutation: `Evaluate` returns a
-    THREE-valued result whose `Unevaluable` arm C1 does not dispose of.
+    domain. `Evaluate` is THREE-valued, and C1 now disposes of the third
+    arm explicitly (exclude, never admit) while recording that it is
+    unreachable for the kinds C1 admits: `internal/table/model.go`'s
+    operator/kind matrix confines `lt`/`lte`/`gt`/`gte` to `int` and
+    `internal/table/load.go::conform` kind-checks their bound, so both
+    `Atoi` calls succeed over an `IntDomain()` member; `in`'s literal is
+    always a rendered set and always parses; `eq` is total;
+    `internal/table/normalize.go` refuses an unknown operator at load
+    against the frozen vocabulary; `contains` is `set`-only and `exists`
+    is kernel-decided (`0007:C1`). `0007:C2`'s partiality is scoped to a
+    tag key absent from a runtime VIEW, which a load-time domain
+    enumeration has no analogue for.
   - **If wrong**: load and runtime disagree on which cells a stepping row
     admits; the bound refusal fires on a cell the runtime never reaches or
     misses one it does.
@@ -305,10 +299,21 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     `retry`, never `retry#3`. A related join is ambiguous for the same
     reason — `internal/cli/flow_resolve.go::rowByID` matches on
     `row.RuleID == ruleID`, so N expanded rows share one key and the first
-    wins.
-  - **If wrong** (as verified): a rendering surface IS owed, not merely a
-    doc line — the flow payloads do not carry the cell that distinguishes
-    the rows this record mints. Disposition is the author's (round item Q1).
+    wins (sound by `0010:C3`; see the audit row).
+    The refutation narrows the claim rather than opening a gap: the split is
+    per SURFACE, not per verb — every surface that names a ROW publishes
+    `identity` (`internal/table/dump.go`'s column;
+    `internal/cli/graph_document.go`'s `graphRowDoc.Identity`), every surface
+    that names a RULE publishes `rule` (`flow_next.go`, `flow_resolve.go`,
+    and the graph document's edge). The published vocabulary agrees —
+    `0005:C1` says "matched rule identity", `docs/cli-output-contract.md`
+    says "a candidate is a rule". So no rendering surface is owed; C3 states
+    the split.
+  - **If wrong** (as verified, and dispositioned): the narrowed claim is what
+    C3 now carries — the dump/graph precedent only. Were the flow verbs
+    instead owed the suffix, it would widen the `resolve.Plan` seam RDR
+    0002/0007 owns and reach the `intrastate.graph/1` edge vocabulary C3
+    holds fixed — a successor record, not a clause here.
 - **A9 No open peer relies on the inline-table write refusal
   (`malformed_tag_declaration: … is not a tag value`) as a contract.**
   - **Status**: Verified
@@ -365,7 +370,13 @@ beside an `in` match atom, compose as the product already does.
 **Admitted cells.** The rule's own positive atoms on the stepped tag decide
 which domain members expand: `eq`/`in`/`lt`/`lte`/`gt`/`gte` under
 `guard.all` and `eq`/`in` under `match`, each evaluated per member with the
-same comparison the runtime evaluator performs (`0012:C2`). `unless` atoms
+same comparison the runtime evaluator performs (`0012:C2`) — which is
+three-valued, so C1 fixes the undecided arm to EXCLUDE the member. That
+arm is unreachable for the kinds C1 admits (A4); fixing it is a soundness
+fence, and the direction is chosen because a loader that over-admits turns
+an undecidable predicate into C2's refusal, while one that under-admits
+leaves an ordinary `graph-coverage-gap` the author can see and answer.
+`unless` atoms
 are not consulted — an `unless` block is negated as a whole and may mention
 other keys, so per-cell evaluation is not decidable from this tag alone;
 ignoring it can only over-admit, and an over-admitted cell surfaces as the
@@ -409,7 +420,9 @@ included) is refused at load under `malformed_tag_declaration` with a
 detail naming the one admitted form. The form is admitted only on a tag whose declared kind is `int` with
 both `min` and `max`, or `enum` with a non-empty `domain`; on `bool`,
 `set`, `scalar`, or an `int` missing a bound it is refused under the same
-category. `[initial]` values and predicate literals keep the literal-only
+category. An `int` whose declared `min..max` spans the full integer width
+is refused too: its domain is unenumerable, so the expansion has no cell
+set to compute over. `[initial]` values and predicate literals keep the literal-only
 grammar; the table shape is admitted on the write-block path alone.
 
 The loader expands a rule carrying a step write into literal rows, one per
@@ -422,7 +435,20 @@ authors on that tag, however many per block (`guard.all`
 as the runtime evaluator would and against the atoms as already chosen in
 the expanded row — a match `in` on the stepped tag has expanded to its
 `eq` member first, so the two compose to exactly its members; `unless`
-atoms are not consulted. The authored atoms are retained; the expansion
+atoms are not consulted. The runtime evaluator is three-valued; an atom
+answering neither true nor false at a member does NOT admit that member.
+For the kinds this clause admits that arm is UNREACHABLE — the operator/
+kind matrix confines the ordered operators to `int`, their bounds are
+kind-checked at load, an unknown operator is already refused against the
+frozen operator vocabulary, `exists` is decided in the kernel and never
+reaches this seam, `contains` is `set`-only and excluded here, and `eq`
+and `in` are total over a declared domain member — so the rule is a
+soundness fence, not a live branch. It is written to exclude rather than
+admit because the two directions fail differently at LOAD: excluding
+leaves the cell to the outcome group's ordinary `graph-coverage-gap`,
+which is visible, non-blocking and actionable, whereas admitting mints a
+row the author did not ask for and lets C2's bound report "I cannot tell"
+as "your model is broken". The authored atoms are retained; the expansion
 adds its own atom beside them. Each expanded row carries a `guard.all`
 atom `eq = <cell>` on the tag, the literal write `cell + n` (`int`) or the
 domain member `n` positions from the cell (`enum`), and the cell appended
@@ -466,8 +492,14 @@ admitted kinds, the admitted-cell rule, and the bound refusal beside the
 existing write-block section; `intrastate --help-all` is regenerated. No
 emitted vocabulary — `internal/table::Categories()`, the CLIError codes,
 the finding codes, the graph document's members — gains a member, so no
-`0029:C4` stability tier is owed by this record; the suffixed identity
-`rule#cell` is the shape `in` expansion already emits.
+`0029:C4` stability tier is owed by this record. Every surface that names a
+ROW publishes the suffixed identity `rule#cell` — the shape `in` expansion
+already emits there (`dump`'s `identity` column, the graph document's
+`identity` row field) — and every surface that names a RULE publishes the
+authored rule id (`flow next`'s and `flow resolve`'s `rule`, the graph
+document's edge `rule`). That split is the existing design, not a gap: a
+flow payload names the rule it matched, so this record mints no obligation
+on it.
 ```
 
 #### Load-Bearing Decisions
@@ -553,6 +585,10 @@ refuse.
 | Admit a write value | `internal/table/load.go::valueMembers` | no inline-table arm | Reuse, unchanged | intercepted before it on the write path only (C1) |
 | Successor per node, export, fingerprint | `reach.go::successor`, `graph_document.go::graphRows`, `engine.go::Fingerprint` | read `Row.Writes` literals | Reuse, unchanged | C3 |
 | Flag a write that moves nothing | `groups.go::checkIdempotentWrites` | `eq`-match only | Reuse, unchanged | a non-zero step never lands on its own cell |
+| Decide whether one atom admits one candidate value | `internal/guard/product.go::valueSatisfies` (render-then-`Evaluate` shim, ~13 lines) | lives in `internal/guard`, which imports `internal/table`, so `table` cannot import it (the cycle `0012:A5` identifies) | Reuse (extract) | extract the shim to `internal/resolve` — the leaf both reach, which already owns `GuardAtom`, `GuardResult` and `GuardEvaluator` and imports nothing intra-repo — and repoint `guard` and `graphlint`. It is already duplicated three ways (`guard/product.go::valueSatisfies`, `graphlint/reach.go::atomAdmitsValue`, a test-local copy in `internal/resolve`), plus the set renderer twice (`guard/assignment.go::renderSet`, `graphlint/reach.go::renderSetLiteral`); this record would mint a FOURTH, and the first in the loader, where a divergence is a load refusal rather than a lint finding. C1's "as the runtime evaluator would" then holds structurally |
+| Enumerate an int tag's declared domain | `internal/guard/declaration.go::IntDomain` | same package placement | Cited, not reused | the loader enumerates `min..max` directly; no cycle incurred |
+| Intersect an atom's denotation across a rule's guard block | `internal/guard/product.go::Denotation` / `::acceptedIn` | carries `AssignmentSet`, presence dimensions, group products and `unless` subtraction; yields the unprojectable empty set on an undecidable dimension — lint's false-green guard, the wrong direction for a loader (C1's third arm) | Cited, not reused | the loader's conjunction is a `&&` over the shim above, per cell |
+| Join a rule's `emit` block back after selection | `internal/cli/flow_resolve.go::rowByID` (first-match on bare `RuleID`) | one key per rule, not per expanded row — contracted, not a defect (`0010:C3`) | Reuse, unchanged | none: 0030 INHERITS `0010:C3`'s soundness condition and preserves it — the step expansion rides the same `expand` loop and copies `Emit`, `Gate`, `RequiresOwned` and `Escape` identically to every row it mints, so every row a stepped rule expands to carries the same block |
 | Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | a lint analysis scope (`0013:C1`); unreachable from load — `go list -deps ./internal/table` names neither `guard` nor `graphlint` | Not reusable (A7) | none: the A7 spike measured load linear and cheap, so no load ceiling is owed |
 
 ### Decision Rationale
@@ -565,8 +601,8 @@ refuse.
 | Correctness fit: bound decided declaratively | `+` bound = existing `conform` + coverage cell | `0` new guard-conditioned interval analysis, or a runtime refusal | `+` generator emits literals | `−` undecidable in general |
 | Prior-art alignment | `+` the Ragel review's option (a), made cheap | `0` option (b) without the host language | `+` option (a) by tooling | `+` every peer, and the drift they document |
 | Reversibility | `+` remove the form; expanded rows were never persisted | `−` a second value shape across ten consumers and an export member | `+` delete the tool | `−` models come to depend on it |
-| Blast radius (seams touched) | `internal/table` + docs | table, resolve, accessor, cli ×4, graphlint ×3, export, 0022/0015 | none in-repo; a new artifact | table, resolve, graphlint, export, 0003's operator model |
-| Cost | one choice-point kind in `expand`; fixtures | value shape, evaluator, lint analysis, export `/1` addition, preview semantics | a generator + a drift check | a parser and evaluator |
+| Blast radius (seams touched) | `internal/table` + docs, plus a behaviour-preserving move of one shim into `internal/resolve` | table, resolve, accessor, cli ×4, graphlint ×3, export, 0022/0015 | none in-repo; a new artifact | table, resolve, graphlint, export, 0003's operator model |
+| Cost | one choice-point kind in `expand`; one shim extracted and two callers repointed; fixtures | value shape, evaluator, lint analysis, export `/1` addition, preview semantics | a generator + a drift check | a parser and evaluator |
 | Review legibility (the user's problem) | `+` source is one row; dump shows the cells | `+` source and dump both one row | `−` the reviewed file is the unrolled one | `+` one row, opaque semantics |
 | Open-peer safety (0022, 0015 assume constant successor) | `+` unchanged | `−` both re-authored | `+` unchanged | `−` both re-authored |
 
@@ -583,9 +619,47 @@ artifact, and it loses on rows 3–4: ten shipped read sites of `Row.Writes`
 learn a computed shape, and the bound would need a guard-conditioned
 interval analysis. Approach 3 fails row 6, which is the problem statement.
 Approach 4 fails rows 1 and 3 and is what RDR 0002 chartered against. The
-cost Approach 1 pays is row 6's second half: the normalized dump and
-`flow next` show `retry#0 … retry#4`, not `retry` — the same view an `in`
-expansion already gives, accepted on that precedent.
+cost Approach 1 pays is row 6's second half: the normalized dump and the
+graph document's rows show `retry#0 … retry#4`, not `retry` — the same view
+an `in` expansion already gives *there*, accepted on that precedent
+(`internal/table/dump.go`'s `identity` column;
+`internal/cli/graph_document.go`'s `graphRowDoc.Identity`). The flow verbs
+are a different surface and keep naming the authored rule
+(`internal/cli/flow_next.go`, `internal/cli/flow_resolve.go` carry `rule` ←
+`plan.RuleID`, which `0023:C2` binds into every projection mode), so a
+consumer wanting per-row identity from a flow payload reads `graph` or
+`dump`. Publishing the suffix on `rule` was weighed and rejected: the kernel
+plan carries only `RuleID` and one `SourceLocator` shared by every expanded
+row (`internal/table/normalize.go::expand`), so the suffix is genuinely
+absent at a seam RDR 0002/0007 owns; `rule` is also the graph document's
+EDGE field, which C3 promises not to touch; and
+`TestReq92_ANonFirstExpandedRowResolvesToTheAuthoredEmitBlock`
+(`internal/cli/decision_table_0010_test.go`) asserts the authored id on a
+non-first expanded row today. Per-row identity IN a flow payload is a
+possible successor record — disclosed here as a non-obligation, not an owed
+fix.
+
+**Q: where does the admits comparison live?** Extracted, not duplicated.
+The comparison C1 specifies already ships as a ~13-line render-then-
+`Evaluate` shim, and it already exists three times — in lint's projection,
+in the reachability traversal, and test-locally — with its set renderer
+twice more. A fourth copy would be the first one in the LOADER, where a
+divergence from the runtime is a load refusal rather than a lint finding,
+and the precedent for catching that early is in the repo: `flow_next.go`
+carries a comment about a hand-rolled filter that "answered a question it
+does not own, and its answer disagreed with the kernel silently", and
+`internal/table/model.go`'s `operatorKinds` claims to mirror
+`guard.Accepts` with no cross-package test holding the two together — so
+the duplicate-plus-contract-test option is already shown not to hold here.
+House doctrine points the same way (`0029`: the shared constant lives in
+the leaf both sides reach). `internal/resolve` is that leaf: it imports
+nothing intra-repo and already owns `GuardAtom`, `GuardResult` and the
+`GuardEvaluator` interface, and the shim needs no `table` type, so the
+cycle `0012:A5` identifies is not incurred. `Denotation`/`acceptedIn` are
+CITED and not reused — they carry lint's `AssignmentSet`, presence
+dimensions and `unless` subtraction, and return the unprojectable empty
+set on an undecidable dimension, which is the false-green direction a
+loader must not take (C1's third arm, from the other side).
 
 Premortem: hardened — the draft-free critic returned PASS with
 fourteen rules the brief omitted (conjunction of atoms per key, `in`+step
@@ -823,6 +897,10 @@ order.
 
 - A step write on a `scalar`, `set`, `bool`, or unbounded `int` — load
   refusal, `malformed_tag_declaration`, detail names the admitted kinds.
+  An `int` bounded across the full integer width refuses the same way: the
+  domain is unenumerable (`internal/guard/declaration.go::intWidth` already
+  reports that span as unusable), so this is an explicit refusal rather
+  than an accidental fall-through to the zero-cell rule.
 - A stepped value past `max` or past the last member at an admitted cell —
   load refusal (C2), detail names rule, tag, cell, value.
 - A step rule admitting no cell — load refusal, the `0003:C6`
@@ -832,6 +910,9 @@ order.
 - A cap cell excluded by the step rule and claimed by no other row —
   `graph-coverage-gap` at lint, the existing finding.
 - A stepped tag never initialised — `graph-owned-before-write` at lint.
+- A consumer needing per-row identity from a flow verb — reads `graph` or
+  `dump`, whose row surfaces publish `identity`. `flow next` and `flow
+  resolve` name the authored rule on `rule` by design (C3).
 
 ## Implementation Plan
 
@@ -871,6 +952,15 @@ one admitted key and the admitted kinds, and record the step point on the
 rule (C1's grammar half).
 
 ### Phase 2: Expand into cells
+
+Extract `internal/guard/product.go::valueSatisfies` to `internal/resolve`
+(the leaf `table`, `guard` and `graphlint` all reach — it needs only
+`resolve.GuardAtom` and a `[]string` literal, so no `table` type is named
+and the cycle `0012:A5` identifies does not arise), and repoint
+`guard::valueSatisfies` and `graphlint::atomAdmitsValue` at it. The loader's
+admits filter then calls the same function the runtime does, rather than a
+fourth copy of it. Accepted cost: this widens the change beyond
+`internal/table`, taken deliberately.
 
 Add the step choice point to `expand`: admitted-cell evaluation over the
 rule's positive atoms, the `guard.all` `eq` atom, the stepped literal, the
@@ -919,8 +1009,8 @@ new envelope member.
    **Expected**: both refuse — the table shape is write-block only. Backs
    C1's interception arm.
 5. **Scenario**: zero-cell, zero-step, float-step, and `#`-in-domain step
-   models loaded; a step write on `bool`, `set`, `scalar`, and an
-   unbounded `int`.
+   models loaded; a step write on `bool`, `set`, `scalar`, an unbounded
+   `int`, and an `int` bounded across the full integer width.
    **Expected**: each a load refusal under `malformed_tag_declaration`
    whose detail names the admitted form or kinds. Backs C1's grammar arm
    and, for the `#` case, the new guard A3 established is not redundant.
@@ -928,6 +1018,15 @@ new envelope member.
    shipped `intrastate.graph/1` document type.
    **Expected**: decodes with no new member; `internal/table::Categories()`,
    the CLIError codes and the finding codes each gain none. Backs C3.
+7. **Scenario**: `flow resolve` selecting a NON-FIRST expanded row of a
+   stepped rule that authors an `emit` block —
+   `TestReq34_TheRuleIDJoinIsSoundOverAnExpandingRule`'s shape
+   (`internal/cli/decision_table_0010_test.go`) extended from an `in`
+   expansion to a `step` one.
+   **Expected**: the payload's `emit` and `dispositions` are the authored
+   block, and `rule` is the authored id — the first-match `rowByID` join
+   stays sound because a stepped rule's rows share one `Emit`. Pins the
+   `0010:C3` inheritance the audit row records.
 
 ### Performance Expectations
 
