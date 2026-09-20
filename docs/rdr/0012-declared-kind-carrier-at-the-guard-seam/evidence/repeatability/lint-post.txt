@@ -1,0 +1,31 @@
+0012  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=15
+  conformance prose:exactness                747-747   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                748-748   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                776-776   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                781-781   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                782-782   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                800-800   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                803-803   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                807-807   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance prose:exactness                813-813   an exactness term of art in a normative claim: "canonical"
+                                                      fix: each needs an Evidence Record — prefer a named normative fixture — or coverage by the Minimum Viable Validation; for byte-stable output run the determinism checklist (hash fn+lib, pre-image byte layout, encodings, map order, whitespace, case folding, empty/null/absent, version marker)
+  conformance gate:inline                   1710-1830  the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived          1740-1743  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1749-1761  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1767-1769  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1780-1784  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1805-1830  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
