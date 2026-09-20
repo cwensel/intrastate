@@ -292,6 +292,32 @@ Resolve's refusal taxonomy).
     behavior fix — and the silent-match cases must be enumerated, since
     an RDR premised on removing silent verdict changes cannot introduce
     an unbounded set of them.
+- **A7 Widening graphlint's atom check from `bool` to
+  `resolve.GuardResult` (C4) changes no lint verdict for atoms that
+  are already decided — every GuardTrue/GuardFalse pair reaches the
+  same finding it does on `main`, and only the previously-collapsed
+  GuardUnevaluable case is newly distinguishable at both callers.**
+  - **Status**: Pending
+  - **Method**: Source Search + Spike
+  - **Evidence**: none yet. The two callers read the current `bool`
+    with OPPOSITE polarity —
+    `internal/graphlint/reach.go::ownedAtomSatisfiable` existentially
+    (any admitting value wins) and
+    `internal/graphlint/analysis.go::nodeMeetsAll` exclusionarily
+    (a non-admitting value fails the node) — so the widening is
+    exactly the shape where a sign error is invisible: a mis-mapped
+    decided verdict at the negated caller suppresses a finding rather
+    than producing a wrong one, which no corpus diff over FIRING
+    findings detects. Verify by re-expressing today's
+    `verdict != resolve.GuardFalse` at each caller and diffing lint
+    output over the committed corpus in BOTH directions (findings
+    gained and findings lost), not by reading the rewrite.
+  - **If wrong**: the rename and widening land with a suppressed
+    finding class, and C4's own premise — that three-valued
+    consumption makes lint agree with the runtime — is the thing that
+    broke it. The fix is to widen one caller at a time with the
+    corpus diff between, rather than both in the phase that also
+    introduces the new verdict.
 
 ## Proposed Solution
 
@@ -375,6 +401,19 @@ RESOLUTION PATH — `Resolve` and its callees — continues to read no
 declarations. The rule governs that path, not `internal/resolve` as a
 namespace, which may host the seam implementation with its declaration
 state (`JDR 0004 §JD-1`).
+
+The atom's fields keep their `main` types, which this clause reads and
+does not restate as new: `Key`, `Operator` and `Literal` are bare
+`string`, `Block` is the named string type `resolve.Block`
+(`BlockAll | BlockUnless | BlockMatch`) that `internal/table` aliases.
+`DeclaredKinds` is homed in `internal/guard` — the package that owns
+the evaluator it feeds, and the one all three C4 sites already import;
+`internal/table` is import-legal but would put a guard-shaped producer
+in the loader's package. Handed a nil model it returns an empty
+non-nil map rather than panicking: that is the same LOUD-not-crash
+disposition as the nil-mapping evaluator above, and it makes the two
+failure paths converge on one diagnosis — every `eq`/`in` answers
+GuardUnevaluable — instead of one refusing and one crashing.
 ```
 
 **C2**
@@ -459,6 +498,50 @@ become GuardUnevaluable under the `set` arm above (which governs
 `eq`/`in` only). Operator-inferred and declared-kind readings never
 compete: the declared kind changes the reading of `eq` and `in`, and
 nothing else.
+
+SHAPES THIS CLAUSE READS AND DOES NOT CHANGE. The arms above quantify
+over per-member parsing, a three-valued verdict and an operator
+dispatch, each of which already has a fixed shape on `main`. Naming
+them here is what makes the clause reconstructible; none is amended.
+
+- `in` MEMBERS. The atom's `Literal` is a single `string`
+  (`internal/resolve/guard.go::GuardAtom`), and an `in` list travels
+  through it as a JSON array, in whatever form the two producers on
+  `main` already render — `internal/guard/assignment.go::renderSet`
+  and `internal/graphlint/reach.go::renderSetLiteral`, both sorting,
+  deduping and compact-encoding the members per JDR 0001 §D13. That
+  encoding is those functions' to define and this clause makes no
+  exactness claim of its own about it; the conformance suite's
+  existing `in/member` case (`internal/resolve/guardcontract.go`)
+  is the fixture that pins it.
+  "Each member, for `in`" above means the members decoded from that
+  array, and parse-all-then-compare quantifies over them. No new
+  members field and no delimiter convention is introduced.
+- `GuardResult` ENCODING. `resolve.GuardResult` is an `int` whose
+  constants are declared `GuardFalse = iota, GuardTrue,
+  GuardUnevaluable` (`internal/resolve/resolve.go`), so the ZERO value
+  is `GuardFalse`. That order is deliberately NOT the strong-Kleene
+  truth order (`internal/resolve/guard.go` documents the difference);
+  `kleeneAnd`/`kleeneNot` implement the truth table directly and never
+  compare raw constant values. This RDR fixes no ordering and adds no
+  verdict — a reconstruction that re-derives the iota order, or
+  reorders it to match the truth order, is wrong.
+- OPERATOR DISPATCH. `Operator` is a bare `string`, not a named type,
+  and only `exists` has a declared constant (`resolve.OpExists`). The
+  kind lookup is reached from the `eq`/`in` arms; an operator the seam
+  does not recognize — `exists` included, which `0007:C1` keeps off
+  this path — answers GuardUnevaluable like any other atom it cannot
+  type. The seam NEVER panics: C1 fixes the nil-mapping disposition as
+  LOUD-not-crash, and that posture is the seam's generally, so an
+  unreachable-by-contract operator is a verdict, not an
+  `unreachable` panic.
+- STEP ORDER. The unparseable-LITERAL arm is a per-kind obligation
+  inside the `int` and `bool` arms, not a pre-dispatch gate above the
+  kind switch. The kind lookup runs FIRST: an unknown or absent kind
+  answers GuardUnevaluable through the `default` without the literal
+  being parsed at all. Hoisting the literal parse above the switch
+  would make the literal's shape decide a verdict the declared kind
+  owns, and reverses this clause's order of authority.
 ```
 
 **C3**
@@ -477,7 +560,16 @@ discriminating case per kind token, and a meta-check that the
 fixture's kind tokens are exactly the five-kind vocabulary. The suite
 publishes the declaration fixture its cases assume as a kernel-owned
 `map[string]string` (key → kind token; no `internal/table` type
-crosses — A5). Delivery is STRUCTURAL, not a documented obligation —
+crosses — A5). It is published as a FUNCTION returning a fresh map:
+
+func ContractKinds() map[string]string
+
+not a package-level `var`. Nothing like it exists on `main`, so the
+form is this RDR's to fix, and an exported map var is mutable shared
+state every importing test package could write — one package's mutation
+would silently re-type another's comparisons, which is precisely the
+vacuous-pass mode F5 names. A constructor hands each caller its own
+copy. Delivery is STRUCTURAL, not a documented obligation —
 the suite takes a constructor and builds the seam itself:
 
 func TestGuardEvaluatorContract(t *testing.T,
@@ -521,11 +613,28 @@ On `main` the contract test has THREE call sites: two in
 `var ev guard.Evaluator`, the ZERO VALUE. So the real implementer is
 already gated, but by a nil-mapping seam: under C1's LOUD disposition
 that site's `eq`/`in` cases invert from GuardTrue to GuardUnevaluable,
-which is exactly what scenario 5 demands. It therefore migrates to
-`TestGuardEvaluatorContract(t, guard.NewEvaluator)` over the published
-fixture in the SAME phase as the signature widening — it is the third
-member of that migration list, and the only one crossing a package
-boundary.
+which is exactly what scenario 5 demands. It therefore migrates to a
+call over the published fixture in the SAME phase as the signature
+widening — it is the third member of that migration list, and the only
+one crossing a package boundary.
+
+The constructor is passed WRAPPED, not bare. Go function types are
+invariant in the return position, so `guard.NewEvaluator` — typed
+`func(map[string]string) guard.Evaluator` by C1 — does not assign to
+the `newSeam` parameter above, which returns the INTERFACE
+`GuardEvaluator`; measured, `go build` refuses it (spike
+`evidence/spikes/c3-newseam-invariance.md`). Each migrating site
+therefore supplies a one-line adapter:
+
+func(k map[string]string) resolve.GuardEvaluator {
+        return guard.NewEvaluator(k)
+}
+
+`NewEvaluator`'s return type is NOT widened to the interface to avoid
+the wrapper: C1 fixes the concrete value shape deliberately, and
+widening it would hand every non-test construction site an interface
+where it holds a struct — trading a three-line closure in three test
+call sites for an indirection on the production path.
 
 The widening also breaks a normative pin this RDR must amend
 explicitly: `internal/resolve/guard_mvv_test.go:222` holds
@@ -598,6 +707,39 @@ as admissible and stay silent) is a lint-policy question this RDR does
 not decide; it requires only that the reading be explicit and the two
 callers agree.
 
+The three-valued answer is carried as `resolve.GuardResult` itself —
+`atomAdmitsValue`'s `bool` return widens to the verdict type rather
+than to a lint-local enum or a `(bool, bool)` pair. The verdict is the
+kernel's vocabulary and both callers are deciding the kernel's
+question; a lint-side enum would be a second three-valued type to keep
+in agreement with the first, which is the drift this clause exists to
+close. `atomAdmitsValue` then names a predicate it no longer answers,
+so it becomes `atomVerdictForValue` in the same change — a `bool`-shaped
+name over a three-valued return is how the collapse gets
+re-introduced by the next reader. Its PARAMETERS are unchanged apart
+from the threaded evaluator C4 already requires; only the name and the
+return type move:
+
+func atomVerdictForValue(ev resolve.GuardEvaluator, a table.Atom,
+        held string) resolve.GuardResult
+
+Every use of the old name elsewhere
+in this record describes the site as it stands on `main`, and stays.
+Because the policy above is deliberately open, the RETURN TYPE and the
+name are what this clause fixes and the callers' handling is what it
+constrains — neither is choosing the policy.
+
+This clause reaches the CONSTRUCTION and the CONSUMPTION of a verdict,
+never its AGGREGATION: how a row's several atoms combine is already
+fixed in the kernel by `internal/resolve/guard.go::evaluateAtoms`,
+which evaluates every atom with no short-circuit and combines under
+strong-Kleene AND, where GuardFalse dominates GuardUnevaluable
+(`kleeneAnd`). `probeRow` does not aggregate at all — it builds a
+single-row table and calls `resolve.Resolve` once. So MVV step 2's
+singular "the `iter` atom" names the one unevaluable atom in that
+fixture, not a first-unevaluable-wins rule, and nothing here changes
+which atom a multi-atom row reports.
+
 Dependency: `JDR 0004 §JD-3` obliges the loader-side admitted-cell shim
 RDR 0030's Phase 2 extracts to construct through `NewEvaluator` with the
 loader's own `l.model.Tags`. That shim does NOT exist on `main` — no
@@ -662,6 +804,13 @@ this RDR does not decide — see the Charted note in
 The refusal is user-visible and DIAGNOSTIC: it names the offending site
 and the canonical rewrite, e.g.
 `<site>: "00" is not the canonical spelling of int tag n; write 0`.
+It travels as whatever error value `(*loader).atom`'s existing
+`conform` call already returns to its caller — the check is folded in
+beside that call and returns the same shape, adding no new error type
+and no new sentinel. Whether the comparison is factored into a private
+helper is implementation latitude, but the refusal must arrive on the
+path `conform`'s already does, or it reaches the envelope differently
+from the code it reuses.
 It reuses the one refusal code its ingress already carries —
 `malformed_predicate_atom` (guard and match atoms, via
 `internal/table/normalize.go::(*loader).atom`) — and adds no envelope
@@ -1328,7 +1477,13 @@ later answer lands on it rather than minting a third path.
    --outcome <o>` → refuses `flow-guard-unevaluable`; the payload names
    the guarded row and the `iter` atom with reason `uncomparable`.
    Today the same invocation silently prunes the guarded row and plans
-   the fallback.
+   the fallback. The envelope carries the existing
+   `code`/`message`/`schema_version` fields and NO new top-level key —
+   the row, the atom and the reason are named in `message`, the same
+   place S8's control envelope names its offending value. Naming them
+   as new sibling keys would add envelope surface this RDR elsewhere
+   declares it adds none of (C5), and the reason vocabulary is
+   `0011`'s existing closed set, reused rather than minted.
 3. With the reader returning `07` against the guard `iter eq 7`: the
    guarded row MATCHES under parsed comparison where it was pruned
    under raw-string comparison — the parsed-comparison leg, on the one
@@ -1491,7 +1646,12 @@ GuardUnevaluable, which is the regression that would matter.
    `guard.Evaluator` outside `NewEvaluator`'s own body. A regexp over
    source cannot separate those forms from a constructor call and would
    pass vacuously; the scenario is only a backstop if it runs, so it is
-   wired into `make check` rather than left as prose.
+   wired into `make check` rather than left as prose. It lives as a Go
+   test under `internal/guard` — the package whose invariant it
+   guards, so it moves with the type it pins and needs no separate
+   `make` target beyond the existing `test` leg. A `cmd/`-hosted tool
+   would be a second build artifact and a second thing to remember to
+   wire.
    **Why the backstop matters more than C1's LOUD disposition reads.**
    C1 fixes a nil-mapping evaluator's disposition as LOUD, but C4
    establishes that loudness is a property of the CONSUMER, not the
