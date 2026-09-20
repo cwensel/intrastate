@@ -44,3 +44,31 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
     note, not a present site in fenced C4). Notes F1's expectation and F3's role
     both change under (a). Bottom line: approach stands, lockable after three edits.
     Relayed to the user 2026-09-20; the six items remain unruled.
+  - Adversarial verification of the consult's load-bearing empirical claim
+    (LINT-EQ-RUNTIME), run once at the ceiling. New work, not a second opinion:
+    it tested a checkable claim rather than re-asking the design question.
+    **VERDICT: CLAIM REFUTED**, with a measured counterexample.
+    - Shared-seam premise holds for GUARD atoms, is FALSE for MATCH atoms: lint
+      decides match atoms through the seam (`reach.go:502-513`), the kernel
+      byte-compares them (`resolve.go:178`, via `model.go:367`). C1 requires that
+      divergence while C4 lists `atomAdmitsValue` as a typed construction site.
+    - Fixture `matchlit` (`[initial] n = 0`; `[rule.match.n] eq = "00"`): typed lint
+      exit 0 / no findings, while the runtime is a real dead end at the root
+      (`flow-no-match`, exit 2) under BOTH binaries. The dropped `graph-dead-end`
+      was correct. Same from the held side (`matchheld`).
+    - `cover07` itself survives — its clean verdict does re-describe the typed
+      runtime. The narrow claim held; the generalization did not.
+    - Consequences for Q1: option (b) is dead; option (a) is a SAFETY fix and is
+      insufficient as scoped (must extend to int `[initial]` and `[rule.write]`
+      values, not just guard literals); and a THIRD option the author's round never
+      listed is on the table — exclude `atomAdmitsValue` from typed comparison so
+      lint's match admission stays byte-equal to the kernel's, which contradicts
+      C4 as written and so also bears on Q3.
+    - Blast radius partially refuted: 220 .toml files (not 225); zero non-canonical
+      spellings CONFIRMED; but "only authorable as a quoted string" is FALSE —
+      bare float `eq = -0.0` renders literal `"-0"`, which `Atoi` accepts.
+    - `--write n=07` misroute CONFIRMED by measurement (base prunes to `fallback`,
+      typed selects `guarded`).
+    - Corpus diff byte-identical across all 123 lintable models: the divergence is
+      LATENT, not currently firing — an urgency argument, not a correctness one.
+    Relayed to the user 2026-09-20. Still advisory; the six items remain unruled.
