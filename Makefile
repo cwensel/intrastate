@@ -168,9 +168,16 @@ snapshot:
 # empty output reads as drift and reports the wrong cause. goreleaser names
 # the per-target dirs `intrastate_<goos>_<goarch>...`, so ask the toolchain
 # what host it is and match that prefix.
+#
+# GOHOSTOS/GOHOSTARCH, not GOOS/GOARCH: the latter are the *target* triple
+# and the environment overrides them, so `GOOS=windows make release-check`
+# would hunt for a foreign binary. The host pair names the machine actually
+# able to run what it selects. Ask for them one at a time — `go env A B`
+# prints a line per name, not one value. Match `.exe` too: that is what
+# goreleaser names the binary on windows targets.
 release-check:
-	@goos=$$($(GO) env GOOS); goarch=$$($(GO) env GOARCH); \
-	bin=$$(find dist -type f -name intrastate -path "*_$${goos}_$${goarch}*" 2>/dev/null | head -1); \
+	@goos=$$($(GO) env GOHOSTOS); goarch=$$($(GO) env GOHOSTARCH); \
+	bin=$$(find dist -type f \( -name intrastate -o -name intrastate.exe \) -path "*_$${goos}_$${goarch}*" 2>/dev/null | head -1); \
 	if [ -z "$$bin" ]; then \
 		echo "error: no $${goos}/$${goarch} binary under dist/ — run 'make snapshot' first" >&2; \
 		exit 1; \
