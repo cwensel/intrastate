@@ -111,7 +111,7 @@ N/A-bulleted). -->
 
 A model author writing a transition table for a retry, escalation, or
 attempt-counting flow wants to say "one more attempt" or "step to the next
-tier" once, and have the table mean it for every value the tag can hold.
+tier" once, and have the table mean it at every value the rule applies to.
 Today they cannot: a write value must be a literal, so the author writes out
 one row per (current value, outcome) cell by hand. They discover this the
 moment the flow has a counter in it — a ladder that is one sentence of intent
@@ -404,7 +404,16 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   - **Method**: Source Search
   - **Evidence**: `internal/guard/grammar.go` imports only `encoding/json`,
     `slices`, `strconv` and `internal/resolve`, and names no `table` type,
-    so it carries no dependency `resolve` lacks. `resolve` declares
+    so it carries no dependency `resolve` lacks. `internal/guard/declaration.go`'s
+    `::intWidth(minV, maxV int) (int, bool)` moves in the same relocation
+    (C1) — it takes no `table` type either — so the width rule the loader
+    needs is single-sourced rather than copied into `table`. `::IntDomain`
+    does NOT move: its parameter is a `table.TagDecl` and `resolve` cannot
+    import `table`, so it stays in `guard` as the decl-unpacking wrapper it
+    already is. Verify the move by compiling, and verify the wrapper by
+    checking `::domainSize` and `assignment.go::valueAssignments` both
+    reach the moved core rather than keeping the in-package re-inline of
+    the counted loop that exists today. `resolve` declares
     `::GuardEvaluator` (the interface `Evaluator` implements, `0012:C2`)
     and hosts `guardcontract.go`'s conformance harness, so the move
     co-locates the interface, its sole implementation (A4) and its
@@ -415,6 +424,39 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     "evaluated per member as the runtime evaluator would" becomes a
     reimplementation rather than a reuse — a fourth copy, in the one place
     a divergence is a load refusal.
+- **A13 The bound check can be ordered before the literal render, so an
+  out-of-`int`-range stepped value is reported as C2's bound failure and
+  never reaches `conformKind`'s `strconv.Atoi`.**
+  - **Status**: Pending — the ordering claim is new at this pre-lock pass;
+    C2 as first written said only "computed without overflow".
+  - **Method**: MVV Test
+  - **Evidence**: `internal/table/load.go::conform` calls `::conformKind`
+    before `::conformDomain`, and `conformKind`'s `int` arm runs
+    `strconv.Atoi` on the rendered member — so a rendered out-of-range
+    decimal is reported as `"%q is not an int"`, which names an
+    unparseable literal rather than an out-of-bound one (this is also why
+    `conformDomain`'s own `Atoi` branch is unreachable through `conform`).
+    Verify with a fixture whose step magnitude carries a cell past
+    `math.MaxInt` and assert the refusal names the cell and the bound, not
+    a parse failure.
+  - **If wrong** (the check cannot precede the render): C2's detail for
+    that arm is a parse-error message, and the mini-check `disposition`
+    row "stepped value computed past `int` range → names the cell and the
+    bound" overstates what the loader can say.
+- **A14 A rule that both steps a key and lists it in `clear` is detectable
+  at load, because the step spec is derived before the clear-list pass.**
+  - **Status**: Pending — the refusal is new at this pre-lock pass.
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/normalize.go::renderWrites` runs the
+    write loop (`assignments[key] = members`) before the clear loop, which
+    today overwrites the same key with the clear sentinel silently and
+    mints no refusal; the clear loop's only refusals are `CatUnknownTag`
+    and `CatWriteToNonOwnedTag`. Verify that the step spec is available at
+    the clear loop, so the pair can be refused there rather than needing a
+    second pass.
+  - **If wrong**: the pair cannot be refused at load, and C1 must instead
+    DEFINE the interaction (clear wins, or step wins) rather than reject
+    it.
 
 ## Proposed Solution
 
@@ -468,9 +510,10 @@ are not consulted — an `unless` block is negated as a whole and may mention
 other keys, so per-cell evaluation is not decidable from this tag alone;
 ignoring it can only over-admit, and an over-admitted cell surfaces in one
 of two places, not one. A cell whose stepped value leaves the domain
-surfaces as C2's bound refusal, with the `guard.all` complement as the
-named remedy — the authoring guide's existing advice for a needed
-conjunction (`docs/model-authoring.md` §Guard and match atoms). An
+surfaces as C2's bound refusal, whose detail names the unconsulted
+`unless` atom and directs the author to the positive-atom (`guard.all`)
+rewrite — the authoring guide's existing advice for a needed conjunction
+(`docs/model-authoring.md` §Guard and match atoms). An
 INTERIOR over-admitted cell conforms, so it mints a row — but that row is
 DEAD, not overlapping: the authored `unless` is retained on it, so its
 `guard.all eq = <cell>` and `unless eq = <cell>` cancel and its accepted
@@ -528,20 +571,42 @@ both `min` and `max`, or `enum` with a non-empty `domain`; on `bool`,
 category. An `int` whose declared width is not representable — `max - min`
 negative, or equal to `math.MaxInt`, so the inclusive `+1` wraps — is
 refused too: the loader cannot count the cell set, let alone walk it. That
-is `internal/guard/declaration.go::intWidth`'s rule, restated because
-`guard` is unreachable from `table` (`go list -deps`), and it must be the
+is `internal/guard/declaration.go::intWidth`'s rule, and it must be the
 SAME rule: a declaration whose width lint cannot compute — it saturates
 `Cardinality` to the ceiling and refuses the product as over-large — must
-not be one the loader enumerates. The bound is representability, not size — a wide
+not be one the loader enumerates. `guard` is unreachable from `table`
+(`go list -deps`), so the rule MOVES to the `internal/resolve` shim beside
+the relocated `Evaluator` rather than being copied — one relocation, on
+the same cycle and in the same phase, so the loader and lint cannot drift.
+What moves is the TYPE-FREE core only: `declaration.go::intWidth(minV,
+maxV int) (int, bool)` already takes no `table` type and relocates as-is.
+`::IntDomain(d table.TagDecl) []int` does NOT move — `resolve` must not
+import `table` (`table` imports `resolve`) — so it stays in `guard` as a
+thin wrapper that unpacks the decl and calls the moved core, which is the
+existing shape, not a third spelling: `guard`'s in-package re-inline
+(`assignment.go::valueAssignments` walks the same counted loop) and
+`::domainSize` both repoint through the moved `intWidth`. The moved core
+returns the WIDTH, an `int` — it renders nothing — so each caller keeps
+its own `strconv.Itoa` over the counted walk, and the loader's emitted
+`guard.all eq = <cell>` must render byte-identically to the cells
+`valueAssignments` produces or the atom never satisfies at lint. That
+byte-match is the reason the width rule is shared rather than the
+rendering. The bound is representability, not size — a wide
 but representable domain is admitted and merely expensive (A7), and the
-record takes no load-time row ceiling. An `enum` whose `domain` repeats a
-member is refused as well: C1's `enum` step is position-indexed ("`n`
-positions from the cell"), and `internal/table/load.go::tagDecl` checks
-`src.Domain` for neither duplicates nor emptiness today, so
-`domain = ["a","b","a"]` is authorable and "one position from `a`" has two
-answers — and the suffix `retry#a` would name two cells, the collision the
-`#` ban exists to prevent. Same class of guard as the `#` member, same
-reason.
+record takes no load-time row ceiling. A step write over an `enum` whose
+`domain` repeats a member is refused as well: C1's `enum` step is
+position-indexed ("`n` positions from the cell"), and
+`internal/table/load.go::tagDecl` checks `src.Domain` for neither
+duplicates nor emptiness today, so `domain = ["a","b","a"]` is authorable
+and "one position from `a`" has two answers — and the suffix `retry#a`
+would name two cells, the collision the `#` ban exists to prevent. Same
+class of guard as the `#` member, same reason. **Both guards are
+step-scoped, not new declaration rules**: an `enum` whose domain repeats a
+member or carries a `#` member and that NO rule steps continues to load
+exactly as it does today (A3 records the `#` case as loadable). The
+refusal fires on the step write, not on the declaration, because it is the
+step that indexes positions and mints the suffix; this record changes no
+behaviour on a model that steps nothing.
 
 `[initial]` values and predicate
 literals keep the literal-only
@@ -592,11 +657,13 @@ and `internal/table/model.go::KernelRow` enforces that shape by
 construction: it renders each match atom as `resolve.Tag{Key, Value}`
 through `::seamValue`, whose non-set arm returns `members[0]`. A retained
 multi-member `in` would therefore reach the kernel as its FIRST member on
-every row, and every row for a later cell could never match. So the
-stepped tag carries exactly two atoms per row: the rewritten
-`match eq = <cell>` where an `in` was subsumed, and the expansion's own
-`guard.all eq = <cell>`. Every OTHER authored atom on the tag —
-the `guard.all` bounds — is retained unchanged.
+every row, and every row for a later cell could never match. So this
+mechanism contributes exactly two atoms to the stepped tag per row — the
+rewritten `match eq = <cell>` where an `in` was subsumed, and the
+expansion's own `guard.all eq = <cell>` — and no more. It is not a count
+of the tag's atoms: every OTHER authored atom on the tag, the `guard.all`
+bounds among them, is retained unchanged beside these two, so a row's
+atom set on the stepped tag is the retained authored set plus this pair.
 
 The runtime evaluator is three-valued; an atom
 answering neither true nor false at a member does NOT admit that member.
@@ -622,8 +689,10 @@ cell, including when exactly one is admitted: a stepped row is never the
 authored row, so it always carries its cell. That differs from the
 single-member `in` rule, whose one row IS the authored row and mints no
 suffix element (`normalize.go`'s `suffixed := expanding && len(members) >
-1`), so the flag stops being a function of the member count and becomes a
-function of the choice-point kind. The identity tuple stays total over
+1`). That local is computed per choice point, so the step point computes
+its own as constant-true rather than changing the `in` arm's: the two
+arms keep their own rules, and the `in` expansion's behaviour is
+unchanged by this record. The identity tuple stays total over
 the product (`0002:C13`) either way — the step point's element is always
 present, where the `in`'s is present iff it branched.
 
@@ -640,7 +709,25 @@ alone would otherwise be told something this record makes false. The stepped val
 at every admitted cell, whatever the step's magnitude; whether it lands
 inside the domain is C2's bound, not an admission question. A rule
 admitting zero cells is refused at load. A step write over a domain
-containing a member with the suffix separator `#` is refused at load.
+containing a member with the suffix separator `#` is refused at load. A
+rule that BOTH steps a key and names it in its `clear` list is refused at
+load under the same category: today `::renderWrites` lets the clear loop
+overwrite `assignments[key]` with the clear sentinel silently, which
+against a step would either mint N rows all writing the sentinel or make
+the step vanish. Neither is authorable intent, and the existing silent
+overwrite is tolerable only because a literal write and a clear are both
+one value — a step is N, so the collision is refused rather than
+resolved. The step spec is therefore derived BEFORE the clear-list pass,
+so the pair is detectable. **The stepped key is placed in `assignments`
+like any other written key**, carrying a placeholder the expansion
+replaces per cell: `0002:C14` derives `RequiresOwned` from
+`maps.Keys(assignments)`, so a spec tracked beside the map instead would
+silently drop the stepped key from the kernel's owned-state gate. The spec
+itself rides alongside as one more per-key record, since
+`::renderWrites` returns `([]TagValue, []string, error)` and
+`::expand` takes `writes []TagValue`, neither of which can carry a
+non-literal today — widening that pair is the one signature change this
+clause implies.
 
 The per-cell stepped literal is the row's rendered assignment for that
 key, so it lands in BOTH carriers the assignment feeds: `Row.Writes` and
@@ -672,14 +759,48 @@ declaration exactly as an authored literal write does (`int` within
 domain in either direction — past `max` or below `min`, past the last
 member or before the first — is a load refusal under `malformed_tag_declaration` — the category a
 non-conforming literal write already takes — whose detail names the rule,
-the tag, the cell, and the stepped value. Where more than one admitted
-cell fails, the detail names the FIRST in the tag's own domain order —
-ascending `min..max` for `int`, the authored `domain` order for `enum` —
-not the row's suffix order, so the message is a function of the
-declaration and the step alone. There is no saturating and no
-wrapping form. The remedy is the author's: a positive atom excluding the
-cell, or a literal row for it; the cell it leaves unclaimed is then the
-outcome group's ordinary coverage obligation (`graph-coverage-gap`).
+the tag, the cell, and the result. The result slot differs by kind, because
+only one kind has a value to name: for `int` it is the computed literal
+(`10`), which `internal/table/load.go::conformDomain` already reports as
+"is above max 9" / "is below min 0"; for `enum` there IS no stepped value —
+no member sits `n` positions from the cell — so the slot names the signed
+offset off the end instead (`1 past the last member`, `2 before the first`),
+and on the checked-add arm (A13) there is no representable literal either,
+so the slot names the bound it passed. All four parts ride the refusal's
+`Detail` STRING: `internal/table/category.go::Failure` carries
+`Category`, `Detail`, `Offending` and `Rule` and no per-part fields, and
+this record adds none — `Failure.Rule` is a direction identifier
+(`RuleKernelOwned` / `RuleAuthorMustRename`) that
+`internal/cli/flow_input.go` gates a rename hint on, so populating it with
+a rule id would publish that hint on the wire. Tests therefore assert the
+`Category` plus the detail text, and the detail names the cell FIRST so
+the assertion is anchored at a stable position rather than mid-sentence.
+Minting structured fields would add envelope members and contradict C3.
+Where
+more than one admitted cell fails, the detail names the FIRST in the tag's
+own domain order — ascending `min..max` for `int`, the authored `domain`
+order for `enum` — not the row's suffix order, which is lexical
+(`normalize.go::compareRows` ends in `slices.Compare` over `[]string`, so
+`int` cell `10` sorts before `9`) and would otherwise make the message a
+function of string collation. There is no saturating and no wrapping form.
+The stepped value is computed as a CHECKED `int` add, and that check is
+ordered BEFORE the render: a step whose magnitude carries a cell outside
+`int` range is refused as this bound failure, naming the cell, rather than
+being rendered and handed to conformance. Left unordered it would reach
+`internal/table/load.go::conformKind`, whose `strconv.Atoi` runs first and
+reports "is not an int" — an unparseable-literal message standing in for
+an out-of-range arithmetic result, naming the wrong defect.
+
+The remedy is the author's, and it is ONE fix with a consequence, not two
+alternatives: exclude the cell with a positive atom on the stepped tag. A
+literal row elsewhere does not change THIS rule's admitted cells and so
+cannot clear the refusal — it is the remedy for the `graph-coverage-gap`
+that FOLLOWS the exclusion, once the excluded cell is claimed by nobody.
+Because `unless` atoms are not consulted when cells are admitted (C1), the
+detail also names any `unless` atom the rule authors on the stepped tag and
+says it did not exclude the cell — the author who wrote the intuitive
+`unless tier = "large"` is otherwise told only that `large` steps past the
+end, with nothing pointing at the atom they thought was doing the work.
 ```
 
 **C3**
@@ -694,7 +815,15 @@ learns a computed value shape; the graph
 document's `intrastate.graph/1` vocabulary gains no member. The
 authoring guide (`docs/model-authoring.md`) documents the form, the
 admitted kinds, the admitted-cell rule, and the bound refusal beside the
-existing write-block section; `intrastate --help-all` is regenerated. No
+existing write-block section — and, because neither is inferable from the
+form, the two hazards this record creates for an author: that an authored
+`enum` `domain`'s ORDER is the step order, so reordering a stepped
+domain changes the model with no lint to catch it; that `unless`
+never excludes a cell from a step, so the exclusion must be a positive
+atom; and that on an `enum` the only atom that can exclude the terminal
+member is an `in` re-listing the domain minus that member — the first
+thing an author stepping a tier hits, and the residual §consequences
+records. `intrastate --help-all` is regenerated. No
 emitted vocabulary — `internal/table::Categories()`, the CLIError codes,
 the finding codes, the graph document's members — gains a member, so no
 `0029:C4` stability tier is owed by this record. Every surface that names a
@@ -718,6 +847,8 @@ is canonical. Cue: three sibling arms already make this call.
 | Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
 | --- | --- | --- | --- | --- | --- |
 | Does atom A admit value v (two-valued core) | the extracted shim in `internal/resolve` (Phase 2), which is also where `Evaluator` moves so the shim can reach it | `guard`, `graphlint`, the loader | `product.go::valueSatisfies`, `reach.go::atomAdmitsValue`, C1's admits filter | — (this record makes it single-source) | the shim |
+| Is an `int` declaration's width representable | `declaration.go::intWidth`, MOVING to the `internal/resolve` shim (type-free, so it relocates as-is — C1) | lint, the loader | `intWidth` at lint's `Cardinality`, C1's kind arm at load | `::domainSize` and `assignment.go::valueAssignments`, which both repoint through the moved core | the moved `intWidth` (A12) |
+| What are an `int` decl's cells | `guard::IntDomain`, STAYING in `guard` — its parameter is a `table.TagDecl` and `resolve` cannot import `table` | `guard` only | the two `guard` tests | the loader enumerates from the moved `intWidth` instead | `IntDomain` for `guard`, `intWidth` for the loader — one width rule, two unpackings |
 | The UNDECIDED verdict's disposition | each caller, at its own call site | — | `guard` passes through; `graphlint` admits (`!= GuardFalse`, false-green); loader EXCLUDES (C1) | all three | none — deliberately per-caller; C1 owns the loader's |
 | Set-literal rendering for `in` | `renderSetLiteral`'s canonicalizing form, carried into the shim | loader, `graphlint` | `assignment.go::renderSet` (as-authored) vs `reach.go::renderSetLiteral` (sorted/compacted) | two | the canonicalizing one (`0003` set-literal clause) |
 | A row's written value, per carrier | `expand`'s per-cell loop | `Fingerprint`, `graph`, `flow next`, `guard` lint, `dump` | `Row.Writes` AND `Row.NextTags` (`0002:C15`) | two independent fields | neither — C1 requires BOTH be set per row |
@@ -732,6 +863,7 @@ is canonical. Cue: three sibling arms already make this call.
 | 5 grammar refusals | asserts the category per path (`malformed_initial_declaration`, `malformed_predicate_atom`, `malformed_tag_declaration`), so a merged category fails | the admitted `int`/`enum` forms must load |
 | 6 graph decode | a new vocabulary member fails the shipped document type | — (decode is itself the discriminator) |
 | 7 non-first expanded row | asserts `rule` is the AUTHORED id, so a suffix leaking into `rule` fails | the first expanded row, which would pass trivially |
+| 7 source legibility (rule count) | a stepped ladder still needing one rule per cell has a rule count equal to the literal ladder's | `ladder-literal.toml`'s own count, which must be strictly greater |
 
 **`fidelity`** — the literal↔step pair and the graph export.
 
@@ -747,7 +879,9 @@ is canonical. Cue: three sibling arms already make this call.
 | step on `int`+bounds, `enum`+domain | admitted | — | N expanded rows | loud (rows visible in `dump`) |
 | step on `bool`/`set`/`scalar`/unbounded `int` | load refusal | `malformed_tag_declaration` | none | loud |
 | `int` width not representable | load refusal | `malformed_tag_declaration` | none | loud |
+| stepped value computed past `int` range | load refusal (C2 bound, checked add ordered before the render — A13) | `malformed_tag_declaration`, names the cell and the bound, not a parse error | none | loud |
 | zero step, float step, other table keys | load refusal | `malformed_tag_declaration` | none | loud |
+| a key both stepped and in the rule's `clear` list | load refusal | `malformed_tag_declaration` | none | loud |
 | `#` in a domain member; duplicate domain member | load refusal | `malformed_tag_declaration` | none | loud |
 | zero admitted cells | load refusal (NEW check, `0003:C6` disposition) | `malformed_tag_declaration` | none | loud |
 | stepped value leaves the domain | load refusal | `malformed_tag_declaration`, names first failing cell in domain order | none | loud |
@@ -767,7 +901,7 @@ with `guard.all.attempt lt = 5`, write `attempt = { step = 1 }`.
 | 3. emit one choice point | C1 subsumption: one point per stepped tag, local or inherited; no match `in` on `attempt` here, so nothing to subsume or rewrite | 5 rows |
 | 4. per row: atoms | C1 "authored atoms retained, except a subsumed `in` rewritten to `eq`"; expansion adds its own | each row carries `{attempt all lt 5, attempt all eq <cell>}`; with a `match.attempt in = [1,3]` the rows would instead be cells `{1,3}` carrying `{attempt match eq <cell>, attempt all lt 5, attempt all eq <cell>}` |
 | 5. per row: write | C1 both-carriers clause + C2 bound | cell 4 → value 5; `5 ∈ 0..9`, conforms. `Writes` AND `NextTags` both `attempt=5` |
-| 6. per row: suffix | C1 always-append + D-identity sort order | identities `retry#0 … retry#4` |
+| 6. per row: suffix | C1 always-append + D-identity order-by-key | identities `retry#0 … retry#4`; one step point, so the key order is vacuous here — with `tier = { step = 1 }` beside it the elements order `attempt` then `tier`, one suffix-emitting point per key by C1 subsumption |
 | 7. lint | A5 (scoped: no `unless` here) + C3 invariance | cells `5..9` unclaimed by `retry` → `graph-coverage-gap` unless another rule claims them, exactly as the unrolled ladder |
 | 8. MVV compare | S1 projection | unrolled `retry-0…retry-4` vs stepped `retry#0…retry#4`: `rule`/`span`/`element`/`fingerprint` differ (dropped), `(code, key, dimension, class, reason)` equal as sets |
 
@@ -777,14 +911,28 @@ No CONTRADICTION row.
 
 - **Identity** — an expanded row's identity is the existing tuple
   `(model id, rule id, suffix…)` with the cell appended as one more suffix
-  element in the choice-point sort order; no new identity. The single-cell
-  case is C1's (it always appends, unlike the single-member `in`) — a
-  code fork on one shared `suffixed` flag, so it is fenced there rather
-  than left as a decision note. Two step
-  points in one rule order their suffix elements by the choice-point
-  sort, as `in` atoms do; the element is the bare cell, not
-  tag-qualified, on the `in` precedent — and `#` is banned in rule ids,
-  so `retry#3` can never be an authored id.
+  element; no new identity. The single-cell case is C1's (it always
+  appends, unlike the single-member `in`) — `normalize.go::expand`'s
+  `suffixed` is a per-choice-point local (`expanding && len(members) > 1`),
+  so the step point computes its own rather than sharing the `in` arm's;
+  the fence is C1's, stated there because it is the clause a reader would
+  otherwise read off `0002:C13`. **Step points order by KEY alone.** A step
+  point is not an `Atom`, so `compareAtoms`' `(Key, Block, Operator,
+  Literal)` tuple does not apply to it — and its `guard.all eq` literal is
+  per-cell, hence row-dependent, so a literal-bearing tuple would not be a
+  stable order anyway. Key alone is total here because C1's subsumption
+  leaves at most one suffix-emitting step point per key: two step points in
+  one rule are two distinct keys by construction. So `attempt = { step = 1
+  }` with `tier = { step = 1 }` yields `retry#<attempt>#<tier>`, ordered by
+  the key names. **The same key comparison places a step point among the
+  OTHER candidates** — unsubsumed `in` points on other keys, and the
+  outcome point — so the whole sorted list is keyed consistently and a
+  rule with a step on `attempt` and an `in` on `mode` yields
+  `retry#<attempt>#<mode>`. No tie is possible: subsumption removes the
+  same-key `in`, and the outcome point's `RecognizedTagKey` is never owned
+  and so never stepped. The element is the bare cell, not tag-qualified, on the
+  `in` precedent — and `#` is banned in rule ids, so `retry#3` can never be
+  an authored id.
 - **Wire / byte format** — the TOML inline table `{ step = <n> }`, exactly
   one key. A string sentinel (`"+1"`) is rejected: `strconv.Atoi("+1")` is
   `1`, so it already parses as a literal on an `int` tag. A bare table with
@@ -1129,8 +1277,24 @@ order.
 - A ladder is one row per intent in source; the normalized view shows the
   cells as `rule#cell` rows, as `in` expansion already does.
 - The bound is authored, not inferred: a step rule must exclude the cap
-  cell with its own positive atom (or a literal row must claim it), and an
-  unexcluded cap refuses at load with the cell named.
+  cell with its OWN positive atom, and an unexcluded cap refuses at load
+  with the cell named. A literal row for the cap is not an alternative to
+  that exclusion — it does not change this rule's admitted cells, so the
+  refusal stands (C2) — it is what claims the cell afterwards, once the
+  exclusion has left it to the group's coverage obligation.
+- **The `enum` arm delivers the stepped VALUE once, not the cap once.**
+  Ordered operators (`lt`/`lte`/`gt`/`gte`) are `int`-only in the frozen
+  operator/kind matrix and `unless` is not consulted, so the only positive
+  atom that can exclude an `enum`'s terminal member is
+  `in = [<every member but the last>]` — a re-listing of the domain, edited
+  on every domain change. So for `enum` the Problem Statement's "every
+  change to the tier domain means re-typing" is reduced (one rule, not one
+  row per member) but not eliminated: the write is said once, the cap is
+  not. The `int` arm has no such residual — its cap is one guard literal.
+  Extending the guard grammar with an ordered or `neq` atom over an
+  authored `enum` domain would close it and is out of scope here (the
+  grammar is a frozen vocabulary this record does not reopen); it is the
+  natural successor if the residual proves to hurt.
 - A stepped tag must be initialised: the expanded `guard.all` atom reads
   the key, so an uninitialised counter surfaces as the existing
   `graph-owned-before-write` finding.
@@ -1152,7 +1316,8 @@ order.
 
 - **`unless` on the stepped tag over-admits cells** → a cell whose stepped
   value leaves the domain hits C2's bound refusal, whose detail names the
-  `guard.all` complement. An INTERIOR over-admitted cell conforms and
+  unconsulted `unless` atom and points at the positive-atom rewrite. An
+  INTERIOR over-admitted cell conforms and
   mints a row, but the retained `unless` empties that row's accepted set,
   so it is a dead row: advisory `graph-redundant-row` at lint, never a
   refusal and never blocking `graph-overlap`. The authoring
@@ -1205,12 +1370,25 @@ order.
 - [ ] All Critical Assumptions verified
 - [ ] RDR 0002 is `Implemented` on `main` (it is); no open peer edit is
   scheduled — the joint check below records the peers consulted.
+- [ ] **This record does NOT wait on RDR 0012.** 0012 is `Draft`, and it
+  lands on today's `internal/guard/grammar.go::Evaluator` — a `struct{}`
+  whose `eq` is string equality. This record moves that evaluator to
+  `internal/resolve` unchanged (A12) and the shim's admits call passes the
+  cell string, NOT the declared kind, exactly as `Evaluate` takes it today.
+  So the shim's signature is fixed by what is on `main`, and 0012's typing
+  work later targets `internal/resolve` instead of `internal/guard` — a
+  relocation 0012 absorbs, not a dependency this record has. Ordering the
+  other way would block a Final record behind a Draft one.
 
 ### Minimum Viable Validation
 
 1. Author two in-repo fixtures of the Background's ladder over
-   `internal/table/testdata/rdr-fixture.toml`'s `iter`-shaped `int` tag and
-   an ordered `enum` tier: `ladder-literal.toml` (unrolled, as today) and
+   `internal/table/testdata/rdr-fixture.toml`'s `iter`-shaped `int` tag
+   (`min = 0, max = 9`) and an ordered `enum` tier the fixtures DECLARE as
+   `tier` with `domain = ["small","mid","large"]` — not `rdr-fixture.toml`'s
+   `profile`, whose domain ends in `foundational`, so every `large` this
+   record's scenarios name is this fixture's terminal member:
+   `ladder-literal.toml` (unrolled, as today) and
    `ladder-step.toml` (`attempt = { step = 1 }`, `tier = { step = 1 }`,
    each step rule carrying at least one row with two positive atoms on the
    stepped tag).
@@ -1232,9 +1410,22 @@ order.
    outcome, and A5's negative control.
 6. `graph` export of `ladder-step.toml` decodes under the shipped
    `intrastate.graph/1` document type with no new member (C3).
+7. Source legibility, the outcome the Problem Statement names: the
+   `[[rules]]` count of `ladder-step.toml` is ONE PER INTENT — one rule
+   per (ladder, outcome) pair rather than one per cell — and is strictly
+   less than `ladder-literal.toml`'s. Both assertions are derived from the
+   fixtures as authored (a count over the parsed source, not a line
+   count), not from the Background's approximate figures, which describe
+   the motivating shape rather than these fixtures. Without it every item
+   above passes on a stepped ladder that still needs a dozen
+   hand-written rules: items 1–6 prove the expansion is INVISIBLE, which
+   is necessary and not sufficient for the user's problem. Note the
+   `enum` arm's cap exclusion is itself authored per-domain (§consequences),
+   so the per-intent count is over the ladder's step rules.
 
-End-state: the step ladder is the literal ladder to every consumer, and
-the unguarded cap is a named load refusal.
+End-state: the step ladder is the literal ladder to every consumer, it is
+one row per intent in source, and the unguarded cap is a named load
+refusal.
 
 ### Phase 1: Admit the form
 
@@ -1271,7 +1462,21 @@ own — the shim is the comparison, never the policy — so the repoint is
 behaviour-preserving in all three. The loader's admits filter then calls
 the same comparison the runtime does, applying C1's exclude collapse at
 its own call site, rather than minting a fourth copy. Accepted cost: this
-widens the change beyond `internal/table`, taken deliberately.
+widens the change beyond `internal/table`, taken deliberately. Two
+non-test call sites repoint (`guard/product.go::valueSatisfies`,
+`graphlint/reach.go::atomAdmitsValue`), plus `cli/flow_resolve.go::guardSeam`,
+which constructs the evaluator directly. The extracted shim takes a
+`resolve.GuardAtom` and the held value, NOT a `table.Atom` —
+`valueSatisfies`'s current parameter — because `resolve` cannot import
+`table`; each of the three callers renders its own `table.Atom` into that
+form at the call site, which is the same cycle `IntDomain` hits above and
+the reason neither moves with its present signature. The TEST surface is larger and
+moves in this same phase: roughly twenty-five `Evaluator` references
+across seven `internal/guard/*_test.go` files, including
+`guard_evaluator_0003_test.go`'s field-count reflection assertion (it
+asserts the type holds no state) — which follows the type to `resolve`
+rather than being rewritten. Named here so the phase estimate is the real
+one; nothing in the design turns on it.
 
 Add the step choice point to `expand`: admitted-cell evaluation over the
 rule's positive atoms, the `guard.all` `eq` atom, the stepped literal, the
@@ -1309,49 +1514,146 @@ new envelope member.
    what "the same table" means here — the same defects about the same tags
    and dimensions — and the exclusions are named because comparing the
    unprojected objects is unsatisfiable on any non-empty finding set.
-   Spanning both the blocking codes and the advisory
-   `graph-idempotent-write`; zero `graph-overlap` and zero
-   `graph-coverage-gap` on both. Backs A5.
+   The compared set MUST be non-empty, asserted BEFORE the set
+   comparison — otherwise empty-equals-empty passes and the scenario
+   proves nothing. It takes TWO fixture pairs to reach both tiers,
+   because `internal/cli/lint.go` returns one tier per run: any blocking
+   finding exits through `respond.Fail` carrying `report.Blocking()`
+   alone, and the advisory list is only ever built on the success path.
+   So: (a) the CLEAN pair — `ladder-literal.toml` / `ladder-step.toml`,
+   which every other scenario here reuses — must exit OK and yield a
+   non-empty ADVISORY set, guaranteed by authoring a `graph-idempotent-write`
+   on an UNSTEPPED key (a non-zero step is never idempotent) mirrored on
+   both sides; and (b) a BLOCKING pair, `ladder-literal-blocking.toml` /
+   `ladder-step-blocking.toml`, authored solely for this tier and reused
+   by nothing else, so the deliberate defect cannot perturb MVV item 7's
+   rule count or S2/S6/S7/S9/S10. The blocking defect is
+   `graph-owned-before-write` on a tag neither ladder initialises — it is
+   in `BlockingCodes()`, is neither `graph-overlap` nor
+   `graph-coverage-gap`, and projects identically on both sides. Zero
+   `graph-overlap` and zero `graph-coverage-gap` on all four. Backs A5.
 2. **Scenario**: `flow resolve --as json --plan-only` swept over every
    (state, outcome) cell of the pair, the state driven by rewriting the
-   bound artifact file.
-   **Expected**: `writes`, `next` and `clear` equal cell by cell. Backs A6.
+   bound artifact file. The sweep's domain is the FULL cross product of
+   both stepped tags' declared domains × the outcome set — `(attempt,
+   tier)` jointly, not the stepped tag alone — since a rule may guard on
+   either.
+   **Expected**: `writes`, `next` and `clear` equal cell by cell. On the
+   declared pair every cell IS claimed (S1 asserts zero
+   `graph-coverage-gap` on both), so the unclaimed-cell arm needs its own
+   fixture and gets one: 2b below. Backs A6.
+2b. **Scenario**: unclaimed-cell parity. The F4 shape — a cap cell excluded
+   by the step rule and claimed by no other row — authored both ways,
+   swept as in 2.
+   **Expected**: BOTH sides refuse at that cell, with the same code. This
+   is the arm that catches a stepped ladder silently planning where the
+   literal one refuses; it cannot live on the S1 pair, whose zero coverage
+   gaps mean no such cell exists there.
 3. **Scenario**: `ladder-step-unguarded.toml` — the `lt 5` atom removed —
    loaded.
    **Expected**: refusal under `malformed_tag_declaration` naming rule
-   `retry`, tag `attempt`, cell `9`, value `10`; the enum sibling names
-   `tier` and `large`. Backs C2, whose check is
-   `internal/table/load.go::conform` → `::conformDomain` (the existing
-   message names value and bound, and `renderWrites` already prefixes rule
-   and key, so only the cell is new text).
+   `retry`, tag `attempt`, cell `9`, result `10`; the enum sibling names
+   `tier`, `large`, and `1 past the last member` (no stepped value exists
+   on that arm — C2). Asserted as the `Category` plus the detail text,
+   which is what the refusal carries (C2: `Failure` has no per-part
+   fields and this record adds none); the detail names the cell first, so
+   the cell assertion is positionally stable. Backs C2, whose check is
+   `internal/table/load.go::conform` → `::conformDomain` (whose int arm
+   already reports "is above max 9"; `renderWrites` already prefixes rule
+   and key, so the cell and the enum offset are the new text).
+3b. **Scenario**: multi-failure domain order. An `int` step whose admitted
+   cells include both `9` and `10` failing (e.g. `max = 11`, `step = 3`,
+   cells `9..11`) and an `enum` `tier = ["small","mid","large"]` with
+   `step = 2` admitting `mid` and `large`.
+   **Expected**: the detail names cell `9` (domain-first), NOT `10`
+   (suffix-lexical-first); and `mid` (authored-domain-first), not `large`.
+   Pins C2's "first in the tag's own domain order, not the row's suffix
+   order" — which S3 alone cannot exercise, having one failing cell.
+3c. **Scenario**: negative step, two fixtures because a refusing load
+   publishes no rows. (i) `attempt = { step = -1 }` over `min = 0, max = 9`
+   with NO excluding atom, and an `enum` `step = -1` likewise;
+   (ii) the same with `gte = 1` excluding cell `0` (and the enum's first
+   member excluded).
+   **Expected**: (i) refuses, naming cell `0` and `min` on the `int` arm
+   and `1 before the first member` on the `enum` arm — the only
+   observation a refusing load affords. (ii) loads, and its rows are
+   `retry#1 … retry#9` each writing `cell - 1`. Pins C2's "in either
+   direction" and C1's non-zero `n`, neither of which any other scenario
+   reaches.
 4. **Scenario**: `[initial] attempt = { step = 1 }` and a predicate literal
    `{ step = 1 }`, each loaded.
    **Expected**: both refuse, and under the categories C1 names — the
    `[initial]` one `malformed_initial_declaration`, the predicate one
    `malformed_predicate_atom`. Asserting the code, not merely "refuses",
    is what pins the clause: each path keeps its existing category and this
-   record merges none. Backs C1's interception arm.
+   record merges none. The predicate-literal fixture covers all three atom
+   positions — `match … eq`, `guard.all … eq`, and as a member of an `in`
+   list — since each reaches `::loader.atom`'s `badAtom` by a different
+   arm and a single position would leave two untested. Backs C1's
+   interception arm.
 5. **Scenario**: zero-cell (from an ordered bound, e.g. `lt = 0` over
    `min=0,max=9` — the shape the loader does NOT refuse today), zero-step,
    float-step, `#`-in-domain, and duplicate-member-in-domain step models
    loaded; a step write on `bool`, `set`, `scalar`, an unbounded
-   `int`, and an `int` whose width is not representable.
+   `int`, and an `int` whose width is not representable; a rule that
+   both steps a key and names it in its `clear` list; and a
+   REPRESENTABLE-width `int` whose step magnitude carries an admitted
+   cell past `math.MaxInt` (A13's fixture — distinct from the
+   unrepresentable-width case, which is a declaration defect caught
+   before any write is read).
    **Expected**: each a load refusal under `malformed_tag_declaration`
-   whose detail names the admitted form or kinds. Backs C1's grammar arm
-   and, for the `#` and duplicate cases, the new guards A3 established are
-   not redundant; the zero-cell case pins that the refusal is new rather
-   than `0003:C6`'s existing check.
+   whose detail names the admitted form or kinds. Backs C1's grammar arm.
+   Each carries its paired negative control, which is what makes the
+   refusal testable as NEW rather than pre-existing: the same `lt = 0`
+   predicate WITHOUT the step loads today (zero-cell — both spellings
+   share `malformed_tag_declaration`, so the control is the only
+   discriminator against `0003:C6`'s existing check), and an unstepped
+   `enum` whose domain carries a `#` member or a repeated member also
+   loads unchanged (C1's step-scoped guards; A3 records the `#` case as
+   loadable today). One item carries NO control because it needs none:
+   the unrepresentable-width case is new only on its
+   `max - min == math.MaxInt` arm — `load.go::tagDecl` already refuses
+   `min exceeds max` today, before any write is read, so the negative-width
+   arm is a pre-existing refusal this record restates rather than mints,
+   and the scenario asserts it as such. The A13 overflow fixture's expected
+   detail names the cell and the bound it passed, NOT "is not an int" —
+   that is the ordering A13 exists to pin.
 5b. **Scenario**: a stepped rule with `guard.unless` on the stepped tag
-   excluding an INTERIOR cell another row claims literally.
+   excluding an INTERIOR cell another row claims literally. The literal
+   row must sit in the SAME outcome group and be of the same `Kind()` as
+   the dead row — `internal/graphlint/groups.go::checkRedundantRows` walks
+   siblings within one group and skips a `Kind()` mismatch, so a fixture
+   that splits them proves nothing.
    **Expected**: loads (no refusal — the stepped value conforms), and
-   lints advisory `graph-redundant-row` for the dead row with ZERO
-   `graph-overlap`. Pins C1's `unless` paragraph and, by producing no
-   overlap, is the negative control that A5's no-new-overlap claim holds
-   in the one case that could have broken it.
+   lints EXACTLY ONE advisory `graph-redundant-row` (the dead row); other
+   advisories may co-fire and are not asserted, but the redundant-row
+   count is closed at one. Pins C1's `unless` paragraph.
+   **The zero-`graph-overlap` half needs its own fixture**, because on
+   THIS one it would be vacuous: the fixture's every row must project
+   whole through `guard.AcceptedAssignments` for
+   `groups.go::decidableAccepted` to decide it, and where it falls back to
+   the scoped-product path an `unless`-carrying row returns undecided and
+   is skipped, so zero overlap would hold whatever the expansion did. The
+   scenario therefore asserts the projectability precondition explicitly,
+   and A5's no-new-overlap control is 5c below rather than this row.
+5c. **Scenario**: overlap control. A step rule whose interior cell is
+   excluded by a POSITIVE atom pair (`gt`/`lt`) rather than by `unless`,
+   with a literal row claiming that cell — every row projects whole, so
+   the overlap oracle decides all of them.
+   **Expected**: ZERO `graph-overlap`. This is A5's real negative control:
+   the expansion's per-row `guard.all eq = <cell>` makes the stepped rows
+   pairwise disjoint, and the literal row occupies only the excluded cell.
 6. **Scenario**: `graph` export of `ladder-step.toml` decoded against the
    shipped `intrastate.graph/1` document type.
-   **Expected**: decodes with no new member; `internal/table::Categories()`,
-   the CLIError codes and the finding codes each gain none. Backs C3.
+   **Expected**: decodes with no new member — asserted by STRICT decode
+   into the shipped document type (unknown fields rejected), the oracle
+   `internal/cli/graph_mvv_0021_test.go` already uses; and
+   `internal/table::Categories()`, the CLIError codes and the finding
+   codes each gain none, asserted as golden enumerations on the
+   `internal/graphlint/tier_assertions_0029_test.go` and
+   `::vocabulary_snapshot_0029_test.go` precedent. Naming both
+   oracles is what makes "gains no member" a test rather than a reading.
+   Backs C3.
 7. **Scenario**: `flow resolve` selecting a NON-FIRST expanded row of a
    stepped rule that authors an `emit` block —
    `TestReq34_TheRuleIDJoinIsSoundOverAnExpandingRule`'s shape
@@ -1361,6 +1663,38 @@ new envelope member.
    block, and `rule` is the authored id — the first-match `rowByID` join
    stays sound because a stepped rule's rows share one `Emit`. Pins the
    `0010:C3` inheritance the audit row records.
+8. **Scenario**: subsumption. A step rule on `attempt` that ALSO authors
+   `match.attempt in = [1,3]`, and a sibling fixture where that same `in`
+   is inherited from a context rather than authored on the rule.
+   **Expected**: both yield exactly |in ∩ admitted cells| rows — two, not
+   the |members| × |cells| product — each carrying `match eq = <cell>`
+   with NO surviving `in`, and a suffix carrying exactly one element for
+   `attempt`. Asserted CLI-level on `dump`'s `atoms` column, the public
+   surface that publishes the rewritten per-row atoms, keeping this
+   scenario in `internal/cli/*_mvv_0030_test.go` with the rest;
+   `KernelRow`/`::seamValue` is the mechanism, not the oracle. Pins C1's
+   subsumption paragraphs, whose only statement today is A10's prose;
+   the inherited arm is what proves `expand` sees the merged predicate
+   set. Backs A10.
+9. **Scenario**: row identity. (a) a step rule whose bounds admit exactly
+   ONE cell; (b) the multi-cell `retry` rule; (c) a single-member
+   `match in = ["x"]` with no step, as the negative control.
+   **Expected**: (a) publishes `retry#<cell>` in `dump`'s `identity`
+   column and the graph document's row `identity` — the suffix is appended
+   even at one cell; (b) publishes `retry#0 … retry#4` on those same
+   surfaces; (c) mints NO suffix element, as
+   `normalize.go::expand`'s `suffixed := expanding && len(members) > 1`
+   does today. Pins C1's always-append fence and C3's row-identity split,
+   which S1 cannot reach (it drops `rule`/`element`/`fingerprint` by
+   construction) and S6 does not assert.
+10. **Scenario**: both-carriers. `graph` export and `dump` of
+   `ladder-step.toml`, read for each expanded row's successor.
+   **Expected**: every row's `next` (graph) and next column (`dump`)
+   carries THAT row's stepped value, not the authored one. A
+   `Writes`-only implementation passes every `Fingerprint` and plan
+   assertion above and fails here — this is the discriminating oracle A11
+   names for C1's both-carriers clause, and nothing else in this strategy
+   exercises `NextTags` independently of `Writes`. Backs A11.
 
 ### Performance Expectations
 
