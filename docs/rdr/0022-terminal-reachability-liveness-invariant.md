@@ -534,6 +534,13 @@ two applies is 0022's call, made against 0029:C3 — not re-decided here.
 Note both records are pre-1.0.0, where `0.x` carries no compatibility
 guarantee, so the rule binds as declared intent until 1.0.0.
 
+Joint-check: fired → 0030 (home: `cli/0030 §Normative Contracts` C3).
+Context: A1 rests on `internal/graphlint/reach.go::successor` applying
+literal writes; 0030 (Draft) admits a computed write form and its C3 keeps
+every row's successor a literal by load-time expansion — cite it there
+rather than assume it. Recorded symmetrically by 0030's propose,
+2026-09-19.
+
 ## Alternatives Considered
 
 ### Alternative 1: Merged-node backward reachability (pinned miss)

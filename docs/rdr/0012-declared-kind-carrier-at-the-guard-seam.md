@@ -433,6 +433,11 @@ declared-key *values* and pins no contract there), and open JDR 0001
 §JD-18 (view-conformance venue) is deliberately NOT decided here (O4's
 rejection preserves it).
 
+Joint-check: fired → 0030 (home: `cli/0003 §Normative Contracts` C6).
+Context: the kind tokens `bool`/`enum`/`int`/`scalar`/`set` appear inside
+both records' fences; both cite RDR 0003's closed vocabulary and neither
+extends it. Recorded symmetrically by 0030's propose, 2026-09-19.
+
 ## Alternatives Considered
 
 ### Alternative 1: Widened seam signature

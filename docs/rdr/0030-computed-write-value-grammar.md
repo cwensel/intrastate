@@ -168,254 +168,476 @@ two apart.
 
 ## Critical Assumptions
 
-[Required — never omit. Load-bearing assumptions — if
-wrong, the approach fails. Each must have a complete
-Evidence Record before marking this RDR Final.]
+Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 
-- **A1 [Statement]**
-  - **Status**: Verified | Pending | Unverified
-  - **Method**: `one of the eight — README
-    §Verifying load-bearing claims`
-  - **Evidence**: [single sentence — concrete artifact;
-    per-method form in README §Verifying load-bearing
-    claims. Prefer a stable anchor: `path::Symbol`,
-    section heading, REQ/assumption/test ID, grepable
-    literal snippet, or artifact path. A bare `file:line` or peer-RDR
-    `~line N` is non-normative — drop or rewrite to a
-    stable anchor unless the line number **is** the
-    behavior under test.
-    **Method: Peer RDR cites an element ID, not a record**:
-    `cli/0055:C4`, `0055:A3` — the element the claim rests
-    on, never the whole file. `recs inspect NNNN` lists them.
-    A filename or heading-text reference is a *mention*:
-    fine for context, not for a load-bearing claim.]
-  - **If wrong**: [single sentence — what fails; how
-    it surfaces to a user or test]
-- **A2 [Statement]** — (same shape)
+- **A1 The loader's existing per-member row expansion can host a guard-block
+  expansion keyed on the stepped tag without disturbing 0002:C13's
+  match-only rule for `in` atoms.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/normalize.go::expand` — its choice-point
+    loop and its comment on why a guard `in` atom is deliberately not
+    expanded (a conjunction would become a disjunction).
+  - **If wrong**: the step expansion is a second mechanism beside `expand`
+    with its own suffix and ordering rules, and Phase 1 doubles.
+- **A2 An enum's authored `domain` order survives load, normalization, the
+  dump and the graph export unsorted, so it can carry step order.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/load.go::tagDecl` carries `Domain:
+    src.Domain`; `0021:C2` "`domain` carries the declaration's AUTHORED
+    members"; no `sort` over `TagDecl.Domain` in `internal/table`.
+  - **If wrong**: `step` on an enum has no stable order and needs an
+    explicit ordering facet, widening the declaration model RDR 0003 owns.
+- **A3 Every string that reaches a row's expansion suffix is `#`-free at
+  load, and an enum domain member is NOT among the strings that guarantee
+  covers today.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/model.go::Identity` ("Every string that
+    can reach here has `#` banned at load"); `0002:C17` scopes the `#` ban
+    to match-block `in` members.
+  - **If wrong** (a member with `#` can reach the suffix): two expanded
+    rows collide on one identity — C1's refusal of a `step` over a domain
+    with a `#` member is the required guard, not an optional one.
+- **A4 The per-cell admits filter is decidable at load with the same
+  comparison the runtime guard evaluator uses, for `eq`/`in`/`lt`/`lte`/
+  `gt`/`gte` on `int` and `eq`/`in` on `enum`.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/resolve/guardcontract.go` (0012's typed
+    evaluator, `0012:C2`) — the int comparison and enum equality it
+    performs are total over a declared finite domain.
+  - **If wrong**: load and runtime disagree on which cells a stepping row
+    admits; the bound refusal fires on a cell the runtime never reaches or
+    misses one it does.
+- **A5 Expanded rows introduce no overlap the hand-unrolled table did not
+  have: two rows in one outcome group that step the same tag partition its
+  cells by their own atoms exactly as literal rows do.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: the MVV's fixture pair — `lint` findings on the `step`
+    ladder equal those on the unrolled ladder, including zero
+    `graph-overlap`.
+  - **If wrong**: a computed ladder lints `graph-overlap` where the
+    literal one did not, and the "same table, fewer rows" claim fails.
+- **A6 For every (state, outcome) cell the `step` ladder resolves to the
+  same plan as the unrolled ladder.**
+  - **Status**: Pending
+  - **Method**: MVV Test
+  - **Evidence**: the MVV's `flow resolve` sweep over the fixture pair,
+    plans compared on `writes`/`next`/`clear`.
+  - **If wrong**: load-time expansion is a semantics change, not a grammar
+    change, and Alternative 1 reopens.
+- **A7 The step expansion's row growth is bounded by the declaration
+  alone — at most the admitted-cell count, itself at most the domain
+  width — and needs no load-time ceiling at the ladder sizes reported;
+  the lint enumeration limit is RDR 0013's caller-supplied analysis scope
+  (`0013:C1`, `0013:C3`) and gates nothing at load.**
+  - **Status**: Pending
+  - **Method**: Spike
+  - **Evidence**: load a step model over an `int` declared `min = 0,
+    max = 100000` and record wall time and row count; the joint check
+    below records the 0013 coupling.
+  - **If wrong**: C1 gains a load-time ceiling of its own — a 0030
+    decision, never a reuse of 0013's lint limit, which the analysis scope
+    it parametrises cannot reach.
+- **A8 An expanded row's suffixed identity is what `flow next`, `flow
+  resolve` and the dump already show for `in`-expanded rows, so no new
+  rendering surface is owed.**
+  - **Status**: Pending
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/model.go::Identity` and its consumers in
+    `internal/cli/flow_next.go` / `internal/table/dump.go`: the dump
+    carries `SourceLocator`, and the `flow resolve` / `flow next` payloads
+    carry the rule id and suffix as they do for an `in` expansion.
+  - **If wrong**: a caller sees `retry#3` with no way back to the authored
+    rule — a doc obligation on the authoring guide, not a design change.
+- **A9 No open peer relies on the inline-table write refusal
+  (`malformed_tag_declaration: … is not a tag value`) as a contract.**
+  - **Status**: Pending
+  - **Method**: Peer RDR
+  - **Evidence**: joint check arm 3 over open peers' normative fences for
+    the refusal token; a citing element id if found.
+  - **If wrong**: a peer's fenced refusal silently becomes an acceptance
+    — a joint decision, not an edit here.
 
 ## Proposed Solution
 
 ### Approach
 
-[Detailed description of the recommended solution.]
+Admit one computed write form, `<tag> = { step = <n> }`, and have the
+**loader expand it into literal rows** — one row per current value the rule
+admits, each carrying a `guard.all` `eq` atom on the tag, a literal write of
+the stepped value, and the current value as its row-identity suffix. This
+is the mechanism the loader already uses to expand a match-block `in` atom
+into one row per member (`internal/table/normalize.go::expand`,
+`0002:C13`), pointed at a guard dimension instead of a match scope. The
+form is admitted on an `int` declared with both bounds and on an `enum`
+with a domain, whose authored member order is the step order; on every
+other kind and on an unbounded `int` it is refused at load. A stepped value
+that leaves the domain at any admitted cell is a **load refusal** naming
+the rule, the tag and the cell — no saturation, no wrap. Everything after
+normalization (kernel resolve, write application and read-back, lint
+coverage and reachability, the graph export, and the two Draft consumers
+that assume a constant successor) sees only literal writes and is
+unchanged. `0002:C4`'s "a write replaces" holds per expanded row, which is
+why this record extends the value grammar C4 admits without reopening the
+application semantics C4 states.
 
 ### Technical Design
 
-[Architecture, component relationships, data flow,
-extension points.]
+The write value enters at `renderWrites`, which today hands every value to
+`internal/table/load.go::valueMembers`; a TOML inline table has no arm
+there and is refused as `malformed_tag_declaration` (the current behaviour
+the Background confirmed). The design intercepts the table shape on the
+**write-block path only** — `[initial]` values and predicate literals keep
+the literal-only grammar; `valueMembers` itself is unchanged, since the
+interception precedes the call. A rule with a
+`step` write is recorded as a **step point** on the rule, and `expand`
+treats it as one more choice point in its Cartesian product: the members
+are the tag's admitted cells, the emitted atom is `guard.all` `eq =
+<cell>`, the row's write for that key is the stepped literal, and the
+suffix element is the cell. Two step writes in one rule, or a step write
+beside an `in` match atom, compose as the product already does.
+
+**Admitted cells.** The rule's own positive atoms on the stepped tag decide
+which domain members expand: `eq`/`in`/`lt`/`lte`/`gt`/`gte` under
+`guard.all` and `eq`/`in` under `match`, each evaluated per member with the
+same comparison the runtime evaluator performs (`0012:C2`). `unless` atoms
+are not consulted — an `unless` block is negated as a whole and may mention
+other keys, so per-cell evaluation is not decidable from this tag alone;
+ignoring it can only over-admit, and an over-admitted cell surfaces as the
+bound refusal with the `guard.all` complement as the named remedy, which is
+the authoring guide's existing advice for a needed conjunction
+(`docs/model-authoring.md` §Guard and match atoms). A rule with zero
+admitted cells is refused: it is the unsatisfiable-atom case `0003:C6`
+already refuses at load rather than yielding a never-matching row.
+
+**The bound.** For each admitted cell the stepped literal passes the same
+`conform` check a literal write passes today (`internal/table/load.go::
+conform` → `conformDomain`: `int` against `min`/`max`, `enum` against
+`domain`). A failure is the bound refusal. ⇒ The bound is therefore not a
+new analysis: "guard it below the cap" makes the rule admit only cells
+whose successor exists, and the cell at the cap is then an ordinary
+uncovered cell in the outcome group's product, which the existing coverage
+proof reports as `graph-coverage-gap` unless another row (the exhausted
+row) claims it. The scope review's worry — that the bound check is a new
+guard-conditioned interval analysis — dissolves because the interval is
+enumerated, not analysed.
+
+**Why guard atoms, not match atoms.** "A **match** atom *scopes* the row
+group … and contributes **no dimension** to the product lint proves
+exhaustiveness over. Only `guard.all` and `guard.unless` atoms collect as
+dimensions" (`docs/model-authoring.md` §Discriminate with guard atoms). ⇒ An
+expansion into match atoms would leave the cap cell unprovable — a silent
+green over the exact hole the author is most likely to leave. The emitted
+atom goes to `guard.all`. The state read this expansion depends on — the
+tag's current value — is written by `[initial]` and by prior rows' writes,
+which is why an unstepped-before-initialised key surfaces through the
+existing `graph-owned-before-write` finding, not a new one.
 
 #### Normative Contracts
-
-[Required — never omit. Load-bearing — implementers must match exactly.
-The implementation prompt extracts REQ-N quotes from
-this section. This section is also the **authoritative
-list of the contracts this RDR owns**: a surface not
-named here has no spec to test against, so during
-implementation an un-named surface is a deviation, not
-free latitude (see `prompts/implementation/launch.md`
-Phase 2). Stage 5 closes this section with one line,
-outside the fences: either `Determinacy: fired — <contracts>`
-or else `Determinacy: n/a — <reason>` (prompts/pre-lock/
-3-repeatability.md §Determinacy trigger).]
-
-> **Proportionality (split signal).** Count the
-> *independent* load-bearing contracts this RDR is the
-> sole author of (a distinct type design, a hash, a wire
-> format, a taxonomy, a destructive-op policy each count
-> as one). If an implementer would have to hold **more
-> than one** such contract in working memory at once,
-> this RDR spans more than one seam — split it along those
-> seams rather than locking them together. The split test
-> is **contract count, not word count**.
-
-> **Transient marker (bridge surfaces).** A contract block
-> for bridge code may carry one line: `Transient — scheduled
-> deletion by <sibling NNNN-slug>, <phase/anchor>;
-> <one-clause disposition>`. The surface stays named here —
-> Profile sizes by blast radius; the marker caps rigor for a
-> surface with a scheduled deletion. A `Transient`-marked
-> contract counts toward neither the Profile contract axis
-> (blast-radius sizing stays on the durable contracts) nor
-> the >1-independent-contract split signal above (that
-> signal counts *sole-authored* contracts — a bridge whose
-> replacement a sibling owns is not sole-authored).
-
-> **Surface marker (enforcement fences).** A contract block
-> that only enforces another contract in this record — the
-> gate, invariant, recovery or reader a taxonomy or format
-> implies — may carry one line: `Surface — of Cn; <one
-> clause naming what it enforces>`. The fence stays labelled
-> and citable; the marker declares the dependence the split
-> test asks about (delete `Cn` and this fence has no
-> subject). A `Surface`-marked contract counts toward
-> neither the Profile contract axis nor the split signal —
-> its root is the one contract counted. The root must be a
-> labelled contract here; a marker naming none, or a cycle,
-> leaves the fence counted.
-
-- Function/method signatures and type definitions for
-  values that cross module boundaries
-- Wire-format / on-disk / serialization grammars
-- Error envelope shapes and error code enums
-- For every introduced user-facing or system-facing
-  surface, specify the I/O contract:
-  - **Success output**: silent | single value | named
-    structured format (link to grammar)
-  - **Failure output**: human-readable | structured |
-    both (give field-level shape if structured)
-  - **Status / sentinel errors**: every distinct code or
-    state with one-line user-visible meaning
-  - **Preview / dry-run / validation-only mode**: exact
-    shape; how it differs from committed success output
-  - **Environment divergence**: what changes across
-    interactive vs non-interactive, local vs remote,
-    batch vs streaming, or equivalent execution modes
-
-State each Normative item in a clearly labeled block.
-**Label every block `**C1**`, `**C2**`, … in document
-order** — the label is the contract's name for life: peers
-cite `NNNN:C2`, and it survives a heading rewrite, a split,
-or the contract moving to another RDR. Never reuse a number,
-never renumber (a deleted C2 leaves a gap). A clause labelled
-at column zero inside the fence (`L-3  …`) is cited as
-`NNNN:L-3`; keep clause labels unique across the record.
 
 **C1**
 
 ```normative
-func Check(sealed []op.Op, proposed []op.Op) Report
-type Report struct { ... }
+STEP WRITE. A rule's write block MAY assign an owned tag the inline table
+`{ step = <n> }`, `n` a non-zero TOML integer, and no other table shape:
+any other key set, a zero step, or a non-integer step (a TOML float `1.0`
+included) is refused at load under `malformed_tag_declaration` with a
+detail naming the one admitted form. The form is admitted only on a tag whose declared kind is `int` with
+both `min` and `max`, or `enum` with a non-empty `domain`; on `bool`,
+`set`, `scalar`, or an `int` missing a bound it is refused under the same
+category. `[initial]` values and predicate literals keep the literal-only
+grammar; the table shape is admitted on the write-block path alone.
+
+The loader expands a rule carrying a step write into literal rows, one per
+ADMITTED CELL of the stepped tag, composed into the rule's existing
+expansion product (`0002:C13`) as one more choice point. An admitted cell
+is a domain member — `{min..max}` for `int`, the authored `domain` order
+for `enum` — that satisfies the CONJUNCTION of every positive atom the rule
+authors on that tag, however many per block (`guard.all`
+`eq`/`in`/`lt`/`lte`/`gt`/`gte`; `match` `eq`/`in`), evaluated per member
+as the runtime evaluator would and against the atoms as already chosen in
+the expanded row — a match `in` on the stepped tag has expanded to its
+`eq` member first, so the two compose to exactly its members; `unless`
+atoms are not consulted. The authored atoms are retained; the expansion
+adds its own atom beside them. Each expanded row carries a `guard.all`
+atom `eq = <cell>` on the tag, the literal write `cell + n` (`int`) or the
+domain member `n` positions from the cell (`enum`), and the cell appended
+to its expansion suffix. A rule admitting zero cells — including a step
+whose magnitude reaches the domain's width, so that no cell has a
+successor — is refused at load; the stepped value is computed without
+overflow, and a step too large to compute admits no cell. A step write
+over a domain containing a member with the suffix separator `#` is
+refused at load.
+
+After normalization no surface distinguishes an expanded row from an
+authored literal row: `Row.Writes` holds literals only, and `0002:C4`'s
+write-replaces clause applies per row unchanged.
 ```
 
-Every external API call inside a Normative block must
-have a corresponding Critical Assumption Evidence
-Record above (Method: Source Search or Spike, with a
-greppable `path::Symbol` or command + output).
+**C2**
+
+```normative
+Surface — of C1; the refusal the expansion's conformance check implies.
+BOUND. At every admitted cell the stepped literal MUST conform to the tag's
+declaration exactly as an authored literal write does (`int` within
+`min..max`; `enum` within `domain`). A cell whose stepped value leaves the
+domain in either direction — past `max` or below `min`, past the last
+member or before the first — is a load refusal under `malformed_tag_declaration` — the category a
+non-conforming literal write already takes — whose detail names the rule,
+the tag, the cell, and the stepped value. There is no saturating and no
+wrapping form. The remedy is the author's: a positive atom excluding the
+cell, or a literal row for it; the cell it leaves unclaimed is then the
+outcome group's ordinary coverage obligation (`graph-coverage-gap`).
+```
+
+**C3**
+
+```normative
+Surface — of C1; the invariance C1's last paragraph implies on shipped
+surfaces. INVARIANCE. `flow next`, `flow resolve`, `flow set-state`,
+`lint`, `dump`, and `graph` read expanded rows through `Row.Writes` and
+`Row.Atoms` alone; none learns a computed value shape, and the graph
+document's `intrastate.graph/1` vocabulary gains no member. The
+authoring guide (`docs/model-authoring.md`) documents the form, the
+admitted kinds, the admitted-cell rule, and the bound refusal beside the
+existing write-block section; `intrastate --help-all` is regenerated. No
+emitted vocabulary — `internal/table::Categories()`, the CLIError codes,
+the finding codes, the graph document's members — gains a member, so no
+`0029:C4` stability tier is owed by this record; the suffixed identity
+`rule#cell` is the shape `in` expansion already emits.
+```
 
 #### Load-Bearing Decisions
 
-[Conditional — include only the classes this RDR
-touches; omit (don't N/A-bullet) the rest. These four
-decision classes are the ones implementation otherwise
-invents silently, so each must carry **one explicit
-answer** here when in play. This is targeted rigor on
-the churn-prone decisions, not blanket detail.]
-
-- **Identity** — what makes two of these things "the
-  same"? (the equality/dedup/merge key)
-- **Wire / byte format** — the exact layout, or
-  explicitly deferred with the named owner.
-- **Naming** — the canonical name, and the rejected
-  alternatives.
-- **Selection / predicate** — when N candidates qualify,
-  *which one* is chosen and *why*.
-
-#### Round-Trip / Inverse Invariants
-
-[Conditional — include only if this RDR introduces a
-pair of operations expected to compose to identity
-(encode/decode, serialize/parse, import/export,
-migrate/rollback, snapshot/restore, undo/redo). Omit
-otherwise.]
-
-State each invariant explicitly as `X ∘ Y = identity on
-input class Z`, and specify the equality as **byte- or
-value-for-byte fidelity** — *not* "does not error." A
-green exit code does not prove the round-trip preserved
-the input; the validation must assert the reconstructed
-value equals the original. If the pair spans two RDRs,
-also record it as a Critical Assumption with
-`Method: Peer RDR` so Stage 7.1 asserts it across the
-seam.
+- **Identity** — an expanded row's identity is the existing tuple
+  `(model id, rule id, suffix…)` with the cell appended as one more suffix
+  element in the choice-point sort order; no new identity, and a
+  single-cell expansion still appends its element (a stepped row is never
+  the authored row, so it always carries the cell — the opposite of the
+  single-member `in` rule, whose one row IS the authored row). Two step
+  points in one rule order their suffix elements by the choice-point
+  sort, as `in` atoms do; the element is the bare cell, not
+  tag-qualified, on the `in` precedent — and `#` is banned in rule ids,
+  so `retry#3` can never be an authored id.
+- **Wire / byte format** — the TOML inline table `{ step = <n> }`, exactly
+  one key. A string sentinel (`"+1"`) is rejected: `strconv.Atoi("+1")` is
+  `1`, so it already parses as a literal on an `int` tag. A bare table with
+  the reporter's `add`/`next` keys is rejected as a second spelling of one
+  operation; the detail names `step`.
+- **Naming** — `step`, one operator over both ordered kinds (a negative
+  step is the predecessor; `next = true` carried an operation in a
+  boolean and no distance; `add` reads as arithmetic and has no enum
+  meaning). The refusal category is reused, not minted: a write value's
+  kind/domain conformance already files under `malformed_tag_declaration`
+  (`renderWrites`, deviations D3 precedent), and the bound is that check
+  on the expanded literal.
+- **Selection / predicate** — which cells expand is decided by the rule's
+  own positive atoms on the tag, never by `unless`, never by other rows;
+  the cells it leaves are the group's to cover.
 
 #### Illustrative Code
 
-[Shape only — not load-bearing. Use sparingly; prose
-is usually clearer.]
+Illustrative — the ladder from the Background, both forms; tests assert
+the fixture pair the MVV names, not this excerpt.
 
-- Pseudocode showing algorithmic structure
-- Sample invocations showing user-side syntax
-- Examples of canonical-form output
+```toml
+# today: one row per attempt value, differing only in the literal
+[[rule]]
+id = "retry-2"
+[rule.match.recognized]
+eq = "transient"
+[rule.guard.all.attempt]
+eq = 2
+[rule.write]
+attempt = 3
+# … retry-0, retry-1, retry-3, retry-4 …
 
-Every example, fixture, sample input/output, numeric
-count, and platform path is either **Normative** (tests
-may assert it; cite the artifact or derivation) or
-**Illustrative** (intent only; tests must not assert it
-literally).
+# proposed: one row; the loader mints retry#0 … retry#4
+[[rule]]
+id = "retry"
+[rule.match.recognized]
+eq = "transient"
+[rule.guard.all.attempt]
+lt = 5
+[rule.write]
+attempt = { step = 1 }
 
-Do not include full class implementations,
-config/schema definitions, or code for deferred
-features. Do not annotate Verified/Assumed inside
-Illustrative blocks; the surrounding prose makes
-assumptions explicit.
+[[rule]]
+id = "escalate"
+[rule.match.recognized]
+eq = "deterministic"
+[rule.guard.all.tier]
+in = ["small", "medium"]
+[rule.write]
+tier = { step = 1 }
+attempt = 0
+```
 
-### Capability Dependencies
-
-[Conditional — required whenever a load-bearing behavior
-depends on a capability not already available (introduced
-here, by a predecessor, or deferred); omit (don't
-N/A-bullet) this whole section only if every capability
-this RDR relies on already exists. For each load-bearing
-behavior, state whether the enabling capability exists
-now, is introduced by this RDR, is provided by a
-predecessor, or is deferred.]
-
-| Needed Capability | Source | Status | Spec Impact |
-| --- | --- | --- | --- |
-| [Capability] | Existing / This RDR / Predecessor / Future | Available / Introduced / Deferred | [Impact] |
+The `retry` rule over `attempt` declared `min = 0, max = 9` admits cells
+0–4 (the `lt 5` atom), writes 1–5, and leaves cells 5–9 to the exhausted
+row; without the `lt 5` atom it admits 0–9 and cell 9 refuses at load. The
+`escalate` rule admits `small` and `medium` and leaves `large` to the
+exhausted row; `tier = { step = 1 }` with no atom would admit `large` and
+refuse.
 
 ### Existing Infrastructure Audit
 
-[Conditional — required whenever this RDR proposes a
-component that overlaps an existing module; omit (don't
-N/A-bullet) this whole section only if this RDR touches no
-existing infrastructure. List existing modules that
-overlap with proposed components. For each, state whether
-to reuse, extend, or replace, and name any known limit
-that affects the spec.]
-
 | Needed Capability | Existing Surface | Known Limit | Decision | Spec Impact |
 | --- | --- | --- | --- | --- |
-| [Capability] | [Module/path] | [Limit or none] | Reuse / Extend / Replace | [Impact] |
+| Mint one row per member with a suffixed identity | `internal/table/normalize.go::expand` | match-block `in` only, by design (`0002:C13`) | Extend | one more choice-point kind; guard atom emitted instead of match |
+| Refuse a write value outside its declaration | `internal/table/load.go::conform` / `conformDomain` | literal only | Reuse | the bound refusal is this check on the expanded literal (C2) |
+| Prove the cap cell is claimed | `internal/guard` product coverage, `graph-coverage-gap` | guard atoms only | Reuse | why the expansion emits `guard.all` (C1) |
+| Admit a write value | `internal/table/load.go::valueMembers` | no inline-table arm | Reuse, unchanged | intercepted before it on the write path only (C1) |
+| Successor per node, export, fingerprint | `reach.go::successor`, `graph_document.go::graphRows`, `engine.go::Fingerprint` | read `Row.Writes` literals | Reuse, unchanged | C3 |
+| Flag a write that moves nothing | `groups.go::checkIdempotentWrites` | `eq`-match only | Reuse, unchanged | a non-zero step never lands on its own cell |
+| Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | reached at lint, not load | Reuse (A7) | may owe a load ceiling if A7 fails |
 
 ### Decision Rationale
 
-[Why this approach over alternatives. Key factors,
-how it addresses the problem, why alternatives were
-ruled out. Closes with Stage 2's two greppable verdict
-lines — `Premortem:` and `Joint-check:` — whose absence
-means the check never ran.]
+**Q: what may a write value be?** Scored matrix — approaches × criteria;
+`+` favourable, `0` neutral, `−` unfavourable, one clause per cell.
+
+| Criterion | 1 Load-time expansion (chosen) | 2 Symbolic write to the kernel | 3 External unroll generator | 4 Expression language |
+| --- | --- | --- | --- | --- |
+| Correctness fit: bound decided declaratively | `+` bound = existing `conform` + coverage cell | `0` new guard-conditioned interval analysis, or a runtime refusal | `+` generator emits literals | `−` undecidable in general |
+| Prior-art alignment | `+` the Ragel review's option (a), made cheap | `0` option (b) without the host language | `+` option (a) by tooling | `+` every peer, and the drift they document |
+| Reversibility | `+` remove the form; expanded rows were never persisted | `−` a second value shape across ten consumers and an export member | `+` delete the tool | `−` models come to depend on it |
+| Blast radius (seams touched) | `internal/table` + docs | table, resolve, accessor, cli ×4, graphlint ×3, export, 0022/0015 | none in-repo; a new artifact | table, resolve, graphlint, export, 0003's operator model |
+| Cost | one choice-point kind in `expand`; fixtures | value shape, evaluator, lint analysis, export `/1` addition, preview semantics | a generator + a drift check | a parser and evaluator |
+| Review legibility (the user's problem) | `+` source is one row; dump shows the cells | `+` source and dump both one row | `−` the reviewed file is the unrolled one | `+` one row, opaque semantics |
+| Open-peer safety (0022, 0015 assume constant successor) | `+` unchanged | `−` both re-authored | `+` unchanged | `−` both re-authored |
+
+Row 1 and row 7 decide it. Approach 1 turns the bound question the seed
+could not state into two things that already exist — a literal conformance
+check and an uncovered coverage cell — and leaves every consumer of a
+row's writes, including the two Draft records, reading literals. Approach
+2 is the only other one that solves the user's problem without a second
+artifact, and it loses on rows 3–4: ten shipped read sites of `Row.Writes`
+(`internal/guard/lint.go::writtenKeys`, `internal/accessor/executor.go`,
+`flow_resolve.go`, `flow_next.go`, `flow_state.go`, `graph_document.go`,
+`reach.go::successor`, `engine.go::Fingerprint`,
+`groups.go::checkIdempotentWrites`, `dump.go::renderValue`) would each
+learn a computed shape, and the bound would need the analysis the scope
+review flagged. Approach 3 fails row 6, which is the problem statement.
+Approach 4 fails rows 1 and 3 and is what RDR 0002 chartered against. The
+cost Approach 1 pays is row 6's second half: the normalized dump and
+`flow next` show `retry#0 … retry#4`, not `retry` — the same view an `in`
+expansion already gives, accepted on that precedent.
+
+Profile note: the seed sized `large` on a cross-RDR lock against 0002:C4,
+0004, 0006:A10 and 0021. Under the chosen approach C4 is extended, not
+reopened, and 0004/0006/0021 read literals unchanged; Resolve recounts the
+Profile from the verified contract count.
+
+Premortem: hardened (hardened) — the draft-free critic returned PASS with
+fourteen rules the brief omitted (conjunction of atoms per key, `in`+step
+composition, lower-bound and oversize steps, float/zero steps, the
+write-block-only interception on every path, the untiered-surface class);
+each is folded into C1–C3, D-identity, A7, A8, the MVV and Failure Modes
+(`evidence/propose-premortem/critic.md`).
+
+Ground-sweep: clean (33 anchors) — 32 confirmed at source or by the
+projector, 1 cosmetic (the sweep brief, not the record, said `Identity`
+joins the model id with `#`; it is `.`, and only the suffix elements take
+`#`); no load-bearing miss (`evidence/research/ground-sweep.md`).
+
+Joint-check: fired → 0013 (home: `cli/0013 §Normative Contracts` C1).
+Arm 1: `internal/guard/declaration.go::AssignmentCount` is shared with
+0013, uncited before this line. Neither record modifies it; 0013 makes the
+enumeration limit a caller-supplied lint scope (`0013:C1`, `0013:C3`), so
+A7 cites 0013 as the owner and any load-time ceiling is 0030's own.
+
+Joint-check: fired → 0022 (home: `cli/0030 §Normative Contracts` C3).
+Arm 1: `internal/graphlint/reach.go::successor` is shared with 0022,
+cited. `0022:A1` rests on a constant literal-applied successor; C3 is
+where this record preserves it, for 0022 to cite rather than assume. Arm
+2 also intersects 0022 and 0015 on `lint` and the authoring-guide path —
+invariance claims on both sides, no shared decision.
+
+Joint-check: fired → 0012 (home: `cli/0003 §Normative Contracts` C6).
+Arm 2: the kind tokens `bool`/`enum`/`int`/`scalar`/`set` are shared with
+0012 inside both records' fences — RDR 0003's closed vocabulary, which
+neither extends.
+
+Arm 3 (absence, manual): clear — no peer fence relies on the inline-table
+refusal this record converts; 0019 names `valueMembers` for float
+rendering only. All three arms ran. Ground-before-ask resolved `apply`
+(searched=cluster, found), so the homes are recommended from the peers'
+own clauses, not asked.
 
 ## Alternatives Considered
 
-[Full analysis for seriously evaluated alternatives.
-One-sentence rejection for trivially eliminated options.]
+### Alternative 1: Symbolic step carried into the kernel
 
-[Conditional scaffold — omit (don't N/A-bullet) the
-`Alternative 1` block below if no alternative warranted
-full analysis; the `Briefly Rejected` list alone is fine.]
+The reporter's framing: `Row.Writes` gains a computed value shape (`step
+n`), `internal/resolve` computes the concrete plan value from the tag view
+at `planOf`, graphlint maps the step over each node's held values in
+`successor`, and lint gains a guard-conditioned interval check for the
+bound.
 
-### Alternative 1: [Name]
+- **Pros**: the normalized table stays one row per authored rule; the dump
+  and `flow next` name the authored rule id; no row-count growth.
+- **Cons**: a second value shape at every one of the ten `Row.Writes` read
+  sites listed in the rationale; `Fingerprint`/`literalKey` and the
+  `intrastate.graph/1` export need a spelling for it (an additive member,
+  but a consumer-visible one that RDR 0029's tier vocabulary would oblige);
+  `checkIdempotentWrites` and the 0004 read-back stay meaningful only
+  because the plan is concrete — `flow next`'s preview, which has no view,
+  cannot show a value; the bound is either the new analysis or a runtime
+  `write_out_of_domain` refusal for what is statically decidable; RDR 0022
+  and RDR 0015 are re-authored against a non-constant successor.
+- **Prior art**: the Ragel review's option (b) — "count in an action
+  variable" — minus the host language; every peer does this, and the
+  review records the cost as "the .rl is no longer the single source of
+  truth".
+- **Rejected because** the chosen approach yields the same runtime plans
+  and the same lint verdicts while leaving the analyzability seam
+  untouched; its one cost (the suffixed row view) already exists for `in`.
 
-[Conditional scaffold — this block is a per-instance slot, not a
-section every RDR owes: the heading is the author's own and the
-block is omitted (never N/A-bulleted) when unused.]
+### Alternative 2: Keep writes literal; ship an unroll generator
 
-**Description**: [Brief description]
+A tool (or `intrastate expand`) reads a compact ladder in a side format and
+writes the unrolled literal TOML.
 
-**Pros**:
+- **Pros**: zero change to the loader, the seam, or any record.
+- **Cons**: the unrolled file is what lint loads and what a reviewer diffs,
+  so the review cost the problem statement names is untouched; two files
+  for one intent drift; a side format is a second grammar.
+- **Rejected because** it solves the typing cost and not the review cost,
+  which the problem states lands twice.
 
-- [Advantage 1]
+### Alternative 3: Expression language in write values
 
-**Cons**:
+`attempt = { expr = "attempt + 1" }`, the SCXML/sismic class answer.
 
-- [Disadvantage 1]
-
-**Reason for rejection**: [Why this wasn't chosen]
+- **Pros**: unbounded expressiveness; familiar to authors of every peer
+  tool.
+- **Cons**: coverage and reachability proofs need the value set of every
+  expression — undecidable in general and out of RDR 0003's closed
+  operator model; the table stops being reviewable data (RDR 0002's
+  charter); the Ragel review names the drift: "Everything interesting about
+  this model lives in the actions, not in the regular expression".
+- **Rejected because** it is the failure mode the data-only table exists
+  to avoid, and one operator over two ordered kinds covers the reported
+  need.
 
 ### Briefly Rejected
 
-- **[Alternative N]**: [One-sentence rejection]
+- **Saturate or wrap at the bound**: a write that moves nothing is what
+  `graph-idempotent-write` already flags as a smell; silent saturation
+  hides an exhausted counter, against `0002:C3`'s "never a silent no-op".
+- **String sentinel spelling (`"+1"`, `"next"`)**: `+1` already parses as
+  the literal `1` on an `int`; `"next"` could be a legal enum member.
+- **An explicit `order = [...]` facet for enums**: a second copy of the
+  domain that can disagree with the first; authored `domain` order is
+  carried today (A2).
+- **Computed values in the next-state block (`advance`)**: out of scope;
+  the write block is the value grammar this record decides.
+- **`bool` toggle**: two literals; write the literal.
 
 ## Context
 
@@ -473,100 +695,144 @@ consumers RDR 0022 and RDR 0015.
 
 ### Investigation
 
-[What was analyzed? Code, docs, source, experiments,
-standards. Cite specific locations.]
+Prior art was read before the approaches were named; the record is at
+`0030-computed-write-value-grammar/evidence/research/prior-art.md`. The
+class read (Ragel POC review, sismic `code.rst`, SCXML `<assign>` via
+uscxml/scxmlcc) shows every peer with extended state answering "count in
+an action" with a host expression language, and the Ragel review naming
+the alternative intrastate forces today — "unroll the loop into three
+explicit states … the cap becomes hard-wired topology". The instance read
+found no peer with a data-only computed write and none deciding the bound
+declaratively, so the bound disposition rests on in-repo principle
+(`0002:C3` via the `valueMembers` comment) rather than external prior art.
+⚠ no literature coverage for analysis-time successor enumeration
+(`StateMachineLit`, one query); the choice does not rest on it. In-repo,
+the choice rests on four shipped facts: `expand` already mints suffixed
+rows per member; coverage is proved over guard atoms only; a literal write
+outside its declaration already refuses at load under
+`malformed_tag_declaration`; and `TagDecl.Domain` is carried in authored
+order.
 
 ### Key Discoveries
 
-[Label each finding's evidence basis:
-
-- **Verified** — confirmed by spike/POC/experiment
-- **Documented** — from official docs or source reading
-- **Assumed** — needs validation before implementation]
+- **Verified** — `attempt = { add = 1 }` and `tier = { next = true }`
+  refuse today as `malformed_tag_declaration: … is not a tag value`
+  (Background probe); `valueMembers` has no inline-table arm.
+- **Documented** — coverage dimensions come from `guard.all`/`guard.unless`
+  atoms only; a match atom scopes and proves nothing
+  (`docs/model-authoring.md` §Discriminate with guard atoms).
+- **Documented** — `expand` is a match-block mechanism by `0002:C13`, and
+  its comment records why a guard `in` is not expanded; a step expansion
+  emits a fresh `eq` atom per cell and never rewrites an authored guard
+  atom, so that reason does not apply to it.
+- **Documented** — `0021:C2` exports `domain` as the AUTHORED members and
+  its vocabulary is append-only; the chosen approach adds no member.
+- **Documented** — `0003:C6` refuses an unsatisfiable atom at load "rather
+  than a silently-never-matching row"; a zero-cell step rule takes the same
+  disposition.
+- **Assumed** — the admits filter, the suffix `#` guarantee, and the row
+  growth ceiling (A3, A4, A7).
 
 ## Trade-offs
 
 ### Consequences
 
-[Positive and negative consequences of the chosen
-approach.]
-
-- [Consequence 1 — positive or negative]
-- [Consequence 2 — positive or negative]
+- A ladder is one row per intent in source; the normalized view shows the
+  cells as `rule#cell` rows, as `in` expansion already does.
+- The bound is authored, not inferred: a step rule must exclude the cap
+  cell with its own positive atom (or a literal row must claim it), and an
+  unexcluded cap refuses at load with the cell named.
+- A stepped tag must be initialised: the expanded `guard.all` atom reads
+  the key, so an uninitialised counter surfaces as the existing
+  `graph-owned-before-write` finding.
+- Authored enum `domain` order acquires meaning (step order) where today
+  it has none; reordering a domain that a rule steps changes the model.
+- A guard bound and the declared `max` can drift apart: tightening `max`
+  below an admitted cell's successor refuses at load (C2); widening it
+  leaves new cells to the group's coverage proof (`graph-coverage-gap`).
+  Both are existing refusals; no advisory is minted.
+- A `step` ladder and a hand-unrolled ladder are two authorings of one
+  behaviour but not of one dump: their row identities differ (suffix vs
+  authored id). `0002:§round-trip-inverse-invariants` is not extended to
+  the pair; the MVV compares plans and findings, not dumps.
 
 ### Risks and Mitigations
 
-- **Risk**: [Description]
-  **Mitigation**: [How to address]
+- **`unless` on the stepped tag over-admits cells** → the bound refusal
+  fires and its detail names the `guard.all` complement; the authoring
+  guide already prescribes that rewrite for a needed conjunction.
+- **Wide `int` bounds multiply rows at load** (A7) → if `AssignmentCount`'s
+  ceiling is not reached before `expand`, C1 gains a load-time ceiling at
+  the same value; a Resolve outcome, not a redesign.
+- **A rule with two atoms on the stepped tag in one block** (the 0011
+  escape: the atom builder nests operators inside keys) → the admits filter
+  is defined over EVERY positive atom on the tag, not "the" atom, so two
+  atoms conjoin; the MVV fixture carries such a rule.
+- **Suffix collision via a `#` domain member** (A3) → C1 refuses the step
+  over such a domain at load.
 
 ### Failure Modes
 
-[Required — never omit. What breaks visibly? What fails
-silently? Recovery path? How does a developer diagnose
-the problem?]
+- A step write on a `scalar`, `set`, `bool`, or unbounded `int` — load
+  refusal, `malformed_tag_declaration`, detail names the admitted kinds.
+- A stepped value past `max` or past the last member at an admitted cell —
+  load refusal (C2), detail names rule, tag, cell, value.
+- A step rule admitting no cell, a step whose magnitude reaches the
+  domain width, a zero or float step — load refusal, the `0003:C6`
+  disposition for the first, C1's grammar arm for the rest.
+- A cap cell excluded by the step rule and claimed by no other row —
+  `graph-coverage-gap` at lint, the existing finding.
+- A stepped tag never initialised — `graph-owned-before-write` at lint.
 
 ## Implementation Plan
 
 ### Prerequisites
 
 - [ ] All Critical Assumptions verified
-- [ ] [Other prerequisites]
+- [ ] RDR 0002 is `Implemented` on `main` (it is); no open peer edit is
+  scheduled — the joint check below records the peers consulted.
 
 ### Minimum Viable Validation
 
-[Required — never omit. The single end-to-end proof that
-the approach works. Must be in scope — not deferred.
-State it as a stepwise scenario — numbered steps plus the
-expected end-state — so the pre-lock desk trace can walk
-it.]
+1. Author two in-repo fixtures of the Background's ladder over
+   `internal/table/testdata/rdr-fixture.toml`'s `iter`-shaped `int` tag and
+   an ordered `enum` tier: `ladder-literal.toml` (unrolled, as today) and
+   `ladder-step.toml` (`attempt = { step = 1 }`, `tier = { step = 1 }`,
+   each step rule carrying at least one row with two positive atoms on the
+   stepped tag).
+2. `intrastate lint` on both: identical finding sets, zero
+   `graph-overlap`, zero `graph-coverage-gap` (A5).
+3. `flow resolve` over every (state, outcome) cell of both: identical
+   `writes`/`next`/`clear` (A6).
+4. `ladder-step-unguarded.toml` (the `lt 5` atom removed): load refuses
+   `malformed_tag_declaration` naming `retry`, `attempt`, cell `9`, value
+   `10`; the enum sibling names `tier`, `large`. Two more refusal
+   fixtures: `[initial] attempt = { step = 1 }` and a predicate literal
+   `{ step = 1 }` both refuse — the table shape is write-block only.
+5. `graph` export of `ladder-step.toml` decodes under the shipped
+   `intrastate.graph/1` document type with no new member (C3).
 
-### Phase 1: Code Implementation
+End-state: the step ladder is the literal ladder to every consumer, and
+the unguarded cap is a named load refusal.
 
-#### Step 1: [Title]
+### Phase 1: Admit the form
 
-[Conditional scaffold]
+Intercept the inline-table shape on the write-block path, validate the
+one admitted key and the admitted kinds, and record the step point on the
+rule (C1's grammar half).
 
-[Instructions]
+### Phase 2: Expand into cells
 
-#### Step 2: [Title]
+Add the step choice point to `expand`: admitted-cell evaluation over the
+rule's positive atoms, the `guard.all` `eq` atom, the stepped literal, the
+suffix element, the zero-cell and `#`-member refusals (C1's expansion
+half), and the bound refusal through `conform` (C2).
 
-[Conditional scaffold]
+### Phase 3: Authoring surface and proof
 
-[Instructions]
-
-### Phase 2: Operational Activation
-
-[Conditional scaffold]
-
-[Deployment, CI/CD, credentials, shared infrastructure.
-Omit if not applicable.]
-
-#### Activation Step 1: [Title]
-
-[Conditional scaffold]
-
-[Instructions]
-
-### Day 2 Operations
-
-[Conditional — omit (don't N/A-bullet) this whole section
-if this RDR creates no persistent resource. For every
-persistent resource this RDR creates (collection, index,
-data store, config entry), address management operations:]
-
-| Resource | List | Info | Delete | Verify | Backup |
-| --- | --- | --- | --- | --- | --- |
-| [Resource] | In scope / Deferred / N/A | ... | ... | ... | ... |
-
-[If any operation is marked "Deferred," justify why
-it is not needed for initial usability.]
-
-### New Dependencies
-
-[Conditional — omit (don't N/A-bullet) this section if no
-dependency is added or updated. Dependencies to add/update.
-For third-party: note license and whether legal review is
-required.]
+Document the form beside the write-block section of the authoring guide,
+regenerate the help, land the MVV fixture pair and the refusal fixtures,
+and assert C3's invariance on the export and the CLI previews.
 
 ## Validation
 
@@ -713,7 +979,21 @@ matrix/provenance prose left from the template or Seed
 
 ## References
 
-- [Requirements/standards with section numbers]
-- [Dependency docs, source paths reviewed]
-- [Dependency repos searched (clone + code search)]
-- [Related issues, articles, discussions]
+- RDR 0002 `0002:C4` (write replaces), `0002:C13` (match-block expansion),
+  `0002:C17` (`#` ban scope), `0002:C22`/`0002:C24` (declaration keys and
+  load categories); RDR 0003 `0003:C3`/`0003:C6` (finite domains, load-time
+  refusal of an unsatisfiable atom); RDR 0012 `0012:C2` (typed comparison);
+  RDR 0021 `0021:C2` (export vocabulary, authored `domain`).
+- `internal/table/load.go::valueMembers`, `::conform`, `::conformDomain`,
+  `::tagDecl`; `internal/table/normalize.go::renderWrites`, `::expand`;
+  `internal/table/model.go::Identity`; `internal/graphlint/reach.go::
+  successor`, `engine.go::Fingerprint`, `groups.go::checkIdempotentWrites`;
+  `internal/cli/graph_document.go::graphRows`;
+  `internal/guard/declaration.go::AssignmentCount`.
+- `docs/model-authoring.md` §Discriminate with guard atoms, §Guard and
+  match atoms, §Rules advance the state.
+- Prior art: `../state-machines/contrast/poc-rdr-ragel/REVIEW.md`
+  §Faithfulness; `../state-machines/study/sismic/docs/code.rst`;
+  `../state-machines/MODEL-transition.md` §3a; scxmlcc user manual §Assign.
+  Record: `0030-computed-write-value-grammar/evidence/research/prior-art.md`.
+- Related issue: intrastate#jwgr.

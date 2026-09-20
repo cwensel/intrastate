@@ -387,6 +387,12 @@ dependencies on the closed 0003 surface (no peer modifies them, and
 this RDR does not either); 0012 modifies `grammar.go::Evaluator` /
 `valueSatisfies`, disjoint from this seam's entries.
 
+Joint-check: fired → 0030 (home: `cli/0013 §Normative Contracts` C1).
+Context: 0030 (Draft) cites `internal/guard/declaration.go::AssignmentCount`
+and rests its A7 on the enumeration limit being this record's
+caller-supplied lint scope, not a load-time bound; neither record modifies
+the symbol. Recorded symmetrically by 0030's propose, 2026-09-19.
+
 ## Alternatives Considered
 
 ### Alternative 1: Exported production observation API
