@@ -34,3 +34,13 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
   C2's parsed-comparison leg. Q2 may re-scope the Problem Statement. Q3 asks whether
   JDR 0004's JD-1/JD-2/JD-3 land. Hard stop — a delegated run may not approve fixtures.
   Resume: `/rdr-resolve 0012` once `evidence/rulings.md` carries the rulings.
+  - §strong-consult run once at the bound ceiling (`claude-fable-5-1`; Profile
+    foundational, `status_form=none` so no prior `consult: strong`). ADVISORY only —
+    it did not close the fork. Its verdict: Q1 → (a) canonicalize int literals at
+    load, retire A4's proxy claim (it argues lint and runtime move together, so the
+    measured flip is the correct verdict for the new runtime, not a hidden defect);
+    Q2 → both edits, owned-reader ingress is the primary door, build the arm;
+    Q3 → confirm JD-1/JD-2, confirm JD-3's substance but hold its form (dependency
+    note, not a present site in fenced C4). Notes F1's expectation and F3's role
+    both change under (a). Bottom line: approach stands, lockable after three edits.
+    Relayed to the user 2026-09-20; the six items remain unruled.
