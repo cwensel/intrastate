@@ -163,8 +163,7 @@ value onto a single-valued tag, which is what 0004's equality read-back and
 0006's single-valued-state invariant rest on. That is the semantics of
 *application*. The grammar of the write *value* is not addressed by any
 record; the refusal in `valueMembers` is the absence of a decision, not a
-decision. The record still owes an explicit Overrides statement to keep the
-two apart.
+decision. The **Overrides** field above keeps the two apart.
 
 ## Critical Assumptions
 
@@ -189,17 +188,17 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     members"; no `sort` over `TagDecl.Domain` in `internal/table`.
   - **If wrong**: `step` on an enum has no stable order and needs an
     explicit ordering facet, widening the declaration model RDR 0003 owns.
-- **A3 Every string that reaches a row's expansion suffix is `#`-free at
-  load, and an enum domain member is NOT among the strings that guarantee
-  covers today.**
+- **A3 An enum domain member is NOT among the strings today's `#` ban
+  covers, so a member carrying `#` can reach a row's expansion suffix
+  unless this record refuses it.**
   - **Status**: Pending
   - **Method**: Source Search
   - **Evidence**: `internal/table/model.go::Identity` ("Every string that
     can reach here has `#` banned at load"); `0002:C17` scopes the `#` ban
-    to match-block `in` members.
-  - **If wrong** (a member with `#` can reach the suffix): two expanded
-    rows collide on one identity — C1's refusal of a `step` over a domain
-    with a `#` member is the required guard, not an optional one.
+    to match-block `in` members, which a domain member is not.
+  - **If wrong** (the ban already covers domain members): C1's refusal of
+    a `step` over a domain with a `#` member is redundant with an existing
+    load check and drops to a restatement, not a new guard.
 - **A4 The per-cell admits filter is decidable at load with the same
   comparison the runtime guard evaluator uses, for `eq`/`in`/`lt`/`lte`/
   `gt`/`gte` on `int` and `eq`/`in` on `enum`.**
@@ -289,11 +288,10 @@ application semantics C4 states.
 
 The write value enters at `renderWrites`, which today hands every value to
 `internal/table/load.go::valueMembers`; a TOML inline table has no arm
-there and is refused as `malformed_tag_declaration` (the current behaviour
-the Background confirmed). The design intercepts the table shape on the
-**write-block path only** — `[initial]` values and predicate literals keep
-the literal-only grammar; `valueMembers` itself is unchanged, since the
-interception precedes the call. A rule with a
+there and is refused as `malformed_tag_declaration`. The design intercepts
+the table shape on the **write-block path only** — `[initial]` values and
+predicate literals keep the literal-only grammar; `valueMembers` itself is
+unchanged, since the interception precedes the call. A rule with a
 `step` write is recorded as a **step point** on the rule, and `expand`
 treats it as one more choice point in its Cartesian product: the members
 are the tag's admitted cells, the emitted atom is `guard.all` `eq =
@@ -322,9 +320,8 @@ new analysis: "guard it below the cap" makes the rule admit only cells
 whose successor exists, and the cell at the cap is then an ordinary
 uncovered cell in the outcome group's product, which the existing coverage
 proof reports as `graph-coverage-gap` unless another row (the exhausted
-row) claims it. The scope review's worry — that the bound check is a new
-guard-conditioned interval analysis — dissolves because the interval is
-enumerated, not analysed.
+row) claims it. The bound is not a guard-conditioned interval analysis
+because the interval is enumerated, not analysed.
 
 **Why guard atoms, not match atoms.** "A **match** atom *scopes* the row
 group … and contributes **no dimension** to the product lint proves
@@ -493,7 +490,7 @@ refuse.
 | Admit a write value | `internal/table/load.go::valueMembers` | no inline-table arm | Reuse, unchanged | intercepted before it on the write path only (C1) |
 | Successor per node, export, fingerprint | `reach.go::successor`, `graph_document.go::graphRows`, `engine.go::Fingerprint` | read `Row.Writes` literals | Reuse, unchanged | C3 |
 | Flag a write that moves nothing | `groups.go::checkIdempotentWrites` | `eq`-match only | Reuse, unchanged | a non-zero step never lands on its own cell |
-| Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | reached at lint, not load | Reuse (A7) | may owe a load ceiling if A7 fails |
+| Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | a lint analysis scope (`0013:C1`), unreachable from load | Not reusable (A7) | none unless A7 fails, and then a load ceiling this record decides |
 
 ### Decision Rationale
 
@@ -520,8 +517,8 @@ artifact, and it loses on rows 3–4: ten shipped read sites of `Row.Writes`
 `flow_resolve.go`, `flow_next.go`, `flow_state.go`, `graph_document.go`,
 `reach.go::successor`, `engine.go::Fingerprint`,
 `groups.go::checkIdempotentWrites`, `dump.go::renderValue`) would each
-learn a computed shape, and the bound would need the analysis the scope
-review flagged. Approach 3 fails row 6, which is the problem statement.
+learn a computed shape, and the bound would need a guard-conditioned
+interval analysis. Approach 3 fails row 6, which is the problem statement.
 Approach 4 fails rows 1 and 3 and is what RDR 0002 chartered against. The
 cost Approach 1 pays is row 6's second half: the normalized dump and
 `flow next` show `retry#0 … retry#4`, not `retry` — the same view an `in`
@@ -641,9 +638,9 @@ Raised as a model-authoring complaint from a real ladder: a retry/escalation
 table whose whole intent is "increment the attempt while it is under the cap;
 on a deterministic failure step the tier small → medium → large" had to be
 unrolled into rows differing only in the literal next value — transient-retry
-rows, one deterministic row per (tier, attempt) cell, and exhausted rows. The
-reporter's estimate was roughly a 24-row table collapsing to 8 with both
-forms, or 10 with the integer form alone.
+rows, one deterministic row per (tier, attempt) cell, and exhausted rows. That
+ladder is roughly 24 rows unrolled, against 8 with both step forms or 10 with
+the integer form alone.
 
 In this repo today, `attempt = 1` is accepted; `attempt = { add = 1 }` and
 `tier = { next = true }` are both refused `malformed_tag_declaration: … is
@@ -713,8 +710,8 @@ order.
 - **Documented** — `0003:C6` refuses an unsatisfiable atom at load "rather
   than a silently-never-matching row"; a zero-cell step rule takes the same
   disposition.
-- **Assumed** — the admits filter, the suffix `#` guarantee, and the row
-  growth ceiling (A3, A4, A7).
+- **Assumed** — the reach of today's `#` ban over domain members, the
+  admits filter, and the row growth ceiling (A3, A4, A7).
 
 ## Trade-offs
 
@@ -744,9 +741,11 @@ order.
 - **`unless` on the stepped tag over-admits cells** → the bound refusal
   fires and its detail names the `guard.all` complement; the authoring
   guide already prescribes that rewrite for a needed conjunction.
-- **Wide `int` bounds multiply rows at load** (A7) → if `AssignmentCount`'s
-  ceiling is not reached before `expand`, C1 gains a load-time ceiling at
-  the same value; a Resolve outcome, not a redesign.
+- **Wide `int` bounds multiply rows at load** (A7) → if the spike shows a
+  declared domain whose expansion is too wide to load, C1 gains a
+  load-time ceiling of its own, at a value this record picks; 0013's lint
+  scope cannot serve, since it is not reachable from load. A Resolve
+  outcome, not a redesign.
 - **A rule with two atoms on the stepped tag in one block** (the 0011
   escape: the atom builder nests operators inside keys) → the admits filter
   is defined over EVERY positive atom on the tag, not "the" atom, so two
