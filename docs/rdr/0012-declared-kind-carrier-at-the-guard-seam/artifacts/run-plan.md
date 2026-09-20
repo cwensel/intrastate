@@ -29,11 +29,25 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
 | prelock cove | PASS | no | Converged in 2 iterations, 16 findings all fixed. REFUTED a Key Discovery: graphlint's reachability already runs MATCH atoms through the guard seam, so "shared for guard atoms only" was false — design survives (C5 makes the divergence unauthorable) but the stated reason was wrong. C5's venue re-pinned to "the ingress that admits them". Commits d652204, e77f86f. |
 | prelock 3amigo | PASS | no | Converged in 2 iterations, 27 findings. **C5 NARROWED** from the shared `conformKind` int arm to the predicate ingress (`normalize.go::(*loader).atom`) — the wider rule was refuted by two BOUNDARY-marked tests passing on main (RDR 0024 REQ-7/REQ-9). CLI + `[emit]`/`[initial]`/`[rule.write]` now OUT of scope; CLI int canonicality charted to a successor. A4 flipped Verified->Pending (basis changed); new Pending A6 (installed base of persisted owned values unmeasured). Commits 08919f4, ccd2c99. |
 | prelock critique | PASS | no | Dual-model (opus-5 + fable-5, third-model barrier diff), 2 iterations, 23 findings. **REVERSED a Verified Key Discovery**: canonicalization does NOT close the divergence — graphlint reaches held values via `heldValues`->`canonicalValues` with no int round-trip, fed by `[initial]`/`[rule.write]` cells `conformKind` admits as `"007"`. Reopens the `matchlit` shape. C4 gained a consumption obligation (two-valued collapse at consumers would have made lint green on this RDR's own defects). Commits ab4aefa, 6198deb. |
+| prelock repeatability | PASS | no | Full x3 (three distinct models) + diff + one delta re-run; 18 findings. Grounding INVERTED three findings that would have contradicted shipped code (GuardResult iota order, False/Unevaluable precedence, exists-panic). Delta re-run caught a real compile error in C3's own migration line (Go func types are return-invariant). New Pending A7. Commits 2003b0c, 0355143. |
+| **CASCADE STOPPED** | — | — | Lens row complete (`lens-foundational-row-complete`); router names `/rdr-reconcile`. Stopped BEFORE reconcile by orchestrator decision: A4 carries an open design choice critique declined to collapse, and it is downstream of the user's Q1 ruling. Reconcile would have to pick (i) or (ii). Not this skill's call. |
 | resolve | NEEDS_DECISION | yes | A1/A2/A3/A5 Verified against source; A4 REFUTED on its literal side (authored `n eq "00"` flips lint blocking→clean) and on its malformed leg (`--tag` conforms upstream, so the seam is never reached). Profile latched `foundational` (1 durable C1; C2/C3/C4 marked `Surface — of C1`). Evidence-body authored; Performance Expectations omitted per template. 3 questions + 3 fixtures put to the author in `evidence/author-round.md`; delegated run, so the round is not self-approved. Commits 60a3954, ca709d9. |
 
 Re-ask after resolve (2026-09-20): profile `foundational` unchanged; lens row
 `cove,3amigo,critique,repeatability` unchanged (rule `lens-foundational-cove`);
 posture unchanged. Plan line above still current — no rewrite owed.
+
+## Three Pending assumptions carried to reconcile
+
+- **A4** — held-side int canonicality via the second graphlint path. Carries the
+  open design choice below.
+- **A6** — installed-base census for silent verdict flips (gate-blocking).
+- **A7** — NEW (repeatability): widening graphlint's atom check to three-valued
+  changes no verdict for already-decided atoms. The stage flagged this as the one
+  it would not let ship unverified: the two callers read the current bool with
+  OPPOSITE polarity, so a sign error SUPPRESSES a finding rather than producing a
+  wrong one — invisible to a corpus diff over firing findings. Verification must
+  look for findings LOST as well as gained.
 
 ## OPEN DESIGN CHOICE — A4, for the user (critique declined to collapse it)
 
