@@ -253,7 +253,13 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   stepped tag is not consulted by the admits filter (C1), so it can
   over-admit an interior cell — but the retained `unless` empties that
   row's accepted set, so the row is dead rather than overlapping and lints
-  advisory `graph-redundant-row`, never blocking `graph-overlap`.**
+  advisory `graph-redundant-row`, never blocking `graph-overlap`. That
+  advisory has a precondition: `checkRedundantRows` emits only where a
+  same-group, same-`Kind()` sibling is projectable and properly contains
+  the dead row's accepted set, so it is the rows AROUND the dead one that
+  make it visible. Where no sibling claims the cell, the dead row draws no
+  advisory and the cell surfaces as a blocking `graph-coverage-gap`
+  instead — a louder signal, not a missing one.**
   - **Status**: Pending — resolves at the MVV; the form is unimplemented, so
     the pair cannot be run before Phase 2.
   - **Method**: MVV Test
@@ -330,8 +336,14 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     that names a RULE publishes `rule` (`flow_next.go`, `flow_resolve.go`,
     and the graph document's edge). The published vocabulary agrees —
     `0005:C1` says "matched rule identity", `docs/cli-output-contract.md`
-    says "a candidate is a rule". So no rendering surface is owed; C3 states
-    the split.
+    says "a candidate is a rule". So no rendering surface among the three
+    this assumption surveyed is owed; C3 states the split.
+    A FOURTH surface this assumption did not survey does owe one: a
+    graph-lint finding names a ROW and publishes the bare id, so it sits
+    on the wrong side of the same split. A15 carries it and C3's lint
+    paragraph states it; it is a finding-payload change inside
+    `internal/graphlint`, reaching neither the `resolve.Plan` seam nor the
+    graph edge vocabulary, so the narrowing above is unaffected.
   - **If wrong** (as verified, and dispositioned): the narrowed claim is what
     C3 now carries — the dump/graph precedent only. Were the flow verbs
     instead owed the suffix, it would widen the `resolve.Plan` seam RDR
@@ -457,6 +469,29 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   - **If wrong**: the pair cannot be refused at load, and C1 must instead
     DEFINE the interaction (clear wins, or step wins) rather than reject
     it.
+
+- **A15 A per-row graph-lint finding can carry the expanded row's
+  suffixed identity in its `Rule` and `Element` slots without disturbing
+  the group-level findings, any finding code, or any in-package consumer
+  that reads those slots back.**
+  - **Status**: Pending — the obligation is new at this pre-lock pass.
+  - **Method**: Source Search
+  - **Evidence**: every per-row site sets `Rule: row.RuleID`
+    (`internal/graphlint/groups.go`, `analysis.go`, `coverage.go`); the
+    package calls `Row.Identity()` nowhere outside tests. Verify that
+    those per-row sites all hold the `Row` (not just its id) at the point
+    of construction, so the suffixed form is reachable without threading
+    new state, and that the group-level sites using `firstRuleID` are
+    disjoint from them. **And enumerate every READ-BACK of those slots**,
+    not only the writes: `coverage.go::groupHasOverlap` joins an emitted
+    finding's `Rule` and `Element` against `ruleIDsOf(g)`'s bare ids to
+    gate the `ambiguous_match` coverage arm, so it must move to a key the
+    suffix does not carry (the row's `Span`, or the authored id recovered
+    from the suffixed form). The search is for consumers of the field, not
+    just producers — the producer census is the half that misses this.
+  - **If wrong**: C3's lint paragraph cannot be satisfied by a payload
+    change alone, and the attribution gap is either carried as a disclosed
+    consequence or routed to a successor record.
 
 ## Proposed Solution
 
@@ -674,9 +709,12 @@ frozen operator vocabulary, `exists` is decided in the kernel and never
 reaches this seam, `contains` is `set`-only and excluded here, and `eq`
 and `in` are total over a declared domain member — so the rule is a
 soundness fence, not a live branch. It is written to exclude rather than
-admit because the two directions fail differently at LOAD: excluding
-leaves the cell to the outcome group's ordinary `graph-coverage-gap`,
-which is visible, non-blocking and actionable, whereas admitting mints a
+admit because the two directions fail at different STAGES, and the later
+one fails better: excluding
+leaves the cell to the outcome group's ordinary `graph-coverage-gap` —
+BLOCKING (`internal/graphlint/taxonomy.go::blockingCodes`), and that is
+the point: it is a named cell in a named group, loud at lint and cleared
+by claiming the cell. Admitting instead mints a
 row the author did not ask for and lets C2's bound report "I cannot tell"
 as "your model is broken". The authored atoms are retained — except a
 subsumed match `in` on the stepped tag, which is rewritten to `eq` per row
@@ -726,8 +764,15 @@ silently drop the stepped key from the kernel's owned-state gate. The spec
 itself rides alongside as one more per-key record, since
 `::renderWrites` returns `([]TagValue, []string, error)` and
 `::expand` takes `writes []TagValue`, neither of which can carry a
-non-literal today — widening that pair is the one signature change this
-clause implies.
+non-literal today — widening that pair is one of the TWO signature
+changes this clause implies. The second follows from where the admits
+filter runs: it is a conjunction over the rule's merged predicate set,
+`::renderWrites` does not receive that set today
+(`::normalizeRule` assembles `predicates` one line above the call and
+hands it only to `::expand`), and the filter needs the `TagDecl` only
+`renderWrites` holds. So `renderWrites` takes the merged predicates as a
+parameter. Both widenings are local to `normalize.go` and neither adds a
+site.
 
 The per-cell stepped literal is the row's rendered assignment for that
 key, so it lands in BOTH carriers the assignment feeds: `Row.Writes` and
@@ -768,8 +813,11 @@ offset off the end instead (`1 past the last member`, `2 before the first`),
 and on the checked-add arm (A13) there is no representable literal either,
 so the slot names the bound it passed. All four parts ride the refusal's
 `Detail` STRING: `internal/table/category.go::Failure` carries
-`Category`, `Detail`, `Offending` and `Rule` and no per-part fields, and
-this record adds none — `Failure.Rule` is a direction identifier
+`Category`, `Detail`, `Offending`, `Remedy`, `Rule` and `Line`, and no
+field among them decomposes a bound failure — `Offending` and `Remedy` are
+`0008:C3`'s declaration-name pair, declared for `reserved_tag_key` and
+populated at its two sites alone. This record adds none — `Failure.Rule`
+is a direction identifier
 (`RuleKernelOwned` / `RuleAuthorMustRename`) that
 `internal/cli/flow_input.go` gates a rename hint on, so populating it with
 a rule id would publish that hint on the wire. Tests therefore assert the
@@ -815,15 +863,26 @@ learns a computed value shape; the graph
 document's `intrastate.graph/1` vocabulary gains no member. The
 authoring guide (`docs/model-authoring.md`) documents the form, the
 admitted kinds, the admitted-cell rule, and the bound refusal beside the
-existing write-block section — and, because neither is inferable from the
-form, the two hazards this record creates for an author: that an authored
+existing write-block section — and, because none is inferable from the
+form, the four hazards this record creates for an author: that an authored
 `enum` `domain`'s ORDER is the step order, so reordering a stepped
 domain changes the model with no lint to catch it; that `unless`
 never excludes a cell from a step, so the exclusion must be a positive
-atom; and that on an `enum` the only atom that can exclude the terminal
+atom; that on an `enum` the only atom that can exclude the terminal
 member is an `in` re-listing the domain minus that member — the first
 thing an author stepping a tier hits, and the residual §consequences
-records. `intrastate --help-all` is regenerated. No
+records; and that the cell count is the LINT cost, not the load cost —
+an `int` step whose atoms admit a few hundred cells loads in
+milliseconds and pushes `lint` past the point it can finish (A7,
+§Performance Expectations). There is NO in-band signal in that band: the
+A7 spike records exit 0 with an empty findings list at every size that
+completed and no verdict at all past it, and neither bound that would
+degrade the verdict — the 2048 product bound, the 4096 node ceiling —
+trips between a few hundred cells and those limits. What the author sees
+is `lint` not returning. The guide says exactly that, and names the shape
+of the cliff — it is the admitted-cell count, not the declared `min..max`
+width, that drives it, so narrowing the rule's atoms is the fix —
+because a hang names no cause and the author has nothing else to go on. `intrastate --help-all` is regenerated. No
 emitted vocabulary — `internal/table::Categories()`, the CLIError codes,
 the finding codes, the graph document's members — gains a member, so no
 `0029:C4` stability tier is owed by this record. Every surface that names a
@@ -834,6 +893,49 @@ authored rule id (`flow next`'s and `flow resolve`'s `rule`, the graph
 document's edge `rule`). That split is the existing design, not a gap: a
 flow payload names the rule it matched, so this record mints no obligation
 on it.
+
+`lint` is the THIRD position, and it is a gap this record closes rather
+than inherits. A per-row finding carries `Rule` from `row.RuleID`
+(`internal/graphlint/groups.go`, `analysis.go`, `coverage.go` — every
+per-row site; the package has no `Row.Identity()` caller outside tests),
+so N expanded rows of one authored rule emit N findings all reading
+`rule: "retry"`, where the unrolled ladder named `retry-3`. That inverts
+this record's own legibility claim exactly on the surface a reviewer uses
+to find the bad cell. A per-row graph-lint finding on an EXPANDED row
+therefore publishes the suffixed identity `rule#cell`, not the bare
+authored id: lint names a ROW, because its subject is a row. That covers
+BOTH row-naming slots — `Rule`, and the `Element` slot the two findings
+that name a SECOND row populate (`graph-overlap`'s `Element:
+right.RuleID`, `graph-redundant-row`'s `Element: rows[j].RuleID`). A
+finding may not suffix one slot and not the other: a record reading
+`rule: "retry#3", element: "retry"` names one row two ways. The
+group-level findings that name a group rather than a row
+(`coverage.go`'s `firstRuleID` sites) are unchanged — they name no row and
+gain no suffix.
+
+**The suffixed form is a rendering, and the JOIN KEY stays bare.**
+`internal/graphlint/coverage.go::groupHasOverlap` reads an ALREADY-EMITTED
+`graph-overlap` finding back and matches its `Rule` and `Element` against
+`ruleIDsOf(g)` — bare `row.RuleID`s — to decide whether the group's
+`ambiguous_match` coverage arm is reachable; a failed match skips that arm
+as vacuously closed. So suffixing the published field without addressing
+the read-back would turn a real coverage obligation into a silent pass,
+which is a worse defect than the one this paragraph fixes. The suffix is
+therefore applied at EMISSION and the in-package read-back joins on a key
+that does not carry it — the row's `Span`
+(`model:rule`, unchanged by expansion) or the authored id recovered from
+the suffixed form. No in-package consumer may resolve a per-row finding's
+`Rule` against authored `[[rules]]` ids by equality. Stating this is part
+of the clause, not an implementation note: the field's published meaning
+narrows from "the authored rule id" to "the row's identity", and
+`docs/cli-output-contract.md` describes `rule` as graph-lint attribution,
+so an out-of-repo consumer joining on it is affected in the same way and
+`span` is the stable key it should use.
+
+This is a finding-payload change with no new finding code
+and no new vocabulary member, so the paragraph above stands; `0030:S11`
+pins it — both slots, and the `ambiguous_match` arm's survival — and A15
+carries the verification.
 ```
 
 #### Mini-check tables
@@ -852,6 +954,7 @@ is canonical. Cue: three sibling arms already make this call.
 | The UNDECIDED verdict's disposition | each caller, at its own call site | — | `guard` passes through; `graphlint` admits (`!= GuardFalse`, false-green); loader EXCLUDES (C1) | all three | none — deliberately per-caller; C1 owns the loader's |
 | Set-literal rendering for `in` | `renderSetLiteral`'s canonicalizing form, carried into the shim | loader, `graphlint` | `assignment.go::renderSet` (as-authored) vs `reach.go::renderSetLiteral` (sorted/compacted) | two | the canonicalizing one (`0003` set-literal clause) |
 | A row's written value, per carrier | `expand`'s per-cell loop | `Fingerprint`, `graph`, `flow next`, `guard` lint, `dump` | `Row.Writes` AND `Row.NextTags` (`0002:C15`) | two independent fields | neither — C1 requires BOTH be set per row |
+| How a graph-lint finding NAMES a row | the emitting site, per finding (C3's lint clause) | a reviewer reading `lint --as json`; `coverage.go::groupHasOverlap`, which reads emitted findings back | `Rule` and `Element` on the per-row findings; `firstRuleID` on the group-level ones | published field vs join key — the SAME field served both before this record | split deliberately: the published form is the suffixed identity, the in-package join key is `Span` (or the recovered authored id). One field, two readers, and only the rendering moves |
 
 **`oracle`** — each MVV row, what makes it fail, and its negative control.
 
@@ -864,6 +967,8 @@ is canonical. Cue: three sibling arms already make this call.
 | 6 graph decode | a new vocabulary member fails the shipped document type | — (decode is itself the discriminator) |
 | 7 non-first expanded row | asserts `rule` is the AUTHORED id, so a suffix leaking into `rule` fails | the first expanded row, which would pass trivially |
 | 7 source legibility (rule count) | a stepped ladder still needing one rule per cell has a rule count equal to the literal ladder's | `ladder-literal.toml`'s own count, which must be strictly greater |
+| 2 lint attribution (S11) | a finding naming the authored rule instead of the cell is indistinguishable from a correct one under item 2's projection, which drops `rule` | the group-level finding, which must still read the BARE id — so a blanket suffixing fails too |
+| 2 `ambiguous_match` survival (S11c) | suffixing the published field breaks `groupHasOverlap`'s bare-id join and the arm is skipped as vacuously closed — every other assertion still passes | the same fixture before the suffix change, where the arm fires |
 
 **`fidelity`** — the literal↔step pair and the graph export.
 
@@ -1295,6 +1400,15 @@ order.
   authored `enum` domain would close it and is out of scope here (the
   grammar is a frozen vocabulary this record does not reopen); it is the
   natural successor if the residual proves to hurt.
+  The failure this residual produces is worth stating exactly, because it
+  is neither of the two things it looks like: appending `critical` to a
+  domain whose step rule carries `in = ["small","medium"]` does NOT refuse
+  at load (the `in` still admits only the cells it names, so no stepped
+  value leaves the domain) and does NOT silently widen the ladder (no cell
+  steps into `critical`). The ladder keeps stopping at `large`, and the
+  new member surfaces as a BLOCKING `graph-coverage-gap` at lint — a cell
+  claimed by nobody. So the signal is loud and it names the right tag; what
+  it does not name is the `in` list in a rule the author never opened.
 - A stepped tag must be initialised: the expanded `guard.all` atom reads
   the key, so an uninitialised counter surfaces as the existing
   `graph-owned-before-write` finding.
@@ -1311,6 +1425,15 @@ order.
   a finding carries the row identity too (`rule`, `span`, `fingerprint`),
   the finding comparison is over S1's projection, which drops exactly
   those fields.
+  That comparison is a TEST oracle, not a product surface: an author
+  converting a hand-unrolled ladder to step form has no supported way to
+  confirm the conversion was faithful, and the motivating journey in the
+  Problem Statement is exactly that conversion. Accepted, not closed —
+  shipping an equivalence checker is a verb, and this record mints none.
+  The mitigation available today is `flow resolve --plan-only` swept over
+  the cells (what S2 automates), which an author can run against both
+  authorings by hand. A `dump`-diff or an equivalence mode is the natural
+  successor if conversions prove common.
 
 ### Risks and Mitigations
 
@@ -1394,7 +1517,12 @@ order.
    stepped tag).
 2. `intrastate lint` on both: identical finding sets under S1's
    `(code, key, dimension, class, reason)` projection, zero
-   `graph-overlap`, zero `graph-coverage-gap` (A5).
+   `graph-overlap`, zero `graph-coverage-gap` (A5). Plus the half that
+   projection cannot see: a per-row finding on the stepped ladder names
+   the offending CELL (`retry#3`), not the bare rule (S11, A15).
+   Item 2's set comparison and this assertion are complementary — the
+   first proves the expansion is invisible, the second proves the
+   remaining visible difference points at the right row.
 3. `flow resolve` over every (state, outcome) cell of both: identical
    `writes`/`next`/`clear` (A6).
 4. `ladder-step-unguarded.toml` (the `lt 5` atom removed): load refuses
@@ -1404,10 +1532,15 @@ order.
    `malformed_initial_declaration` and a predicate literal
    `{ step = 1 }` refuses `malformed_predicate_atom` — the table shape is
    write-block only, and each path keeps its own category.
-5. A stepped rule with `unless` on the stepped tag excluding an interior
-   cell a literal row claims: loads, and lints advisory
-   `graph-redundant-row` with zero `graph-overlap` — the dead-row
-   outcome, and A5's negative control.
+5. The dead-row outcome and A5's negative control, which take TWO
+   fixtures rather than one (S5b, S5c): (a) a stepped rule with `unless`
+   on the stepped tag excluding an interior cell a literal row claims —
+   loads, and lints exactly one advisory `graph-redundant-row`; (b) the
+   same exclusion written with a POSITIVE atom pair instead, where every
+   row projects — zero `graph-overlap`. The zero-overlap assertion is
+   vacuous on (a), because an `unless`-carrying row can fall to the
+   scoped-product path and be skipped undecided, so it would hold
+   whatever the expansion did.
 6. `graph` export of `ladder-step.toml` decodes under the shipped
    `intrastate.graph/1` document type with no new member (C3).
 7. Source legibility, the outcome the Problem Statement names: the
@@ -1483,6 +1616,22 @@ rule's positive atoms, the `guard.all` `eq` atom, the stepped literal, the
 suffix element, the zero-cell and `#`-member refusals (C1's expansion
 half), and the bound refusal through `conform` (C2).
 
+That work splits across two existing sites, because `expand` cannot do it
+alone: it is a package-level function
+(`expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row`)
+with no `*loader` receiver and so no reach to the `TagDecl` every one of
+those steps needs. The declaration-dependent half — admitted-cell
+evaluation, the `int` width check, the per-cell stepped literal and its
+`conform` bound check, the `#`-member and duplicate guards — stays in
+`renderWrites`, the `*loader` method that already holds the decl and
+already calls `conform` on authored write values. It resolves the step
+spec into the per-key cell list and the literal each cell writes, and
+hands `expand` a widened per-key record. `expand` then does only what it
+does for `in` today: take a list of members per key and mint one row per
+combination, carrying the supplied literal and appending the suffix
+element. No new state is threaded through `expand`'s signature beyond
+that widened record, and the phase adds no fourth site.
+
 ### Phase 3: Authoring surface and proof
 
 Document the form beside the write-block section of the authoring guide,
@@ -1507,7 +1656,9 @@ new envelope member.
    **Expected**: identical finding sets compared as sets over the
    PROJECTION `(code, key, dimension, class, reason)` of each `findings[]`
    entry — not over whole finding objects. The row-naming fields differ by
-   construction and are excluded: `rule` (`retry` vs `retry-2`), `span`
+   construction and are excluded: `rule` (`retry#2` vs `retry-2` — both
+   sides name their own row, by C3's lint clause; S11 is what pins that,
+   and this projection is blind to it by design), `span`
    (different source locators), `element`, and `fingerprint` (which hashes
    every atom, and a step row retains the authored `lt 5` beside its
    generated `eq`). `model` is normalized as before. The projection is
@@ -1636,6 +1787,11 @@ new envelope member.
    is skipped, so zero overlap would hold whatever the expansion did. The
    scenario therefore asserts the projectability precondition explicitly,
    and A5's no-new-overlap control is 5c below rather than this row.
+   What an authored ladder that does NOT project gets instead is the
+   unclaimed-cell arm: no advisory, and the cell surfaces as a blocking
+   `graph-coverage-gap` wherever no sibling claims it. That is A5's
+   scoping, not a gap in it — the advisory is a convenience over the
+   blocking finding, never a substitute for it.
 5c. **Scenario**: overlap control. A step rule whose interior cell is
    excluded by a POSITIVE atom pair (`gt`/`lt`) rather than by `unless`,
    with a literal row claiming that cell — every row projects whole, so
@@ -1684,9 +1840,14 @@ new envelope member.
    even at one cell; (b) publishes `retry#0 … retry#4` on those same
    surfaces; (c) mints NO suffix element, as
    `normalize.go::expand`'s `suffixed := expanding && len(members) > 1`
-   does today. Pins C1's always-append fence and C3's row-identity split,
-   which S1 cannot reach (it drops `rule`/`element`/`fingerprint` by
-   construction) and S6 does not assert.
+   does today. (d) a rule carrying a step on `attempt` AND an unsubsumed
+   `match in` on `mode`, which publishes `retry#<attempt>#<mode>` — the
+   suffix elements ordered by KEY, not by point kind. Without (d) nothing
+   exercises a step point sorted against a non-step candidate, which is
+   the one ordering `D-identity`'s key-alone rule actually decides.
+   Pins C1's always-append fence, `D-identity`'s ordering, and C3's
+   row-identity split, which S1 cannot reach (it drops
+   `rule`/`element`/`fingerprint` by construction) and S6 does not assert.
 10. **Scenario**: both-carriers. `graph` export and `dump` of
    `ladder-step.toml`, read for each expanded row's successor.
    **Expected**: every row's `next` (graph) and next column (`dump`)
@@ -1695,6 +1856,30 @@ new envelope member.
    assertion above and fails here — this is the discriminating oracle A11
    names for C1's both-carriers clause, and nothing else in this strategy
    exercises `NextTags` independently of `Writes`. Backs A11.
+11. **Scenario**: lint attribution. `lint --as json` over a stepped
+   ladder authored so exactly ONE admitted cell carries a per-row
+   blocking defect, beside its unrolled twin.
+   **Expected**: the finding's `rule` reads `retry#3` — the offending
+   cell — and the literal twin's reads `retry-3`; the two name the same
+   cell by different spellings. The `rule` field is precisely what S1's
+   projection drops, so S1 passes on an implementation that emits
+   `retry` on all five rows and this scenario is the only thing that
+   fails it. Assert additionally that a GROUP-level finding
+   (`coverage.go`'s `firstRuleID` sites) still reads the bare authored
+   id, so the row/group distinction is pinned in both directions rather
+   than a blanket suffixing.
+   Two more assertions, because the payload change has a read-back half
+   nothing else here would catch. (b) a `graph-overlap` between a literal
+   row and an expanded one: BOTH `rule` and `element` carry their own
+   row's identity — the expanded side suffixed, the literal side not —
+   so neither slot is left half-migrated. (c) the same fixture authored
+   so the group's `ambiguous_match` coverage arm is reachable: the arm
+   must still fire. `coverage.go::groupHasOverlap` gates that arm by
+   joining the emitted finding's `Rule`/`Element` against bare ids, so a
+   naive suffixing silently drops the arm and every other assertion in
+   this strategy still passes — (c) is the only thing that fails it, and
+   it is the scenario that would have caught the defect this clause's
+   first draft introduced. Backs A15, pins C3's lint paragraph.
 
 ### Performance Expectations
 
