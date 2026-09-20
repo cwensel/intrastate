@@ -68,33 +68,7 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Bug Fix
-- **Profile**: foundational — provisional: one contract (the
-  declared-kind carrier) whose every candidate shape modifies a
-  seam pinned by RDR 0007/RDR 0003, and every `GuardEvaluator`
-  implementer inherits the answer.
-  <!-- Do not paste the matrix below into the field; it is the
-  Stage 5 routing latch, provisional on `Draft`, made
-  authoritative by Resolve.
-  Sized by BLAST RADIUS — the MAX of two axes, not
-  contract count or word count.
-  (1) contract axis: small = one contract, no user-facing
-  surface (skips Stage 5); mid = one contract + user-facing
-  surface OR locks a contract; large = locks an enum/hash/
-  format/grammar/destructive-op; foundational = cross-RDR
-  producer / spans modules.
-  (2) accretion axis (HARD floor): if `Seam Lineage` below
-  carries ≥2 closed prior point-fixes at this locus, Profile
-  is floored at FOUNDATIONAL regardless of the contract axis
-  — a seam with prior point-fixes is never small/mid (it
-  spans the prior RDRs/patches = the matrix's cross-RDR
-  trigger). The only escape is a written accretion disposition
-  in the Seam Lineage field. This floor is what stops a
-  "one contract → mid" sizing from under-gating an accreting
-  seam.
-  Matrix: rdr/stages/README.md. Seed estimates from the design
-  shape; Resolve overwrites from the verified count; Stage 8
-  Gate locks it at Draft → Final. Never skip lenses off a
-  Draft Profile until Resolve has run. -->
+- **Profile**: foundational — C1, the declared-kind carrier at the value seam, which RDR 0030 and every `GuardEvaluator` implementer consume; user-facing yes; locks cross-rdr
 - **Priority**: Medium
 - **Related Issues**: kata `intrastate#cq5p` (1528)
 - **Predecessors**: 0007-guard-predicate-totality,
@@ -134,12 +108,15 @@ Resolve's refusal taxonomy).
 - **A1 Every guard-referenced key is declared in the loaded model, so a
   kind lookup at the seam always answers when the evaluator is
   constructed over the same model the evaluated table came from.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR + Source Search
-  - **Evidence needed**: `0007:A7` ("Every guard-referenced key is
-    declared … a typo'd key fails table load") plus the load-time check
-    that enforces it in `internal/table` — confirm the refusal fires for
-    a guard atom naming an undeclared key, not only for match keys.
+  - **Evidence**: `0007:A7` (Verified) plus
+    `internal/table/normalize.go::atomsFromBlock`, whose contract is
+    block-agnostic — "the tag-key declaration rule are enforced
+    identically in all three blocks" (match, `guard.all`,
+    `guard.unless`) — and refuses an undeclared key with
+    `CatUnknownTag` ("references the undeclared tag"). The refusal
+    therefore fires for guard atoms, not only match keys.
   - **If wrong**: `eq`/`in` over an undeclared key answers
     `GuardUnevaluable` under the defensive no-declaration arm, and a
     guard that decided before this change now refuses
@@ -151,11 +128,16 @@ Resolve's refusal taxonomy).
   NOT read the tag view"), not itself a fenced 0003 contract — so
   narrowing it to "no view-typed or runtime-valued state" preserves
   every normative obligation while admitting declaration state.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR + Source Search
-  - **Evidence needed**: `0003:C9`'s fenced text and the REQ-34 quote in
-    `0003`'s req-list — confirm neither says "stateless" or "zero
-    fields"; the field check appears only in the test body.
+  - **Evidence**: `0003:C9`/REQ-34 fence reads "MUST decide value
+    semantics over a present value only … the evaluator MUST NOT read
+    the tag view" — neither "stateless" nor "zero fields" appears in
+    0003's normative or req-list text. The field check exists only in
+    the test body
+    (`internal/guard/guard_evaluator_0003_test.go::TestReq34_EvaluatorDecidesPresentValuesOnlyAndNeverReadsTheView`,
+    a `reflect` `NumField() != 0` assertion), confirming it is a
+    structural proxy rather than a fenced obligation.
   - **If wrong**: statelessness is itself fenced and the choice must
     move to the atom-stamp carrier (Alternative 2), reopening JDR 0001
     §D1's atom shape instead.
@@ -164,11 +146,19 @@ Resolve's refusal taxonomy).
   `internal/cli/flow_resolve.go::guardSeam`,
   `internal/guard/product.go::valueSatisfies`,
   `internal/graphlint/reach.go::atomAdmitsValue`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence needed**: the call chains into all three sites, showing a
-    `*table.Model` (or equivalent declaration carrier) reachable without
-    signature surgery beyond the site itself.
+  - **Evidence**: `rg` over non-test sources returns exactly the three
+    named `Evaluator{}` sites (`internal/cli/flow_resolve.go::guardSeam`,
+    `internal/guard/product.go::valueSatisfies`,
+    `internal/graphlint/reach.go::atomAdmitsValue`) — no fourth site on
+    `main`. In all three the `*table.Model` is in scope at an ancestor
+    frame, never at the immediate site: `guardSeam()` is zero-arg but its
+    callers hold `req.model`; `valueSatisfies` is called from
+    `Denotation(m *table.Model, …)` one frame up;
+    `atomAdmitsValue` sits two frames below
+    `matchSatisfiable(m *table.Model, …)`. Each needs one added local
+    parameter — no cross-package signature surgery.
   - **If wrong**: a consumer without a model needs a declaration-free
     degraded evaluator, re-introducing the raw-string arms the RDR
     exists to remove — the constructor design must change (e.g. thread
@@ -182,14 +172,34 @@ Resolve's refusal taxonomy).
   `GuardFalse → GuardTrue` — the latter reachable from either side of
   the comparison, since C2 parses held value AND literal (a
   caller-supplied `--tag n=07`, or an authored `n eq 07` in a guard).**
-  - **Status**: Pending
+  - **Status**: Pending — REFUTED as written on two legs; awaiting the
+    author's ruling on the narrowing (see
+    `evidence/author-round.md` 2026-09-20).
   - **Method**: Source Search + MVV Test
-  - **Evidence needed**: `internal/guard/lint.go`/`product.go` render
-    path showing held values come from declared domains; an MVV case
-    exercising `--tag n=07` against `n eq 7`; and a before/after lint
-    diff over the checked-in model corpus (`models/`) proving no
-    committed model's lint verdict flips — authored-literal flips
-    (`n eq 07` in a guard) count, not just held-value flips.
+  - **Evidence**: HELD side CONFIRMED —
+    `internal/guard/product.go::valueAssignments` ranges over
+    `m.Tags[key]` and `internal/guard/assignment.go`'s `int` arm renders
+    the domain with `strconv.Itoa`, which emits no leading zero, `+`, or
+    whitespace, so a non-canonical spelling never reaches the lint side.
+    LITERAL side REFUTED — the literal is not rendered from the
+    declaration (`valueSatisfies` joins the authored bytes) and the
+    loader's check is `strconv.Atoi`
+    (`internal/table/load.go::conformKind`), which ACCEPTS `"00"`,
+    `"01"`, `"+1"`. An authored `n eq "00"` therefore flips lint from
+    blocking `graph-coverage-gap` (exit 2) to clean (exit 0) — the
+    blocking→clean direction (spike
+    `evidence/spikes/a4-lint-diff.md`). The 123-model corpus shows no
+    flip, but it contains ZERO `eq`/`in` atoms over an `int` tag, so
+    that result measures coverage, not safety.
+    MALFORMED leg REFUTED — `internal/cli/flow_input.go` calls
+    `table.ConformValue` on every declared `--tag` before resolution, so
+    `--tag iter=many` refuses `flow-tag-invalid` at input and never
+    reaches the seam; the `GuardFalse → GuardUnevaluable` path A4 calls
+    "the fix" is unreachable via `--tag` on a declared `int`
+    (spike `evidence/spikes/a4-typed-compare.md`).
+  - **If wrong**: lint and runtime disagree on a canonical-form edge and
+    the fix must narrow to validate-then-byte-compare (parse to prove
+    comparability, compare raw bytes), which A4's verification decides.
   - **If wrong**: lint and runtime disagree on a canonical-form edge and
     the fix must narrow to validate-then-byte-compare (parse to prove
     comparability, compare raw bytes), which A4's verification decides.
@@ -199,11 +209,13 @@ Resolve's refusal taxonomy).
   imports `internal/resolve` (`table/model.go::KernelTable` returns
   `resolve.Table`), so `internal/resolve` cannot import `table` and the
   fixture must not mention `table.TagDecl`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence needed**: the import direction as stated, and a
-    constructor shape for `guard.NewEvaluator` that accepts the plain
-    mapping so the suite's fixture can drive it.
+  - **Evidence**: `internal/table/model.go` imports `internal/resolve`
+    and `model.go::KernelTable` returns `resolve.Table`; a grep for
+    `internal/table` across `internal/resolve`'s non-test sources
+    returns zero hits, so the direction is one-way as stated and a
+    kernel-owned `map[string]string` fixture mentions no `table` type.
   - **If wrong**: the suite cannot state its own fixture and the
     contract cases move to `internal/guard` tests — losing the
     cross-implementer conformance property `0007:C1` placed in the
@@ -267,6 +279,7 @@ string) GuardResult` (`0007:C1`, REQ-10) and the atom shape (JDR 0001
 **C2**
 
 ```normative
+Surface — of C1; states how the carried kind is applied at the comparison.
 TYPED COMPARISON. `eq` and `in` resolve the atom's key against the
 constructed kind mapping and compare under the declared kind:
 
@@ -299,6 +312,7 @@ admits only `int`); `contains` and the §D13 set arms are unchanged;
 **C3**
 
 ```normative
+Surface — of C1; the cross-implementer gate proving the carrier types comparisons.
 CONFORMANCE SUITE. `internal/resolve/guardcontract.go::
 TestGuardEvaluatorContract` extends with kind-discriminating cases:
 `eq`/`in` over an `int` and a `bool` dimension where the held value
@@ -318,6 +332,7 @@ seam under test over that fixture before invoking the suite.
 **C4**
 
 ```normative
+Surface — of C1; the construction-site obligation keeping the carrier's mapping correct.
 PRODUCER OBLIGATION. Every non-test evaluator construction site —
 `internal/cli/flow_resolve.go::guardSeam`,
 `internal/guard/product.go::valueSatisfies`,
@@ -730,23 +745,49 @@ test fixtures migrate to the constructor.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+The matrix the verified assumptions imply. Each row names the code path
+the verification reviewed, so a regression lands against the same
+evidence that admitted the design.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
-
-### Performance Expectations
-
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+1. **Scenario**: Shared conformance suite, kind-discriminating cases
+   (C3), driven against `guard.NewEvaluator` constructed over the
+   published `map[string]string` fixture.
+   **Expected**: green, including the `int`/`bool` want-Unevaluable legs
+   that fail against today's raw-string arms. Backed by A5's verified
+   import direction (`internal/table` → `internal/resolve`, one-way), so
+   the kernel-owned fixture crosses no `table` type.
+2. **Scenario**: Per-kind dispatch at the seam — `int`, `bool`, `enum`,
+   `scalar`, `set`, and key-absent — over `eq` and `in`.
+   **Expected**: the C2 matrix verbatim. The `set` and key-absent arms
+   are defensive; A1's verified load-time refusal
+   (`internal/table/normalize.go::atomsFromBlock`, block-agnostic) is
+   what makes the key-absent arm unreachable in production.
+3. **Scenario**: The zero-field reflection assertion in
+   `guard_evaluator_0003_test.go` narrowed to "no view-typed or
+   runtime-valued state".
+   **Expected**: passes with the declaration mapping present, fails if a
+   `resolve.TagSet` or runtime value is added. A2 verified this is a
+   test-body proxy, not a 0003 fence, so the narrowing is a recorded
+   deviation against an implemented test rather than a contract change.
+4. **Scenario**: Construction-site migration (C4) — the three sites A3
+   verified, each constructing over the same model whose rows it
+   evaluates.
+   **Expected**: no `Evaluator{}` literal survives in non-test code; a
+   missed site surfaces as loud `guard_unevaluable` refusals (F5), never
+   a silent raw-string revert.
+5. **Scenario**: Lint/runtime agreement over the committed corpus —
+   before/after verdict diff.
+   **Expected**: no committed model's verdict flips. Measured: 123
+   models, no diff (`evidence/spikes/a4-lint-diff.md`). This corpus
+   contains zero `eq`/`in` atoms over an `int` tag, so the result is a
+   coverage statement; the authored-literal case below is what the suite
+   must actually pin.
+6. **Scenario**: Authored non-canonical `int` literal (`n eq "00"`)
+   under typed comparison — the leg that REFUTED A4 as written.
+   **Expected**: pending the author's ruling (see §Critical Assumptions
+   A4). Today's measured behavior is a lint flip from blocking
+   `graph-coverage-gap` (exit 2) to clean (exit 0); whichever narrowing
+   is chosen, this case is a required regression test.
 
 ## Finalization Gate
 
