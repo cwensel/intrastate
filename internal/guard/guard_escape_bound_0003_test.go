@@ -669,3 +669,94 @@ func TestReq94_UnprovableDimensionsAreReportedAndTheOverLargeRefusalIsNot(t *tes
 			"naming it; named=%v", named)
 	}
 }
+
+// REQ-94 + RDR 0006 C16: "Withholding a group's exhaustiveness claim MUST
+// NOT suppress overlap, coverage, or further withholding findings for that
+// group." The clause is unconditional, so the over-bound branch that
+// withholds on a STRUCTURALLY unprojectable dimension owes the same
+// surviving overlap check as the no-finite-domain withholding path does.
+// ADVERSARIAL
+func TestReq94AndC16_OverBoundStructuralWithholdingStillEmitsDecidableOverlap(t *testing.T) {
+	m := mustLoadSource(t, overBoundStructuralPlusOverlapSource())
+	g := groupOf(t, m, "decidable-a")
+
+	// The fixture must actually reach the branch under test: a computable
+	// cardinality over the bound, with a structurally unprojectable
+	// dimension among the participants. Asserting it here keeps a later
+	// declaration edit from silently routing the test down another path.
+	card, ok := guard.Cardinality(m, g)
+	if !ok || card <= guard.Bound() {
+		t.Fatalf("Cardinality = (%d, %v); the fixture must present a "+
+			"computable product OVER the bound %d to reach the branch under "+
+			"test", card, ok, guard.Bound())
+	}
+
+	reports := guard.Lint(m)
+
+	// The withholding itself still happens, and it names the structurally
+	// unprovable dimension rather than reporting a size.
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeUnprovableCoverage && f.Dimension == "loose"
+	}) {
+		t.Errorf("no withholding finding named the unprovable dimension "+
+			"`loose`; findings=%v", allFindings(reports))
+	}
+
+	// And the overlap between the two rows that guard only the DECIDABLE
+	// dimension survives it. Their accepted assignments are computed over
+	// the decidable sub-product, so the ambiguity is decidable without ever
+	// projecting `loose`.
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeOverlap &&
+			slices.Contains(f.RuleIDs, "decidable-a") &&
+			slices.Contains(f.RuleIDs, "decidable-b")
+	}) {
+		t.Errorf("overlap among the group's decidable rows was suppressed by "+
+			"the over-bound structural withholding; C16 forbids the "+
+			"suppression. findings=%v", allFindings(reports))
+	}
+}
+
+// The surviving overlap check must be a CHECK, not an unconditional
+// finding: the same fixture with the two decidable rows made mutually
+// exclusive reports no overlap.
+// DISCRIMINATING
+func TestReq94AndC16_OverBoundStructuralWithholdingReportsNoSpuriousOverlap(t *testing.T) {
+	m := mustLoadSource(t, overBoundStructuralDisjointSource())
+	reports := guard.Lint(m)
+
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeUnprovableCoverage && f.Dimension == "loose"
+	}) {
+		t.Fatalf("the fixture no longer withholds on `loose`; findings=%v",
+			allFindings(reports))
+	}
+	if n := countCode(reports, guard.CodeOverlap); n != 0 {
+		t.Errorf("mutually exclusive decidable rows drew %d graph-overlap "+
+			"findings; the surviving check intersects accepted assignments, "+
+			"it does not fire on the branch being taken. findings=%v",
+			n, allFindings(reports))
+	}
+}
+
+// Negative control: when EVERY row in the group guards the unprovable
+// dimension, no row has an accepted-assignment set, so the surviving
+// overlap check correctly reports nothing. This is the case REQ-94's own
+// fixture exercises, and running overlap on this path must not change it.
+// ADVERSARIAL
+func TestReq94AndC16_OverBoundStructuralWithholdingFindsNoOverlapWhenNoRowIsDecidable(t *testing.T) {
+	m := mustLoadSource(t, overBoundStructuralAllUnprovableSource())
+	reports := guard.Lint(m)
+
+	if !anyFinding(reports, func(f guard.Finding) bool {
+		return f.Code == guard.CodeUnprovableCoverage && f.Dimension == "loose"
+	}) {
+		t.Fatalf("the fixture no longer withholds on `loose`; findings=%v",
+			allFindings(reports))
+	}
+	if n := countCode(reports, guard.CodeOverlap); n != 0 {
+		t.Errorf("two rows that both guard the unprovable dimension drew %d "+
+			"graph-overlap findings; neither has an accepted-assignment set "+
+			"to intersect. findings=%v", n, allFindings(reports))
+	}
+}

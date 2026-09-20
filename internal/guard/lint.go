@@ -270,6 +270,16 @@ func lintGroup(m *table.Model, g Group, written map[string]bool) GroupReport {
 			r.Cardinality = 0
 			r.Findings = append(r.Findings, structural...)
 			r.Findings = append(r.Findings, withholdingFindings(m, g)...)
+			// Same invariant the no-finite-domain withholding path below
+			// carries: withholding the exhaustiveness CLAIM is not
+			// withholding every check. Overlap among the group's decidable
+			// rows is computed over the decidable sub-product, so it never
+			// touches the unprojectable dimension and never enumerates the
+			// over-large product — the rows that constrain only provable
+			// keys are as ambiguous here as they would be in a group that
+			// proved. Returning without it suppressed a defect the group
+			// can decide, which C16 forbids unconditionally.
+			r.Findings = append(r.Findings, overlapFindings(m, g)...)
 			return r
 		}
 

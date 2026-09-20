@@ -1588,6 +1588,146 @@ eq = "x"
 `
 }
 
+// overBoundStructuralPlusOverlapSource drives the over-bound,
+// structurally-unprovable branch while keeping an overlap decidable.
+//
+// `loose` is an enum with a finite declared domain — so `Cardinality` is
+// computable — but it carries no single-valued marker, which makes its
+// spread 2^12 and pushes the product past the bound, AND makes the `eq`
+// atom over it structurally unprojectable. `flag` is a plain required bool,
+// so the two rows guarding only `flag` have an accepted-assignment set over
+// the decidable sub-product and their overlap is decidable without ever
+// touching `loose`.
+func overBoundStructuralPlusOverlapSource() string {
+	return declBlock(`
+[tags.loose]
+provenance = "owned"
+kind = "enum"
+domain = ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"]
+required = true
+
+[tags.flag]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "unprovable-row"
+source = "t:up"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.loose]
+eq = "v0"
+[rule.write]
+
+[[rule]]
+id = "decidable-a"
+source = "t:da"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = true
+[rule.write]
+
+[[rule]]
+id = "decidable-b"
+source = "t:db"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = true
+[rule.write]
+`
+}
+
+// overBoundStructuralDisjointSource is the same shape with the two
+// decidable rows made mutually exclusive, so the overlap the branch now
+// runs reports nothing rather than reporting spuriously.
+func overBoundStructuralDisjointSource() string {
+	return declBlock(`
+[tags.loose]
+provenance = "owned"
+kind = "enum"
+domain = ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"]
+required = true
+
+[tags.flag]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "unprovable-row"
+source = "t:up"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.loose]
+eq = "v0"
+[rule.write]
+
+[[rule]]
+id = "decidable-a"
+source = "t:da"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = true
+[rule.write]
+
+[[rule]]
+id = "decidable-b"
+source = "t:db"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = false
+[rule.write]
+`
+}
+
+// overBoundStructuralAllUnprovableSource is the negative control: EVERY row
+// in the group guards the unprovable dimension, so no row has an accepted
+// assignment set at all and the overlap check correctly reports nothing.
+func overBoundStructuralAllUnprovableSource() string {
+	return declBlock(`
+[tags.loose]
+provenance = "owned"
+kind = "enum"
+domain = ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"]
+required = true
+
+[tags.flag]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+required = true
+`) + `
+[[rule]]
+id = "unprovable-a"
+source = "t:ua"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.loose]
+eq = "v0"
+[rule.guard.all.flag]
+eq = true
+[rule.write]
+
+[[rule]]
+id = "unprovable-b"
+source = "t:ub"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.loose]
+eq = "v0"
+[rule.guard.all.flag]
+eq = true
+[rule.write]
+`
+}
+
 // --- diagnostics fixture sources -----------------------------------------
 
 // gapAndOverlapSource carries BOTH an intentional gap and an intentional
