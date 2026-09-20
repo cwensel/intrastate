@@ -256,6 +256,31 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 
 	exec := accessor.NewExecutor(r.registry, r.artifactMap())
 
+	// The resolver seam is PROVENANCE-FILTERED; the diagnostic one is not.
+	//
+	// A reader's declared `keys` may legally span provenances: RDR 0016
+	// fixes read cardinality per KEY — exactly one reader per owned key, at
+	// most one per observed key — and never requires a reader's key set to
+	// be homogeneous. So one reader can be the unique server of an owned key
+	// AND of an observed key the caller also supplies with `--tag`.
+	//
+	// Folding every returned value into `owned` made that legal model a
+	// precedence inversion: `resolve.assemble` stamps everything in
+	// `Input.Owned` as `ProvenanceOwned` whatever the model's own
+	// `[tags.<key>].Provenance` says, and owned outranks observed in the
+	// kernel. The artifact's value then beat the caller's `--tag` and
+	// selected a different transition — with no remedy available, because
+	// `parseTags` refuses a `--tag` only on keys the model declares OWNED
+	// and so cannot protect this one.
+	//
+	// The set is built ONCE, off the MODEL rather than off any reader's
+	// `keys`: what makes a key owned is its declaration, not which accessor
+	// happens to answer it.
+	ownedKeys := map[string]bool{}
+	for _, key := range flowbind.OwnedTags(r.model) {
+		ownedKeys[key] = true
+	}
+
 	outputs := make([]readerOutput, 0, len(names))
 	var owned []resolve.Tag
 	for _, name := range names {
@@ -298,10 +323,18 @@ func (r flowRequest) runReaders(ctx context.Context, names []string) (
 			}
 			tags[v.Key] = v.Value
 		}
+		// `tags` above is the UNFILTERED diagnostic view and stays that way:
+		// `flow read-state` must keep reporting every key its readers
+		// answered, whatever provenance the model assigns them (REQ-77).
 		outputs = append(outputs, readerOutput{
 			ID: name, Keys: def.RequestedKeys(), Tags: tags,
 		})
-		owned = append(owned, result.OwnedSnapshot()...)
+		for _, tag := range result.OwnedSnapshot() {
+			if !ownedKeys[tag.Key] {
+				continue
+			}
+			owned = append(owned, tag)
+		}
 	}
 
 	slices.SortFunc(owned, func(a, b resolve.Tag) int {
