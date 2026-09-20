@@ -13,10 +13,27 @@
 [ "$ALLOW_UNSIGNED" = "1" ] && exit 0
 [ "$1" = "prepared" ] || exit 0          # check once, before the txn commits
 
-case "$(git config --get commit.gpgsign 2>/dev/null)" in
-  true|yes|on|1) ;;
-  *) exit 0 ;;
-esac
+# Read the setting through --bool, which collapses every spelling Git
+# itself accepts -- True, YES, On, 1, and an implicit bare key -- to
+# exactly true or false. Matching the raw string against a closed
+# lowercase enum missed those and fell through to "not signing", turning
+# a repo that genuinely asked for signatures into one with no backstop.
+#
+# --bool exits nonzero for two different reasons. Key unset is the
+# ordinary case: no config, no enforcement. A key set to something that
+# is not a boolean is a config error, and treating it as "not signing"
+# would let a typo disable this hook silently -- the exact failure mode
+# above. Tell them apart and refuse the malformed one out loud.
+if gpgsign=$(git config --bool --get commit.gpgsign 2>/dev/null); then
+  [ "$gpgsign" = "true" ] || exit 0
+elif git config --get commit.gpgsign >/dev/null 2>&1; then
+  echo "reference-transaction: REFUSED — commit.gpgsign is set to" >&2
+  echo "  '$(git config --get commit.gpgsign 2>/dev/null)', which is not a boolean." >&2
+  echo "  Set it to true or false; refusing rather than assuming unsigned is ok." >&2
+  exit 1
+else
+  exit 0                                 # key unset: no config, no enforcement
+fi
 
 # Most commits this hook will enumerate for one ref update. Past it the
 # update is refused, not sampled. Raise it, or ALLOW_UNSIGNED=1, for a
