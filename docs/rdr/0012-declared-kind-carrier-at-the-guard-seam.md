@@ -179,7 +179,9 @@ Resolve's refusal taxonomy).
   non-canonical spelling (`"07"`) never appears on the lint side, and
   the only runtime verdicts that flip are malformed-value
   `GuardFalse → GuardUnevaluable` (the fix) and non-canonical-numeral
-  `GuardFalse → GuardTrue` (caller-supplied only).**
+  `GuardFalse → GuardTrue` — the latter reachable from either side of
+  the comparison, since C2 parses held value AND literal (a
+  caller-supplied `--tag n=07`, or an authored `n eq 07` in a guard).**
   - **Status**: Pending
   - **Method**: Source Search + MVV Test
   - **Evidence needed**: `internal/guard/lint.go`/`product.go` render
@@ -343,7 +345,8 @@ a verdict") — the CLI already maps it to `flow-guard-unevaluable`.
   existing `Evaluator` type); rejected: `NewTypedEvaluator` (there is
   no untyped one left), a `Kind` field on `GuardAtom` (Alternative 2).
 - **Selection / predicate** — typed comparison compares PARSED values
-  for `int`/`bool` and raw strings for `enum`/`scalar` (C2). The
+  for `int`, boolean TOKENS for `bool`, and raw strings for
+  `enum`/`scalar` (C2). The
   narrower "validate-then-byte-compare" variant is the recorded
   fallback if A4's lint-agreement verification fails.
 
@@ -402,8 +405,8 @@ construction, not discipline; **blast** — modules/records touched.
 
 The deciding rows are **pins** and **structure**. O1 is the only option
 whose collision is with a test-body proxy rather than a fenced contract:
-REQ-10's signature, §D1's atom, and the five-kind refusal taxonomy all
-survive verbatim. O4 additionally fails **fit**: with the seam still
+REQ-10's signature, §D1's atom, and REQ-7's five-member refusal
+taxonomy all survive verbatim. O4 additionally fails **fit**: with the seam still
 raw-string, `TestGuardEvaluatorContract`'s "unevaluable, never false"
 stays uncomputable for `eq`/`in`, and any `resolve.Resolve` caller that
 is not the CLI (lint, graphlint, library use) keeps the silent
@@ -427,16 +430,15 @@ Ground-sweep: clean (24 anchors — 23 confirmed, 1 cosmetic
 misattribution fixed in place: A17's If-wrong text had been credited
 to A18 in Key Discoveries; see
 `evidence/propose-premortem/ground-sweep.md`)
-Joint-check: clear (12 peers) — nearest couplings: 0020 shares the
+Joint-check: fired → 0030 (home: `cli/0003 §Normative Contracts` C6) —
+the kind tokens `bool`/`enum`/`int`/`scalar`/`set` appear inside both
+records' fences; both cite RDR 0003's closed vocabulary and neither
+extends it. Recorded symmetrically by 0030's propose, 2026-09-19. The
+other 11 peers are clear; nearest couplings are 0020, which shares the
 runtime-admission locus upstream (undeclared *keys*; this RDR decides
 declared-key *values* and pins no contract there), and open JDR 0001
-§JD-18 (view-conformance venue) is deliberately NOT decided here (O4's
+§JD-18 (view-conformance venue), deliberately NOT decided here (O4's
 rejection preserves it).
-
-Joint-check: fired → 0030 (home: `cli/0003 §Normative Contracts` C6).
-Context: the kind tokens `bool`/`enum`/`int`/`scalar`/`set` appear inside
-both records' fences; both cite RDR 0003's closed vocabulary and neither
-extends it. Recorded symmetrically by 0030's propose, 2026-09-19.
 
 ## Alternatives Considered
 
@@ -508,13 +510,9 @@ as its key's declared kind before evaluation — at the CLI
   refusal path the taxonomy does not have (REQ-7 pins the refusal kinds
   at five; a new CLI error code is an unadjudicated envelope change).
 - The CLI-only arm leaves every non-CLI `resolve.Resolve` caller (lint,
-  graphlint, library use) unprotected: the seam still folds malformed
-  values into `GuardFalse`, `TestGuardEvaluatorContract`'s obligation
-  stays uncomputable for `eq`/`in`, and the guarantee holds by producer
-  discipline — the class `0007:C1` rejects by design.
-- Deciding where view-level validation lives is JDR 0001 §JD-18's open
-  question (siblings 0003/0007); settling it as a side effect of a bug
-  fix puts the decision in the wrong home.
+  graphlint, library use) unprotected, and it pre-empts JDR 0001
+  §JD-18's open view-conformance question — the matrix's **fit** and
+  **structure** rows (§Decision Rationale) carry the full argument.
 
 **Reason for rejection**: fails **fit** (the seam contract stays
 unenforceable) and **structure**, and pre-empts an open joint decision.
@@ -600,19 +598,18 @@ kind-lookup path exists.
 
 ### Key Discoveries
 
-- **Documented** — `0007:A17` Evidence: "The declared kind needed to
-  *parse* the value is known to the evaluator from the table it was
-  built for, not from the kernel" — the chosen carrier is the one the
-  verifying record itself anticipated; A17 froze the signature, not
-  the constructor.
+- **Documented** — `0007:A17`'s Evidence already names construction as
+  the delivery path (quoted in §Approach): A17 froze the signature,
+  not the constructor, so the chosen carrier is the one the verifying
+  record itself anticipated.
 - **Documented** — `0007:A18` and `0007:C1` ("MAY answer unevaluable
   for a present value it cannot compare (A18)") fix the semantics;
   `0007:A17`'s If-wrong names the fallback carrier ("e.g. the declared
   kind on the atom … but never the view") — only the carrier was
   deferred.
 - **Documented** — `resolve.Table` carries `Revision/Outcomes/Rows`
-  only; the kernel cannot supply a kind without widening its own seam
-  (kills Alternative 1's cheap form).
+  only, with no declaration field (the fact Alternative 1's rejection
+  turns on).
 - **Documented** — the inline `072c7a0` fix (`parseHeldSet` nil check)
   proves the disposition for the declaration-free arms; `eq`/`in`
   cannot reach it without a kind (Background).
