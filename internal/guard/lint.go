@@ -534,7 +534,7 @@ func coverageFindings(m *table.Model, g Group, ordinaryOverlap bool) ([]Finding,
 			union = EscapeUnionFor(m, g, class)
 		}
 		if union.Equal(product) {
-			if row := bareEscapeFor(g, class); row != "" && !ordinaryClosesAlone(m, g, product) {
+			if row := bareEscapeFor(g, class); row != "" {
 				closedBy = row
 			}
 			continue
@@ -557,6 +557,14 @@ func coverageFindings(m *table.Model, g Group, ordinaryOverlap bool) ([]Finding,
 		// A bare escape row is not a silent opt-out from the guarantee: the
 		// closure it performs is reported as an OBSERVABLE result, and a
 		// bare green for such a group does not satisfy the clause.
+		//
+		// Reported whatever ELSE closed the arm, including a group whose
+		// ordinary rows already partition the product. `0006:C9` states the
+		// obligation over any group closed by a bare escape row with no
+		// carve-out, and "the ordinary rows also close" is the common
+		// authoring idiom rather than a rare one, so conditioning on it is
+		// where the clause would quietly stop applying. The authoritative
+		// engine's `emitCoverageArms` reads it the same way.
 		out = append(out, Finding{
 			Code:     CodeCoverageClosedByEscape,
 			Context:  g.Context.String(),
@@ -565,22 +573,6 @@ func coverageFindings(m *table.Model, g Group, ordinaryOverlap bool) ([]Finding,
 		})
 	}
 	return out, closedBy
-}
-
-// ordinaryClosesAlone reports whether the group's non-escape rows already
-// close coverage, in which case no escape row closed anything.
-func ordinaryClosesAlone(m *table.Model, g Group, product AssignmentSet) bool {
-	union := newSet(productDims(m, g))
-	for _, row := range g.Rows {
-		if row.Kind() == table.KindEscape {
-			continue
-		}
-		accepted := acceptedIn(m, g, row)
-		if accepted.Projectable() {
-			union = union.Union(accepted)
-		}
-	}
-	return union.Equal(product)
 }
 
 // bareEscapeFor names the escape row declaring class that carries NO guard

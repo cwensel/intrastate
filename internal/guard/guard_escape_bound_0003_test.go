@@ -307,6 +307,167 @@ func TestReq82_BareEscapeClosureIsObservableAndNamesTheRow(t *testing.T) {
 	}
 }
 
+// REQ-82, the unconditional half. RDR 0006's C9 states the obligation over
+// ANY "group whose coverage is closed by a bare escape row", with no
+// carve-out for a group whose ordinary rows also close it — and 0006's
+// disposition table corroborates ("Clean model, a group closed by a bare
+// escape row | 0 | respond.OK | graph-coverage-closed-by-escape naming the
+// row | Loud"). A group that partitions its guard dimension AND carries a
+// bare catch-all is the ordinary authoring idiom, so suppressing the
+// attribution there is where the clause silently stops applying.
+// ADVERSARIAL
+func TestReq82_ClosureIsNamedEvenWhenOrdinaryRowsAlsoClose(t *testing.T) {
+	m := mustLoadSource(t, closedPartitionPlusBareEscapeSource())
+
+	// The premise: the ORDINARY rows already close the product on their
+	// own. Without this the fixture would only re-witness the sole-closer
+	// case REQ-82's first test already covers.
+	plain := reportFor(t, guard.Lint(mustLoadSource(t, completePartitionSource())), "part-small")
+	if plain.Verdict != guard.VerdictExhaustive {
+		t.Fatalf("the fixture's ordinary rows do not close coverage on "+
+			"their own; verdict=%s", plain.Verdict)
+	}
+
+	reports := guard.Lint(m)
+	r := reportFor(t, reports, "part-small")
+
+	if r.ClosedByEscape != "bare-escape" {
+		t.Errorf("the group's verdict names escape row %q; want "+
+			"`bare-escape` — C9 admits no carve-out for a group whose "+
+			"ordinary rows also close. verdict=%s findings=%v",
+			r.ClosedByEscape, r.Verdict, allFindings(reports))
+	}
+
+	named := findingsWithCode(reports, guard.CodeCoverageClosedByEscape)
+	if len(named) != 1 {
+		t.Fatalf("the group drew %d %s findings; want exactly one. "+
+			"findings=%v", len(named), guard.CodeCoverageClosedByEscape,
+			allFindings(reports))
+	}
+	if !slices.Contains(named[0].RuleIDs, "bare-escape") {
+		t.Errorf("the closure finding names %v; want the bare escape row "+
+			"`bare-escape`", named[0].RuleIDs)
+	}
+
+	// The closure is OBSERVABLE, not blocking: the group still proves
+	// exhaustive and still goes green. A reader must be able to see which
+	// row closed it without the model being refused for it.
+	if r.Verdict != guard.VerdictExhaustive || !r.Green {
+		t.Errorf("the attributed closure changed the disposition: "+
+			"verdict=%s green=%t; want exhaustive/green — the closure is "+
+			"reported, never a refusal", r.Verdict, r.Green)
+	}
+}
+
+// The `no_match` arm specifically. The gate this pins the removal of sat
+// inside the shared rescuable-class loop, and C9 is stated over coverage
+// closure generally rather than per class — the per-class split is C10's
+// subject (WHICH rows enter the union), which says nothing about
+// attribution. The divergence bit hardest on `no_match`, because that arm's
+// union counts the ordinary population, so "the ordinary rows already
+// closed it" is the common case there rather than the rare one.
+// ADVERSARIAL
+func TestReq82_NoMatchArmAttributesItsBareCloserToo(t *testing.T) {
+	m := mustLoadSource(t, closedPartitionPlusBareEscapeSource())
+
+	// The escape row declares `no_match` and nothing else, so `no_match` is
+	// the only arm whose closure it can be attributed to.
+	bare := rowByID(t, m, "bare-escape")
+	if !slices.Equal(bare.Escape, []string{string(resolve.KindNoMatch)}) {
+		t.Fatalf("the fixture's escape row declares %v; the arm under test "+
+			"is `no_match` alone", bare.Escape)
+	}
+
+	g := groupOf(t, m, "part-small")
+	union := guard.CoverageUnionFor(m, g, string(resolve.KindNoMatch))
+	if !union.Equal(guard.Product(m, g)) {
+		t.Fatalf("the `no_match` arm is not closed at all; the attribution " +
+			"question does not arise")
+	}
+
+	r := reportFor(t, guard.Lint(m), "part-small")
+	if r.ClosedByEscape != "bare-escape" {
+		t.Errorf("the `no_match` arm's bare closer is unnamed "+
+			"(ClosedByEscape=%q); C9 binds this arm on the same terms as "+
+			"the other", r.ClosedByEscape)
+	}
+	if r.Verdict != guard.VerdictExhaustive || !r.Green {
+		t.Errorf("naming the `no_match` arm's closer blocked the group: "+
+			"verdict=%s green=%t; want exhaustive/green", r.Verdict, r.Green)
+	}
+}
+
+// The negative control that bounds the widening. C9's subject is a BARE
+// escape row — one denoting the whole scoped product. A GUARDED escape row
+// contributes only its own assignments and closes nothing by itself, so it
+// is never the closer, whatever the ordinary population does. This pins
+// that dropping the "ordinary rows also close" condition widened the
+// ATTRIBUTION, not the bare-row predicate.
+// ADVERSARIAL
+func TestReq82_AGuardedEscapeRowIsNeverNamedTheCloser(t *testing.T) {
+	reports := guard.Lint(mustLoadSource(t, closedPartitionPlusGuardedEscapeSource()))
+	r := reportFor(t, reports, "part-small")
+
+	if r.ClosedByEscape != "" {
+		t.Errorf("a GUARDED escape row was named the closer (%q); it "+
+			"denotes only its own assignments, so it closes nothing by "+
+			"itself", r.ClosedByEscape)
+	}
+	if n := countCode(reports, guard.CodeCoverageClosedByEscape); n != 0 {
+		t.Errorf("the group drew %d %s findings over a guarded escape row; "+
+			"want none. findings=%v", n,
+			guard.CodeCoverageClosedByEscape, allFindings(reports))
+	}
+}
+
+// The other negative control. A group with NO escape row at all still draws
+// no closure finding — the clause reports the rows that close coverage by
+// catch-all, not every group that happens to be closed.
+// ADVERSARIAL
+func TestReq82_AClosedGroupWithNoEscapeRowReportsNoClosure(t *testing.T) {
+	reports := guard.Lint(mustLoadSource(t, completePartitionSource()))
+
+	if n := countCode(reports, guard.CodeCoverageClosedByEscape); n != 0 {
+		t.Errorf("a group carrying no escape row drew %d %s findings; the "+
+			"clause reports a CATCH-ALL closure, not any closure. "+
+			"findings=%v", n, guard.CodeCoverageClosedByEscape,
+			allFindings(reports))
+	}
+}
+
+// Withholding dominates closure, guard-side — the mirror of `graphlint`'s
+// TestReq115_WithholdingDominatesBareEscapeClosure. A group carrying a row
+// that can refuse `guard_unevaluable` has no PROVABLE product, so lint must
+// withhold rather than certify a closure over it. The withheld path returns
+// before coverage is computed at all, so this held before the attribution
+// widened; it is pinned so the widening cannot later leak past it.
+// ADVERSARIAL
+func TestReq82_WithholdingDominatesBareEscapeClosure(t *testing.T) {
+	reports := guard.Lint(mustLoadSource(t, closedPartitionPlusRefusingRowAndBareEscapeSource()))
+	r := reportFor(t, reports, "part-small")
+
+	if r.Verdict != guard.VerdictWithheld {
+		t.Fatalf("the group resolved %s over a row that can refuse "+
+			"`guard_unevaluable`; withholding dominates closure. "+
+			"findings=%v", r.Verdict, allFindings(reports))
+	}
+	if countCode(reports, guard.CodeUnprovableCoverage) == 0 {
+		t.Errorf("the withheld group drew no %s finding; findings=%v",
+			guard.CodeUnprovableCoverage, allFindings(reports))
+	}
+	// The assertion that matters.
+	if r.ClosedByEscape != "" {
+		t.Errorf("a withheld group named escape row %q as its closer; "+
+			"there is no provable product for anything to have closed",
+			r.ClosedByEscape)
+	}
+	if n := countCode(reports, guard.CodeCoverageClosedByEscape); n != 0 {
+		t.Errorf("a withheld group drew %d %s findings; withholding "+
+			"dominates closure. findings=%v", n,
+			guard.CodeCoverageClosedByEscape, allFindings(reports))
+	}
+}
+
 // REQ-83: "A set literal — the right-hand side of `in` and of `contains` —
 // has one canonical spelling: an unordered set of typed elements,
 // duplicate-free, and compared as a set. Two authored spellings differing

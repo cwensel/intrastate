@@ -556,3 +556,103 @@ func TestGuardEmitsOnlyCodesThisTaxonomyMints(t *testing.T) {
 		}
 	}
 }
+
+// C9's closure attribution has TWO implementations — this engine's
+// `emitCoverageArms` and `internal/guard`'s `coverageFindings` — over one
+// clause. This RDR is authoritative for the mechanics, so a guard-side
+// reading that diverges is a defect even where `guard.Lint` has no
+// non-test caller: guard's suite is the oracle this engine's behavior is
+// checked against, and an oracle that disagrees with the authority silently
+// stops being one. The divergence this pins was a guard-side gate
+// suppressing the attribution whenever the ordinary rows also closed the
+// product — invisible to every single-engine test, because each engine was
+// self-consistent (kata `dhfj`).
+func TestClosureAttributionAgreesAcrossBothEngines(t *testing.T) {
+	// The shape that split them: two ordinary rows PARTITIONING the guard
+	// dimension, so nothing is uncovered, plus a bare escape row. It is the
+	// ordinary "authored rows cover the domain, plus a defensive catch-all"
+	// idiom, and the shipped example models carry it.
+	const body = `
+terminal = ["done"]
+
+[initial]
+status = "a"
+flag = "false"
+
+[context.done]
+[context.done.match.status]
+eq = "b"
+
+[[rule]]
+id = "advance-on"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = "true"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "advance-off"
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.flag]
+eq = "false"
+[rule.write]
+status = "b"
+
+[[rule]]
+id = "bare-rescue"
+escape = ["no_match"]
+[rule.match.status]
+eq = "a"
+[rule.match.recognized]
+eq = "go"
+`
+	src := source(twoStateDecls, body)
+	m := mustLoad(t, src)
+
+	// This engine, the authority.
+	var authoritative []string
+	for _, f := range graphlint.Run(graphlint.NewRequest(m)).Findings {
+		if f.Code == graphlint.CodeCoverageClosedByEscape {
+			authoritative = append(authoritative, f.Rule)
+		}
+	}
+	slices.Sort(authoritative)
+
+	// `internal/guard`, over the SAME normalized model — not a parallel
+	// fixture, so no fixture drift can explain a disagreement away.
+	var mirrored []string
+	for _, r := range guard.Lint(m) {
+		for _, f := range r.Findings {
+			if f.Code == guard.CodeCoverageClosedByEscape {
+				mirrored = append(mirrored, f.RuleIDs...)
+			}
+		}
+		// The struct field and the finding are one claim, not two.
+		if r.ClosedByEscape != "" && !slices.Contains(mirrored, r.ClosedByEscape) {
+			t.Errorf("guard's group %q reports ClosedByEscape=%q with no "+
+				"matching %s finding; the field and the finding are one "+
+				"claim", r.Context, r.ClosedByEscape,
+				guard.CodeCoverageClosedByEscape)
+		}
+	}
+	slices.Sort(mirrored)
+
+	if len(authoritative) == 0 {
+		t.Fatalf("the authoritative engine attributed no closure over a "+
+			"model carrying a bare escape row; the parity question does "+
+			"not arise. src:\n%s", src)
+	}
+	if !slices.Equal(authoritative, mirrored) {
+		t.Errorf("the two implementations of C9's closure attribution "+
+			"disagree over one model: this engine names %v, "+
+			"`internal/guard` names %v. This RDR is authoritative for the "+
+			"mechanics, so guard follows it", authoritative, mirrored)
+	}
+}

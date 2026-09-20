@@ -1436,6 +1436,98 @@ eq = "large"
 `
 }
 
+// closedPartitionPlusBareEscapeSource is completePartitionSource — whose two
+// ordinary rows already PARTITION the guard dimension — with a bare escape
+// row declaring `no_match` added. Nothing is uncovered, so the group is
+// green either way; the question the fixture asks is whether the closure is
+// ATTRIBUTED. RDR 0006's C9 states the obligation unconditionally ("a bare
+// green MUST NOT satisfy this clause") with no carve-out for "the ordinary
+// rows also close", so the bare row must be named here exactly as it is
+// where it is the sole closer.
+func closedPartitionPlusBareEscapeSource() string {
+	return completePartitionSource() + `
+[[rule]]
+id = "bare-escape"
+source = "t:bare"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "go"
+`
+}
+
+// closedPartitionPlusGuardedEscapeSource is the paired negative control: the
+// same closed partition, but the escape row carries a guard atom. A GUARDED
+// escape row denotes only its own assignments, never the whole scoped
+// product, so it closes nothing by itself and C9's clause — which is about
+// BARE rows — does not reach it.
+func closedPartitionPlusGuardedEscapeSource() string {
+	return completePartitionSource() + `
+[[rule]]
+id = "guarded-escape"
+source = "t:guarded"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "large"
+`
+}
+
+// closedPartitionPlusRefusingRowAndBareEscapeSource adds, to the closed
+// partition plus its bare escape row, an ordinary row whose guard reads an
+// OPTIONAL key — so it can refuse `guard_unevaluable`. Withholding dominates
+// closure: the group has no provable product, so no closure may be
+// attributed over it however bare the escape row.
+func closedPartitionPlusRefusingRowAndBareEscapeSource() string {
+	return declBlock(`
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "large"]
+single_valued = true
+required = true
+
+[tags.opt]
+provenance = "owned"
+kind = "bool"
+single_valued = true
+`) + `
+[[rule]]
+id = "part-small"
+source = "t:small"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "small"
+[rule.write]
+
+[[rule]]
+id = "part-large"
+source = "t:large"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.profile]
+eq = "large"
+[rule.write]
+
+[[rule]]
+id = "can-refuse"
+source = "t:refuse"
+[rule.match.recognized]
+eq = "go"
+[rule.guard.all.opt]
+eq = true
+[rule.write]
+
+[[rule]]
+id = "bare-escape"
+source = "t:bare"
+escape = ["no_match"]
+[rule.match.recognized]
+eq = "go"
+`
+}
+
 // optionalKeyPlusBareEscapeSource is optionalKeyGroupSource(false) with a
 // bare escape row added — the false-green A19 guards.
 func optionalKeyPlusBareEscapeSource() string {
