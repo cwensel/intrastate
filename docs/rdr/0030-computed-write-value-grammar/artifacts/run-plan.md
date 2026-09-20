@@ -17,3 +17,4 @@ stages: refine -> resolve -> [lenses] -> reconcile -> finalize   stop-after: fin
 | --- | --- | --- | --- |
 | refine | PASS | no | One load-bearing contradiction resolved (audit row reused 0013 lint ceiling at load); 4 round-narration passages cut. All 9 CAs Pending. Commit 586ecba. |
 | resolve | NEEDS_DECISION | no | 6 CAs Verified, A8 Refuted, A5/A6 Pending-at-MVV. A7 spike ran. Profile latched large->foundational; lens row rewritten. 4 author items parked -> evidence/author-round.md. Commits 61f4cea, 2340098. |
+| resolve (re-run) | PASS | no | Q1-Q4 rulings absorbed; rulings_open 1+ -> 0. Profile latched foundational. C3 narrowed, 4 audit rows, 1 phase step, 2 test scenarios. Commits 408722a, cb51995. |
