@@ -72,3 +72,30 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
     - Corpus diff byte-identical across all 123 lintable models: the divergence is
       LATENT, not currently firing — an urgency argument, not a correctness one.
     Relayed to the user 2026-09-20. Still advisory; the six items remain unruled.
+  - Literature/prior-art pass at the ceiling on the (a)-vs-(d) fork — the evidence
+    neither prior pass consulted. **Verdict: (a), canonicalize at load, widened.**
+    - Grounding is principle + prior art, not agent judgment: the measured defect is
+      a Non-Redundancy violation (Meyer, OOSC §11.7 pp.354-355) / SPOT violation
+      (Raymond, AoUP p.124) — one correctness condition decided in two places with
+      two answers. Google BSRS p.105 (parse-don't-validate), DDIA p.39
+      (schema-on-write), Refactoring Databases p.186.
+    - DX / least-burden answer is (a): AoUP Rule of Repair p.54 — under (d) the
+      author gets lint exit 0 and a runtime dead end, the "much later" case; (d) has
+      no natural discovery point. Raymond/Spencer p.53 on "almost the same" fits (d)
+      exactly (match and guard atoms are visually identical, subtly different).
+    - Peer CLIs agree: helm `typedVal` refuses leading-zero int coercion (commit
+      609e72b35, issue #2693); OpenTofu converts at ingress with a sited diagnostic.
+    - Timing: zero violators argues FOR acting now (SWE-at-Google pp.161-162, gofmt
+      vs buildifier's 6 engineer-weeks over 200k files; Refactoring Databases p.186).
+    - REFINEMENT: C4 stays as written — `atomAdmitsValue` remains a construction site
+      — with the RDR stating lint's typed admission is safe ONLY because load made
+      typed-vs-bytes unobservable. This DECOUPLES Q3 from Q1.
+    - Refusal must be diagnostic (Postgres style guide p.2642) and cover the
+      bare-float `-0.0` -> `"-0"` path, not just quoted strings.
+    - Rejected third framings: canonicalize-on-read (K8s Quantity's own "or don't
+      diff" caveat; models are reviewable data), accept-with-deprecation (zero
+      violators), `--fix` (a later affordance layered on (a), not a substitute).
+    - Corpora empty where expected: SchemaEvo* is relational-DDL-oriented,
+      CodeMaintenance named no hazard, StateMachine*/SpecDrivenDev nothing on point.
+      Grounding rests on DevRef + peer CLI source.
+    Relayed to the user 2026-09-20. Advisory; the six items remain unruled.
