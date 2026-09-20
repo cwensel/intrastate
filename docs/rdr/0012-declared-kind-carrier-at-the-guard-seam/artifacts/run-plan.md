@@ -27,11 +27,30 @@ Not a re-entry: `status_form=none`, `reentry_target=none`.
 | resolve | NEEDS_DECISION | yes | A1/A2/A3/A5 Verified; A4 refuted on two legs. Profile latched foundational. Commits 60a3954, ca709d9. PARKED on Stage 4's author's round (6 items: Q1-Q3 + fixtures F1-F3) — put to the user; rulings go to evidence/rulings.md. |
 | resolve (re-run) | PASS | no | All 6 rulings absorbed; A4 restated and Verified (5/5 CAs, rulings_open=0). New contract C5 (canonical int spelling at load). Problem Statement + MVV re-scoped onto the owned ingress; JDR 0004 JD-1/JD-2/JD-3 applied. Profile re-resolved foundational (idempotent). Commits ef5312d, 37bee1a. |
 | prelock cove | PASS | no | Converged in 2 iterations, 16 findings all fixed. REFUTED a Key Discovery: graphlint's reachability already runs MATCH atoms through the guard seam, so "shared for guard atoms only" was false — design survives (C5 makes the divergence unauthorable) but the stated reason was wrong. C5's venue re-pinned to "the ingress that admits them". Commits d652204, e77f86f. |
+| prelock 3amigo | PASS | no | Converged in 2 iterations, 27 findings. **C5 NARROWED** from the shared `conformKind` int arm to the predicate ingress (`normalize.go::(*loader).atom`) — the wider rule was refuted by two BOUNDARY-marked tests passing on main (RDR 0024 REQ-7/REQ-9). CLI + `[emit]`/`[initial]`/`[rule.write]` now OUT of scope; CLI int canonicality charted to a successor. A4 flipped Verified->Pending (basis changed); new Pending A6 (installed base of persisted owned values unmeasured). Commits 08919f4, ccd2c99. |
 | resolve | NEEDS_DECISION | yes | A1/A2/A3/A5 Verified against source; A4 REFUTED on its literal side (authored `n eq "00"` flips lint blocking→clean) and on its malformed leg (`--tag` conforms upstream, so the seam is never reached). Profile latched `foundational` (1 durable C1; C2/C3/C4 marked `Surface — of C1`). Evidence-body authored; Performance Expectations omitted per template. 3 questions + 3 fixtures put to the author in `evidence/author-round.md`; delegated run, so the round is not self-approved. Commits 60a3954, ca709d9. |
 
 Re-ask after resolve (2026-09-20): profile `foundational` unchanged; lens row
 `cove,3amigo,critique,repeatability` unchanged (rule `lens-foundational-cove`);
 posture unchanged. Plan line above still current — no rewrite owed.
+
+## Ruling divergence — for the user, not resolved here
+
+3amigo narrowed C5 to the predicate ingress. This is NARROWER than ruling Q1,
+which said "every authoring site: guard literals, match literals, `[initial]`,
+`[rule.write]`". The narrowing is grounded (two live BOUNDARY tests from locked
+RDR 0024 refute the wider rule; `--outcome ground` returned `apply`), and the
+stage charted the CLI/`[initial]`/`[rule.write]` scope to a successor rather than
+retiring 0024's locked REQs — out of this RDR's mandate.
+
+Consequence the stage states plainly: `--tag iter=07` now matches SILENTLY
+(accepted residual, recorded in F1). That is the misroute the ruling intended to
+close. The ruling's own rationale is also undercut: "zero violators" rested on a
+wrong-unit measurement (S5 counted guard atoms; the rule was homed in an arm
+serving five populations).
+
+The user should decide whether the charted successor is an acceptable home for
+the CLI scope, or whether 0012 must carry it. Not this skill's call.
 
 ## Parked forks
 
