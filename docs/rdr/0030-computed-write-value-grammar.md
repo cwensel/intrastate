@@ -260,8 +260,13 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   make it visible. Where no sibling claims the cell, the dead row draws no
   advisory and the cell surfaces as a blocking `graph-coverage-gap`
   instead — a louder signal, not a missing one.**
-  - **Status**: Pending — resolves at the MVV; the form is unimplemented, so
-    the pair cannot be run before Phase 2.
+  - **Status**: Pending [downgraded @reconcile 2026-09-20 — unrunnable
+    before Phase 2 by construction: the fixture pair cannot be authored
+    against a form the loader refuses. Named plan: MVV items 2 and 5,
+    scenarios S1 (both tiers), S5b and S5c. Not survivable-if-wrong in the
+    ordinary sense — it is MVV-load-bearing, which is why it is pinned to
+    named scenarios that MUST pass before the implementation is accepted,
+    not deferred to a follow-up.]
   - **Method**: MVV Test
   - **Evidence**: the MVV's fixture pair — `intrastate lint --model
     <fixture> --as json` on each, finding sets compared as sets over
@@ -277,7 +282,9 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     literal one did not, and the "same table, fewer rows" claim fails.
 - **A6 For every (state, outcome) cell the `step` ladder resolves to the
   same plan as the unrolled ladder.**
-  - **Status**: Pending — resolves at the MVV, with A5.
+  - **Status**: Pending [downgraded @reconcile 2026-09-20 — unrunnable
+    before Phase 2 with A5, same construction. Named plan: MVV item 3,
+    scenario S2. MVV-load-bearing; pinned, not deferred.]
   - **Method**: MVV Test
   - **Evidence**: `intrastate flow resolve --model <fixture> --outcome <o>
     --artifact <role>=<statefile> --as json --plan-only` swept over every
@@ -368,9 +375,14 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   exactly the cells the two would have conjoined, and `expand` can emit one
   choice point per stepped tag without disturbing the identity tuple's
   totality (`0002:C13`).**
-  - **Status**: Pending — the subsumption rule is new at this pre-lock pass
-    (it replaces a composition rule the choice-point sort order cannot
-    support); the form is unimplemented, so it resolves at the MVV.
+  - **Status**: Pending [downgraded @reconcile 2026-09-20 — the subsumption
+    rule is new at the pre-lock pass and the form is unimplemented, so it
+    is unrunnable before Phase 2. Its STATIC half is already discharged:
+    A1 verified `::compareAtoms`' (key, block, operator, literal) order
+    with `BlockAll` ahead of `BlockMatch`, which is the fact that forces
+    subsumption over composition, so what remains is the row set the rule
+    produces. Named plan: scenario S8, both the authored and the
+    context-inherited arm. MVV-load-bearing; pinned, not deferred.]
   - **Method**: MVV Test
   - **Evidence**: an MVV fixture whose stepped rule ALSO carries
     `match.<tag> in = [...]` on the stepped tag; assert the row set is the
@@ -388,8 +400,13 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 - **A11 Setting the stepped literal in BOTH `Row.Writes` and
   `Row.NextTags` per row is sufficient for every shipped consumer, and
   no third carrier or derived field holds a per-row written value.**
-  - **Status**: Pending — resolves at the MVV; C1's both-carriers clause is
-    new at this pre-lock pass.
+  - **Status**: Pending [downgraded @reconcile 2026-09-20 — unrunnable
+    before Phase 2; C1's both-carriers clause is new at the pre-lock pass.
+    Its CENSUS half is a source fact already recorded in the Evidence
+    below; what remains is that the implementation populates both carriers,
+    which only a built form can show. Named plan: scenario S10, the
+    discriminating oracle (a `Writes`-only build passes every other
+    scenario and fails this one). MVV-load-bearing; pinned, not deferred.]
   - **Method**: MVV Test
   - **Evidence**: the MVV's `flow resolve` cell sweep already compares
     `writes` and `next` (the two carriers' surfaces) cell by cell against
@@ -410,9 +427,7 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 - **A12 `internal/guard/grammar.go`'s `Evaluator` can move to
   `internal/resolve` unchanged, so the extracted admits shim can reach it
   from the loader without a cycle.**
-  - **Status**: Pending — the move is new at this pre-lock pass (the
-    extraction as first written left the evaluator behind, unreachable);
-    it resolves when Phase 2 compiles.
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/guard/grammar.go` imports only `encoding/json`,
     `slices`, `strconv` and `internal/resolve`, and names no `table` type,
@@ -432,9 +447,20 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     `::GuardEvaluator` (the interface `Evaluator` implements, `0012:C2`)
     and hosts `guardcontract.go`'s conformance harness, so the move
     co-locates the interface, its sole implementation (A4) and its
-    contract test. Verify by compiling: `go build ./...` plus
-    `go list -deps ./internal/table` still naming no package above
-    `resolve`.
+    contract test. Verified at Stage 6 against `main`
+    (`evidence/reconcile/source-verify.md` §A12): `grammar.go` imports
+    exactly `encoding/json`, `slices`, `strconv` and `internal/resolve` and
+    names no `table` identifier; `::intWidth`'s signature is `int`-only and
+    its three callers are `::domainSize`, `::IntDomain` and
+    `assignment.go::valueAssignments`, all in `guard` and so all outside
+    `resolve`, which is why the move exports it; `::IntDomain(d
+    table.TagDecl)` and `::domainSize(d table.TagDecl)` carry the `table`
+    type and stay; `internal/resolve/resolve.go::GuardEvaluator` and
+    `guardcontract.go::TestGuardEvaluatorContract` are both already there.
+    `go list -deps ./internal/table` names `internal/resolve` and neither
+    `internal/guard` nor `internal/graphlint`, so the cycle direction is
+    `table → resolve` as the clause requires. The remaining obligation is
+    the compile itself, which Phase 2 discharges.
   - **If wrong**: the loader cannot call the runtime comparison, and C1's
     "evaluated per member as the runtime evaluator would" becomes a
     reimplementation rather than a reuse — a fourth copy, in the one place
@@ -442,8 +468,18 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 - **A13 The bound check can be ordered before the literal render, so an
   out-of-`int`-range stepped value is reported as C2's bound failure and
   never reaches `conformKind`'s `strconv.Atoi`.**
-  - **Status**: Pending — the ordering claim is new at this pre-lock pass;
-    C2 as first written said only "computed without overflow".
+  - **Status**: Pending [downgraded @reconcile 2026-09-20 — the ordering
+    claim is new at the pre-lock pass and C2 as first written said only
+    "computed without overflow". Its PREMISE is verified: `::conform`
+    calls `::conformKind` before `::conformDomain`, and `conform` is
+    reached only from `::renderWrites`' write loop
+    (`evidence/reconcile/source-verify.md` §A14 d), so the site where the
+    bound check must be ordered ahead of the render is the one this record
+    already widens. What cannot be run before Phase 2 is the refusal's
+    TEXT — that it names the cell and the bound rather than "is not an
+    int". Named plan: scenario S5, the A13 overflow fixture, whose
+    expected detail is asserted against exactly that wording. MVV-load-
+    bearing; pinned, not deferred.]
   - **Method**: MVV Test
   - **Evidence**: `internal/table/load.go::conform` calls `::conformKind`
     before `::conformDomain`, and `conformKind`'s `int` arm runs
@@ -460,7 +496,7 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     bound" overstates what the loader can say.
 - **A14 A rule that both steps a key and lists it in `clear` is detectable
   at load, because the step spec is derived before the clear-list pass.**
-  - **Status**: Pending — the refusal is new at this pre-lock pass.
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/table/normalize.go::renderWrites` runs the
     write loop (`assignments[key] = members`) before the clear loop, which
@@ -470,7 +506,18 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     the clear loop, so the pair can be refused there rather than needing a
     second pass — and that the clear loop still precedes the per-cell walk,
     which C1 requires so the collision, not C2's bound, is what a rule
-    tripping both reports.
+    tripping both reports. Verified at Stage 6 against `main`
+    (`evidence/reconcile/source-verify.md` §A14): both loops sit in one
+    `::renderWrites` body, write first and clear strictly after with no
+    branch between them, so the step spec is in hand at the clear loop and
+    the pair is refusable there without a second pass; the clear loop ends
+    each key with an unconditional `assignments[key] = []string{ClearSentinel}`
+    and mints no collision refusal today; its only two refusals are
+    `category.go::CatUnknownTag` and `::CatWriteToNonOwnedTag`; and
+    `::conform` on write values is called only inside the write loop, which
+    completes before the clear loop starts — so the per-cell walk C1 places
+    after the clear loop is being added where `conform` already runs, and
+    the collision fires first as C1 requires.
   - **If wrong**: the pair cannot be refused at load, and C1 must instead
     DEFINE the interaction (clear wins, or step wins) rather than reject
     it.
@@ -479,7 +526,7 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   suffixed identity in its `Rule` and `Element` slots without disturbing
   the group-level findings, any finding code, or any in-package consumer
   that reads those slots back.**
-  - **Status**: Pending — the obligation is new at this pre-lock pass.
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: every per-row site sets `Rule: row.RuleID`
     (`internal/graphlint/groups.go`, `analysis.go`, `coverage.go`); the
@@ -497,6 +544,38 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     slots recover, and that `ruleIDsOf` needs no change. The search is for
     consumers of the field, not
     just producers — the producer census is the half that misses this.
+    Verified at Stage 6 against `main`
+    (`evidence/reconcile/source-verify-a15.md`). EIGHT per-row producer
+    sites, not the three files' worth this text first implied — five in
+    `groups.go` (`::checkOwnedBeforeMatch`, `::emitOverlaps`,
+    `::checkRedundantRows`, `::checkIdempotentWrites`,
+    `::checkVacuousAtoms`), two in `analysis.go`
+    (`::checkSingleValuedState`, `::checkUnreachableRules`), one in
+    `coverage.go` (`::emitWithholdings`) — and every one holds the `Row`
+    as a loop variable, so the suffixed form is reachable without new
+    state. The four group-level sites read `::firstRuleID` or
+    `::bareEscapeFor` over a `guard.Group` with no `Row` in scope, and are
+    disjoint from the eight. `::ruleIDsOf` reads `row.RuleID` directly and
+    needs no change; no production caller of `Row.Identity()` exists in
+    the package. Recovery is exact: `normalize.go::normalizeRules` refuses
+    a `#` in a rule id and `load.go` refuses one in a candidate member, so
+    truncating at the FIRST `#` recovers the authored id for any number of
+    suffix elements.
+    The read-back census ran to TWO, not one — the second is the reason
+    this assumption insists on consumers over producers, since its own
+    first pass named only `::groupHasOverlap`.
+    `internal/graphlint/engine.go::identityKey`, the sort key
+    `::sortFindings` orders on, also reads both slots. It is verified SAFE
+    and needs no change: it branches on `Rule` being NON-EMPTY to pick a
+    namespace and then uses the raw string only as a within-namespace
+    tie-break, so a suffixed value stays in the same bucket and the
+    rule-before-element ordering holds; no test pins the literal string,
+    only that the key forms a stable total order. It never resolves the
+    field against authored `[[rules]]` ids by equality, which is what C3's
+    fence forbids — so the fence is total over both readers and only
+    `::groupHasOverlap` moves. `export.go::compareEdges` reads an
+    `Edge.Rule`, a different struct in the graph-edge vocabulary C3 holds
+    fixed, and is not a finding read-back at all.
   - **If wrong**: C3's lint paragraph cannot be satisfied by a payload
     change alone, and the attribution gap is either carried as a disclosed
     consequence or routed to a successor record.
@@ -504,9 +583,7 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 - **A16 `::expand` can mint the stepped rows while staying TOTAL — its
   `[]Row` return unchanged and no error added — because `::renderWrites`
   resolves every refusable step before the crossing record is built.**
-  - **Status**: Pending — the site split and `expand`'s totality are new
-    at this pre-lock pass; C1 as first written named the widened pair
-    without saying which site owns the cell walk.
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/table/normalize.go::expand` is today
     `expand(base Row, predicates []Atom, outcome Atom, writes []TagValue)
@@ -518,7 +595,19 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     needs neither the `TagDecl` nor the step magnitude; and that the
     zero-cell, `#`-member, duplicate-member, width, clear-collision and
     C2 bound refusals all fire inside `renderWrites`, leaving `expand`
-    with nothing to refuse.
+    with nothing to refuse. Verified at Stage 6 against `main`
+    (`evidence/reconcile/source-verify.md` §A16): `::expand` is
+    package-level with the quoted signature, `[]Row` and no error;
+    `::renderWrites` is the `*loader` method, reaches the decl through
+    `l.model.Tags[key]` and already calls `::conform` on authored write
+    values; its return triple is `([]TagValue, []string, error)` as
+    stated; `model.go::TagValue` is `{Key string; Value []string}`, so it
+    carries a literal sequence and nothing else — which is what the
+    widening must change; and `::normalizeRule` assembles `predicates`
+    and hands them to `::expand` alone, never to `::renderWrites`, which
+    is the second signature change C1 names. Every refusal this record
+    mints is therefore sited where the decl is in hand, and `expand` keeps
+    its totality.
   - **If wrong** (a refusal is only decidable once rows are minted):
     `expand` needs an error return, which is a THIRD signature change
     beyond the two C1 admits, and C1's widening paragraph must be
@@ -1016,7 +1105,15 @@ would have to mint a new payload field for the right row, where recovery
 needs none. Recovery also leaves `ruleIDsOf` untouched, which a `Span`
 join would have to repoint off `row.RuleID`. No in-package consumer may
 resolve a per-row finding's
-`Rule` against authored `[[rules]]` ids by equality. Stating this is part
+`Rule` against authored `[[rules]]` ids by equality. That fence is
+written over the read-backs that EXIST, both of them: `::groupHasOverlap`
+is the one that resolves by equality and so the one that moves, and
+`internal/graphlint/engine.go::identityKey` — the key `::sortFindings`
+orders on — is the other, which branches only on the slot being non-empty
+and then uses the raw string as a within-namespace tie-break. It
+therefore satisfies the fence unchanged and keeps its ordering guarantee
+under a suffixed value (A15). Naming it here is the point: a fence stated
+over an unenumerated consumer set is the defect this paragraph is fixing. Stating this is part
 of the clause, not an implementation note: the field's published meaning
 narrows from "the authored rule id" to "the row's identity", and
 `docs/cli-output-contract.md` describes `rule` as graph-lint attribution,
@@ -1045,7 +1142,7 @@ is canonical. Cue: three sibling arms already make this call.
 | The UNDECIDED verdict's disposition | each caller, at its own call site | — | `guard` passes through; `graphlint` admits (`!= GuardFalse`, false-green); loader EXCLUDES (C1) | all three | none — deliberately per-caller; C1 owns the loader's |
 | Set-literal rendering for `in` | `renderSetLiteral`'s canonicalizing form, carried into the shim | loader, `graphlint` | `assignment.go::renderSet` (as-authored) vs `reach.go::renderSetLiteral` (sorted/compacted) | two | the canonicalizing one (`0003` set-literal clause) |
 | A row's written value, per carrier | `expand`'s per-cell loop | `Fingerprint`, `graph`, `flow next`, `guard` lint, `dump` | `Row.Writes` AND `Row.NextTags` (`0002:C15`) | two independent fields | neither — C1 requires BOTH be set per row |
-| How a graph-lint finding NAMES a row | the emitting site, per finding (C3's lint clause) | a reviewer reading `lint --as json`; `coverage.go::groupHasOverlap`, which reads emitted findings back | `Rule` and `Element` on the per-row findings; `firstRuleID` on the group-level ones | published field vs join key — the SAME field served both before this record | split deliberately: the published form is the suffixed identity, the in-package join key is the authored id RECOVERED from it (truncate at the first `#`) — not `Span`, which `Element`'s row does not carry. One field, two readers, and only the rendering moves |
+| How a graph-lint finding NAMES a row | the emitting site, per finding (C3's lint clause) | a reviewer reading `lint --as json`; `coverage.go::groupHasOverlap`, which reads emitted findings back; `engine.go::identityKey`, the sort key, which reads both slots but only for non-emptiness and a tie-break, and so is unaffected (A15) | `Rule` and `Element` on the per-row findings; `firstRuleID` on the group-level ones | published field vs join key — the SAME field served both before this record | split deliberately: the published form is the suffixed identity, the in-package join key is the authored id RECOVERED from it (truncate at the first `#`) — not `Span`, which `Element`'s row does not carry. One field, two readers, and only the rendering moves |
 
 **`oracle`** — each MVV row, what makes it fail, and its negative control.
 
