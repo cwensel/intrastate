@@ -25,3 +25,6 @@ stages: refine -> resolve -> [lenses] -> reconcile -> finalize   stop-after: fin
 | prelock repeatability | PASS | no | FULL variant: 3 cross-model runs (opus/fable/sonnet) + barrier diff; converged iter-2, 7/7 pins clean. C1 site-split pinned (renderWrites owns cell walk; expand stays total). C3 join key single-sourced. Determinacy written: fired. A16 booked. Commits 4d9b7e0, 1d8f72f. |
 
 Lens row complete (`emit.row: none`). Nine CAs Pending with declared Methods — Stage 6 closes them.
+| reconcile | RECONCILED | no | 9 open CAs -> 9 terminal. 4 Verified by source search (A12/A14/A15/A16), 5 Downgraded to named MVV scenarios (A5/A6/A10/A11/A13). identityKey BLOCK judged not-a-refutation, ratified by author. Commits dfddd97, ccff86f. |
+
+Pre-finalize confirm PUT AND GRANTED (author: "go"), 2026-09-20.
