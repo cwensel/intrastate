@@ -45,8 +45,20 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 		# New branch on the remote. Bound the walk to commits not already
 		# reachable from some other remote ref, so creating a branch does
 		# not re-scan (and re-litigate) all of published history.
-		mapfile -t range_args < <(git for-each-ref --format='^%(refname)' refs/remotes/)
-		commits=$(git rev-list "$local_sha" "${range_args[@]}" 2>/dev/null)
+		# Built with a read loop, not mapfile: mapfile is bash 4+, and
+		# the bundled macOS /bin/bash is 3.2. Both the declaration and
+		# the count guard are load-bearing under `set -u`: bash 3.2
+		# calls "${arr[@]}" unbound when arr is unset OR empty, which
+		# empties $commits and silently skips the scan below.
+		range_args=()
+		while IFS= read -r ref_exclude; do
+			[ -n "$ref_exclude" ] && range_args+=("$ref_exclude")
+		done < <(git for-each-ref --format='^%(refname)' refs/remotes/)
+		if [ "${#range_args[@]}" -gt 0 ]; then
+			commits=$(git rev-list "$local_sha" "${range_args[@]}" 2>/dev/null)
+		else
+			commits=$(git rev-list "$local_sha" 2>/dev/null)
+		fi
 	else
 		commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null)
 	fi
