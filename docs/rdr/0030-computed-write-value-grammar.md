@@ -419,7 +419,10 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     so it carries no dependency `resolve` lacks. `internal/guard/declaration.go`'s
     `::intWidth(minV, maxV int) (int, bool)` moves in the same relocation
     (C1) — it takes no `table` type either — so the width rule the loader
-    needs is single-sourced rather than copied into `table`. `::IntDomain`
+    needs is single-sourced rather than copied into `table`. It is
+    unexported today and both post-move callers are outside `resolve`, so
+    it lands as the exported `resolve.IntWidth`; verify the two callers
+    compile against that spelling. `::IntDomain`
     does NOT move: its parameter is a `table.TagDecl` and `resolve` cannot
     import `table`, so it stays in `guard` as the decl-unpacking wrapper it
     already is. Verify the move by compiling, and verify the wrapper by
@@ -465,7 +468,9 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     mints no refusal; the clear loop's only refusals are `CatUnknownTag`
     and `CatWriteToNonOwnedTag`. Verify that the step spec is available at
     the clear loop, so the pair can be refused there rather than needing a
-    second pass.
+    second pass — and that the clear loop still precedes the per-cell walk,
+    which C1 requires so the collision, not C2's bound, is what a rule
+    tripping both reports.
   - **If wrong**: the pair cannot be refused at load, and C1 must instead
     DEFINE the interaction (clear wins, or step wins) rather than reject
     it.
@@ -486,12 +491,38 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
     not only the writes: `coverage.go::groupHasOverlap` joins an emitted
     finding's `Rule` and `Element` against `ruleIDsOf(g)`'s bare ids to
     gate the `ambiguous_match` coverage arm, so it must move to a key the
-    suffix does not carry (the row's `Span`, or the authored id recovered
-    from the suffixed form). The search is for consumers of the field, not
+    suffix does not carry — C3 fixes that key as the authored id RECOVERED
+    from the suffixed form (truncate at the first `#`), because the join is
+    two-slot and `Element`'s row carries no span to join on. Verify both
+    slots recover, and that `ruleIDsOf` needs no change. The search is for
+    consumers of the field, not
     just producers — the producer census is the half that misses this.
   - **If wrong**: C3's lint paragraph cannot be satisfied by a payload
     change alone, and the attribution gap is either carried as a disclosed
     consequence or routed to a successor record.
+
+- **A16 `::expand` can mint the stepped rows while staying TOTAL — its
+  `[]Row` return unchanged and no error added — because `::renderWrites`
+  resolves every refusable step before the crossing record is built.**
+  - **Status**: Pending — the site split and `expand`'s totality are new
+    at this pre-lock pass; C1 as first written named the widened pair
+    without saying which site owns the cell walk.
+  - **Method**: Source Search
+  - **Evidence**: `internal/table/normalize.go::expand` is today
+    `expand(base Row, predicates []Atom, outcome Atom, writes []TagValue)
+    []Row` — package-level, no `*loader` receiver, no error return — and
+    `::renderWrites` is the `*loader` method holding the `TagDecl` and
+    already calling `::conform` on authored write values. Verify that the
+    per-key record `renderWrites` hands over can carry, per stepped key,
+    the resolved admitted cells and the literal each writes, so `expand`
+    needs neither the `TagDecl` nor the step magnitude; and that the
+    zero-cell, `#`-member, duplicate-member, width, clear-collision and
+    C2 bound refusals all fire inside `renderWrites`, leaving `expand`
+    with nothing to refuse.
+  - **If wrong** (a refusal is only decidable once rows are minted):
+    `expand` needs an error return, which is a THIRD signature change
+    beyond the two C1 admits, and C1's widening paragraph must be
+    reopened to admit it.
 
 ## Proposed Solution
 
@@ -593,6 +624,12 @@ existing `graph-owned-before-write` finding, not a new one.
 
 #### Normative Contracts
 
+Determinacy: fired — C1 (step ordering: the admits filter's position
+relative to `compareAtoms`, and the two-site split between `renderWrites`
+and `expand`), C1 (identity: the always-appended suffix element and its
+key order), C3 (identity: the published suffixed form vs the recovered
+join key).
+
 **C1**
 
 ```normative
@@ -610,17 +647,24 @@ is `internal/guard/declaration.go::intWidth`'s rule, and it must be the
 SAME rule: a declaration whose width lint cannot compute — it saturates
 `Cardinality` to the ceiling and refuses the product as over-large — must
 not be one the loader enumerates. `guard` is unreachable from `table`
-(`go list -deps`), so the rule MOVES to the `internal/resolve` shim beside
+(`go list -deps`), so the rule MOVES to the shim in the EXISTING
+`internal/resolve` package beside
 the relocated `Evaluator` rather than being copied — one relocation, on
 the same cycle and in the same phase, so the loader and lint cannot drift.
 What moves is the TYPE-FREE core only: `declaration.go::intWidth(minV,
-maxV int) (int, bool)` already takes no `table` type and relocates as-is.
+maxV int) (int, bool)` already takes no `table` type and so relocates
+with its BODY unchanged — but it is unexported today, and after the move
+its two callers sit in different packages (`table`'s loader and `guard`'s
+wrapper), so it is EXPORTED at its new home as
+`resolve.IntWidth(minV, maxV int) (int, bool)`. "Relocates as-is" is the
+body, not the spelling: left lowercase the moved core is unreachable from
+both callers this clause requires it to serve.
 `::IntDomain(d table.TagDecl) []int` does NOT move — `resolve` must not
 import `table` (`table` imports `resolve`) — so it stays in `guard` as a
 thin wrapper that unpacks the decl and calls the moved core, which is the
 existing shape, not a third spelling: `guard`'s in-package re-inline
 (`assignment.go::valueAssignments` walks the same counted loop) and
-`::domainSize` both repoint through the moved `intWidth`. The moved core
+`::domainSize` both repoint through the moved `resolve.IntWidth`. The moved core
 returns the WIDTH, an `int` — it renders nothing — so each caller keeps
 its own `strconv.Itoa` over the counted walk, and the loader's emitted
 `guard.all eq = <cell>` must render byte-identically to the cells
@@ -700,6 +744,17 @@ of the tag's atoms: every OTHER authored atom on the tag, the `guard.all`
 bounds among them, is retained unchanged beside these two, so a row's
 atom set on the stepped tag is the retained authored set plus this pair.
 
+The comparison the filter calls is the extracted shim, and its surface is
+what is on `main` today, not a new one: the shim takes a
+`resolve.GuardAtom` and the held value as a STRING — the cell, never the
+declared kind — and returns `resolve.GuardResult`, whose members are
+`GuardTrue`, `GuardFalse` and `GuardUnevaluable`. That is
+`grammar.go::Evaluator.Evaluate`'s existing signature, which is why the
+relocation carries no retyping; stating it here rather than leaving it to
+§Prerequisites because the held-value type is what fixes 0012's later
+typing work to `internal/resolve`, and a contracts-only reader would
+otherwise have to guess it.
+
 The runtime evaluator is three-valued; an atom
 answering neither true nor false at a member does NOT admit that member.
 For the kinds this clause admits that arm is UNREACHABLE — the operator/
@@ -756,7 +811,14 @@ the step vanish. Neither is authorable intent, and the existing silent
 overwrite is tolerable only because a literal write and a clear are both
 one value — a step is N, so the collision is refused rather than
 resolved. The step spec is therefore derived BEFORE the clear-list pass,
-so the pair is detectable. **The stepped key is placed in `assignments`
+so the pair is detectable, and the collision refusal PRECEDES the per-cell
+walk: a key both stepped and cleared is refused before any cell is
+evaluated, so it never reaches C2's bound. Where a rule would trip both,
+the collision is what the author is told — the clear list is a whole-key
+authoring mistake, where the bound is a statement about one cell, and
+reporting the cell first would send the author to narrow atoms on a rule
+whose step is not going to survive the clear list anyway. **The stepped
+key is placed in `assignments`
 like any other written key**, carrying a placeholder the expansion
 replaces per cell: `0002:C14` derives `RequiresOwned` from
 `maps.Keys(assignments)`, so a spec tracked beside the map instead would
@@ -773,6 +835,25 @@ hands it only to `::expand`), and the filter needs the `TagDecl` only
 `renderWrites` holds. So `renderWrites` takes the merged predicates as a
 parameter. Both widenings are local to `normalize.go` and neither adds a
 site.
+
+**The two widened sites own different halves, and the record crossing
+between them carries RESOLVED cells.** `::expand` is a package-level
+function with no `*loader` receiver and so no `TagDecl`, so every
+declaration-dependent step stays in `::renderWrites`: the admitted-cell
+evaluation, the `int` width check, the `#`-member and duplicate-member
+guards, the step/clear collision, the per-cell stepped literal and its
+`conform` bound check (C2). `::renderWrites` resolves the step spec into
+the per-key list of admitted cells and the literal each cell writes, and
+that — not the step magnitude — is what the widened per-key record
+carries, so `expand` needs neither the `TagDecl` nor `n`. `::expand` then
+does only what it does for `in` today: take a list of members per key and
+mint one row per combination, carrying the supplied literal and appending
+the suffix element. It therefore stays TOTAL — it keeps its `[]Row`
+return and gains no error — because every refusal this record mints has
+already fired before it is called. A reading that pushes the cell walk
+into `expand` has to invent a `TagDecl` reach that does not exist and
+widen the return to carry an error, which is a third signature change
+this clause does not admit.
 
 The per-cell stepped literal is the row's rendered assignment for that
 key, so it lands in BOTH carriers the assignment feeds: `Row.Writes` and
@@ -921,10 +1002,20 @@ gain no suffix.
 as vacuously closed. So suffixing the published field without addressing
 the read-back would turn a real coverage obligation into a silent pass,
 which is a worse defect than the one this paragraph fixes. The suffix is
-therefore applied at EMISSION and the in-package read-back joins on a key
-that does not carry it — the row's `Span`
-(`model:rule`, unchanged by expansion) or the authored id recovered from
-the suffixed form. No in-package consumer may resolve a per-row finding's
+therefore applied at EMISSION and the in-package read-back joins on the
+AUTHORED ID RECOVERED from the suffixed form — the published identity
+truncated at the first `#`, which is exact because `#` is banned in rule
+ids and every expanded row appends exactly one cell element per step
+point. The finding's own `Span` is NOT the join key, though it is the
+stable key for an out-of-repo consumer: `groupHasOverlap` joins on TWO
+slots, and while `Rule` has a `Span` beside it (set from
+`row.SourceLocator`), `Element` names a SECOND row that the finding
+carries no span for — `graph-overlap` emits `Span: rows[i].SourceLocator`
+with `Element: right.RuleID` and no right-hand span — so a `Span` join
+would have to mint a new payload field for the right row, where recovery
+needs none. Recovery also leaves `ruleIDsOf` untouched, which a `Span`
+join would have to repoint off `row.RuleID`. No in-package consumer may
+resolve a per-row finding's
 `Rule` against authored `[[rules]]` ids by equality. Stating this is part
 of the clause, not an implementation note: the field's published meaning
 narrows from "the authored rule id" to "the row's identity", and
@@ -949,12 +1040,12 @@ is canonical. Cue: three sibling arms already make this call.
 | Input / decision | Writer | Readers | Call sites | Sibling arms | Canonical |
 | --- | --- | --- | --- | --- | --- |
 | Does atom A admit value v (two-valued core) | the extracted shim in `internal/resolve` (Phase 2), which is also where `Evaluator` moves so the shim can reach it | `guard`, `graphlint`, the loader | `product.go::valueSatisfies`, `reach.go::atomAdmitsValue`, C1's admits filter | — (this record makes it single-source) | the shim |
-| Is an `int` declaration's width representable | `declaration.go::intWidth`, MOVING to the `internal/resolve` shim (type-free, so it relocates as-is — C1) | lint, the loader | `intWidth` at lint's `Cardinality`, C1's kind arm at load | `::domainSize` and `assignment.go::valueAssignments`, which both repoint through the moved core | the moved `intWidth` (A12) |
-| What are an `int` decl's cells | `guard::IntDomain`, STAYING in `guard` — its parameter is a `table.TagDecl` and `resolve` cannot import `table` | `guard` only | the two `guard` tests | the loader enumerates from the moved `intWidth` instead | `IntDomain` for `guard`, `intWidth` for the loader — one width rule, two unpackings |
+| Is an `int` declaration's width representable | `declaration.go::intWidth`, MOVING to the `internal/resolve` shim as the EXPORTED `resolve.IntWidth` (type-free body, but two packages call it after the move — C1) | lint, the loader | `IntWidth` at lint's `Cardinality`, C1's kind arm at load | `::domainSize` and `assignment.go::valueAssignments`, which both repoint through the moved core | the moved `resolve.IntWidth` (A12) |
+| What are an `int` decl's cells | `guard::IntDomain`, STAYING in `guard` — its parameter is a `table.TagDecl` and `resolve` cannot import `table` | `guard` only | the two `guard` tests | the loader enumerates from the moved `resolve.IntWidth` instead | `IntDomain` for `guard`, `resolve.IntWidth` for the loader — one width rule, two unpackings |
 | The UNDECIDED verdict's disposition | each caller, at its own call site | — | `guard` passes through; `graphlint` admits (`!= GuardFalse`, false-green); loader EXCLUDES (C1) | all three | none — deliberately per-caller; C1 owns the loader's |
 | Set-literal rendering for `in` | `renderSetLiteral`'s canonicalizing form, carried into the shim | loader, `graphlint` | `assignment.go::renderSet` (as-authored) vs `reach.go::renderSetLiteral` (sorted/compacted) | two | the canonicalizing one (`0003` set-literal clause) |
 | A row's written value, per carrier | `expand`'s per-cell loop | `Fingerprint`, `graph`, `flow next`, `guard` lint, `dump` | `Row.Writes` AND `Row.NextTags` (`0002:C15`) | two independent fields | neither — C1 requires BOTH be set per row |
-| How a graph-lint finding NAMES a row | the emitting site, per finding (C3's lint clause) | a reviewer reading `lint --as json`; `coverage.go::groupHasOverlap`, which reads emitted findings back | `Rule` and `Element` on the per-row findings; `firstRuleID` on the group-level ones | published field vs join key — the SAME field served both before this record | split deliberately: the published form is the suffixed identity, the in-package join key is `Span` (or the recovered authored id). One field, two readers, and only the rendering moves |
+| How a graph-lint finding NAMES a row | the emitting site, per finding (C3's lint clause) | a reviewer reading `lint --as json`; `coverage.go::groupHasOverlap`, which reads emitted findings back | `Rule` and `Element` on the per-row findings; `firstRuleID` on the group-level ones | published field vs join key — the SAME field served both before this record | split deliberately: the published form is the suffixed identity, the in-package join key is the authored id RECOVERED from it (truncate at the first `#`) — not `Span`, which `Element`'s row does not carry. One field, two readers, and only the rendering moves |
 
 **`oracle`** — each MVV row, what makes it fail, and its negative control.
 
