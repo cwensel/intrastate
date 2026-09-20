@@ -1,0 +1,13 @@
+0030  Draft  live  PASS  blocking=0 resolution=0 placeholder=5 advisory=6
+  conformance gate:inline                   1383-1502  the gate responses are inlined; they belong in artifacts/gate.md
+                                                      fix: move these responses to the record's artifacts/gate.md and leave the one-line pointer (a cross-file move; no patch)
+  conformance placeholder:survived          1413-1416  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1422-1434  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1440-1442  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1453-1457  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
+  conformance placeholder:survived          1478-1502  TEMPLATE.md's guidance block survived here; it is the template's words, not the author's
+                                                      fix: delete the bracketed guidance block, keeping whatever the author wrote around it
