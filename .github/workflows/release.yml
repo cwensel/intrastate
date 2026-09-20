@@ -42,6 +42,31 @@ jobs:
       - name: Verify the tagged commit
         run: make check
 
+      # `make check` above validates a binary the Makefile built with its
+      # OWN ldflags — a different templating path from .goreleaser.yaml's.
+      # Broken goreleaser ldflags would sail through it and publish an
+      # asset that reports "dev" forever, and a published tag cannot be
+      # taken back. So build the real artifacts first WITHOUT publishing
+      # and put those through the same gate the untagged snapshot job in
+      # ci.yml already applies. It costs a second build; a permanently
+      # mis-stamped release costs more.
+      - name: Build the release artifacts without publishing
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=publish
+        env:
+          # `--skip=publish` suppresses the publish stage, not the whole
+          # GitHub API surface: `changelog.use: github` in .goreleaser.yaml
+          # still calls the compare API, which 401s without a token. The
+          # `contents: write` scope is the same one the publishing step
+          # below uses; nothing here creates a release.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the built binary reports its identity
+        run: make release-check
+
       # No per-OS matrix: intrastate is pure Go and cross-compiles every
       # target from this one runner. See .goreleaser.yaml.
       - uses: goreleaser/goreleaser-action@v7
