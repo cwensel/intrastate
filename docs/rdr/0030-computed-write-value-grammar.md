@@ -94,10 +94,7 @@ N/A-bulleted). -->
     it is never silently dropped.
   -->
 - **Type**: Feature
-- **Profile**: large — provisional; the write-value grammar is a
-  model-author-facing contract that also binds the normalized graph
-  export and the guard-bound check, so it locks cross-RDR against
-  0002 C4, 0004, 0006 A10 and 0021.
+- **Profile**: foundational — C1, the step write and its expansion into literal rows; user-facing yes; locks cross-rdr
   <!-- Do not paste the matrix below into the field; it is the
   Stage 5 routing latch, provisional on `Draft`, made
   authoritative by Resolve.
@@ -172,60 +169,100 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
 - **A1 The loader's existing per-member row expansion can host a guard-block
   expansion keyed on the stepped tag without disturbing 0002:C13's
   match-only rule for `in` atoms.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/table/normalize.go::expand` — its choice-point
-    loop and its comment on why a guard `in` atom is deliberately not
-    expanded (a conjunction would become a disjunction).
+    loop over sorted candidates appends the member to `Row.Suffix`, and its
+    `case expanding:` arm MINTS a fresh `eq` atom rather than rewriting the
+    authored one, so the comment's reason for refusing a guard `in` (a
+    conjunction would become a disjunction, and `0002:C7` forbids folding an
+    `unless` into a per-member `eq`) does not reach a step point. Two
+    structural facts bound the work: the choice-point discriminant is
+    `c.atom.Operator == "in" && c.atom.Block == BlockMatch`, so a step point
+    is a third kind whose suffix element must slot into
+    `internal/table/normalize.go::compareAtoms`' sort; and `renderWrites`
+    runs BEFORE `expand`, whose tail clones one write set onto every row, so
+    the per-cell write must move inside the loop.
   - **If wrong**: the step expansion is a second mechanism beside `expand`
     with its own suffix and ordering rules, and Phase 1 doubles.
 - **A2 An enum's authored `domain` order survives load, normalization, the
   dump and the graph export unsorted, so it can carry step order.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
   - **Evidence**: `internal/table/load.go::tagDecl` carries `Domain:
-    src.Domain`; `0021:C2` "`domain` carries the declaration's AUTHORED
-    members"; no `sort` over `TagDecl.Domain` in `internal/table`.
+    src.Domain` unsorted; `0021:C2` "`domain` carries the declaration's
+    AUTHORED members"; a sweep of every `sort.`/`slices.Sort` in
+    `internal/table`, `internal/cli/graph_document.go` and
+    `internal/graphlint` finds none over `TagDecl.Domain` — the export
+    clones it, `conformDomain` only reads membership. The one domain sort
+    is over `EmitDecl.Domain` (RDR 0024's emit alphabet), a different type
+    whose carry is documented value-preserving, not order-preserving.
   - **If wrong**: `step` on an enum has no stable order and needs an
     explicit ordering facet, widening the declaration model RDR 0003 owns.
 - **A3 An enum domain member is NOT among the strings today's `#` ban
   covers, so a member carrying `#` can reach a row's expansion suffix
   unless this record refuses it.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/table/model.go::Identity` ("Every string that
-    can reach here has `#` banned at load"); `0002:C17` scopes the `#` ban
-    to match-block `in` members, which a domain member is not.
+  - **Evidence**: the load-time `#` ban has exactly three sites, and the one
+    that bans a member is `internal/table/normalize.go::normalizeAtom`'s
+    `case "in":` arm, gated `if b == BlockMatch` with the comment "The `#`
+    reservation is match-only: only match blocks expand"; the other two are
+    `::normalizeRules` (rule ids) and `internal/table/load.go::loadOutcomes`
+    (the recognized alphabet). `tagDecl` performs NO `#` check on
+    `src.Domain`. So a domain member carrying `#` is authorable today and
+    reaches `internal/table/model.go::Identity`'s suffix, and C1's refusal
+    is a new guard, not a restatement. `0002:C17` scopes the ban to
+    match-block `in` members, which a domain member is not.
   - **If wrong** (the ban already covers domain members): C1's refusal of
     a `step` over a domain with a `#` member is redundant with an existing
     load check and drops to a restatement, not a new guard.
 - **A4 The per-cell admits filter is decidable at load with the same
   comparison the runtime guard evaluator uses, for `eq`/`in`/`lt`/`lte`/
   `gt`/`gte` on `int` and `eq`/`in` on `enum`.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Source Search
-  - **Evidence**: `internal/resolve/guardcontract.go` (0012's typed
-    evaluator, `0012:C2`) — the int comparison and enum equality it
-    performs are total over a declared finite domain.
+  - **Evidence**: `internal/guard/grammar.go::Evaluator.Evaluate` is the sole
+    implementation of `internal/resolve/resolve.go::GuardEvaluator` (0012's
+    typed evaluator, `0012:C2`); `internal/resolve/guardcontract.go` is its
+    cross-RDR conformance harness, not the evaluator. `lt`/`lte`/`gt`/`gte`
+    parse both sides with `strconv.Atoi` and delegate to
+    `internal/guard/grammar.go::compare`; `eq` is string equality and `in` is
+    `slices.Contains` over a parsed set. The type is `struct{}` — documented
+    as carrying no state so that "never reads the tag view" is a property of
+    the type — so each comparison is a pure function of (operator, atom
+    literal, candidate value) and replays at load over a declared finite
+    domain. Open at C-clause level, not a refutation: `Evaluate` returns a
+    THREE-valued result whose `Unevaluable` arm C1 does not dispose of.
   - **If wrong**: load and runtime disagree on which cells a stepping row
     admits; the bound refusal fires on a cell the runtime never reaches or
     misses one it does.
 - **A5 Expanded rows introduce no overlap the hand-unrolled table did not
   have: two rows in one outcome group that step the same tag partition its
   cells by their own atoms exactly as literal rows do.**
-  - **Status**: Pending
+  - **Status**: Pending — resolves at the MVV; the form is unimplemented, so
+    the pair cannot be run before Phase 2.
   - **Method**: MVV Test
-  - **Evidence**: the MVV's fixture pair — `lint` findings on the `step`
-    ladder equal those on the unrolled ladder, including zero
-    `graph-overlap`.
+  - **Evidence**: the MVV's fixture pair — `intrastate lint --model
+    <fixture> --as json` on each, finding sets compared as sets over
+    `findings[]` (normalizing `model`), including zero `graph-overlap`. All
+    four cited finding codes exist today:
+    `internal/graphlint/taxonomy.go::CodeOverlap`, `::CodeCoverageGap`,
+    `::CodeOwnedBeforeWrite` (blocking) and `::CodeIdempotentWrite`
+    (advisory tier — so "identical finding sets" spans both tiers).
   - **If wrong**: a computed ladder lints `graph-overlap` where the
     literal one did not, and the "same table, fewer rows" claim fails.
 - **A6 For every (state, outcome) cell the `step` ladder resolves to the
   same plan as the unrolled ladder.**
-  - **Status**: Pending
+  - **Status**: Pending — resolves at the MVV, with A5.
   - **Method**: MVV Test
-  - **Evidence**: the MVV's `flow resolve` sweep over the fixture pair,
-    plans compared on `writes`/`next`/`clear`.
+  - **Evidence**: `intrastate flow resolve --model <fixture> --outcome <o>
+    --artifact <role>=<statefile> --as json --plan-only` swept over every
+    (state, outcome) cell of the pair; `internal/cli/flow_resolve.go`'s
+    payload carries `next`, `writes` and `clear` as named fields, and
+    `--plan-only` drops the request echo so the two models' plans compare
+    directly. The state cell is driven by rewriting the bound artifact file,
+    the pattern `internal/cli/flow_exit_0005_test.go` already uses.
   - **If wrong**: load-time expansion is a semantics change, not a grammar
     change, and Alternative 1 reopens.
 - **A7 The step expansion's row growth is bounded by the declaration
@@ -233,31 +270,57 @@ Pending at Propose; Stage 4 verifies. Each names the artifact that decides it.
   width — and needs no load-time ceiling at the ladder sizes reported;
   the lint enumeration limit is RDR 0013's caller-supplied analysis scope
   (`0013:C1`, `0013:C3`) and gates nothing at load.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Spike
-  - **Evidence**: load a step model over an `int` declared `min = 0,
-    max = 100000` and record wall time and row count; the joint check
-    below records the 0013 coupling.
+  - **Evidence**: `evidence/spikes/a7-row-growth.md` — a table of N literal
+    rows (what C1 says the expansion mints) at the A7 declaration `min = 0,
+    max = 100000` loads and normalizes in **0.96 s / 584 MB at 100,001
+    rows**, exit 0, and stays linear (~10 us and ~5.8 KB per row) to 500,000
+    rows / 5.08 s. No row-count gate exists in `internal/table`, and
+    `internal/guard/declaration.go::AssignmentCount` is not merely unreached
+    but UNREACHABLE from load: `go list -deps ./internal/table` names
+    neither `internal/guard` nor `internal/graphlint`, so the package graph
+    enforces it. Both published bounds are lint-side
+    (`internal/guard/product.go` product bound, `internal/graphlint/taxonomy.go`
+    node ceiling), and exceeding one degrades the verdict —
+    `reach.go` sets `complete=false`, reported as a finding — rather than
+    refusing the model. The joint check below records the 0013 coupling.
   - **If wrong**: C1 gains a load-time ceiling of its own — a 0030
     decision, never a reuse of 0013's lint limit, which the analysis scope
     it parametrises cannot reach.
 - **A8 An expanded row's suffixed identity is what `flow next`, `flow
   resolve` and the dump already show for `in`-expanded rows, so no new
   rendering surface is owed.**
-  - **Status**: Pending
+  - **Status**: Refuted — the dump half holds, the flow half does not.
   - **Method**: Source Search
-  - **Evidence**: `internal/table/model.go::Identity` and its consumers in
-    `internal/cli/flow_next.go` / `internal/table/dump.go`: the dump
-    carries `SourceLocator`, and the `flow resolve` / `flow next` payloads
-    carry the rule id and suffix as they do for an `in` expansion.
-  - **If wrong**: a caller sees `retry#3` with no way back to the authored
-    rule — a doc obligation on the authoring guide, not a design change.
+  - **Evidence**: the suffix lives in a separate `Row.Suffix` field and is
+    joined to the rule id ONLY by `internal/table/model.go::Identity`;
+    `expand` leaves `RuleID` the bare authored id. `internal/table/dump.go`
+    does render it (`case "identity": return r.Identity()`, beside
+    `SourceLocator`), so the dump claim stands. But
+    `internal/table/model.go::Row.KernelRow` builds the kernel row as
+    `resolve.Row{RuleID: r.RuleID, …}`, dropping `Suffix` entirely, and
+    `internal/cli/flow_next.go::summarize` and `internal/cli/flow_resolve.go`
+    then publish that bare id: an `in`-expanded row surfaces TODAY as
+    `retry`, never `retry#3`. A related join is ambiguous for the same
+    reason — `internal/cli/flow_resolve.go::rowByID` matches on
+    `row.RuleID == ruleID`, so N expanded rows share one key and the first
+    wins.
+  - **If wrong** (as verified): a rendering surface IS owed, not merely a
+    doc line — the flow payloads do not carry the cell that distinguishes
+    the rows this record mints. Disposition is the author's (round item Q1).
 - **A9 No open peer relies on the inline-table write refusal
   (`malformed_tag_declaration: … is not a tag value`) as a contract.**
-  - **Status**: Pending
+  - **Status**: Verified
   - **Method**: Peer RDR
-  - **Evidence**: joint check arm 3 over open peers' normative fences for
-    the refusal token; a citing element id if found.
+  - **Evidence**: joint check arm 3 read the `§normative-contracts` fence of
+    every open (Draft) peer — 0012, 0013, 0014, 0015, 0016, 0017, 0018,
+    0022 — for `is not a tag value` and `malformed_tag_declaration`: no
+    citing element id, clear. 0019 is Implemented, not an open peer, and
+    names `valueMembers` only for canonical-form rendering. 0015 and 0022
+    consume `reach.go::successor` over an ALREADY-NORMALIZED row, so
+    expanding to literal rows at load preserves the shape their fences rest
+    on — more rows, same literal `Writes`.
   - **If wrong**: a peer's fenced refusal silently becomes an acceptance
     — a joint decision, not an edit here.
 
@@ -490,7 +553,7 @@ refuse.
 | Admit a write value | `internal/table/load.go::valueMembers` | no inline-table arm | Reuse, unchanged | intercepted before it on the write path only (C1) |
 | Successor per node, export, fingerprint | `reach.go::successor`, `graph_document.go::graphRows`, `engine.go::Fingerprint` | read `Row.Writes` literals | Reuse, unchanged | C3 |
 | Flag a write that moves nothing | `groups.go::checkIdempotentWrites` | `eq`-match only | Reuse, unchanged | a non-zero step never lands on its own cell |
-| Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | a lint analysis scope (`0013:C1`), unreachable from load | Not reusable (A7) | none unless A7 fails, and then a load ceiling this record decides |
+| Cap row growth | `internal/guard/declaration.go::AssignmentCount` ceiling | a lint analysis scope (`0013:C1`); unreachable from load — `go list -deps ./internal/table` names neither `guard` nor `graphlint` | Not reusable (A7) | none: the A7 spike measured load linear and cheap, so no load ceiling is owed |
 
 ### Decision Rationale
 
@@ -741,11 +804,14 @@ order.
 - **`unless` on the stepped tag over-admits cells** → the bound refusal
   fires and its detail names the `guard.all` complement; the authoring
   guide already prescribes that rewrite for a needed conjunction.
-- **Wide `int` bounds multiply rows at load** (A7) → if the spike shows a
-  declared domain whose expansion is too wide to load, C1 gains a
-  load-time ceiling of its own, at a value this record picks; 0013's lint
-  scope cannot serve, since it is not reachable from load. A Resolve
-  outcome, not a redesign.
+- **Wide `int` bounds multiply rows at load** (A7, spike-settled) → load is
+  linear and cheap (100,001 rows in 0.96 s), so C1 takes no load-time
+  ceiling. The cost lands on `lint`, whose enumeration is roughly quartic
+  and whose bounds are 0013's caller-supplied analysis scope, unreachable
+  from load by the package graph: a wide step domain yields a model that
+  loads instantly and that lint cannot finish analysing, degrading the
+  verdict (`complete=false`, reported as a finding) rather than refusing
+  the model.
 - **A rule with two atoms on the stepped tag in one block** (the 0011
   escape: the atom builder nests operators inside keys) → the admits filter
   is defined over EVERY positive atom on the tag, not "the" atom, so two
@@ -821,23 +887,69 @@ and assert C3's invariance on the export and the CLI previews.
 
 ### Testing Strategy
 
-[Required — never omit. Test scenarios and coverage goals — what to test and
-what constitutes "done." For non-functional concerns
-(performance, security): state measurement strategy,
-not estimates.]
+Fixtures live in `internal/table/testdata/` beside `rdr-fixture.toml`
+(whose `[tags.iter]` `int` with `min = 0, max = 9` and enum `domain`
+declarations are the shapes the ladder pair is built on); the assertions
+are CLI-level, on the JSON envelopes, in `internal/cli/lint_mvv_0030_test.go`
+and `internal/cli/flow_mvv_0030_test.go` per the `<topic>_mvv_<rdr>_test.go`
+precedent. Done = every scenario below green with no new finding code and no
+new envelope member.
 
-1. **Scenario**: [Description]
-   **Expected**: [Result]
+1. **Scenario**: `lint --as json` over `ladder-literal.toml` and
+   `ladder-step.toml`, the same ladder authored unrolled and stepped, each
+   step rule carrying a rule with two positive atoms on the stepped tag.
+   **Expected**: identical finding sets as sets over `findings[]`
+   (`model` normalized), spanning both the blocking codes and the advisory
+   `graph-idempotent-write`; zero `graph-overlap` and zero
+   `graph-coverage-gap` on both. Backs A5.
+2. **Scenario**: `flow resolve --as json --plan-only` swept over every
+   (state, outcome) cell of the pair, the state driven by rewriting the
+   bound artifact file.
+   **Expected**: `writes`, `next` and `clear` equal cell by cell. Backs A6.
+3. **Scenario**: `ladder-step-unguarded.toml` — the `lt 5` atom removed —
+   loaded.
+   **Expected**: refusal under `malformed_tag_declaration` naming rule
+   `retry`, tag `attempt`, cell `9`, value `10`; the enum sibling names
+   `tier` and `large`. Backs C2, whose check is
+   `internal/table/load.go::conform` → `::conformDomain` (the existing
+   message names value and bound, and `renderWrites` already prefixes rule
+   and key, so only the cell is new text).
+4. **Scenario**: `[initial] attempt = { step = 1 }` and a predicate literal
+   `{ step = 1 }`, each loaded.
+   **Expected**: both refuse — the table shape is write-block only. Backs
+   C1's interception arm.
+5. **Scenario**: zero-cell, zero-step, float-step, and `#`-in-domain step
+   models loaded; a step write on `bool`, `set`, `scalar`, and an
+   unbounded `int`.
+   **Expected**: each a load refusal under `malformed_tag_declaration`
+   whose detail names the admitted form or kinds. Backs C1's grammar arm
+   and, for the `#` case, the new guard A3 established is not redundant.
+6. **Scenario**: `graph` export of `ladder-step.toml` decoded against the
+   shipped `intrastate.graph/1` document type.
+   **Expected**: decodes with no new member; `internal/table::Categories()`,
+   the CLIError codes and the finding codes each gain none. Backs C3.
 
 ### Performance Expectations
 
-[Conditional — omit (don't N/A-bullet) this section unless
-comparing alternatives on empirical performance grounds.
-Do not include effort estimates or speculative
-throughput targets. Rough performance metrics are
-appropriate only when comparing alternatives — note
-empirical data or obvious gains that support the
-chosen approach over a rejected one.]
+Measured, not estimated — `evidence/spikes/a7-row-growth.md`, the A7 spike,
+over tables of N literal rows (what the expansion mints).
+
+Load and normalize are **linear** in the expanded row count: 0.96 s and
+584 MB resident at 100,001 rows, 5.08 s at 500,000, ~10 us and ~5.8 KB per
+row throughout. So the declaration bounds the cost and no load-time ceiling
+is owed at the ladder sizes this record serves (tens of rows) or four orders
+of magnitude past them.
+
+Lint is the opposite curve and is **0013's analysis scope, not this
+record's**: it is roughly quartic — 7.5 s at 100 rows, 116 s at 200, beyond
+600 s at 1,000 — so a step write over a wide domain yields a model that
+loads instantly and that `lint` cannot finish analysing. Exceeding a lint
+bound degrades the verdict (`reach.go` sets `complete=false`, surfaced as a
+finding) rather than refusing the model, which is why the bound cannot be
+answered at load: a load-time ceiling would refuse models the loader handles
+in under a second for a cost the loader never pays. Were a ceiling ever
+wanted it would be memory-motivated and first bite near 1,000,000 rows
+(~6 GB extrapolated), an order of magnitude past the A7 declaration.
 
 ## Finalization Gate
 
