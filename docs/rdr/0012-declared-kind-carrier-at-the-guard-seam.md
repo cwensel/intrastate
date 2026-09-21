@@ -11,7 +11,7 @@ N/A-bulleted). -->
 ## Metadata
 
 - **Date**: 2026-08-28
-- **Status**: Draft
+- **Status**: Final
   <!--
   - `Deferred` is the parked-with-a-revisit-trigger status for a
     Draft that cannot proceed because **no acceptable mechanism
@@ -223,39 +223,21 @@ Resolve's refusal taxonomy).
     resolvable here).
   - **Method**: Source Search + Spike
   - **Evidence**: HELD side —
-    `internal/guard/assignment.go::valueAssignments` (called from
-    `internal/guard/product.go` with `m.Tags[key]`) renders the declared
-    domain with `strconv.Itoa` in its `int` arm, which emits no leading
-    zero, `+`, or whitespace, so only canonical spellings reach the lint
-    side by THAT path (spike
-    `evidence/spikes/a4-render-path.md`). That spike measured the
-    product path, which under the narrowed scope is the whole held
-    side of this claim: `product.go::valueSatisfies` is reached from
-    `Denotation`, and `product.go::selectionOf` routes `BlockMatch`
-    atoms away from it. The other held-side path —
-    `internal/graphlint/reach.go::heldValues` → `canonicalValues` (no
-    integer round-trip) — feeds `reach.go::atomAdmitsValue` ONLY,
-    which C4 excludes from typing, so lint and the kernel read those
-    cells identically and this claim does not quantify over them.
-    Reconcile verified that exclusion is structural, not incidental
-    (both callers are `BlockMatch`-only; derivation in
-    `evidence/reconcile/report.md` §A4). LITERAL side — today the
-    literal is joined from authored bytes (`valueSatisfies`) and the
-    loader's kind check is `strconv.Atoi`
-    (`internal/table/load.go::conformKind`), which ACCEPTS `"00"`,
-    `"01"`, `"+1"`; measured, an authored `n eq "00"` flips lint from
-    blocking `graph-coverage-gap` (exit 2) to clean (exit 0) — the
-    blocking→clean direction (fixture S7; spike
-    `evidence/spikes/a4-lint-diff.md`). C5 closes that leg by admitting
-    only `strconv.Itoa(n) == authored`, so the divergence the spike
-    measured cannot be authored at all. Bare floats are covered: a TOML
-    `eq = -0.0` is rendered to the literal `"-0"` by
-    `internal/table/load.go::valueMembers`
-    (`strconv.FormatFloat(t, 'g', -1, 64)`) BEFORE the kind check, and
-    `Atoi("-0")` succeeds while `Itoa(0)` is `"0"` — C5 refuses it,
-    `conformKind` alone does not. The 123-model corpus shows no verdict
-    flip, but it contains ZERO `eq`/`in` atoms over an `int` tag, so
-    that result measures coverage, not safety (S6).
+    `internal/guard/assignment.go::valueAssignments` renders the declared
+    domain with `strconv.Itoa`, so only canonical spellings reach lint by
+    the product path (`internal/guard/product.go::valueSatisfies`, reached
+    from `Denotation`); the other held path,
+    `internal/graphlint/reach.go::heldValues`, feeds only
+    `reach.go::atomAdmitsValue`, which C4 excludes from typing. LITERAL
+    side — the loader's kind check
+    (`internal/table/load.go::conformKind`) accepts `"00"`/`"01"`/`"+1"`
+    and, via `internal/table/load.go::valueMembers`, `-0`; C5 admits only
+    `strconv.Itoa(n) == authored` and refuses them. Measured in spikes
+    `evidence/spikes/a4-render-path.md` and
+    `evidence/spikes/a4-lint-diff.md` (fixture S7) and in
+    `evidence/reconcile/report.md` §A4; full derivation, including the
+    123-model corpus coverage result (S6), in
+    `artifacts/a4-evidence.md`.
   - **If wrong**: lint and runtime disagree on a canonical-form edge the
     load refusal does not cover, and the fix narrows to
     validate-then-byte-compare (parse to prove comparability, compare
@@ -764,6 +746,10 @@ contradicts RDR 0024's locked REQ-7/REQ-9, and this project does not
 re-open locked records; see the Residual note in §Load-Bearing
 Decisions for the kata that carries it.
 
+The two excluded functions are also read by an open peer over the same
+seam; that overlap is adjudicated in §Load-Bearing Decisions and
+changes nothing in this clause.
+
 CONSTRUCTION IS NOT ENOUGH — the verdict must also be CONSUMED
 three-valued, on the guard path. Constructing over the right model
 makes a consumer's verdict correct; it does not make that consumer's
@@ -1070,6 +1056,23 @@ surface reading is "refuses" or "is green".
   survives the narrowing: ALT3's defect was the VENUE (runtime,
   caller-supplied), not the reach, so scoping C5 to one authoring
   ingress leaves it on the correct side of that line.
+- **The excluded MATCH path is shared with RDR 0022, and the exclusion
+  is what makes that safe** — RDR 0022 (terminal-reachability
+  liveness, Draft) reads both functions C4 excludes: its `C2` fixes
+  `reach.go::matchSatisfiable` as the existential edge-construction
+  primitive for its liveness closure, and its `A3` is Pending on the
+  evaluator's verdict for `OpaqueValue` under a value atom, written by
+  `reach.go::heldValues`. Neither record re-cuts the other. RDR 0022
+  reuses those functions' BYTE-based behaviour, and the entire content
+  of C4's exclusion is that the behaviour stays byte-based — so this
+  record's decision is what RDR 0022 is relying on, not a change under
+  it. The dependency runs one way: RDR 0022's A3 spike will exercise
+  `Evaluator.Evaluate` as C1 defines it, so RDR 0022 reads this
+  record's locked surface; nothing here is contingent on how A3
+  resolves. If A3 resolves toward a different value representation at
+  the held ingress, that is a successor to kata `intrastate#ch99`
+  above — the same residual, from the other side — and not a re-cut of
+  C4.
 
 #### Illustrative Code
 
@@ -1386,14 +1389,17 @@ later answer lands on it rather than minting a third path.
   `reach.go::canonicalValues`, which sorts and dedupes and applies no
   integer round-trip; those cells are conformed only by
   `internal/table/load.go::conformKind`, whose int arm is a bare
-  `strconv.Atoi` admitting `"007"`. So a model CAN author a held value
-  the two read differently — lint parses it at the guard seam, the
-  kernel byte-compares it at `TagSet.matches` — which is the `matchlit`
-  shape the Q1 ruling rejected a design for reopening. Canonicalization
-  as narrowed does not close the divergence; A4 carries the open
-  question of whether the held leg must be closed too (a second C5
-  ingress) or the seam's match arm must byte-compare to match the
-  kernel.
+  `strconv.Atoi` admitting `"007"`. A4's ruling settles which way that
+  leg goes: the seam's MATCH arm byte-compares (option (ii)), so C4
+  removes `reach.go::atomAdmitsValue` from the typed construction
+  sites and lint reads those held cells exactly as the kernel's
+  `TagSet.matches` does. The two therefore do NOT diverge on the match
+  path — the `matchlit` shape is closed by exclusion rather than by
+  canonicalization. What survives is not a divergence but a
+  canonicalization gap at the held ingress, identical on both sides;
+  it is out of scope here (closing it is repair (i), which `0024`'s
+  locked `REQ-7`/`REQ-9` forbid) and is carried by kata
+  `intrastate#ch99`.
 - **Verified** — the owned ingress is the sole door that conforms
   neither KIND nor SPELLING
   (`internal/accessor/model.go::ReadResult.OwnedSnapshot` →
@@ -1875,101 +1881,64 @@ GuardUnevaluable, which is the regression that would matter.
 
 ### Contradiction Check
 
-[Gate key: contradiction — a gate response is cited as
-`cli/NNNN:G-<key>`, so the key is a stable id and is
-not derived from this heading, which may be reworded.]
-
-[State any conflicts between Research Findings and
-the Proposed Solution. If none exist, state
-"No contradictions found between research findings,
-design principles, and proposed solution."]
+Responses: 0012-declared-kind-carrier-at-the-guard-seam/artifacts/gate.md (Gate PASS 2026-09-20)
 
 ### Assumption Verification
 
-[Gate key: assumptions]
-
-[Confirm every Critical Assumption Evidence Record
-is internally consistent: Status, Method, and
-Evidence agree, and "If wrong" is non-empty. List
-any record whose Method is `Docs Only` (these block
-lock unless paired with a Spike or Source Search
-plan) and any that remain `Pending` or `Unverified`
-with a plan to verify before implementation begins.
-Confirm no `Verified` stamp is self-referential or
-proves only an adjacent claim, and that each cited
-`path::Symbol` resolves on `main`. **Status
-consistency:** no assumption marked `Pending` or
-`Unverified` may have settled-fact prose elsewhere in
-the RDR depending on it.]
+Responses: 0012-declared-kind-carrier-at-the-guard-seam/artifacts/gate.md (Gate PASS 2026-09-20)
 
 ### Scope Verification
 
-[Gate key: scope]
-
-[Confirm the Minimum Viable Validation is in scope
-and will be executed during implementation, not
-deferred. State the specific test or proof.]
+Responses: 0012-declared-kind-carrier-at-the-guard-seam/artifacts/gate.md (Gate PASS 2026-09-20)
 
 ### Cross-Cutting Concerns
 
 [Gate key: cross-cutting]
 
-[Retained at lock — this sub-section stays in the RDR
-when the other gate responses move to gate.md, because
-peer RDRs cite it as `cli/NNNN:G-cross-cutting` and an
-element that is not projected cannot be cited.]
+- **Canonical-form / determinism** — owned here, and it is this
+  record's central concern. C5 defines canonical int spelling
+  operationally as `strconv.Itoa(n) == authored` after `Atoi`, applied
+  at the PREDICATE literal ingress (the atom builder) only. The rule
+  covers the bare-float path: a TOML `eq = -0.0` renders to the literal
+  `"-0"` via `internal/table/load.go::valueMembers` BEFORE the kind
+  check, and `Atoi("-0")` succeeds where `Itoa(0)` is `"0"`, so C5
+  refuses it and `conformKind` alone would not. This RDR claims no
+  byte-identical output, content-addressed identity or replay-stable
+  hash, so the hash/pre-image/version-marker checklist does not apply.
+  The non-predicate ingresses (`[emit]`, `[initial]`, `[rule.write]`,
+  CLI `--tag`) stay permissive under `0024:REQ-7`/`REQ-9`, which owns
+  that policy; the resulting held-ingress gap is recorded as the
+  Residual in §Load-Bearing Decisions and carried by kata
+  `intrastate#ch99`.
 
-[List only concerns that apply to this RDR. For each,
-state either how this RDR addresses it, or which peer
-RDR owns the project-wide policy this RDR conforms
-to. Omit (rather than N/A-bullet) anything that does
-not apply.]
+- **Incremental adoption** — the carrier lands with no migration. The
+  seam signature `Evaluate(atom, value)` is frozen by `0007:C1`/REQ-10
+  and untouched, so no implementer re-writes a call site; the change is
+  a constructor gaining a mapping. A6's census found no persisted owned
+  value whose verdict changes. C5's refusal is new user-visible
+  behaviour, but its population is measured at zero (`0012:A4` — the
+  123-model corpus carries no `eq`/`in` atom over an `int` tag), which
+  is why the invariant is affordable now rather than after a violator
+  base exists.
 
-Candidate concerns (include only those that apply):
-versioning · build tool compatibility · licensing ·
-deployment model · IDE compatibility · incremental
-adoption · secret/credential lifecycle · memory
-management · concurrency model · character encoding ·
-canonical-form / determinism (see note below).
+- **Character encoding** — in scope only as spelling, not as charset.
+  The comparison is over declared-kind parses (`Atoi`,
+  `ParseBool`, `FormatFloat`), never over collation or case folding,
+  and no case-folding or normalization rule is introduced. String-kind
+  atoms continue to byte-compare unchanged.
 
-If this RDR claims byte-identical output,
-content-addressed identity, or replay-stable hashes,
-also confirm: hash function + library, pre-image
-byte layout, primitive encodings, map iteration order,
-whitespace policy, case folding, empty/null/absent
-distinguishability, and a version marker for future
-evolution.
+- **Refusal vocabulary** — conformed to, not owned. The
+  `flow-guard-unevaluable` payload reuses RDR 0011's existing closed
+  reason set (`uncomparable`) rather than minting a term, and C5's
+  load refusal reuses the codes already at each ingress `conformKind`
+  serves (`malformed_predicate_atom`,
+  `malformed_initial_declaration`, `flow-tag-invalid` /
+  `flow-write-invalid`). No new envelope field is added at either
+  site; the row, atom and reason are named in `message`.
 
 ### Proportionality
 
-[Gate key: proportionality]
-
-[Is the document right-sized for the change? Flag
-any sections that should be trimmed before locking.
-The split test is **contract count, not word count**:
-confirm this RDR is the sole author of at most one
-independent load-bearing contract (per the Normative
-Contracts split signal). If it owns more than one
-seam, flag it for splitting rather than locking the
-seams together.
-
-Re-validate the **Profile** Metadata field against the
-contracts you just counted: confirm the value Resolve
-wrote still matches (one contract + no user-facing
-surface → `small`; etc. per the applicability matrix).
-If the lenses that actually ran disagree with the
-Profile (e.g. Profile says `small` but the change locks
-a contract that warranted `mid`+ lenses, or the lenses
-were skipped on a wrong `small`), correct the field and
-do not lock until the missing lenses have run. This is
-the latch's backstop — a wrong Profile cannot route
-past the lens battery undetected. A `Transient`-marked
-contract with a named deleting sibling and schedule is a
-recorded lifespan disposition, not an under-sized
-Profile — do not count it when re-deriving. Also confirm form:
-value + one clause naming the contract(s); strip any
-matrix/provenance prose left from the template or Seed
-(it belongs in the template comment, not the instance).]
+Responses: 0012-declared-kind-carrier-at-the-guard-seam/artifacts/gate.md (Gate PASS 2026-09-20)
 
 ## References
 
@@ -1986,6 +1955,16 @@ Peer records and joint decisions
 - RDR 0024 — `REQ-7`/`REQ-9`, the locked permissive int spelling at
   the `[emit]`/`[initial]`/`[rule.write]` ingress; the reason the
   held-ingress canonicalization residual is out of scope here.
+- RDR 0013 — ungated proof-completion observation seam; reads
+  `assignment.go::valueAssignments` and `grammar.go::Evaluator` on the
+  enumeration/bound axis. Ruled disjoint by that record's own
+  joint-check (`cli/0013:JC1`, "0012 modifies `grammar.go::Evaluator` /
+  `valueSatisfies`, disjoint from this seam's entries"); recorded here
+  symmetrically.
+- RDR 0022 — terminal-reachability liveness; reads
+  `reach.go::matchSatisfiable` (`C2`) and `reach.go::heldValues` (`A3`,
+  Pending) over the MATCH path C4 excludes from typing. See the
+  shared-seam disposition in §Load-Bearing Decisions.
 - RDR 0030 — Phase 2 extracts the loader-side admitted-cell shim that
   becomes a construction site under C4.
 - JDR 0001 — `§D1` (atom shape), `§D12` (the match block), `§D13`
