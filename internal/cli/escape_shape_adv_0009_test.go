@@ -37,7 +37,7 @@ func adv0009KernelError(t *testing.T, rows ...resolve.Row) error {
 	_, err := resolve.Resolve(resolve.Input{
 		Table:      resolve.Table{Outcomes: []string{"adv-outcome"}, Rows: rows},
 		Recognized: "adv-outcome",
-		Guards:     guardSeam(),
+		Guards:     guardSeam(nil),
 	})
 	if err == nil {
 		t.Fatal("Resolve returned nil error for a breaching table")
@@ -156,7 +156,7 @@ func TestAdv0009_ANonBreachKernelErrorKeepsTheGenericInternalCode(t *testing.T) 
 		Table:      resolve.Table{Outcomes: []string{"adv-outcome"}},
 		Recognized: "adv-outcome",
 		Owned:      []resolve.Tag{{Key: "recognized", Value: "adv-outcome"}},
-		Guards:     guardSeam(),
+		Guards:     guardSeam(nil),
 	})
 	if err == nil {
 		t.Fatal("want the RDR 0008 reserved-key breach, got nil")

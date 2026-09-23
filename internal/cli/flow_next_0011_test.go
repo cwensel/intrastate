@@ -803,7 +803,7 @@ func TestReq2And67_TheProbeBindsItsOwnOutcomeStripsEscapeAndKeepsTheResult(t *te
 		if len(row.Escape) != 0 {
 			continue
 		}
-		result := probeRow(row, view, owned, nil, false)
+		result := probeRow(row, view, owned, nil, false, guardSeam(model))
 		if result.Refused() &&
 			result.Refusal.Kind == resolve.KindUnmodeledOutcome {
 			t.Errorf("row %q's probe refused `unmodeled_outcome`; "+
@@ -858,7 +858,7 @@ func TestReq2And67_TheProbeBindsItsOwnOutcomeStripsEscapeAndKeepsTheResult(t *te
 
 	escView := map[string]string{"status": "final"}
 	escOwned := []resolve.Tag{{Key: "status", Value: "final"}}
-	escResult := probeRow(escRow, escView, escOwned, nil, false)
+	escResult := probeRow(escRow, escView, escOwned, nil, false, guardSeam(esc))
 	if escResult.Plan == nil {
 		t.Fatalf("`matching-escape`'s probe produced no plan: %#v\nIts "+
 			"match holds over the view, so with the escape list stripped it "+

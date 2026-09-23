@@ -28,7 +28,7 @@ import (
 // expression surface would have to carry an unparsed string the evaluator
 // splits itself.
 func TestReq1_GuardIsASymbolicAtomOverADeclaredTag(t *testing.T) {
-	var ev guard.Evaluator
+	ev := guard.NewEvaluator(map[string]string{"profile": "enum"})
 
 	atom := resolve.GuardAtom{
 		Key:      "profile",
@@ -423,7 +423,7 @@ func TestReq11_ByteIdenticalGuardsInTwoRulesOverlapRatherThanDeduplicate(t *test
 // tags against a typed element set."
 // HAPPY PATH
 func TestReq12_OperatorSemanticsAreAsStated(t *testing.T) {
-	var ev guard.Evaluator
+	ev := guard.NewEvaluator(map[string]string{"subject": "enum"})
 
 	cases := []struct {
 		name     string

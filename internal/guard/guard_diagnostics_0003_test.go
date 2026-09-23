@@ -295,7 +295,7 @@ func TestReq106_ZeroQualifyingIsAGapAndTwoQualifyingIsAnOverlap(t *testing.T) {
 	}
 
 	// And the runtime refuses rather than first-matching.
-	res := resolveWith(t, m.KernelTable(), guard.View{"profile": "small", "flag": "true"})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{"profile": "small", "flag": "true"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Errorf("two qualifying rows gave %v; RDR 0001 refuses — never "+
 			"first-match", describe(res))
@@ -311,7 +311,7 @@ func TestReq107_UnprovableDimensionStaysRuntimeEvaluableAndDrawsOneFindingEach(t
 	m := mustLoadSource(t, twoUnprovableDimensionsSource())
 
 	// Evaluable at runtime.
-	res := resolveWith(t, m.KernelTable(), guard.View{"loose_a": "one", "loose_b": "one"})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{"loose_a": "one", "loose_b": "one"})
 	if res.Refused() && res.Refusal.Kind == resolve.KindGuardUnevaluable {
 		t.Error("the runtime could not evaluate a guard over an unprovable " +
 			"dimension; it stays evaluable at runtime")

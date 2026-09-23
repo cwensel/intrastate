@@ -238,6 +238,7 @@ func runFlowNext(cmd *cobra.Command, _ []string) error {
 	view := assembledView(owned, req.observed)
 	evaluate, _ := cmd.Flags().GetBool("evaluate-gates")
 	all, _ := cmd.Flags().GetBool("all")
+	seam := guardSeam(req.model)
 
 	payload := nextPayload{
 		Model:     req.modelRef,
@@ -256,7 +257,7 @@ func runFlowNext(cmd *cobra.Command, _ []string) error {
 			// cannot request.
 			continue
 		}
-		result := probeRow(row, view, owned, req.observed, all)
+		result := probeRow(row, view, owned, req.observed, all, seam)
 		if excluded(result) {
 			// The probe answered `no_match`: the row's guard is DECIDED
 			// FALSE, or (by default) a match atom over a PRESENT key is
@@ -432,7 +433,9 @@ func assembledView(owned []resolve.Tag, observed []resolveTag) map[string]string
 // The CLI decides nothing about guards itself: the row verdict rule
 // `all ∧ ¬unless` (`0007:C5`/`0007:C6`) is RDR 0007's, and the typed
 // operator semantics behind each atom are RDR 0003's, reached through the
-// same `guardSeam()` `flow resolve` hands the kernel. That is the whole
+// same `guardSeam` `flow resolve` hands the kernel, constructed once per
+// request over the loaded model and threaded down here rather than
+// re-derived per row. That is the whole
 // point of the seam — a hand-rolled filter here answered a question it does
 // not own, and its answer disagreed with the kernel silently.
 //
@@ -472,6 +475,7 @@ func probeRow(
 	owned []resolve.Tag,
 	observed []resolveTag,
 	all bool,
+	seam resolve.GuardEvaluator,
 ) resolve.Result {
 	probe := row.KernelRow()
 	probe.Escape = nil
@@ -489,7 +493,7 @@ func probeRow(
 		Owned:      owned,
 		Observed:   kernelTags(observed),
 		Recognized: row.Outcome,
-		Guards:     guardSeam(),
+		Guards:     seam,
 	})
 	if err != nil {
 		// A probe the kernel could not even accept is not a verdict, so it

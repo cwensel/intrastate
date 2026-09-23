@@ -248,14 +248,16 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 
 	// ONE kernel call. The kernel owns selection, guard evaluation, and the
 	// escape phase; the CLI neither pre-filters candidates nor re-decides
-	// anything it returns (REQ-111, REQ-113).
+	// anything it returns (REQ-111, REQ-113). The seam is constructed once,
+	// over this request's model, and threaded to every kernel call below.
+	seam := guardSeam(req.model)
 	result, err := resolve.Resolve(resolve.Input{
 		Flow:       req.model.ID,
 		Table:      req.model.KernelTable(),
 		Owned:      owned,
 		Observed:   kernelTags(req.observed),
 		Recognized: outcome,
-		Guards:     guardSeam(),
+		Guards:     seam,
 	})
 	if err != nil {
 		return respond.Fail(cmd, kernelResolveFailure(err))
@@ -348,7 +350,7 @@ func runFlowResolve(cmd *cobra.Command, _ []string) error {
 		// (A-3). A row modeling several classes rescued this request under
 		// exactly one of them, and naming the others would misreport why
 		// the plan exists.
-		payload.EscapeClass = escapeClassOf(row, req, owned, outcome)
+		payload.EscapeClass = escapeClassOf(row, req, owned, outcome, seam)
 	}
 
 	// RDR 0023 `0023:C1` — the projection site, and the only place this verb
@@ -426,7 +428,9 @@ func rowByID(m *table.Model, ruleID string) (table.Row, bool) {
 // the list. If the probe cannot name a kind the row actually rescues, the
 // row's single declared class is the answer; a row declaring several and
 // rescuing an unprobeable kind reports nothing rather than guessing.
-func escapeClassOf(row table.Row, req flowRequest, owned []resolve.Tag, outcome string) string {
+func escapeClassOf(
+	row table.Row, req flowRequest, owned []resolve.Tag, outcome string, seam resolve.GuardEvaluator,
+) string {
 	probe := req.model.KernelTable()
 	var ordinary []resolve.Row
 	for _, r := range probe.Rows {
@@ -442,7 +446,7 @@ func escapeClassOf(row table.Row, req flowRequest, owned []resolve.Tag, outcome 
 		Owned:      owned,
 		Observed:   kernelTags(req.observed),
 		Recognized: outcome,
-		Guards:     guardSeam(),
+		Guards:     seam,
 	})
 	if err == nil && result.Refused() {
 		kind := string(result.Refusal.Kind)
@@ -558,4 +562,10 @@ func joinedBreaches(err error) []error {
 // guardSeam returns RDR 0003's value-comparison evaluator, the delegated
 // seam the kernel calls for typed operator semantics. This RDR does not
 // own guard semantics and implements none of its own (REQ-113).
-func guardSeam() resolve.GuardEvaluator { return guard.Evaluator{} }
+//
+// It is constructed over the declarations of m, the model whose rows the
+// kernel evaluates, so guard `eq`/`in` compare under the declared kind
+// (`0012:C4`). Callers build it once per request and thread it down.
+func guardSeam(m *table.Model) resolve.GuardEvaluator {
+	return guard.NewEvaluator(guard.DeclaredKinds(m))
+}

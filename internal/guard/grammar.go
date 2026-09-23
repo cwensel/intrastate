@@ -89,29 +89,41 @@ func SingleValueOperator(operator string) bool {
 // Evaluator is RDR 0003's value-comparison seam: it decides value
 // semantics over a PRESENT value and never reads the tag view.
 //
-// It carries no state, which is what makes "never reads the tag view" a
-// property of the type rather than a discipline: there is nowhere to hold a
-// view and the signature admits none. Key presence, existence atoms,
-// absent-key unevaluability, and the combination of per-atom verdicts are
-// the kernel's (RDR 0007).
-type Evaluator struct{}
+// It holds the declaration mapping it was constructed over — tag key to
+// declared kind token — and NOTHING else: no view, no runtime tag value.
+// That keeps "never reads the tag view" a property of the type rather than
+// a discipline, while letting `eq`/`in` compare under the declared kind
+// (RDR 0012). Key presence, existence atoms, absent-key unevaluability, and
+// the combination of per-atom verdicts are the kernel's (RDR 0007).
+//
+// Construct it with NewEvaluator. A zero value holds no mapping, so every
+// `eq`/`in` atom answers unevaluable rather than reverting to raw-string
+// comparison.
+type Evaluator struct {
+	kinds map[string]string
+}
+
+// NewEvaluator returns the seam constructed over kinds, the tag key → kind
+// token mapping DeclaredKinds produces for the model whose rows it will
+// evaluate. The return is the concrete Evaluator, never widened to the
+// kernel's interface.
+func NewEvaluator(kinds map[string]string) Evaluator {
+	return Evaluator{kinds: kinds}
+}
 
 // Evaluate decides one atom against the present value its key holds.
 //
 // A present value the operator cannot parse is UNEVALUABLE, never false:
 // that is the obligation the seam exists to carry, and folding it into
 // false would let a malformed literal prune a row silently.
-func (Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
+func (e Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
 	switch atom.Operator {
-	case "eq":
-		return boolResult(value == atom.Literal)
-	case "in":
-		members, ok := parseSetLiteral(atom.Literal)
-		if !ok {
-			return resolve.GuardUnevaluable
-		}
-		return boolResult(slices.Contains(members, value))
+	case "eq", "in":
+		return e.typedEquality(atom, value)
 	case "lt", "lte", "gt", "gte":
+		// The ordering operators keep their operator-inferred integer parse:
+		// the matrix admits them over `int` alone, so the kind mapping is not
+		// consulted.
 		bound, err := strconv.Atoi(atom.Literal)
 		if err != nil {
 			return resolve.GuardUnevaluable
@@ -146,6 +158,67 @@ func (Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardRes
 	// the vocabulary is frozen, so a free-form expression string is not an
 	// operator and has no reading.
 	return resolve.GuardUnevaluable
+}
+
+// typedEquality decides `eq`/`in` under the atom key's declared kind.
+//
+// The literal side is the one member of `eq` or the members decoded from
+// `in`'s §D13 array, and every member must parse under the kind before any
+// comparison: one unparseable member poisons the whole list. A key the
+// mapping does not carry, a `set` kind (the matrix admits no `eq`/`in`
+// over it), and a token outside the five-kind vocabulary are all atoms the
+// seam cannot type — unevaluable, never a raw-string comparison.
+func (e Evaluator) typedEquality(atom resolve.GuardAtom, value string) resolve.GuardResult {
+	kind, ok := e.kinds[atom.Key]
+	if !ok {
+		return resolve.GuardUnevaluable
+	}
+	literals := []string{atom.Literal}
+	if atom.Operator == "in" {
+		members, ok := parseSetLiteral(atom.Literal)
+		if !ok {
+			return resolve.GuardUnevaluable
+		}
+		literals = members
+	}
+
+	switch kind {
+	case "int":
+		held, err := strconv.Atoi(value)
+		if err != nil {
+			return resolve.GuardUnevaluable
+		}
+		parsed := make([]int, 0, len(literals))
+		for _, l := range literals {
+			n, err := strconv.Atoi(l)
+			if err != nil {
+				return resolve.GuardUnevaluable
+			}
+			parsed = append(parsed, n)
+		}
+		return boolResult(slices.Contains(parsed, held))
+	case "bool":
+		if !isBoolToken(value) {
+			return resolve.GuardUnevaluable
+		}
+		for _, l := range literals {
+			if !isBoolToken(l) {
+				return resolve.GuardUnevaluable
+			}
+		}
+		return boolResult(slices.Contains(literals, value))
+	case "enum", "scalar":
+		return boolResult(slices.Contains(literals, value))
+	case "set":
+		return resolve.GuardUnevaluable
+	default:
+		return resolve.GuardUnevaluable
+	}
+}
+
+// isBoolToken reports whether s is one of the two boolean tokens.
+func isBoolToken(s string) bool {
+	return s == "true" || s == "false"
 }
 
 // parseSetLiteral decodes an authored set LITERAL from its §D13 canonical

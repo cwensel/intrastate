@@ -37,9 +37,9 @@ func TestReq38_PolarityIsByBlockAndMatchingIsOrderIndependent(t *testing.T) {
 	// Matching does not depend on source order: reversing the rows of a
 	// two-row group leaves the disposition unchanged.
 	kt := m.KernelTable()
-	forward := resolveWith(t, kt, guard.View{"profile": "large", "iter": "1"})
+	forward := resolveWith(t, m, kt, guard.View{"profile": "large", "iter": "1"})
 	slices.Reverse(kt.Rows)
-	reversed := resolveWith(t, kt, guard.View{"profile": "large", "iter": "1"})
+	reversed := resolveWith(t, m, kt, guard.View{"profile": "large", "iter": "1"})
 	if !sameDisposition(forward, reversed) {
 		t.Errorf("reversing row order changed the disposition (%v vs %v); "+
 			"matching MUST NOT depend on source order or first-match priority",
@@ -99,14 +99,14 @@ func TestReq40_RowQualifiesOnAllTrueAndUnlessNotFullyTrueAndTiesRefuse(t *testin
 	kt := m.KernelTable()
 
 	// `all` true, `unless` not FULLY true: qualifies.
-	res := resolveWith(t, kt, guard.View{"profile": "large", "flag": "false"})
+	res := resolveWith(t, m, kt, guard.View{"profile": "large", "flag": "false"})
 	if res.Refused() {
 		t.Errorf("a row with every `all` atom true and `unless` not fully "+
 			"true refused %v; it qualifies", res.Refusal.Kind)
 	}
 
 	// `unless` fully true: disabled.
-	res = resolveWith(t, kt, guard.View{"profile": "large", "flag": "true"})
+	res = resolveWith(t, m, kt, guard.View{"profile": "large", "flag": "true"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindNoMatch {
 		t.Errorf("a row whose full `unless` block is true gave %+v; it is "+
 			"disabled", describe(res))
@@ -114,7 +114,7 @@ func TestReq40_RowQualifiesOnAllTrueAndUnlessNotFullyTrueAndTiesRefuse(t *testin
 
 	// Multiple rows qualify: the exact-one resolver refuses, never chooses.
 	dup := mustLoadSource(t, twoRuleIdenticalGuardSource())
-	res = resolveWith(t, dup.KernelTable(), guard.View{"profile": "large"})
+	res = resolveWith(t, dup, dup.KernelTable(), guard.View{"profile": "large"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Errorf("two qualifying rows gave %v; the exact-one resolver refuses "+
 			"instead of choosing by priority", describe(res))
@@ -139,7 +139,7 @@ func TestReq41_UnevaluableAtomInsideUnlessMakesTheWholeRowUnevaluable(t *testing
 	res, err := resolve.Resolve(resolve.Input{
 		Table: tbl, Recognized: "go",
 		Observed: []resolve.Tag{{Key: "profile", Value: "large"}},
-		Guards:   guard.Evaluator{},
+		Guards:   guard.NewEvaluator(map[string]string{"profile": "enum", "missing": "enum", "decidable": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -160,7 +160,7 @@ func TestReq41_UnevaluableAtomInsideUnlessMakesTheWholeRowUnevaluable(t *testing
 			{Key: "profile", Value: "large"},
 			{Key: "decidable", Value: "not-x"},
 		},
-		Guards: guard.Evaluator{},
+		Guards: guard.NewEvaluator(map[string]string{"profile": "enum", "missing": "enum", "decidable": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -282,7 +282,7 @@ func TestReq67_LintNarrowsWhereItWouldOutrunTheRuntimeVeto(t *testing.T) {
 	}
 
 	// And the runtime veto is not weakened: the same model still refuses.
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Errorf("the runtime gave %v; the veto MUST NOT be weakened to make "+
 			"lint's claim true", describe(res))
@@ -297,7 +297,7 @@ func TestReq67_LintNarrowsWhereItWouldOutrunTheRuntimeVeto(t *testing.T) {
 			"certifies nothing is not a narrowing. reports=%s",
 			renderReports(guard.Lint(twin)))
 	}
-	if twinRes := resolveWith(t, twin.KernelTable(), guard.View{"gate": "true"}); twinRes.Refused() {
+	if twinRes := resolveWith(t, twin, twin.KernelTable(), guard.View{"gate": "true"}); twinRes.Refused() {
 		t.Errorf("the runtime refused the twin lint certifies (%v); a green "+
 			"result must mean resolution succeeds", describe(twinRes))
 	}
@@ -565,7 +565,7 @@ func TestReq103_UnlessOverAbsentKeyIsLoudOnBothSurfaces(t *testing.T) {
 			},
 		}},
 	}
-	res, err := resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.Evaluator{}})
+	res, err := resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.NewEvaluator(map[string]string{"gate": "bool"})})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -627,7 +627,7 @@ func TestReq105_ExistenceOverAbsentKeySelectsAbsentAndDrawsNoDiagnostic(t *testi
 	}
 
 	// Runtime: decided, never unevaluable.
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 	if res.Refused() && res.Refusal.Kind == resolve.KindGuardUnevaluable {
 		t.Error("an existence atom over an absent key was unevaluable; it is " +
 			"DECIDED from presence == literal")
@@ -663,7 +663,7 @@ func TestReq110_OneFindingPerRefusingRowAndAbsenceOfGreenIsNotTheArtifact(t *tes
 	}
 
 	// And the runtime carries RDR 0007's payload naming the atom.
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Fatalf("runtime gave %v; want the RDR 0007 payload", describe(res))
 	}

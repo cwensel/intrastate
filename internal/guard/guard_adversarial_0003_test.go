@@ -116,7 +116,7 @@ func TestAdv1_GreenClaimCoversAViewTheRuntimeRefuses(t *testing.T) {
 			if !r.Covers(view) {
 				continue
 			}
-			res := resolveWith(t, kt, view)
+			res := resolveWith(t, m, kt, view)
 			if res.Refused() && res.Refusal.Kind == resolve.KindGuardUnevaluable {
 				t.Errorf("group %s is certified EXHAUSTIVE and its coverage "+
 					"union contains the conforming view caps=%s, yet the "+
@@ -405,7 +405,7 @@ func TestAdv3_UnprovableDimensionSilencesAnUnrelatedOverlap(t *testing.T) {
 	// The runtime's verdict on the duplicate pair, which is what lint is
 	// describing: both rows qualify, so the kernel cannot pick one.
 	kt := m.KernelTable()
-	res := resolveWith(t, kt, guard.View{"p": "true", "s": "z"})
+	res := resolveWith(t, m, kt, guard.View{"p": "true", "s": "z"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Fatalf("the fixture's premise is gone: the duplicate rows no "+
 			"longer collide at runtime (%s)", describe(res))

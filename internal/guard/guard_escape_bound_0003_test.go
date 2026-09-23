@@ -166,7 +166,7 @@ func TestReq78_BareEscapeRowDoesNotDischargeTheNarrowing(t *testing.T) {
 
 	// And the runtime agrees: the refusal is guard_unevaluable, not a rescue.
 	m := mustLoadSource(t, optionalKeyPlusBareEscapeSource())
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Errorf("the runtime gave %v; the gate's refusal is returned before "+
 			"escapeOrRefuse is reachable", describe(res))

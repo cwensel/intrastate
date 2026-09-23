@@ -43,9 +43,14 @@ func TestReq34_EvaluatorDecidesPresentValuesOnlyAndNeverReadsTheView(t *testing.
 				"MUST NOT read the tag view", i)
 		}
 	}
-	if reflect.TypeOf(ev).Kind() == reflect.Struct && reflect.TypeOf(ev).NumField() != 0 {
-		t.Errorf("guard.Evaluator carries %d fields; a view-free evaluator "+
-			"holds no state to read one from", reflect.TypeOf(ev).NumField())
+	// Narrowed by RDR 0012 (A2): the evaluator holds the declaration mapping
+	// it was constructed over, and no view-typed or runtime-valued state.
+	mapping := reflect.TypeOf(map[string]string(nil))
+	for i := range reflect.TypeOf(ev).NumField() {
+		if f := reflect.TypeOf(ev).Field(i); f.Type != mapping {
+			t.Errorf("guard.Evaluator field %s has type %s; a view-free evaluator "+
+				"holds only its declaration mapping", f.Name, f.Type)
+		}
 	}
 
 	// Existence atoms belong to the kernel, so the evaluator does not decide
@@ -64,7 +69,7 @@ func TestReq34_EvaluatorDecidesPresentValuesOnlyAndNeverReadsTheView(t *testing.
 	// either, and would pass the clauses above while deciding nothing. The
 	// cross-RDR contract test drives the present-value × literal × operator
 	// product and is the discriminating oracle.
-	resolve.TestGuardEvaluatorContract(t, ev)
+	resolve.TestGuardEvaluatorContract(t, func(k map[string]string) resolve.GuardEvaluator { return guard.NewEvaluator(k) })
 }
 
 // REQ-35: "an existence atom over an absent key is decided — not
@@ -81,7 +86,7 @@ func TestReq35_ExistenceOverAbsentIsDecidedAndValueOverAbsentIsUnevaluable(t *te
 		}},
 	}
 	res, err := resolve.Resolve(resolve.Input{
-		Table: tbl, Recognized: "go", Guards: guard.Evaluator{},
+		Table: tbl, Recognized: "go", Guards: guard.NewEvaluator(map[string]string{"missing": "enum", "present": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -101,7 +106,7 @@ func TestReq35_ExistenceOverAbsentIsDecidedAndValueOverAbsentIsUnevaluable(t *te
 		}},
 	}}
 	res, err = resolve.Resolve(resolve.Input{
-		Table: tbl, Recognized: "go", Guards: guard.Evaluator{},
+		Table: tbl, Recognized: "go", Guards: guard.NewEvaluator(map[string]string{"missing": "enum", "present": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -121,7 +126,7 @@ func TestReq35_ExistenceOverAbsentIsDecidedAndValueOverAbsentIsUnevaluable(t *te
 	res, err = resolve.Resolve(resolve.Input{
 		Table: tbl, Recognized: "go",
 		Observed: []resolve.Tag{{Key: "present", Value: "x"}},
-		Guards:   guard.Evaluator{},
+		Guards:   guard.NewEvaluator(map[string]string{"missing": "enum", "present": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -146,7 +151,7 @@ func TestReq36_AbsenceIsExpressedWithAnExistenceAtomNotAMissingValueAtom(t *test
 			Literal: resolve.LiteralFalse, Block: resolve.BlockAll,
 		}},
 	}}
-	res, err := resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.Evaluator{}})
+	res, err := resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.NewEvaluator(map[string]string{"x": "enum"})})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -161,7 +166,7 @@ func TestReq36_AbsenceIsExpressedWithAnExistenceAtomNotAMissingValueAtom(t *test
 		RuleID: "absent-wrong", SourceLocator: "f:2", Outcome: "go",
 		Guard: []resolve.GuardAtom{kernelAtom("x", "eq", "")},
 	}}
-	res, err = resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.Evaluator{}})
+	res, err = resolve.Resolve(resolve.Input{Table: tbl, Recognized: "go", Guards: guard.NewEvaluator(map[string]string{"x": "enum"})})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -183,7 +188,7 @@ func TestReq36_AbsenceIsExpressedWithAnExistenceAtomNotAMissingValueAtom(t *test
 	res, err = resolve.Resolve(resolve.Input{
 		Table: tbl, Recognized: "go",
 		Observed: []resolve.Tag{{Key: "x", Value: "no"}},
-		Guards:   guard.Evaluator{},
+		Guards:   guard.NewEvaluator(map[string]string{"x": "enum"}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -217,7 +222,7 @@ func TestReq37_ValueVerdictIsThisRDRsAndPresenceCombinationIsTheKernels(t *testi
 	in := resolve.Input{
 		Table: tbl, Recognized: "go",
 		Observed: []resolve.Tag{{Key: "k", Value: "yes"}},
-		Guards:   guard.Evaluator{},
+		Guards:   guard.NewEvaluator(map[string]string{"k": "enum"}),
 	}
 	res, err := resolve.Resolve(in)
 	if err != nil {

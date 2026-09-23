@@ -172,6 +172,20 @@ func (l *loader) atom(decl TagDecl, key, operator string, raw any, b Block, owne
 	if err := conform(decl, operator, members); err != nil {
 		return badAtom(err.Error())
 	}
+	// A predicate literal over an `int` tag is admitted only in its canonical
+	// decimal spelling — the `strconv.Itoa` round-trip and nothing wider —
+	// because guard `eq`/`in` compare parsed values while match atoms
+	// byte-compare, and a non-canonical literal would read differently to the
+	// two (`0012:C5`). The check sits here rather than in `conformKind` so it
+	// reaches predicate literals only, never `[emit]`/`[initial]`/`[rule.write]`.
+	if decl.Kind == "int" && operator != resolve.OpExists {
+		for _, m := range members {
+			if n, _ := strconv.Atoi(m); strconv.Itoa(n) != m {
+				return badAtom(fmt.Sprintf("%s is not the canonical spelling of int tag %s; write %d",
+					strconv.Quote(m), key, n))
+			}
+		}
+	}
 
 	if operator == resolve.OpExists {
 		// Verbatim: OpExists plus LiteralTrue or LiteralFalse (`0002:C8`).

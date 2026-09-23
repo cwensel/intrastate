@@ -230,6 +230,23 @@ out-of-domain member is `malformed_predicate_atom` wherever it is
 authored. A comparison bound is kind-checked but not domain-checked, so
 `gte = 9` over `min = 0, max = 2` loads and simply denotes nothing.
 
+A literal over an `int` tag must also be spelled **canonically** in every
+predicate block: `"00"`, `"01"`, `"+1"` and `"-0"` parse, but they are
+refused as `malformed_predicate_atom` with the rewrite named (`"01" is not
+the canonical spelling of int tag n; write 1`). Values in `[initial]`,
+`[rule.write]` and `[rule.emit]`, and values passed with `--tag` or
+`--write`, are not held to this.
+
+One declared kind, two comparison rules. A **guard** `eq` or `in` atom
+compares the held value under the tag's **declared kind**: over an `int`
+tag a held `07` equals the guard literal `7`, over a `bool` tag only `true`
+and `false` compare, and a held value the kind cannot parse (say `many` on
+an `int` tag) leaves the atom undecided, so the resolve refuses
+`flow-guard-unevaluable` rather than pruning the row. A **match** atom does
+not consult the kind: it compares the held value to the literal byte for
+byte, so a held `07` does not match `eq = 7` in a `[rule.match.<key>]`
+block.
+
 `contains` asks whether the held set is a **superset** of the literal, and
 it is total: a held `[]` answers false rather than refusing. `exists` reads
 presence alone and never the value, so it is the one operator that decides

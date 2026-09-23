@@ -279,7 +279,10 @@ func guardRow(ruleID string, atoms ...table.Atom) table.Row {
 // accessor gate rather than the predicate semantics under test. Supplying
 // both is value-identical: `assemble` resolves a key crossing provenances
 // by precedence, never as a conflict.
-func resolveWith(t *testing.T, kt resolve.Table, view guard.View) resolve.Result {
+//
+// The seam is constructed over the declarations of m, the model kt was
+// built from, exactly as a production construction site does (`0012:C4`).
+func resolveWith(t *testing.T, m *table.Model, kt resolve.Table, view guard.View) resolve.Result {
 	t.Helper()
 
 	tags := make([]resolve.Tag, 0, len(view))
@@ -291,7 +294,7 @@ func resolveWith(t *testing.T, kt resolve.Table, view guard.View) resolve.Result
 		Recognized: recognizedFor(kt),
 		Owned:      tags,
 		Observed:   tags,
-		Guards:     guard.Evaluator{},
+		Guards:     guard.NewEvaluator(guard.DeclaredKinds(m)),
 	})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)

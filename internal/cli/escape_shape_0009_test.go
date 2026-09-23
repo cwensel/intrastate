@@ -80,7 +80,7 @@ func breachedKernelError(t *testing.T, refs ...resolve.RowRef) error {
 		Flow:       "escapeshape",
 		Table:      tbl,
 		Recognized: "advance",
-		Guards:     guardSeam(),
+		Guards:     guardSeam(nil),
 	})
 	if err == nil {
 		t.Fatalf("the kernel accepted a breaching table; there is no breach " +
@@ -621,7 +621,7 @@ func TestReq109_ANonBreachKernelErrorStillFallsThroughToTheGenericBranch(t *test
 		Table:      resolve.Table{Revision: "r", Outcomes: []string{"advance"}},
 		Owned:      []resolve.Tag{{Key: "recognized", Value: "advance"}},
 		Recognized: "advance",
-		Guards:     guardSeam(),
+		Guards:     guardSeam(nil),
 	})
 	if err == nil {
 		t.Fatalf("the reserved-key producer breach no longer errors")

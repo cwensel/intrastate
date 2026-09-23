@@ -1,0 +1,781 @@
+{
+  "internal/table/testdata/delim/merge-delim-comma.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/delim/merge-delim-empty.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/delim/merge-delim-pipe.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/delim/merge-delim-semi.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/delim/merge-delim-space.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-comma-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-comma-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-empty-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-empty-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-pipe-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-pipe-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-semi-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-semi-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-space-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/delim/write-delim-space-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/dup/dup-model-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/dup/dup-model-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/dup/dup-model-distinct.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/kata-fixture.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/merge-delim-atom.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/merge-distinct-rev.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned",
+      "graph-dead-end",
+      "graph-terminal-escape"
+    ]
+  },
+  "internal/table/testdata/merge-distinct.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned",
+      "graph-dead-end",
+      "graph-terminal-escape"
+    ]
+  },
+  "internal/table/testdata/merge-idempotent.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/neg/neg-accessor-no-timeout.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_accessor_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-alphabet-hash.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_recognized_outcome_alphabet"
+    ]
+  },
+  "internal/table/testdata/neg/neg-bad-exists.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-case-folded-tag.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_tag"
+    ]
+  },
+  "internal/table/testdata/neg/neg-clear-as-write.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_value"
+    ]
+  },
+  "internal/table/testdata/neg/neg-clear-in-initial.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_value"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-and-path-conflict.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_and_path_conflict"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-empty.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_empty"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-env-conflict.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_env_conflict"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-output-shape.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_output_shape"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-shell-interpreter.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_shell_interpreter"
+    ]
+  },
+  "internal/table/testdata/neg/neg-command-unknown-placeholder.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "command_unknown_placeholder"
+    ]
+  },
+  "internal/table/testdata/neg/neg-cyclic-context.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "cyclic_context_inheritance"
+    ]
+  },
+  "internal/table/testdata/neg/neg-dump-omitted-column.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_dump_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-dump-repeated-column.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_dump_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-dump-unknown-column.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_dump_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-dup-alphabet-member.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_recognized_outcome_alphabet"
+    ]
+  },
+  "internal/table/testdata/neg/neg-duplicate-rule-id.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "duplicate_rule_id"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-anchor-invalid.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_anchor_invalid"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-carrier-conflict.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_carrier_conflict"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-clear-invalid.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_clear_invalid"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-key-mismatch.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_key_mismatch"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-tag-argv0.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_tag_argv0"
+    ]
+  },
+  "internal/table/testdata/neg/neg-edit-template-invalid.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "edit_template_invalid"
+    ]
+  },
+  "internal/table/testdata/neg/neg-emit-unknown-key.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_emit_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-emit-unknown-kind.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_emit_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-emit-value-out-of-domain.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "emit_value_out_of_domain"
+    ]
+  },
+  "internal/table/testdata/neg/neg-empty-alphabet-member.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_recognized_outcome_alphabet"
+    ]
+  },
+  "internal/table/testdata/neg/neg-escape-no-match-block.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_rule_shape"
+    ]
+  },
+  "internal/table/testdata/neg/neg-escape-with-clear.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_escape_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-escape-with-empty-write.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_escape_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-escape-with-gate.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_escape_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-escape-with-write.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_escape_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-gate-is-reader.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_accessor"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-all-bad-operator.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-all-clear.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_value"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-unless-bad-operator.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-unless-clear.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_value"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-unless-out-of-domain.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-guard-unless-unknown-tag.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_tag"
+    ]
+  },
+  "internal/table/testdata/neg/neg-in-member-hash.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-initial-bad-value.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_initial_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-initial-int-out-of-range.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_initial_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-initial-unknown.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_tag"
+    ]
+  },
+  "internal/table/testdata/neg/neg-literal-outside-domain.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-malformed-toml.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_toml"
+    ]
+  },
+  "internal/table/testdata/neg/neg-match-exists.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-match-lt.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_predicate_atom"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-alphabet.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "missing_recognized_outcome_alphabet"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-model-id.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_model_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-model-table.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_model_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-recognized-decl.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_model_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-version.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_model_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-no-write-block.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_rule_shape"
+    ]
+  },
+  "internal/table/testdata/neg/neg-outcome-outside.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_outcome_binding"
+    ]
+  },
+  "internal/table/testdata/neg/neg-owned-no-reader.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_accessor_binding"
+    ]
+  },
+  "internal/table/testdata/neg/neg-owned-two-readers.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_accessor_binding"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-declared-twice.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_toml"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-in-guard.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_outcome_binding"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-in-keys.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_accessor_binding"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-misnamed.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-observed.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-owned.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-recognized-quoted-owned.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-rule-empty-match-block.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_rule_shape"
+    ]
+  },
+  "internal/table/testdata/neg/neg-rule-no-match-block.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_rule_shape"
+    ]
+  },
+  "internal/table/testdata/neg/neg-ruleid-hash.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_rule_id"
+    ]
+  },
+  "internal/table/testdata/neg/neg-tagdecl-domain-on-bool.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_tag_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-tagdecl-single-valued-on-scalar.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_tag_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-tagdecl-single-valued-on-set.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_tag_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-terminal-unknown.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_context"
+    ]
+  },
+  "internal/table/testdata/neg/neg-two-recognized-decls.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "reserved_tag_key"
+    ]
+  },
+  "internal/table/testdata/neg/neg-unknown-context.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_context"
+    ]
+  },
+  "internal/table/testdata/neg/neg-unknown-field.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_schema_field"
+    ]
+  },
+  "internal/table/testdata/neg/neg-unknown-tag-match.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unknown_tag"
+    ]
+  },
+  "internal/table/testdata/neg/neg-v2-shaped.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unsupported_version"
+    ]
+  },
+  "internal/table/testdata/neg/neg-version.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "unsupported_version"
+    ]
+  },
+  "internal/table/testdata/neg/neg-write-observed.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "write_to_non_owned_tag"
+    ]
+  },
+  "internal/table/testdata/neg/neg-write-value-outside-domain.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_tag_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/neg-write-value-wrong-kind.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_tag_declaration"
+    ]
+  },
+  "internal/table/testdata/neg/probe-a-initial-observed-no-writer.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "malformed_accessor_binding"
+    ]
+  },
+  "internal/table/testdata/neg/probe-b-initial-observed-with-writer.toml": {
+    "code": "model-invalid",
+    "findings": [
+      "write_to_non_owned_tag"
+    ]
+  },
+  "internal/table/testdata/perm/rdr-eq-as-in.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/perm/rdr-keyorder.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/perm/rdr-ruleorder.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-near-miss-both.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-near-miss-folded.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-near-miss-space.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-near-miss-upper.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-no-initial.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dangling-edge"
+    ]
+  },
+  "internal/table/testdata/pos-no-terminal.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/pos-not-near-miss.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/rdr-fixture.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-always-present-owned"
+    ]
+  },
+  "internal/table/testdata/write-delim-a.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "internal/table/testdata/write-delim-b.toml": {
+    "code": "graph-lint-failed",
+    "findings": [
+      "graph-dead-end",
+      "graph-terminal-escape",
+      "graph-unprovable-coverage",
+      "graph-unprovable-coverage"
+    ]
+  },
+  "models/examples/markdown-review.toml": {
+    "code": "ok",
+    "findings": null
+  },
+  "models/examples/pricing-decision-table.toml": {
+    "code": "ok",
+    "findings": null
+  },
+  "models/examples/release-grammar.toml": {
+    "code": "ok",
+    "findings": [
+      "graph-coverage-closed-by-escape",
+      "graph-coverage-closed-by-escape",
+      "graph-coverage-closed-by-escape"
+    ]
+  },
+  "models/examples/review-state-machine.toml": {
+    "code": "ok",
+    "findings": [
+      "graph-coverage-closed-by-escape",
+      "graph-coverage-closed-by-escape",
+      "graph-coverage-closed-by-escape"
+    ]
+  },
+  "models/examples/routing-decision-table.toml": {
+    "code": "ok",
+    "findings": null
+  }
+}

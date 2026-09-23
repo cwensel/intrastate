@@ -81,7 +81,7 @@ required = true
 // BOUNDARY
 func TestReq113_UndecidableAtRuntimeSurfacesAsGuardUnevaluableNotAParseKind(t *testing.T) {
 	m := mustLoadSource(t, optionalKeyGroupSource(false))
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Fatalf("an undecidable guard surfaced as %v; want RDR 0007's "+
@@ -294,7 +294,7 @@ func TestReq119_TheHotPathCarriesNoCallbackParserOrExternalEngine(t *testing.T) 
 	// one verdict out. Repeated calls are pure — the same inputs give the
 	// same verdict, which an indexed or stateful engine would have to
 	// preserve anyway.
-	var ev guard.Evaluator
+	ev := guard.NewEvaluator(map[string]string{"profile": "enum"})
 	atom := kernelAtom("profile", "in", `["mid","large"]`)
 	first := ev.Evaluate(atom, "large")
 	for range 100 {
@@ -309,7 +309,7 @@ func TestReq119_TheHotPathCarriesNoCallbackParserOrExternalEngine(t *testing.T) 
 
 	// Exact-one refusal behaviour is preserved end to end.
 	dup := mustLoadSource(t, twoRuleIdenticalGuardSource())
-	res := resolveWith(t, dup.KernelTable(), guard.View{"profile": "large"})
+	res := resolveWith(t, dup, dup.KernelTable(), guard.View{"profile": "large"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Errorf("exact-one refusal behaviour was not preserved: %v", describe(res))
 	}
@@ -350,7 +350,7 @@ func TestReq120_TheCanonicalNameIsGuardPredicate(t *testing.T) {
 	// callback" or "guard expression" would carry opaque host logic, and the
 	// thing this package actually names must therefore be a SYMBOLIC atom
 	// that decides from its own declared fields.
-	var ev guard.Evaluator
+	ev := guard.NewEvaluator(map[string]string{"subject": "enum"})
 	atom := kernelAtom("subject", "eq", "Draft")
 	if got := ev.Evaluate(atom, "Draft"); got != resolve.GuardTrue {
 		t.Errorf("Evaluate(%+v, %q) = %v; the canonically-named guard "+
@@ -491,7 +491,7 @@ func TestReq125_DiagnosticsCarryRDR0002IdentitiesAndRDR0006Codes(t *testing.T) {
 
 	// RDR 0001 exact-one selection: the overlap the diagnostic names is the
 	// ambiguity the kernel refuses.
-	res := resolveWith(t, m.KernelTable(), guard.View{"profile": "small", "flag": "true"})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{"profile": "small", "flag": "true"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Errorf("the kernel gave %v for the assignment lint reports as "+
 			"overlapping", describe(res))
@@ -508,7 +508,7 @@ func TestReq141_OneAtomSetDrivesSelectionOverlapAndProofWithoutOrderPriority(t *
 	m := mustLoadSource(t, gapAndOverlapSource())
 
 	// Exact-one selection over the same atoms.
-	sel := resolveWith(t, m.KernelTable(), guard.View{"profile": "large", "flag": "true"})
+	sel := resolveWith(t, m, m.KernelTable(), guard.View{"profile": "large", "flag": "true"})
 	if sel.Refused() {
 		t.Errorf("exact-one selection over the normalized atoms refused %v",
 			sel.Refusal.Kind)
@@ -524,7 +524,7 @@ func TestReq141_OneAtomSetDrivesSelectionOverlapAndProofWithoutOrderPriority(t *
 	// Without source-order priority: reordering changes nothing.
 	kt := m.KernelTable()
 	slices.Reverse(kt.Rows)
-	reordered := resolveWith(t, kt, guard.View{"profile": "large", "flag": "true"})
+	reordered := resolveWith(t, m, kt, guard.View{"profile": "large", "flag": "true"})
 	if !sameDisposition(sel, reordered) {
 		t.Errorf("reordering rows changed the disposition (%v vs %v)",
 			describe(sel), describe(reordered))

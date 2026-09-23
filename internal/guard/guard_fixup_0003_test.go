@@ -324,7 +324,7 @@ func TestFixup_EmptyHeldSetIsDecidedRatherThanRefused(t *testing.T) {
 			t.Fatalf("the fixture's premise is gone: caps=%s is no longer a "+
 				"conforming view (%v)", held, err)
 		}
-		res := resolveWith(t, kt, view)
+		res := resolveWith(t, m, kt, view)
 		if res.Refused() {
 			t.Errorf("the kernel refuses %s on the conforming view caps=%s. "+
 				"`contains` denotes the assignments whose held set CONTAINS "+
@@ -359,7 +359,7 @@ func TestFixup_EmptyHeldSetIsDecidedRatherThanRefused(t *testing.T) {
 			if !r.Covers(view) {
 				continue
 			}
-			if res := resolveWith(t, kt, view); res.Refused() {
+			if res := resolveWith(t, m, kt, view); res.Refused() {
 				t.Errorf("group %s is certified EXHAUSTIVE and covers the "+
 					"conforming view caps=%s, yet the kernel refuses %s on "+
 					"it. A green claim MUST NOT be stronger than the runtime "+

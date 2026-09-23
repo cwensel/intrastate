@@ -485,9 +485,12 @@ func Denotation(m *table.Model, key string, atom table.Atom) AssignmentSet {
 		return AssignmentSet{}
 	}
 
+	// One model, one evaluator: the seam is constructed over the declarations
+	// of the model whose atom this denotes (`0012:C4`).
+	seam := NewEvaluator(DeclaredKinds(m))
 	out := newSet(dims)
 	for _, v := range values {
-		switch valueSatisfies(atom, v) {
+		switch valueSatisfies(seam, atom, v) {
 		case resolve.GuardUnevaluable:
 			// The atom has NO verdict on this assignment: the runtime finds
 			// it unevaluable and refuses `guard_unevaluable` on any view
@@ -537,9 +540,10 @@ func presenceFor(atom table.Atom) string {
 // it describes rather than about a second semantics — and it returns the
 // seam's THREE-VALUED verdict, because reading a three-valued seam
 // two-valued is what makes lint's claim stronger than the runtime it
-// describes.
-func valueSatisfies(atom table.Atom, held string) resolve.GuardResult {
-	seam := Evaluator{}
+// describes. The seam is the one the caller constructed over the model's
+// declarations, so `eq`/`in` compare under the declared kind here exactly as
+// they do at the runtime's guard path.
+func valueSatisfies(seam Evaluator, atom table.Atom, held string) resolve.GuardResult {
 	literal := strings.Join(atom.Literal, "")
 	if atom.Operator == "in" || atom.Operator == "contains" {
 		literal = renderSet(atom.Literal)

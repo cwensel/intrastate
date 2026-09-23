@@ -494,12 +494,27 @@ func existsWantsPresent(a table.Atom) bool {
 	return len(a.Literal) == 1 && a.Literal[0] == resolve.LiteralTrue
 }
 
-// atomAdmitsValue decides one match atom against one held value, using RDR
-// 0003's evaluator so the traversal never defines a second value semantics.
-// An UNEVALUABLE verdict is taken as satisfiable: the relation
+// atomAdmitsValue decides one match atom against one held value. An
+// UNEVALUABLE verdict is taken as satisfiable: the relation
 // over-approximates, and pruning an edge lint cannot decide is the
 // false-green direction.
+//
+// It is the MATCH path, and match `eq`/`in` compare RAW BYTES here exactly
+// as the kernel does at `resolve.go::TagSet.matches` — never under the
+// declared kind, which would make lint's match admission diverge from the
+// kernel's (`0012:C4`). The evaluator below is the zero-value one with no
+// declaration mapping, and a nil-mapping evaluator answers every `eq`/`in`
+// UNEVALUABLE rather than byte-comparing (`0012:C1`), so the byte
+// comparison is made here and only the remaining operators reach it.
 func atomAdmitsValue(a table.Atom, held string) bool {
+	switch a.Operator {
+	case "eq":
+		return strings.Join(a.Literal, "") == held
+	case "in":
+		// An empty member list has no set literal to compare against, which
+		// the seam answered unevaluable — satisfiable here.
+		return len(a.Literal) == 0 || slices.Contains(a.Literal, held)
+	}
 	literal := strings.Join(a.Literal, "")
 	if a.Operator == "in" || a.Operator == "contains" {
 		literal = renderSetLiteral(a.Literal)

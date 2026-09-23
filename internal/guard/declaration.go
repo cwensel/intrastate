@@ -48,6 +48,27 @@ func DeclarationOf(m *table.Model, key string) Declaration {
 	return declarationOf(m.Tags[key])
 }
 
+// DeclaredKinds is the one producer of the mapping NewEvaluator is built
+// over: tag key → declared kind token, total over m.Tags.
+//
+// A key whose Kind is the empty string is OMITTED rather than mapped to "":
+// an empty-string entry would read at the seam exactly like an absent key,
+// collapsing two diagnostics into one. A nil model yields an empty, non-nil
+// map.
+func DeclaredKinds(m *table.Model) map[string]string {
+	out := map[string]string{}
+	if m == nil {
+		return out
+	}
+	for key, decl := range m.Tags {
+		if decl.Kind == "" {
+			continue
+		}
+		out[key] = decl.Kind
+	}
+	return out
+}
+
 func declarationOf(d table.TagDecl) Declaration {
 	return Declaration{
 		Provenance:   d.Provenance,

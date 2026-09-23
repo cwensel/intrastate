@@ -9,6 +9,7 @@ import (
 	"go/printer"
 	"go/token"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -219,7 +220,7 @@ func TestReq69_TheGuardTextFieldIsActuallyRemoved(t *testing.T) {
 // address, and the file location by inspecting the package's non-test
 // sources.
 func TestReq71_GuardEvaluatorContractIsAnImportableCrossRDRSurface(t *testing.T) {
-	var fn func(*testing.T, resolve.GuardEvaluator) = resolve.TestGuardEvaluatorContract
+	var fn func(*testing.T, func(map[string]string) resolve.GuardEvaluator) = resolve.TestGuardEvaluatorContract
 	if fn == nil {
 		t.Fatal("resolve.TestGuardEvaluatorContract is nil")
 	}
@@ -253,8 +254,11 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 	// captures them beside each question. What follows asserts the matrix of
 	// verdict CLASSES the contract owes per operator, not the incidental
 	// shape of today's case table.
-	rec := &recordingSeam{inner: conformingContractSeam{}}
-	resolve.TestGuardEvaluatorContract(t, rec)
+	rec := &recordingSeam{}
+	resolve.TestGuardEvaluatorContract(t, func(k map[string]string) resolve.GuardEvaluator {
+		rec.inner = newConformingContractSeam(k)
+		return rec
+	})
 
 	if len(rec.calls) == 0 {
 		t.Fatal("the contract test asked the seam nothing; it must exercise " +
@@ -459,7 +463,7 @@ func TestReq71_ContractTestExercisesThePresentValueLiteralOperatorProduct(t *tes
 // honestly passes the exported contract test.
 // HAPPY PATH
 func TestReq71_AConformingValueSeamSatisfiesTheContractTest(t *testing.T) {
-	resolve.TestGuardEvaluatorContract(t, conformingContractSeam{})
+	resolve.TestGuardEvaluatorContract(t, newConformingContractSeam)
 }
 
 // recordingSeam delegates to a conforming seam and records what it was
@@ -485,16 +489,31 @@ func (s *recordingSeam) Evaluate(atom resolve.GuardAtom, value string) resolve.G
 
 // conformingContractSeam implements RDR 0003's typed semantics narrowly
 // enough to satisfy the contract: it compares parseable values and answers
-// unevaluable — never false — for a value it cannot parse.
-type conformingContractSeam struct{}
+// unevaluable — never false — for a value it cannot parse. `eq`/`in`
+// compare under the kind its declaration mapping names for the key (RDR
+// 0012), so it is built through newConformingContractSeam.
+type conformingContractSeam struct {
+	kinds map[string]string
+}
 
-func (conformingContractSeam) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
+// newConformingContractSeam is the seam constructor the contract test
+// takes.
+func newConformingContractSeam(kinds map[string]string) resolve.GuardEvaluator {
+	return conformingContractSeam{kinds: kinds}
+}
+
+func (s conformingContractSeam) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
 	switch atom.Operator {
-	case opEq:
-		if value == atom.Literal {
-			return resolve.GuardTrue
+	case opEq, opIn:
+		literals := []string{atom.Literal}
+		if atom.Operator == opIn {
+			members, ok := parseD13Set(atom.Literal)
+			if !ok {
+				return resolve.GuardUnevaluable
+			}
+			literals = members
 		}
-		return resolve.GuardFalse
+		return s.typedMember(s.kinds[atom.Key], literals, value)
 	case opGte, "gt", "lt", "lte":
 		a, aok := parseInt(value)
 		b, bok := parseInt(atom.Literal)
@@ -511,12 +530,6 @@ func (conformingContractSeam) Evaluate(atom resolve.GuardAtom, value string) res
 		default:
 			return boolVerdict(a < b)
 		}
-	case opIn:
-		members, ok := parseD13Set(atom.Literal)
-		if !ok {
-			return resolve.GuardUnevaluable
-		}
-		return boolVerdict(hasItem(members, value))
 	case opContains:
 		want, wok := parseD13Set(atom.Literal)
 		have, hok := parseD13Set(value)
@@ -529,6 +542,39 @@ func (conformingContractSeam) Evaluate(atom resolve.GuardAtom, value string) res
 			}
 		}
 		return resolve.GuardTrue
+	default:
+		return resolve.GuardUnevaluable
+	}
+}
+
+// typedMember decides whether value is one of literals under kind: `int`
+// compares parsed values, `bool` admits only its two tokens, `enum` and
+// `scalar` compare exact strings, and anything else cannot be typed.
+func (conformingContractSeam) typedMember(kind string, literals []string, value string) resolve.GuardResult {
+	switch kind {
+	case "int":
+		held, err := strconv.Atoi(value)
+		if err != nil {
+			return resolve.GuardUnevaluable
+		}
+		found := false
+		for _, l := range literals {
+			n, err := strconv.Atoi(l)
+			if err != nil {
+				return resolve.GuardUnevaluable
+			}
+			found = found || n == held
+		}
+		return boolVerdict(found)
+	case "bool":
+		for _, v := range append([]string{value}, literals...) {
+			if v != "true" && v != "false" {
+				return resolve.GuardUnevaluable
+			}
+		}
+		return boolVerdict(hasItem(literals, value))
+	case "enum", "scalar":
+		return boolVerdict(hasItem(literals, value))
 	default:
 		return resolve.GuardUnevaluable
 	}

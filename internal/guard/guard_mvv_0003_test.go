@@ -159,7 +159,7 @@ func TestReq128_ScenarioOneRuntimeEvaluationOverTheRepresentativeRows(t *testing
 	kt := m.KernelTable()
 
 	// Exactly one qualifying row resolves for the legal input.
-	res := resolveWith(t, kt, mvvLegalView())
+	res := resolveWith(t, m, kt, mvvLegalView())
 	if res.Refused() {
 		t.Fatalf("the legal input refused %v; exactly one qualifying row must "+
 			"resolve. undecided=%v", res.Refusal.Kind, res.Refusal.Undecided)
@@ -172,14 +172,14 @@ func TestReq128_ScenarioOneRuntimeEvaluationOverTheRepresentativeRows(t *testing
 	// also matches.
 	view := mvvLegalView()
 	view["prelock_iterations"] = "3"
-	disabled := resolveWith(t, kt, view)
+	disabled := resolveWith(t, m, kt, view)
 	if !disabled.Refused() && disabled.Plan.RuleID == res.Plan.RuleID {
 		t.Errorf("the row stayed selected with its full `unless` block true; " +
 			"it must be disabled")
 	}
 
 	// Zero and multiple qualifying rows become typed refusals.
-	zero := resolveWith(t, kt, mvvNoRowView())
+	zero := resolveWith(t, m, kt, mvvNoRowView())
 	if !zero.Refused() {
 		t.Errorf("zero qualifying rows produced a plan (%s)", zero.Plan.RuleID)
 	}
@@ -363,7 +363,7 @@ func TestReq131_ShapePairIsBuiltRelativeToThePublishedBound(t *testing.T) {
 func TestReq132_ScenarioThreeExpectationsIncludingEqualCardinalityAgreement(t *testing.T) {
 	// Runtime remains available over an unprovable dimension.
 	unbounded := mustLoadSource(t, unboundedIntGuardSource())
-	if res := resolveWith(t, unbounded.KernelTable(), guard.View{"iter": "1"}); res.Refused() &&
+	if res := resolveWith(t, unbounded, unbounded.KernelTable(), guard.View{"iter": "1"}); res.Refused() &&
 		res.Refusal.Kind == resolve.KindGuardUnevaluable {
 		t.Error("runtime evaluation was not available over an unprovable dimension")
 	}
@@ -771,18 +771,18 @@ func TestReq137_ScenarioSixReorderingChangesNeitherMatchingNorFindings(t *testin
 	// Successful matching is unchanged.
 	view := guard.View{"profile": "large", "labels": `["bug"]`}
 	if !sameDisposition(
-		resolveWith(t, forward.KernelTable(), view),
-		resolveWith(t, reordered.KernelTable(), view)) {
+		resolveWith(t, forward, forward.KernelTable(), view),
+		resolveWith(t, reordered, reordered.KernelTable(), view)) {
 		t.Errorf("reordering changed the disposition (%v vs %v)",
-			describe(resolveWith(t, forward.KernelTable(), view)),
-			describe(resolveWith(t, reordered.KernelTable(), view)))
+			describe(resolveWith(t, forward, forward.KernelTable(), view)),
+			describe(resolveWith(t, reordered, reordered.KernelTable(), view)))
 	}
 
 	// An ambiguous pair remains a multiple-match refusal.
 	dup := mustLoadSource(t, twoRuleIdenticalGuardSource())
 	kt := dup.KernelTable()
 	slices.Reverse(kt.Rows)
-	res := resolveWith(t, kt, guard.View{"profile": "large"})
+	res := resolveWith(t, dup, kt, guard.View{"profile": "large"})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindAmbiguousMatch {
 		t.Errorf("the reordered ambiguous pair gave %v; it must stay a "+
 			"multiple-match refusal, never a first-match success", describe(res))
@@ -838,7 +838,7 @@ func TestReq139_ScenarioEightPositiveNarrowingAndItsNegativeControl(t *testing.T
 	optional := mustLoadSource(t, optionalKeyGroupSource(false))
 
 	// Resolution refuses guard_unevaluable under RDR 0007's veto.
-	res := resolveWith(t, optional.KernelTable(), guard.View{})
+	res := resolveWith(t, optional, optional.KernelTable(), guard.View{})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Fatalf("resolution gave %v; the value atom is unevaluable rather "+
 			"than false", describe(res))
@@ -870,7 +870,7 @@ func TestReq139_ScenarioEightPositiveNarrowingAndItsNegativeControl(t *testing.T
 
 	// An existence atom over the same absent key DECIDES instead of refusing.
 	exists := mustLoadSource(t, existsPartitionSource())
-	if res := resolveWith(t, exists.KernelTable(), guard.View{}); res.Refused() &&
+	if res := resolveWith(t, exists, exists.KernelTable(), guard.View{}); res.Refused() &&
 		res.Refusal.Kind == resolve.KindGuardUnevaluable {
 		t.Error("an existence atom over the absent key refused; it decides " +
 			"from presence alone")
@@ -905,7 +905,7 @@ func TestReq140_ScenarioEightBothBlocksAndTheEscapePath(t *testing.T) {
 
 	// And the kernel agrees: the gate's refusal precedes escapeOrRefuse.
 	m := mustLoadSource(t, optionalKeyPlusBareEscapeSource())
-	res := resolveWith(t, m.KernelTable(), guard.View{})
+	res := resolveWith(t, m, m.KernelTable(), guard.View{})
 	if !res.Refused() || res.Refusal.Kind != resolve.KindGuardUnevaluable {
 		t.Errorf("the kernel gave %v; the escape row cannot rescue "+
 			"guard_unevaluable", describe(res))
