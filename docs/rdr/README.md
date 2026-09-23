@@ -20,7 +20,7 @@ engine README — this file is only the per-project index.
 | [0009](0009-escape-row-shape-conformance-ownership.md) | Ownership of escape-row shape conformance | Implemented | Medium |
 | [0010](0010-stateless-decision-tables.md) | Owned state is optional: stateless decision tables are first-class | Implemented | High |
 | [0011](0011-flow-next-match-conditioned-candidates.md) | flow next selects by match; --all enumerates the alphabet | Implemented | High |
-| [0012](0012-declared-kind-carrier-at-the-guard-seam.md) | Declared-kind carrier at the guard value seam | Final | Medium |
+| [0012](0012-declared-kind-carrier-at-the-guard-seam.md) | Declared-kind carrier at the guard value seam | Implemented | Medium |
 | [0013](0013-ungated-proof-completion-observation-seam.md) | Ungated proof-completion observation seam | Draft | Low |
 | [0014](0014-repository-gate-verification-oracle.md) | Repository gate verification oracle | Draft | Medium |
 | [0015](0015-dead-end-quantifier-over-merged-nodes.md) | Dead-end quantifier over merged nodes | Draft | Medium |
