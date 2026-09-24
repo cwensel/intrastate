@@ -94,7 +94,7 @@ Provenance is one of three, and it decides who supplies the value:
 | provenance | supplied by | notes |
 | --- | --- | --- |
 | `owned` | the model's `[read.*]` accessors | state the model owns; a `decision-table` declares none |
-| `observed` | the caller, as `--tag key=value` | may also be served by at most one reader |
+| `observed` | the caller, as `--tag key=value` | at most one reader may also serve it; `flow read-state` reports that answer, but resolution reads only `--tag` |
 | `recognized` | the kernel, from `--outcome` | exactly the reserved `recognized` key; no accessor may name it |
 
 Kind is one of exactly **five** tokens, and each admits a different facet.

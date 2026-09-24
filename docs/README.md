@@ -24,7 +24,8 @@ These carry what the CLI surface cannot state about itself:
 - [model-authoring.md](model-authoring.md) — how to author a
   transition model in TOML. The grammar surface: the five tag kinds and
   the facets each admits, the eight guard operators and which kinds take
-  them, shared contexts, gates, and `clear`. Then the choices above it:
+  them, shared contexts, gates, `clear`, and stepped `{ step = <n> }`
+  writes. Then the choices above it:
   the model class (`state-machine` / `decision-table`), a decision
   table's cells, and the "otherwise" escape row. This is about the INPUT
   format, which the binary has no help surface for.
