@@ -14,7 +14,15 @@ rm -f "$_roborev_input"
 }
 _roborev_flush
 # roborev hook end
-# Pre-push hook: refuse to publish commits carrying agent attribution.
+# Pre-push hook: refuse to publish commits that are unsigned or carry
+# agent attribution.
+#
+# Every pushed commit must carry a signature that is not BAD. This is
+# unconditional: it does not read commit.gpgsign, because a stray
+# repo-local `commit.gpgsign=false` is exactly what silenced both signing
+# and the reference-transaction backstop (which only enforces when the
+# repo asks for signing) and let unsigned commits pile up on a branch.
+# Push is the publication gate; unsigned history must not cross it.
 #
 # Banned in a commit message:
 #   Co-Authored-By: ...                   any co-author trailer
@@ -36,6 +44,7 @@ set -uo pipefail
 
 zero=$(git hash-object --stdin </dev/null | tr '[:xdigit:]' '0')
 attrib_failed=0
+unsigned_failed=0
 
 # A ref update whose commits cannot be enumerated cannot be cleared either.
 # This hook reads only local objects and refs that the push decision already
@@ -91,6 +100,20 @@ while read -r local_ref local_sha _remote_ref remote_sha; do
 	while read -r sha; do
 		[ -z "$sha" ] && continue
 
+		# N is no signature, B a bad one. An empty status means git could
+		# not read the commit, which clears nothing.
+		sig=$(git log -1 --pretty='%G?' "$sha" 2>/dev/null) || sig=""
+		case "$sig" in
+		N | B | '')
+			if [ "$unsigned_failed" -eq 0 ]; then
+				echo "pre-push: refusing to push unsigned commits:" >&2
+				echo "" >&2
+			fi
+			echo "  [${sig:-?}] $(git log -1 --pretty='%h %s' "$sha")" >&2
+			unsigned_failed=1
+			;;
+		esac
+
 		# Report which shape hit so the fix is obvious without re-reading
 		# the commit.
 		msg=$(git log -1 --pretty='%B' "$sha")
@@ -114,6 +137,23 @@ while read -r local_ref local_sha _remote_ref remote_sha; do
 	done <<<"$commits"
 done
 
+if [ "$unsigned_failed" -ne 0 ]; then
+	cat >&2 <<'EOF'
+
+Every pushed commit must be signed ([N] unsigned, [B] bad signature).
+First check `git config --show-origin --get-all commit.gpgsign`: a
+repo-local `false` overrides the global setting and silences signing.
+
+Then re-sign the range with `git commit-tree -S`, exporting each original's
+GIT_AUTHOR_* and GIT_COMMITTER_* (NAME, EMAIL, DATE) so identity and dates
+survive, and move the branch in one `git update-ref <ref> <new> <old>`.
+Set MAX_UNSIGNED_SCAN=<n> when the range exceeds the reference-transaction
+hook's 50-commit bound. (filter-branch is refused there: its refs/original
+backup points at the unsigned commits.)
+
+EOF
+fi
+
 if [ "$attrib_failed" -ne 0 ]; then
 	cat >&2 <<'EOF'
 
@@ -135,4 +175,5 @@ EOF
 	exit 1
 fi
 
+[ "$unsigned_failed" -ne 0 ] && exit 1
 exit 0
