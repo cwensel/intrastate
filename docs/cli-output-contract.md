@@ -206,6 +206,14 @@ field that is present is one its producer populated:
 No producer nests its own fields in a sub-object, and each populates only
 the fields it owns.
 
+On a per-row graph-lint finding, `rule` (and `element`, where the finding
+names a second row) carries the **row's identity**: the authored rule id,
+joined with the row's expansion suffix by `#` when the rule expanded — so a
+row a step or an `in` minted reads `retry#3`, not `retry`. A finding that
+names a group rather than a row keeps the bare authored id. A consumer
+joining findings to source should use `span`, the stable key, which always
+names the authored rule.
+
 In `--as=text` every finding renders on its own line under the message,
 with its identity fields appended. The set of finding codes in text output
 equals the set in JSON output: a renderer that summarised would drop a

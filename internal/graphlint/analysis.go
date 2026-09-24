@@ -210,7 +210,7 @@ func (a *analysis) checkSingleValuedState() {
 			}
 			a.emit(clierr.Finding{
 				Code:        CodeSingleValuedState,
-				Rule:        row.RuleID,
+				Rule:        rowIdentity(row),
 				Span:        row.SourceLocator,
 				Key:         w.Key,
 				Literal:     strings.Join(w.Value, ","),
@@ -564,7 +564,7 @@ func (a *analysis) checkUnreachableRules() {
 		for _, row := range rows {
 			a.emit(clierr.Finding{
 				Code:        CodeUnreachableRule,
-				Rule:        row.RuleID,
+				Rule:        rowIdentity(row),
 				Span:        row.SourceLocator,
 				Fingerprint: Fingerprint(row),
 				Message: fmt.Sprintf("no reachable owned-state satisfies the "+

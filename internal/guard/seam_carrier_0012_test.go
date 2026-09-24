@@ -444,6 +444,10 @@ func TestReq8_0012_TheSeamSignatureAndAtomShapeAreUnchanged(t *testing.T) {
 // r12GuardPath is internal/guard's import path.
 const r12GuardPath = "github.com/cwensel/intrastate/internal/guard"
 
+// r12ResolvePath is internal/resolve's import path, the Evaluator's declared
+// home since RDR 0030.
+const r12ResolvePath = "github.com/cwensel/intrastate/internal/resolve"
+
 // r12ZeroSite is one zero-value construction of guard.Evaluator.
 type r12ZeroSite struct {
 	file string
@@ -563,7 +567,10 @@ func r12IsEvaluator(t types.Type) bool {
 		return false
 	}
 	obj := n.Obj()
-	return obj.Pkg() != nil && obj.Pkg().Path() == r12GuardPath && obj.Name() == "Evaluator"
+	// RDR 0030 relocates the declaration to internal/resolve and guard
+	// re-exports it as an alias, so the named type is found at either home.
+	return obj.Pkg() != nil && (obj.Pkg().Path() == r12GuardPath || obj.Pkg().Path() == r12ResolvePath) &&
+		obj.Name() == "Evaluator"
 }
 
 // r12HoldsEvaluator reports whether a zero value of t is, or holds by value,
@@ -689,7 +696,8 @@ func r12RecvName(e ast.Expr) string {
 // r12AllowedZeroSite is the ONE named exception (`0012:C4`, REQ-35), plus
 // NewEvaluator's own body.
 func r12AllowedZeroSite(s r12ZeroSite) bool {
-	if s.fn == "NewEvaluator" && strings.HasPrefix(s.file, "internal/guard/") {
+	if s.fn == "NewEvaluator" && (strings.HasPrefix(s.file, "internal/guard/") ||
+		strings.HasPrefix(s.file, "internal/resolve/")) {
 		return true
 	}
 	return s.file == "internal/graphlint/reach.go" && s.fn == "atomAdmitsValue"

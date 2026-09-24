@@ -327,7 +327,7 @@ func (a *analysis) emitWithholdings(g guard.Group) bool {
 		a.emit(clierr.Finding{
 			Code:        CodeUnprovableCoverage,
 			Reason:      ReasonRowCanRefuse,
-			Rule:        row.RuleID,
+			Rule:        rowIdentity(row),
 			Span:        row.SourceLocator,
 			Dimension:   atom.Key,
 			Key:         atom.Key,
@@ -522,7 +522,7 @@ func (a *analysis) groupHasOverlap(g guard.Group) bool {
 		if f.Code != CodeOverlap || f.Class != "" {
 			continue
 		}
-		if slices.Contains(ids, f.Rule) && slices.Contains(ids, f.Element) {
+		if slices.Contains(ids, authoredID(f.Rule)) && slices.Contains(ids, authoredID(f.Element)) {
 			return true
 		}
 	}
@@ -561,7 +561,9 @@ func bareEscapeFor(g guard.Group, class string) string {
 			continue
 		}
 		if len(guardAtomsOf(row)) == 0 {
-			found = append(found, row.RuleID)
+			// The finding names this ROW, so an expanded one publishes its
+			// suffixed identity (`0030:C3`).
+			found = append(found, rowIdentity(row))
 		}
 	}
 	slices.Sort(found)

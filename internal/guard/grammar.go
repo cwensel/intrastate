@@ -1,9 +1,7 @@
 package guard
 
 import (
-	"encoding/json"
 	"slices"
-	"strconv"
 
 	"github.com/cwensel/intrastate/internal/resolve"
 )
@@ -86,204 +84,16 @@ func SingleValueOperator(operator string) bool {
 
 // --- the value seam ------------------------------------------------------
 
-// Evaluator is RDR 0003's value-comparison seam: it decides value
-// semantics over a PRESENT value and never reads the tag view.
-//
-// It holds the declaration mapping it was constructed over — tag key to
-// declared kind token — and NOTHING else: no view, no runtime tag value.
-// That keeps "never reads the tag view" a property of the type rather than
-// a discipline, while letting `eq`/`in` compare under the declared kind
-// (RDR 0012). Key presence, existence atoms, absent-key unevaluability, and
-// the combination of per-atom verdicts are the kernel's (RDR 0007).
-//
-// Construct it with NewEvaluator. A zero value holds no mapping, so every
-// `eq`/`in` atom answers unevaluable rather than reverting to raw-string
-// comparison.
-type Evaluator struct {
-	kinds map[string]string
-}
+// Evaluator is RDR 0003's value-comparison seam. It is DECLARED in
+// `internal/resolve`, beside the kernel it serves, so the loader can compare
+// through the same seam the runtime does (`0030:C1`, JDR 0004 JD-1); this
+// package re-exports it under its original name.
+type Evaluator = resolve.Evaluator
 
 // NewEvaluator returns the seam constructed over kinds, the tag key → kind
 // token mapping DeclaredKinds produces for the model whose rows it will
 // evaluate. The return is the concrete Evaluator, never widened to the
 // kernel's interface.
 func NewEvaluator(kinds map[string]string) Evaluator {
-	return Evaluator{kinds: kinds}
-}
-
-// Evaluate decides one atom against the present value its key holds.
-//
-// A present value the operator cannot parse is UNEVALUABLE, never false:
-// that is the obligation the seam exists to carry, and folding it into
-// false would let a malformed literal prune a row silently.
-func (e Evaluator) Evaluate(atom resolve.GuardAtom, value string) resolve.GuardResult {
-	switch atom.Operator {
-	case "eq", "in":
-		return e.typedEquality(atom, value)
-	case "lt", "lte", "gt", "gte":
-		// The ordering operators keep their operator-inferred integer parse:
-		// the matrix admits them over `int` alone, so the kind mapping is not
-		// consulted.
-		bound, err := strconv.Atoi(atom.Literal)
-		if err != nil {
-			return resolve.GuardUnevaluable
-		}
-		held, err := strconv.Atoi(value)
-		if err != nil {
-			return resolve.GuardUnevaluable
-		}
-		return boolResult(compare(atom.Operator, held, bound))
-	case "contains":
-		want, ok := parseSetLiteral(atom.Literal)
-		if !ok {
-			return resolve.GuardUnevaluable
-		}
-		held, ok := parseHeldSet(value)
-		if !ok {
-			// A `contains` value crosses the seam as the §D13 canonical JSON
-			// array. A bare string is not a held set, so the comparison has
-			// no answer — unevaluable, never false.
-			return resolve.GuardUnevaluable
-		}
-		for _, e := range want {
-			if !slices.Contains(held, e) {
-				return resolve.GuardFalse
-			}
-		}
-		return resolve.GuardTrue
-	}
-	// `exists` is the kernel's: it is decided from presence alone and never
-	// reaches this seam, so being handed one means answering from a view
-	// this evaluator does not have. Every unknown operator lands here too —
-	// the vocabulary is frozen, so a free-form expression string is not an
-	// operator and has no reading.
-	return resolve.GuardUnevaluable
-}
-
-// typedEquality decides `eq`/`in` under the atom key's declared kind.
-//
-// The literal side is the one member of `eq` or the members decoded from
-// `in`'s §D13 array, and every member must parse under the kind before any
-// comparison: one unparseable member poisons the whole list. A key the
-// mapping does not carry, a `set` kind (the matrix admits no `eq`/`in`
-// over it), and a token outside the five-kind vocabulary are all atoms the
-// seam cannot type — unevaluable, never a raw-string comparison.
-func (e Evaluator) typedEquality(atom resolve.GuardAtom, value string) resolve.GuardResult {
-	kind, ok := e.kinds[atom.Key]
-	if !ok {
-		return resolve.GuardUnevaluable
-	}
-	literals := []string{atom.Literal}
-	if atom.Operator == "in" {
-		members, ok := parseSetLiteral(atom.Literal)
-		if !ok {
-			return resolve.GuardUnevaluable
-		}
-		literals = members
-	}
-
-	switch kind {
-	case "int":
-		held, err := strconv.Atoi(value)
-		if err != nil {
-			return resolve.GuardUnevaluable
-		}
-		parsed := make([]int, 0, len(literals))
-		for _, l := range literals {
-			n, err := strconv.Atoi(l)
-			if err != nil {
-				return resolve.GuardUnevaluable
-			}
-			parsed = append(parsed, n)
-		}
-		return boolResult(slices.Contains(parsed, held))
-	case "bool":
-		if !isBoolToken(value) {
-			return resolve.GuardUnevaluable
-		}
-		for _, l := range literals {
-			if !isBoolToken(l) {
-				return resolve.GuardUnevaluable
-			}
-		}
-		return boolResult(slices.Contains(literals, value))
-	case "enum", "scalar":
-		return boolResult(slices.Contains(literals, value))
-	case "set":
-		return resolve.GuardUnevaluable
-	default:
-		return resolve.GuardUnevaluable
-	}
-}
-
-// isBoolToken reports whether s is one of the two boolean tokens.
-func isBoolToken(s string) bool {
-	return s == "true" || s == "false"
-}
-
-// parseSetLiteral decodes an authored set LITERAL from its §D13 canonical
-// JSON array. A NON-EMPTY set is the published literal shape for both
-// set-shaped operators, so an empty array is not a well-formed literal.
-func parseSetLiteral(s string) ([]string, bool) {
-	members, ok := parseHeldSet(s)
-	if !ok || len(members) == 0 {
-		return nil, false
-	}
-	return members, true
-}
-
-// parseHeldSet decodes a HELD set-valued tag value from its §D13 canonical
-// JSON array.
-//
-// The non-empty requirement is a rule about the authored LITERAL — the
-// operator/kind matrix publishes `contains`' literal shape as a "non-empty
-// typed element set" — and it does NOT carry over to the held value. A
-// set-valued tag holds any SUBSET of its declared element universe, the
-// empty subset included: the assignment-count table makes the dimension
-// `2^|universe|` by construction, and `Conforms` admits a held `[]` as a
-// conforming view.
-//
-// Containment is total over sets, so `contains ["x"]` against a held `[]`
-// has an answer — FALSE, since the held set does not contain `x`. Applying
-// the literal's non-empty rule to the held value refused instead, and the
-// kernel then refused `guard_unevaluable` on a conforming view that lint's
-// own scoped product enumerates. That disagreement is the false
-// exhaustiveness claim REQ-67 forbids, reached from the runtime side.
-func parseHeldSet(s string) ([]string, bool) {
-	var members []string
-	if err := json.Unmarshal([]byte(s), &members); err != nil {
-		return nil, false
-	}
-	// `null` decodes without error into a NIL slice, while `[]` decodes into a
-	// non-nil empty one — so the nil check is exactly the line between a value
-	// that is not a set at all and the empty subset. Without it a held `null`
-	// would read as `[]` and `contains` would DECIDE it false, converting an
-	// unevaluable into a decided verdict — the direction `0007:C1` forbids
-	// ("never to false and never to true"), and the mirror image of the defect
-	// D14 fixed. Lint never renders `null` (`renderSet` marshals a []string),
-	// so only a runtime caller can supply it.
-	if members == nil {
-		return nil, false
-	}
-	return members, true
-}
-
-func compare(operator string, held, bound int) bool {
-	switch operator {
-	case "lt":
-		return held < bound
-	case "lte":
-		return held <= bound
-	case "gt":
-		return held > bound
-	default:
-		return held >= bound
-	}
-}
-
-func boolResult(b bool) resolve.GuardResult {
-	if b {
-		return resolve.GuardTrue
-	}
-	return resolve.GuardFalse
+	return resolve.NewEvaluator(kinds)
 }

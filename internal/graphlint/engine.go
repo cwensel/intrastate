@@ -200,3 +200,21 @@ func canonicalTags(in []table.TagValue) []table.TagValue {
 	slices.SortFunc(out, func(a, b table.TagValue) int { return strings.Compare(a.Key, b.Key) })
 	return out
 }
+
+// rowIdentity is the identity a per-row finding publishes in its row-naming
+// slots, `Rule` and `Element`: the authored rule id joined with the row's
+// expansion suffix by `#` — `retry#3` for an expanded row, the bare id for
+// an unexpanded one (`0030:C3`). Lint names a ROW because its subject is a
+// row.
+func rowIdentity(row table.Row) string {
+	return strings.Join(append([]string{row.RuleID}, row.Suffix...), "#")
+}
+
+// authoredID recovers the authored rule id from a published row identity:
+// the identity truncated at the first `#`, which a rule id never contains.
+// An in-package read-back joins on it, never on the published slot by
+// equality (`0030:C3`).
+func authoredID(identity string) string {
+	id, _, _ := strings.Cut(identity, "#")
+	return id
+}

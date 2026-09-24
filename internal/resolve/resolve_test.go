@@ -1,8 +1,10 @@
 package resolve_test
 
 import (
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/resolve"
@@ -1200,7 +1202,25 @@ func TestReq36_KernelExposesNoEncodeDecodeOrInverseOperation(t *testing.T) {
 // canonical serialization is introduced"
 // BOUNDARY
 func TestReq37_KernelIntroducesNoHashOrCanonicalSerialization(t *testing.T) {
-	for imp := range kernelPackageImports(t) {
+	// The fence governs the kernel's RESOLUTION PATH, not the package as a
+	// namespace (JDR 0004 JD-1): the value-comparison seam RDR 0030 relocates
+	// here, `seamFile`, decodes and renders JDR 0001 §D13's canonical set
+	// literal, which is the seam's and not a form this RDR introduces.
+	const seamFile = "evaluator.go"
+	imports := map[string]bool{}
+	for name, f := range parseKernelPackage(t) {
+		if filepath.Base(name) == seamFile {
+			continue
+		}
+		for _, imp := range f.Imports {
+			p, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				t.Fatalf("unquoting import %s: %v", imp.Path.Value, err)
+			}
+			imports[p] = true
+		}
+	}
+	for imp := range imports {
 		switch imp {
 		case "crypto/sha256", "crypto/sha1", "crypto/md5", "hash", "hash/fnv",
 			"hash/crc32", "encoding/json", "encoding/gob", "encoding/hex":

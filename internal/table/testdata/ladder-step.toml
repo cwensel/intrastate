@@ -1,0 +1,120 @@
+# RDR 0030 MVV — the retry/escalation ladder, STEPPED.
+#
+# One rule per (ladder, outcome) intent: `retry` steps `attempt` while it is
+# under the cap, `escalate` steps `tier` while it is below the last member.
+# `retry` authors TWO positive atoms on its stepped tag, so its admitted
+# cells are a conjunction; `escalate` excludes the terminal member with the
+# one atom an `enum` affords, an `in` re-listing the domain minus it.
+# `ladder-literal.toml` is the same table written out cell by cell.
+outcomes = ["retry", "escalate", "succeed"]
+terminal = ["done"]
+
+[model]
+id = "ladder"
+version = 1
+
+[initial]
+status = "open"
+attempt = 0
+tier = "small"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["open", "done"]
+single_valued = true
+required = true
+
+[tags.attempt]
+provenance = "owned"
+kind = "int"
+min = 0
+max = 9
+single_valued = true
+required = true
+
+[tags.tier]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "mid", "large"]
+single_valued = true
+required = true
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "attempt", "tier"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "attempt", "tier"]
+timeout = "2s"
+read_back = true
+
+[context.open.match.status]
+eq = "open"
+
+[context.done.match.status]
+eq = "done"
+
+# attempt + 1 while attempt is under the cap. `status = "open"` is the
+# mirrored idempotent write on an UNSTEPPED key.
+[[rule]]
+id = "retry"
+use = ["open"]
+[rule.match.recognized]
+eq = "retry"
+[rule.guard.all.attempt]
+gte = 0
+lt = 5
+[rule.write]
+attempt = { step = 1 }
+status = "open"
+
+[[rule]]
+id = "retry-cap"
+use = ["open"]
+[rule.match.recognized]
+eq = "retry"
+[rule.guard.all.attempt]
+gte = 5
+[rule.write]
+status = "done"
+
+# tier + 1 below the last member.
+[[rule]]
+id = "escalate"
+use = ["open"]
+[rule.match.recognized]
+eq = "escalate"
+[rule.guard.all.tier]
+in = ["small", "mid"]
+[rule.write]
+tier = { step = 1 }
+attempt = 0
+
+[[rule]]
+id = "escalate-cap"
+use = ["open"]
+[rule.match.recognized]
+eq = "escalate"
+[rule.guard.all.tier]
+eq = "large"
+[rule.write]
+status = "done"
+
+[[rule]]
+id = "succeed"
+use = ["open"]
+[rule.match.recognized]
+eq = "succeed"
+[rule.write]
+status = "done"

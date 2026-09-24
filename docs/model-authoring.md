@@ -820,6 +820,60 @@ owned tag — writing an observed or recognized one is `write_to_non_owned_tag`
 — and a value outside its declared domain is refused at load, so the
 declaration is never advisory on the path that persists.
 
+#### Stepping a tag: `{ step = <n> }`
+
+A retry counter or an escalation tier advances by one position per
+transition. Rather than writing one rule per value, a write block may
+assign the inline table `{ step = <n> }`, `n` a non-zero integer:
+
+```toml
+[[rule]]
+id = "retry"
+[rule.match.recognized]
+eq = "retry"
+[rule.guard.all.attempt]
+lt = 5
+[rule.write]
+attempt = { step = 1 }
+```
+
+The loader expands the rule into one literal row per **admitted cell**: a
+member of the tag's domain that satisfies every positive atom the rule
+authors on that tag (`guard.all`, and `match` `eq`/`in`), each checked as
+the runtime would. Above, cells `0..4` are admitted, so the rule loads as
+`retry#0 … retry#4`, each guarding `eq = <cell>` and writing `cell + 1`. A
+match `in` on the stepped tag narrows the cells rather than expanding
+separately, and each row then MATCHES `eq = <cell>` instead of guarding it,
+as it does under a match `eq` on the tag. The cell is always appended to the
+row identity, even when only one is admitted. After loading, nothing distinguishes these rows from
+hand-written ones.
+
+The form is admitted only on an `int` declaring both `min` and `max`, or an
+`enum` with a non-empty `domain`; on an `enum` the step moves `n` positions
+through the domain. Everything else refuses at load under
+`malformed_tag_declaration`: any other table shape, a zero or non-integer
+step, another kind, an `int` whose width is not representable, an `enum`
+domain that repeats a member or carries `#`, a rule admitting no cell, a
+rule that both steps and clears one key, and — the **bound** — an admitted
+cell whose stepped value leaves the domain (`rule retry write attempt: cell
+9 steps to 10, which is above max 9`). `[initial]` and predicate literals
+never take the form.
+
+Four hazards are not visible from the form itself:
+
+- An `enum` domain's authored **order** is the step order. Reordering a
+  stepped domain changes the model, and no lint catches it.
+- `unless` never excludes a cell from a step. An exclusion must be written
+  as a positive `guard.all` atom; the bound refusal names any `unless` atom
+  that failed to exclude the cell it reports.
+- On an `enum`, the only atom that can exclude the terminal member is an
+  `in` re-listing the domain minus that member.
+- The admitted-cell count is the **lint** cost, not the load cost. Loading
+  thousands of cells is fast; linting a few hundred can be slow enough that
+  what you see is `lint` not returning, with nothing in-band to say why.
+  The declared `min..max` width does not drive this — the admitted-cell
+  count does — so narrow the rule's atoms to fix it.
+
 #### Removing an owned tag: `clear`
 
 Absence from a write block never implies deletion. Removing an owned key is

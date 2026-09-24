@@ -1,0 +1,123 @@
+# RDR 0030 S1(b) — the BLOCKING tier of the lint-parity pair: the stepped ladder
+# plus one deliberate defect, `graph-owned-before-write` on `note`, a tag
+# neither ladder initialises. Authored for this tier alone.
+outcomes = ["retry", "escalate", "succeed"]
+terminal = ["done"]
+
+[model]
+id = "ladder"
+version = 1
+
+[initial]
+status = "open"
+attempt = 0
+tier = "small"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["open", "done"]
+single_valued = true
+required = true
+
+[tags.attempt]
+provenance = "owned"
+kind = "int"
+min = 0
+max = 9
+single_valued = true
+required = true
+
+[tags.tier]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "mid", "large"]
+single_valued = true
+required = true
+
+[tags.note]
+provenance = "owned"
+kind = "enum"
+domain = ["x"]
+single_valued = true
+
+[read.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "attempt", "tier", "note"]
+timeout = "2s"
+
+[write.state]
+role = "state"
+path = "flow.state"
+keys = ["status", "attempt", "tier"]
+timeout = "2s"
+read_back = true
+
+[context.open.match.status]
+eq = "open"
+
+[context.done.match.status]
+eq = "done"
+
+# attempt + 1 while attempt is under the cap. `status = "open"` is the
+# mirrored idempotent write on an UNSTEPPED key.
+[[rule]]
+id = "retry"
+use = ["open"]
+[rule.match.recognized]
+eq = "retry"
+[rule.guard.all.attempt]
+gte = 0
+lt = 5
+[rule.write]
+attempt = { step = 1 }
+status = "open"
+
+[[rule]]
+id = "retry-cap"
+use = ["open"]
+[rule.match.recognized]
+eq = "retry"
+[rule.guard.all.attempt]
+gte = 5
+[rule.write]
+status = "done"
+
+# tier + 1 below the last member.
+[[rule]]
+id = "escalate"
+use = ["open"]
+[rule.match.recognized]
+eq = "escalate"
+[rule.guard.all.tier]
+in = ["small", "mid"]
+[rule.write]
+tier = { step = 1 }
+attempt = 0
+
+[[rule]]
+id = "escalate-cap"
+use = ["open"]
+[rule.match.recognized]
+eq = "escalate"
+[rule.guard.all.tier]
+eq = "large"
+[rule.write]
+status = "done"
+
+[[rule]]
+id = "succeed"
+use = ["open"]
+[rule.match.recognized]
+eq = "succeed"
+[rule.guard.all.note]
+eq = "x"
+[rule.write]
+status = "done"

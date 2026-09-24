@@ -544,16 +544,7 @@ func presenceFor(atom table.Atom) string {
 // declarations, so `eq`/`in` compare under the declared kind here exactly as
 // they do at the runtime's guard path.
 func valueSatisfies(seam Evaluator, atom table.Atom, held string) resolve.GuardResult {
-	literal := strings.Join(atom.Literal, "")
-	if atom.Operator == "in" || atom.Operator == "contains" {
-		literal = renderSet(atom.Literal)
-	}
-	return seam.Evaluate(resolve.GuardAtom{
-		Key:      atom.Key,
-		Operator: atom.Operator,
-		Literal:  literal,
-		Block:    atom.Block,
-	}, held)
+	return resolve.CompareValue(seam, atom.Key, atom.Operator, atom.Block, atom.Literal, held)
 }
 
 // --- row acceptance ------------------------------------------------------

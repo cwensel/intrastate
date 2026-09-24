@@ -77,7 +77,7 @@ func (a *analysis) checkOwnedBeforeMatch(g guard.Group) {
 			}
 			a.emit(clierr.Finding{
 				Code:        CodeOwnedBeforeWrite,
-				Rule:        row.RuleID,
+				Rule:        rowIdentity(row),
 				Span:        row.SourceLocator,
 				Key:         key,
 				Dimension:   key,
@@ -204,9 +204,9 @@ func (a *analysis) emitOverlaps(g guard.Group, rows []table.Row, class string) {
 			}
 			a.emit(clierr.Finding{
 				Code:        CodeOverlap,
-				Rule:        rows[i].RuleID,
+				Rule:        rowIdentity(rows[i]),
 				Span:        rows[i].SourceLocator,
-				Element:     right.RuleID,
+				Element:     rowIdentity(right),
 				Class:       class,
 				Fingerprint: Fingerprint(rows[i]) + "|" + Fingerprint(right),
 				Message: fmt.Sprintf("rows %q and %q are enabled together by "+
@@ -315,9 +315,9 @@ func (a *analysis) checkRedundantRows(g guard.Group) {
 			}
 			a.emit(clierr.Finding{
 				Code:        CodeRedundantRow,
-				Rule:        rows[i].RuleID,
+				Rule:        rowIdentity(rows[i]),
 				Span:        rows[i].SourceLocator,
-				Element:     rows[j].RuleID,
+				Element:     rowIdentity(rows[j]),
 				Fingerprint: Fingerprint(rows[i]),
 				Message: fmt.Sprintf("row %q accepts a proper subset of row "+
 					"%q's assignments, so it can never be the exact-one match",
@@ -360,7 +360,7 @@ func (a *analysis) checkIdempotentWrites(g guard.Group) {
 				}
 				a.emit(clierr.Finding{
 					Code:        CodeIdempotentWrite,
-					Rule:        row.RuleID,
+					Rule:        rowIdentity(row),
 					Span:        row.SourceLocator,
 					Key:         write.Key,
 					Operator:    atom.Operator,
@@ -396,7 +396,7 @@ func (a *analysis) checkVacuousAtoms(g guard.Group) {
 			}
 			a.emit(clierr.Finding{
 				Code:        CodeVacuousAtom,
-				Rule:        row.RuleID,
+				Rule:        rowIdentity(row),
 				Span:        row.SourceLocator,
 				Key:         atom.Key,
 				Operator:    atom.Operator,

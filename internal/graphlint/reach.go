@@ -1,7 +1,6 @@
 package graphlint
 
 import (
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -515,31 +514,6 @@ func atomAdmitsValue(a table.Atom, held string) bool {
 		// the seam answered unevaluable — satisfiable here.
 		return len(a.Literal) == 0 || slices.Contains(a.Literal, held)
 	}
-	literal := strings.Join(a.Literal, "")
-	if a.Operator == "in" || a.Operator == "contains" {
-		literal = renderSetLiteral(a.Literal)
-	}
-	verdict := guard.Evaluator{}.Evaluate(resolve.GuardAtom{
-		Key:      a.Key,
-		Operator: a.Operator,
-		Literal:  literal,
-		Block:    a.Block,
-	}, held)
+	verdict := resolve.CompareValue(guard.Evaluator{}, a.Key, a.Operator, a.Block, a.Literal, held)
 	return verdict != resolve.GuardFalse
-}
-
-// renderSetLiteral spells a member sequence as the canonical JSON array the
-// seam compares over (JDR 0001 §D13), which is the form the evaluator's `in`
-// and `contains` arms parse.
-func renderSetLiteral(members []string) string {
-	canonical := canonicalValues(members)
-	if canonical == nil {
-		canonical = []string{}
-	}
-	b, err := json.Marshal(canonical)
-	if err != nil {
-		// json.Marshal of a []string cannot fail.
-		return "[]"
-	}
-	return string(b)
 }

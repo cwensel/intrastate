@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cwensel/intrastate/internal/resolve"
 	"github.com/cwensel/intrastate/internal/table"
 )
 
@@ -289,7 +290,7 @@ func valueAssignments(d table.TagDecl) ([]string, bool) {
 		if d.Min == nil || d.Max == nil {
 			return nil, false
 		}
-		width, ok := intWidth(*d.Min, *d.Max)
+		width, ok := resolve.IntWidth(*d.Min, *d.Max)
 		if !ok {
 			// An overflowing width names no dimension this implementation
 			// can enumerate. The `n > Bound()` precheck already declines

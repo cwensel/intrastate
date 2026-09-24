@@ -455,7 +455,7 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 	}
 	predicates = mergeAtoms(predicates, guardAll, guardUnless)
 
-	writes, requiresOwned, err := l.renderWrites(rule, id, isEscape)
+	writes, requiresOwned, steps, err := l.renderWrites(rule, id, isEscape, predicates)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +482,7 @@ func (l *loader) normalizeRule(rule *sourceRule, id string, setKeys []string) ([
 		setKeys:       setKeys,
 	}
 
-	return expand(base, predicates, outcomeAtom, writes), nil
+	return expand(base, predicates, outcomeAtom, writes, steps), nil
 }
 
 // checkOrdinaryWriteShape enforces `0002:C4`'s write-block obligation over
@@ -591,12 +591,20 @@ func (l *loader) outcomeBinding(id string, matchAtoms []Atom) (Atom, error) {
 //
 // An escape rule carries neither, so an escape row normalizes to both empty
 // and an empty required-owned set (`0002:C14`, `0002:C15`).
-func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]TagValue, []string, error) {
+//
+// A `{ step = <n> }` write resolves here, against the rule's merged
+// predicates, into the per-key admitted cells and stepped literals `expand`
+// mints rows from (`0030:C1`). The stepped key is placed in `assignments`
+// like any other written key, with a placeholder `expand` replaces per
+// cell, so `RequiresOwned` names it. Every refusal a step mints fires here,
+// before `expand` is called.
+func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool, predicates []Atom) ([]TagValue, []string, []stepPoint, error) {
 	if isEscape {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	assignments := map[string][]string{}
+	var specs []stepSpec
 	// A decision-table ordinary rule carries no write block (`0010:C2`), so
 	// there is nothing to render; the row normalizes to empty
 	// Writes/NextTags/RequiresOwned exactly as an escape row does. The
@@ -607,7 +615,7 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		for _, key := range slices.Sorted(maps.Keys(*rule.Write)) {
 			decl, ok := l.model.Tags[key]
 			if !ok {
-				return nil, nil, fail(CatUnknownTag, "rule "+id+" writes the undeclared tag "+key)
+				return nil, nil, nil, fail(CatUnknownTag, "rule "+id+" writes the undeclared tag "+key)
 			}
 			// `write to non-owned tag` is a RULE-level refusal, decidable from
 			// one rule plus the declarations (Failure Modes). It is what
@@ -620,23 +628,35 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 			// the model's wiring for a defect in the rule and collapse two
 			// categories `0002:C24` states separately.
 			if decl.Provenance != ProvenanceOwned {
-				return nil, nil, fail(CatWriteToNonOwnedTag,
+				return nil, nil, nil, fail(CatWriteToNonOwnedTag,
 					"rule "+id+" writes the "+string(decl.Provenance)+" tag "+key)
 			}
 			raw := (*rule.Write)[key]
+			// The computed form is intercepted before `valueMembers`, on the
+			// write path only: `[initial]` and predicate literals keep the
+			// literal-only grammar and their own categories.
+			if table, ok := raw.(map[string]any); ok {
+				n, detail := parseStep(decl, table)
+				if detail != "" {
+					return nil, nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+detail)
+				}
+				specs = append(specs, stepSpec{key: key, decl: decl, n: n})
+				assignments[key] = []string{""}
+				continue
+			}
 			members, err := valueMembers(raw)
 			if err != nil {
-				return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
+				return nil, nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
 			}
 			if slices.Contains(members, ClearSentinel) {
-				return nil, nil, fail(CatReservedTagValue,
+				return nil, nil, nil, fail(CatReservedTagValue,
 					"rule "+id+" write "+key+" authors the reserved value "+ClearSentinel)
 			}
 			// A write-block value's kind and domain conformance is filed under
 			// the declaration category (deviations.md D3): `0002:C24` names no
 			// dedicated category, and D3's check names this one.
 			if err := conform(decl, "eq", members); err != nil {
-				return nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
+				return nil, nil, nil, fail(CatMalformedTagDeclaration, "rule "+id+" write "+key+": "+err.Error())
 			}
 			// A write REPLACES: for a set kind the array literal is the whole
 			// new set, and it normalizes to a member-sorted sequence rather
@@ -649,7 +669,7 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 				// for the declared kind and is refused rather than truncated
 				// at the seam, where `resolve.Tag.Value` is one string and
 				// RDR 0004's read-back compares it for equality.
-				return nil, nil, fail(CatMalformedTagDeclaration,
+				return nil, nil, nil, fail(CatMalformedTagDeclaration,
 					"rule "+id+" write "+key+": kind "+decl.Kind+
 						" holds one value, not a member sequence")
 			}
@@ -665,16 +685,34 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 		for _, key := range *rule.Clear {
 			decl, ok := l.model.Tags[key]
 			if !ok {
-				return nil, nil, fail(CatUnknownTag, "rule "+id+" clears the undeclared tag "+key)
+				return nil, nil, nil, fail(CatUnknownTag, "rule "+id+" clears the undeclared tag "+key)
 			}
 			// A clear IS a `<clear>` write (`0002:C23`) and `0002:C14`
 			// derives `RequiresOwned` from the write block AND clear list,
 			// so it carries the same provenance obligation.
 			if decl.Provenance != ProvenanceOwned {
-				return nil, nil, fail(CatWriteToNonOwnedTag,
+				return nil, nil, nil, fail(CatWriteToNonOwnedTag,
 					"rule "+id+" clears the "+string(decl.Provenance)+" tag "+key)
 			}
+			// A key both stepped and cleared is refused BEFORE any cell is
+			// walked, so the collision is what the author is told (`0030:C1`).
+			if slices.ContainsFunc(specs, func(s stepSpec) bool { return s.key == key }) {
+				return nil, nil, nil, fail(CatMalformedTagDeclaration,
+					"rule "+id+" write "+key+": the key is both stepped and named in the clear list")
+			}
 			assignments[key] = []string{ClearSentinel}
+		}
+	}
+
+	var steps []stepPoint
+	if len(specs) > 0 {
+		ev := resolve.NewEvaluator(l.tagKinds())
+		for _, spec := range specs {
+			point, err := l.resolveStep(id, spec, predicates, ev)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			steps = append(steps, point)
 		}
 	}
 
@@ -687,7 +725,7 @@ func (l *loader) renderWrites(rule *sourceRule, id string, isEscape bool) ([]Tag
 	for _, key := range keys {
 		writes = append(writes, TagValue{Key: key, Value: slices.Clone(assignments[key])})
 	}
-	return writes, slices.Clone(keys), nil
+	return writes, slices.Clone(keys), steps, nil
 }
 
 // emitSequence renders the authored `[rule.emit]` block as the key-sorted
@@ -741,7 +779,21 @@ func sortedList(in *[]string) []string {
 // `in` therefore expands to one row whose suffix is empty, so `eq = "x"`
 // and `in = ["x"]` are one spelling of one edge and cannot mint two
 // identities.
-func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row {
+//
+// A step write is one more choice point, one per stepped key, over its
+// admitted cells (`0030:C1`). It SUBSUMES a match `in` on its key — the `in`
+// already contributed its members to admission — so that `in` expands
+// nowhere and is rewritten per row to `match eq = <cell>`. The per-cell atom
+// lands in the block the author scoped the tag with: a row whose stepped tag
+// is PINNED by a match `eq` on that key — the subsumed-`in` rewrite, or an
+// authored or inherited match `eq` — carries no second copy, since a guard
+// dimension beside the group's own match `eq` would read every other cell of
+// the domain as uncovered (`0006:C7`); every other stepped row carries
+// `guard.all eq = <cell>`. Each stepped row carries its stepped literal in
+// both write carriers, and the cell as a suffix element even at one
+// admitted cell. Step points order among the other candidates by KEY
+// (`0030:D-identity`).
+func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue, steps []stepPoint) []Row {
 	// The outcome atom participates in the product like any other
 	// expanding match atom, in the same sort order, but its chosen member
 	// lands in the row's outcome field rather than its predicate set.
@@ -750,11 +802,33 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 		// outcome atom is identified by outcomeIndex.
 		atom    Atom
 		outcome bool
+		// step is set on a step point; its atom carries only the key, so
+		// the point sorts by key alone. rewrite records that it subsumed a
+		// match `in` on that key; pinned, that a match `eq` on that key
+		// (the rewrite, or an authored or inherited one) scopes each row.
+		step    *stepPoint
+		rewrite bool
+		pinned  bool
 	}
 
-	candidates := make([]choicePoint, 0, len(predicates)+1)
+	candidates := make([]choicePoint, 0, len(predicates)+len(steps)+1)
+	subsumes := func(a Atom) bool {
+		return a.Block == BlockMatch && a.Operator == "in" &&
+			slices.ContainsFunc(steps, func(p stepPoint) bool { return p.key == a.Key })
+	}
 	for _, a := range predicates {
-		candidates = append(candidates, choicePoint{atom: a})
+		if !subsumes(a) {
+			candidates = append(candidates, choicePoint{atom: a})
+		}
+	}
+	for i := range steps {
+		rewrite := slices.ContainsFunc(predicates, func(a Atom) bool { return a.Key == steps[i].key && subsumes(a) })
+		pinned := rewrite || slices.ContainsFunc(predicates, func(a Atom) bool {
+			return a.Key == steps[i].key && a.Block == BlockMatch && a.Operator == "eq"
+		})
+		candidates = append(candidates, choicePoint{
+			atom: Atom{Key: steps[i].key}, step: &steps[i], rewrite: rewrite, pinned: pinned,
+		})
 	}
 	candidates = append(candidates, choicePoint{atom: outcome, outcome: true})
 	slices.SortFunc(candidates, func(x, y choicePoint) int {
@@ -782,8 +856,43 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 		setKeys:       base.setKeys,
 	}}
 	atomSets := [][]Atom{nil}
+	// writeSets carries each row's rendered assignments: shared until a step
+	// point replaces its key's placeholder, which clones.
+	writeSets := [][]TagValue{writes}
 
 	for _, c := range candidates {
+		if c.step != nil {
+			grown := make([]Row, 0, len(rows)*len(c.step.cells))
+			grownAtoms := make([][]Atom, 0, len(rows)*len(c.step.cells))
+			grownWrites := make([][]TagValue, 0, len(rows)*len(c.step.cells))
+			for i, row := range rows {
+				for j, cell := range c.step.cells {
+					next := row
+					next.Suffix = append(slices.Clone(row.Suffix), cell)
+					atoms := slices.Clone(atomSets[i])
+					if c.rewrite {
+						atoms = append(atoms,
+							Atom{Key: c.step.key, Block: BlockMatch, Operator: "eq", Literal: []string{cell}})
+					}
+					if !c.pinned {
+						atoms = append(atoms,
+							Atom{Key: c.step.key, Block: BlockAll, Operator: "eq", Literal: []string{cell}})
+					}
+					w := cloneTagValues(writeSets[i])
+					for k := range w {
+						if w[k].Key == c.step.key {
+							w[k].Value = []string{c.step.values[j]}
+						}
+					}
+					grown = append(grown, next)
+					grownAtoms = append(grownAtoms, atoms)
+					grownWrites = append(grownWrites, w)
+				}
+			}
+			rows, atomSets, writeSets = grown, grownAtoms, grownWrites
+			continue
+		}
+
 		// Expansion is a MATCH-BLOCK mechanism (`0002:C13`: "Every `in`
 		// atom in a rule's match blocks … expands"). A guard `in` is ONE
 		// predicate over a member set: `unless x in [a, b]` means "not a
@@ -806,6 +915,7 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 
 		grown := make([]Row, 0, len(rows)*len(members))
 		grownAtoms := make([][]Atom, 0, len(rows)*len(members))
+		grownWrites := make([][]TagValue, 0, len(rows)*len(members))
 		for i, row := range rows {
 			for _, member := range members {
 				next := row
@@ -835,10 +945,12 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 
 				grown = append(grown, next)
 				grownAtoms = append(grownAtoms, atoms)
+				grownWrites = append(grownWrites, writeSets[i])
 			}
 		}
 		rows = grown
 		atomSets = grownAtoms
+		writeSets = grownWrites
 	}
 
 	for i := range rows {
@@ -847,8 +959,8 @@ func expand(base Row, predicates []Atom, outcome Atom, writes []TagValue) []Row 
 		rows[i].Atoms = mergeAtoms(atomSets[i])
 		// NextTags and Writes are built per row from the same rendered
 		// assignments, never by aliasing one to the other (`0002:C15`).
-		rows[i].NextTags = cloneTagValues(writes)
-		rows[i].Writes = cloneTagValues(writes)
+		rows[i].NextTags = cloneTagValues(writeSets[i])
+		rows[i].Writes = cloneTagValues(writeSets[i])
 	}
 	return rows
 }
