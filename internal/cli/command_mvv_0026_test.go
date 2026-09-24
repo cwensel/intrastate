@@ -284,16 +284,18 @@ import (
 	"time"
 )
 
+// escape starts the grandchild and leaves the pid bookkeeping to it. This
+// process is in the group the declared deadline SIGKILLs, so a write here
+// can lose that race under load even though the escape already happened.
 func escape(pidfile string) {
 	self, _ := os.Executable()
-	sub := exec.Command(self, "hold")
+	sub := exec.Command(self, "hold", pidfile)
 	sub.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	sub.Stdout = os.Stdout
 	sub.Stderr = os.Stderr
 	if err := sub.Start(); err != nil {
 		os.Exit(95)
 	}
-	_ = os.WriteFile(pidfile, []byte(strconv.Itoa(sub.Process.Pid)), 0o600)
 }
 
 func main() {
@@ -302,8 +304,17 @@ func main() {
 	}
 	switch os.Args[1] {
 	// hold is the GRANDCHILD: it holds the inherited stdout and stderr and
-	// sleeps 60 s, writing nothing. Nothing in the CLI can reach it.
+	// sleeps 60 s, writing nothing to them. Nothing in the CLI can reach it.
+	// Its first act is to record its OWN pid: it is in a new session from
+	// the moment it starts, so the group kill cannot skip the write, and
+	// the temp file + rename means a reader sees no file or a whole one.
 	case "hold":
+		if len(os.Args) > 2 {
+			tmp := os.Args[2] + ".tmp"
+			if os.WriteFile(tmp, []byte(strconv.Itoa(os.Getpid())), 0o600) == nil {
+				_ = os.Rename(tmp, os.Args[2])
+			}
+		}
 		time.Sleep(60 * time.Second)
 
 	// deadline is MVV rows 1-4: the grandchild inherits BOTH pipes and
