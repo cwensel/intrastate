@@ -1154,29 +1154,45 @@ func TestReq49_TheDeadlineBoundsTheWholeProcessGroupAndLeavesNoSurvivor(t *testi
 	})
 
 	t.Run("FX-deadline S2: a grandchild holds the stdout pipe", func(t *testing.T) {
-		pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
-		acc := entry(fxRole, []string{bin, "orphan-holds-pipe", "30s", pidFile})
-		acc.Output = strptr("raw")
+		// Under whole-suite -race load the child's re-exec can consume most
+		// of the bound, so the deadline may reap the fixture before it has
+		// recorded its grandchild. That attempt never reached the state S3
+		// judges — a setup miss, retried with a fresh pidfile. The bound and
+		// the refusal still hold on every attempt, so they are asserted on
+		// every attempt; only a RECORDED pid is ever judged, and all attempts
+		// missing is a failure, so the loop cannot pass vacuously.
+		const attempts = 3
+		dir := t.TempDir()
+		pid, recorded := 0, false
+		for i := 1; i <= attempts && !recorded; i++ {
+			pidFile := filepath.Join(dir, "grandchild-"+itoa(i)+".pid")
+			acc := entry(fxRole, []string{bin, "orphan-holds-pipe", "30s", pidFile})
+			acc.Output = strptr("raw")
 
-		ctx, cancel := context.WithTimeout(ctxOf(t), bound)
-		defer cancel()
+			ctx, cancel := context.WithTimeout(ctxOf(t), bound)
+			r := cmdbind.Reader{Accessor: acc, Name: fxName, Config: allowed(t)}
+			start := time.Now()
+			_, _, err := r.Read(ctx, art, acc.Keys)
+			elapsed := time.Since(start)
+			cancel()
 
-		r := cmdbind.Reader{Accessor: acc, Name: fxName, Config: allowed(t)}
-		start := time.Now()
-		_, _, err := r.Read(ctx, art, acc.Keys)
-		elapsed := time.Since(start)
-
-		if err == nil {
-			t.Fatal("the invocation answered a value despite the deadline")
+			if err == nil {
+				t.Fatal("the invocation answered a value despite the deadline")
+			}
+			if elapsed > limit {
+				t.Errorf("the read returned after %v; want within %v — dropping "+
+					"WaitDelay hangs Wait on the held pipe (FX-deadline S1)",
+					elapsed, limit)
+			}
+			pid, recorded = pidFrom(t, pidFile)
 		}
-		if elapsed > limit {
-			t.Errorf("the read returned after %v; want within %v — dropping "+
-				"WaitDelay hangs Wait on the held pipe (FX-deadline S1)",
-				elapsed, limit)
+		if !recorded {
+			t.Fatalf("the deadline reaped the fixture before it recorded its "+
+				"grandchild in %d attempts; S3's orphan was never set up, so "+
+				"its survival could not be judged", attempts)
 		}
 		// The load-bearing half: NO process from the child's GROUP survives.
 		// Dropping the group signal orphans this grandchild (FX-deadline S3).
-		pid := pidFrom(t, pidFile)
 		time.Sleep(100 * time.Millisecond)
 		if alive(pid) {
 			t.Errorf("the grandchild pid %d survived the refusal; the deadline "+

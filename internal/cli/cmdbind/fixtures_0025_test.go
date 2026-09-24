@@ -18,6 +18,8 @@ package cmdbind_test
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -201,9 +203,16 @@ func main() {
 		sub.Stdout = os.Stdout
 		_ = sub.Start()
 		// Record the grandchild's pid so the test can assert it did not
-		// survive the refusal.
+		// survive the refusal. The deadline's group SIGKILL can land at any
+		// instant, so the pid is written to a temp file and renamed into
+		// place: a reader sees either no file or a complete one, never the
+		// zero-byte file a kill between WriteFile's create and its write
+		// leaves behind.
 		if len(rest) > 1 {
-			_ = os.WriteFile(rest[1], []byte(strconv.Itoa(sub.Process.Pid)), 0o600)
+			tmp := rest[1] + ".tmp"
+			if os.WriteFile(tmp, []byte(strconv.Itoa(sub.Process.Pid)), 0o600) == nil {
+				_ = os.Rename(tmp, rest[1])
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
 
@@ -305,16 +314,23 @@ func alive(pid int) bool {
 }
 
 // pidFrom reads the grandchild pid the `orphan-holds-pipe` mode recorded.
-func pidFrom(t *testing.T, path string) int {
+// recorded is false when no pidfile exists: a deadline that reaped the
+// fixture before it reached the rename is a setup miss the caller decides
+// on, not a verdict. A file that exists but does not parse is a fixture
+// bug — the write is atomic, so a torn read cannot explain it — and fails.
+func pidFrom(t *testing.T, path string) (pid int, recorded bool) {
 	t.Helper()
 
 	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, false
+	}
 	if err != nil {
-		t.Fatalf("the fixture recorded no grandchild pid: %v", err)
+		t.Fatalf("reading the recorded grandchild pid failed: %v", err)
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
 	if err != nil {
 		t.Fatalf("the recorded pid %q is not a number: %v", b, err)
 	}
-	return n
+	return n, true
 }
