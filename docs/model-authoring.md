@@ -634,6 +634,10 @@ element. `--file={artifact}` is not a placeholder; it, and any other
   `command_unknown_placeholder`. An unbound key, or one bound to a
   `-`-prefixed value a child could parse as a flag, refuses the request
   before spawn; a placeholder is never passed through literally.
+  `flow read-state` runs every declared reader in turn, so it needs
+  `--tag` for each `{tag.<key>}` any reader names; the refusal lands
+  before the affected reader spawns, after any reader ahead of it has
+  run.
 
 `{tag.<key>}` at argv0 is `edit_tag_argv0`, for the reason
 [the `edit` carrier](#the-edit-carrier) gives: the executable must be

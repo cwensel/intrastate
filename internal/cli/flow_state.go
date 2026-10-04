@@ -60,6 +60,10 @@ Each reader reports its declared key set beside the tags it returned, so a
 key that is absent from the artifact is distinguishable from one this
 reader was never asked for.
 
+--tag binds observed context into the readers' argv. A command reader that
+names {tag.<key>} needs the key bound here; the bound tags are never reported
+as read state, and an owned or reserved key refuses as on every flow verb.
+
 It invokes no gate accessor: a gate answers allow, deny, or indeterminate
 rather than a tag value.`,
 		SilenceErrors: true,
@@ -68,6 +72,7 @@ rather than a tag value.`,
 		RunE:          runFlowReadState,
 	}
 	registerSelectionFlags(cmd)
+	registerTagFlag(cmd)
 	withExtendedHelp(cmd, flowReadStateExtendedDesc)
 	return cmd
 }
@@ -106,8 +111,18 @@ No gates
   indeterminate; it does not return a tag value, so there is nothing for
   a state report to carry.
 
---tag is not accepted here: there is no verdict for observed context to
-inform.
+Observed context
+
+  --tag is CONTEXT for the readers, not input to a verdict: read-state
+  evaluates nothing. Its one use here is binding a command reader's
+  {tag.<key>} argv, so a reader such as ["kata", "show", "{tag.id}"]
+  can be read. Every declared reader runs, in turn, so --tag must bind
+  each key any reader names: a reader naming a key that is not bound
+  refuses before its own child spawns, though a reader ahead of it may
+  already have run. The usual --tag refusals land before any reader
+  runs: an owned key is ` + codeTagOwned + `, a reserved one is
+  ` + codeTagReserved + `. The bound tags are never reported as read
+  state.
 
 Shared refusals
 
@@ -125,14 +140,21 @@ Exits
 Worked call
 
   intrastate flow read-state --model flow.toml \
-      --artifact state=state.json --as json`
+      --artifact state=state.json --as json
+
+  intrastate flow read-state --model kata.toml --allow-commands \
+      --artifact kata=. --tag id=ab12 --as json`
 
 func runFlowReadState(cmd *cobra.Command, _ []string) error {
 	if ce := respond.ValidateMode(cmd); ce != nil {
 		return respond.Fail(cmd, ce)
 	}
 
-	req, ce := buildRequest(cmd, false)
+	// `--tag` is parsed so a command reader's `{tag.<key>}` argv can bind
+	// (`0028:C1.6`) and so its refusals bite before any reader runs. The
+	// values reach the readers through `artifactMap` and are never reported
+	// as read state.
+	req, ce := buildRequest(cmd, true)
 	if ce != nil {
 		return respond.Fail(cmd, ce)
 	}

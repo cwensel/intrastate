@@ -145,8 +145,8 @@ Shared input grammar
   ` + codeTagOwned + ` and naming a reserved key refuses with
   ` + codeTagReserved + `: owned state comes from the readers and is
   written only through set-state, so accepting it as context would let a
-  caller assert state the model owns. --tag is absent from read-state,
-  which reports what readers see rather than evaluating anything.
+  caller assert state the model owns. On read-state, which evaluates
+  nothing, --tag only binds a command reader's {tag.<key>} argv.
 
 Ordering
 
@@ -183,9 +183,9 @@ func registerSelectionFlags(cmd *cobra.Command) {
 		"artifact role binding, as role=path (repeatable)")
 }
 
-// registerTagFlag adds `--tag`, the observed-context channel. It is absent
-// from `read-state`, which reports what readers see rather than evaluating
-// anything against caller context.
+// registerTagFlag adds `--tag`, the observed-context channel. On
+// `read-state` it informs no verdict; it only binds a command reader's
+// `{tag.<key>}` argv (`0028:C1.6`).
 func registerTagFlag(cmd *cobra.Command) {
 	cmd.Flags().StringArray("tag", nil,
 		"observed tag, as name=value (repeatable); set values are JSON arrays")

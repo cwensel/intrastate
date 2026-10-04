@@ -255,8 +255,8 @@ Shared input grammar
   flow-tag-owned and naming a reserved key refuses with
   flow-tag-reserved: owned state comes from the readers and is
   written only through set-state, so accepting it as context would let a
-  caller assert state the model owns. --tag is absent from read-state,
-  which reports what readers see rather than evaluating anything.
+  caller assert state the model owns. On read-state, which evaluates
+  nothing, --tag only binds a command reader's {tag.<key>} argv.
 
 Ordering
 
@@ -558,6 +558,10 @@ Each reader reports its declared key set beside the tags it returned, so a
 key that is absent from the artifact is distinguishable from one this
 reader was never asked for.
 
+--tag binds observed context into the readers' argv. A command reader that
+names {tag.<key>} needs the key bound here; the bound tags are never reported
+as read state, and an owned or reserved key refuses as on every flow verb.
+
 It invokes no gate accessor: a gate answers allow, deny, or indeterminate
 rather than a tag value.
 ```
@@ -571,6 +575,7 @@ Flags:
       --flow string            flow id (reserved; this build resolves none — use --model)
       --help-all               show extended help (vocabulary, wire shapes, exit codes)
       --model string           path to the transition model
+      --tag stringArray        observed tag, as name=value (repeatable); set values are JSON arrays
 
 Global Flags:
       --allow-commands   permit model-declared command accessors to execute (off by default)
@@ -612,8 +617,18 @@ No gates
   indeterminate; it does not return a tag value, so there is nothing for
   a state report to carry.
 
---tag is not accepted here: there is no verdict for observed context to
-inform.
+Observed context
+
+  --tag is CONTEXT for the readers, not input to a verdict: read-state
+  evaluates nothing. Its one use here is binding a command reader's
+  {tag.<key>} argv, so a reader such as ["kata", "show", "{tag.id}"]
+  can be read. Every declared reader runs, in turn, so --tag must bind
+  each key any reader names: a reader naming a key that is not bound
+  refuses before its own child spawns, though a reader ahead of it may
+  already have run. The usual --tag refusals land before any reader
+  runs: an owned key is flow-tag-owned, a reserved one is
+  flow-tag-reserved. The bound tags are never reported as read
+  state.
 
 Shared refusals
 
@@ -632,6 +647,9 @@ Worked call
 
   intrastate flow read-state --model flow.toml \
       --artifact state=state.json --as json
+
+  intrastate flow read-state --model kata.toml --allow-commands \
+      --artifact kata=. --tag id=ab12 --as json
 ```
 
 ## intrastate flow resolve
