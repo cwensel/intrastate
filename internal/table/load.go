@@ -1180,12 +1180,35 @@ func carrierDefect(
 		}
 	}
 
+	// The command keys are properties of the invocation envelope
+	// (`0025:C1`, C3/C4), so they mean something only on a carrier that
+	// spawns a child: `command`, or `steps`, whose every step composes its
+	// environment the same way (kata c6t5). These arms run after the
+	// carrier arms above, so a carrier-less entry still reports
+	// `command_and_path_conflict`.
+	spawns := hasCommand || hasSteps
+
 	// 5 — command_output_shape.
-	if err := outputShapeDefect(a, capability, where, keys); err != nil {
+	if err := outputShapeDefect(a, capability, where, keys, spawns); err != nil {
 		return err
 	}
 
-	// 6 — command_env_conflict.
+	// 6 — command_env_conflict. On an entry that never spawns, `env` and
+	// `env_pass` would be silently ignored, so declaring either there is
+	// this category before the reserved-prefix rule is consulted (kata
+	// c6t5, composing `0025:C1` and `0025:C5`).
+	if !spawns {
+		for _, k := range []struct {
+			name     string
+			declared bool
+		}{{"env", a.Env != nil}, {"env_pass", a.EnvPass != nil}} {
+			if k.declared {
+				return fail(CatCommandEnvConflict,
+					where+" declares `"+k.name+"`, which requires a `command` "+
+						"or `steps` carrier")
+			}
+		}
+	}
 	if a.Env != nil {
 		for _, k := range slices.Sorted(maps.Keys(*a.Env)) {
 			if strings.HasPrefix(k, envReservedPrefix) {
@@ -1660,7 +1683,26 @@ func filepathBase(s string) string {
 // non-read entry, and `exit_verdicts` on a non-gate entry or naming a
 // value outside the closed verdict set. `output` itself is a read-entry
 // key admitting exactly `"json"` or `"raw"` (`0025:C1`, `0025:C3`).
-func outputShapeDefect(a sourceAcc, capability, where string, keys []string) error {
+//
+// All three shape a spawned command's stdout or exit status, so on an
+// entry whose carrier never spawns (`spawns` false) declaring any of them
+// is this category first, ahead of the capability arms (kata c6t5).
+func outputShapeDefect(a sourceAcc, capability, where string, keys []string, spawns bool) error {
+	if !spawns {
+		for _, k := range []struct {
+			name     string
+			declared bool
+		}{
+			{"output", a.Output != nil},
+			{"exit_absent", a.ExitAbsent != nil},
+			{"exit_verdicts", a.ExitVerdicts != nil},
+		} {
+			if k.declared {
+				return fail(CatCommandOutputShape,
+					where+" declares `"+k.name+"`, which requires a `command` carrier")
+			}
+		}
+	}
 	if a.Output != nil {
 		if capability != "read" {
 			return fail(CatCommandOutputShape,

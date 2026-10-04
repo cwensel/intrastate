@@ -722,6 +722,11 @@ An `env` key or `env_pass` name starting with `INTRASTATE_` is
 `command_env_conflict`, so the overlay is never shadowed silently. A
 `steps` writer composes every step's environment the same way.
 
+These keys, like `output`, `exit_absent` and `exit_verdicts`, configure
+the spawned child, so lint refuses them on a `path` entry or an `edit`
+writer, which spawn none, while `steps` spawns and admits `env` and
+`env_pass`.
+
 ##### `--allow-commands`
 
 A command in a model is code that runs when the model is used, so running
@@ -745,12 +750,14 @@ carrying several reports the first in this order:
 - `command_unknown_placeholder` — a `{…}` token other than a whole-element
   `{artifact}` or a whole-element `{tag.<key>}` naming a declared key;
 - `command_shell_interpreter` — the interpreter form above;
-- `command_output_shape` — `output` on a non-read entry, or naming anything
-  but `"json"` or `"raw"`; `output = "raw"` beside other than one declared
-  key; `exit_absent` on a non-read entry; `exit_verdicts` on a non-gate
-  entry, or mapping an exit to a value outside `allow`, `deny`,
+- `command_output_shape` — `output`, `exit_absent` or `exit_verdicts` on
+  an entry without a `command`; `output` on a non-read entry, or naming
+  anything but `"json"` or `"raw"`; `output = "raw"` beside other than one
+  declared key; `exit_absent` on a non-read entry; `exit_verdicts` on a
+  non-gate entry, or mapping an exit to a value outside `allow`, `deny`,
   `indeterminate`;
-- `command_env_conflict` — an `env` key or `env_pass` name carrying the
+- `command_env_conflict` — `env` or `env_pass` on an entry with neither a
+  `command` nor `steps`; an `env` key or `env_pass` name carrying the
   reserved `INTRASTATE_` prefix.
 
 `edit_tag_argv0` fires on a `command` entry too, and the three

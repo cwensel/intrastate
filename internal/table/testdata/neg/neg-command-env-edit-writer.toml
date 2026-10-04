@@ -1,0 +1,214 @@
+# RDR 0025 negative fixture: an `edit` writer declares `env_pass`, which only a spawning `command` or `steps` carrier consults.
+# RDR flow slice, authored to the JDR 0001 §D7 closed layout.
+outcomes = ["round-clean", "verdict-flapping", "reconcile-block", "finalized"]
+terminal = ["archived"]
+
+[model]
+id = "rdr"
+version = 1
+description = "Representative RDR prelock and rewind slice."
+
+[model.metadata]
+owner = "flow-team"
+review_cadence = "per-lock"
+
+[initial]
+status = "Draft"
+stage = "propose"
+iter = 0
+
+[tags.status]
+provenance = "owned"
+kind = "enum"
+domain = ["Draft", "Final"]
+single_valued = true
+required = true
+
+[tags.stage]
+provenance = "owned"
+kind = "enum"
+domain = ["propose", "prelock", "resolve", "archive"]
+single_valued = true
+required = true
+
+[tags.profile]
+provenance = "owned"
+kind = "enum"
+domain = ["small", "mid", "large", "foundational"]
+single_valued = true
+required = true
+
+[tags.iter]
+provenance = "owned"
+kind = "int"
+min = 0
+max = 9
+required = true
+
+[tags.rewind_scope]
+provenance = "owned"
+kind = "enum"
+domain = ["assumptions", "approach"]
+single_valued = true
+
+[tags.prelock_lens]
+provenance = "owned"
+kind = "enum"
+domain = ["grounding", "cove", "3amigo", "critique", "repeatability"]
+single_valued = true
+
+[tags.cluster_ready]
+provenance = "owned"
+kind = "bool"
+
+[tags.finalized_at]
+provenance = "observed"
+kind = "scalar"
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[read.rdr-status]
+role = "rdr"
+path = "rdr.status"
+keys = ["status", "stage", "profile", "iter", "rewind_scope", "prelock_lens", "cluster_ready"]
+timeout = "2s"
+
+[read.rdr-finalized-at]
+role = "rdr"
+path = "rdr.finalized_at"
+keys = ["finalized_at"]
+timeout = "2s"
+
+[write.rdr-status]
+role = "rdr"
+env_pass = ["RDR_TOKEN"]
+keys = ["status", "stage", "profile", "iter", "rewind_scope", "prelock_lens", "cluster_ready"]
+timeout = "2s"
+read_back = true
+
+[write.rdr-status.edit.status]
+anchor  = "^- \\*\\*status\\*\\*: (.*)$"
+replace = "- **status**: {status}"
+
+[write.rdr-status.edit.stage]
+anchor  = "^- \\*\\*stage\\*\\*: (.*)$"
+replace = "- **stage**: {stage}"
+
+[write.rdr-status.edit.profile]
+anchor  = "^- \\*\\*profile\\*\\*: (.*)$"
+replace = "- **profile**: {profile}"
+
+[write.rdr-status.edit.iter]
+anchor  = "^- \\*\\*iter\\*\\*: (.*)$"
+replace = "- **iter**: {iter}"
+
+[write.rdr-status.edit.rewind_scope]
+anchor  = "^- \\*\\*rewind_scope\\*\\*: (.*)$"
+replace = "- **rewind_scope**: {rewind_scope}"
+
+[write.rdr-status.edit.prelock_lens]
+anchor  = "^- \\*\\*prelock_lens\\*\\*: (.*)$"
+replace = "- **prelock_lens**: {prelock_lens}"
+
+[write.rdr-status.edit.cluster_ready]
+anchor  = "^- \\*\\*cluster_ready\\*\\*: (.*)$"
+replace = "- **cluster_ready**: {cluster_ready}"
+
+[gate.rdr-lock]
+role = "rdr"
+path = "rdr.lock"
+keys = ["status"]
+timeout = "2s"
+
+[context.draft.match.status]
+eq = "Draft"
+
+[context.prelock]
+inherits = "draft"
+[context.prelock.match.stage]
+eq = "prelock"
+
+[context.large-prelock]
+inherits = "prelock"
+[context.large-prelock.match.profile]
+in = ["large", "foundational"]
+
+[context.archived.match.stage]
+eq = "archive"
+
+# Ordinary rule: inherits a match-block `in` (profile) -> expands to two rows
+# under the general §D6 expansion rule. Carries a gate reference.
+[[rule]]
+id = "continue-prelock"
+use = ["large-prelock"]
+source = "rdr:prelock"
+gate = ["rdr-lock"]
+[rule.match.recognized]
+eq = "round-clean"
+[rule.guard.all.iter]
+lt = 3
+[rule.guard.all.finalized_at]
+exists = false
+[rule.guard.unless.profile]
+eq = "small"
+[rule.write]
+stage = "prelock"
+iter = 2
+
+# Sibling of continue-prelock: binds the SAME outcome, and its guard.all
+# carries an `eq` atom over an optional (required-unset) owned key. This is
+# the MVV's two-sibling requirement and A12's discriminating witness.
+[[rule]]
+id = "continue-prelock-cluster"
+use = ["large-prelock"]
+source = "rdr:prelock-cluster"
+[rule.match.recognized]
+eq = "round-clean"
+[rule.guard.all.cluster_ready]
+eq = true
+[rule.write]
+stage = "prelock"
+prelock_lens = "critique"
+
+# Multi-tag write plus an explicit clear.
+[[rule]]
+id = "reconcile-rewind"
+use = ["draft"]
+source = "rdr:reconcile"
+clear = ["prelock_lens"]
+[rule.match.recognized]
+eq = "reconcile-block"
+[rule.write]
+stage = "resolve"
+status = "Draft"
+rewind_scope = "assumptions"
+
+# Escape rule binding its outcome with `in` over two alphabet members:
+# expands to two escape rows, each rescuing only its own outcome (A11).
+[[rule]]
+id = "draft-no-match-escape"
+use = ["draft"]
+source = "rdr:escape"
+escape = ["no_match"]
+[rule.match.recognized]
+in = ["round-clean", "reconcile-block"]
+
+# Self-loop on a terminal context (authored via `use` of a terminal id).
+[[rule]]
+id = "terminal-archive"
+use = ["archived"]
+source = "rdr:terminal"
+[rule.match.recognized]
+in = ["finalized", "verdict-flapping"]
+[rule.write]
+stage = "archive"
+
+[dump]
+order = [
+  "identity", "source", "kind", "outcome",
+  "atoms", "next", "writes", "requires_owned", "gate", "escape", "emit",
+]

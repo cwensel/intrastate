@@ -826,6 +826,173 @@ read_back = true`)
 	})
 }
 
+// --- C1 + C5: the command keys need a spawning carrier ---------------------
+
+// C1 makes `output`, `exit_absent`, `exit_verdicts`, `env` and `env_pass`
+// properties of the command invocation envelope (C3/C4), so on an entry
+// that never spawns they would be silently ignored. C5's two existing
+// categories own them there: the output family is `command_output_shape`
+// and the env family `command_env_conflict` (kata c6t5). `steps` spawns,
+// so it admits the env family; the output family is already refused on it
+// by the capability arms, since `steps` is write-only.
+// ADVERSARIAL
+func TestCommandKeysWithoutASpawningCarrierAreRefused(t *testing.T) {
+	writeBlock := `[write.state]
+role = "state"
+command = ["tools/flowstate-write", "{artifact}"]
+keys = ["status"]
+timeout = "2s"
+read_back = true`
+	gateBlock := `[gate.approval]
+role = "state"
+command = ["git", "-C", "{artifact}", "diff", "--quiet"]
+exit_verdicts = { "0" = "allow", "1" = "deny" }
+keys = ["status"]
+timeout = "2s"`
+
+	refused := []struct {
+		name    string
+		old     string
+		replace string
+		want    table.Category
+	}{
+		{"raw output on a path read", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+output = "raw"
+keys = ["status"]
+timeout = "2s"`, table.CatCommandOutputShape},
+		{"json output on a path read", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+output = "json"
+keys = ["status"]
+timeout = "2s"`, table.CatCommandOutputShape},
+		{"exit_absent on a path read", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+exit_absent = [1]
+keys = ["status"]
+timeout = "2s"`, table.CatCommandOutputShape},
+		{"exit_verdicts on a path gate", gateBlock, `[gate.approval]
+role = "state"
+path = "flow.gate"
+exit_verdicts = { "0" = "allow" }
+keys = ["status"]
+timeout = "2s"`, table.CatCommandOutputShape},
+		{"env on a path read", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+env = { GIT_CONFIG_NOSYSTEM = "1" }
+keys = ["status"]
+timeout = "2s"`, table.CatCommandEnvConflict},
+		{"env_pass on a path writer", writeBlock, `[write.state]
+role = "state"
+path = "flow.status"
+env_pass = ["SSH_AUTH_SOCK"]
+keys = ["status"]
+timeout = "2s"
+read_back = true`, table.CatCommandEnvConflict},
+		{"env_pass on an edit writer", writeBlock, `[write.state]
+role = "state"
+env_pass = ["SSH_AUTH_SOCK"]
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[write.state.edit.status]
+anchor = "^status: (.*)$"
+replace = "status: {status}"`, table.CatCommandEnvConflict},
+		{"env on an edit writer", writeBlock, `[write.state]
+role = "state"
+env = { GIT_CONFIG_NOSYSTEM = "1" }
+keys = ["status"]
+timeout = "2s"
+read_back = true
+
+[write.state.edit.status]
+anchor = "^status: (.*)$"
+replace = "status: {status}"`, table.CatCommandEnvConflict},
+		{"a reserved env key on a path entry is still env conflict", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+env = { INTRASTATE_ROLE = "spoof" }
+keys = ["status"]
+timeout = "2s"`, table.CatCommandEnvConflict},
+		{"output outranks env on a path entry", cmdReadBlock, `[read.state]
+role = "state"
+path = "flow.status"
+output = "raw"
+env = { GIT_CONFIG_NOSYSTEM = "1" }
+keys = ["status"]
+timeout = "2s"`, table.CatCommandOutputShape},
+		{"a carrier-less entry is still a carrier conflict", cmdReadBlock, `[read.state]
+role = "state"
+output = "raw"
+env = { GIT_CONFIG_NOSYSTEM = "1" }
+keys = ["status"]
+timeout = "2s"`, table.CatCommandAndPathConflict},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			src := swapEntry(t, cmdCarrierModel, tc.old, tc.replace)
+			if cat := loadCategoryOf(t, src, "cmd-key-no-spawn.toml"); cat != tc.want {
+				t.Errorf("category = %q; want %q", cat, tc.want)
+			}
+		})
+	}
+
+	// The same keys on a spawning carrier stay clean: the base model's
+	// raw `exit_absent` read and `exit_verdicts` gate, and env on both a
+	// command and a steps entry.
+	clean := []struct {
+		name string
+		src  func(t *testing.T) string
+	}{
+		{"command read with raw output and exit_absent, gate with exit_verdicts",
+			func(*testing.T) string { return cmdCarrierModel }},
+		{"command read with env and env_pass", func(t *testing.T) string {
+			return swapEntry(t, cmdCarrierModel, cmdReadBlock, `[read.state]
+role = "state"
+command = ["reader"]
+output = "raw"
+env = { GIT_CONFIG_NOSYSTEM = "1" }
+env_pass = ["SSH_AUTH_SOCK"]
+keys = ["status"]
+timeout = "2s"`)
+		}},
+		{"steps writer with env and env_pass", func(t *testing.T) string {
+			return swapEntry(t, stepsModel, stepsWriteBlock, strings.Replace(stepsWriteBlock,
+				"read_back = true\n",
+				"read_back = true\nenv = { KATA_FORMAT = \"plain\" }\nenv_pass = [\"KATA_AUTHOR\"]\n", 1))
+		}},
+	}
+	for _, tc := range clean {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := table.Load([]byte(tc.src(t)), "cmd-key-spawn.toml"); err != nil {
+				t.Errorf("a spawning carrier admits the command keys; refused: %v", err)
+			}
+		})
+	}
+}
+
+// The committed single-defect witnesses for the same rule, one per key
+// family plus the `edit` carrier. They sit beside each category's own
+// witness rather than in the one-per-category floor map.
+func TestCommandKeysWithoutASpawningCarrierNegFixtures(t *testing.T) {
+	for rel, want := range map[string]table.Category{
+		"neg/neg-command-output-shape-path-read.toml": table.CatCommandOutputShape,
+		"neg/neg-command-env-path-entry.toml":         table.CatCommandEnvConflict,
+		"neg/neg-command-env-edit-writer.toml":        table.CatCommandEnvConflict,
+	} {
+		t.Run(rel, func(t *testing.T) {
+			if got := loadCategory(t, rel); got != want {
+				t.Errorf("%s refused %q; want %q", rel, got, want)
+			}
+		})
+	}
+}
+
 // --- C5: registration ----------------------------------------------------
 
 // REQ-77: "registration: all six are appended to `table.Categories()`,
