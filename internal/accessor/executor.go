@@ -438,6 +438,60 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		return WriteResult{Refusal: r}
 	}
 
+	// The `steps` carrier's prior pre-read (kata q14r). A binding whose
+	// argv depends on what a key holds BEFORE the write — a replace runs
+	// `clear.<prior>` then `set.<planned>` — names those keys, and they are
+	// read through the SAME role reader the read-back uses, before any
+	// mutation. This is a pre-mutation read of OWNED keys, which the
+	// protected-key baseline below deliberately excludes; it is scoped to
+	// the bindings that ask for it.
+	//
+	// Every refusal here is decided before the write command runs, so
+	// none carries the applied sense, and none is `ClassTimeout`: at the
+	// write phase that class is rendered as a post-mutation read-back
+	// timeout, which this is not. An unread prior is never guessed
+	// absent: running `set` without the `clear` it owed could leave two
+	// values held, so the write is refused instead.
+	var prior []KeyValue
+	priorBinding, wantsPrior := binding.(PriorBinding)
+	if wantsPrior {
+		if priorKeys := priorBinding.PriorKeys(slices.Clone(planned)); len(priorKeys) != 0 {
+			refusePrior := func(why string, keys []string, err error) WriteResult {
+				r := refusalOf(def, timeout, ClassExecutionFailure, err)
+				detail := "the write accessor `" + name + "` selects its steps " +
+					"from the prior value of " + strings.Join(keys, ", ") +
+					", and " + why + "; refusing before mutation"
+				if r.Detail != "" {
+					detail += "\n" + r.Detail
+				}
+				r.Detail = detail
+				r.Keys = slices.Clone(keys)
+				r.Expected = planned
+				return WriteResult{Refusal: r}
+			}
+			if !hasReader {
+				return refusePrior("no reader serves the role `"+
+					def.Accessor.Role+"` to read it", priorKeys, nil)
+			}
+			rt, _ := reader.timeout()
+			raw := e.invokeRead(ctx, reader, art, rt, priorKeys)
+			switch raw.class {
+			case "":
+			case ClassTimeout:
+				return refusePrior("the read of it timed out", priorKeys, nil)
+			default:
+				return refusePrior("the read of it failed", priorKeys, raw.err)
+			}
+			// A prior reading back as the `<clear>` literal established
+			// nothing, exactly as on the read path (`0004:C11`).
+			vals, unread := raw.classify(priorKeys, true)
+			if len(unread) != 0 {
+				return refusePrior("it could not be read", unread, nil)
+			}
+			prior = vals
+		}
+	}
+
 	// Before the write, record the protected non-owned values this
 	// boundary can observe: the reader's declared keys, minus the plan's
 	// own owned keys, which are excluded from the comparison by
@@ -489,7 +543,12 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 	// failure shape one hop later. `resolve.Tag` is a value struct of
 	// strings, so a shallow clone fully severs the aliasing.
 	applyCtx, cancelApply := context.WithTimeout(ctx, timeout)
-	err := binding.Apply(applyCtx, art, slices.Clone(planned))
+	var err error
+	if wantsPrior {
+		err = priorBinding.ApplyPrior(applyCtx, art, slices.Clone(planned), prior)
+	} else {
+		err = binding.Apply(applyCtx, art, slices.Clone(planned))
+	}
 	appliedDeadline := errors.Is(applyCtx.Err(), context.DeadlineExceeded)
 	cancelApply()
 
@@ -512,8 +571,16 @@ func (e *Executor) Write(ctx context.Context, name string, plan resolve.Plan) Wr
 		// `os.Pipe` failure, a plain non-zero exit — and flipping one of
 		// those to "may have been applied" makes an agent skip a retry that
 		// was safe, the exact inverse of the gain.
+		//
+		// A multi-step write failing AFTER an earlier step exited 0 is the
+		// second post-run shape (kata q14r): the earlier steps' mutations
+		// stand, so the applied sense is owed. Nothing is retried or undone
+		// (`0004:C14`); a first-step failure is not this error and keeps
+		// the not-applied sense.
 		r := refusalOf(def, timeout, ClassExecutionFailure, err)
-		if _, ok := errors.AsType[*HeldPipeError](err); ok {
+		_, held := errors.AsType[*HeldPipeError](err)
+		_, partial := errors.AsType[*PartialApplyError](err)
+		if held || partial {
 			r.applied = true
 			r.Expected = planned
 		}

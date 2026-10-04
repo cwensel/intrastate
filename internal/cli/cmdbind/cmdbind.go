@@ -244,9 +244,7 @@ func spawn(
 	// when the model is used, so execution requires an opt-in outside the
 	// model.
 	if !cfg.AllowCommands {
-		return invocation{}, refuse("command execution requires the " +
-			"`allow_commands` opt-in (--allow-commands); the accessor `" +
-			name + "` declares a command and none was given")
+		return invocation{}, gateRefusal(name)
 	}
 
 	// C4 platform — refuse-listed, so every Unix that supports the
@@ -585,6 +583,16 @@ func spawn(
 		return inv, wrap(inv.detail(""), werrRefusal)
 	}
 	return inv, nil
+}
+
+// gateRefusal is the C6 refusal: command execution without the opt-in.
+// It is shared by `spawn` and by the `steps` writer, which checks it
+// before selecting any step so a write that would run nothing still
+// refuses without the gate (kata q14r).
+func gateRefusal(name string) error {
+	return refuse("command execution requires the " +
+		"`allow_commands` opt-in (--allow-commands); the accessor `" +
+		name + "` declares a command and none was given")
 }
 
 // heldPipes folds the two drains' reported terminal conditions into the
@@ -1585,3 +1593,259 @@ func (w *Writer) Apply(ctx context.Context, art accessor.Artifact, planned []res
 // (`0025:C7`). The count is about the accessor LAYER's re-entry, not about
 // process success, so a failing spawn still counts one.
 func (w *Writer) Invocations() int { return w.invocations }
+
+// --- the steps write binding ----------------------------------------------
+
+// StepsWriter is the `steps`-carried `accessor.WriteBinding` (kata q14r):
+// per key, per planned VALUE, a list of LITERAL argv vectors run in
+// order. It is how a model drives an argv-only tool — one that ignores
+// stdin and changes state through several calls, such as a label remove
+// then a label add — with no wrapper script.
+//
+// No vector carries a planned value. The argv vocabulary is `command`'s
+// own, `{artifact}` and the observed `{tag.<key>}` family under the same
+// whole-element substitution (`0025:C2`, `0028:C1.6`), and the planned
+// object still crosses on stdin (`0025:C3`). What a value changes is
+// WHICH literal vectors run, so every executable argv is readable off the
+// model.
+//
+// Each step is one `spawn`, under the same gate, environment, process
+// group and bounds as a `command` write. Success is never taken from exit
+// status: verification is the executor's one read-back after the last
+// step (`0004:C12`).
+type StepsWriter struct {
+	Accessor table.Accessor
+	Name     string
+	Config   Config
+
+	invocations int
+}
+
+// The executor reaches the prior pre-read only through this capability.
+var _ accessor.PriorBinding = (*StepsWriter)(nil)
+
+// step is one selected argv vector and the arm position a refusal names
+// it by, `steps.<key>.<arm>.<value>[<i>]`.
+type step struct {
+	label string
+	argv  []string
+}
+
+// Capability reports the capability this binding serves.
+func (*StepsWriter) Capability() accessor.Capability { return accessor.CapWrite }
+
+// PriorKeys names the planned keys whose table declares any `clear` arm,
+// in the entry's declared `keys` order. Only those select argv from the
+// prior value; a tool whose `set` natively replaces declares no clear
+// arms, and its write runs no pre-read.
+func (w *StepsWriter) PriorKeys(planned []resolve.Tag) []string {
+	var out []string
+	for _, key := range w.Accessor.Keys {
+		if len(w.Accessor.Steps[key].Clear) == 0 || slices.Contains(out, key) {
+			continue
+		}
+		if slices.ContainsFunc(planned, func(t resolve.Tag) bool { return t.Key == key }) {
+			out = append(out, key)
+		}
+	}
+	return out
+}
+
+// Apply runs the selected steps with no prior value. A write whose arms
+// need one refuses before any spawn, so a caller that skipped the
+// executor's pre-read can never run `set` without the `clear` it owed.
+func (w *StepsWriter) Apply(ctx context.Context, art accessor.Artifact, planned []resolve.Tag) error {
+	return w.ApplyPrior(ctx, art, planned, nil)
+}
+
+// ApplyPrior selects and runs the steps for the planned tags against the
+// pre-read prior values (kata q14r).
+//
+// Selection, per planned key in the entry's declared `keys` order:
+//
+//   - a value replacing a different held value runs `clear.<prior>` (when
+//     that arm exists) then `set.<planned>`;
+//   - a value equal to the held one runs `set.<planned>` alone — it
+//     re-asserts, and a clear would remove what it then re-adds;
+//   - a planned `<clear>` runs `clear.<prior>` alone, and nothing when
+//     the key is already absent, which `0004:C11` requires to succeed.
+//
+// Everything that can refuse without running a child is decided before
+// the FIRST spawn: the gate, the selection, and every selected vector's
+// placeholder substitution and argv0 resolution. Then the steps run in
+// order and the first non-zero exit or signal stops the write. Fail-fast
+// rather than run-all: a lost compare-and-set (a claim exiting non-zero)
+// must not be followed by the label changes it guarded.
+//
+// A first-step failure applied nothing and keeps the safe-to-retry sense.
+// A later failure is a `*accessor.PartialApplyError`, which the executor
+// reports as applied-but-unverified; nothing is retried or undone
+// (`0004:C14`).
+func (w *StepsWriter) ApplyPrior(ctx context.Context, art accessor.Artifact,
+	planned []resolve.Tag, prior []accessor.KeyValue,
+) error {
+	w.invocations++
+
+	// C6 — checked here and not only in `spawn`, because a selection can
+	// run nothing (a `<clear>` of an absent key), and a `steps` entry
+	// without the opt-in must refuse whatever it selects.
+	if !w.Config.AllowCommands {
+		return gateRefusal(w.Name)
+	}
+
+	steps, err := w.selectSteps(planned, prior)
+	if err != nil {
+		return err
+	}
+	for _, s := range steps {
+		if len(s.argv) == 0 {
+			return refuse("the accessor `" + w.Name + "` declares the empty step " +
+				s.label + ", which cannot be invoked")
+		}
+		argv, serr := substitute(s.argv, art)
+		if serr != nil {
+			return serr
+		}
+		if _, rerr := resolveArgv0(argv[0], w.Config.BaseDir); rerr != nil {
+			return rerr
+		}
+	}
+
+	stdin := stdinObject(planned)
+	for i, s := range steps {
+		serr := w.runStep(ctx, art, s, stdin)
+		if serr == nil {
+			continue
+		}
+		if i == 0 {
+			return serr
+		}
+		return partialApply(i, s.label, serr)
+	}
+	return nil
+}
+
+// selectSteps maps the plan onto the declared arms. Every refusal here
+// precedes any spawn.
+//
+// The arm-coverage refusals are about the REQUEST and take
+// `refuseRequest`'s exit-2 group, as `edit_clear_undeclared` does
+// (`0028:C1.3` EXIT GROUP:): lint proves a `set` arm per domain value and
+// a `clear` arm per value wherever a RULE can clear, but `flow set-state
+// --clear` plans a removal no rule declared, and an artifact can hold a
+// value outside the domain. Re-running either unchanged cannot help.
+func (w *StepsWriter) selectSteps(planned []resolve.Tag, prior []accessor.KeyValue) ([]step, error) {
+	want := make(map[string]string, len(planned))
+	for _, t := range planned {
+		if _, ok := w.Accessor.Steps[t.Key]; !ok {
+			return nil, refuse("the accessor `" + w.Name + "` declares no `steps." +
+				t.Key + "` table for the planned key " + t.Key)
+		}
+		want[t.Key] = t.Value
+	}
+	held := make(map[string]accessor.KeyValue, len(prior))
+	for _, kv := range prior {
+		held[kv.Key] = kv
+	}
+
+	var out []step
+	add := func(key, arm, member string, vectors [][]string) {
+		for i, argv := range vectors {
+			out = append(out, step{
+				label: "`steps." + key + "." + arm + "." + member + "[" + strconv.Itoa(i) + "]`",
+				argv:  argv,
+			})
+		}
+	}
+	for _, key := range w.Accessor.Keys {
+		value, ok := want[key]
+		if !ok {
+			continue
+		}
+		rule := w.Accessor.Steps[key]
+
+		var before accessor.KeyValue
+		if len(rule.Clear) != 0 {
+			kv, read := held[key]
+			if !read {
+				return nil, refuse("the accessor `" + w.Name + "` selects the " +
+					"steps for " + key + " from its prior value, and none was read")
+			}
+			before = kv
+		}
+
+		if accessor.IsClear(value) {
+			if len(rule.Clear) == 0 {
+				return nil, refuseRequest("the accessor `" + w.Name + "` declares no " +
+					"`clear` arms for " + key + ", so it cannot remove it")
+			}
+			if before.Absent {
+				continue
+			}
+			vectors, ok := rule.Clear[before.Value]
+			if !ok {
+				return nil, refuseRequest("the accessor `" + w.Name + "` cannot remove " +
+					key + ": it holds " + strconv.Quote(before.Value) +
+					", which has no `clear` arm")
+			}
+			add(key, "clear", before.Value, vectors)
+			continue
+		}
+
+		set, ok := rule.Set[value]
+		if !ok {
+			return nil, refuseRequest("the accessor `" + w.Name + "` declares no `set." +
+				value + "` arm for the planned " + key + " = " + strconv.Quote(value))
+		}
+		if len(rule.Clear) != 0 && !before.Absent && before.Value != value {
+			if vectors, ok := rule.Clear[before.Value]; ok {
+				add(key, "clear", before.Value, vectors)
+			}
+		}
+		add(key, "set", value, set)
+	}
+	return out, nil
+}
+
+// runStep is one bounded invocation of one selected vector, refused on a
+// signal or a non-zero exit exactly as `Writer.Apply` refuses its one.
+func (w *StepsWriter) runStep(ctx context.Context, art accessor.Artifact, s step, stdin []byte) error {
+	acc := w.Accessor
+	acc.Command = s.argv
+	inv, err := spawn(ctx, acc, w.Name, accessor.CapWrite, w.Config, art, stdin)
+	if err != nil {
+		return err
+	}
+	if inv.signaled {
+		return wrap(inv.detail(""), errors.New(
+			"the write step "+s.label+" was killed by a signal before it exited"))
+	}
+	if inv.exitCode != 0 {
+		return wrap(inv.detail(""), errors.New(
+			"the write step "+s.label+" exited "+strconv.Itoa(inv.exitCode)))
+	}
+	return nil
+}
+
+// partialApply wraps a later step's failure in the applied sense. The
+// reason leads the Detail and the failing step's own diagnosis follows,
+// as `invocation.detail` orders a held-pipe reason ahead of its tail.
+func partialApply(ran int, label string, err error) error {
+	detail := "the step " + label + " failed after " + strconv.Itoa(ran) +
+		" earlier step(s) of this write exited 0, so the write is partly " +
+		"applied; no step is retried or undone"
+	if ee, ok := errors.AsType[*accessor.ExecError](err); ok && ee.Detail != "" {
+		detail += "\n" + ee.Detail
+	} else {
+		detail += ": " + err.Error()
+	}
+	return &accessor.ExecError{
+		Detail: detail,
+		Err:    &accessor.PartialApplyError{Ran: ran, Step: label, Err: err},
+	}
+}
+
+// Invocations counts Apply ENTRIES — one per Apply or ApplyPrior call,
+// however many steps it runs. The count is about the accessor LAYER's
+// re-entry, not process count (`0025:C7`), so a three-step write is one.
+func (w *StepsWriter) Invocations() int { return w.invocations }

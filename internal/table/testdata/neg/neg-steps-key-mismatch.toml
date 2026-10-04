@@ -1,0 +1,59 @@
+# kata q14r negative fixture: a bare `steps` table, so the declared key `lifecycle` has no `steps.lifecycle` arms.
+outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "kataflow"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.id]
+provenance = "observed"
+kind = "scalar"
+
+[tags.lifecycle]
+provenance = "owned"
+kind = "enum"
+domain = ["resolving", "shipping"]
+single_valued = true
+required = true
+
+[read.kata]
+role = "kata"
+command = ["kata", "show", "{tag.id}", "--json"]
+keys = ["lifecycle"]
+timeout = "2s"
+
+[read.kata.select.lifecycle]
+pointer = "/labels"
+element = "/label"
+prefix = "lifecycle:"
+
+[write.kata]
+role = "kata"
+keys = ["lifecycle"]
+timeout = "2s"
+read_back = true
+
+[write.kata.steps]
+
+[initial]
+lifecycle = "resolving"
+
+[context.done]
+[context.done.match.lifecycle]
+eq = "shipping"
+
+[[rule]]
+id = "ship"
+[rule.match.lifecycle]
+eq = "resolving"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+lifecycle = "shipping"

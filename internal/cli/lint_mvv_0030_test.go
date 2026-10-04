@@ -1013,6 +1013,8 @@ func TestReq34_0030_NoEmittedVocabularyGainsAMember(t *testing.T) {
 		// Appended after this record by kata wchf's `select` tables; the
 		// step form still adds none.
 		"command_select_placement", "command_select_key_mismatch", "command_select_invalid",
+		// Appended after those by kata q14r's `steps` carrier.
+		"steps_carrier_conflict", "steps_key_mismatch", "steps_table_invalid",
 	}
 	if !slices.Equal(cats, wantCats) {
 		t.Errorf("table.Categories() = %v; want the golden %v", cats, wantCats)

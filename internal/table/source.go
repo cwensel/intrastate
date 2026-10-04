@@ -116,6 +116,21 @@ type sourceAcc struct {
 	// placement and bijection arms key on the table being PRESENT, so a
 	// bare `[read.x.select]` must stay distinguishable from an absent one.
 	Select *map[string]sourceSelectRule `toml:"select"`
+
+	// Steps is the `steps` write carrier's per-key arm set (kata q14r). It
+	// is a POINTER to a map for `Edit`'s reason: the carrier-conflict arm
+	// keys on the table being PRESENT, so a bare `[write.x.steps]` beside
+	// another carrier stays distinguishable from an absent one.
+	Steps *map[string]sourceStepsRule `toml:"steps"`
+}
+
+// sourceStepsRule is one `[write.<id>.steps.<key>]` table: per planned
+// VALUE, the literal argv vectors that set it, and per prior value the
+// vectors that clear it (kata q14r). Both are pointers so an absent arm
+// table stays distinguishable from an authored empty one.
+type sourceStepsRule struct {
+	Set   *map[string][][]string `toml:"set"`
+	Clear *map[string][][]string `toml:"clear"`
 }
 
 // sourceSelectRule is one `[read.<id>.select.<key>]` table. Every field is

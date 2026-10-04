@@ -948,6 +948,20 @@ func (l *loader) loadAccessors() error {
 // rule.
 func (l *loader) accessorTable(src map[string]sourceAcc, capability string, wantReadBack bool) (map[string]Accessor, error) {
 	out := make(map[string]Accessor, len(src))
+
+	// The keys a rule can plan `<clear>` for: a rule-level `clear` list is
+	// the only source of the sentinel (`0002:C4`), so a `steps` table owes
+	// clear arms exactly for these (kata q14r). It reads the SOURCE rules,
+	// which normalization has not yet reached at this step.
+	cleared := map[string]bool{}
+	for _, r := range l.doc.Rule {
+		if r.Clear != nil {
+			for _, key := range *r.Clear {
+				cleared[key] = true
+			}
+		}
+	}
+
 	for id, a := range src {
 		bad := func(detail string) error {
 			return fail(CatMalformedAccessorDeclaration, capability+" "+id+": "+detail)
@@ -971,7 +985,7 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		// The CARRIER, before the per-key checks: C5's arms judge the
 		// entry's own declaration, and a raw-mode arity defect must not be
 		// masked by a key that happens to name the reserved kernel key.
-		if err := carrierDefect(a, capability, id, *a.Keys, l.model.Tags); err != nil {
+		if err := carrierDefect(a, capability, id, *a.Keys, l.model.Tags, cleared); err != nil {
 			return nil, err
 		}
 
@@ -1039,6 +1053,7 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 			}
 		}
 		acc.Select = selectRules(a.Select)
+		acc.Steps = stepsRules(a.Steps)
 		out[id] = acc
 	}
 	return out, nil
@@ -1077,8 +1092,12 @@ const envReservedPrefix = "INTRASTATE_"
 // clause order C5 declares: conflict, empty, unknown placeholder, shell
 // interpreter, output shape, env conflict. Load is fail-fast, so an entry
 // carrying several reports the earliest (`0025:C5` precedence).
+//
+// `cleared` names the keys some rule's `clear` list removes, which the
+// `steps` table check needs to know whether `<clear>` is plannable.
 func carrierDefect(
 	a sourceAcc, capability, id string, keys []string, tags map[string]TagDecl,
+	cleared map[string]bool,
 ) error {
 	where := capability + " " + id
 	hasPath := a.Path != nil && *a.Path != ""
@@ -1088,6 +1107,8 @@ func carrierDefect(
 	// is a conflict rather than a silently ignored second carrier
 	// (`0028:C1.1`).
 	hasEdit := a.Edit != nil
+	// The same PRESENCE discipline for the fourth carrier (kata q14r).
+	hasSteps := a.Steps != nil
 
 	// 1 — command_and_path_conflict: both or neither carrier.
 	//
@@ -1102,16 +1123,16 @@ func carrierDefect(
 	// carrier-less — while its wire string stays 0025:C5's
 	// `command_and_path_conflict`. Only the message text moves, to name
 	// three carriers: the wire string is the contract and the message is
-	// not.
+	// not. The `steps` carrier widens it to four the same way (kata q14r).
 	switch {
 	case a.Path != nil && a.Command != nil:
 		return fail(CatCommandAndPathConflict,
 			where+" declares both `path` and `command`; an entry carries "+
 				"exactly one carrier")
-	case !hasPath && !hasCommand && !hasEdit:
+	case !hasPath && !hasCommand && !hasEdit && !hasSteps:
 		return fail(CatCommandAndPathConflict,
-			where+" declares none of `path`, `command` or `edit`; an entry "+
-				"carries exactly one carrier")
+			where+" declares none of `path`, `command`, `edit` or `steps`; "+
+				"an entry carries exactly one carrier")
 	}
 
 	// 1b — edit_carrier_conflict: `edit` beside another carrier, or on a
@@ -1131,84 +1152,31 @@ func carrierDefect(
 		}
 	}
 
+	// 1c — steps_carrier_conflict: `steps` beside another carrier, or on
+	// a read or gate entry, on `edit_carrier_conflict`'s model (kata
+	// q14r). Its table categories are decided once the carrier is
+	// established as the one, exactly as C1.4's are.
+	if hasSteps {
+		switch {
+		case a.Path != nil || a.Command != nil || hasEdit:
+			return fail(CatStepsCarrierConflict,
+				where+" declares `steps` beside another carrier; an entry "+
+					"carries exactly one of `path`, `command`, `edit` or `steps`")
+		case capability != "write":
+			return fail(CatStepsCarrierConflict,
+				where+" declares `steps`, which is admissible on write entries only")
+		}
+	}
+
+	// 2–4 and the argv0 rule, factored into `argvDefect` so a `steps`
+	// vector is judged by the same checks (kata q14r).
 	if hasCommand {
-		argv := *a.Command
-
-		// 2 — command_empty: an empty vector or an empty element.
-		if len(argv) == 0 {
-			return fail(CatCommandEmpty, where+" declares an empty `command` vector")
+		declared := func(key string) bool {
+			_, ok := tags[key]
+			return ok
 		}
-		for i, el := range argv {
-			if el == "" {
-				return fail(CatCommandEmpty,
-					where+" declares an empty `command` element at index "+strconv.Itoa(i))
-			}
-		}
-
-		interpEl, isInterp := interpreterForm(argv)
-
-		// 3 — command_unknown_placeholder: an unknown or non-whole-element
-		// `{…}` token. Never silently-literal text.
-		for _, el := range argv {
-			if slices.Contains(commandPlaceholders, el) {
-				continue
-			}
-			// `{tag.<key>}` joins the vocabulary as a FAMILY, admitted
-			// whole-element for a key the model declares (`0028:C1.6`).
-			// An undeclared key, and a `{…}` element that is neither
-			// `{artifact}` nor a declared `{tag.<key>}`, keep 0025:C5's
-			// unchanged `command_unknown_placeholder` wire string.
-			if key, ok := CommandTagKey(el); ok {
-				if _, declared := tags[key]; declared {
-					continue
-				}
-			}
-			// A brace-bearing element carrying whitespace is a command
-			// STRING — the `sh -c "cat {artifact}"` shape — which clause 4
-			// owns; reading it as a malformed placeholder would report the
-			// wrong defect and mask the interpreter form (deviations D6).
-			// That exemption belongs to the INTERPRETER FORM, not to
-			// whitespace as such: clause 4 fires only when some argv word
-			// names a listed interpreter followed by one of its inline-code
-			// flags (`0027:C1`), so under any other argv an exempted element
-			// is owned by nothing and would reach the executor as literal,
-			// unsubstituted argv — the outcome C2 forbids.
-			if strings.ContainsAny(el, "{}") &&
-				(!isInterp || strings.IndexFunc(el, unicode.IsSpace) < 0) {
-				return fail(CatCommandUnknownPlaceholder,
-					where+" declares the element "+el+
-						", which carries a `{…}` token that is not exactly a known "+
-						"placeholder; the v1 vocabulary is "+
-						strings.Join(commandPlaceholders, ", "))
-			}
-		}
-
-		// 4 — command_shell_interpreter: a listed interpreter word plus one
-		// of its inline-code flags at any later argv position, under any
-		// prefix (`0027:C1`, succeeding `0025:C5`'s argv0 line).
-		if isInterp {
-			return fail(CatCommandShellInterpreter,
-				where+" declares the interpreter form "+interpEl+
-					"; inline shell is not a declared command; put it in a script "+
-					"and declare the script as argv0")
-		}
-
-		// edit_tag_argv0 (`0028:C1.4`, C1.6) — a `{tag.<key>}` element at
-		// argv0 of a read, gate or WRITE entry's command. The executable
-		// is the one word a reviewer must be able to read off the model,
-		// and a caller-bound argv0 makes the interpreter deny-list
-		// unenforceable against a name that does not exist until
-		// invocation. It is statically decidable, so it is refused where
-		// it is visible rather than at spawn.
-		//
-		// The rule is on THIS FAMILY only: `{artifact}` at argv0 stays
-		// admitted, having no such rule and no such reviewer promise to
-		// break.
-		if _, ok := CommandTagKey(argv[0]); ok {
-			return fail(CatEditTagArgv0,
-				where+" declares the placeholder "+argv[0]+" at argv0; the "+
-					"executable must be readable off the model, so a "+
-					"`{tag.<key>}` element is admitted at any later position only")
+		if err := argvDefect(*a.Command, where, "`command`", declared); err != nil {
+			return err
 		}
 	}
 
@@ -1249,6 +1217,97 @@ func carrierDefect(
 	// (`0028:C1.4` precedence:).
 	if hasEdit {
 		return editTableDefect(*a.Edit, where, keys, tags)
+	}
+	if hasSteps {
+		return stepsTableDefect(*a.Steps, where, keys, tags, cleared)
+	}
+	return nil
+}
+
+// argvDefect reports the FIRST defect one declared argv vector carries
+// under `command`'s clauses 2–4 and the argv0 rule, in that order: empty,
+// unknown placeholder, shell interpreter, `{tag.<key>}` at argv0
+// (`0025:C5`, `0027:C1`, `0028:C1.4`).
+//
+// It is factored out of `carrierDefect` so a `steps` vector is judged by
+// the SAME checks a `command` is and carries the same wire strings (kata
+// q14r). `what` names the vector in the empty-vector detail, and
+// `admitTag` is the `{tag.<key>}` admission: any DECLARED key for a
+// `command` (`0028:C1.6`), an OBSERVED key for a step.
+func argvDefect(argv []string, where, what string, admitTag func(string) bool) error {
+	// 2 — command_empty: an empty vector or an empty element.
+	if len(argv) == 0 {
+		return fail(CatCommandEmpty, where+" declares an empty "+what+" vector")
+	}
+	for i, el := range argv {
+		if el == "" {
+			return fail(CatCommandEmpty,
+				where+" declares an empty "+what+" element at index "+strconv.Itoa(i))
+		}
+	}
+
+	interpEl, isInterp := interpreterForm(argv)
+
+	// 3 — command_unknown_placeholder: an unknown or non-whole-element
+	// `{…}` token. Never silently-literal text.
+	for _, el := range argv {
+		if slices.Contains(commandPlaceholders, el) {
+			continue
+		}
+		// `{tag.<key>}` joins the vocabulary as a FAMILY, admitted
+		// whole-element for a key the caller's `admitTag` admits
+		// (`0028:C1.6`). An unadmitted key, and a `{…}` element that is
+		// neither `{artifact}` nor an admitted `{tag.<key>}`, keep
+		// 0025:C5's unchanged `command_unknown_placeholder` wire string.
+		if key, ok := CommandTagKey(el); ok && admitTag(key) {
+			continue
+		}
+		// A brace-bearing element carrying whitespace is a command
+		// STRING — the `sh -c "cat {artifact}"` shape — which clause 4
+		// owns; reading it as a malformed placeholder would report the
+		// wrong defect and mask the interpreter form (deviations D6).
+		// That exemption belongs to the INTERPRETER FORM, not to
+		// whitespace as such: clause 4 fires only when some argv word
+		// names a listed interpreter followed by one of its inline-code
+		// flags (`0027:C1`), so under any other argv an exempted element
+		// is owned by nothing and would reach the executor as literal,
+		// unsubstituted argv — the outcome C2 forbids.
+		if strings.ContainsAny(el, "{}") &&
+			(!isInterp || strings.IndexFunc(el, unicode.IsSpace) < 0) {
+			return fail(CatCommandUnknownPlaceholder,
+				where+" declares the element "+el+
+					", which carries a `{…}` token that is not exactly a known "+
+					"placeholder; the v1 vocabulary is "+
+					strings.Join(commandPlaceholders, ", "))
+		}
+	}
+
+	// 4 — command_shell_interpreter: a listed interpreter word plus one
+	// of its inline-code flags at any later argv position, under any
+	// prefix (`0027:C1`, succeeding `0025:C5`'s argv0 line).
+	if isInterp {
+		return fail(CatCommandShellInterpreter,
+			where+" declares the interpreter form "+interpEl+
+				"; inline shell is not a declared command; put it in a script "+
+				"and declare the script as argv0")
+	}
+
+	// edit_tag_argv0 (`0028:C1.4`, C1.6) — a `{tag.<key>}` element at
+	// argv0 of a read, gate or WRITE entry's command. The executable
+	// is the one word a reviewer must be able to read off the model,
+	// and a caller-bound argv0 makes the interpreter deny-list
+	// unenforceable against a name that does not exist until
+	// invocation. It is statically decidable, so it is refused where
+	// it is visible rather than at spawn.
+	//
+	// The rule is on THIS FAMILY only: `{artifact}` at argv0 stays
+	// admitted, having no such rule and no such reviewer promise to
+	// break.
+	if _, ok := CommandTagKey(argv[0]); ok {
+		return fail(CatEditTagArgv0,
+			where+" declares the placeholder "+argv[0]+" at argv0; the "+
+				"executable must be readable off the model, so a "+
+				"`{tag.<key>}` element is admitted at any later position only")
 	}
 	return nil
 }
@@ -1387,6 +1446,166 @@ func editTableDefect(
 		}
 	}
 	return nil
+}
+
+// stepsTableDefect reports the FIRST `steps` table defect an entry
+// carries (kata q14r), in check order: key mismatch, table invalid, then
+// each step vector under `command`'s own argv clauses. Sibling tables,
+// arms and members are swept in SORTED order, so the reported defect is
+// deterministic as `editTableDefect`'s category is.
+func stepsTableDefect(
+	rules map[string]sourceStepsRule, where string, keys []string,
+	tags map[string]TagDecl, cleared map[string]bool,
+) error {
+	// steps_key_mismatch — `keys` and the tables in bijection, mirroring
+	// `edit.<key>`: every planned key has arms, so no key falls through
+	// to a write that runs nothing.
+	for _, key := range keys {
+		if _, ok := rules[key]; !ok {
+			return fail(CatStepsKeyMismatch,
+				where+" declares the key "+key+" with no `steps."+key+"` table")
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		if !slices.Contains(keys, key) {
+			return fail(CatStepsKeyMismatch,
+				where+" declares a `steps."+key+"` table for a key not in `keys`")
+		}
+	}
+
+	// steps_table_invalid — the arms against the tag's domain. A step
+	// table maps each VALUE to literal argv, so the tag must have finitely
+	// many values and every one it can be planned must have a set arm;
+	// a value the tag cannot take is a typo lint can see.
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		r := rules[key]
+		at := where + " `steps." + key + "`"
+		bad := func(detail string) error {
+			return fail(CatStepsTableInvalid, at+" "+detail)
+		}
+		decl := tags[key]
+		domain, finite := stepsDomain(decl)
+		if !finite {
+			return bad("is declared for the " + decl.Kind + "-kind tag " + key +
+				"; steps name argv per value, so the tag needs a finite domain " +
+				"(an enum with a domain, or a bool) — write it through " +
+				"`command`, which carries the value on stdin, or `edit`")
+		}
+		if r.Set == nil {
+			return bad("declares no `set` arms")
+		}
+		for _, arm := range []struct {
+			name  string
+			table *map[string][][]string
+		}{{"set", r.Set}, {"clear", r.Clear}} {
+			if arm.table == nil {
+				continue
+			}
+			for _, member := range slices.Sorted(maps.Keys(*arm.table)) {
+				if !slices.Contains(domain, member) {
+					return bad("declares the `" + arm.name + "` arm " +
+						strconv.Quote(member) + ", which is not a value of " + key)
+				}
+				if len((*arm.table)[member]) == 0 {
+					return bad("declares an empty `" + arm.name + "." + member +
+						"` arm; an arm runs at least one step")
+				}
+			}
+		}
+		for _, member := range domain {
+			if _, ok := (*r.Set)[member]; !ok {
+				return bad("declares no `set." + member + "` arm; every value " +
+					key + " can be planned needs one")
+			}
+		}
+		// A planned `<clear>` runs `clear.<prior>` alone, so once a rule
+		// can clear the key, every value it can HOLD needs a clear arm —
+		// otherwise the removal would run nothing and read-back would be
+		// the first to notice (`0004:C11`).
+		if cleared[key] {
+			for _, member := range domain {
+				if r.Clear == nil {
+					return bad("declares no `clear` arms, and a rule clears " + key)
+				}
+				if _, ok := (*r.Clear)[member]; !ok {
+					return bad("declares no `clear." + member + "` arm, and a " +
+						"rule clears " + key + "; every value it can hold needs one")
+				}
+			}
+		}
+	}
+
+	// The step vectors themselves, under `command`'s clauses 2–4 and the
+	// argv0 rule. A step names only an OBSERVED `{tag.<key>}`: that is the
+	// one provenance a caller can bind (`flow_input.go::parseTags` refuses
+	// owned and recognized keys), so an owned key here would lint clean
+	// and then refuse every invocation as unbound — and the planned value
+	// never crosses argv at all.
+	observed := func(key string) bool {
+		return tags[key].Provenance == ProvenanceObserved
+	}
+	for _, key := range slices.Sorted(maps.Keys(rules)) {
+		r := rules[key]
+		for _, arm := range []struct {
+			name  string
+			table *map[string][][]string
+		}{{"set", r.Set}, {"clear", r.Clear}} {
+			if arm.table == nil {
+				continue
+			}
+			for _, member := range slices.Sorted(maps.Keys(*arm.table)) {
+				for i, argv := range (*arm.table)[member] {
+					at := where + " `steps." + key + "." + arm.name + "." +
+						member + "[" + strconv.Itoa(i) + "]`"
+					if err := argvDefect(argv, at, "step", observed); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// stepsDomain is the finite value set a `steps` table enumerates: an
+// enum's declared domain, or a bool's two literals (kata q14r).
+func stepsDomain(decl TagDecl) ([]string, bool) {
+	switch {
+	case decl.Kind == "enum" && len(decl.Domain) > 0:
+		return decl.Domain, true
+	case decl.Kind == "bool":
+		return []string{"false", "true"}, true
+	default:
+		return nil, false
+	}
+}
+
+// stepsRules converts the decoded tables into the model's typed form.
+// PRESENCE survives: a bare `[write.x.steps]` decodes to a non-nil empty
+// map, as `edit` does.
+func stepsRules(src *map[string]sourceStepsRule) map[string]StepsRule {
+	if src == nil {
+		return nil
+	}
+	clone := func(arms *map[string][][]string) map[string][][]string {
+		if arms == nil {
+			return nil
+		}
+		out := make(map[string][][]string, len(*arms))
+		for member, steps := range *arms {
+			cloned := make([][]string, 0, len(steps))
+			for _, argv := range steps {
+				cloned = append(cloned, slices.Clone(argv))
+			}
+			out[member] = cloned
+		}
+		return out
+	}
+	out := make(map[string]StepsRule, len(*src))
+	for key, r := range *src {
+		out[key] = StepsRule{Set: clone(r.Set), Clear: clone(r.Clear)}
+	}
+	return out
 }
 
 // interpreterForm reports the offending pair when argv carries a listed

@@ -69,6 +69,14 @@ const (
 	CatCommandSelectKeyMismatch Category = "command_select_key_mismatch"
 	CatCommandSelectInvalid     Category = "command_select_invalid"
 
+	// The three `steps`-carrier categories (kata q14r), in check order.
+	// A step vector's OWN argv defects are not here: each vector reuses
+	// `command`'s clauses 2–4 and the argv0 rule, so it carries those
+	// existing wire strings (`0025:C5`, `0028:C1.4`).
+	CatStepsCarrierConflict Category = "steps_carrier_conflict"
+	CatStepsKeyMismatch     Category = "steps_key_mismatch"
+	CatStepsTableInvalid    Category = "steps_table_invalid"
+
 	// The six RDR 0028 `edit`-carrier categories (`0028:C1.4`), in clause
 	// order, appended after 0025:C5's six. The wire STRINGS are the
 	// contract and these identifiers are not, exactly as for 0025's.
@@ -156,6 +164,12 @@ func Categories() []Category {
 		CatCommandSelectPlacement,
 		CatCommandSelectKeyMismatch,
 		CatCommandSelectInvalid,
+
+		// The three `steps` categories, appended at the tail for the same
+		// reason (`0029:C4`, kata q14r).
+		CatStepsCarrierConflict,
+		CatStepsKeyMismatch,
+		CatStepsTableInvalid,
 	}
 }
 

@@ -187,6 +187,25 @@ type Accessor struct {
 	// key, on a `command` read entry with json output (kata wchf). Empty
 	// means the entry reads `0025:C3`'s flat object of strings unchanged.
 	Select map[string]SelectRule
+
+	// Steps is the `steps` carrier, the FOURTH member of the exactly-one
+	// carrier rule and admissible on WRITE entries only (kata q14r). It
+	// holds one arm table per member of `keys`, keyed by that key; a
+	// non-empty map is what selects the steps binding at the registry.
+	Steps map[string]StepsRule
+}
+
+// StepsRule is one key's `steps` arms (kata q14r): for each value the key
+// can be PLANNED, the argv vectors that set it, and for each value the key
+// can HOLD, the vectors that remove it. Every vector is literal argv in
+// the `command` vocabulary — no element carries a planned value, so every
+// executable word is readable off the model.
+//
+// A replace runs `Clear[prior]` then `Set[planned]`; a planned `<clear>`
+// runs `Clear[prior]` alone. Steps run in array order.
+type StepsRule struct {
+	Set   map[string][][]string
+	Clear map[string][][]string
 }
 
 // SelectRule is one key's json selector: where in the read command's json

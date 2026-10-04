@@ -564,22 +564,25 @@ reserved `recognized` key.
 
 Those three keys say WHICH tags an entry serves and how long it may take.
 The **carrier** says how it reaches them, and an entry declares **exactly
-one** of three:
+one** of four:
 
 - `path` — a dotted locator into the caller-bound artifact, the carrier
   the example above uses;
 - `command` — an argv vector the CLI spawns, admissible on read, gate and
   write entries;
 - `edit` — a table of declared line rules that rewrite lines of a text
-  artifact in place, admissible on **write entries only**.
+  artifact in place, admissible on **write entries only**;
+- `steps` — per key and per value, literal argv vectors the CLI spawns in
+  order, admissible on **write entries only**.
 
-Declaring none of the three is `command_and_path_conflict`, whose wire
-string predates the third carrier and did not move when the carrier set
+Declaring none of them is `command_and_path_conflict`, whose wire
+string predates the later carriers and did not move when the carrier set
 widened; declaring both `path` and `command` carries the same string.
-`edit` beside either of the others, or `edit` on a read or gate entry, is
-`edit_carrier_conflict`. That category keys on the `[write.<id>.edit]`
-table being **present**, not on it being non-empty — a bare `[write.x.edit]`
-beside a `path` is a conflict, never a silently ignored second carrier.
+`edit` beside any of the others, or `edit` on a read or gate entry, is
+`edit_carrier_conflict`; `steps` beside any of the others, or on a read or
+gate entry, is `steps_carrier_conflict`. Both key on the table being
+**present**, not on it being non-empty — a bare `[write.x.edit]` beside a
+`path` is a conflict, never a silently ignored second carrier.
 
 #### Selecting keys out of a command's json output
 
@@ -630,6 +633,81 @@ entry), `command_select_key_mismatch` (the tables and `keys` out of
 bijection), and `command_select_invalid` (a pointer that does not parse,
 an empty `prefix`, `element` without `prefix`, a `prefix` filling a
 set-kind tag, or an `absent` member outside `{"null", "missing"}`).
+
+#### The `steps` carrier
+
+A `command` writer hands the planned values to its tool on stdin, so a
+tool that takes its input only as arguments — and changes state through
+several calls, such as removing one label and adding another — needs a
+wrapper script. A `steps` writer declares those calls in the model
+instead. Each member of `keys` gets a `[write.<id>.steps.<key>]` table
+with two arm tables, keyed by the tag's **values**:
+
+```toml
+[write.issue]
+role = "issue"
+keys = ["lifecycle"]
+timeout = "10s"
+read_back = true
+
+[write.issue.steps.lifecycle.set]
+resolving = [["kata", "claim", "{tag.id}", "--as", "{tag.session}"],
+             ["kata", "label", "add", "{tag.id}", "lifecycle:resolving"]]
+refining  = [["kata", "label", "add", "{tag.id}", "lifecycle:refining"]]
+closed    = [["kata", "unassign", "{tag.id}"],
+             ["kata", "label", "add", "{tag.id}", "lifecycle:closed"]]
+
+[write.issue.steps.lifecycle.clear]
+resolving = [["kata", "label", "rm", "{tag.id}", "lifecycle:resolving"]]
+refining  = [["kata", "label", "rm", "{tag.id}", "lifecycle:refining"]]
+```
+
+- `set.<value>` (**required for every value** the tag can be planned) —
+  the steps that make the key hold that value;
+- `clear.<value>` (optional) — the steps that remove that value when the
+  key holds it.
+
+No step carries the planned value. Every element is literal argv in
+`command`'s vocabulary — `{artifact}` and a whole-element `{tag.<key>}`
+naming an **observed** key — so every executable word is readable off the
+model, and the arm for `refining` simply spells `lifecycle:refining`. The
+planned object still crosses on stdin, exactly as for `command`.
+
+At apply, per planned key in `keys` order:
+
+- **replace** — the key holds another value: `clear.<held>` (when that
+  arm exists) runs, then `set.<planned>`;
+- **re-assert** — the key already holds the planned value: `set.<planned>`
+  alone;
+- **remove** — a planned `<clear>`: `clear.<held>` alone, and nothing when
+  the key is already absent.
+
+When any `clear` arm is declared, the held value is read through the
+role's reader **before** anything runs; if it cannot be read, the write
+refuses and nothing is applied. Steps run in array order and stop at the
+first non-zero exit or signal. A failure on the **first** step applied
+nothing, so a compare-and-set placed first — like the claim above, when
+the value it moves from declares no `clear` arm — refuses cleanly when it
+loses. A failure on a **later** step refuses with "the mutation may have
+been applied and was not verified": earlier steps stand, and nothing is
+retried or undone. Success is never read off exit status; the read-back
+runs once, after the last step, and is the only commit check.
+
+`steps` spawns, so it requires `--allow-commands` like `command` does. A
+removal the model declares no `clear` arm for — `flow set-state --clear`
+on such a key, or a held value outside the domain — refuses before any
+step as a defect of the request.
+
+Lint proves the declaration under three categories:
+`steps_carrier_conflict` (above), `steps_key_mismatch` (the tables and
+`keys` out of bijection), and `steps_table_invalid` (a tag without a
+finite domain — only an enum with a domain or a bool is admitted; a
+missing `set` arm; an arm for a value outside the domain; an empty arm;
+or, when a rule's `clear` list names the key, a missing `clear` arm for
+any value). Each step vector is checked by `command`'s own rules and
+reports their categories: `command_empty`, `command_unknown_placeholder`
+(including a `{tag.<key>}` naming a key that is not observed),
+`command_shell_interpreter`, and `edit_tag_argv0`.
 
 #### The `edit` carrier
 

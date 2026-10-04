@@ -883,6 +883,12 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		table.CatCommandSelectPlacement:   "neg/neg-command-select-placement.toml",
 		table.CatCommandSelectKeyMismatch: "neg/neg-command-select-key-mismatch.toml",
 		table.CatCommandSelectInvalid:     "neg/neg-command-select-invalid.toml",
+
+		// The three `steps` categories (kata q14r), registered in the same
+		// map for the same reason.
+		table.CatStepsCarrierConflict: "neg/neg-steps-carrier-conflict.toml",
+		table.CatStepsKeyMismatch:     "neg/neg-steps-key-mismatch.toml",
+		table.CatStepsTableInvalid:    "neg/neg-steps-table-invalid.toml",
 	}
 
 	t.Run("every category the floor names is exported", func(t *testing.T) {

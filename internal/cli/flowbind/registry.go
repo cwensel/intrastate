@@ -77,6 +77,13 @@ func Registry(m *table.Model, baseDir string, allowCommands bool) accessor.Regis
 		// parser.
 		case len(acc.Edit) != 0:
 			binding = NewEditWriter(acc, name)
+		// The `steps` arm follows `edit`'s discipline for the same reason:
+		// tested on its own presence and ahead of `commandBacked`, whose
+		// `Path == ""` arm would otherwise take a `steps` entry as residue
+		// (kata q14r). It is a command-spawning binding, so it takes the
+		// same `cmdbind.Config` and with it the `--allow-commands` gate.
+		case len(acc.Steps) != 0:
+			binding = &cmdbind.StepsWriter{Accessor: acc, Name: name, Config: cfg}
 		case commandBacked(acc):
 			binding = &cmdbind.Writer{Accessor: acc, Name: name, Config: cfg}
 		}

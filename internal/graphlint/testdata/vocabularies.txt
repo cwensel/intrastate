@@ -89,6 +89,9 @@ malformed_toml
 missing_recognized_outcome_alphabet
 reserved_tag_key
 reserved_tag_value
+steps_carrier_conflict
+steps_key_mismatch
+steps_table_invalid
 unknown_accessor
 unknown_context
 unknown_emit_key
