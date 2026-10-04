@@ -210,9 +210,16 @@ func TestReq92_WithoutTheFlagACommandModelRefusesAndNoChildSpawns(t *testing.T) 
 		t.Fatal("a command-backed set-state succeeded with no --allow-commands; " +
 			"execution requires an opt-in outside the model")
 	}
-	if code := clierr.ErrorCode(err); code != codeAccessorFailed {
-		t.Errorf("code = %q; want %q — the gate refusal is an execution failure",
-			code, codeAccessorFailed)
+	// The class stays `execution_failure`; the missing opt-in is a property
+	// of the REQUEST, so it takes the request code and the exit-2 group
+	// (JDR 0001 §D10 rule 1, `0028:C1.3`'s reasoning): exit 3 would tell a
+	// caller to re-run unchanged, which can never succeed.
+	if code := clierr.ErrorCode(err); code != codeRequestRefused {
+		t.Errorf("code = %q; want %q — the gate refusal is about the request",
+			code, codeRequestRefused)
+	}
+	if got := clierr.ExitCodeFor(err); got != 2 {
+		t.Errorf("exit = %d; want 2 — re-running without the flag cannot succeed", got)
 	}
 	// ABSENCE OF A SPAWN, not merely a non-zero exit.
 	if _, serr := os.Stat(trace); serr == nil {

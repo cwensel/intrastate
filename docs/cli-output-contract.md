@@ -248,7 +248,9 @@ identical request.
 Every other failure is exit 2 — the request or the model is wrong, or the
 model said no. The split is what makes a caller's retry loop safe: a
 refusal about the request must never exit 3, or the caller spins on an
-input it must instead fix.
+input it must instead fix. A command-backed accessor invoked without the
+`--allow-commands` opt-in is one: it refuses before spawn as
+`flow-accessor-request-refused`, exit 2.
 
 A read-back that did not complete carries a `detail` saying the write may
 have been applied and was not verified. It is never reported as a write

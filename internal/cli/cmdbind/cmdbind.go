@@ -589,8 +589,17 @@ func spawn(
 // It is shared by `spawn` and by the `steps` writer, which checks it
 // before selecting any step so a write that would run nothing still
 // refuses without the gate (kata q14r).
+//
+// It is a refusal about the REQUEST, so it is built with `refuseRequest`
+// and takes the exit-2 group. JDR 0001 §D10 rule 1 reserves exit 3 for an
+// environment that could not be consulted; a missing opt-in is a property
+// of the invocation, and re-issuing it unchanged can never succeed. This
+// is the reasoning `0028:C1.3` applies to the same missing flag on the
+// edit writer's command-backed read-back, so both gates now route alike.
+// `0025:C6`'s CLASS is unchanged: `ErrDeclaredRequest` rides the existing
+// `Err` slot and the refusal stays `execution_failure` (JDR 0003 §D3(b)).
 func gateRefusal(name string) error {
-	return refuse("command execution requires the " +
+	return refuseRequest("command execution requires the " +
 		"`allow_commands` opt-in (--allow-commands); the accessor `" +
 		name + "` declares a command and none was given")
 }
@@ -900,10 +909,13 @@ func refuse(detail string) error {
 // among them C1.6's unbound `{tag.<key>}` and its `-`-prefixed bound
 // value).
 //
+// It also builds `0025:C6`'s gate refusal (see `gateRefusal`), a missing
+// opt-in being a property of the request on the same reasoning.
+//
 // It is deliberately a SIBLING of `refuse` rather than a widening of it:
-// 0025's own pre-spawn refusals — the gate, the argv0 deny-list, a
-// non-absolute `{artifact}` path — keep their existing routing, which
-// this record does not amend.
+// 0025's other pre-spawn refusals — the argv0 deny-list, a non-absolute
+// `{artifact}` path — keep their existing routing, which this record
+// does not amend.
 func refuseRequest(detail string) error {
 	return &accessor.ExecError{Detail: detail, Err: accessor.ErrDeclaredRequest}
 }

@@ -732,8 +732,10 @@ writer, which spawn none, while `steps` spawns and admits `env` and
 A command in a model is code that runs when the model is used, so running
 one takes an opt-in outside the model. Every `flow` verb carries
 `--allow-commands`, off by default. Without it, a `command` or `steps`
-accessor refuses before any child is spawned, as `flow-accessor-failed` at
-exit 3, with a `detail` naming the opt-in. `lint` does not carry the flag:
+accessor refuses before any child is spawned, as
+`flow-accessor-request-refused` at exit 2, with a `detail` naming the
+opt-in: the missing flag is a defect of the request, and re-running it
+unchanged cannot succeed. `lint` does not carry the flag:
 validation is ungated, so a model is reviewable before it is trusted.
 `flow init-state` refuses a command-backed accessor whether or not the
 flag is passed; see

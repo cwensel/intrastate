@@ -164,8 +164,13 @@ env = { INTRASTATE_ROLE = "spoof" }`,
 		if err == nil {
 			t.Fatal("set-state succeeded with no --allow-commands")
 		}
-		if code := clierr.ErrorCode(err); code != codeAccessorFailed {
-			t.Errorf("code = %q; want %q", code, codeAccessorFailed)
+		// Still `execution_failure`, but a refusal of the REQUEST: the
+		// exit-2 group, never exit 3's re-run-unchanged advice.
+		if code := clierr.ErrorCode(err); code != codeRequestRefused {
+			t.Errorf("code = %q; want %q", code, codeRequestRefused)
+		}
+		if got := clierr.ExitCodeFor(err); got != 2 {
+			t.Errorf("exit = %d; want 2", got)
 		}
 		if _, serr := os.Stat(trace); serr == nil {
 			t.Error("a child ran; the gate refuses BEFORE spawn")

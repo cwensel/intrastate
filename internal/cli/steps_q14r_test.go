@@ -439,6 +439,14 @@ func TestStepsQ14r_WithoutTheGateNothingRuns(t *testing.T) {
 	if !strings.Contains(ce.Detail, "allow_commands") {
 		t.Errorf("Detail %q does not name the gate", ce.Detail)
 	}
+	// A missing opt-in is a refusal of the REQUEST: the exit-2 group, so a
+	// caller's retry loop does not re-run what can never succeed.
+	if ce.Code != codeRequestRefused {
+		t.Errorf("code = %q; want %q", ce.Code, codeRequestRefused)
+	}
+	if got := clierr.ExitCodeFor(err); got != 2 {
+		t.Errorf("exit = %d; want 2", got)
+	}
 	if strings.Contains(ce.Detail, detailMayHaveApplied) {
 		t.Errorf("Detail carries the applied sense: %q", ce.Detail)
 	}

@@ -136,12 +136,14 @@ func TestExitGroup0028_CommandTagPreconditionsTakeTheRequestExitGroup(t *testing
 		}
 	})
 
-	t.Run("the_0025_gate_refusal_keeps_its_own_routing", func(t *testing.T) {
-		// The scope control. `0025:C6`'s gate refusal is NOT one of the
-		// three entry-level preconditions `0028:C1.3` enumerates — it is
-		// 0025's own pre-spawn ladder, which this record does not amend.
-		// The fix is a sibling of `refuse`, not a widening of it, and
-		// this arm is what holds that line.
+	t.Run("the_0025_gate_refusal_takes_the_request_exit_group", func(t *testing.T) {
+		// `0025:C6`'s gate refusal is a missing opt-in: a property of the
+		// request, which re-issuing unchanged can never satisfy. JDR 0001
+		// §D10 rule 1 reserves exit 3 for an environment that could not be
+		// consulted, and `0028:C1.3` already routes the same missing flag
+		// on the edit read-back to exit 2, so the gate wraps
+		// `ErrDeclaredRequest` too. It is not a line edit, so it must not
+		// carry the narrower `ErrDeclaredEdit` bit.
 		acc := table.Accessor{
 			Role:    editRole,
 			Command: []string{"echo", "{tag.nnnn}"},
@@ -162,10 +164,14 @@ func TestExitGroup0028_CommandTagPreconditionsTakeTheRequestExitGroup(t *testing
 		if err == nil {
 			t.Fatalf("the gate-off read succeeded")
 		}
-		if errors.Is(err, accessor.ErrDeclaredRequest) {
-			t.Errorf("`0025:C6`'s gate refusal now wraps " +
-				"`accessor.ErrDeclaredRequest`; RDR 0028 amends only C1.6's " +
-				"two argv rules and leaves 0025's pre-spawn ladder alone")
+		if !errors.Is(err, accessor.ErrDeclaredRequest) {
+			t.Errorf("`0025:C6`'s gate refusal does not wrap "+
+				"`accessor.ErrDeclaredRequest`, so it routes to exit 3 and a "+
+				"caller's retry loop spins on a request it must fix: %v", err)
+		}
+		if errors.Is(err, accessor.ErrDeclaredEdit) {
+			t.Errorf("`0025:C6`'s gate refusal wraps "+
+				"`accessor.ErrDeclaredEdit`; no line edit minted it: %v", err)
 		}
 	})
 }

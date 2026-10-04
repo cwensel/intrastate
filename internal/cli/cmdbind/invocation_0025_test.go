@@ -1412,6 +1412,12 @@ func requireGateRefusal(t *testing.T, err error, trace string) {
 		t.Errorf("Detail = %q; want it to name the `allow_commands` gate",
 			ee.Detail)
 	}
+	// A missing opt-in is a refusal of the REQUEST (exit 2), not an
+	// environment that could not be consulted (exit 3).
+	if !errors.Is(err, accessor.ErrDeclaredRequest) {
+		t.Errorf("the gate refusal does not wrap accessor.ErrDeclaredRequest, "+
+			"so it routes to exit 3: %v", err)
+	}
 	if _, serr := os.Stat(trace); serr == nil {
 		t.Error("a child ran; the gate refuses BEFORE spawn — asserted by the " +
 			"absence of a spawn, not by a non-zero exit")
