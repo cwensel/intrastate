@@ -852,8 +852,9 @@ refining  = [["kata", "label", "rm", "{tag.id}", "lifecycle:refining"]]
 
 - `set.<value>` (**required for every value** the tag can be planned) —
   the steps that make the key hold that value;
-- `clear.<value>` (optional) — the steps that remove that value when the
-  key holds it.
+- `clear.<value>` (**required for every value a clearing rule can hold**,
+  optional otherwise) — the steps that remove that value when the key
+  holds it.
 
 No step carries the planned value. Every element is literal argv in the
 placeholder vocabulary of [the command carrier](#argv-and-placeholders) —
@@ -877,23 +878,27 @@ refuses and nothing is applied. Steps run in array order and stop at the
 first non-zero exit or signal. A failure on the **first** step applied
 nothing, so a compare-and-set placed first — like the claim above, when
 the value it moves from declares no `clear` arm — refuses cleanly when it
-loses. A failure on a **later** step refuses with "the mutation may have
+loses. A rule that clears the key does not force those arms back: it owes
+`clear` arms only for the values its own match can hold, so leaving the
+compare-and-set's entry values arm-less keeps it first. A failure on a **later** step refuses with "the mutation may have
 been applied and was not verified": earlier steps stand, and nothing is
 retried or undone. Success is never read off exit status; the read-back
 runs once, after the last step, and is the only commit check.
 
 `steps` spawns, so it requires `--allow-commands` like `command` does. A
 removal the model declares no `clear` arm for — `flow set-state --clear`
-on such a key, or a held value outside the domain — refuses before any
-step as a defect of the request.
+while the key holds a value with no `clear` arm, or a held value outside
+the domain — refuses before any step as a defect of the request.
 
 Lint proves the declaration under three categories:
 `steps_carrier_conflict` (above), `steps_key_mismatch` (the tables and
 `keys` out of bijection), and `steps_table_invalid` (a tag without a
 finite domain — only an enum with a domain or a bool is admitted; a
 missing `set` arm; an arm for a value outside the domain; an empty arm;
-or, when a rule's `clear` list names the key, a missing `clear` arm for
-any value). Each step vector is checked by the argv rules of
+or a missing `clear` arm for a value some rule clearing the key can
+hold). What a clearing rule can hold is read off its `eq`/`in` atoms on
+the key — under `match` or `guard.all`, inherited ones included; a rule
+with none can hold every value, and so owes an arm for each. Each step vector is checked by the argv rules of
 [the command carrier](#the-command-carrier) and reports its categories:
 `command_empty`, `command_unknown_placeholder`
 (including a `{tag.<key>}` naming a key that is not observed),

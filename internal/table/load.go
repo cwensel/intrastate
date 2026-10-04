@@ -949,19 +949,6 @@ func (l *loader) loadAccessors() error {
 func (l *loader) accessorTable(src map[string]sourceAcc, capability string, wantReadBack bool) (map[string]Accessor, error) {
 	out := make(map[string]Accessor, len(src))
 
-	// The keys a rule can plan `<clear>` for: a rule-level `clear` list is
-	// the only source of the sentinel (`0002:C4`), so a `steps` table owes
-	// clear arms exactly for these (kata q14r). It reads the SOURCE rules,
-	// which normalization has not yet reached at this step.
-	cleared := map[string]bool{}
-	for _, r := range l.doc.Rule {
-		if r.Clear != nil {
-			for _, key := range *r.Clear {
-				cleared[key] = true
-			}
-		}
-	}
-
 	for id, a := range src {
 		bad := func(detail string) error {
 			return fail(CatMalformedAccessorDeclaration, capability+" "+id+": "+detail)
@@ -985,7 +972,7 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 		// The CARRIER, before the per-key checks: C5's arms judge the
 		// entry's own declaration, and a raw-mode arity defect must not be
 		// masked by a key that happens to name the reserved kernel key.
-		if err := carrierDefect(a, capability, id, *a.Keys, l.model.Tags, cleared); err != nil {
+		if err := carrierDefect(a, capability, id, *a.Keys, l.model.Tags); err != nil {
 			return nil, err
 		}
 
@@ -1092,13 +1079,7 @@ const envReservedPrefix = "INTRASTATE_"
 // clause order C5 declares: conflict, empty, unknown placeholder, shell
 // interpreter, output shape, env conflict. Load is fail-fast, so an entry
 // carrying several reports the earliest (`0025:C5` precedence).
-//
-// `cleared` names the keys some rule's `clear` list removes, which the
-// `steps` table check needs to know whether `<clear>` is plannable.
-func carrierDefect(
-	a sourceAcc, capability, id string, keys []string, tags map[string]TagDecl,
-	cleared map[string]bool,
-) error {
+func carrierDefect(a sourceAcc, capability, id string, keys []string, tags map[string]TagDecl) error {
 	where := capability + " " + id
 	hasPath := a.Path != nil && *a.Path != ""
 	hasCommand := a.Command != nil
@@ -1242,7 +1223,7 @@ func carrierDefect(
 		return editTableDefect(*a.Edit, where, keys, tags)
 	}
 	if hasSteps {
-		return stepsTableDefect(*a.Steps, where, keys, tags, cleared)
+		return stepsTableDefect(*a.Steps, where, keys, tags)
 	}
 	return nil
 }
@@ -1476,9 +1457,13 @@ func editTableDefect(
 // each step vector under `command`'s own argv clauses. Sibling tables,
 // arms and members are swept in SORTED order, so the reported defect is
 // deterministic as `editTableDefect`'s category is.
+//
+// The `clear` arms a clearing rule OWES are not judged here: which values
+// it can hold is read off the normalized rows, so that arm of
+// `steps_table_invalid` is `checkStepsClearArms` (kata t02k).
 func stepsTableDefect(
 	rules map[string]sourceStepsRule, where string, keys []string,
-	tags map[string]TagDecl, cleared map[string]bool,
+	tags map[string]TagDecl,
 ) error {
 	// steps_key_mismatch — `keys` and the tables in bijection, mirroring
 	// `edit.<key>`: every planned key has arms, so no key falls through
@@ -1539,21 +1524,6 @@ func stepsTableDefect(
 			if _, ok := (*r.Set)[member]; !ok {
 				return bad("declares no `set." + member + "` arm; every value " +
 					key + " can be planned needs one")
-			}
-		}
-		// A planned `<clear>` runs `clear.<prior>` alone, so once a rule
-		// can clear the key, every value it can HOLD needs a clear arm —
-		// otherwise the removal would run nothing and read-back would be
-		// the first to notice (`0004:C11`).
-		if cleared[key] {
-			for _, member := range domain {
-				if r.Clear == nil {
-					return bad("declares no `clear` arms, and a rule clears " + key)
-				}
-				if _, ok := (*r.Clear)[member]; !ok {
-					return bad("declares no `clear." + member + "` arm, and a " +
-						"rule clears " + key + "; every value it can hold needs one")
-				}
 			}
 		}
 	}
@@ -1848,7 +1818,80 @@ func (l *loader) checkAccessorBindings() error {
 			}
 		}
 	}
+	// The one writer-against-rows check beyond arity. It rides this step
+	// rather than adding one to `run`: it needs the same normalized rows,
+	// and `0010:C1` fixes this step as `run`'s last.
+	return l.checkStepsClearArms()
+}
+
+// checkStepsClearArms is the `steps_table_invalid` arm that needs the
+// normalized rows (kata t02k). A planned `<clear>` runs `clear.<held>`
+// alone, so every value a clearing rule can HOLD needs a clear arm —
+// otherwise the removal would run nothing and read-back would be the first
+// to notice (`0004:C11`). A value no clearing rule can hold owes none, and
+// leaving it arm-less is what keeps a compare-and-set the FIRST step of
+// the `set` arm entered from it: a replace runs `clear.<held>` only when
+// that arm exists.
+//
+// What a row can hold is read off its normalized atoms on the key — match
+// `eq` (a match `in` has already expanded into one row per member) and
+// `guard.all` `eq`/`in`, intersected, inherited atoms included. A row with
+// none can hold any domain value. Every other atom is ignored, which only
+// over-approximates: an `unless` may leave an arm owed that no row can
+// select, never the reverse.
+func (l *loader) checkStepsClearArms() error {
+	for _, id := range slices.Sorted(maps.Keys(l.model.Writers)) {
+		w := l.model.Writers[id]
+		for _, key := range slices.Sorted(maps.Keys(w.Steps)) {
+			domain, finite := stepsDomain(l.model.Tags[key])
+			if !finite {
+				continue
+			}
+			arms := w.Steps[key].Clear
+			for _, row := range l.model.Rows {
+				if !rowClears(row, key) {
+					continue
+				}
+				for _, held := range rowHolds(row, key, domain) {
+					if _, ok := arms[held]; ok {
+						continue
+					}
+					return fail(CatStepsTableInvalid,
+						"write "+id+" `steps."+key+"` declares no `clear."+held+
+							"` arm, and rule "+row.RuleID+" clears "+key+
+							" while it holds "+strconv.Quote(held)+
+							"; declare `clear."+held+"`")
+				}
+			}
+		}
+	}
 	return nil
+}
+
+// rowClears reports whether the row's write set renders `<clear>` for key.
+func rowClears(row Row, key string) bool {
+	return slices.ContainsFunc(row.Writes, func(t TagValue) bool {
+		return t.Key == key && isClear(t.Value)
+	})
+}
+
+// rowHolds is the subset of domain the row's own atoms on key admit, in
+// domain order: the intersection of its match and `guard.all` `eq`/`in`
+// literals, or the whole domain when it carries none.
+func rowHolds(row Row, key string, domain []string) []string {
+	out := slices.Clone(domain)
+	for _, a := range row.Atoms {
+		if a.Key != key || (a.Operator != "eq" && a.Operator != "in") {
+			continue
+		}
+		if a.Block != BlockMatch && a.Block != BlockAll {
+			continue
+		}
+		out = slices.DeleteFunc(out, func(v string) bool {
+			return !slices.Contains(a.Literal, v)
+		})
+	}
+	return out
 }
 
 // ------------------------------------------------------------------ dump

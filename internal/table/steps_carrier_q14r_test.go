@@ -10,6 +10,7 @@ package table_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/cwensel/intrastate/internal/table"
@@ -18,8 +19,9 @@ import (
 // stepsModel is the consumer's lifecycle: an owned enum held as one
 // `lifecycle:<value>` label, moved by removing the old label and adding
 // the new one, with a claim in front of `resolving` and an unassign in
-// front of `closed`. `rewind` clears the key, so every value it can hold
-// owes a clear arm.
+// front of `closed`. `rewind` clears the key while it holds `shipping`, so
+// `shipping` owes a clear arm; the other two arms are declared but not owed
+// (kata t02k).
 const stepsModel = `outcomes = ["advance", "rewind"]
 terminal = ["done"]
 
@@ -251,8 +253,8 @@ func TestSteps_DefectsCarryTheirCategories(t *testing.T) {
 			want: table.CatStepsTableInvalid,
 		},
 		{
-			name: "a cleared key missing a clear arm",
-			old:  "closed = [[\"kata\", \"label\", \"rm\", \"{tag.id}\", \"lifecycle:closed\"]]\n",
+			name: "a cleared key missing the clear arm a clearing rule can hold",
+			old:  "shipping = [[\"kata\", \"label\", \"rm\", \"{tag.id}\", \"lifecycle:shipping\"]]\n",
 			new:  "",
 			want: table.CatStepsTableInvalid,
 		},
@@ -407,6 +409,101 @@ closed = [["kata", "label", "rm", "{tag.id}", "lifecycle:closed"]]
 		t.Fatalf("a steps table with no clear arms, and no rule clearing the "+
 			"key, refused: %v", err)
 	}
+}
+
+// Kata t02k — a clearing rule owes `clear.<v>` only for the values v its
+// own predicate lets the key HOLD (`0004:C11`), not for the whole domain.
+// A value no clearing rule can hold may leave its arm undeclared, which is
+// what keeps a compare-and-set the FIRST step of the arm entered from it.
+
+// rewindRule is the fixture's one clearing rule, as every mutant below
+// rewrites it.
+const rewindRule = `[[rule]]
+id = "rewind"
+clear = ["lifecycle"]
+[rule.match.lifecycle]
+eq = "shipping"
+[rule.match.recognized]
+eq = "rewind"
+`
+
+// dropClearArms deletes the `clear.resolving` and `clear.closed` arms, the
+// two values no rule in the base fixture clears from.
+func dropClearArms(t *testing.T, src string) string {
+	t.Helper()
+
+	src = swapEntry(t, src, "resolving = [[\"kata\", \"label\", \"rm\", \"{tag.id}\", \"lifecycle:resolving\"]]\n", "")
+	return swapEntry(t, src, "closed = [[\"kata\", \"label\", \"rm\", \"{tag.id}\", \"lifecycle:closed\"]]\n", "")
+}
+
+func TestSteps_ClearArmsAreOwedOnlyForValuesAClearingRuleCanHold(t *testing.T) {
+	t.Run("the rule's own match", func(t *testing.T) {
+		src := dropClearArms(t, stepsModel)
+		m, err := table.Load([]byte(src), "steps-held.toml")
+		if err != nil {
+			t.Fatalf("rewind clears lifecycle only while it holds shipping, yet "+
+				"the model refused for the arms it never selects: %v", err)
+		}
+		if got := m.Writers["kata"].Steps["lifecycle"].Clear; len(got) != 1 {
+			t.Errorf("clear arms = %q; want `shipping` alone", got)
+		}
+	})
+
+	t.Run("a use-context atom", func(t *testing.T) {
+		src := swapEntry(t, stepsModel, rewindRule, `[context.shipped]
+[context.shipped.match.lifecycle]
+eq = "shipping"
+
+[[rule]]
+id = "rewind"
+use = ["shipped"]
+clear = ["lifecycle"]
+[rule.match.recognized]
+eq = "rewind"
+`)
+		if _, err := table.Load([]byte(dropClearArms(t, src)), "steps-context.toml"); err != nil {
+			t.Fatalf("an inherited lifecycle atom narrows what rewind holds as "+
+				"its own does, yet the model refused: %v", err)
+		}
+	})
+
+	t.Run("a guard.all membership", func(t *testing.T) {
+		src := swapEntry(t, stepsModel, rewindRule, `[[rule]]
+id = "rewind"
+clear = ["lifecycle"]
+[rule.match.recognized]
+eq = "rewind"
+[rule.guard.all.lifecycle]
+in = ["shipping"]
+`)
+		if _, err := table.Load([]byte(dropClearArms(t, src)), "steps-guard.toml"); err != nil {
+			t.Fatalf("a guard.all `in` narrows what rewind holds, yet the "+
+				"model refused: %v", err)
+		}
+	})
+
+	t.Run("a rule with no lifecycle atom still owes every arm", func(t *testing.T) {
+		src := swapEntry(t, stepsModel, rewindRule, `[[rule]]
+id = "rewind"
+clear = ["lifecycle"]
+[rule.match.recognized]
+eq = "rewind"
+`)
+		src = swapEntry(t, src, "closed = [[\"kata\", \"label\", \"rm\", \"{tag.id}\", \"lifecycle:closed\"]]\n", "")
+		_, err := table.Load([]byte(src), "steps-unscoped.toml")
+		if err == nil {
+			t.Fatal("a rule clearing lifecycle from any value loaded with no `clear.closed` arm")
+		}
+		f := cmdFailureOf(t, err)
+		if f.Category != table.CatStepsTableInvalid {
+			t.Errorf("category = %q; want %q", f.Category, table.CatStepsTableInvalid)
+		}
+		for _, want := range []string{"rule rewind", `"closed"`, "`clear.closed`"} {
+			if !strings.Contains(f.Detail, want) {
+				t.Errorf("detail %q does not name %s", f.Detail, want)
+			}
+		}
+	})
 }
 
 func TestSteps_CategoriesAreRegistered(t *testing.T) {

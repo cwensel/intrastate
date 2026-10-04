@@ -78,7 +78,11 @@ esac
 // declares no clear arm, so entering `resolving` runs the claim before any
 // label changes. Every later move removes the old label, then adds the
 // new one; `closed` unassigns first.
-const stepsModelQ14r = `outcomes = ["claim", "advance"]
+//
+// `release` CLEARS the key from `resolving` or `refining`. It owes clear
+// arms for exactly those two values, so `queued` stays arm-less and the
+// claim stays first even though a rule clears the key (kata t02k).
+const stepsModelQ14r = `outcomes = ["claim", "advance", "release"]
 terminal = ["done"]
 
 [model]
@@ -173,6 +177,15 @@ eq = "shipping"
 eq = "advance"
 [rule.write]
 lifecycle = "closed"
+
+[[rule]]
+id = "release"
+clear = ["lifecycle"]
+[rule.match.lifecycle]
+in = ["resolving", "refining"]
+[rule.match.recognized]
+eq = "release"
+[rule.write]
 `
 
 // fakeKata is one fixture: the model, the tool's state directory, and the
@@ -312,6 +325,8 @@ func TestStepsQ14r_TheLifecycleMovesThroughEveryStateWithNoWrapper(t *testing.T)
 	}
 }
 
+// The model also CLEARS the key (`release`), and the claim still runs
+// first: a clearing rule owes arms only for what it can hold (kata t02k).
 func TestStepsQ14r_ALostClaimRaceRefusesWithNothingApplied(t *testing.T) {
 	f := newFakeKata(t, "lifecycle:queued")
 	f.control(t, "claim-exit", "5")
@@ -334,6 +349,20 @@ func TestStepsQ14r_ALostClaimRaceRefusesWithNothingApplied(t *testing.T) {
 	}
 	if got := f.read(t, "labels"); !slices.Equal(got, []string{"area:cli", "lifecycle:queued"}) {
 		t.Errorf("labels = %q; want them unchanged", got)
+	}
+}
+
+func TestStepsQ14r_AReleaseRunsTheHeldValuesClearArmAlone(t *testing.T) {
+	f := newFakeKata(t, "lifecycle:refining")
+
+	if _, err := f.move(t, "release"); err != nil {
+		t.Fatalf("release refused: %v", err)
+	}
+	if got := f.mutations(t); !slices.Equal(got, []string{"label rm q14r lifecycle:refining"}) {
+		t.Errorf("the tool saw %q; want `clear.refining` alone", got)
+	}
+	if got := f.read(t, "labels"); !slices.Equal(got, []string{"area:cli"}) {
+		t.Errorf("labels = %q; want the lifecycle label gone and the unrelated one kept", got)
 	}
 }
 
@@ -398,7 +427,9 @@ func TestStepsQ14r_ClearingAnAbsentKeyRunsNothingAndVerifies(t *testing.T) {
 }
 
 func TestStepsQ14r_AnUndeclaredClearRefusesBeforeAnyStep(t *testing.T) {
-	// `queued` declares no clear arm, so a removal of it has no argv.
+	// `queued` declares no clear arm — legal although `release` clears the
+	// key, since no clearing rule can hold `queued` — so a removal of it has
+	// no argv (kata t02k).
 	f := newFakeKata(t, "lifecycle:queued")
 
 	args := append([]string{"flow", "set-state", "--model", f.model,
