@@ -182,6 +182,36 @@ type Accessor struct {
 	// silently ignored second carrier. A decoded empty-but-present table
 	// therefore has to survive as a NON-NIL empty map.
 	Edit map[string]EditRule
+
+	// Select holds one json selector per member of `keys`, keyed by that
+	// key, on a `command` read entry with json output (kata wchf). Empty
+	// means the entry reads `0025:C3`'s flat object of strings unchanged.
+	Select map[string]SelectRule
+}
+
+// SelectRule is one key's json selector: where in the read command's json
+// stdout the key's value lives, and which shapes there establish it
+// absent (kata wchf).
+//
+// The pointers carry the AUTHORED text and are parsed again at read, as
+// `EditRule`'s templates are: the read binding is also constructible from
+// an in-memory model that never passed the loader.
+type SelectRule struct {
+	// Pointer is the RFC 6901 pointer to the key's value, or — with a
+	// Prefix — to the array the value is projected from.
+	Pointer string
+	// Element is an RFC 6901 pointer applied to each array member before
+	// the prefix test, reaching `[{"label": …}]`. Empty is the member
+	// itself, which is the string-array form.
+	Element string
+	// Prefix projects the ONE array member that starts with it, stripped
+	// of it. Empty means no projection.
+	Prefix string
+	// AbsentNull: a JSON null at Pointer is established-absent.
+	AbsentNull bool
+	// AbsentMissing: a missing final token under an existing parent is
+	// established-absent.
+	AbsentMissing bool
 }
 
 // EditRule is one declared line rule: the identity `(entry, key)` a

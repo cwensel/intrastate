@@ -110,6 +110,23 @@ type sourceAcc struct {
 	// PRESENT, not on it being non-empty, so a bare `[write.x.edit]`
 	// beside another carrier must stay distinguishable from an absent one.
 	Edit *map[string]sourceEditRule `toml:"edit"`
+
+	// Select is the per-key json selector set of a `command` read entry
+	// (kata wchf). It is a POINTER to a map for `Edit`'s reason: the
+	// placement and bijection arms key on the table being PRESENT, so a
+	// bare `[read.x.select]` must stay distinguishable from an absent one.
+	Select *map[string]sourceSelectRule `toml:"select"`
+}
+
+// sourceSelectRule is one `[read.<id>.select.<key>]` table. Every field is
+// a pointer so an ABSENT field is distinguishable from an authored empty
+// one: an omitted `prefix` is no projection, while `prefix = ""` is a
+// defect every member would match (kata wchf).
+type sourceSelectRule struct {
+	Pointer *string   `toml:"pointer"`
+	Element *string   `toml:"element"`
+	Prefix  *string   `toml:"prefix"`
+	Absent  *[]string `toml:"absent"`
 }
 
 // sourceEditRule is one `[write.<id>.edit.<key>]` table. Every field is a

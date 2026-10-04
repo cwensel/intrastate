@@ -1038,6 +1038,7 @@ func (l *loader) accessorTable(src map[string]sourceAcc, capability string, want
 				acc.Edit[key] = rule
 			}
 		}
+		acc.Select = selectRules(a.Select)
 		out[id] = acc
 	}
 	return out, nil
@@ -1234,6 +1235,13 @@ func carrierDefect(
 						"the reserved "+envReservedPrefix+" prefix the overlay owns")
 			}
 		}
+	}
+
+	// The three `command_select_*` categories (kata wchf), after 0025:C5's
+	// clauses 1–6 so no existing entry's reported defect moves. `select`
+	// is read-only and `edit` write-only, so the two never both apply.
+	if err := selectDefect(a, capability, where, keys, tags); err != nil {
+		return err
 	}
 
 	// C1.4's remaining four edit-table categories, evaluated after

@@ -581,6 +581,56 @@ widened; declaring both `path` and `command` carries the same string.
 table being **present**, not on it being non-empty — a bare `[write.x.edit]`
 beside a `path` is a conflict, never a silently ignored second carrier.
 
+#### Selecting keys out of a command's json output
+
+By default a `command` read entry's stdout must be a flat JSON object of
+strings, one member per declared key. A tool whose `--json` output is
+nested is read through **per-key `select` tables** instead of a wrapper
+script, so the tool's output shape lives in the model where lint can see
+it:
+
+```toml
+[read.issue]
+role = "issue"
+command = ["kata", "show", "{tag.id}", "--json"]
+keys = ["lifecycle", "owner"]
+timeout = "5s"
+
+[read.issue.select.lifecycle]
+pointer = "/labels"      # an array of {"label": "..."} objects
+element = "/label"       # reached inside each member
+prefix = "lifecycle:"    # the one member starting with it, prefix stripped
+
+[read.issue.select.owner]
+pointer = "/issue/owner"
+absent = ["null", "missing"]
+```
+
+- `pointer` (**required**) is an RFC 6901 JSON Pointer into the stdout
+  document. Without a `prefix` it must reach a string, number or bool; a
+  number or bool reads as its JSON text, and an object or array is
+  unreadable.
+- `prefix` projects one member of the array `pointer` reaches. Exactly
+  one member starting with it reads as that member minus the prefix; no
+  member is **established-absent**, since the tool reported the whole set;
+  two or more is unreadable, never "the first". `element` (only beside a
+  `prefix`) is a pointer applied inside each member, for an array of
+  objects; omit it for an array of strings.
+- `absent` declares which shapes mean "unset": `"null"` for a JSON null at
+  the pointer, `"missing"` for a missing **final** token under a parent
+  that exists. A missing intermediate node is the tool's shape changing,
+  and stays unreadable whatever is declared.
+
+`select` is opt-in per entry: an entry declaring none reads the flat
+object exactly as before, and one declaring any must declare a table for
+every member of `keys` and none for any other key. Lint proves the
+declaration only, since it never sees the tool's output:
+`command_select_placement` (a `select` on a `path`, raw, gate or write
+entry), `command_select_key_mismatch` (the tables and `keys` out of
+bijection), and `command_select_invalid` (a pointer that does not parse,
+an empty `prefix`, `element` without `prefix`, a `prefix` filling a
+set-kind tag, or an `absent` member outside `{"null", "missing"}`).
+
 #### The `edit` carrier
 
 An `edit` writer rewrites **declared lines** of the artifact its `role`

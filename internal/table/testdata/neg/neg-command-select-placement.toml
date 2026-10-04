@@ -1,0 +1,63 @@
+# kata wchf negative fixture: a `select` table on a `path` read entry, which has no command stdout to select from.
+outcomes = ["advance"]
+terminal = ["done"]
+
+[model]
+id = "kataflow"
+version = 1
+
+[tags.recognized]
+provenance = "recognized"
+kind = "enum"
+single_valued = true
+required = true
+
+[tags.id]
+provenance = "observed"
+kind = "scalar"
+
+[tags.owner]
+provenance = "observed"
+kind = "scalar"
+
+[tags.lifecycle]
+provenance = "owned"
+kind = "enum"
+domain = ["queued", "shipping"]
+single_valued = true
+required = true
+
+[read.kata]
+role = "kata"
+path = "kata.json"
+keys = ["lifecycle", "owner"]
+timeout = "2s"
+
+[read.kata.select.lifecycle]
+pointer = "/lifecycle"
+
+[read.kata.select.owner]
+pointer = "/owner"
+
+[write.kata]
+role = "kata"
+command = ["tools/kata-label", "{tag.id}"]
+keys = ["lifecycle"]
+timeout = "2s"
+read_back = true
+
+[initial]
+lifecycle = "queued"
+
+[context.done]
+[context.done.match.lifecycle]
+eq = "shipping"
+
+[[rule]]
+id = "ship"
+[rule.match.lifecycle]
+eq = "queued"
+[rule.match.recognized]
+eq = "advance"
+[rule.write]
+lifecycle = "shipping"

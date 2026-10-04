@@ -877,6 +877,12 @@ func TestReq106_EveryNamedCategoryExistsAndIsWitnessed(t *testing.T) {
 		table.CatEditTemplateInvalid: "neg/neg-edit-template-invalid.toml",
 		table.CatEditClearInvalid:    "neg/neg-edit-clear-invalid.toml",
 		table.CatEditTagArgv0:        "neg/neg-edit-tag-argv0.toml",
+
+		// The three `select` categories (kata wchf), registered in the
+		// same map for the same reason.
+		table.CatCommandSelectPlacement:   "neg/neg-command-select-placement.toml",
+		table.CatCommandSelectKeyMismatch: "neg/neg-command-select-key-mismatch.toml",
+		table.CatCommandSelectInvalid:     "neg/neg-command-select-invalid.toml",
 	}
 
 	t.Run("every category the floor names is exported", func(t *testing.T) {

@@ -143,6 +143,23 @@ func main() {
 		b, _ := io.ReadAll(os.Stdin)
 		_ = os.WriteFile(rest[0], b, 0o600)
 
+	// stdin-to-labels drains the envelope and writes the named file as a
+	// nested, label-array document: each planned key and value becomes
+	// one {"label": "<key>:<value>"} member beside an unrelated label. It
+	// is the tool-native shape a json selector reads back (kata wchf).
+	case "stdin-to-labels":
+		var env map[string]string
+		_ = json.NewDecoder(os.Stdin).Decode(&env)
+		labels := []map[string]string{{"label": "area:cli"}}
+		for k, v := range env {
+			labels = append(labels, map[string]string{"label": k + ":" + v})
+		}
+		b, _ := json.Marshal(map[string]any{
+			"issue":  map[string]any{"owner": nil},
+			"labels": labels,
+		})
+		_ = os.WriteFile(rest[0], b, 0o600)
+
 	// emit writes its literal argument on stdout and exits with the code
 	// its second argument names.
 	case "emit":

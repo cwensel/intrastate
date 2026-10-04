@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"maps"
 	"os"
 	"os/exec"
@@ -1123,6 +1124,17 @@ func (Reader) Capability() accessor.Capability { return accessor.CapRead }
 func (r Reader) Read(ctx context.Context, art accessor.Artifact, requested []string) (
 	[]accessor.KeyValue, []string, error,
 ) {
+	// The selectors are compiled BEFORE the spawn: a selector set that
+	// cannot be parsed is a defect of the entry, and running the tool
+	// first would spend an invocation on output nothing could read. A
+	// loaded model never reaches this refusal — lint proves every pointer
+	// and the key bijection — so it guards the in-memory construction
+	// only (kata wchf).
+	sel, err := compileSelectors(r.Accessor.Select, requested)
+	if err != nil {
+		return nil, nil, refuse(r.Name + ": " + err.Error())
+	}
+
 	inv, err := spawn(ctx, r.Accessor, r.Name, accessor.CapRead, r.Config, art,
 		stdinObject(nil))
 	if err != nil {
@@ -1132,7 +1144,7 @@ func (r Reader) Read(ctx context.Context, art accessor.Artifact, requested []str
 	// Ordering is normative: a NON-EMPTY stdout is parsed first, and the
 	// exit maps apply only to an empty stdout (`0025:C4`).
 	if len(inv.stdout) != 0 {
-		return r.parse(inv, requested)
+		return r.parse(inv, requested, sel)
 	}
 
 	// An empty stdout carries meaning ONLY through `exit_absent`. A silent
@@ -1157,7 +1169,7 @@ func (r Reader) Read(ctx context.Context, art accessor.Artifact, requested []str
 
 // parse maps a non-empty stdout onto the split return, per the entry's
 // declared output mode.
-func (r Reader) parse(inv invocation, requested []string) (
+func (r Reader) parse(inv invocation, requested []string, sel map[string]selector) (
 	[]accessor.KeyValue, []string, error,
 ) {
 	if r.Accessor.Output != nil && *r.Accessor.Output == "raw" {
@@ -1172,6 +1184,13 @@ func (r Reader) parse(inv invocation, requested []string) (
 		value := string(inv.stdout)
 		value = strings.TrimSuffix(value, "\n")
 		return []accessor.KeyValue{{Key: requested[0], Value: value}}, nil, nil
+	}
+
+	// An entry declaring `select` reads a json DOCUMENT through its
+	// per-key pointers; one declaring none reads C3's flat object below,
+	// byte-for-byte as before (kata wchf).
+	if sel != nil {
+		return parseSelect(inv, requested, sel)
 	}
 
 	var obj map[string]string
@@ -1201,6 +1220,261 @@ func (r Reader) parse(inv invocation, requested []string) (
 		values = append(values, accessor.KeyValue{Key: k, Value: v})
 	}
 	return values, unreadable, nil
+}
+
+// --- the json selectors ---------------------------------------------------
+
+// selector is one key's compiled `select` table (kata wchf): the parsed
+// RFC 6901 tokens and the declared projection and absence shapes.
+type selector struct {
+	pointer       []string
+	element       []string
+	prefix        string
+	absentNull    bool
+	absentMissing bool
+}
+
+// compileSelectors parses the entry's selectors for the requested keys. It
+// returns nil for an entry declaring none, which is the flat-object read.
+func compileSelectors(rules map[string]table.SelectRule, requested []string) (
+	map[string]selector, error,
+) {
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]selector, len(requested))
+	for _, k := range requested {
+		rule, ok := rules[k]
+		if !ok {
+			return nil, errors.New("the entry declares `select` tables but none " +
+				"for the key " + k + "; every declared key needs one")
+		}
+		pointer, err := table.ParseJSONPointer(rule.Pointer)
+		if err != nil {
+			return nil, errors.New("`select." + k + "`: " + err.Error())
+		}
+		if rule.Element != "" && rule.Prefix == "" {
+			return nil, errors.New("`select." + k + "` declares `element` " +
+				"without `prefix`")
+		}
+		element, err := table.ParseJSONPointer(rule.Element)
+		if err != nil {
+			return nil, errors.New("`select." + k + "` element " + err.Error())
+		}
+		out[k] = selector{
+			pointer:       pointer,
+			element:       element,
+			prefix:        rule.Prefix,
+			absentNull:    rule.AbsentNull,
+			absentMissing: rule.AbsentMissing,
+		}
+	}
+	return out, nil
+}
+
+// parseSelect maps a json stdout onto the split return through the
+// entry's selectors (kata wchf).
+//
+// It NARROWS `0025:C3` rather than lifting it: whatever a selector cannot
+// establish is UNREADABLE, never a guess. Absence is established only by
+// a shape the author DECLARED to mean it, or by a prefix projection over
+// a set the tool reported whole in which no member carries the prefix.
+func parseSelect(inv invocation, requested []string, sel map[string]selector) (
+	[]accessor.KeyValue, []string, error,
+) {
+	doc, err := decodeDocument(inv.stdout)
+	if err != nil {
+		return nil, nil, wrap(inv.detail(""), errors.New(
+			"the read command's stdout is not one JSON document: "+err.Error()))
+	}
+
+	var values []accessor.KeyValue
+	var unreadable []string
+	for _, k := range requested {
+		value, out := sel[k].read(doc)
+		switch out {
+		case selValue:
+			values = append(values, accessor.KeyValue{Key: k, Value: value})
+		case selAbsent:
+			values = append(values, accessor.KeyValue{Key: k, Absent: true})
+		default:
+			unreadable = append(unreadable, k)
+		}
+	}
+	return values, unreadable, nil
+}
+
+// decodeDocument decodes exactly ONE json value, with numbers kept as
+// their own text so `7` reads as "7" and never as "7e+00".
+func decodeDocument(b []byte) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var doc any
+	if err := dec.Decode(&doc); err != nil {
+		return nil, err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("data follows the first JSON value")
+	}
+	return doc, nil
+}
+
+// selOutcome is what one selector established.
+type selOutcome int
+
+const (
+	selUnreadable selOutcome = iota
+	selValue
+	selAbsent
+)
+
+// read applies one selector to the decoded document.
+func (s selector) read(doc any) (string, selOutcome) {
+	v, found := resolvePointer(doc, s.pointer)
+	switch found {
+	case lookupDrift:
+		return "", selUnreadable
+	case lookupMissing:
+		if s.absentMissing {
+			return "", selAbsent
+		}
+		return "", selUnreadable
+	}
+	if v == nil {
+		if s.absentNull {
+			return "", selAbsent
+		}
+		return "", selUnreadable
+	}
+
+	if s.prefix != "" {
+		return s.project(v)
+	}
+	return scalarText(v)
+}
+
+// project reads the ONE array member that starts with the prefix,
+// stripped of it. Zero matches is established-absent: the tool reported
+// the whole set and no member carries the prefix. Two or more is
+// UNREADABLE — "first match" would depend on array order and hide the
+// corruption a second member is (`0007` totality).
+//
+// A member the element pointer cannot reach as a string is shape drift
+// and makes the KEY unreadable rather than being skipped: a skipped
+// member may be exactly the one that carried the prefix.
+func (s selector) project(v any) (string, selOutcome) {
+	members, ok := v.([]any)
+	if !ok {
+		return "", selUnreadable
+	}
+	var matched []string
+	for _, m := range members {
+		ev, found := resolvePointer(m, s.element)
+		str, isString := ev.(string)
+		if found != lookupFound || !isString {
+			return "", selUnreadable
+		}
+		if rest, has := strings.CutPrefix(str, s.prefix); has {
+			matched = append(matched, rest)
+		}
+	}
+	switch len(matched) {
+	case 0:
+		return "", selAbsent
+	case 1:
+		return matched[0], selValue
+	default:
+		return "", selUnreadable
+	}
+}
+
+// scalarText renders a json scalar as the key's value: a string as
+// itself, a number and a bool as their json text. An object or an array
+// is not one value and is UNREADABLE.
+func scalarText(v any) (string, selOutcome) {
+	switch t := v.(type) {
+	case string:
+		return t, selValue
+	case json.Number:
+		return t.String(), selValue
+	case bool:
+		return strconv.FormatBool(t), selValue
+	default:
+		return "", selUnreadable
+	}
+}
+
+// lookup is what a pointer walk found.
+type lookup int
+
+const (
+	lookupFound lookup = iota
+	// lookupMissing: the FINAL token names nothing under a parent that
+	// exists — the one shape `absent = ["missing"]` may establish.
+	lookupMissing
+	// lookupDrift: an intermediate node is missing or is not a container
+	// the next token can index. That is the tool's shape moving, not a
+	// value being unset, and it stays unreadable whatever is declared.
+	lookupDrift
+)
+
+// resolvePointer walks parsed RFC 6901 tokens through a decoded document.
+// An object member is matched byte-exactly; an array index is `0` or a
+// digit string without a leading zero, and `-` names the member past the
+// end, so it is always missing (RFC 6901 §4).
+func resolvePointer(doc any, tokens []string) (any, lookup) {
+	cur := doc
+	for i, tok := range tokens {
+		last := i == len(tokens)-1
+		switch node := cur.(type) {
+		case map[string]any:
+			v, ok := node[tok]
+			if !ok {
+				return nil, missingAt(last)
+			}
+			cur = v
+		case []any:
+			idx, ok := arrayIndex(tok, len(node))
+			if !ok {
+				return nil, lookupDrift
+			}
+			if idx >= len(node) {
+				return nil, missingAt(last)
+			}
+			cur = node[idx]
+		default:
+			return nil, lookupDrift
+		}
+	}
+	return cur, lookupFound
+}
+
+func missingAt(last bool) lookup {
+	if last {
+		return lookupMissing
+	}
+	return lookupDrift
+}
+
+// arrayIndex parses an RFC 6901 array index. An index too large to
+// represent is past the end of any array, so it is reported as `n`.
+func arrayIndex(tok string, n int) (int, bool) {
+	if tok == "-" {
+		return n, true
+	}
+	if tok == "" || (len(tok) > 1 && tok[0] == '0') {
+		return 0, false
+	}
+	for _, c := range tok {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+	}
+	idx, err := strconv.Atoi(tok)
+	if err != nil {
+		return n, true
+	}
+	return idx, true
 }
 
 // --- the gate binding -----------------------------------------------------

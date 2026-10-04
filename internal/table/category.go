@@ -61,6 +61,14 @@ const (
 	CatCommandOutputShape        Category = "command_output_shape"
 	CatCommandEnvConflict        Category = "command_env_conflict"
 
+	// The three `select` categories (kata wchf), in clause order. They
+	// judge the DECLARATION only: lint cannot see a tool's output, so
+	// whether a pointer still finds its value is a read-time question
+	// answered by an unreadable key, never by a load category.
+	CatCommandSelectPlacement   Category = "command_select_placement"
+	CatCommandSelectKeyMismatch Category = "command_select_key_mismatch"
+	CatCommandSelectInvalid     Category = "command_select_invalid"
+
 	// The six RDR 0028 `edit`-carrier categories (`0028:C1.4`), in clause
 	// order, appended after 0025:C5's six. The wire STRINGS are the
 	// contract and these identifiers are not, exactly as for 0025's.
@@ -141,6 +149,13 @@ func Categories() []Category {
 		CatEditTemplateInvalid,
 		CatEditClearInvalid,
 		CatEditTagArgv0,
+
+		// The three `select` categories, appended at the tail: the list is
+		// append-only, so a member registered later never lands between
+		// earlier ones (`0029:C4`, kata wchf).
+		CatCommandSelectPlacement,
+		CatCommandSelectKeyMismatch,
+		CatCommandSelectInvalid,
 	}
 }
 

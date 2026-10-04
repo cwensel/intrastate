@@ -57,6 +57,9 @@ command_and_path_conflict
 command_empty
 command_env_conflict
 command_output_shape
+command_select_invalid
+command_select_key_mismatch
+command_select_placement
 command_shell_interpreter
 command_unknown_placeholder
 cyclic_context_inheritance
