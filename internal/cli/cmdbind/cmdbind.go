@@ -1252,6 +1252,7 @@ type selector struct {
 	prefix        string
 	absentNull    bool
 	absentMissing bool
+	unmatched     string
 }
 
 // compileSelectors parses the entry's selectors for the requested keys. It
@@ -1287,6 +1288,7 @@ func compileSelectors(rules map[string]table.SelectRule, requested []string) (
 			prefix:        rule.Prefix,
 			absentNull:    rule.AbsentNull,
 			absentMissing: rule.AbsentMissing,
+			unmatched:     rule.Unmatched,
 		}
 	}
 	return out, nil
@@ -1375,7 +1377,9 @@ func (s selector) read(doc any) (string, selOutcome) {
 
 // project reads the ONE array member that starts with the prefix,
 // stripped of it. Zero matches is established-absent: the tool reported
-// the whole set and no member carries the prefix. Two or more is
+// the whole set and no member carries the prefix — unless the author
+// declared `unmatched`, the value that whole set encodes (kata 9xjf),
+// in which case zero matches reads that value. Two or more is
 // UNREADABLE — "first match" would depend on array order and hide the
 // corruption a second member is (`0007` totality).
 //
@@ -1400,6 +1404,9 @@ func (s selector) project(v any) (string, selOutcome) {
 	}
 	switch len(matched) {
 	case 0:
+		if s.unmatched != "" {
+			return s.unmatched, selValue
+		}
 		return "", selAbsent
 	case 1:
 		return matched[0], selValue

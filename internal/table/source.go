@@ -138,10 +138,11 @@ type sourceStepsRule struct {
 // one: an omitted `prefix` is no projection, while `prefix = ""` is a
 // defect every member would match (kata wchf).
 type sourceSelectRule struct {
-	Pointer *string   `toml:"pointer"`
-	Element *string   `toml:"element"`
-	Prefix  *string   `toml:"prefix"`
-	Absent  *[]string `toml:"absent"`
+	Pointer   *string   `toml:"pointer"`
+	Element   *string   `toml:"element"`
+	Prefix    *string   `toml:"prefix"`
+	Absent    *[]string `toml:"absent"`
+	Unmatched *string   `toml:"unmatched"`
 }
 
 // sourceEditRule is one `[write.<id>.edit.<key>]` table. Every field is a

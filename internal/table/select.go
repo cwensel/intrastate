@@ -152,6 +152,18 @@ func selectDefect(
 					"; a prefix projects one member and a set holds many")
 			}
 		}
+		if r.Unmatched != nil {
+			// `unmatched` is an authored tag value, so the reserved-value
+			// rule outranks its select arms (`0002:C11`): a projected
+			// sentinel would read as unreadable, never as the fallback.
+			if *r.Unmatched == ClearSentinel {
+				return fail(CatReservedTagValue,
+					at+" `unmatched` authors the reserved value "+ClearSentinel)
+			}
+			if err := unmatchedDefect(*r.Unmatched, r.Prefix != nil, key, tags[key]); err != "" {
+				return bad(err)
+			}
+		}
 		if r.Absent != nil {
 			seen := map[string]bool{}
 			for _, m := range *r.Absent {
@@ -169,6 +181,37 @@ func selectDefect(
 		}
 	}
 	return nil
+}
+
+// unmatchedDefect judges a `select.<key>` table's `unmatched` value, the
+// value a prefix projection reads when no member carries the prefix (kata
+// 9xjf). It returns the refusal's detail, or "" when the value is legal.
+//
+// The value is the author declaring how the TOOL encodes "none of these":
+// a label set reported whole with no member under the prefix. It reaches
+// no other shape, so only a prefix projection may declare it. The tag
+// must be `required = true`: the reader can no longer report the key
+// absent, so an optional tag would owe an absent arm no state reaches,
+// and required brings lint's always-present check, which refuses any rule
+// that clears the key — whose read-back could never read absent.
+func unmatchedDefect(value string, hasPrefix bool, key string, decl TagDecl) string {
+	switch {
+	case !hasPrefix:
+		return "declares `unmatched` without `prefix`; `unmatched` is the " +
+			"value a prefix projection reads when no member carries the prefix"
+	case value == "":
+		return "declares an empty `unmatched`; it names the value the key " +
+			"reads when no member carries the prefix"
+	case !decl.Required:
+		return "declares `unmatched` for the tag " + key + ", which is not " +
+			"declared `required = true`; a key that can never read absent " +
+			"is always-present"
+	}
+	if err := ConformValue(decl, value); err != nil {
+		return "declares an `unmatched` the tag " + key + " cannot hold: " +
+			err.Error()
+	}
+	return ""
 }
 
 // selectRules converts the decoded tables into the model's typed form.
@@ -189,6 +232,9 @@ func selectRules(src *map[string]sourceSelectRule) map[string]SelectRule {
 		}
 		if r.Prefix != nil {
 			rule.Prefix = *r.Prefix
+		}
+		if r.Unmatched != nil {
+			rule.Unmatched = *r.Unmatched
 		}
 		if r.Absent != nil {
 			rule.AbsentNull = slices.Contains(*r.Absent, SelectAbsentNull)

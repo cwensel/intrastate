@@ -231,6 +231,10 @@ type SelectRule struct {
 	// AbsentMissing: a missing final token under an existing parent is
 	// established-absent.
 	AbsentMissing bool
+	// Unmatched is the value a Prefix projection reads when no member
+	// carries the prefix (kata 9xjf). Empty keeps the default: zero
+	// matches is established-absent.
+	Unmatched string
 }
 
 // EditRule is one declared line rule: the identity `(entry, key)` a

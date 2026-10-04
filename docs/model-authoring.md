@@ -811,6 +811,41 @@ absent = ["null", "missing"]
   the pointer, `"missing"` for a missing **final** token under a parent
   that exists. A missing intermediate node is the tool's shape changing,
   and stays unreadable whatever is declared.
+- `unmatched` (only beside a `prefix`) is the value the key reads when no
+  member carries the prefix, in place of established-absent. Two or more
+  matches and every unreadable shape stay unreadable.
+
+An owned key that reads absent cannot be written: a rule writing it
+requires it present, so a prefix projection with no match leaves the
+issue with no rule that can move it. When the tool's "no label" means a
+state of the lifecycle, declare that state as `unmatched` and as the
+`[initial]` value, and declare the tag `required = true` (lint refuses
+`unmatched` otherwise):
+
+```toml
+[tags.lifecycle]
+provenance = "owned"
+kind = "enum"
+domain = ["filed", "resolving", "refining", "closed"]
+single_valued = true
+required = true
+
+[read.issue.select.lifecycle]
+pointer = "/labels"
+element = "/label"
+prefix = "lifecycle:"
+unmatched = "filed"      # no lifecycle label reads as "filed"
+
+[initial]
+lifecycle = "filed"
+```
+
+An unlabelled issue then reads `filed`, and a rule matching `filed` claims
+it with no seed step. A rule returning the issue to that state **writes**
+`filed` — its `set.filed` steps run after the held value's `clear` arm
+removes the label — rather than clearing the key: the reader can never
+report the key absent, so a clear's read-back could never pass, and lint
+refuses any reachable state that drops an always-present key.
 
 `select` is opt-in per entry: an entry declaring none reads the flat
 object exactly as before, and one declaring any must declare a table for
@@ -820,7 +855,11 @@ declaration only, since it never sees the tool's output:
 entry), `command_select_key_mismatch` (the tables and `keys` out of
 bijection), and `command_select_invalid` (a pointer that does not parse,
 an empty `prefix`, `element` without `prefix`, a `prefix` filling a
-set-kind tag, or an `absent` member outside `{"null", "missing"}`).
+set-kind tag, an `absent` member outside `{"null", "missing"}`, or an
+`unmatched` that is empty, has no `prefix`, lies outside the tag's
+domain, or fills a tag not declared `required = true`). An `unmatched`
+of `<clear>` is refused as `reserved_tag_value`, as at every other site
+that authors a tag value.
 
 #### The `steps` carrier
 
