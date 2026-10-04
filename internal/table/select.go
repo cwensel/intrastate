@@ -160,7 +160,8 @@ func selectDefect(
 				return fail(CatReservedTagValue,
 					at+" `unmatched` authors the reserved value "+ClearSentinel)
 			}
-			if err := unmatchedDefect(*r.Unmatched, r.Prefix != nil, key, tags[key]); err != "" {
+			hasAbsent := r.Absent != nil && len(*r.Absent) > 0
+			if err := unmatchedDefect(*r.Unmatched, r.Prefix != nil, hasAbsent, key, tags[key]); err != "" {
 				return bad(err)
 			}
 		}
@@ -184,24 +185,29 @@ func selectDefect(
 }
 
 // unmatchedDefect judges a `select.<key>` table's `unmatched` value, the
-// value a prefix projection reads when no member carries the prefix (kata
-// 9xjf). It returns the refusal's detail, or "" when the value is legal.
+// value the key reads wherever the select would establish it absent: a
+// prefix projection with no member carrying the prefix (kata 9xjf), or a
+// null or missing field the table's `absent` set declares (kata n139). It
+// returns the refusal's detail, or "" when the value is legal.
 //
-// The value is the author declaring how the TOOL encodes "none of these":
-// a label set reported whole with no member under the prefix. It reaches
-// no other shape, so only a prefix projection may declare it. The tag
-// must be `required = true`: the reader can no longer report the key
-// absent, so an optional tag would owe an absent arm no state reaches,
+// The value is the author declaring how the TOOL encodes a state: a label
+// set reported whole with no member under the prefix, or a field the tool
+// reports only once the state changes. It reaches no other shape, so the
+// table must declare one that establishes absence — a `prefix` or a
+// non-empty `absent`; without either, `unmatched` could never be read.
+// The tag must be `required = true`: the reader can no longer report the
+// key absent, so an optional tag would owe an absent arm no state reaches,
 // and required brings lint's always-present check, which refuses any rule
 // that clears the key — whose read-back could never read absent.
-func unmatchedDefect(value string, hasPrefix bool, key string, decl TagDecl) string {
+func unmatchedDefect(value string, hasPrefix, hasAbsent bool, key string, decl TagDecl) string {
 	switch {
-	case !hasPrefix:
-		return "declares `unmatched` without `prefix`; `unmatched` is the " +
-			"value a prefix projection reads when no member carries the prefix"
+	case !hasPrefix && !hasAbsent:
+		return "declares `unmatched` without a `prefix` or a declared " +
+			"`absent`; `unmatched` is the value the key reads in place of " +
+			"established-absent, and only those establish it"
 	case value == "":
 		return "declares an empty `unmatched`; it names the value the key " +
-			"reads when no member carries the prefix"
+			"reads in place of established-absent"
 	case !decl.Required:
 		return "declares `unmatched` for the tag " + key + ", which is not " +
 			"declared `required = true`; a key that can never read absent " +

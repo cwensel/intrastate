@@ -811,9 +811,11 @@ absent = ["null", "missing"]
   the pointer, `"missing"` for a missing **final** token under a parent
   that exists. A missing intermediate node is the tool's shape changing,
   and stays unreadable whatever is declared.
-- `unmatched` (only beside a `prefix`) is the value the key reads when no
-  member carries the prefix, in place of established-absent. Two or more
-  matches and every unreadable shape stay unreadable.
+- `unmatched` (beside a `prefix` or a declared `absent`) is the value the
+  key reads in place of established-absent: when no member carries the
+  prefix, or when the pointer lands on a shape `absent` declares. Two or
+  more matches, a missing intermediate node, and every other unreadable
+  shape stay unreadable.
 
 An owned key that reads absent cannot be written: a rule writing it
 requires it present, so a prefix projection with no match leaves the
@@ -847,6 +849,33 @@ removes the label — rather than clearing the key: the reader can never
 report the key absent, so a clear's read-back could never pass, and lint
 refuses any reachable state that drops an always-present key.
 
+A field the tool reports only in some states works the same way. An issue
+carries `closed_reason` only once it is closed, so an open issue reads the
+reason established-absent and no close rule could write it. Declare the
+open state as `unmatched` beside the `absent` shapes that mean it:
+
+```toml
+[tags.reason]
+provenance = "owned"
+kind = "enum"
+domain = ["open", "done", "wontfix", "duplicate"]
+single_valued = true
+required = true
+
+[read.issue.select.reason]
+pointer = "/issue/closed_reason"
+absent = ["null", "missing"]
+unmatched = "open"       # no closed_reason reads as "open"
+
+[initial]
+reason = "open"
+```
+
+An open issue then reads `open`, each close rule matches it and writes its
+reason through that reason's `set` arm, and a reopen writes `open`. Only a
+null or missing **final** token reads `open`: an `issue` object gone from
+the output is the tool's shape changing, and stays unreadable.
+
 `select` is opt-in per entry: an entry declaring none reads the flat
 object exactly as before, and one declaring any must declare a table for
 every member of `keys` and none for any other key. Lint proves the
@@ -856,8 +885,9 @@ entry), `command_select_key_mismatch` (the tables and `keys` out of
 bijection), and `command_select_invalid` (a pointer that does not parse,
 an empty `prefix`, `element` without `prefix`, a `prefix` filling a
 set-kind tag, an `absent` member outside `{"null", "missing"}`, or an
-`unmatched` that is empty, has no `prefix`, lies outside the tag's
-domain, or fills a tag not declared `required = true`). An `unmatched`
+`unmatched` that is empty, has neither a `prefix` nor a non-empty
+`absent`, lies outside the tag's domain, or fills a tag not declared
+`required = true`). An `unmatched`
 of `<clear>` is refused as `reserved_tag_value`, as at every other site
 that authors a tag value.
 

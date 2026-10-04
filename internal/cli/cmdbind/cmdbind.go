@@ -1301,6 +1301,9 @@ func compileSelectors(rules map[string]table.SelectRule, requested []string) (
 // establish is UNREADABLE, never a guess. Absence is established only by
 // a shape the author DECLARED to mean it, or by a prefix projection over
 // a set the tool reported whole in which no member carries the prefix.
+// A selector declaring `unmatched` reads that value wherever it would
+// establish absence (katas 9xjf, n139); it never reads it for a shape it
+// cannot establish.
 func parseSelect(inv invocation, requested []string, sel map[string]selector) (
 	[]accessor.KeyValue, []string, error,
 ) {
@@ -1350,8 +1353,23 @@ const (
 	selAbsent
 )
 
-// read applies one selector to the decoded document.
+// read applies one selector to the decoded document. An established-absent
+// outcome reads the declared `unmatched` value instead, when there is one
+// (katas 9xjf, n139): the author declared how the tool encodes that state.
+// Only selAbsent moves — a missing intermediate, shape drift, and a null or
+// missing leaf the `absent` set does not declare stay unreadable, so a tool
+// whose output changed shape never reads as the declared state.
 func (s selector) read(doc any) (string, selOutcome) {
+	v, out := s.establish(doc)
+	if out == selAbsent && s.unmatched != "" {
+		return s.unmatched, selValue
+	}
+	return v, out
+}
+
+// establish is what the selector's pointer, projection and `absent` set
+// establish of the document, before `unmatched` speaks.
+func (s selector) establish(doc any) (string, selOutcome) {
 	v, found := resolvePointer(doc, s.pointer)
 	switch found {
 	case lookupDrift:
@@ -1377,11 +1395,10 @@ func (s selector) read(doc any) (string, selOutcome) {
 
 // project reads the ONE array member that starts with the prefix,
 // stripped of it. Zero matches is established-absent: the tool reported
-// the whole set and no member carries the prefix — unless the author
-// declared `unmatched`, the value that whole set encodes (kata 9xjf),
-// in which case zero matches reads that value. Two or more is
-// UNREADABLE — "first match" would depend on array order and hide the
-// corruption a second member is (`0007` totality).
+// the whole set and no member carries the prefix (read maps it onto a
+// declared `unmatched`, kata 9xjf). Two or more is UNREADABLE — "first
+// match" would depend on array order and hide the corruption a second
+// member is (`0007` totality).
 //
 // A member the element pointer cannot reach as a string is shape drift
 // and makes the KEY unreadable rather than being skipped: a skipped
@@ -1404,9 +1421,6 @@ func (s selector) project(v any) (string, selOutcome) {
 	}
 	switch len(matched) {
 	case 0:
-		if s.unmatched != "" {
-			return s.unmatched, selValue
-		}
 		return "", selAbsent
 	case 1:
 		return matched[0], selValue
