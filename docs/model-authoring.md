@@ -584,7 +584,182 @@ gate entry, is `steps_carrier_conflict`. Both key on the table being
 **present**, not on it being non-empty — a bare `[write.x.edit]` beside a
 `path` is a conflict, never a silently ignored second carrier.
 
-#### Selecting keys out of a command's json output
+#### The command carrier
+
+A `command` entry hands a read, a gate or a write to an established
+external tool. The CLI spawns the declared argv itself — no shell, no word
+splitting, no glob expansion — so every word the child receives is
+readable off the model:
+
+```toml
+[read.review-state]
+role = "review"
+command = ["bin/review-state", "get", "{artifact}"]
+keys = ["status"]
+timeout = "5s"
+output = "raw"          # stdout is the one key's value
+exit_absent = [3]       # exit 3 with an empty stdout: no status recorded yet
+env = { REVIEW_FORMAT = "plain" }
+env_pass = ["REVIEW_TOKEN"]
+
+[write.review-state]
+role = "review"
+command = ["bin/review-state", "set", "{artifact}"]
+keys = ["status"]
+timeout = "5s"
+read_back = true
+```
+
+`role`, `keys`, `timeout` and a writer's `read_back = true` mean exactly
+what they mean on a `path` entry.
+
+##### Argv and placeholders
+
+argv0 resolves one of three ways: a bare name through the CLI's own
+`PATH`; a name carrying a path separator, like `bin/review-state` above,
+against the directory of the model file; an absolute name as written. The
+process working directory is never consulted — a separator-bearing argv0
+in a model with no source file refuses rather than falling back to it.
+
+Two placeholders exist, and each is recognized only as a **whole** argv
+element. `--file={artifact}` is not a placeholder; it, and any other
+`{…}` token, is `command_unknown_placeholder`:
+
+- `{artifact}` — the path the caller binds to the entry's `role` with
+  `--artifact`. It must be absolute: a relative or `-`-prefixed path
+  refuses before spawn rather than being resolved against a directory the
+  tool does not share.
+- `{tag.<key>}` — the value this invocation binds for a declared tag key
+  (`--tag <key>=<value>`). A key the model does not declare is
+  `command_unknown_placeholder`. An unbound key, or one bound to a
+  `-`-prefixed value a child could parse as a flag, refuses the request
+  before spawn; a placeholder is never passed through literally.
+
+`{tag.<key>}` at argv0 is `edit_tag_argv0`, for the reason
+[the `edit` carrier](#the-edit-carrier) gives: the executable must be
+readable off the model. `{artifact}` at argv0 stays admitted.
+
+##### The interpreter deny-list
+
+Inline shell is not a declared command. An argv carrying a listed
+interpreter word followed, at **any** later position, by one of that
+interpreter's own inline-code flags is `command_shell_interpreter` —
+whatever precedes the interpreter (`env`, `nice`, `timeout`, `xargs`, or a
+wrapper nobody listed), and matched on the word's basename, so
+`/bin/sh -c` is `sh -c`:
+
+| interpreter | inline-code flags |
+| --- | --- |
+| `sh`, `bash`, `dash`, `ksh`, `zsh`, `csh`, `tcsh`, `python` | `-c` |
+| `ruby` | `-e` |
+| `node` | `-e`, `--eval` |
+| `php` | `-r` |
+
+The list is **open**: an unlisted spelling (`python3`, `nodejs`,
+`busybox`) is admitted, and the list grows only by amendment. Two forms
+are out of scope by name and lint admits them — a shell string carried in
+ONE word (`env -S "sh -c …"`), and an interpreter reading its script from
+stdin (`sh -s`, bare `sh`, `python -`). `sh script.sh` is the sanctioned
+wrapper form and never a defect: put the shell in a script and declare the
+script. `intrastate lint --help-all` carries the full promise.
+
+##### Output and exit mapping
+
+Every invocation sends one flat JSON object of strings on stdin: the empty
+object for a read or a gate, the planned values for a write, with a
+removal crossing as the literal `<clear>`. What comes back depends on the
+capability, and a non-empty stdout is always parsed before any exit status
+is consulted:
+
+- **read** — `output = "json"`, the default, expects a flat JSON object of
+  strings with one member per declared key; a key the object omits is
+  **unreadable**, never absent. `output = "raw"` takes the whole stdout,
+  minus exactly one trailing newline, as the value of the entry's single
+  key, and is admitted only when `keys` has one member. A nested document
+  is read through `select`, below.
+- **gate** — a JSON object carrying the string fields `verdict` (`allow`,
+  `deny` or `indeterminate`) and `reason`. A well-formed deny with a
+  non-zero exit is a deny, not a failure.
+- **write** — nothing is parsed from stdout. A non-zero exit is a failure,
+  but exit 0 is not success: the read-back through the role's reader is
+  the only commit check.
+
+An empty stdout means something only through a declared exit map, and only
+for a process that exited on its own — a spawn failure or a signal is
+never mapped, however broadly the map is written:
+
+- `exit_absent` (read entries only) lists the exit codes that establish
+  every declared key **absent**. Any other exit with an empty stdout — exit
+  0 included — is an execution failure: a silent tool is a broken tool,
+  not an answer.
+- `exit_verdicts` (gate entries only) maps an exit code, written as a
+  string key, to a verdict — `exit_verdicts = { "0" = "allow", "1" =
+  "deny" }`. An unlisted exit refuses rather than reading as a verdict.
+
+The child runs in its own process group under the entry's `timeout`, with
+stdout capped at 1 MiB — an overflow is a failure, never a truncation. A
+helper that leaves a background process holding the child's stdout or
+stderr open refuses rather than waiting; see
+[cli-output-contract.md](cli-output-contract.md#held-output-pipes-on-a-command-accessor).
+Command entries refuse on Windows, Plan 9 and js.
+
+##### Environment
+
+The child does not inherit the CLI's environment. It is composed in four
+layers, a later layer winning a collision:
+
+1. `PATH`, `HOME`, `TMPDIR`, `LANG` and every `LC_*` variable, from the
+   parent;
+2. `env_pass` — whole parent variable names to forward, with no pattern. A
+   name unset in the parent is not passed at all, rather than passed
+   empty;
+3. `env` — literal `NAME = "value"` pairs;
+4. the overlay, `INTRASTATE_ROLE`, `INTRASTATE_CAPABILITY`,
+   `INTRASTATE_ACCESSOR` and `INTRASTATE_PROTOCOL`, which tells a wrapper
+   which entry invoked it and under which protocol version.
+
+An `env` key or `env_pass` name starting with `INTRASTATE_` is
+`command_env_conflict`, so the overlay is never shadowed silently. A
+`steps` writer composes every step's environment the same way.
+
+##### `--allow-commands`
+
+A command in a model is code that runs when the model is used, so running
+one takes an opt-in outside the model. Every `flow` verb carries
+`--allow-commands`, off by default. Without it, a `command` or `steps`
+accessor refuses before any child is spawned, as `flow-accessor-failed` at
+exit 3, with a `detail` naming the opt-in. `lint` does not carry the flag:
+validation is ungated, so a model is reviewable before it is trusted.
+`flow init-state` refuses a command-backed accessor whether or not the
+flag is passed; see
+[cli-output-contract.md](cli-output-contract.md#flow-init-state-and-how-a-seed-is-told-from-a-no-op).
+
+##### What lint decides
+
+The carrier owns six load categories, reported by `lint`. An entry
+carrying several reports the first in this order:
+
+- `command_and_path_conflict` — an entry declaring both `path` and
+  `command`, or no carrier at all ([above](#the-carrier));
+- `command_empty` — an empty `command` vector, or an empty element in it;
+- `command_unknown_placeholder` — a `{…}` token other than a whole-element
+  `{artifact}` or a whole-element `{tag.<key>}` naming a declared key;
+- `command_shell_interpreter` — the interpreter form above;
+- `command_output_shape` — `output` on a non-read entry, or naming anything
+  but `"json"` or `"raw"`; `output = "raw"` beside other than one declared
+  key; `exit_absent` on a non-read entry; `exit_verdicts` on a non-gate
+  entry, or mapping an exit to a value outside `allow`, `deny`,
+  `indeterminate`;
+- `command_env_conflict` — an `env` key or `env_pass` name carrying the
+  reserved `INTRASTATE_` prefix.
+
+`edit_tag_argv0` fires on a `command` entry too, and the three
+`command_select_*` categories belong to `select`, below. Lint never sees
+the tool: whether it exists, what it prints and how it exits are
+invocation-time questions, so a model that lints clean can still refuse to
+read.
+
+##### Selecting keys out of a command's json output
 
 By default a `command` read entry's stdout must be a flat JSON object of
 strings, one member per declared key. A tool whose `--json` output is
@@ -667,9 +842,10 @@ refining  = [["kata", "label", "rm", "{tag.id}", "lifecycle:refining"]]
 - `clear.<value>` (optional) — the steps that remove that value when the
   key holds it.
 
-No step carries the planned value. Every element is literal argv in
-`command`'s vocabulary — `{artifact}` and a whole-element `{tag.<key>}`
-naming an **observed** key — so every executable word is readable off the
+No step carries the planned value. Every element is literal argv in the
+placeholder vocabulary of [the command carrier](#argv-and-placeholders) —
+`{artifact}` and a whole-element `{tag.<key>}`, here naming an
+**observed** key — so every executable word is readable off the
 model, and the arm for `refining` simply spells `lifecycle:refining`. The
 planned object still crosses on stdin, exactly as for `command`.
 
@@ -704,8 +880,9 @@ Lint proves the declaration under three categories:
 finite domain — only an enum with a domain or a bool is admitted; a
 missing `set` arm; an arm for a value outside the domain; an empty arm;
 or, when a rule's `clear` list names the key, a missing `clear` arm for
-any value). Each step vector is checked by `command`'s own rules and
-reports their categories: `command_empty`, `command_unknown_placeholder`
+any value). Each step vector is checked by the argv rules of
+[the command carrier](#the-command-carrier) and reports its categories:
+`command_empty`, `command_unknown_placeholder`
 (including a `{tag.<key>}` naming a key that is not observed),
 `command_shell_interpreter`, and `edit_tag_argv0`.
 

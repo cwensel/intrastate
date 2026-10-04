@@ -260,6 +260,17 @@ its neighbours, and it is deliberately distinct from `flow-accessor-failed`:
 a write that could not start may be retried unchanged, and one that may
 already have landed must be inspected first.
 
+A `steps` writer runs one command per step, and the split falls per step.
+A first step that fails — a non-zero exit, a signal, or a failure to start
+— applied nothing, even though its command ran, so it is
+`flow-accessor-failed`: a compare-and-set placed first refuses cleanly when
+it loses. A step that fails after an earlier step exited 0 is
+`flow-write-failed-applied`, exit 3: the earlier steps' mutations stand,
+and nothing is retried or undone. A held pipe keeps the applied sense on
+any step, the first included. A removal the model declares no `clear` arm
+for refuses before any step runs, as `flow-accessor-request-refused` at
+exit 2, since re-running it unchanged cannot help.
+
 ## Held output pipes on a command accessor
 
 A command accessor's stdout and stderr are drained under a bound. If a
