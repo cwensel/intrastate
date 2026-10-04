@@ -4,20 +4,20 @@ session: `910616ea-7d94-41da-bed7-b6b16b0b820d.jsonl`  started: 2026-09-13 19:09
 
 | agent | turns | tools | wall min | in | cache r | cache w | out | peak ctx |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|
-| orchestrator | 108 | 71 | 78 | 2,796 | 9,846,170 | 431,043 | 143,942 | 149,189 |
-| Phase 0 spec auditor | 53 | 42 | 5 | 1,606 | 3,430,970 | 725,389 | 28,414 | 123,778 |
-| Phase 1 test author | 169 | 126 | 27 | 5,258 | 36,485,120 | 1,600,498 | 136,821 | 370,425 |
-| Phase 2 implementer leg 1 | 226 | 179 | 18 | 7,142 | 37,308,002 | 2,173,397 | 69,110 | 289,488 |
-| Phase 3a CoVe verifier | 95 | 75 | 9 | 2,950 | 6,140,229 | 563,334 | 44,593 | 116,530 |
-| Phase 3b adversarial reviewer | 106 | 80 | 10 | 3,302 | 10,759,983 | 679,415 | 41,494 | 160,759 |
-| Phase 3c fixup | 138 | 107 | 9 | 4,326 | 12,229,320 | 657,178 | 37,102 | 144,665 |
-| **total** | **895** | **680** | | | | | **501,476** | |
+| orchestrator | 37 | 70 | 78 | 944 | 3,680,465 | 133,711 | 46,833 | 149,189 |
+| Phase 0 spec auditor | 11 | 42 | 5 | 322 | 831,789 | 117,687 | 28,342 | 123,778 |
+| Phase 1 test author | 43 | 126 | 27 | 1,316 | 10,156,226 | 361,300 | 136,439 | 370,425 |
+| Phase 2 implementer leg 1 | 47 | 179 | 18 | 1,474 | 9,153,453 | 281,539 | 68,529 | 289,488 |
+| Phase 3a CoVe verifier | 20 | 75 | 9 | 610 | 1,359,366 | 110,070 | 44,429 | 116,530 |
+| Phase 3b adversarial reviewer | 26 | 80 | 10 | 802 | 2,768,291 | 153,229 | 41,281 | 160,759 |
+| Phase 3c fixup | 31 | 107 | 9 | 962 | 2,940,413 | 137,712 | 36,824 | 144,665 |
+| **total** | **215** | **679** | | | | | **402,677** | |
 
 ## Totals
 
-- context tokens processed (in + cache read + cache write): **123,057,428**
-- output tokens: 501,476
-- orchestrator share of context: **8%** at 149,189 peak
+- context tokens processed (in + cache read + cache write): **32,191,681**
+- output tokens: 402,677
+- orchestrator share of context: **12%** at 149,189 peak
 - agents: 7 (6 sub-agent legs)
 - wall: **78 min active**, 0 min idle
 - test waits (a Bash call that runs a test -- rdr-leg-test or a raw test/lint command; never an Agent/TaskOutput wait): **4 min** over 7 blocking runs (>20s)
@@ -54,13 +54,13 @@ None -- the run was unattended end to end.
 ## Digest
 
 ```
-scorecard: 123,057,428 context tokens over 7 agents
-  orchestrator: 8% of context, 149,189 peak
-  turns/tools:  895 / 680   output: 501,476
+scorecard: 32,191,681 context tokens over 7 agents
+  orchestrator: 12% of context, 149,189 peak
+  turns/tools:  215 / 679   output: 402,677
   wall:         78 min active, 0 min idle
   test waits:   4 min over 7 runs   waiting on legs: 78 min over 6 Agent waits
   budget asks:  5 asks / 4 commits
-  human prompts after launch: 0
+  human prompts after launch: 0   agent hand-backs: 0
   orchestrator ctx: gate 107,175 → final 149,189   legs: helpers 150 / raw 66
   guard refusals: 0 (harness 0 · leg-guard 0)   parent: cd-prefixed 14 (worktree 0) · full-suite runs 0 (+1 baseline)
 ```

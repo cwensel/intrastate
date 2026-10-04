@@ -4,25 +4,25 @@ session: `9e981bb5-bac6-4eac-b871-8cb0101862fc.jsonl`  started: 2026-09-14 00:24
 
 | agent | turns | tools | wall min | in | cache r | cache w | out | peak ctx |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|
-| orchestrator | 89 | 63 | 47 | 2,518 | 7,559,380 | 403,440 | 118,491 | 135,250 |
-| Tail triage leaf for RDR 0021 | 183 | 128 | 29 | 5,016 | 21,463,786 | 1,297,676 | 72,001 | 192,467 |
+| orchestrator | 26 | 63 | 47 | 742 | 2,371,038 | 119,772 | 35,305 | 135,250 |
+| Tail triage leaf for RDR 0021 | 55 | 128 | 29 | 1,430 | 6,537,328 | 521,076 | 71,654 | 192,467 |
 | ↳ Spawn probe | 1 | 0 | 0 | 3 | 0 | 12,537 | 4 | 12,540 |
-| ↳ Ground empty-set null export finding | 59 | 44 | 4 | 1,798 | 2,750,958 | 292,265 | 12,878 | 81,337 |
-| ↳ Ground initial-node marker finding | 67 | 51 | 5 | 2,054 | 3,547,618 | 333,141 | 21,390 | 85,819 |
-| ↳ Ground export.go edge-join finding | 50 | 35 | 6 | 1,510 | 2,847,789 | 347,855 | 24,161 | 95,521 |
-| ↳ Ground round-trip oracle finding | 44 | 33 | 4 | 1,318 | 1,625,670 | 258,246 | 12,966 | 62,658 |
-| ↳ Phase 3c fixup | 136 | 97 | 11 | 4,262 | 11,614,325 | 553,643 | 40,025 | 140,862 |
-| ↳ Phase 3c respawn: finish REQ-18 demo | 33 | 21 | 2 | 966 | 989,315 | 112,994 | 7,534 | 41,658 |
-| Tail land leaf for RDR 0021 | 43 | 24 | 7 | 926 | 1,749,788 | 361,203 | 16,784 | 66,910 |
+| ↳ Ground empty-set null export finding | 15 | 44 | 4 | 450 | 748,714 | 75,037 | 12,778 | 81,337 |
+| ↳ Ground initial-node marker finding | 16 | 51 | 5 | 482 | 879,293 | 79,184 | 21,279 | 85,819 |
+| ↳ Ground export.go edge-join finding | 15 | 35 | 6 | 450 | 935,407 | 88,689 | 22,823 | 95,521 |
+| ↳ Ground round-trip oracle finding | 11 | 33 | 4 | 322 | 452,289 | 57,128 | 12,888 | 62,658 |
+| ↳ Phase 3c fixup | 39 | 97 | 11 | 1,218 | 3,624,976 | 132,121 | 39,623 | 140,862 |
+| ↳ Phase 3c respawn: finish REQ-18 demo | 12 | 21 | 2 | 354 | 383,228 | 35,773 | 7,478 | 41,658 |
+| Tail land leaf for RDR 0021 | 19 | 24 | 7 | 428 | 787,471 | 164,159 | 16,708 | 66,910 |
 | ↳ Spawn probe | 1 | 0 | 0 | 3 | 0 | 12,508 | 4 | 12,511 |
-| ↳ Ship rdr-0021 branch to main | 25 | 15 | 3 | 740 | 727,320 | 77,675 | 6,937 | 39,395 |
-| ↳ Flip RDR 0021 docs to Implemented | 17 | 10 | 1 | 454 | 660,651 | 112,772 | 3,212 | 53,373 |
-| **total** | **748** | **521** | | | | | **336,387** | |
+| ↳ Ship rdr-0021 branch to main | 10 | 15 | 3 | 290 | 291,310 | 33,161 | 6,912 | 39,395 |
+| ↳ Flip RDR 0021 docs to Implemented | 7 | 10 | 1 | 194 | 278,748 | 47,843 | 3,192 | 53,373 |
+| **total** | **227** | **521** | | | | | **250,648** | |
 
 ## Totals
 
-- context tokens processed (in + cache read + cache write): **59,734,123**
-- output tokens: 336,387
+- context tokens processed (in + cache read + cache write): **18,675,156**
+- output tokens: 250,648
 - orchestrator share of context: **13%** at 135,250 peak
 - agents: 13 (12 sub-agent legs)
 - wall: **47 min active**, 0 min idle
@@ -62,13 +62,13 @@ None -- the run was unattended end to end.
 ## Digest
 
 ```
-scorecard: 59,734,123 context tokens over 13 agents
+scorecard: 18,675,156 context tokens over 13 agents
   orchestrator: 13% of context, 135,250 peak
-  turns/tools:  748 / 521   output: 336,387
+  turns/tools:  227 / 521   output: 250,648
   wall:         47 min active, 0 min idle
   test waits:   3 min over 6 runs   waiting on legs: 37 min over 2 Agent waits
   budget asks:  6 asks / 3 commits
-  human prompts after launch: 0
+  human prompts after launch: 0   agent hand-backs: 0
   orchestrator ctx: gate - → final 135,250   legs: helpers 47 / raw 34
   guard refusals: 1 (harness 1 · leg-guard 0)   parent: cd-prefixed 6 (worktree 2) · full-suite runs 1 (+0 baseline)
 ```
