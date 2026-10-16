@@ -1,5 +1,10 @@
 # intrastate
 
+[![Release](https://img.shields.io/github/v/release/cwensel/intrastate?sort=semver)](https://github.com/cwensel/intrastate/releases/latest)
+[![CI](https://github.com/cwensel/intrastate/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cwensel/intrastate/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/cwensel/intrastate)](go.mod)
+[![License](https://img.shields.io/github/license/cwensel/intrastate)](LICENSE)
+
 intrastate is a CLI for deterministic decisions and state transitions
 inside agent workflows. Prompts supply facts, resolve declared rules,
 and act on the result. State stays in existing workflow artifacts.
